@@ -95,7 +95,7 @@ func (v *BaseKuneiformParserVisitor) VisitColumn_def(ctx *Column_defContext) int
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitC_column_def(ctx *C_column_defContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitTable_column_def(ctx *Table_column_defContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -103,7 +103,7 @@ func (v *BaseKuneiformParserVisitor) VisitIndex_def(ctx *Index_defContext) inter
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitC_index_def(ctx *C_index_defContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitTable_index_def(ctx *Table_index_defContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -159,7 +159,11 @@ func (v *BaseKuneiformParserVisitor) VisitProcedure_return(ctx *Procedure_return
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitSql(ctx *SqlContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitSql_stmt(ctx *Sql_stmtContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitDdl_stmt(ctx *Ddl_stmtContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -175,11 +179,7 @@ func (v *BaseKuneiformParserVisitor) VisitCreate_table_statement(ctx *Create_tab
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitConstraint_def(ctx *Constraint_defContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitUnnamed_constraint(ctx *Unnamed_constraintContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitTable_constraint_def(ctx *Table_constraint_defContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

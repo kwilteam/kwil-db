@@ -275,6 +275,41 @@ type SQLParseResult struct {
 	Mutative bool
 }
 
+// DDLParseResult is the result of parsing an DDL statement.
+// NOTE: THIS is only temporary.
+type DDLParseResult struct {
+	// AST is the abstract syntax tree of the SQL statement.
+	AST SQLStmt
+	// Errs are the errors that occurred during parsing and analysis.
+	// These include syntax errors, type errors, etc.
+	ParseErrs ParseErrs
+
+	// Mutative is true if the statement mutates state.
+	Mutative bool
+}
+
+// ParseDDL parses an SQL DDL statement.
+// NOTE: THIS is only temporary so that I can write tests. After we shift from
+// *SQLStatement to SQLStmt we can delete this.
+func ParseDDL(sql string, schema *types.Schema, skipValidation bool) (res *DDLParseResult, err error) {
+	parser, errLis, visitor, deferFn, err := setupParser2(sql)
+	if err != nil {
+		return nil, err
+	}
+
+	defer func() {
+		err2 := deferFn(recover())
+		if err2 != nil {
+			err = err2
+		}
+	}()
+
+	return &DDLParseResult{
+		AST:       parser.Sql_entry().Accept(visitor).(SQLStmt),
+		ParseErrs: errLis,
+	}, nil
+}
+
 // ParseSQL parses an SQL statement.
 // It requires a schema to be passed in, since SQL statements may reference
 // schema objects.

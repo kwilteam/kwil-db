@@ -794,6 +794,9 @@ func (s *sqlGenerator) VisitCreateTableStatement(p0 *parse.CreateTableStatement)
 	str := strings.Builder{}
 	indent := "  "
 	str.WriteString("CREATE TABLE ")
+	if p0.IfNotExists {
+		str.WriteString("IF NOT EXISTS ")
+	}
 	str.WriteString(p0.Name)
 	str.WriteString(" (\n")
 	for i, col := range p0.Columns {
@@ -877,7 +880,29 @@ func (s *sqlGenerator) VisitAlterTableStatement(p0 *parse.AlterTableStatement) a
 }
 
 func (s *sqlGenerator) VisitCreateIndexStatement(p0 *parse.CreateIndexStatement) any {
-	return "CREATE " + p0.Index.String()
+	str := strings.Builder{}
+	str.WriteString("CREATE ")
+
+	switch p0.Type {
+	case parse.IndexTypeBTree:
+		str.WriteString("INDEX ")
+	case parse.IndexTypeUnique:
+		str.WriteString("UNIQUE INDEX ")
+	default:
+		// should not happen
+		panic("unknown index type")
+	}
+
+	if p0.IfNotExists {
+		str.WriteString("IF NOT EXISTS ")
+	}
+	if p0.Name != "" {
+		str.WriteString(p0.Name + " ")
+	}
+	str.WriteString("ON " + p0.On)
+	str.WriteString("(" + strings.Join(p0.Columns, ", ") + ")")
+
+	return str.String()
 }
 
 func (s *sqlGenerator) VisitDropIndexStatement(p0 *parse.DropIndexStatement) any {

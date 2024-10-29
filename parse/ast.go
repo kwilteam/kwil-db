@@ -507,11 +507,17 @@ func (c *CommonTableExpression) Accept(v Visitor) any {
 	return v.VisitCommonTableExpression(c)
 }
 
-// SQLStatement is a SQL statement.
+// SQLStmt is top-level statement, can be any SQL statement.
+type SQLStmt interface {
+	Node
+	StmtType() SQLStatementType
+}
+
+// SQLStatement is a DML statement with common table expression.
 type SQLStatement struct {
 	Position
 	CTEs []*CommonTableExpression
-	// Recursive is true if the RECUSRIVE keyword is present.
+	// Recursive is true if the RECURSIVE keyword is present.
 	Recursive bool
 	// SQL can be an insert, update, delete, or select statement.
 	SQL SQLCore
@@ -521,7 +527,11 @@ func (s *SQLStatement) Accept(v Visitor) any {
 	return v.VisitSQLStatement(s)
 }
 
-// SQLCore is a top-level statement.
+func (s *SQLStatement) StmtType() SQLStatementType {
+	return s.SQL.StmtType()
+}
+
+// SQLCore is a DML statement.
 // It can be INSERT, UPDATE, DELETE, SELECT.
 type SQLCore interface {
 	Node
@@ -546,10 +556,11 @@ const (
 type CreateTableStatement struct {
 	Position
 
-	Name    string
-	Columns []*Column
+	IfNotExists bool
+	Name        string
+	Columns     []*Column
 	// Indexes contains the non-inline indexes
-	Indexes []*Index
+	Indexes []*TableIndex
 	// Constraints contains the non-inline constraints
 	Constraints []Constraint
 }
@@ -588,7 +599,6 @@ type Constraint interface {
 	Node
 
 	ConstraintType() ConstraintType
-	SetName(string)
 	ToSQL() string
 }
 
@@ -613,8 +623,6 @@ func (c *ConstraintPrimaryKey) ToSQL() string {
 
 	return "PRIMARY KEY (" + strings.Join(c.Columns, ", ") + ")"
 }
-
-func (c *ConstraintPrimaryKey) SetName(name string) {}
 
 type ConstraintUnique struct {
 	Position
@@ -644,10 +652,6 @@ func (c *ConstraintUnique) ToSQL() string {
 	return "CONSTRAINT " + c.Name + " " + s
 }
 
-func (c *ConstraintUnique) SetName(name string) {
-	c.Name = name
-}
-
 type ConstraintDefault struct {
 	Position
 
@@ -666,10 +670,6 @@ func (c *ConstraintDefault) ConstraintType() ConstraintType {
 
 func (c *ConstraintDefault) ToSQL() string {
 	return "DEFAULT " + c.Value.String()
-}
-
-func (c *ConstraintDefault) SetName(name string) {
-	c.Name = name
 }
 
 type ConstraintNotNull struct {
@@ -691,10 +691,6 @@ func (c *ConstraintNotNull) ToSQL() string {
 	return "NOT NULL"
 }
 
-func (c *ConstraintNotNull) SetName(name string) {
-	c.Name = name
-}
-
 type ConstraintCheck struct {
 	Position
 
@@ -712,10 +708,6 @@ func (c *ConstraintCheck) ConstraintType() ConstraintType {
 
 func (c *ConstraintCheck) ToSQL() string {
 	return ""
-}
-
-func (c *ConstraintCheck) SetName(name string) {
-	c.Name = name
 }
 
 type ConstraintForeignKey struct {
@@ -754,10 +746,6 @@ func (c *ConstraintForeignKey) ToSQL() string {
 	return "CONSTRAINT " + c.Name + " FOREIGN KEY (" + c.Column + ") " + s
 }
 
-func (c *ConstraintForeignKey) SetName(name string) {
-	c.Name = name
-}
-
 type IndexType string
 
 const (
@@ -770,40 +758,42 @@ const (
 	IndexTypeUnique IndexType = "unique"
 )
 
-// Index represents non-inline index declaration.
-type Index struct {
+// TableIndex represents table index declaration, both inline and non-inline.
+type TableIndex struct {
 	Position
 
 	Name    string
-	On      string
 	Columns []string
 	Type    IndexType
 }
 
-func (i *Index) String() string {
-	if i.Type == IndexTypeUnique && len(i.Columns) == 0 { //inline
-		return "UNIQUE"
+func (i *TableIndex) String() string {
+	if len(i.Columns) == 0 {
+		if i.Type == IndexTypeUnique {
+			return "UNIQUE"
+		}
+		panic("inline index can only be UNIQUE")
 	}
 
 	str := strings.Builder{}
-	str.WriteString("INDEX ")
-	if i.Name != "" {
-		str.WriteString(i.Name + " ")
-	}
-	if i.On != "" {
-		str.WriteString("ON " + i.On)
-	}
-	str.WriteString("(" + strings.Join(i.Columns, ", ") + ")")
 
 	switch i.Type {
 	case IndexTypeBTree:
-		return str.String()
+		str.WriteString("INDEX ")
 	case IndexTypeUnique:
-		return "UNIQUE " + str.String()
+		str.WriteString("UNIQUE INDEX ")
 	default:
 		// should not happen
 		panic("unknown index type")
 	}
+
+	if i.Name != "" {
+		str.WriteString(i.Name + " ")
+	}
+
+	str.WriteString("(" + strings.Join(i.Columns, ", ") + ")")
+
+	return str.String()
 }
 
 // ForeignKey is a foreign key in a table.
@@ -1068,7 +1058,13 @@ func (a *DropTableConstraint) ToSQL() string {
 }
 
 type CreateIndexStatement struct {
-	Index
+	Position
+
+	IfNotExists bool
+	Name        string
+	On          string
+	Columns     []string
+	Type        IndexType
 }
 
 func (s *CreateIndexStatement) Accept(v Visitor) any {

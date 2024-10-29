@@ -2015,11 +2015,11 @@ func exprFunctionCall(name string, args ...parse.Expression) *parse.ExpressionFu
 	}
 }
 
-func Test_SQL(t *testing.T) {
+func Test_DDL(t *testing.T) {
 	type testCase struct {
 		name string
 		sql  string
-		want *parse.SQLStatement
+		want parse.SQLStmt
 		err  error
 	}
 
@@ -2039,114 +2039,129 @@ UNIQUE (city_id, address),
 UNIQUE INDEX group_name_unique (group_id, name),
 INDEX ithome (name, address)
 );`,
-			want: &parse.SQLStatement{
-				SQL: &parse.CreateTableStatement{
-					Name: "users",
-					Columns: []*parse.Column{
-						{
-							Name: "id",
-							Type: types.IntType,
-							Constraints: []parse.Constraint{
-								&parse.ConstraintPrimaryKey{},
-							},
+			want: &parse.CreateTableStatement{
+				Name: "users",
+				Columns: []*parse.Column{
+					{
+						Name: "id",
+						Type: types.IntType,
+						Constraints: []parse.Constraint{
+							&parse.ConstraintPrimaryKey{},
 						},
-						{
-							Name: "name",
-							Type: types.TextType,
-							Constraints: []parse.Constraint{
-								&parse.ConstraintCheck{
-									Param: &parse.ExpressionComparison{
-										Left:     exprFunctionCall("length", exprColumn("", "name")),
-										Right:    exprLit(10),
-										Operator: parse.ComparisonOperatorGreaterThan,
-									},
-								},
-							},
-						},
-						{
-							Name: "address",
-							Type: types.TextType,
-							Constraints: []parse.Constraint{
-								&parse.ConstraintNotNull{},
-								&parse.ConstraintDefault{
-									Value: &parse.ExpressionLiteral{
-										Type:  types.TextType,
-										Value: "usa",
-										Typecastable: parse.Typecastable{
-											TypeCast: types.TextType,
-										},
-									},
-								},
-							},
-						},
-						{
-							Name: "email",
-							Type: types.TextType,
-							Constraints: []parse.Constraint{
-								&parse.ConstraintNotNull{},
-								&parse.ConstraintUnique{},
-							},
-						},
-						{
-							Name: "city_id",
-							Type: types.IntType,
-						},
-						{
-							Name: "group_id",
-							Type: types.IntType,
-							Constraints: []parse.Constraint{
-								&parse.ConstraintForeignKey{
-									RefTable:  "groups",
-									RefColumn: "id",
-									Ons:       []parse.ForeignKeyActionOn{parse.ON_DELETE},
-									Dos:       []parse.ForeignKeyActionDo{parse.DO_CASCADE},
+					},
+					{
+						Name: "name",
+						Type: types.TextType,
+						Constraints: []parse.Constraint{
+							&parse.ConstraintCheck{
+								Param: &parse.ExpressionComparison{
+									Left:     exprFunctionCall("length", exprColumn("", "name")),
+									Right:    exprLit(10),
+									Operator: parse.ComparisonOperatorGreaterThan,
 								},
 							},
 						},
 					},
-					Indexes: []*parse.Index{
-						{
-							Name:    "group_name_unique",
-							Columns: []string{"group_id", "name"},
-							Type:    parse.IndexTypeUnique,
-						},
-						{
-							Name:    "ithome",
-							Columns: []string{"name", "address"},
-							Type:    parse.IndexTypeBTree,
+					{
+						Name: "address",
+						Type: types.TextType,
+						Constraints: []parse.Constraint{
+							&parse.ConstraintNotNull{},
+							&parse.ConstraintDefault{
+								Value: &parse.ExpressionLiteral{
+									Type:  types.TextType,
+									Value: "usa",
+									Typecastable: parse.Typecastable{
+										TypeCast: types.TextType,
+									},
+								},
+							},
 						},
 					},
-					Constraints: []parse.Constraint{
-						&parse.ConstraintForeignKey{
-							Name:      "city_fk",
-							RefTable:  "cities",
-							RefColumn: "id",
-							Column:    "city_id",
-							Ons:       []parse.ForeignKeyActionOn{parse.ON_UPDATE},
-							Dos:       []parse.ForeignKeyActionDo{parse.DO_NO_ACTION},
+					{
+						Name: "email",
+						Type: types.TextType,
+						Constraints: []parse.Constraint{
+							&parse.ConstraintNotNull{},
+							&parse.ConstraintUnique{},
 						},
-						&parse.ConstraintCheck{
-							Param: &parse.ExpressionComparison{
-								Left:     exprFunctionCall("length", exprColumn("", "email")),
-								Right:    exprLit(1),
-								Operator: parse.ComparisonOperatorGreaterThan,
+					},
+					{
+						Name: "city_id",
+						Type: types.IntType,
+					},
+					{
+						Name: "group_id",
+						Type: types.IntType,
+						Constraints: []parse.Constraint{
+							&parse.ConstraintForeignKey{
+								RefTable:  "groups",
+								RefColumn: "id",
+								Ons:       []parse.ForeignKeyActionOn{parse.ON_DELETE},
+								Dos:       []parse.ForeignKeyActionDo{parse.DO_CASCADE},
 							},
 						},
-						&parse.ConstraintUnique{
-							Columns: []string{
-								"city_id",
-								"address",
-							},
+					},
+				},
+				Indexes: []*parse.TableIndex{
+					{
+						Name:    "group_name_unique",
+						Columns: []string{"group_id", "name"},
+						Type:    parse.IndexTypeUnique,
+					},
+					{
+						Name:    "ithome",
+						Columns: []string{"name", "address"},
+						Type:    parse.IndexTypeBTree,
+					},
+				},
+				Constraints: []parse.Constraint{
+					&parse.ConstraintForeignKey{
+						Name:      "city_fk",
+						RefTable:  "cities",
+						RefColumn: "id",
+						Column:    "city_id",
+						Ons:       []parse.ForeignKeyActionOn{parse.ON_UPDATE},
+						Dos:       []parse.ForeignKeyActionDo{parse.DO_NO_ACTION},
+					},
+					&parse.ConstraintCheck{
+						Param: &parse.ExpressionComparison{
+							Left:     exprFunctionCall("length", exprColumn("", "email")),
+							Right:    exprLit(1),
+							Operator: parse.ComparisonOperatorGreaterThan,
+						},
+					},
+					&parse.ConstraintUnique{
+						Columns: []string{
+							"city_id",
+							"address",
 						},
 					},
 				},
 			},
 		},
-		//{ // TODO:
-		//	name: "create table with extra comma",
-		//	sql:  `CREATE TABLE users (id int primary key,);`,
-		//	err:  parse.ErrSyntax,
-		//},
+		{
+			name: "create table if not exists",
+			sql:  `CREATE TABLE IF NOT EXISTS users (id int primary key)`,
+			want: &parse.CreateTableStatement{
+				Name:        "users",
+				IfNotExists: true,
+				Columns: []*parse.Column{
+					{
+						Name: "id",
+						Type: types.IntType,
+						Constraints: []parse.Constraint{
+							&parse.ConstraintPrimaryKey{},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "create table with no column",
+			sql:  `CREATE TABLE users ();`,
+			err:  parse.ErrSyntax,
+		},
 		{
 			name: "create table with redeclare primary",
 			sql: `CREATE TABLE users (id int primary key,
@@ -2156,31 +2171,37 @@ primary key (name)
 			err: parse.ErrRedeclarePrimaryKey,
 		},
 		{
+			name: "create table with redeclare constraint",
+			sql:  `CREATE TABLE users (id int primary key, name text, address text, constraint aa unique(name), constraint aa unique(address))`,
+			err:  parse.ErrCollation,
+		},
+		{
+			name: "create table with constraint on unknown column",
+			sql:  `CREATE TABLE users (id int primary key, name text, address text, constraint aa unique(not_exist))`,
+			err:  parse.ErrUnknownColumn,
+		},
+		{
 			name: "alter table add column constraint NOT NULL",
 			sql:  `ALTER TABLE user ALTER COLUMN name SET NOT NULL;`,
-			want: &parse.SQLStatement{
-				SQL: &parse.AlterTableStatement{
-					Table: "user",
-					Action: &parse.AddColumnConstraint{
-						Column: "name",
-						Type:   parse.NOT_NULL,
-					},
+			want: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.AddColumnConstraint{
+					Column: "name",
+					Type:   parse.NOT_NULL,
 				},
 			},
 		},
 		{
 			name: "alter table add column constraint DEFAULT",
 			sql:  `ALTER TABLE user ALTER COLUMN name SET DEFAULT 10;`,
-			want: &parse.SQLStatement{
-				SQL: &parse.AlterTableStatement{
-					Table: "user",
-					Action: &parse.AddColumnConstraint{
-						Column: "name",
-						Type:   parse.DEFAULT,
-						Value: &parse.ExpressionLiteral{
-							Type:  types.IntType,
-							Value: int64(10),
-						},
+			want: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.AddColumnConstraint{
+					Column: "name",
+					Type:   parse.DEFAULT,
+					Value: &parse.ExpressionLiteral{
+						Type:  types.IntType,
+						Value: int64(10),
 					},
 				},
 			},
@@ -2188,107 +2209,91 @@ primary key (name)
 		{
 			name: "alter table drop column constraint NOT NULL",
 			sql:  `ALTER TABLE user ALTER COLUMN name DROP NOT NULL;`,
-			want: &parse.SQLStatement{
-				SQL: &parse.AlterTableStatement{
-					Table: "user",
-					Action: &parse.DropColumnConstraint{
-						Column: "name",
-						Type:   parse.NOT_NULL,
-					},
+			want: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.DropColumnConstraint{
+					Column: "name",
+					Type:   parse.NOT_NULL,
 				},
 			},
 		},
 		{
 			name: "alter table drop column constraint DEFAULT",
 			sql:  `ALTER TABLE user ALTER COLUMN name DROP DEFAULT;`,
-			want: &parse.SQLStatement{
-				SQL: &parse.AlterTableStatement{
-					Table: "user",
-					Action: &parse.DropColumnConstraint{
-						Column: "name",
-						Type:   parse.DEFAULT,
-					},
+			want: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.DropColumnConstraint{
+					Column: "name",
+					Type:   parse.DEFAULT,
 				},
 			},
 		},
 		{
 			name: "alter table drop column constraint named",
 			sql:  `ALTER TABLE user ALTER COLUMN name DROP CONSTRAINT abc;`,
-			want: &parse.SQLStatement{
-				SQL: &parse.AlterTableStatement{
-					Table: "user",
-					Action: &parse.DropColumnConstraint{
-						Column: "name",
-						Name:   "abc",
-					},
+			want: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.DropColumnConstraint{
+					Column: "name",
+					Name:   "abc",
 				},
 			},
 		},
 		{
 			name: "alter table add column",
 			sql:  `ALTER TABLE user ADD COLUMN abc int;`,
-			want: &parse.SQLStatement{
-				SQL: &parse.AlterTableStatement{
-					Table: "user",
-					Action: &parse.AddColumn{
-						Name: "abc",
-						Type: types.IntType,
-					},
+			want: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.AddColumn{
+					Name: "abc",
+					Type: types.IntType,
 				},
 			},
 		},
 		{
 			name: "alter table drop column",
 			sql:  `ALTER TABLE user DROP COLUMN abc;`,
-			want: &parse.SQLStatement{
-				SQL: &parse.AlterTableStatement{
-					Table: "user",
-					Action: &parse.DropColumn{
-						Name: "abc",
-					},
+			want: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.DropColumn{
+					Name: "abc",
 				},
 			},
 		},
 		{
 			name: "alter table rename column",
 			sql:  `ALTER TABLE user RENAME COLUMN abc TO def;`,
-			want: &parse.SQLStatement{
-				SQL: &parse.AlterTableStatement{
-					Table: "user",
-					Action: &parse.RenameColumn{
-						OldName: "abc",
-						NewName: "def",
-					},
+			want: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.RenameColumn{
+					OldName: "abc",
+					NewName: "def",
 				},
 			},
 		},
 		{
 			name: "alter table rename table",
 			sql:  `ALTER TABLE user RENAME TO account;`,
-			want: &parse.SQLStatement{
-				SQL: &parse.AlterTableStatement{
-					Table: "user",
-					Action: &parse.RenameTable{
-						Name: "account",
-					},
+			want: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.RenameTable{
+					Name: "account",
 				},
 			},
 		},
 		{
 			name: "alter table add constraint fk",
 			sql:  `ALTER TABLE user ADD constraint new_fk FOREIGN KEY (city_id) REFERENCES cities(id) ON DELETE CASCADE;`,
-			want: &parse.SQLStatement{
-				SQL: &parse.AlterTableStatement{
-					Table: "user",
-					Action: &parse.AddTableConstraint{
-						Cons: &parse.ConstraintForeignKey{
-							Name:      "new_fk",
-							RefTable:  "cities",
-							RefColumn: "id",
-							Column:    "city_id",
-							Ons:       []parse.ForeignKeyActionOn{parse.ON_DELETE},
-							Dos:       []parse.ForeignKeyActionDo{parse.DO_CASCADE},
-						},
+			want: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.AddTableConstraint{
+					Cons: &parse.ConstraintForeignKey{
+						Name:      "new_fk",
+						RefTable:  "cities",
+						RefColumn: "id",
+						Column:    "city_id",
+						Ons:       []parse.ForeignKeyActionOn{parse.ON_DELETE},
+						Dos:       []parse.ForeignKeyActionDo{parse.DO_CASCADE},
 					},
 				},
 			},
@@ -2296,76 +2301,104 @@ primary key (name)
 		{
 			name: "alter table drop constraint",
 			sql:  `ALTER TABLE user DROP CONSTRAINT abc;`,
-			want: &parse.SQLStatement{
-				SQL: &parse.AlterTableStatement{
-					Table: "user",
-					Action: &parse.DropTableConstraint{
-						Name: "abc",
-					},
+			want: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.DropTableConstraint{
+					Name: "abc",
 				},
 			},
 		},
 		{
 			name: "create index",
 			sql:  `CREATE INDEX abc ON user(name);`,
-			want: &parse.SQLStatement{
-				SQL: &parse.CreateIndexStatement{
-					Index: parse.Index{
-						Name:    "abc",
-						On:      "user",
-						Columns: []string{"name"},
-						Type:    parse.IndexTypeBTree,
-					},
-				},
+			want: &parse.CreateIndexStatement{
+				Name:    "abc",
+				On:      "user",
+				Columns: []string{"name"},
+				Type:    parse.IndexTypeBTree,
 			},
 		},
 		{
 			name: "create unique index",
 			sql:  `CREATE UNIQUE INDEX abc ON user(name);`,
-			want: &parse.SQLStatement{
-				SQL: &parse.CreateIndexStatement{
-					Index: parse.Index{
-						Name:    "abc",
-						On:      "user",
-						Columns: []string{"name"},
-						Type:    parse.IndexTypeUnique,
-					},
-				},
+			want: &parse.CreateIndexStatement{
+				Name:    "abc",
+				On:      "user",
+				Columns: []string{"name"},
+				Type:    parse.IndexTypeUnique,
 			},
 		},
 		{
 			name: "create index with no name",
 			sql:  `CREATE INDEX ON user(name);`,
-			want: &parse.SQLStatement{
-				SQL: &parse.CreateIndexStatement{
-					Index: parse.Index{
-						On:      "user",
-						Columns: []string{"name"},
-						Type:    parse.IndexTypeBTree,
-					},
-				},
+			want: &parse.CreateIndexStatement{
+				On:      "user",
+				Columns: []string{"name"},
+				Type:    parse.IndexTypeBTree,
+			},
+		},
+		{
+			name: "create index if not exist",
+			sql:  `CREATE INDEX IF NOT EXISTS abc ON user(name);`,
+			want: &parse.CreateIndexStatement{
+				IfNotExists: true,
+				Name:        "abc",
+				On:          "user",
+				Columns:     []string{"name"},
+				Type:        parse.IndexTypeBTree,
 			},
 		},
 		{
 			name: "drop index",
 			sql:  `DROP INDEX abc;`,
-			want: &parse.SQLStatement{
-				SQL: &parse.DropIndexStatement{
-					Name: "abc",
-				},
+			want: &parse.DropIndexStatement{
+				Name: "abc",
 			},
 		},
 
 		{
 			name: "drop index check exist",
 			sql:  `DROP INDEX IF EXISTS abc;`,
-			want: &parse.SQLStatement{
-				SQL: &parse.DropIndexStatement{
-					Name:       "abc",
-					CheckExist: true,
-				},
+			want: &parse.DropIndexStatement{
+				Name:       "abc",
+				CheckExist: true,
 			},
 		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, err := parse.ParseDDL(tt.sql, nil, false)
+			require.NoError(t, err)
+
+			if res.ParseErrs.Err() != nil {
+				if tt.err == nil {
+					t.Errorf("unexpected error: %v", res.ParseErrs.Err())
+				} else {
+					require.ErrorIs(t, res.ParseErrs.Err(), tt.err)
+				}
+
+				return
+			}
+
+			assertPositionsAreSet(t, res.AST)
+
+			if !deepCompare(tt.want, res.AST) {
+				t.Errorf("unexpected AST:%s", diff(tt.want, res.AST))
+			}
+		})
+	}
+}
+
+func Test_SQL(t *testing.T) {
+	type testCase struct {
+		name string
+		sql  string
+		want *parse.SQLStatement
+		err  error
+	}
+
+	tests := []testCase{
 		{
 			name: "simple select",
 			sql:  "select *, id i, length(username) as name_len from users u where u.id = 1;",

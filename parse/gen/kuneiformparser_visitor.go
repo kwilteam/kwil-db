@@ -73,14 +73,14 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#column_def.
 	VisitColumn_def(ctx *Column_defContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#c_column_def.
-	VisitC_column_def(ctx *C_column_defContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#table_column_def.
+	VisitTable_column_def(ctx *Table_column_defContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#index_def.
 	VisitIndex_def(ctx *Index_defContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#c_index_def.
-	VisitC_index_def(ctx *C_index_defContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#table_index_def.
+	VisitTable_index_def(ctx *Table_index_defContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#foreign_key_def.
 	VisitForeign_key_def(ctx *Foreign_key_defContext) interface{}
@@ -121,8 +121,11 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#procedure_return.
 	VisitProcedure_return(ctx *Procedure_returnContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#sql.
-	VisitSql(ctx *SqlContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#sql_stmt.
+	VisitSql_stmt(ctx *Sql_stmtContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#ddl_stmt.
+	VisitDdl_stmt(ctx *Ddl_stmtContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#sql_statement.
 	VisitSql_statement(ctx *Sql_statementContext) interface{}
@@ -133,11 +136,8 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#create_table_statement.
 	VisitCreate_table_statement(ctx *Create_table_statementContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#constraint_def.
-	VisitConstraint_def(ctx *Constraint_defContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#unnamed_constraint.
-	VisitUnnamed_constraint(ctx *Unnamed_constraintContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#table_constraint_def.
+	VisitTable_constraint_def(ctx *Table_constraint_defContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#alter_table_statement.
 	VisitAlter_table_statement(ctx *Alter_table_statementContext) interface{}

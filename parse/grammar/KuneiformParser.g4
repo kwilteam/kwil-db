@@ -22,7 +22,7 @@ schema_entry:
 ;
 
 sql_entry:
-    sql EOF
+    sql_stmt EOF
 ;
 
 action_entry:
@@ -112,8 +112,7 @@ column_def:
     name=IDENTIFIER type constraint*
 ;
 
-// TODO: rename to column_def once table_declaration is removed
-c_column_def:
+table_column_def:
     name=IDENTIFIER type inline_constraint*
 ;
 
@@ -123,7 +122,7 @@ index_def:
     LPAREN  columns=identifier_list RPAREN
 ;
 
-c_index_def:
+table_index_def:
     UNIQUE? INDEX identifier LPAREN columns=identifier_list RPAREN
 ;
 
@@ -156,7 +155,6 @@ constraint:
     (IDENTIFIER| PRIMARY KEY? | NOT NULL | DEFAULT | UNIQUE) (LPAREN literal RPAREN)?
 ;
 
-//// TODO: rename to constraint once table_delcaration is removed
 inline_constraint:
     PRIMARY KEY
     | UNIQUE
@@ -168,15 +166,11 @@ inline_constraint:
 
 fk_action:
     ON (UPDATE|DELETE)
-    (SET NULL
-    | SET DEFAULT
-    | RESTRICT
-    | NO ACTION
-    | CASCADE)
+    (SET NULL | SET DEFAULT | RESTRICT | NO ACTION | CASCADE)
 ;
 
 fk_constraint:
-    REFERENCES table=identifier (LPAREN column=identifier RPAREN) (fk_action (fk_action)*)?
+    REFERENCES table=identifier (LPAREN column=identifier RPAREN) (fk_action (fk_action)?)?
 ;
 
 access_modifier:
@@ -209,15 +203,21 @@ procedure_return:
     The following section includes parser rules for SQL.
 */
 
-// sql is a top-level SQL statement.
-sql:
-    sql_statement SCOL
+// sql is a top-level SQL statement, it maps to SQLStmt interface in AST.
+sql_stmt:
+    (sql_statement | ddl_stmt) SCOL
 ;
 
-sql_statement:
+ddl_stmt:
+    create_table_statement
+    | alter_table_statement
+    | create_index_statement
+    | drop_index_statement
+;
+
+sql_statement: // NOTE: This is only DDL. We should combine ddl and dml into sql_stmt in the future.
     (WITH RECURSIVE? common_table_expression (COMMA common_table_expression)*)?
-    (create_table_statement | alter_table_statement| create_index_statement | drop_index_statement // ddl
-    | select_statement | update_statement | insert_statement | delete_statement) // dml
+    (select_statement | update_statement | insert_statement | delete_statement)
 ;
 
 common_table_expression:
@@ -225,23 +225,19 @@ common_table_expression:
 ;
 
 create_table_statement:
-    CREATE TABLE name=identifier
+    CREATE TABLE (IF NOT EXISTS)? name=identifier
     LPAREN
-    (c_column_def | constraint_def | c_index_def)
-    (COMMA  (c_column_def | constraint_def | c_index_def))*
+    (table_column_def | table_constraint_def | table_index_def)
+    (COMMA  (table_column_def | table_constraint_def | table_index_def))*
     RPAREN
 ;
 
-constraint_def: // TODO: rename to table_constraint
+table_constraint_def:
     (CONSTRAINT name=identifier)?
-    unnamed_constraint
-;
-
-unnamed_constraint:
-    PRIMARY KEY LPAREN identifier_list RPAREN
-    | UNIQUE LPAREN identifier_list RPAREN
-    | CHECK LPAREN sql_expr RPAREN
-    | FOREIGN KEY LPAREN identifier RPAREN fk_constraint
+    (PRIMARY KEY LPAREN identifier_list RPAREN
+     | UNIQUE LPAREN identifier_list RPAREN
+     | CHECK LPAREN sql_expr RPAREN
+     | FOREIGN KEY LPAREN column=identifier RPAREN fk_constraint)
 ;
 
 alter_table_statement:
@@ -256,12 +252,13 @@ alter_table_action:
     | DROP COLUMN column=identifier                                                    # drop_column
     | RENAME COLUMN old_column=identifier TO new_column=identifier                     # rename_column
     | RENAME TO new_table=identifier                                                   # rename_table
-    | ADD constraint_def                                                               # add_table_constraint
+    | ADD table_constraint_def                                                         # add_table_constraint
     | DROP CONSTRAINT identifier                                                       # drop_table_constraint
 ;
 
 create_index_statement:
-    CREATE UNIQUE? INDEX name=identifier? ON table=identifier LPAREN  columns=identifier_list RPAREN
+    CREATE UNIQUE? INDEX (IF NOT EXISTS)? name=identifier?
+    ON table=identifier LPAREN  columns=identifier_list RPAREN
 ;
 
 drop_index_statement:

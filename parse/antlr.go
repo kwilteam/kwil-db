@@ -79,7 +79,7 @@ func (s *schemaVisitor) VisitProcedure_entry(ctx *gen.Procedure_entryContext) an
 }
 
 func (s *schemaVisitor) VisitSql_entry(ctx *gen.Sql_entryContext) any {
-	return ctx.Sql().Accept(s)
+	return ctx.Sql_stmt().Accept(s)
 }
 
 // unknownExpression creates a new literal with an unknown type and null value.
@@ -885,12 +885,33 @@ func (s *schemaVisitor) VisitProcedure_return(ctx *gen.Procedure_returnContext) 
 	return ret
 }
 
-// VisitSQL visits a SQL statement. It is the top-level SQL visitor.
-func (s *schemaVisitor) VisitSql(ctx *gen.SqlContext) any {
-	return ctx.Sql_statement().Accept(s)
+// VisitSql_stmt_s visits a SQL statement. It is the top-level SQL visitor.
+func (s *schemaVisitor) VisitSql_stmt(ctx *gen.Sql_stmtContext) any {
+	// NOTE: this should be temporary; we should combine dml and ddl.
+	if ctx.Sql_statement() != nil {
+		return ctx.Sql_statement().Accept(s)
+	} else {
+		return ctx.Ddl_stmt().Accept(s)
+	}
 }
 
-// VisitSql_statement visits a SQL statement. It is called by all nested
+// VisitDdl_stmt visits a SQL DDL statement.
+func (s *schemaVisitor) VisitDdl_stmt(ctx *gen.Ddl_stmtContext) any {
+	switch {
+	case ctx.Create_table_statement() != nil:
+		return ctx.Create_table_statement().Accept(s).(*CreateTableStatement)
+	case ctx.Alter_table_statement() != nil:
+		return ctx.Alter_table_statement().Accept(s).(*AlterTableStatement)
+	case ctx.Create_index_statement() != nil:
+		return ctx.Create_index_statement().Accept(s).(*CreateIndexStatement)
+	case ctx.Drop_index_statement() != nil:
+		return ctx.Drop_index_statement().Accept(s).(*DropIndexStatement)
+	default:
+		panic("unknown DDL statement")
+	}
+}
+
+// VisitSql_statement visits a SQL DML statement. It is called by all nested
 // sql statements (e.g. in procedures and actions)
 func (s *schemaVisitor) VisitSql_statement(ctx *gen.Sql_statementContext) any {
 	stmt := &SQLStatement{
@@ -906,14 +927,6 @@ func (s *schemaVisitor) VisitSql_statement(ctx *gen.Sql_statementContext) any {
 	}
 
 	switch {
-	case ctx.Create_table_statement() != nil:
-		stmt.SQL = ctx.Create_table_statement().Accept(s).(*CreateTableStatement)
-	case ctx.Alter_table_statement() != nil:
-		stmt.SQL = ctx.Alter_table_statement().Accept(s).(*AlterTableStatement)
-	case ctx.Create_index_statement() != nil:
-		stmt.SQL = ctx.Create_index_statement().Accept(s).(*CreateIndexStatement)
-	case ctx.Drop_index_statement() != nil:
-		stmt.SQL = ctx.Drop_index_statement().Accept(s).(*DropIndexStatement)
 	case ctx.Select_statement() != nil:
 		stmt.SQL = ctx.Select_statement().Accept(s).(*SelectStatement)
 	case ctx.Update_statement() != nil:
@@ -923,7 +936,7 @@ func (s *schemaVisitor) VisitSql_statement(ctx *gen.Sql_statementContext) any {
 	case ctx.Delete_statement() != nil:
 		stmt.SQL = ctx.Delete_statement().Accept(s).(*DeleteStatement)
 	default:
-		panic("unknown sql statement")
+		panic("unknown dml statement")
 	}
 
 	stmt.Set(ctx)
@@ -949,16 +962,33 @@ func (s *schemaVisitor) VisitCommon_table_expression(ctx *gen.Common_table_expre
 func (s *schemaVisitor) VisitCreate_table_statement(ctx *gen.Create_table_statementContext) any {
 	stmt := &CreateTableStatement{
 		Name:        ctx.GetName().Accept(s).(string),
-		Columns:     arr[*Column](len(ctx.AllC_column_def())),
-		Constraints: arr[Constraint](len(ctx.AllConstraint_def())),
-		Indexes:     arr[*Index](len(ctx.AllC_index_def())),
+		Columns:     arr[*Column](len(ctx.AllTable_column_def())),
+		Constraints: arr[Constraint](len(ctx.AllTable_constraint_def())),
+		Indexes:     arr[*TableIndex](len(ctx.AllTable_index_def())),
 	}
 
-	for i, c := range ctx.AllC_column_def() {
-		stmt.Columns[i] = c.Accept(s).(*Column)
+	if ctx.EXISTS() != nil {
+		stmt.IfNotExists = true
 	}
 
+	// for basic validation
 	var primaryKey []string
+	allColumns := make(map[string]bool)
+	allConstraints := make(map[string]bool)
+	allIndexes := make(map[string]bool)
+
+	if len(ctx.AllTable_column_def()) == 0 {
+		s.errs.RuleErr(ctx, ErrTableDefinition, "no column definitions found")
+	}
+	for i, c := range ctx.AllTable_column_def() {
+		col := c.Accept(s).(*Column)
+		stmt.Columns[i] = col
+		if allColumns[col.Name] {
+			s.errs.RuleErr(c, ErrCollation, "constraint name exists")
+		} else {
+			allColumns[col.Name] = true
+		}
+	}
 
 	for _, column := range stmt.Columns {
 		for _, constraint := range column.Constraints {
@@ -969,7 +999,7 @@ func (s *schemaVisitor) VisitCreate_table_statement(ctx *gen.Create_table_statem
 		}
 	}
 
-	for i, c := range ctx.AllConstraint_def() {
+	for i, c := range ctx.AllTable_constraint_def() {
 		constraint := c.Accept(s).(Constraint)
 		stmt.Constraints[i] = constraint
 
@@ -980,28 +1010,81 @@ func (s *schemaVisitor) VisitCreate_table_statement(ctx *gen.Create_table_statem
 				continue
 			}
 
+			for _, col := range cc.Columns {
+				if !allColumns[col] {
+					s.errs.RuleErr(c, ErrUnknownColumn, "primary key on unknown column")
+				}
+			}
+
 			primaryKey = cc.Columns
+		case *ConstraintCheck:
+			if cc.Name != "" {
+				if allConstraints[cc.Name] {
+					s.errs.RuleErr(c, ErrCollation, "constraint name exists")
+				} else {
+					allConstraints[cc.Name] = true
+				}
+			}
+		case *ConstraintUnique:
+			if cc.Name != "" {
+				if allConstraints[cc.Name] {
+					s.errs.RuleErr(c, ErrCollation, "constraint name exists")
+				} else {
+					allConstraints[cc.Name] = true
+				}
+			}
+
+			for _, col := range cc.Columns {
+				if !allColumns[col] {
+					s.errs.RuleErr(c, ErrUnknownColumn, "primary key on unknown column")
+				}
+			}
+		case *ConstraintForeignKey:
+			if cc.Name != "" {
+				if allConstraints[cc.Name] {
+					s.errs.RuleErr(c, ErrCollation, "constraint name exists")
+				} else {
+					allConstraints[cc.Name] = true
+				}
+			}
+
+			if !allColumns[cc.RefColumn] {
+				s.errs.RuleErr(c, ErrUnknownColumn, "index on unknown column")
+			}
+		default:
+			// should not happen
+			panic("unknown constraint type")
 		}
 	}
 
-	for i, c := range ctx.AllC_index_def() {
-		stmt.Indexes[i] = c.Accept(s).(*Index)
+	for i, c := range ctx.AllTable_index_def() {
+		idx := c.Accept(s).(*TableIndex)
+		stmt.Indexes[i] = idx
+
+		if idx.Name != "" {
+			if allIndexes[idx.Name] {
+				s.errs.RuleErr(c, ErrCollation, "index name exists")
+			} else {
+				allIndexes[idx.Name] = true
+			}
+		}
+
+		for _, col := range idx.Columns {
+			if !allColumns[col] {
+				s.errs.RuleErr(c, ErrUnknownColumn, "index on unknown column")
+			}
+		}
 	}
 
 	if len(primaryKey) == 0 {
 		s.errs.RuleErr(ctx, ErrNoPrimaryKey, "no primary key declared")
 	}
 
-	//// TODO: improve
-	//if ctx.GetExtra_comma() != nil {
-	//	s.errs.TokenErr(ctx.GetExtra_comma(), ErrSyntax, "extra comma")
-	//}
-
 	stmt.Set(ctx)
 	return stmt
 }
 
-func (s *schemaVisitor) VisitC_column_def(ctx *gen.C_column_defContext) interface{} {
+func (s *schemaVisitor) VisitTable_column_def(ctx *gen.Table_column_defContext) interface{} {
 	column := &Column{
 		Name:        s.getIdent(ctx.IDENTIFIER()),
 		Type:        ctx.Type_().Accept(s).(*types.DataType),
@@ -1011,8 +1094,6 @@ func (s *schemaVisitor) VisitC_column_def(ctx *gen.C_column_defContext) interfac
 	for i, c := range ctx.AllInline_constraint() {
 		column.Constraints[i] = c.Accept(s).(Constraint)
 	}
-
-	// TODO: basic validations, like default value should be same as column type
 
 	column.Set(ctx)
 	return column
@@ -1081,7 +1162,6 @@ func (s *schemaVisitor) VisitFk_constraint(ctx *gen.Fk_constraintContext) any {
 			c.Dos[i] = DO_NO_ACTION
 		case a.CASCADE() != nil:
 			c.Dos[i] = DO_CASCADE
-			return c
 		default:
 			panic("unknown foreign key action")
 		}
@@ -1095,18 +1175,17 @@ func (s *schemaVisitor) VisitFk_action(ctx *gen.Fk_actionContext) interface{} {
 	panic("implement me")
 }
 
-func (s *schemaVisitor) VisitConstraint_def(ctx *gen.Constraint_defContext) any {
-	c := ctx.Unnamed_constraint().Accept(s).(Constraint)
+func (s *schemaVisitor) VisitTable_constraint_def(ctx *gen.Table_constraint_defContext) any {
+	name := ""
 	if ctx.GetName() != nil {
-		c.SetName(ctx.GetName().Accept(s).(string))
+		name = ctx.GetName().Accept(s).(string)
 	}
-	c.Set(ctx)
-	return c
-}
 
-func (s *schemaVisitor) VisitUnnamed_constraint(ctx *gen.Unnamed_constraintContext) any {
 	switch {
 	case ctx.PRIMARY() != nil:
+		if name != "" {
+			s.errs.RuleErr(ctx, ErrTableDefinition, "primary key has name")
+		}
 		c := &ConstraintPrimaryKey{
 			Columns: ctx.Identifier_list().Accept(s).([]string),
 		}
@@ -1114,6 +1193,7 @@ func (s *schemaVisitor) VisitUnnamed_constraint(ctx *gen.Unnamed_constraintConte
 		return c
 	case ctx.UNIQUE() != nil:
 		c := &ConstraintUnique{
+			Name:    name,
 			Columns: ctx.Identifier_list().Accept(s).([]string),
 		}
 		c.Set(ctx)
@@ -1121,22 +1201,23 @@ func (s *schemaVisitor) VisitUnnamed_constraint(ctx *gen.Unnamed_constraintConte
 	case ctx.CHECK() != nil:
 		param := ctx.Sql_expr().Accept(s).(Expression)
 		c := &ConstraintCheck{
+			Name:  name,
 			Param: param,
 		}
 		c.Set(ctx)
 		return c
 	case ctx.FOREIGN() != nil:
 		c := ctx.Fk_constraint().Accept(s).(*ConstraintForeignKey)
-		c.Set(ctx) ////====
-		c.Column = ctx.Identifier().Accept(s).(string)
+		c.Name = name
+		c.Column = ctx.GetColumn().Accept(s).(string)
 		return c
 	default:
 		panic("unknown constraint")
 	}
 }
 
-func (s *schemaVisitor) VisitC_index_def(ctx *gen.C_index_defContext) any {
-	index := &Index{
+func (s *schemaVisitor) VisitTable_index_def(ctx *gen.Table_index_defContext) any {
+	index := &TableIndex{
 		Name:    ctx.Identifier().Accept(s).(string),
 		Columns: ctx.Identifier_list().Accept(s).([]string),
 		Type:    IndexTypeBTree,
@@ -1237,7 +1318,7 @@ func (s *schemaVisitor) VisitRename_table(ctx *gen.Rename_tableContext) any {
 
 func (s *schemaVisitor) VisitAdd_table_constraint(ctx *gen.Add_table_constraintContext) any {
 	a := &AddTableConstraint{
-		Cons: ctx.Constraint_def().Accept(s).(Constraint),
+		Cons: ctx.Table_constraint_def().Accept(s).(Constraint),
 	}
 
 	a.Set(ctx)
@@ -1255,11 +1336,13 @@ func (s *schemaVisitor) VisitDrop_table_constraint(ctx *gen.Drop_table_constrain
 
 func (s *schemaVisitor) VisitCreate_index_statement(ctx *gen.Create_index_statementContext) any {
 	a := &CreateIndexStatement{
-		Index: Index{
-			On:      ctx.GetTable().Accept(s).(string),
-			Columns: ctx.GetColumns().Accept(s).([]string),
-			Type:    IndexTypeBTree,
-		},
+		On:      ctx.GetTable().Accept(s).(string),
+		Columns: ctx.GetColumns().Accept(s).([]string),
+		Type:    IndexTypeBTree,
+	}
+
+	if ctx.EXISTS() != nil {
+		a.IfNotExists = true
 	}
 
 	if ctx.GetName() != nil {
