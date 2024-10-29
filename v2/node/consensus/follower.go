@@ -11,7 +11,7 @@ import (
 // Validator should only accept the proposal if it is not already processing a block and
 // the proposal is for the next block to be processed.
 func (ce *ConsensusEngine) AcceptProposal(height int64, prevBlockID types.Hash) bool {
-	fmt.Println("Accept proposal?", height, prevBlockID)
+	ce.log.Info("Accept proposal?", "height", height, "prevHash", prevBlockID)
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
@@ -44,7 +44,7 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, prevBlockID types.Hash) 
 // is the next block to be processed, only then it notifies the consensus engine of the block proposal.
 // respCb is a callback function used to send the VoteMessage(ack/nack) back to the leader.
 func (ce *ConsensusEngine) NotifyBlockProposal(blk *types.Block) {
-	// fmt.Println("Notify block proposal", blk.Header.Height, blk.Header.Hash())
+	// ce.log.Infoln("Notify block proposal", blk.Header.Height, blk.Header.Hash())
 	if ce.role == types.RoleLeader {
 		return
 	}
@@ -53,12 +53,12 @@ func (ce *ConsensusEngine) NotifyBlockProposal(blk *types.Block) {
 	defer ce.state.mtx.Unlock()
 
 	if ce.state.blkProp != nil {
-		fmt.Println("block proposal already exists")
+		ce.log.Info("block proposal already exists")
 		return
 	}
 
 	if blk.Header.Height != ce.state.lc.height+1 {
-		fmt.Printf("proposal for height %d does not follow %d", blk.Header.Height, ce.state.lc.height)
+		ce.log.Infof("proposal for height %d does not follow %d", blk.Header.Height, ce.state.lc.height)
 		return
 	}
 
@@ -81,7 +81,7 @@ func (ce *ConsensusEngine) NotifyBlockProposal(blk *types.Block) {
 // 1. If the node is a sentry node and doesn't have the block.
 // 2. If the node is a validator and missed the block proposal message.
 func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash types.Hash) bool {
-	// fmt.Println("Accept commit?", height, blkID, appHash)
+	// ce.log.Infoln("Accept commit?", height, blkID, appHash)
 	if ce.role == types.RoleLeader {
 		return false
 	}
@@ -91,7 +91,7 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash 
 
 	ce.updateNetworkHeight(height)
 
-	fmt.Println("Accept commit?", height, blkID, appHash, ce.state.lc.height+1, ce.state.lc.blkHash)
+	ce.log.Info(fmt.Sprintln("Accept commit?", height, blkID, appHash, ce.state.lc.height+1, ce.state.lc.blkHash)) // maybe we add log.Infoln?
 	if ce.state.lc.height+1 != height {
 		// This is not the next block to be committed by the node.
 		return false
@@ -137,7 +137,7 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash 
 // NotifyBlockCommit is used by the p2p stream handler to notify the consensus engine of a new block commit.
 // It validates blk height, appHash and blkHash and only then notifies the consensus engine to commit the block.
 func (ce *ConsensusEngine) NotifyBlockCommit(blk *types.Block, appHash types.Hash) {
-	// fmt.Println("Notify block commit", blk.Header.Height, blk.Header.Hash(), appHash)
+	// ce.log.Infoln("Notify block commit", blk.Header.Height, blk.Header.Hash(), appHash)
 	if ce.role == types.RoleLeader {
 		// Leader can also use this in blocksync mode, when it tries to replay the blocks or catchup with the network.
 		return
@@ -151,7 +151,7 @@ func (ce *ConsensusEngine) NotifyBlockCommit(blk *types.Block, appHash types.Has
 	}
 
 	if ce.state.blkProp != nil && ce.state.blockRes == nil {
-		fmt.Printf("still processing the block, ignore the commit message for now and commit when ready")
+		ce.log.Infof("still processing the block, ignore the commit message for now and commit when ready")
 		return
 	}
 
@@ -171,16 +171,16 @@ func (ce *ConsensusEngine) NotifyBlockCommit(blk *types.Block, appHash types.Has
 		Msg:     blkCommit,
 		Sender:  ce.pubKey,
 	})
-	// fmt.Println("Notified consensus engine to commit the block", blk.Header.Height, blk.Header.Hash(), appHash)
+	// ce.log.Infoln("Notified consensus engine to commit the block", blk.Header.Height, blk.Header.Hash(), appHash)
 }
 
 // ProcessBlockProposal is used by the validator's consensus engine to process the new block proposal message.
 // This method is used to validate the received block, execute the block and generate appHash and
 // report the result back to the leader.
 func (ce *ConsensusEngine) processBlockProposal(_ context.Context, blkPropMsg *blockProposal) error {
-	fmt.Println("Processing block proposal", blkPropMsg.blk.Header.Height, blkPropMsg.blk.Header.Hash())
+	ce.log.Info("Processing block proposal", "height", blkPropMsg.blk.Header.Height, "hash", blkPropMsg.blk.Header)
 	if ce.role != types.RoleValidator {
-		fmt.Println("Only validators can process block proposals")
+		ce.log.Warn("Only validators can process block proposals")
 		return nil
 	}
 
@@ -193,19 +193,20 @@ func (ce *ConsensusEngine) processBlockProposal(_ context.Context, blkPropMsg *b
 
 	if err := ce.validateBlock(blkPropMsg.blk); err != nil {
 		go ce.ackBroadcaster(false, blkPropMsg.height, blkPropMsg.blkHash, nil)
-		fmt.Println("Error validating block, sending NACK", err)
+		ce.log.Error("Error validating block, sending NACK", "error", err)
 		return err
 	}
 	ce.state.blkProp = blkPropMsg
 
 	if err := ce.executeBlock(); err != nil {
 		// TODO: what to do if the block execution fails? Send NACK?
-		fmt.Println("Error executing block", err)
+		ce.log.Error("Error executing block", "error", err)
 		return err
 	}
 
 	// Broadcast the result back to the leader
-	fmt.Println("Sending ack to the leader", blkPropMsg.height, blkPropMsg.blkHash.String(), ce.state.blockRes.appHash.String())
+	ce.log.Info("Sending ack to the leader", "height", blkPropMsg.height,
+		"hash", blkPropMsg.blkHash, "appHash", ce.state.blockRes.appHash)
 	go ce.ackBroadcaster(true, blkPropMsg.height, blkPropMsg.blkHash, &ce.state.blockRes.appHash)
 
 	return nil
@@ -217,7 +218,7 @@ func (ce *ConsensusEngine) processBlockProposal(_ context.Context, blkPropMsg *b
 // Validator nodes can skip the block execution and directly commit the block if they have already processed the block.
 // The nodes should only commit the block if the appHash is valid, else halt the node.
 func (ce *ConsensusEngine) commitBlock(blk *types.Block, appHash types.Hash) error {
-	// fmt.Println("processing Commit block", blk.Header.Height, blk.Header.Hash(), appHash)
+	// ce.log.Infoln("processing Commit block", blk.Header.Height, blk.Header.Hash(), appHash)
 	if ce.role == types.RoleLeader {
 		return nil
 	}
@@ -258,14 +259,14 @@ func (ce *ConsensusEngine) commitBlock(blk *types.Block, appHash types.Hash) err
 	}
 
 	if ce.state.blockRes.appHash != appHash {
-		fmt.Println("Incorrect AppHash, halt the node.", appHash.String(), ce.state.blockRes.appHash.String())
+		ce.log.Error("Incorrect AppHash, halting the node.", "got", appHash, "expected", ce.state.blockRes.appHash)
 		close(ce.haltChan)
 		return nil
 	}
 
 	// Commit the block
 	if err := ce.commit(); err != nil {
-		fmt.Println("Error committing block", err)
+		ce.log.Errorf("Error committing block: %v", err)
 		return err
 	}
 
@@ -277,10 +278,10 @@ func (ce *ConsensusEngine) commitBlock(blk *types.Block, appHash types.Hash) err
 // processAndCommit: used by the sentry nodes and slow validators to process and commit the block.
 // This is used when the acks are not required to be sent back to the leader, essentially in catchup mode.
 func (ce *ConsensusEngine) processAndCommit(blk *types.Block, appHash types.Hash) error {
-	fmt.Println("Processing committed block", blk.Header.Height, blk.Header.Hash().String(), appHash.String())
+	ce.log.Info("Processing committed block", "height", blk.Header.Height, "hash", blk.Header.Hash(), "appHash", appHash)
 	if err := ce.validateBlock(blk); err != nil {
-		fmt.Println("Error validating block", err)
-		return err
+		ce.log.Errorf("Error validating block: %v", err)
+		return err // who gets this error?
 	}
 	ce.state.blkProp = &blockProposal{
 		height:  blk.Header.Height,
@@ -290,21 +291,21 @@ func (ce *ConsensusEngine) processAndCommit(blk *types.Block, appHash types.Hash
 	}
 
 	if err := ce.executeBlock(); err != nil {
-		fmt.Println("Error executing block", err)
+		ce.log.Errorf("Error executing block: %v", err)
 		return err
 	}
 
 	if ce.state.blockRes.appHash != appHash {
 		// Incorrect AppHash, halt the node.
-		fmt.Println("Incorrect AppHash, processAndCommit.", appHash.String(), ce.state.blockRes.appHash.String())
+		ce.log.Error("processAndCommit: Incorrect AppHash", "received", appHash, "have", ce.state.blockRes.appHash)
 		// ce.haltChan <- struct{}{}
 		close(ce.haltChan)
-		return fmt.Errorf("appHash mismatch, expected: %s, received: %s", appHash.String(), ce.state.blockRes.appHash.String())
+		return fmt.Errorf("appHash mismatch, expected: %s, received: %s", appHash, ce.state.blockRes.appHash)
 	}
 
 	// Commit the block if the appHash is valid
 	if err := ce.commit(); err != nil {
-		fmt.Println("Error committing block", err)
+		ce.log.Errorf("Error committing block: %v", err)
 		return err
 	}
 

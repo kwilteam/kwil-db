@@ -142,7 +142,7 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 		mp = mempool.New()
 	}
 
-	pm := &peerMan{h: host, log: options.logger.New("peers")}
+	pm := &peerMan{h: host, log: options.logger.New("PEERS")}
 	if options.pex {
 		host.SetStreamHandler(ProtocolIDDiscover, pm.discoveryStreamHandler)
 	} else {
@@ -152,9 +152,9 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 	}
 
 	bs := options.bs
-	var err error
 	if bs == nil {
 		blkStrDir := filepath.Join(dir, "blockstore")
+		var err error
 		bs, err = store.NewBlockStore(blkStrDir)
 		if err != nil {
 			return nil, err
@@ -163,14 +163,16 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 	close = addClose(close, bs.Close) //close db after stopping p2p
 	close = addClose(close, host.Close)
 
-	ce := consensus.New(options.role, host.ID(), dir, mp, bs, options.valSet)
+	logger := options.logger
+
+	ceLogger := logger.New("CONS")
+	ce := consensus.New(options.role, host.ID(), dir, mp, bs, options.valSet, ceLogger)
 	if ce == nil {
 		return nil, errors.New("failed to create consensus engine")
 	}
-	// ce.BeLeader(leader)
 
 	node := &Node{
-		log:     options.logger,
+		log:     logger,
 		host:    host,
 		pm:      pm,
 		pex:     options.pex,
