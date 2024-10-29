@@ -9,9 +9,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"log"
-	"p2p/node/types"
 	"time"
+
+	"p2p/node/types"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -86,13 +86,13 @@ func (n *Node) startTxGossip(ctx context.Context, ps *pubsub.PubSub) error {
 			txMsg, err := subTx.Next(ctx)
 			if err != nil {
 				if !errors.Is(err, context.Canceled) {
-					log.Println("subTx.Next:", err)
+					n.log.Errorf("Stopping TX gossip!", "error", err)
 				}
 				return
 			}
 
 			if string(txMsg.From) == string(me) {
-				// log.Println("message from me ignored")
+				// n.log.Infoln("message from me ignored")
 				continue
 			}
 
@@ -101,21 +101,21 @@ func (n *Node) startTxGossip(ctx context.Context, ps *pubsub.PubSub) error {
 			fromPeerID := txMsg.GetFrom()
 
 			have := n.mp.Get(txHash) != nil // danger conversion
-			log.Printf("received tx msg from %v (rcvd from %s), data = %x, already have = %v\n",
+			n.log.Infof("received tx msg from %v (rcvd from %s), data = %x, already have = %v\n",
 				txMsg.GetFrom(), txMsg.ReceivedFrom, txMsg.Message.Data, have)
 			if have {
 				continue
 			}
 
 			// Now we use getTx with the ProtocolIDTransaction stream
-			log.Println("fetching tx", txid)
+			n.log.Info("Fetching tx", "hash", txid)
 			if n.host.Network().Connectedness(fromPeerID) != network.Connected {
-				log.Println("DELAY for fetch, gossip from non-peer")
+				n.log.Infof("DELAY for fetch, gossip from non-peer")
 				time.Sleep(200 * time.Millisecond)
 			}
 			txRaw, err := n.getTxWithRetry(ctx, txHash, 500*time.Millisecond, 10)
 			if err != nil {
-				log.Printf("unable to retrieve tx %v: %v", txid, err)
+				n.log.Errorf("unable to retrieve tx %v: %v", txid, err)
 				continue
 			}
 

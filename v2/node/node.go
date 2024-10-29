@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	mrand2 "math/rand/v2"
 	"os"
 	"path/filepath"
@@ -17,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"p2p/log"
 	"p2p/node/consensus"
 	"p2p/node/mempool"
 	"p2p/node/store"
@@ -86,6 +86,7 @@ type Node struct {
 	bki types.BlockStore
 	mp  types.MemPool
 	ce  ConsensusEngine
+	log log.Logger
 
 	pm *peerMan
 	// pf *prefetch
@@ -141,7 +142,7 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 		mp = mempool.New()
 	}
 
-	pm := &peerMan{h: host}
+	pm := &peerMan{h: host, log: options.logger.New("PEERS")}
 	if options.pex {
 		host.SetStreamHandler(ProtocolIDDiscover, pm.discoveryStreamHandler)
 	} else {
@@ -151,9 +152,9 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 	}
 
 	bs := options.bs
-	var err error
 	if bs == nil {
 		blkStrDir := filepath.Join(dir, "blockstore")
+		var err error
 		bs, err = store.NewBlockStore(blkStrDir)
 		if err != nil {
 			return nil, err
@@ -162,13 +163,16 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 	close = addClose(close, bs.Close) //close db after stopping p2p
 	close = addClose(close, host.Close)
 
-	ce := consensus.New(options.role, host.ID(), dir, mp, bs, options.valSet)
+	logger := options.logger
+
+	ceLogger := logger.New("CONS")
+	ce := consensus.New(options.role, host.ID(), dir, mp, bs, options.valSet, ceLogger)
 	if ce == nil {
 		return nil, errors.New("failed to create consensus engine")
 	}
-	// ce.BeLeader(leader)
 
 	node := &Node{
+		log:     logger,
 		host:    host,
 		pm:      pm,
 		pex:     options.pex,
@@ -202,7 +206,7 @@ func (n *Node) Addr() string {
 	if len(hosts) == 0 {
 		return ""
 	}
-	return fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s\n", hosts[0], ports[0], id)
+	return fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s", hosts[0], ports[0], id)
 }
 
 func (n *Node) Dir() string {
@@ -253,14 +257,14 @@ func (n *Node) Start(ctx context.Context, peers ...string) error {
 	for _, peer := range peers {
 		peerInfo, err := connectPeer(ctx, peer, n.host)
 		if err != nil {
-			log.Printf("failed to connect to %v: %v", peer, err)
+			n.log.Errorf("failed to connect to %v: %v", peer, err)
 			continue
 		}
-		log.Println("connected to ", peerInfo)
+		n.log.Info("Connected", "peer", peerInfo)
 		if err = n.checkPeerProtos(ctx, peerInfo.ID); err != nil {
-			log.Printf("WARNING: peer does not support required protocols %v: %v", peer, err)
+			n.log.Warnf("WARNING: peer does not support required protocols %v: %v", peer, err)
 			if err = n.host.Network().ClosePeer(peerInfo.ID); err != nil {
-				log.Printf("failed to disconnect from %v: %v", peer, err)
+				n.log.Errorf("failed to disconnect from %v: %v", peer, err)
 			}
 			// n.host.Peerstore().RemovePeer()
 			continue
@@ -278,7 +282,7 @@ func (n *Node) Start(ctx context.Context, peers ...string) error {
 			// discover for this node
 			peerChan, err := n.pm.FindPeers(ctx, "kwil_namespace")
 			if err != nil {
-				log.Println("FindPeers:", err)
+				n.log.Errorf("FindPeers: %v", err)
 			} else {
 				go func() {
 					for peer := range peerChan {
@@ -295,7 +299,7 @@ func (n *Node) Start(ctx context.Context, peers ...string) error {
 		}
 	}()
 
-	log.Println("node tx/block gossip started, and peer discovery enabled")
+	n.log.Info("Node started.")
 
 	<-ctx.Done()
 
@@ -351,7 +355,7 @@ func (n *Node) txGetStreamHandler(s network.Stream) {
 
 	var req txHashReq
 	if _, err := req.ReadFrom(s); err != nil {
-		fmt.Println("bad get tx req:", err)
+		n.log.Warn("bad get tx req", "error", err)
 		return
 	}
 
@@ -368,7 +372,7 @@ func (n *Node) txGetStreamHandler(s network.Stream) {
 	_, rawTx, err := n.bki.GetTx(req.Hash)
 	if err != nil {
 		if !errors.Is(err, types.ErrNotFound) {
-			log.Println("unexpected GetTx error:", err)
+			n.log.Errorf("unexpected GetTx error: %v", err)
 		}
 		s.Write(noData) // don't have it
 	} else {
@@ -396,6 +400,7 @@ func (n *Node) peers() []peer.ID {
 	return peers
 }
 
+// NewKey generates a new private key from a reader, which should provide random data.
 func NewKey(r io.Reader) crypto.PrivKey {
 	// priv, _ := secp256k1.GeneratePrivateKeyFromRand(r)
 	// privECDSA := priv.ToECDSA()
@@ -443,8 +448,6 @@ func hostPort(host host.Host) ([]string, []int) {
 			as, _ = addr.ValueForProtocol(multiaddr.P_IP6)
 		}
 		addrStr = append(addrStr, as)
-
-		log.Println("Listening on", addr)
 	}
 
 	return addrStr, ports
@@ -454,14 +457,12 @@ func connectPeer(ctx context.Context, addr string, host host.Host) (*peer.AddrIn
 	// Turn the destination into a multiaddr.
 	maddr, err := multiaddr.NewMultiaddr(addr)
 	if err != nil {
-		log.Println(err)
 		return nil, err
 	}
 
 	// Extract the peer ID from the multiaddr.
 	info, err := peer.AddrInfoFromP2pAddr(maddr)
 	if err != nil {
-		log.Println(err)
 		return nil, err
 	}
 

@@ -4,6 +4,7 @@ go 1.23.2
 
 require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0
+	github.com/decred/slog v1.2.0
 	github.com/dgraph-io/badger/v4 v4.3.1
 	github.com/libp2p/go-libp2p v0.37.0
 	github.com/libp2p/go-libp2p-pubsub v0.12.0
@@ -12,6 +13,7 @@ require (
 
 require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
+	github.com/jrick/logrotate v1.1.2 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
 )
 

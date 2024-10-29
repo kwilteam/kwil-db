@@ -1,5 +1,7 @@
 p2p
+setup/setup
 .vscode/
 go.work
 go.work.sum
 .data-*
+**/.testnet

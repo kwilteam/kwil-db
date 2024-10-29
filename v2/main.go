@@ -6,16 +6,18 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
-	"log"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
 	"syscall"
 
+	"p2p/log"
 	"p2p/node"
 	"p2p/node/types"
 
-	"github.com/libp2p/go-libp2p/core/crypto"
+	// TODO: isolate to config package not main
+	"github.com/libp2p/go-libp2p/core/crypto" // TODO: isolate to config package not main
 )
 
 func main() {
@@ -36,73 +38,56 @@ func main() {
 }
 
 var (
-	// key       string
-	// port      uint64
-	// connectTo string
-	// noPex     bool
-	// leader    bool
-	// numVals   int
-	// role      int
-	rootDir string
+	rootDir   string
+	logLevel  string
+	logFormat string
 )
 
 func run(ctx context.Context) error {
-	// flag.StringVar(&key, "key", "", "private key bytes (hexadecimal), empty is pseudo-random")
-	// flag.Uint64Var(&port, "port", 0, "listen port (0 for random)")
-	// flag.StringVar(&connectTo, "connect", "", "peer multiaddr to connect to")
-	// flag.BoolVar(&noPex, "no-pd", false, "disable peer discover")
-	// flag.BoolVar(&leader, "leader", false, "make this node produce blocks (should only be one in a network)")
-	// flag.IntVar(&role, "role", 0, "role of the node (0: leader, 1: validator, 2: sentry)")
-	// flag.IntVar(&numVals, "v", 1, "number of validators (all peers are validators!)")
-
+	// TODO: restore flags, rethink config file (format and/or existence)
 	flag.StringVar(&rootDir, "root", ".testnet", "root directory for the configuration")
+	flag.StringVar(&logLevel, "log-level", log.LevelInfo.String(), "log level")
+	flag.StringVar(&logFormat, "log-format", string(log.FormatUnstructured), "log format")
 	flag.Parse()
 
-	// dummyce.NumValidatorsFake = numVals
-
-	// rr := rand.Reader
-	// if port != 0 { // deterministic key based on port for testing
-	// 	// rr = mrand.New(mrand.NewSource(int64(port)))
-	// 	var seed [32]byte
-	// 	binary.LittleEndian.PutUint64(seed[:], port)
-	// 	seed = sha256.Sum256(seed[:])
-	// 	log.Printf("seed: %x", seed)
-	// 	rr = mrand2.NewChaCha8(seed)
-	// 	// var buf bytes.Buffer
-	// 	// buf.Write(seed[:])
-	// 	// buf.Write(seed[:])
-	// 	// rr = &buf
-	// }
-
-	// var rawKey []byte
-	// if key == "" {
-	// 	privKey := node.NewKey(rr)
-	// 	rawKey, _ = privKey.Raw()
-	// 	log.Printf("priv key: %x", rawKey)
-	// } else {
-	// 	var err error
-	// 	rawKey, err = hex.DecodeString(key)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// }
-
-	fmt.Println("Parsing the configuration")
-
-	valSet := make(map[string]types.Validator)
-	genFile := filepath.Join(rootDir, "genesis.json")
-	if _, err := os.Stat(genFile); os.IsNotExist(err) {
-		return fmt.Errorf("genesis file not found: %s", genFile)
+	logLevel, err := log.ParseLevel(logLevel)
+	if err != nil {
+		return fmt.Errorf("invalid log level: %w", err)
 	}
 
-	fmt.Println("Loading the genesis configuration", genFile)
+	logFormat, err := log.ParseFormat(logFormat)
+	if err != nil {
+		return fmt.Errorf("invalid log format: %w", err)
+	}
+
+	// Writing to stdout and a log file.  TODO: config outputs
+	rot, err := log.NewRotatorWriter(filepath.Join(rootDir, "kwild.log"), 10_000, 0)
+	if err != nil {
+		return fmt.Errorf("failed to create log rotator: %w", err)
+	}
+	defer func() {
+		if err := rot.Close(); err != nil {
+			fmt.Printf("failed to close log rotator: %v", err)
+		}
+	}()
+
+	logWriter := io.MultiWriter(os.Stdout, rot) // tee to stdout and log file
+
+	logger := log.New(log.WithLevel(logLevel), log.WithFormat(logFormat),
+		log.WithName("KWILD"), log.WithWriter(logWriter))
+	// NOTE: level and name can be set independently for different systems
+
+	genFile := filepath.Join(rootDir, "genesis.json")
+
+	logger.Infof("Loading the genesis configuration from %s", genFile)
 
 	genConfig, err := node.LoadGenesisConfig(genFile)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load genesis config: %w", err)
 	}
 
 	// assuming static validators
+	valSet := make(map[string]types.Validator)
 	for _, val := range genConfig.Validators {
 		valSet[hex.EncodeToString(val.PubKey)] = val
 	}
@@ -110,10 +95,10 @@ func run(ctx context.Context) error {
 	cfgFile := filepath.Join(rootDir, "config.json")
 	cfg, err := node.LoadNodeConfig(cfgFile)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load node config: %w", err)
 	}
 
-	fmt.Println("Loading the node configuration", cfgFile)
+	logger.Infof("Loading the node configuration from %s", cfgFile)
 
 	privKey, err := crypto.UnmarshalSecp256k1PrivateKey(cfg.PrivateKey)
 	if err != nil {
@@ -124,31 +109,36 @@ func run(ctx context.Context) error {
 		return err
 	}
 
-	fmt.Println("Parsing the pubkey key", hex.EncodeToString(pubKey))
+	logger.Info("Parsing the pubkey", "key", hex.EncodeToString(pubKey))
 	// Check if u are the leader
 	var nRole types.Role
 	if bytes.Equal(pubKey, genConfig.Leader) {
 		nRole = types.RoleLeader
-		fmt.Println("You are the leader")
+		logger.Info("You are the leader")
 	} else {
 		// check if you are a validator
 		if _, ok := valSet[hex.EncodeToString(pubKey)]; ok {
 			nRole = types.RoleValidator
-			fmt.Println("You are a validator")
+			logger.Info("You are a validator")
 		} else {
 			nRole = types.RoleSentry
-			fmt.Println("You are a sentry")
+			logger.Info("You are a sentry")
 		}
 	}
 
+	// TODOs:
+	//  - node.WithGenesisConfig instead of WithGenesisValidators
+	//  - change node.WithPrivateKey to []byte or our own PrivateKey type
+
+	nodeLogger := logger.NewWithLevel(logLevel, "NODE")
 	node, err := node.NewNode(rootDir, node.WithPort(cfg.Port), node.WithPrivKey(cfg.PrivateKey),
-		node.WithRole(nRole), node.WithPex(cfg.Pex), node.WithGenesisValidators(valSet))
+		node.WithRole(nRole), node.WithPex(cfg.Pex), node.WithGenesisValidators(valSet), node.WithLogger(nodeLogger))
 	if err != nil {
 		return err
 	}
 
 	addr := node.Addr()
-	log.Printf("to connect: %s", addr)
+	logger.Infof("To connect: %s", addr)
 
 	var bootPeers []string
 	if cfg.SeedNode != "" {
