@@ -47,7 +47,7 @@ func (n *Node) blkGetHeightStreamHandler(s network.Stream) {
 		fmt.Println("bad get blk request:", err)
 		return
 	}
-	log.Printf("requested block height: %q", req.Height)
+	log.Printf("requested block height: %d", req.Height)
 
 	hash, blk, appHash, err := n.bki.GetByHeight(req.Height)
 	if err != nil {
