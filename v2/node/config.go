@@ -3,12 +3,13 @@ package node
 import (
 	"encoding/json"
 	"os"
+
 	"p2p/node/types"
 )
 
 type GenesisConfig struct {
 	// Leader's public key
-	Leader []byte `json:"leader"`
+	Leader types.HexBytes `json:"leader"`
 	// List of validators (including the leader)
 	Validators []types.Validator `json:"validators"`
 }
@@ -25,7 +26,7 @@ func (nc *GenesisConfig) SaveAs(filename string) error {
 func LoadGenesisConfig(filename string) (*GenesisConfig, error) {
 	bts, err := os.ReadFile(filename)
 	if err != nil {
-		return nil, err
+		return nil, err // can be os.ErrNotExist
 	}
 
 	var nc GenesisConfig
@@ -38,14 +39,14 @@ func LoadGenesisConfig(filename string) (*GenesisConfig, error) {
 
 type NodeConfig struct {
 	Port uint64 `json:"port"`
-	Ip   string `json:"ip"`
+	IP   string `json:"ip"`
 
 	// /ip4/127.0.0.1/tcp/6600/p2p/16Uiu2HAkx2kfP117VnYnaQGprgXBoMpjfxGXCpizju3cX7ZUzRhv
 	SeedNode string `json:"seed"` // connection string to the seed node for simplicity.
 
 	Pex bool `json:"pex"` // peer exchange
 
-	PrivateKey []byte `json:"private_key"`
+	PrivateKey types.HexBytes `json:"private_key"`
 }
 
 func (nc *NodeConfig) SaveAs(filename string) error {

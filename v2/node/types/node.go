@@ -1,5 +1,9 @@
 package types
 
+import (
+	"fmt"
+)
+
 type Role int
 
 const (
@@ -8,7 +12,24 @@ const (
 	RoleSentry
 )
 
+func (r Role) String() string {
+	switch r {
+	case RoleLeader:
+		return "leader"
+	case RoleValidator:
+		return "validator"
+	case RoleSentry:
+		return "sentry"
+	default:
+		return "unknown"
+	}
+}
+
 type Validator struct {
-	PubKey []byte
+	PubKey HexBytes
 	Power  int64
+}
+
+func (v Validator) String() string {
+	return fmt.Sprintf("Validator{PubKey: %s, Power: %d}", v.PubKey, v.Power)
 }

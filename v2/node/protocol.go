@@ -5,10 +5,10 @@ import (
 	"context"
 	"encoding"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"time"
 
 	"p2p/node/types"
@@ -93,8 +93,8 @@ func (ca contentAnn) String() string {
 
 // advertiseToPeer sends a lightweight advertisement to a connected peer.
 // The stream remains open in case the peer wants to request the content .
-func advertiseToPeer(ctx context.Context, host host.Host, peerID peer.ID, proto protocol.ID, ann contentAnn) error {
-	s, err := host.NewStream(ctx, peerID, proto)
+func (n *Node) advertiseToPeer(ctx context.Context, peerID peer.ID, proto protocol.ID, ann contentAnn) error {
+	s, err := n.host.NewStream(ctx, peerID, proto)
 	if err != nil {
 		return fmt.Errorf("failed to open stream to peer: %w", err)
 	}
@@ -105,25 +105,23 @@ func advertiseToPeer(ctx context.Context, host host.Host, peerID peer.ID, proto 
 		return fmt.Errorf("send content ID failed: %w", err)
 	}
 
-	log.Printf("advertised content %s to peer %s", ann, peerID)
-
 	// Keep the stream open for potential content requests
 	go func() {
 		defer s.Close()
 
 		req := make([]byte, 128)
-		n, err := s.Read(req)
+		nr, err := s.Read(req)
 		if err != nil && !errors.Is(err, io.EOF) {
-			log.Println("bad get blk req", err)
+			n.log.Warn("bad advertise response", "error", err)
 			return
 		}
-		if n == 0 { // they didn't want it
+		if nr == 0 { // they didn't want it
 			return
 		}
-		req = req[:n]
+		req = req[:nr]
 		req, ok := bytes.CutPrefix(req, []byte(getMsg))
 		if !ok {
-			log.Printf("bad get request for %s: %v", ann, req)
+			n.log.Warn("bad advertise response", "resp", hex.EncodeToString(req))
 			return
 		}
 		s.Write(ann.content)

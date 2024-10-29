@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"log"
 	"time"
 
 	"p2p/node/types"
@@ -67,18 +66,18 @@ func requestTx(rw io.ReadWriter, reqMsg []byte) ([]byte, error) {
 
 func (n *Node) getTx(ctx context.Context, txHash types.Hash) ([]byte, error) {
 	for _, peer := range n.peers() {
-		log.Printf("requesting tx %v from %v", txHash, peer)
+		n.log.Info("requesting tx", "hash", txHash, "peer", peer)
 		raw, err := getTx(ctx, txHash, peer, n.host)
 		if errors.Is(err, ErrTxNotFound) {
-			log.Printf("transaction not available on %v", peer)
+			n.log.Warnf("transaction not available on %v", peer)
 			continue
 		}
 		if errors.Is(err, ErrNoResponse) {
-			log.Printf("no response to tx request to %v", peer)
+			n.log.Warnf("no response to tx request to %v", peer)
 			continue
 		}
 		if err != nil {
-			log.Printf("unexpected error from %v: %v", peer, err)
+			n.log.Warnf("unexpected error from %v: %v", peer, err)
 			continue
 		}
 		return raw, nil
@@ -94,7 +93,7 @@ func (n *Node) getTxWithRetry(ctx context.Context, txHash types.Hash, baseDelay 
 		if err == nil {
 			return raw, nil
 		}
-		log.Printf("unable to retrieve tx %v (%v), waiting to retry", txHash, err)
+		n.log.Warnf("unable to retrieve tx %v (%v), waiting to retry", txHash, err)
 		select {
 		case <-ctx.Done():
 		case <-time.After(baseDelay):

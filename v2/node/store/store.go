@@ -415,7 +415,7 @@ func (bki *BlockStore) GetByHeight(height int64) (types.Hash, *types.Block, type
 
 	hashes, have := bki.hashes[height]
 	if !have {
-		return types.Hash{}, nil, types.Hash{}, fmt.Errorf("block not found at height %d", height)
+		return types.Hash{}, nil, types.Hash{}, types.ErrNotFound
 	}
 	blk, appHash, err := bki.Get(hashes.hash)
 	if err != nil {

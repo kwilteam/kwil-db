@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"fmt"
+
 	"p2p/node/types"
 )
 

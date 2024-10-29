@@ -109,7 +109,8 @@ func (ce *ConsensusEngine) commit() error {
 		ce.mempool.Store(txHash, nil)
 	}
 
-	fmt.Println("Committed Block: ", ce.state.blkProp.blk.Header.Height, " blkHash: ", ce.state.blkProp.blk.Header.Hash().String(), " appHash: ", ce.state.blockRes.appHash.String())
+	ce.log.Info("Committed Block", "height", ce.state.blkProp.blk.Header.Height,
+		"hash", ce.state.blkProp.blk.Header.Hash(), "appHash", ce.state.blockRes.appHash)
 	return nil
 }
 
@@ -139,8 +140,8 @@ type appState struct {
 func (ce *ConsensusEngine) persistAppState() error {
 	bts, err := json.MarshalIndent(ce.state.appState, "", "  ")
 	if err != nil {
-		fmt.Println("Error marshalling appstate: ", err)
-		return err
+		ce.log.Errorf("Error marshalling appstate: %v", err)
+		return err // fatal or warn?
 	}
 	return os.WriteFile(ce.stateFile(), bts, 0644)
 }
@@ -149,8 +150,7 @@ func (ce *ConsensusEngine) loadAppState() (*appState, error) {
 	bts, err := os.ReadFile(ce.stateFile())
 	if err != nil {
 		if os.IsNotExist(err) {
-
-			return &appState{Height: 0, AppHash: types.ZeroHash}, nil
+			return &appState{}, nil
 		}
 		return nil, fmt.Errorf("error reading appstate file: %w", err)
 	}
@@ -169,10 +169,10 @@ func LoadState(filename string) (int64, types.Hash) {
 	state := &appState{}
 	bts, err := os.ReadFile(filename)
 	if err != nil {
-		return 0, types.ZeroHash
+		return 0, types.Hash{}
 	}
 	if err := json.Unmarshal(bts, state); err != nil {
-		return 0, types.ZeroHash
+		return 0, types.Hash{}
 	}
 	return state.Height, state.AppHash
 }

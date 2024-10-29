@@ -5,9 +5,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"log"
 	"sync"
 	"time"
+
+	"p2p/log"
 
 	"github.com/libp2p/go-libp2p/core/discovery"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -23,7 +24,8 @@ var (
 )
 
 type peerMan struct {
-	h host.Host
+	log log.Logger
+	h   host.Host
 	// nodeType string // e.g., "leader", "validator", "sentry"
 }
 
@@ -93,7 +95,7 @@ func (pm *peerMan) FindPeers(ctx context.Context, ns string, opts ...discovery.O
 	peers := pm.h.Network().Peers()
 	if len(peers) == 0 {
 		close(peerChan)
-		log.Println("no existing peers for peer discovery")
+		pm.log.Warn("no existing peers for peer discovery")
 		return peerChan, nil
 	}
 
