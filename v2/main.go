@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"p2p/node"
 	"p2p/node/types"
 
+	// TODO: isolate to config package not main
 	"github.com/libp2p/go-libp2p/core/crypto" // TODO: isolate to config package not main
 )
 
@@ -36,27 +38,13 @@ func main() {
 }
 
 var (
-	rootDir string
-	// key       string
-	// port      uint64
-	// connectTo string
-	// noPex     bool
-	// leader    bool
-	// numVals   int
+	rootDir   string
 	logLevel  string
 	logFormat string
 )
 
 func run(ctx context.Context) error {
 	// TODO: restore flags, rethink config file (format and/or existence)
-
-	// flag.StringVar(&key, "key", "", "private key bytes (hexadecimal), empty is pseudo-random")
-	// flag.Uint64Var(&port, "port", 0, "listen port (0 for random)")
-	// flag.StringVar(&connectTo, "connect", "", "peer multiaddr to connect to")
-	// flag.BoolVar(&noPex, "no-pd", false, "disable peer discover")
-	// flag.BoolVar(&leader, "leader", false, "make this node produce blocks (should only be one in a network)")
-	// flag.IntVar(&role, "role", 0, "role of the node (0: leader, 1: validator, 2: sentry)")
-	// flag.IntVar(&numVals, "v", 1, "number of validators (all peers are validators!)")
 	flag.StringVar(&rootDir, "root", ".testnet", "root directory for the configuration")
 	flag.StringVar(&logLevel, "log-level", log.LevelInfo.String(), "log level")
 	flag.StringVar(&logFormat, "log-format", string(log.FormatUnstructured), "log format")
@@ -72,38 +60,22 @@ func run(ctx context.Context) error {
 		return fmt.Errorf("invalid log format: %w", err)
 	}
 
+	// Writing to stdout and a log file.  TODO: config outputs
+	rot, err := log.NewRotatorWriter(filepath.Join(rootDir, "kwild.log"), 10_000, 0)
+	if err != nil {
+		return fmt.Errorf("failed to create log rotator: %w", err)
+	}
+	defer func() {
+		if err := rot.Close(); err != nil {
+			fmt.Printf("failed to close log rotator: %v", err)
+		}
+	}()
+
+	logWriter := io.MultiWriter(os.Stdout, rot) // tee to stdout and log file
+
 	logger := log.New(log.WithLevel(logLevel), log.WithFormat(logFormat),
-		log.WithName("KWILD"))
-	// NOTE: level can be set independently for different system
-
-	// dummyce.NumValidatorsFake = numVals
-
-	// rr := rand.Reader
-	// if port != 0 { // deterministic key based on port for testing
-	// 	// rr = mrand.New(mrand.NewSource(int64(port)))
-	// 	var seed [32]byte
-	// 	binary.LittleEndian.PutUint64(seed[:], port)
-	// 	seed = sha256.Sum256(seed[:])
-	// 	log.Printf("seed: %x", seed)
-	// 	rr = mrand2.NewChaCha8(seed)
-	// 	// var buf bytes.Buffer
-	// 	// buf.Write(seed[:])
-	// 	// buf.Write(seed[:])
-	// 	// rr = &buf
-	// }
-
-	// var rawKey []byte
-	// if key == "" {
-	// 	privKey := node.NewKey(rr)
-	// 	rawKey, _ = privKey.Raw()
-	// 	log.Printf("priv key: %x", rawKey)
-	// } else {
-	// 	var err error
-	// 	rawKey, err = hex.DecodeString(key)
-	// 	if err != nil {
-	// 		return err
-	// 	}
-	// }
+		log.WithName("KWILD"), log.WithWriter(logWriter))
+	// NOTE: level and name can be set independently for different systems
 
 	genFile := filepath.Join(rootDir, "genesis.json")
 

@@ -400,6 +400,7 @@ func (n *Node) peers() []peer.ID {
 	return peers
 }
 
+// NewKey generates a new private key from a reader, which should provide random data.
 func NewKey(r io.Reader) crypto.PrivKey {
 	// priv, _ := secp256k1.GeneratePrivateKeyFromRand(r)
 	// privECDSA := priv.ToECDSA()
