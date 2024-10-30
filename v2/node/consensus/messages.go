@@ -25,6 +25,9 @@ func (ce *ConsensusEngine) sendConsensusMessage(msg *consensusMessage) {
 	ce.msgChan <- *msg
 }
 
+// BlockProposal is a message that is sent to the consensus engine to notify
+// that a new block proposal has been received from the leader.
+// Ensure that the source of the block proposal is the leader.
 type blockProposal struct {
 	height  int64
 	blkHash types.Hash
@@ -56,6 +59,9 @@ func (vm *vote) String() string {
 	return fmt.Sprintf("Vote {height: %d, ack: %t, blkHash: %s, appHash: %s}", vm.height, vm.ack, vm.blkHash.String(), vm.appHash.String())
 }
 
+// BlockAnnounce is a message that is sent to the consensus engine to notify
+// that a new block has been committed to the blockchain.
+// Ensure that the source of the block announce is the leader.
 type blockAnnounce struct {
 	appHash types.Hash
 	blk     *types.Block
@@ -69,8 +75,24 @@ func (bam *blockAnnounce) String() string {
 	return fmt.Sprintf("BlockAnnounce {height: %d, blkHash: %s, appHash: %s}", bam.blk.Header.Height, bam.blk.Hash().String(), bam.appHash.String())
 }
 
-// TODO: do we need a resetState message to rollback or stop processing certain block>
-// type resetState struct {
-// 	height int64
-//  ignoreBlk types.Hash
-// }
+// resetState is a message that is sent to the consensus engine to
+// abort any ongoing block proposal at height + 1 and reset to the
+// state at height.
+// This message can be triggered in the following scenarios:
+// 1. Leader explicitly sends a resetState message to the nodes.
+// 2. Nodes receive conflicting block proposals from the leader probably
+// due to amnesia after leader restart.
+// 3. Nodes receive a blockAnn message from the leader for a different blk
+// than the one the node is currently processing or waiting on.
+type resetState struct {
+	height int64
+	// ignoreBlk types.Hash
+}
+
+func (rs *resetState) Type() string {
+	return "reset_state"
+}
+
+func (rs *resetState) String() string {
+	return fmt.Sprintf("ResetState {height: %d}", rs.height)
+}

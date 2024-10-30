@@ -150,7 +150,7 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 
 	height := prop.Height
 
-	if !n.ce.AcceptProposal(height, prop.PrevHash /* , prop.Stamp, prop.Hash, prop.LeaderSig */) {
+	if !n.ce.AcceptProposal(height, prop.Hash, prop.PrevHash) {
 		// NOTE: if this is ahead of our last commit height, we have to try to catch up
 		n.log.Infof("don't want proposal content", height, prop.PrevHash)
 		return
@@ -345,8 +345,10 @@ func (n *Node) blkAckStreamHandler(s network.Stream) {
 }
 */
 
-func (n *Node) sendReset(cr ConsensusReset) error {
-	n.resetMsg <- cr // ?
+func (n *Node) sendReset(height int64) error {
+	n.resetMsg <- types.ConsensusReset{
+		ToHeight: height,
+	} // ?
 	return nil
 }
 
