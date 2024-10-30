@@ -43,7 +43,7 @@ const (
 )
 
 type ConsensusEngine interface {
-	AcceptProposal(height int64, prevHash types.Hash) bool
+	AcceptProposal(height int64, blkID, prevBlkID types.Hash) bool
 	NotifyBlockProposal(blk *types.Block)
 
 	AcceptCommit(height int64, blkID types.Hash, appHash types.Hash) bool
@@ -53,7 +53,7 @@ type ConsensusEngine interface {
 
 	// Gonna remove this once we have the commit results such as app hash and the tx results stored in the block store.
 
-	Start(ctx context.Context, proposerBroadcaster consensus.ProposalBroadcaster, blkAnnouncer consensus.BlkAnnouncer, ackBroadcaster consensus.AckBroadcaster, blkRequester consensus.BlkRequester)
+	Start(ctx context.Context, proposerBroadcaster consensus.ProposalBroadcaster, blkAnnouncer consensus.BlkAnnouncer, ackBroadcaster consensus.AckBroadcaster, blkRequester consensus.BlkRequester, stateResetter consensus.ResetStateBroadcaster)
 
 	// Note: Not sure if these are needed here, just for seperate of concerns:
 	// p2p stream handlers role is to downlaod the messages and pass it to the
@@ -248,7 +248,7 @@ func (n *Node) Start(ctx context.Context, peers ...string) error {
 	go func() {
 		defer n.wg.Done()
 		defer cancel()
-		n.ce.Start(ctx, n.announceBlkProp, n.announceBlk, n.sendACK, n.getBlkHeight /*, n.sendReset */)
+		n.ce.Start(ctx, n.announceBlkProp, n.announceBlk, n.sendACK, n.getBlkHeight, n.sendReset)
 	}()
 
 	// mine is our block anns goroutine, which must be only for leader
