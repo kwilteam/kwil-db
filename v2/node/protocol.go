@@ -121,7 +121,7 @@ func (n *Node) advertiseToPeer(ctx context.Context, peerID peer.ID, proto protoc
 	go func() {
 		defer s.Close()
 
-		s.SetReadDeadline(time.Now().Add(annRespTimeout))
+		// s.SetReadDeadline(time.Now().Add(annRespTimeout))
 
 		req := make([]byte, 128)
 		nr, err := s.Read(req)
