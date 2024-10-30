@@ -188,7 +188,7 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 		return
 	}
 
-	n.log.Infof("processing block proposal", "height", height, "hash", hash)
+	n.log.Info("processing block proposal", "height", height, "hash", hash)
 
 	go n.ce.NotifyBlockProposal(blk)
 
