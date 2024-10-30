@@ -80,8 +80,9 @@ func (bp *blockProp) UnmarshalFromReader(r io.Reader) error {
 
 	// buf := make([]byte, 8+2*types.HashLen+...); io.ReadFull(r, buf)
 
-	buf, err := io.ReadAll(r)
-	if err != nil {
+	// buf, err := io.ReadAll(r)
+	buf := make([]byte, 8+2*types.HashLen+8)
+	if _, err := io.ReadFull(r, buf); err != nil {
 		return fmt.Errorf("reading blockProp: %w", err)
 	}
 	return bp.UnmarshalBinary(buf)
