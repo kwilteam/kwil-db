@@ -371,6 +371,7 @@ func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context) error {
 		_, appHash, rawblk, err := ce.blkRequester(ctx, ce.state.lc.height+1)
 		ce.log.Info("Requested block from network", "height", ce.state.lc.height+1, "appHash", appHash)
 		if err != nil { // all kinds of errors?
+			ce.log.Info("Error requesting block from network", "height", ce.state.lc.height+1, "error", err)
 			return nil // no more blocks to sync from network.
 		}
 

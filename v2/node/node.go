@@ -225,6 +225,25 @@ func (n *Node) Start(ctx context.Context, peers ...string) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	// connect to bootstrap peers, if any
+	for _, peer := range peers {
+		peerInfo, err := connectPeer(ctx, peer, n.host)
+		if err != nil {
+			n.log.Errorf("failed to connect to %v: %v", peer, err)
+			continue
+		}
+		n.log.Info("Connected", "peer", peerInfo)
+		if err = n.checkPeerProtos(ctx, peerInfo.ID); err != nil {
+			n.log.Warnf("WARNING: peer does not support required protocols %v: %v", peer, err)
+			if err = n.host.Network().ClosePeer(peerInfo.ID); err != nil {
+				n.log.Errorf("failed to disconnect from %v: %v", peer, err)
+			}
+			// n.host.Peerstore().RemovePeer()
+			continue
+		}
+		// n.host.ConnManager().TagPeer(peerID, "validatorish", 1)
+	} // else would use persistent peer store (address book)
+
 	ps, err := pubsub.NewGossipSub(ctx, n.host)
 	if err != nil {
 		return err
@@ -258,25 +277,6 @@ func (n *Node) Start(ctx context.Context, peers ...string) error {
 	// 	defer cancel()
 	// 	n.announceBlocks(ctx)
 	// }()
-
-	// connect to bootstrap peers, if any
-	for _, peer := range peers {
-		peerInfo, err := connectPeer(ctx, peer, n.host)
-		if err != nil {
-			n.log.Errorf("failed to connect to %v: %v", peer, err)
-			continue
-		}
-		n.log.Info("Connected", "peer", peerInfo)
-		if err = n.checkPeerProtos(ctx, peerInfo.ID); err != nil {
-			n.log.Warnf("WARNING: peer does not support required protocols %v: %v", peer, err)
-			if err = n.host.Network().ClosePeer(peerInfo.ID); err != nil {
-				n.log.Errorf("failed to disconnect from %v: %v", peer, err)
-			}
-			// n.host.Peerstore().RemovePeer()
-			continue
-		}
-		// n.host.ConnManager().TagPeer(peerID, "validatorish", 1)
-	} // else would use persistent peer store (address book)
 
 	n.wg.Add(1)
 	go func() {
