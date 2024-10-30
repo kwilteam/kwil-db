@@ -203,7 +203,7 @@ procedure_return:
     The following section includes parser rules for SQL.
 */
 
-// sql is a top-level SQL statement, it maps to SQLStmt interface in AST.
+// sql_stmt is a top-level SQL statement, it maps to SQLStmt interface in AST.
 sql_stmt:
     (sql_statement | ddl_stmt) SCOL
 ;
