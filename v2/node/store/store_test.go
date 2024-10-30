@@ -14,7 +14,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"p2p/node/types"
+	"kwil/node/types"
 )
 
 func getFileSizes(dirPath string) ([][2]string, error) {

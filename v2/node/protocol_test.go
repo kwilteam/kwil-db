@@ -2,8 +2,8 @@ package node
 
 import (
 	"bytes"
+	"kwil/node/types"
 	"math"
-	"p2p/node/types"
 	"testing"
 )
 
