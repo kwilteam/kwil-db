@@ -6,6 +6,30 @@ import (
 	"fmt"
 )
 
+type ConsensusReset struct {
+	ToHeight int64
+}
+
+func (cr ConsensusReset) String() string {
+	return fmt.Sprintf("ConsensusReset{Height: %d}", cr.ToHeight)
+}
+
+func (cr ConsensusReset) Bytes() []byte {
+	return binary.LittleEndian.AppendUint64(nil, uint64(cr.ToHeight))
+}
+
+func (cr ConsensusReset) MarshalBinary() ([]byte, error) {
+	return cr.Bytes(), nil
+}
+
+func (cr *ConsensusReset) UnmarshalBinary(data []byte) error {
+	if len(data) != 8 {
+		return errors.New("invalid ConsensusReset data")
+	}
+	cr.ToHeight = int64(binary.LittleEndian.Uint64(data))
+	return nil
+}
+
 type AckRes struct {
 	Height  int64
 	ACK     bool

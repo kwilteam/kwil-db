@@ -91,7 +91,8 @@ type Node struct {
 	pm *peerMan
 	// pf *prefetch
 
-	ackChan chan AckRes // from consensus engine, to gossip to leader
+	ackChan  chan AckRes         // from consensus engine, to gossip to leader
+	resetMsg chan ConsensusReset // gossiped in from peers, to consensus engine
 
 	host   host.Host
 	pex    bool
@@ -172,18 +173,19 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 	}
 
 	node := &Node{
-		log:     logger,
-		host:    host,
-		pm:      pm,
-		pex:     options.pex,
-		mp:      mp,
-		bki:     bs,
-		ce:      ce,
-		dir:     dir,
-		ackChan: make(chan AckRes, 1),
-		close:   close,
-		role:    options.role,
-		valSet:  options.valSet,
+		log:      logger,
+		host:     host,
+		pm:       pm,
+		pex:      options.pex,
+		mp:       mp,
+		bki:      bs,
+		ce:       ce,
+		dir:      dir,
+		ackChan:  make(chan AckRes, 1),
+		resetMsg: make(chan ConsensusReset, 1),
+		close:    close,
+		role:     options.role,
+		valSet:   options.valSet,
 	}
 
 	node.leader.Store(options.role == types.RoleLeader)
@@ -227,7 +229,11 @@ func (n *Node) Start(ctx context.Context, peers ...string) error {
 	if err != nil {
 		return err
 	}
-	if err := n.startAckGossip(ctx, ps); err != nil { // gossip.go
+	if err := n.startAckGossip(ctx, ps); err != nil {
+		cancel()
+		return err
+	}
+	if err := n.startConsensusResetGossip(ctx, ps); err != nil {
 		cancel()
 		return err
 	}
@@ -242,7 +248,7 @@ func (n *Node) Start(ctx context.Context, peers ...string) error {
 	go func() {
 		defer n.wg.Done()
 		defer cancel()
-		n.ce.Start(ctx, n.announceBlkProp, n.announceBlk, n.sendACK, n.getBlkHeight)
+		n.ce.Start(ctx, n.announceBlkProp, n.announceBlk, n.sendACK, n.getBlkHeight /*, n.sendReset */)
 	}()
 
 	// mine is our block anns goroutine, which must be only for leader

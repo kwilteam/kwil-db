@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	blkReadLimit  = 300_000_000
-	blkGetTimeout = 90 * time.Second
+	blkReadLimit   = 300_000_000
+	blkGetTimeout  = 90 * time.Second
+	blkSendTimeout = 45 * time.Second
 )
 
 func (n *Node) blkGetStreamHandler(s network.Stream) {
@@ -64,11 +65,11 @@ func (n *Node) blkGetHeightStreamHandler(s network.Stream) {
 func (n *Node) blkAnnStreamHandler(s network.Stream) {
 	defer s.Close()
 
-	s.SetDeadline(time.Now().Add(blkGetTimeout))
+	s.SetDeadline(time.Now().Add(blkGetTimeout + annRespTimeout + annWriteTimeout)) // combined
 	ctx, cancel := context.WithTimeout(context.Background(), blkGetTimeout)
 	defer cancel()
 
-	var reqMsg blockInitMsg
+	var reqMsg blockAnnMsg
 	if _, err := reqMsg.ReadFrom(s); err != nil {
 		n.log.Warn("bad blk ann request", "error", err)
 		return
@@ -76,6 +77,10 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 
 	height, blkHash, appHash := reqMsg.Height, reqMsg.Hash, reqMsg.AppHash
 	blkid := blkHash.String()
+
+	// TODO: also get and pass the signature to AcceptCommit to ensure it's
+	// legit before we waste bandwidth on spam. We could also make the protocol
+	// request the block header, and then CE checks block header.
 
 	if height < 0 {
 		n.log.Warn("invalid height in blk ann request", "height", height)
@@ -171,17 +176,18 @@ func (n *Node) announceRawBlk(ctx context.Context, blkHash types.Hash, height in
 		}
 		n.log.Infof("advertising block %s (height %d / txs %d) to peer %v",
 			blkHash, height, len(rawBlk), peerID)
-		resID, err := blockInitMsg{
+		resID, err := blockAnnMsg{
 			Hash:    blkHash,
 			Height:  height,
 			AppHash: appHash,
+			// LeaderSig: leaderSig, // TODO: leader sig should be attached to the ann, not just in block
 		}.MarshalBinary()
 		if err != nil {
 			n.log.Error("Unable to marshal block announcement", "error", err)
 			continue
 		}
 		ann := contentAnn{cType: "block announce", ann: resID, content: rawBlk}
-		err = n.advertiseToPeer(ctx, peerID, ProtocolIDBlkAnn, ann)
+		err = n.advertiseToPeer(ctx, peerID, ProtocolIDBlkAnn, ann, blkSendTimeout)
 		if err != nil {
 			n.log.Warn("Failed to advertise block", "peer", peerID, "error", err)
 			continue

@@ -81,6 +81,15 @@ func readResp(rd io.Reader, limit int64) ([]byte, error) {
 	return resp, nil
 }
 
+const (
+	// annWriteTimeout the the content announcement write timeout when sending
+	// the resource identifier, which is very small.
+	annWriteTimeout = 5 * time.Second
+	// annRespTimeout is the timeout for the response to the resource
+	// announcement, which is also small e.g. "get".
+	annRespTimeout = 5 * time.Second
+)
+
 type contentAnn struct {
 	cType   string
 	ann     []byte // may be cType if self-describing
@@ -93,11 +102,14 @@ func (ca contentAnn) String() string {
 
 // advertiseToPeer sends a lightweight advertisement to a connected peer.
 // The stream remains open in case the peer wants to request the content .
-func (n *Node) advertiseToPeer(ctx context.Context, peerID peer.ID, proto protocol.ID, ann contentAnn) error {
+func (n *Node) advertiseToPeer(ctx context.Context, peerID peer.ID, proto protocol.ID,
+	ann contentAnn, contentWriteTimeout time.Duration) error {
 	s, err := n.host.NewStream(ctx, peerID, proto)
 	if err != nil {
 		return fmt.Errorf("failed to open stream to peer: %w", err)
 	}
+
+	s.SetWriteDeadline(time.Now().Add(annWriteTimeout))
 
 	// Send a lightweight advertisement with the object ID
 	_, err = s.Write([]byte(ann.ann))
@@ -108,6 +120,8 @@ func (n *Node) advertiseToPeer(ctx context.Context, peerID peer.ID, proto protoc
 	// Keep the stream open for potential content requests
 	go func() {
 		defer s.Close()
+
+		s.SetReadDeadline(time.Now().Add(annRespTimeout))
 
 		req := make([]byte, 128)
 		nr, err := s.Read(req)
@@ -124,23 +138,25 @@ func (n *Node) advertiseToPeer(ctx context.Context, peerID peer.ID, proto protoc
 			n.log.Warn("bad advertise response", "resp", hex.EncodeToString(req))
 			return
 		}
+		s.SetWriteDeadline(time.Now().Add(contentWriteTimeout))
 		s.Write(ann.content)
 	}()
 
 	return nil
 }
 
-// blockInitMsg is for ProtocolIDBlkAnn "/kwil/blkann/1.0.0"
-type blockInitMsg struct {
+// blockAnnMsg is for ProtocolIDBlkAnn "/kwil/blkann/1.0.0"
+type blockAnnMsg struct {
 	Hash    types.Hash
 	Height  int64
 	AppHash types.Hash // could be in the content/response
+	// LeaderSig []byte // to avoid having to get the block to realize if it is fake (spam)
 }
 
-var _ encoding.BinaryMarshaler = blockInitMsg{}
-var _ encoding.BinaryMarshaler = (*blockInitMsg)(nil)
+var _ encoding.BinaryMarshaler = blockAnnMsg{}
+var _ encoding.BinaryMarshaler = (*blockAnnMsg)(nil)
 
-func (m blockInitMsg) MarshalBinary() ([]byte, error) {
+func (m blockAnnMsg) MarshalBinary() ([]byte, error) {
 	var buf bytes.Buffer
 	_, err := m.WriteTo(&buf)
 	if err != nil {
@@ -149,16 +165,16 @@ func (m blockInitMsg) MarshalBinary() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-var _ encoding.BinaryUnmarshaler = (*blockInitMsg)(nil)
+var _ encoding.BinaryUnmarshaler = (*blockAnnMsg)(nil)
 
-func (m *blockInitMsg) UnmarshalBinary(data []byte) error {
+func (m *blockAnnMsg) UnmarshalBinary(data []byte) error {
 	_, err := m.ReadFrom(bytes.NewReader(data))
 	return err
 }
 
-var _ io.WriterTo = (*blockInitMsg)(nil)
+var _ io.WriterTo = (*blockAnnMsg)(nil)
 
-func (m *blockInitMsg) WriteTo(w io.Writer) (int64, error) {
+func (m *blockAnnMsg) WriteTo(w io.Writer) (int64, error) {
 	var n int
 	nw, err := w.Write(m.Hash[:])
 	if err != nil {
@@ -182,9 +198,9 @@ func (m *blockInitMsg) WriteTo(w io.Writer) (int64, error) {
 	return int64(n), nil
 }
 
-var _ io.ReaderFrom = (*blockInitMsg)(nil)
+var _ io.ReaderFrom = (*blockAnnMsg)(nil)
 
-func (m *blockInitMsg) ReadFrom(r io.Reader) (int64, error) {
+func (m *blockAnnMsg) ReadFrom(r io.Reader) (int64, error) {
 	nr, err := io.ReadFull(r, m.Hash[:])
 	if err != nil {
 		return int64(nr), err
