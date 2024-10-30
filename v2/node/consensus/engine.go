@@ -55,6 +55,7 @@ type ConsensusEngine struct {
 	blkAnnouncer        BlkAnnouncer
 	ackBroadcaster      AckBroadcaster
 	blkRequester        BlkRequester
+	rstStateBroadcaster ResetStateBroadcaster
 
 	// logger log.Logger
 }
@@ -71,9 +72,14 @@ type AckBroadcaster func(ack bool, height int64, blkID types.Hash, appHash *type
 // BlkRequester requests the block from the network based on the height
 type BlkRequester func(ctx context.Context, height int64) (types.Hash, types.Hash, []byte, error)
 
+type ResetStateBroadcaster func(height int64) error
+
 // Consensus state that is applicable for processing the blioc at a speociifc height.
 type state struct {
 	mtx sync.RWMutex
+
+	cancelFunc context.CancelFunc
+	// consensusTx sql.Tx
 
 	blkProp  *blockProposal
 	blockRes *blockResult
@@ -119,6 +125,7 @@ func New(role types.Role, hostID peer.ID, dir string, mempool Mempool, bs BlockS
 		return nil
 	}
 
+	be := newBlockExecutor()
 	// rethink how this state is initialized
 	return &ConsensusEngine{
 		role:   role,
@@ -140,18 +147,20 @@ func New(role types.Role, hostID peer.ID, dir string, mempool Mempool, bs BlockS
 		msgChan:       make(chan consensusMessage, 1), // buffer size??
 		haltChan:      make(chan struct{}, 1),
 		// interfaces
-		mempool:    mempool,
-		blockStore: bs,
-		log:        logger,
+		mempool:       mempool,
+		blockStore:    bs,
+		blockExecutor: be,
+		log:           logger,
 	}
 }
 
 func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster ProposalBroadcaster,
-	blkAnnouncer BlkAnnouncer, ackBroadcaster AckBroadcaster, blkRequester BlkRequester) {
+	blkAnnouncer BlkAnnouncer, ackBroadcaster AckBroadcaster, blkRequester BlkRequester, stateResetter ResetStateBroadcaster) {
 	ce.proposalBroadcaster = proposerBroadcaster
 	ce.blkAnnouncer = blkAnnouncer
 	ce.ackBroadcaster = ackBroadcaster
 	ce.blkRequester = blkRequester
+	ce.rstStateBroadcaster = stateResetter
 
 	// Fast catchup the node with the network height
 	if err := ce.catchup(ctx); err != nil {
@@ -260,7 +269,17 @@ func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg cons
 		}
 
 		go ce.commitBlock(blkAnn.blk, blkAnn.appHash)
+
+	case "reset_state":
+		rstMsg, ok := msg.Msg.(*resetState)
+		if !ok {
+			ce.log.Error("Invalid reset state message")
+			return
+		}
+
+		ce.log.Info("Received reset state message", "height", rstMsg.height)
 	}
+
 }
 
 // catchup syncs the node first with the local blockstore and then with the network.
@@ -302,20 +321,23 @@ func (ce *ConsensusEngine) init() error {
 
 	// Retrieve the last commit info from the blockstore based on the appState info.
 	if state.Height > 0 {
-		if state.AppHash == dirtyHash {
-			ce.state.lc.height = state.Height - 1
-		} else {
-			ce.state.lc.height = state.Height
-		}
+		ce.state.lc.height = state.Height
 
+		// TODO: check for any uncommitted transaction in PG and rollback
 		// retrieve the block from the blockstore
 		hash, blk, _, err := ce.blockStore.GetByHeight(ce.state.lc.height)
 		if err != nil {
+			// This is not possible. The state.json will have the height, only when the block is committed.
 			return err
 		}
 
+		if state.AppHash == dirtyHash {
+			// This implies that the commit was successful, but the final appHash is not yet updated.
+			state.AppHash = hash
+			ce.persistAppState()
+		}
+
 		ce.state.lc.blk = blk
-		// WHat does it mean to have a dirty hash here? how would you handle it? roll back mechanics?
 		ce.state.lc.appHash = state.AppHash
 		ce.state.lc.blkHash = hash
 	}
