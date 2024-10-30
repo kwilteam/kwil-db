@@ -2,7 +2,8 @@ package consensus
 
 import (
 	"context"
-	"p2p/node/types"
+	
+	"kwil/node/types"
 )
 
 type Mempool interface {

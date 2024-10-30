@@ -1,8 +1,8 @@
 package node
 
 import (
-	"p2p/log"
-	"p2p/node/types"
+	"kwil/log"
+	"kwil/node/types"
 
 	"github.com/libp2p/go-libp2p/core/host"
 )

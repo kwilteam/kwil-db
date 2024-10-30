@@ -8,7 +8,7 @@ import (
 	"io"
 	"time"
 
-	"p2p/node/types"
+	"kwil/node/types"
 
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
