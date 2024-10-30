@@ -305,6 +305,48 @@ func TestGenerateDDLStatement(t *testing.T) {
 			},
 		},
 		{
+			name: "drop table",
+			want: `DROP TABLE users, posts;`,
+			sql: &parse.DropTableStatement{
+				Tables:   []string{"users", "posts"},
+				Behavior: parse.DropBehaviorNon,
+			},
+		},
+		{
+			name: "drop table single table",
+			want: `DROP TABLE users;`,
+			sql: &parse.DropTableStatement{
+				Tables:   []string{"users"},
+				Behavior: parse.DropBehaviorNon,
+			},
+		},
+		{
+			name: "drop table if exists",
+			want: `DROP TABLE IF EXISTS users, posts;`,
+			sql: &parse.DropTableStatement{
+				Tables:   []string{"users", "posts"},
+				IfExists: true,
+				Behavior: parse.DropBehaviorNon,
+			},
+		},
+		{
+			name: "drop table CASCADE",
+			want: `DROP TABLE IF EXISTS users, posts CASCADE;`,
+			sql: &parse.DropTableStatement{
+				Tables:   []string{"users", "posts"},
+				Behavior: parse.DropBehaviorCascade,
+				IfExists: true,
+			},
+		},
+		{
+			name: "drop table RESTRICT ",
+			want: `DROP TABLE users, posts RESTRICT;`,
+			sql: &parse.DropTableStatement{
+				Tables:   []string{"users", "posts"},
+				Behavior: parse.DropBehaviorRestrict,
+			},
+		},
+		{
 			name: "create index",
 			want: `CREATE INDEX abc ON user(name);`,
 			sql: &parse.CreateIndexStatement{

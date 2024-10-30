@@ -2309,6 +2309,48 @@ primary key (name)
 			},
 		},
 		{
+			name: "drop table",
+			sql:  `DROP TABLE users, posts;`,
+			want: &parse.DropTableStatement{
+				Tables:   []string{"users", "posts"},
+				Behavior: parse.DropBehaviorNon,
+			},
+		},
+		{
+			name: "drop table single table",
+			sql:  `DROP TABLE users;`,
+			want: &parse.DropTableStatement{
+				Tables:   []string{"users"},
+				Behavior: parse.DropBehaviorNon,
+			},
+		},
+		{
+			name: "drop table if exists",
+			sql:  `DROP TABLE IF EXISTS users, posts;`,
+			want: &parse.DropTableStatement{
+				Tables:   []string{"users", "posts"},
+				IfExists: true,
+				Behavior: parse.DropBehaviorNon,
+			},
+		},
+		{
+			name: "drop table CASCADE",
+			sql:  `DROP TABLE IF EXISTS users, posts CASCADE;`,
+			want: &parse.DropTableStatement{
+				Tables:   []string{"users", "posts"},
+				Behavior: parse.DropBehaviorCascade,
+				IfExists: true,
+			},
+		},
+		{
+			name: "drop table RESTRICT ",
+			sql:  `DROP TABLE users, posts RESTRICT;`,
+			want: &parse.DropTableStatement{
+				Tables:   []string{"users", "posts"},
+				Behavior: parse.DropBehaviorRestrict,
+			},
+		},
+		{
 			name: "create index",
 			sql:  `CREATE INDEX abc ON user(name);`,
 			want: &parse.CreateIndexStatement{
@@ -2368,7 +2410,7 @@ primary key (name)
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res, err := parse.ParseDDL(tt.sql, nil, false)
+			res, err := parse.ParseDDL(tt.sql)
 			require.NoError(t, err)
 
 			if res.ParseErrs.Err() != nil {

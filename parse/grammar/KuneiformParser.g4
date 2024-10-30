@@ -211,6 +211,7 @@ sql_stmt:
 ddl_stmt:
     create_table_statement
     | alter_table_statement
+    | drop_table_statement
     | create_index_statement
     | drop_index_statement
 ;
@@ -238,6 +239,16 @@ table_constraint_def:
      | UNIQUE LPAREN identifier_list RPAREN
      | CHECK LPAREN sql_expr RPAREN
      | FOREIGN KEY LPAREN column=identifier RPAREN fk_constraint)
+;
+
+opt_drop_behavior:
+    CASCADE
+    | RESTRICT
+    |
+;
+
+drop_table_statement:
+    DROP TABLE (IF EXISTS)? tables=identifier_list opt_drop_behavior
 ;
 
 alter_table_statement:

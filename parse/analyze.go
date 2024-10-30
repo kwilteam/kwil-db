@@ -2059,6 +2059,10 @@ func (s *sqlAnalyzer) VisitAlterTableStatement(p0 *AlterTableStatement) any {
 	panic("sqlAnalyzer: not implemented")
 }
 
+func (s *sqlAnalyzer) VisitDropTableStatement(p0 *DropTableStatement) any {
+	panic("sqlAnalyzer: not implemented")
+}
+
 func (s *sqlAnalyzer) VisitCreateIndexStatement(p0 *CreateIndexStatement) any {
 	panic("sqlAnalyzer: not implemented")
 }

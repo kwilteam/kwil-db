@@ -879,6 +879,26 @@ func (s *sqlGenerator) VisitAlterTableStatement(p0 *parse.AlterTableStatement) a
 	return str.String()
 }
 
+func (s *sqlGenerator) VisitDropTableStatement(p0 *parse.DropTableStatement) any {
+	str := strings.Builder{}
+	str.WriteString("DROP TABLE ")
+	if p0.IfExists {
+		str.WriteString("IF EXISTS ")
+	}
+
+	str.WriteString(strings.Join(p0.Tables, ", "))
+	switch p0.Behavior {
+	case parse.DropBehaviorCascade:
+		str.WriteString(" CASCADE")
+	case parse.DropBehaviorRestrict:
+		str.WriteString(" RESTRICT")
+	case parse.DropBehaviorNon:
+	default:
+		panic("unknown drop behavior")
+	}
+	return str.String()
+}
+
 func (s *sqlGenerator) VisitCreateIndexStatement(p0 *parse.CreateIndexStatement) any {
 	str := strings.Builder{}
 	str.WriteString("CREATE ")

@@ -902,6 +902,8 @@ func (s *schemaVisitor) VisitDdl_stmt(ctx *gen.Ddl_stmtContext) any {
 		return ctx.Create_table_statement().Accept(s).(*CreateTableStatement)
 	case ctx.Alter_table_statement() != nil:
 		return ctx.Alter_table_statement().Accept(s).(*AlterTableStatement)
+	case ctx.Drop_table_statement() != nil:
+		return ctx.Drop_table_statement().Accept(s).(*DropTableStatement)
 	case ctx.Create_index_statement() != nil:
 		return ctx.Create_index_statement().Accept(s).(*CreateIndexStatement)
 	case ctx.Drop_index_statement() != nil:
@@ -1230,6 +1232,31 @@ func (s *schemaVisitor) VisitTable_index_def(ctx *gen.Table_index_defContext) an
 	index.Set(ctx)
 	index.Set(ctx)
 	return index
+}
+
+func (s *schemaVisitor) VisitDrop_table_statement(ctx *gen.Drop_table_statementContext) any {
+	stmt := &DropTableStatement{
+		Tables:   ctx.GetTables().Accept(s).([]string),
+		Behavior: ctx.Opt_drop_behavior().Accept(s).(DropBehavior),
+	}
+
+	if ctx.EXISTS() != nil {
+		stmt.IfExists = true
+	}
+
+	stmt.Set(ctx)
+	return stmt
+}
+
+func (s *schemaVisitor) VisitOpt_drop_behavior(ctx *gen.Opt_drop_behaviorContext) any {
+	switch {
+	case ctx.CASCADE() != nil:
+		return DropBehaviorCascade
+	case ctx.RESTRICT() != nil:
+		return DropBehaviorRestrict
+	default:
+		return DropBehaviorNon
+	}
 }
 
 func (s *schemaVisitor) VisitAlter_table_statement(ctx *gen.Alter_table_statementContext) any {

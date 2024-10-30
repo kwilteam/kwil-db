@@ -183,6 +183,14 @@ func (v *BaseKuneiformParserVisitor) VisitTable_constraint_def(ctx *Table_constr
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseKuneiformParserVisitor) VisitOpt_drop_behavior(ctx *Opt_drop_behaviorContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitDrop_table_statement(ctx *Drop_table_statementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseKuneiformParserVisitor) VisitAlter_table_statement(ctx *Alter_table_statementContext) interface{} {
 	return v.VisitChildren(ctx)
 }

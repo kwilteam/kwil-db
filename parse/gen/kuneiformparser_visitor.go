@@ -139,6 +139,12 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#table_constraint_def.
 	VisitTable_constraint_def(ctx *Table_constraint_defContext) interface{}
 
+	// Visit a parse tree produced by KuneiformParser#opt_drop_behavior.
+	VisitOpt_drop_behavior(ctx *Opt_drop_behaviorContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#drop_table_statement.
+	VisitDrop_table_statement(ctx *Drop_table_statementContext) interface{}
+
 	// Visit a parse tree produced by KuneiformParser#alter_table_statement.
 	VisitAlter_table_statement(ctx *Alter_table_statementContext) interface{}
 

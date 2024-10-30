@@ -547,9 +547,9 @@ const (
 	SQLStatementTypeSelect      SQLStatementType = "select"
 	SQLStatementTypeCreateTable SQLStatementType = "create_table"
 	SQLStatementTypeAlterTable  SQLStatementType = "alter_table"
+	SQLStatementTypeDropTable   SQLStatementType = "drop_table"
 	SQLStatementTypeCreateIndex SQLStatementType = "create_index"
 	SQLStatementTypeDropIndex   SQLStatementType = "drop_index"
-	//SQLStatementTypeDropTable   SQLStatementType = "drop_table"
 )
 
 // CreateTableStatement is a CREATE TABLE statement.
@@ -863,6 +863,30 @@ type ForeignKeyAction struct {
 
 	// Do specifies what a foreign key action should do
 	Do ForeignKeyActionDo `json:"do"`
+}
+
+type DropBehavior string
+
+const (
+	DropBehaviorCascade  DropBehavior = "CASCADE"
+	DropBehaviorRestrict DropBehavior = "RESTRICT"
+	DropBehaviorNon      DropBehavior = ""
+)
+
+type DropTableStatement struct {
+	Position
+
+	Tables   []string
+	IfExists bool
+	Behavior DropBehavior
+}
+
+func (s *DropTableStatement) Accept(v Visitor) any {
+	return v.VisitDropTableStatement(s)
+}
+
+func (s *DropTableStatement) StmtType() SQLStatementType {
+	return SQLStatementTypeDropTable
 }
 
 type AlterTableAction interface {
@@ -1651,6 +1675,7 @@ type SQLVisitor interface {
 	// DDL
 	VisitCreateTableStatement(*CreateTableStatement) any
 	VisitAlterTableStatement(*AlterTableStatement) any
+	VisitDropTableStatement(*DropTableStatement) any
 	VisitCreateIndexStatement(*CreateIndexStatement) any
 	VisitDropIndexStatement(*DropIndexStatement) any
 }
