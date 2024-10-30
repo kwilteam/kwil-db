@@ -3,7 +3,7 @@ package store
 import (
 	"fmt"
 
-	"p2p/log"
+	"kwil/log"
 )
 
 type options struct {

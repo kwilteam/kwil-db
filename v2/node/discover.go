@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"p2p/log"
+	"kwil/log"
 
 	"github.com/libp2p/go-libp2p/core/discovery"
 	"github.com/libp2p/go-libp2p/core/host"

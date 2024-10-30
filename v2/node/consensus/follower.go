@@ -3,7 +3,7 @@ package consensus
 import (
 	"context"
 	"fmt"
-	"p2p/node/types"
+	"kwil/node/types"
 )
 
 // AcceptProposal checks if the node should download the block corresponding to the proposal.

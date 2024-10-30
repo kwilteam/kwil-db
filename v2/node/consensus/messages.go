@@ -3,7 +3,7 @@ package consensus
 import (
 	"fmt"
 
-	"p2p/node/types"
+	"kwil/node/types"
 )
 
 // This file implements the consensus messages that are exchanged between the

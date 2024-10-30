@@ -1,13 +1,14 @@
 package main
 
 import (
-	"fmt"
 	"os"
+
+	"kwil/app"
 
 	"github.com/spf13/cobra"
 )
 
-func setupCmd() *cobra.Command {
+func rootCmd() *cobra.Command {
 	desc := "Setup is a tool to generate configuration for multiple nodes and generate keys for testing purposes"
 	cmd := &cobra.Command{
 		Use:               "setup",
@@ -15,18 +16,24 @@ func setupCmd() *cobra.Command {
 		Long:              desc,
 		SilenceUsage:      true,
 		DisableAutoGenTag: true,
+		CompletionOptions: cobra.CompletionOptions{
+			DisableDescriptions: true,
+		},
+		PersistentPreRunE: app.PreRunBindFlags,
 	}
 
-	cmd.AddCommand(testnetCmd())
-	cmd.AddCommand(keygenCmd())
-	cmd.AddCommand(resetCmd())
+	// "root" does not have config file analog
+	cmd.PersistentFlags().StringP(app.RootFlagName, "r", ".testnet", "root directory")
+
+	cmd.AddCommand(app.TestnetCmd())
+	cmd.AddCommand(app.KeygenCmd())
+	cmd.AddCommand(app.ResetCmd())
 
 	return cmd
 }
 
 func main() {
-	if err := setupCmd().Execute(); err != nil {
-		fmt.Println(err)
+	if err := rootCmd().Execute(); err != nil {
 		os.Exit(-1)
 	}
 }

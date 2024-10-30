@@ -3,7 +3,7 @@ package mempool
 import (
 	"sync"
 
-	"p2p/node/types"
+	"kwil/node/types"
 )
 
 // mempool is an index of unconfirmed transactions

@@ -3,7 +3,8 @@ package consensus
 import (
 	"context"
 	"crypto/sha256"
-	"p2p/node/types"
+
+	"kwil/node/types"
 )
 
 // potentially our txApp
