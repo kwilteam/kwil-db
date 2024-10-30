@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"os"
 
-	"p2p/node/types"
+	"kwil/node/types"
 )
 
 type GenesisConfig struct {

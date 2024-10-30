@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"io"
 
-	"p2p/node/types"
+	"kwil/node/types"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/network"

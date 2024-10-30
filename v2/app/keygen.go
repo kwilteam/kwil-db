@@ -1,8 +1,8 @@
-package main
+package app
 
 import "github.com/spf13/cobra"
 
-func keygenCmd() *cobra.Command {
+func KeygenCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "keygen",
 		Short: "Generate keys for testing purposes",

@@ -16,11 +16,11 @@ import (
 	"sync/atomic"
 	"time"
 
-	"p2p/log"
-	"p2p/node/consensus"
-	"p2p/node/mempool"
-	"p2p/node/store"
-	"p2p/node/types"
+	"kwil/log"
+	"kwil/node/consensus"
+	"kwil/node/mempool"
+	"kwil/node/store"
+	"kwil/node/types"
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/libp2p/go-libp2p"

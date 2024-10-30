@@ -8,8 +8,8 @@ import (
 	"slices"
 	"sync"
 
-	"p2p/log"
-	"p2p/node/types"
+	"kwil/log"
+	"kwil/node/types"
 
 	"github.com/dgraph-io/badger/v4"
 )
