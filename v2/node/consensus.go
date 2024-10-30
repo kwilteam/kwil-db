@@ -56,7 +56,8 @@ func (bp blockProp) MarshalBinary() ([]byte, error) {
 }
 
 func (bp *blockProp) UnmarshalBinary(data []byte) error {
-	if len(data) < 8+2*types.HashLen+8+4 { // don't know length of a valid sig, but it's certainly more than 4 bytes
+	const minLeaderSigLen = 0 // don't know length of a valid sig, but it's certainly more than 4 bytes
+	if len(data) < 8+2*types.HashLen+8+minLeaderSigLen {
 		return fmt.Errorf("insufficient data for blockProp")
 	}
 	var c int
@@ -79,8 +80,9 @@ func (bp *blockProp) UnmarshalFromReader(r io.Reader) error {
 
 	// buf := make([]byte, 8+2*types.HashLen+...); io.ReadFull(r, buf)
 
-	buf, err := io.ReadAll(r)
-	if err != nil {
+	// buf, err := io.ReadAll(r)
+	buf := make([]byte, 8+2*types.HashLen+8)
+	if _, err := io.ReadFull(r, buf); err != nil {
 		return fmt.Errorf("reading blockProp: %w", err)
 	}
 	return bp.UnmarshalBinary(buf)
@@ -142,7 +144,7 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 	var prop blockProp
 	err := prop.UnmarshalFromReader(s)
 	if err != nil {
-		n.log.Infof("invalid block proposal message:", err)
+		n.log.Infof("invalid block proposal message: %v", err)
 		return
 	}
 
@@ -186,7 +188,7 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 		return
 	}
 
-	n.log.Infof("processing block proposal", "height", height, "hash", hash)
+	n.log.Info("processing block proposal", "height", height, "hash", hash)
 
 	go n.ce.NotifyBlockProposal(blk)
 
