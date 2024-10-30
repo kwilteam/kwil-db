@@ -31,16 +31,12 @@ func subTopic(_ context.Context, ps *pubsub.PubSub, topic string) (*pubsub.Topic
 }
 
 const (
-	TopicTxs  = "txs"
-	TopicBlks = "blks"
+	TopicTxs   = "txs"
+	TopicReset = "reset"
 )
 
 func subTxs(ctx context.Context, ps *pubsub.PubSub) (*pubsub.Topic, *pubsub.Subscription, error) {
 	return subTopic(ctx, ps, TopicTxs)
-}
-
-func subBlks(ctx context.Context, ps *pubsub.PubSub) (*pubsub.Topic, *pubsub.Subscription, error) {
-	return subTopic(ctx, ps, TopicBlks)
 }
 
 func (n *Node) startTxGossip(ctx context.Context, ps *pubsub.PubSub) error {

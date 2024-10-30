@@ -7,20 +7,20 @@ import (
 	"testing"
 )
 
-func TestBlockInitMsg_MarshalUnmarshal(t *testing.T) {
+func TestBlockAnnMsg_MarshalUnmarshal(t *testing.T) {
 	tests := []struct {
 		name    string
-		msg     *blockInitMsg
+		msg     *blockAnnMsg
 		wantErr bool
 	}{
 		{
 			name:    "empty message",
-			msg:     &blockInitMsg{},
+			msg:     &blockAnnMsg{},
 			wantErr: false,
 		},
 		{
 			name: "message with data",
-			msg: &blockInitMsg{
+			msg: &blockAnnMsg{
 				Height: 100,
 				Hash:   [32]byte{1, 2, 3},
 			},
@@ -36,7 +36,7 @@ func TestBlockInitMsg_MarshalUnmarshal(t *testing.T) {
 				return
 			}
 
-			newMsg := &blockInitMsg{}
+			newMsg := &blockAnnMsg{}
 			err = newMsg.UnmarshalBinary(data)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("UnmarshalBinary() error = %v, wantErr %v", err, tt.wantErr)
@@ -55,7 +55,7 @@ func TestBlockInitMsg_MarshalUnmarshal(t *testing.T) {
 	}
 }
 
-func TestBlockInitMsg_UnmarshalInvalidData(t *testing.T) {
+func TestBlockAnnMsg_UnmarshalInvalidData(t *testing.T) {
 	tests := []struct {
 		name    string
 		data    []byte
@@ -80,7 +80,7 @@ func TestBlockInitMsg_UnmarshalInvalidData(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			msg := &blockInitMsg{}
+			msg := &blockAnnMsg{}
 			err := msg.UnmarshalBinary(tt.data)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("UnmarshalBinary() error = %v, wantErr %v", err, tt.wantErr)

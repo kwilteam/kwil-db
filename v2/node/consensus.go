@@ -15,7 +15,10 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
-type AckRes = types.AckRes
+type (
+	ConsensusReset = types.ConsensusReset
+	AckRes         = types.AckRes
+)
 
 type ackFrom struct {
 	fromPubKey []byte
@@ -23,9 +26,12 @@ type ackFrom struct {
 }
 
 type blockProp struct {
-	Height   int64
-	Hash     types.Hash
-	PrevHash types.Hash
+	Height    int64
+	Hash      types.Hash
+	PrevHash  types.Hash
+	Stamp     int64
+	LeaderSig []byte
+	// Replacing *types.Hash
 }
 
 func (bp blockProp) String() string {
@@ -34,26 +40,47 @@ func (bp blockProp) String() string {
 }
 
 func (bp blockProp) MarshalBinary() ([]byte, error) {
-	buf := make([]byte, 8+2*types.HashLen) // 8 bytes for int64 + 2 hash lengths
+	// 8 bytes for int64 + 2 hash lengths + 8 bytes for time stamp + len(sig)
+	buf := make([]byte, 8+2*types.HashLen+8+len(bp.LeaderSig))
+	var c int
 	binary.LittleEndian.PutUint64(buf[:8], uint64(bp.Height))
-	copy(buf[8:], bp.Hash[:])
-	copy(buf[8+types.HashLen:], bp.PrevHash[:])
+	c += 8
+	copy(buf[c:], bp.Hash[:])
+	c += types.HashLen
+	copy(buf[c:], bp.PrevHash[:])
+	c += types.HashLen
+	binary.LittleEndian.PutUint64(buf[c:], uint64(bp.Stamp))
+	c += 8
+	copy(buf[c:], bp.LeaderSig) // c += len(bp.LeaderSig)
 	return buf, nil
 }
 
 func (bp *blockProp) UnmarshalBinary(data []byte) error {
-	if len(data) < 8+2*types.HashLen {
+	if len(data) < 8+2*types.HashLen+8+4 { // don't know length of a valid sig, but it's certainly more than 4 bytes
 		return fmt.Errorf("insufficient data for blockProp")
 	}
+	var c int
 	bp.Height = int64(binary.LittleEndian.Uint64(data[:8]))
-	copy(bp.Hash[:], data[8:8+types.HashLen])
-	copy(bp.PrevHash[:], data[8+types.HashLen:])
+	c += 8
+	copy(bp.Hash[:], data[c:c+types.HashLen])
+	c += types.HashLen
+	copy(bp.PrevHash[:], data[c:])
+	c += types.HashLen
+	bp.Stamp = int64(binary.LittleEndian.Uint64(data[c:]))
+	c += 8
+	bp.LeaderSig = data[c:] // c += len(bp.LeaderSig)
 	return nil
 }
 
 func (bp *blockProp) UnmarshalFromReader(r io.Reader) error {
-	buf := make([]byte, 8+2*types.HashLen)
-	if _, err := io.ReadFull(r, buf); err != nil {
+	// var buf bytes.Buffer
+	// buf.Grow(8 + 2*types.HashLen + 8 + 96)
+	// _, err := buf.ReadFrom(r)
+
+	// buf := make([]byte, 8+2*types.HashLen+...); io.ReadFull(r, buf)
+
+	buf, err := io.ReadAll(r)
+	if err != nil {
 		return fmt.Errorf("reading blockProp: %w", err)
 	}
 	return bp.UnmarshalBinary(buf)
@@ -77,11 +104,13 @@ func (n *Node) announceBlkProp(ctx context.Context, blk *types.Block, from peer.
 		if peerID == from {
 			continue
 		}
-		prop := blockProp{Height: height, Hash: blkHash, PrevHash: blk.Header.PrevHash}
+		prop := blockProp{Height: height, Hash: blkHash, PrevHash: blk.Header.PrevHash,
+			Stamp: blk.Header.Timestamp.UnixMilli(), LeaderSig: blk.Signature}
 		n.log.Infof("advertising block proposal %s (height %d / txs %d) to peer %v", blkHash, height, len(rawBlk), peerID)
 		// resID := annPropMsgPrefix + strconv.Itoa(int(height)) + ":" + prevHash + ":" + blkid
 		propID, _ := prop.MarshalBinary()
-		err := n.advertiseToPeer(ctx, peerID, ProtocolIDBlockPropose, contentAnn{prop.String(), propID, rawBlk})
+		err := n.advertiseToPeer(ctx, peerID, ProtocolIDBlockPropose, contentAnn{prop.String(), propID, rawBlk},
+			blkSendTimeout)
 		if err != nil {
 			n.log.Infof(err.Error())
 			continue
@@ -119,7 +148,7 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 
 	height := prop.Height
 
-	if !n.ce.AcceptProposal(height, prop.PrevHash) {
+	if !n.ce.AcceptProposal(height, prop.PrevHash /* , prop.Stamp, prop.Hash, prop.LeaderSig */) {
 		// NOTE: if this is ahead of our last commit height, we have to try to catch up
 		n.log.Infof("don't want proposal content", height, prop.PrevHash)
 		return
@@ -157,7 +186,7 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 		return
 	}
 
-	n.log.Infof("processing prop for", hash)
+	n.log.Infof("processing block proposal", "height", height, "hash", hash)
 
 	go n.ce.NotifyBlockProposal(blk)
 
@@ -313,3 +342,84 @@ func (n *Node) blkAckStreamHandler(s network.Stream) {
 	return
 }
 */
+
+func (n *Node) sendReset(cr ConsensusReset) error {
+	n.resetMsg <- cr // ?
+	return nil
+}
+
+func subConsensusReset(ctx context.Context, ps *pubsub.PubSub) (*pubsub.Topic, *pubsub.Subscription, error) {
+	return subTopic(ctx, ps, TopicReset)
+}
+
+func (n *Node) startConsensusResetGossip(ctx context.Context, ps *pubsub.PubSub) error {
+	topicReset, subReset, err := subConsensusReset(ctx, ps)
+	if err != nil {
+		return err
+	}
+
+	subCanceled := make(chan struct{})
+
+	n.wg.Add(1)
+	go func() {
+		defer func() {
+			<-subCanceled
+			topicReset.Close()
+			n.wg.Done()
+		}()
+		for {
+			var resetMsg ConsensusReset
+			select {
+			case <-ctx.Done():
+				return
+			case resetMsg = <-n.resetMsg:
+			}
+
+			err := topicReset.Publish(ctx, resetMsg.Bytes())
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	me := n.host.ID()
+
+	go func() {
+		defer close(subCanceled)
+		defer subReset.Cancel()
+		for {
+			resetMsg, err := subReset.Next(ctx)
+			if err != nil {
+				if !errors.Is(err, context.Canceled) {
+					n.log.Errorf("Stopping Consensus Reset gossip!", "error", err)
+				}
+				return
+			}
+
+			if string(resetMsg.From) == string(me) {
+				continue
+			}
+
+			var reset ConsensusReset
+			err = reset.UnmarshalBinary(resetMsg.Data)
+			if err != nil {
+				n.log.Errorf("unable to unmarshal reset msg: %v", err)
+				continue
+			}
+
+			fromPeerID := resetMsg.GetFrom()
+
+			n.log.Infof("received Consensus Reset msg from %s (rcvd from %s), data = %x",
+				fromPeerID, resetMsg.ReceivedFrom, resetMsg.Message.Data)
+
+			// resetSenderPubKey, err := fromPeerID.ExtractPublicKey()
+			// if err != nil {
+			// 	n.log.Infof("failed to extract pubkey from peer ID %v: %v", fromPeerID, err)
+			// 	continue
+			// }
+			// go n.ce.NotifyReset(reset, resetSenderPubKey)
+		}
+	}()
+
+	return nil
+}
