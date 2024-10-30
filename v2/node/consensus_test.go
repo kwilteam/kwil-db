@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"io"
-	"p2p/node/types"
+	"kwil/node/types"
 	"testing"
 	"time"
 )

@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"crypto/rand"
@@ -9,8 +9,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"p2p/node"
-	"p2p/node/types"
+	"kwil/node"
+	"kwil/node/types"
 
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -19,10 +19,8 @@ import (
 )
 
 // accept: #vals, #n-vals and set the first validator as the leader.
-// rootdir
 
-func testnetCmd() *cobra.Command {
-	var rootDir string
+func TestnetCmd() *cobra.Command {
 	var numVals, numNVals int
 	var noPex bool
 	var startingPort uint64
@@ -31,15 +29,18 @@ func testnetCmd() *cobra.Command {
 		Use:   "testnet",
 		Short: "Generate configuration for multiple nodes",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			rootDir, err := RootDir(cmd)
+			if err != nil {
+				return err // the parent command needs to set a persistent flag named "root"
+			}
 			return generateNodeConfig(rootDir, numVals, numNVals, noPex, startingPort)
 		},
 	}
 
-	cmd.Flags().IntVar(&numVals, "v", 3, "number of validators")
-	cmd.Flags().IntVar(&numNVals, "n", 0, "number of non-validators")
-	cmd.Flags().StringVar(&rootDir, "r", ".testnet", "root directory for the configuration")
+	cmd.Flags().IntVarP(&numVals, "vals", "v", 3, "number of validators (includes the one leader)")
+	cmd.Flags().IntVarP(&numNVals, "non-vals", "n", 0, "number of non-validators")
 	cmd.Flags().BoolVar(&noPex, "no-pex", false, "disable peer exchange")
-	cmd.Flags().Uint64Var(&startingPort, "port", 6600, "starting port for the nodes")
+	cmd.Flags().Uint64VarP(&startingPort, "port", "p", 6600, "starting port for the nodes")
 
 	return cmd
 }

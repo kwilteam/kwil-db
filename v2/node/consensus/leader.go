@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"time"
 
-	"p2p/node/types"
+	"kwil/node/types"
 )
 
 // Leader is the node that proposes the block and drives the consensus process:
