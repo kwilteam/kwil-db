@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"context"
 	"p2p/node/types"
 )
 
@@ -21,8 +22,9 @@ type BlockStore interface {
 }
 
 type BlockExecutor interface {
-	Execute(tx []byte) (*types.TxResult, error)
-	Commit() error
+	Execute(ctx context.Context, tx []byte) types.TxResult
+	Precommit() (types.Hash, error)
+	Commit(func() error) error
 }
 
 // Question:

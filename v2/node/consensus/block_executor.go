@@ -1,7 +1,10 @@
 package consensus
 
 import (
+	"context"
+	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"p2p/node/types"
@@ -13,7 +16,6 @@ var (
 )
 
 // Block processing methods
-
 func (ce *ConsensusEngine) validateBlock(blk *types.Block) error {
 	// Validate if this is the correct block proposal to be processed.
 	if blk.Header.Version != types.BlockVersion {
@@ -49,17 +51,15 @@ func (ce *ConsensusEngine) validateBlock(blk *types.Block) error {
 // TODO: need to stop execution when we receive a rollback signal of some sort.
 func (ce *ConsensusEngine) executeBlock() error {
 	var txResults []types.TxResult
+
+	ctx, cancel := context.WithCancel(context.Background())
+	ce.state.cancelFunc = cancel
+
+	// TODO: test resetState
 	// Execute the block and return the appHash and store the txResults
 	for _, tx := range ce.state.blkProp.blk.Txns {
-		// res, err := ce.blockExecutor.Execute(tx)
-		// if err != nil {
-		// 	return err
-		// }
-		hash, _ := types.NewHashFromBytes(tx)
-		txResults = append(txResults, types.TxResult{
-			Code: 0,
-			Log:  "success" + hash.String(),
-		})
+		res := ce.blockExecutor.Execute(ctx, tx) // TODO: this execute function should be context cancellable
+		txResults = append(txResults, res)
 	}
 
 	ce.state.appState.Height = ce.state.blkProp.height
@@ -67,7 +67,14 @@ func (ce *ConsensusEngine) executeBlock() error {
 
 	// Calculate the appHash (dummy for now)
 	// Precommit equivalent
-	appHash := types.HashBytes([]byte(string(ce.state.blkProp.blk.Header.PrevAppHash.String() + "random")))
+	cHash, err := ce.blockExecutor.Precommit()
+	if err != nil {
+		ce.log.Error("Failed to precommit the block tx", "err", err)
+		return err
+	}
+
+	// Calculate the new apphash by hashing the previous apphash and the changeset hash
+	appHash := sha256.Sum256(append(ce.state.blkProp.blk.Header.PrevAppHash[:], cHash[:]...))
 
 	ce.state.blockRes = &blockResult{
 		txResults: txResults,
@@ -85,24 +92,19 @@ func (ce *ConsensusEngine) commit() error {
 	// we are updating the state and the tx checks should be done against the new state.
 
 	// Add the block to the blockstore
-	// rawBlk := types.EncodeBlock(ce.state.blkProp.blk)
 	ce.blockStore.Store(ce.state.blkProp.blk, ce.state.blockRes.appHash)
 	ce.blockStore.StoreResults(ce.state.blkProp.blk.Header.Hash(), ce.state.blockRes.txResults)
 
 	// Commit the block to the postgres database
-	// TODO
-	// if err := ce.blockExecutor.Commit(); err != nil {
-	// 	return err
-	// }
-
-	ce.persistAppState()
+	if err := ce.blockExecutor.Commit(ce.persistAppState); err != nil {
+		return err
+	}
 
 	// Update any other internal states like apphash and height to chain state and commit again
-
 	ce.state.appState.AppHash = ce.state.blockRes.appHash
 	ce.persistAppState()
 
-	// Add transactions to the txIndexer and remove them from the mempool
+	// remove transactions from the mempool
 	for _, txn := range ce.state.blkProp.blk.Txns {
 		txHash := types.HashBytes(txn)
 		// ce.indexer.Store(txHash, txn)
@@ -112,6 +114,40 @@ func (ce *ConsensusEngine) commit() error {
 	ce.log.Info("Committed Block", "height", ce.state.blkProp.blk.Header.Height,
 		"hash", ce.state.blkProp.blk.Header.Hash(), "appHash", ce.state.blockRes.appHash)
 	return nil
+}
+
+func (ce *ConsensusEngine) resetBlockProp(rstMsg *resetState) {
+	ce.state.mtx.Lock()
+	defer ce.state.mtx.Unlock()
+
+	// If we are currently executing any transactions corresponding to the blk at height +1
+	// 1. Cancel the execution context -> so that the transactions stop
+	// 2. Rollback the consensus tx
+	// 3. Reset the blkProp and blockRes
+	// 4. This should never happen after the commit phase, (blk should have never made it to the blockstore)
+
+	// Ensure that the block is not committed yet. Else, we should just ignore the reset message (potentially a stale one)
+	// TODO: this should probably be checked before accepting this message
+	_, _, _, err := ce.blockStore.GetByHeight(rstMsg.height)
+	if err != nil {
+		if !errors.Is(err, types.ErrNotFound) {
+			ce.log.Error("Error fetching block from blockstore", "height", rstMsg.height, "error", err)
+		}
+		// nothing to do here as the block is already committed
+		return
+	}
+
+	if ce.state.lc.height == rstMsg.height {
+		if ce.state.blkProp != nil {
+			// first cancel the context
+			ce.state.cancelFunc()
+			// rollback the pg tx
+			// ce.state.consensusTx.Rollback()
+
+			// reset the blkProp and blockRes
+			ce.resetState()
+		}
+	}
 }
 
 func (ce *ConsensusEngine) nextState() {
@@ -129,6 +165,10 @@ func (ce *ConsensusEngine) resetState() {
 	ce.state.blkProp = nil
 	ce.state.blockRes = nil
 	ce.state.votes = make(map[string]*vote)
+
+	// reset the ctx and tx
+	ce.state.cancelFunc = nil
+	// ce.state.tx = nil
 }
 
 // temporary placeholder as this will be in the PG chainstate in future (as was in previous kwil implementations)
