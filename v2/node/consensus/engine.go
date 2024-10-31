@@ -242,7 +242,8 @@ func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg cons
 			ce.log.Warnf("Invalid block proposal message")
 			return // ignore the message
 		}
-		go ce.processBlockProposal(ctx, blkPropMsg) // This triggers the processing of the block proposal
+		// go ce.processBlockProposal(ctx, blkPropMsg) // This triggers the processing of the block proposal
+		ce.processBlockProposal(ctx, blkPropMsg)
 
 	case "vote":
 		// only leader should receive votes
@@ -409,7 +410,7 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 		}
 		if ce.state.lc.height > 0 {
 			// Announce block commit message for the last committed block
-			go ce.blkAnnouncer(ctx, ce.state.lc.blk, ce.state.lc.appHash, ce.host)
+			go ce.blkAnnouncer(ctx, ce.state.lc.blk, ce.state.lc.appHash, ce.host) // TODO: can be made infrequent
 		}
 		return
 	}
