@@ -45,7 +45,6 @@ func (pm *peerMan) discoveryStreamHandler(s network.Stream) {
 
 		peers := getKnownPeers(pm.h)
 		// filteredPeers := filterPeersForNodeType(peers, nodeType)
-
 		if err := sendPeersToStream(s, peers); err != nil {
 			fmt.Println("failed to send peer list to peer", err)
 			return
@@ -60,6 +59,7 @@ func (pm *peerMan) discoveryStreamHandler(s network.Stream) {
 // }
 
 func (pm *peerMan) requestPeers(ctx context.Context, peerID peer.ID) ([]peer.AddrInfo, error) {
+	pm.log.Info("Requesting peers from", "peer", peerID.String())
 	if peerID == pm.h.ID() {
 		return nil, nil
 	}
@@ -157,6 +157,13 @@ func getKnownPeers(h host.Host) []PeerInfo {
 
 	}
 	return peers
+}
+
+func (pm *peerMan) knownPeers() {
+	peers := getKnownPeers(pm.h)
+	for _, p := range peers {
+		pm.log.Info("Known peer", "id", p.ID.String())
+	}
 }
 
 func sendPeersToStream(s network.Stream, peers []PeerInfo) error {

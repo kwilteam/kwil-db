@@ -114,7 +114,7 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash 
 
 	ce.updateNetworkHeight(height)
 
-	ce.log.Info(fmt.Sprintln("Accept commit?", height, blkID, appHash, ce.state.lc.height+1, ce.state.lc.blkHash)) // maybe we add log.Infoln?
+	ce.log.Info(fmt.Sprintln("Accept commit?", height, blkID, appHash, ce.state.lc.height+1)) // maybe we add log.Infoln?
 	if ce.state.lc.height+1 != height {
 		// This is not the next block to be committed by the node.
 		return false
@@ -315,15 +315,15 @@ func (ce *ConsensusEngine) commitBlock(blk *types.Block, appHash types.Hash) err
 	// - Incorrect AppHash: Halt the node.
 
 	if ce.role == types.RoleSentry {
-		go ce.processAndCommit(blk, appHash)
-		return nil
+		// go ce.processAndCommit(blk, appHash)
+		return ce.processAndCommit(blk, appHash)
 	}
 
 	// You are a validator
 	if ce.state.blkProp == nil {
 		// No block proposal received, execute the block, validate the appHash and commit the block.
-		go ce.processAndCommit(blk, appHash)
-		return nil
+		// go ce.processAndCommit(blk, appHash)
+		return ce.processAndCommit(blk, appHash)
 	}
 
 	// ensure that you are processing the correct block
@@ -331,7 +331,7 @@ func (ce *ConsensusEngine) commitBlock(blk *types.Block, appHash types.Hash) err
 		// Rollback and reprocess the block sent as part of the commit message.
 		ce.resetState()
 		// TODO: somehow signal the current block processing to halt and reprocess the new block.
-		go ce.processAndCommit(blk, appHash)
+		return ce.processAndCommit(blk, appHash)
 	}
 
 	if ce.state.blockRes == nil {
