@@ -17,7 +17,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/crypto" // TODO: isolate to config package not main
 )
 
-func runNode(ctx context.Context, rootDir string, logLevel log.Level, logFormat log.Format) error {
+func runNode(ctx context.Context, rootDir string, cfg *node.Config) error {
 	// Writing to stdout and a log file.  TODO: config outputs
 	rot, err := log.NewRotatorWriter(filepath.Join(rootDir, "kwild.log"), 10_000, 0)
 	if err != nil {
@@ -31,13 +31,13 @@ func runNode(ctx context.Context, rootDir string, logLevel log.Level, logFormat 
 
 	logWriter := io.MultiWriter(os.Stdout, rot) // tee to stdout and log file
 
-	logger := log.New(log.WithLevel(logLevel), log.WithFormat(logFormat),
+	logger := log.New(log.WithLevel(cfg.LogLevel), log.WithFormat(cfg.LogFormat),
 		log.WithName("KWILD"), log.WithWriter(logWriter))
 	// NOTE: level and name can be set independently for different systems
 
 	logger.Infof("Starting kwild version %v", version.KwilVersion)
 
-	genFile := filepath.Join(rootDir, "genesis.json")
+	genFile := filepath.Join(rootDir, GenesisFileName)
 
 	logger.Infof("Loading the genesis configuration from %s", genFile)
 
@@ -51,14 +51,6 @@ func runNode(ctx context.Context, rootDir string, logLevel log.Level, logFormat 
 	for _, val := range genConfig.Validators {
 		valSet[hex.EncodeToString(val.PubKey)] = val
 	}
-
-	cfgFile := filepath.Join(rootDir, "config.json")
-	cfg, err := node.LoadNodeConfig(cfgFile)
-	if err != nil {
-		return fmt.Errorf("failed to load node config: %w", err)
-	}
-
-	logger.Infof("Loading the node configuration from %s", cfgFile)
 
 	privKey, err := crypto.UnmarshalSecp256k1PrivateKey(cfg.PrivateKey)
 	if err != nil {
@@ -91,9 +83,14 @@ func runNode(ctx context.Context, rootDir string, logLevel log.Level, logFormat 
 	//  - node.WithGenesisConfig instead of WithGenesisValidators
 	//  - change node.WithPrivateKey to []byte or our own PrivateKey type
 
-	nodeLogger := logger.NewWithLevel(logLevel, "NODE")
-	node, err := node.NewNode(rootDir, node.WithPort(cfg.Port), node.WithPrivKey(cfg.PrivateKey[:]), node.WithLeader(genConfig.Leader[:]),
-		node.WithRole(nRole), node.WithPex(cfg.Pex), node.WithGenesisValidators(valSet), node.WithLogger(nodeLogger))
+	ip, port := cfg.PeerConfig.IP, cfg.PeerConfig.Port
+
+	nodeLogger := logger.NewWithLevel(cfg.LogLevel, "NODE")
+	// wtf functional options; we're making a config struct soon
+	node, err := node.NewNode(rootDir, node.WithIP(ip), node.WithPort(port),
+		node.WithPrivKey(cfg.PrivateKey[:]), node.WithLeader(genConfig.Leader[:]),
+		node.WithRole(nRole), node.WithGenesisValidators(valSet),
+		node.WithPex(cfg.PeerConfig.Pex), node.WithLogger(nodeLogger))
 	if err != nil {
 		return err
 	}
@@ -102,8 +99,8 @@ func runNode(ctx context.Context, rootDir string, logLevel log.Level, logFormat 
 	logger.Infof("To connect: %s", addr)
 
 	var bootPeers []string
-	if cfg.SeedNode != "" {
-		bootPeers = append(bootPeers, cfg.SeedNode)
+	if cfg.PeerConfig.BootNode != "" {
+		bootPeers = append(bootPeers, cfg.PeerConfig.BootNode)
 	}
 	if err = node.Start(ctx, bootPeers...); err != nil {
 		return err

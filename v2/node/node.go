@@ -24,7 +24,6 @@ import (
 	"kwil/node/store"
 	"kwil/node/types"
 
-	"github.com/decred/dcrd/dcrec/secp256k1/v4"
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/crypto"
@@ -102,15 +101,6 @@ func addClose(close, top func() error) func() error {
 	return func() error { err := top(); return errors.Join(err, close()) }
 }
 
-// Config is the configuration for a node. Although everything is presently set
-// with functional options, some settings may be required, such as identity, and
-// thus are best provided by a config struct.
-type Config struct {
-	PrivKey []byte
-	// Port    uint16
-	// Dir     string
-}
-
 // NewNode creates a new node. For now we are using functional options, but this
 // may be better suited by a config struct, or a hybrid where some settings are
 // required, such as identity.
@@ -130,7 +120,7 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 	host := options.host
 	if host == nil {
 		var err error
-		host, err = newHost(options.port, options.privKey)
+		host, err = newHost(options.ip, options.port, options.privKey)
 		if err != nil {
 			return nil, err
 		}
@@ -417,27 +407,22 @@ func (n *Node) peers() []peer.ID {
 }
 
 // NewKey generates a new private key from a reader, which should provide random data.
-func NewKey(r io.Reader) crypto.PrivKey {
-	// priv, _ := secp256k1.GeneratePrivateKeyFromRand(r)
-	// privECDSA := priv.ToECDSA()
-	// privECDSA.Curve = elliptic.P256()
-	// privKey, _, _ := crypto.ECDSAKeyPairFromKey(privECDSA)
-	//privKey, _, err := crypto.GenerateECDSAKeyPair(r)
-	pk, err := secp256k1.GeneratePrivateKeyFromRand(r)
+func NewKey(r io.Reader) kcrypto.PrivateKey {
+	// priv := kcrypto.GenerateEd25519Key(r)
+	privKey, _, err := kcrypto.GenerateSecp256k1Key(r)
 	if err != nil {
 		panic(err)
 	}
-	privKey := (*crypto.Secp256k1PrivateKey)(pk)
-	// privKey, _, err := crypto.GenerateSecp256k1Key(r)
+
 	return privKey
 }
 
-func newHost(port uint64, privKey []byte) (host.Host, error) {
+func newHost(ip string, port uint64, privKey []byte) (host.Host, error) {
 	privKeyP2P, err := crypto.UnmarshalSecp256k1PrivateKey(privKey) // rypto.UnmarshalECDSAPrivateKey(privKey)
 	if err != nil {
 		return nil, err
 	}
-	sourceMultiAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/0.0.0.0/tcp/%d", port))
+	sourceMultiAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ip, port))
 
 	// listenAddrs := libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0", "/ip4/0.0.0.0/tcp/0/ws")
 
