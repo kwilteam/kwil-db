@@ -26,6 +26,7 @@ type BlockExecutor interface {
 	Execute(ctx context.Context, tx []byte) types.TxResult
 	Precommit() (types.Hash, error)
 	Commit(func() error) error
+	Rollback() error
 }
 
 // Question:

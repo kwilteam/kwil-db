@@ -268,7 +268,10 @@ func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg cons
 			return
 		}
 
-		go ce.commitBlock(blkAnn.blk, blkAnn.appHash)
+		if err := ce.commitBlock(blkAnn.blk, blkAnn.appHash); err != nil {
+			ce.log.Error("Error processing committing block", "error", err)
+			return
+		}
 
 	case "reset_state":
 		rstMsg, ok := msg.Msg.(*resetState)
@@ -276,8 +279,7 @@ func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg cons
 			ce.log.Error("Invalid reset state message")
 			return
 		}
-
-		ce.log.Info("Received reset state message", "height", rstMsg.height)
+		ce.resetBlockProp(rstMsg)
 	}
 
 }
