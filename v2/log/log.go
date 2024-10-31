@@ -77,6 +77,37 @@ func (lvl Level) String() string {
 	}
 }
 
+func (lvl Level) MarshalText() (text []byte, err error) {
+	switch lvl {
+	case LevelDebug:
+		return []byte("debug"), nil
+	case LevelInfo:
+		return []byte("info"), nil
+	case LevelWarn:
+		return []byte("warn"), nil
+	case LevelError:
+		return []byte("error"), nil
+	default:
+		return nil, errors.New("unknown log level: " + lvl.String())
+	}
+}
+
+func (lvl *Level) UnmarshalText(text []byte) error {
+	switch strings.ToLower(string(text)) {
+	case "debug":
+		*lvl = LevelDebug
+	case "info":
+		*lvl = LevelInfo
+	case "warn":
+		*lvl = LevelWarn
+	case "error":
+		*lvl = LevelError
+	default:
+		return errors.New("unknown log level: " + string(text))
+	}
+	return nil
+}
+
 func levelToSlog(l Level) slog.Level {
 	switch l {
 	case LevelDebug:

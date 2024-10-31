@@ -3,12 +3,11 @@ package app
 import (
 	"fmt"
 
-	"kwil/log"
+	"kwil/node"
 	"kwil/version"
 
-	// "github.com/knadh/koanf/parsers/json"
-
 	"github.com/knadh/koanf/v2"
+	gotoml "github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
 )
 
@@ -18,6 +17,13 @@ const RootFlagName = "root"
 
 func RootCmd() *cobra.Command {
 	var rootDir string
+	BindDefaults(struct {
+		RootDir      string `koanf:"root" toml:"root"`
+		*node.Config `koanf:",flatten"`
+	}{
+		RootDir: ".testnet",
+		Config:  node.DefaultConfig(),
+	}, "koanf")
 
 	cmd := &cobra.Command{
 		Use:               "kwil",
@@ -28,23 +34,42 @@ func RootCmd() *cobra.Command {
 		CompletionOptions: cobra.CompletionOptions{
 			DisableDefaultCmd: true,
 		},
-		Version:           version.KwilVersion,
-		Example:           "kwil -r .testnet",
-		PersistentPreRunE: ChainPreRuns(PreRunBindConfigFile, PreRunBindFlags), // now k has all the settings in all (sub)command's RunE funcs
+		Version: version.KwilVersion,
+		Example: "kwil -r .testnet",
+		// PersistentPreRunE so k has all the settings in all (sub)command's RunE funcs
+		PersistentPreRunE: ChainPreRuns(maybeEnableCLIDebug, PreRunBindConfigFile,
+			PreRunBindFlags, PreRunBindEnvMatching, PreRunPrintEffectiveConfig),
 	}
 
-	// "root" does not have config file analog, so binds with local var
+	// --debug enabled CLI debug mode (debugf output)
+	cmd.PersistentFlags().Bool("debug", false, "enable debugging, will print debug logs")
+	cmd.Flag("debug").Hidden = true
+
+	// "root" does not have config file analog, so binds with local var, which
+	// is then available to all subcommands via RootDir(cmd).
 	cmd.PersistentFlags().StringVarP(&rootDir, RootFlagName, "r", ".testnet", "root directory")
 
 	cmd.AddCommand(StartCmd()) // default command
 	cmd.AddCommand(SetupCmd())
+	cmd.AddCommand(PrintConfigCmd())
 
 	return cmd
 }
 
-func RootDir(cmd *cobra.Command) (string, error) {
-	// fmt.Println("app.k's root:", k.String(RootFlagName))
-	return cmd.Flags().GetString(RootFlagName)
+func maybeEnableCLIDebug(cmd *cobra.Command, args []string) error {
+	debugFlag := cmd.Flag("debug")
+	if !debugFlag.Changed {
+		return nil
+	}
+	debug, err := cmd.Flags().GetBool("debug")
+	if err != nil {
+		return err
+	}
+	if debug {
+		enableCLIDebugging()
+		k.Set("log_level", "debug")
+	}
+	return nil
 }
 
 func StartCmd() *cobra.Command {
@@ -60,27 +85,33 @@ func StartCmd() *cobra.Command {
 		Version: version.KwilVersion,
 		Example: "kwil start -r .testnet",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			logLevel, err := log.ParseLevel(k.String("log-level"))
-			if err != nil {
-				return fmt.Errorf("invalid log level: %w", err)
-			}
-
-			logFormat, err := log.ParseFormat(k.String("log-format"))
-			if err != nil {
-				return fmt.Errorf("invalid log format: %w", err)
-			}
 			rootDir, err := RootDir(cmd)
 			if err != nil {
 				return err // the parent command needs to set a persistent flag named "root"
 			}
-			return runNode(cmd.Context(), rootDir, logLevel, logFormat)
+
+			// k => node.Config
+			var cfg node.Config
+			err = k.UnmarshalWithConf("", &cfg, koanf.UnmarshalConf{Tag: "koanf"})
+			if err != nil {
+				return fmt.Errorf("failed to unmarshal config: %w", err)
+			}
+
+			debugf("effective node config (toml):\n%s", lazyPrinter(func() string {
+				rawToml, err := gotoml.Marshal(&cfg)
+				if err != nil {
+					return fmt.Errorf("failed to marshal config to toml: %w", err).Error()
+				}
+				return string(rawToml)
+			}))
+
+			return runNode(cmd.Context(), rootDir, &cfg)
 		},
 	}
 
 	// Other node flags have config file and env analogs, and will be loaded
 	// into koanf where the values are merged.
-	cmd.Flags().String("log-level", log.LevelInfo.String(), "log level")
-	cmd.Flags().String("log-format", string(log.FormatUnstructured), "log format")
+	SetNodeFlags(cmd)
 
 	cmd.SetVersionTemplate("kwil {{printf \"version %s\" .Version}}\n")
 
