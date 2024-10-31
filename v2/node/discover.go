@@ -5,35 +5,16 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"sync"
+	"kwil/log"
+	"kwil/node/types"
 	"time"
 
-	"kwil/log"
-
-	"github.com/libp2p/go-libp2p/core/discovery"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/peerstore"
-	"github.com/libp2p/go-libp2p/core/protocol"
-	"github.com/multiformats/go-multiaddr"
 )
 
-var (
-	discoverPeersMsg = "discover_peers"
-)
-
-type peerMan struct {
-	log log.Logger
-	h   host.Host
-	// nodeType string // e.g., "leader", "validator", "sentry"
-}
-
-var _ discovery.Discoverer = (*peerMan)(nil) // FindPeers method
-
-var _ network.StreamHandler = new(peerMan).discoveryStreamHandler
-
-func (pm *peerMan) discoveryStreamHandler(s network.Stream) {
+func (n *Node) peerDiscoveryStreamHandler(s network.Stream) {
 	defer s.Close()
 
 	sc := bufio.NewScanner(s)
@@ -43,7 +24,7 @@ func (pm *peerMan) discoveryStreamHandler(s network.Stream) {
 			continue
 		}
 
-		peers := getKnownPeers(pm.h)
+		peers := n.pm.KnownPeers()
 		// filteredPeers := filterPeersForNodeType(peers, nodeType)
 		if err := sendPeersToStream(s, peers); err != nil {
 			fmt.Println("failed to send peer list to peer", err)
@@ -54,17 +35,22 @@ func (pm *peerMan) discoveryStreamHandler(s network.Stream) {
 	// fmt.Println("done sending peers on stream", s.ID())
 }
 
-// func (pm *peerMan) Advertise(ctx context.Context, ns string, opts ...discovery.Option) (time.Duration, error) {
-// 	return 0, nil
-// }
+func sendPeersToStream(s network.Stream, peers []types.PeerInfo) error {
+	encoder := json.NewEncoder(s)
+	if err := encoder.Encode(peers); err != nil {
+		return fmt.Errorf("failed to encode peers: %w", err)
+	}
+	return nil
+}
 
-func (pm *peerMan) requestPeers(ctx context.Context, peerID peer.ID) ([]peer.AddrInfo, error) {
-	pm.log.Info("Requesting peers from", "peer", peerID.String())
-	if peerID == pm.h.ID() {
+func requestPeers(ctx context.Context, peerID peer.ID, host host.Host, log log.Logger) ([]peer.AddrInfo, error) {
+	if peerID == host.ID() {
 		return nil, nil
 	}
 
-	stream, err := pm.h.NewStream(ctx, peerID, ProtocolIDDiscover)
+	log.Info("Requesting peers from", "peer", peerID.String())
+
+	stream, err := host.NewStream(ctx, peerID, ProtocolIDDiscover)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open stream: %w", err)
 	}
@@ -87,160 +73,6 @@ func (pm *peerMan) requestPeers(ctx context.Context, peerID peer.ID) ([]peer.Add
 		return nil, fmt.Errorf("failed to read peers from stream: %w", err)
 	}
 	return peers, nil
-}
-
-func (pm *peerMan) FindPeers(ctx context.Context, ns string, opts ...discovery.Option) (<-chan peer.AddrInfo, error) {
-	peerChan := make(chan peer.AddrInfo)
-
-	peers := pm.h.Network().Peers()
-	if len(peers) == 0 {
-		close(peerChan)
-		pm.log.Warn("no existing peers for peer discovery")
-		return peerChan, nil
-	}
-
-	var wg sync.WaitGroup
-	wg.Add(len(peers))
-	for _, peerID := range peers {
-		go func() {
-			defer wg.Done()
-			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
-			defer cancel()
-			peers, err := pm.requestPeers(ctx, peerID)
-			if err != nil {
-				fmt.Printf("Failed to get peers from %v: %v", peerID, err)
-				return
-			}
-
-			for _, p := range peers {
-				peerChan <- p
-			}
-		}()
-	}
-
-	go func() {
-		wg.Wait()
-		close(peerChan)
-	}()
-
-	return peerChan, nil
-}
-
-type AddrInfo struct {
-	ID    peer.ID               `json:"id"`
-	Addrs []multiaddr.Multiaddr `json:"addrs"`
-}
-
-type PeerInfo struct {
-	AddrInfo
-	Protos []protocol.ID `json:"protos"`
-}
-
-func (p PeerInfo) MarshalJSON() ([]byte, error) {
-	var addrStrs []string
-	for _, addr := range p.Addrs {
-		addrStrs = append(addrStrs, addr.String())
-	}
-	var protoStrs []string
-	for _, proto := range p.Protos {
-		protoStrs = append(protoStrs, string(proto))
-	}
-	return json.Marshal(struct {
-		ID     string   `json:"id"`
-		Addrs  []string `json:"addrs"`
-		Protos []string `json:"protos"`
-	}{
-		ID:     p.ID.String(),
-		Addrs:  addrStrs,
-		Protos: protoStrs,
-	})
-}
-
-func (p *PeerInfo) UnmarshalJSON(data []byte) error {
-	aux := struct {
-		ID     string   `json:"id"`
-		Addrs  []string `json:"addrs"`
-		Protos []string `json:"protos"`
-	}{}
-	if err := json.Unmarshal(data, &aux); err != nil {
-		return err
-	}
-	peerID, err := peer.Decode(aux.ID)
-	if err != nil {
-		return err
-	}
-	p.ID = peerID
-	for _, addrStr := range aux.Addrs {
-		addr, err := multiaddr.NewMultiaddr(addrStr)
-		if err != nil {
-			return err
-		}
-		p.Addrs = append(p.Addrs, addr)
-	}
-	for _, protoStr := range aux.Protos {
-		p.Protos = append(p.Protos, protocol.ID(protoStr))
-	}
-	return nil
-}
-
-func getKnownPeers(h host.Host) []PeerInfo {
-	var peers []PeerInfo
-	for _, peerID := range h.Network().Peers() { // connected peers only
-		addrs := h.Peerstore().Addrs(peerID)
-
-		supportedProtos, err := h.Peerstore().GetProtocols(peerID)
-		if err != nil {
-			fmt.Printf("GetProtocols for %v: %v\n", peerID, err)
-			continue
-		}
-
-		peers = append(peers, PeerInfo{
-			AddrInfo: AddrInfo{
-				ID:    peerID,
-				Addrs: addrs,
-			},
-			Protos: supportedProtos,
-		})
-
-	}
-	return peers
-}
-
-func (pm *peerMan) knownPeers() {
-	peers := getKnownPeers(pm.h)
-	for _, p := range peers {
-		pm.log.Info("Known peer", "id", p.ID.String())
-	}
-}
-
-func sendPeersToStream(s network.Stream, peers []PeerInfo) error {
-	encoder := json.NewEncoder(s)
-	if err := encoder.Encode(peers); err != nil {
-		return fmt.Errorf("failed to encode peers: %w", err)
-	}
-	return nil
-}
-
-// addPeerToPeerStore adds a discovered peer to the local peer store.
-func addPeerToPeerStore(ps peerstore.Peerstore, p peer.AddrInfo) {
-	// Only add the peer if it's not already in the peer store.
-	// h.Peerstore().Peers()
-	addrs := ps.Addrs(p.ID)
-	for _, addr := range p.Addrs {
-		if !multiaddr.Contains(addrs, addr) {
-			ps.AddAddr(p.ID, addr, time.Hour)
-			fmt.Println("Added new peer address to store:", p.ID, addr)
-		}
-		// TODO: we need a connect hook to change to forever on connect
-	}
-
-	// Add the peer's addresses to the peer store.
-	// for _, addr := range p.Addrs {
-	// 	h.Peerstore().AddAddr(p.ID, addr, time.Hour)
-	// 	fmt.Println("Added new peer to store:", p.ID, addr)
-	// }
-
-	// and connect?
 }
 
 // readPeersFromStream reads a list of peer addresses from the stream.

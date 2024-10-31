@@ -3,7 +3,6 @@ package node
 import (
 	"context"
 	"crypto/rand"
-	"encoding/json"
 	"fmt"
 	"kwil/node/types"
 	"net"
@@ -16,7 +15,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/protocol"
 	mock "github.com/libp2p/go-libp2p/p2p/net/mock"
 	ma "github.com/multiformats/go-multiaddr"
 )
@@ -165,110 +163,3 @@ func TestDualNodeMocknet(t *testing.T) {
 
 	wg.Wait()
 }*/
-
-func TestPersistPeers(t *testing.T) {
-	ma1, _ := ma.NewMultiaddr("/ip4/127.0.0.1/tcp/4001")
-	ma1b, _ := ma.NewMultiaddr("/ip4/127.0.0.2/tcp/4001")
-	pid1, _ := peer.Decode("16Uiu2HAm8iRUsTzYepLP8pdJL3645ACP7VBfZQ7yFbLfdb7WvkL7")
-	ma2, _ := ma.NewMultiaddr("/ip4/127.0.0.1/tcp/4002")
-	pid2, _ := peer.Decode("16Uiu2HAkx2kfP117VnYnaQGprgXBoMpjfxGXCpizju3cX7ZUzRhv")
-
-	tests := []struct {
-		name     string
-		peers    []PeerInfo
-		wantErr  bool
-		setup    func() string
-		validate func(string) error
-	}{
-		{
-			name: "valid peers list",
-			peers: []PeerInfo{
-				{
-					AddrInfo: AddrInfo{
-						ID:    pid1,
-						Addrs: []ma.Multiaddr{ma1, ma1b},
-					},
-					Protos: []protocol.ID{"ProtocolWhatever"},
-				},
-				{
-					AddrInfo: AddrInfo{
-						ID:    pid2,
-						Addrs: []ma.Multiaddr{ma2},
-					},
-					Protos: []protocol.ID{"ProtocolWhatever", "ProtocolOther"},
-				},
-			},
-			setup: func() string {
-				tmpFile, err := os.CreateTemp("", "peers_*.json")
-				if err != nil {
-					t.Fatal(err)
-				}
-				return tmpFile.Name()
-			},
-			validate: func(path string) error {
-				data, err := os.ReadFile(path)
-				if err != nil {
-					return err
-				}
-				var peers []PeerInfo
-				if err := json.Unmarshal(data, &peers); err != nil {
-					return err
-				}
-				if len(peers) != 2 {
-					return fmt.Errorf("expected 2 peers, got %d", len(peers))
-				}
-				return nil
-			},
-		},
-		{
-			name:  "empty peers list",
-			peers: []PeerInfo{},
-			setup: func() string {
-				tmpFile, err := os.CreateTemp("", "peers_*.json")
-				if err != nil {
-					t.Fatal(err)
-				}
-				return tmpFile.Name()
-			},
-			validate: func(path string) error {
-				data, err := os.ReadFile(path)
-				if err != nil {
-					return err
-				}
-				var peers []PeerInfo
-				if err := json.Unmarshal(data, &peers); err != nil {
-					return err
-				}
-				if len(peers) != 0 {
-					return fmt.Errorf("expected empty peers list, got %d peers", len(peers))
-				}
-				return nil
-			},
-		},
-		{
-			name:  "invalid file path",
-			peers: []PeerInfo{},
-			setup: func() string {
-				return "/nonexistent/directory/peers.json"
-			},
-			wantErr: true,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			filePath := tt.setup()
-			if !tt.wantErr {
-				defer os.Remove(filePath)
-			}
-
-			persistPeers(tt.peers, filePath)
-
-			if !tt.wantErr {
-				if err := tt.validate(filePath); err != nil {
-					t.Errorf("validation failed: %v", err)
-				}
-			}
-		})
-	}
-}
