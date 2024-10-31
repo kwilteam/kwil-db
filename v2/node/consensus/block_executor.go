@@ -55,7 +55,6 @@ func (ce *ConsensusEngine) executeBlock() error {
 	ctx, cancel := context.WithCancel(context.Background())
 	ce.state.cancelFunc = cancel
 
-	// TODO: test resetState
 	// Execute the block and return the appHash and store the txResults
 	for _, tx := range ce.state.blkProp.blk.Txns {
 		res := ce.blockExecutor.Execute(ctx, tx) // TODO: this execute function should be context cancellable
@@ -80,6 +79,8 @@ func (ce *ConsensusEngine) executeBlock() error {
 		txResults: txResults,
 		appHash:   appHash,
 	}
+
+	ce.log.Info("Executed Block", "height", ce.state.blkProp.blk.Header.Height, "blkHash", ce.state.blkProp.blkHash, "appHash", ce.state.blockRes.appHash.String())
 
 	return nil
 }
@@ -112,7 +113,7 @@ func (ce *ConsensusEngine) commit() error {
 	}
 
 	ce.log.Info("Committed Block", "height", ce.state.blkProp.blk.Header.Height,
-		"hash", ce.state.blkProp.blk.Header.Hash(), "appHash", ce.state.blockRes.appHash)
+		"hash", ce.state.blkProp.blk.Header.Hash(), "appHash", ce.state.blockRes.appHash.String())
 	return nil
 }
 
@@ -146,6 +147,7 @@ func (ce *ConsensusEngine) resetBlockProp(rstMsg *resetState) {
 
 			// reset the blkProp and blockRes
 			ce.resetState()
+			// no need to update the last commit info as commit phase is not reached yet
 		}
 	}
 }
@@ -169,6 +171,9 @@ func (ce *ConsensusEngine) resetState() {
 	// reset the ctx and tx
 	ce.state.cancelFunc = nil
 	// ce.state.tx = nil
+
+	// clear the changesets
+	ce.blockExecutor.Rollback() // TODO:
 }
 
 // temporary placeholder as this will be in the PG chainstate in future (as was in previous kwil implementations)

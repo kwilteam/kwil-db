@@ -8,6 +8,8 @@ import (
 	"kwil/node/types"
 )
 
+var lastReset int64 = 0
+
 // Leader is the node that proposes the block and drives the consensus process:
 // 1. Prepare Phase:
 //   - Create a block proposal
@@ -30,6 +32,8 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 		return err
 	}
 
+	ce.log.Info("Created a new block proposal", "height", blkProp.height, "hash", blkProp.blkHash, "header", blkProp.blk.Header)
+
 	// Validate the block proposal before announcing it to the network
 	if err := ce.validateBlock(blkProp.blk); err != nil {
 		ce.log.Errorf("Error validating the block proposal: %v", err)
@@ -50,6 +54,15 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	ce.state.votes[string(ce.pubKey)] = &vote{
 		ack:     true,
 		appHash: &ce.state.blockRes.appHash,
+	}
+
+	// TODO: test resetState
+	if ce.state.blkProp.height%10 == 0 && lastReset != ce.state.blkProp.height {
+		ce.log.Info("Resetting the state (for testing purposes)", "height", lastReset, " blkHash", ce.state.blkProp.blkHash)
+		ce.resetState()
+		go ce.rstStateBroadcaster(ce.state.lc.height)
+		go ce.startNewRound(ctx)
+		return nil
 	}
 
 	ce.processVotes(ctx)
@@ -142,6 +155,7 @@ func (ce *ConsensusEngine) addVote(ctx context.Context, vote *vote, sender strin
 		return fmt.Errorf("vote received from an unknown validator %s", sender)
 	}
 
+	ce.log.Info("Adding vote", "height", vote.height, "blkHash", vote.blkHash, "appHash", vote.appHash, "sender", sender)
 	// Add the vote to the votes map
 	if _, ok := ce.state.votes[sender]; !ok {
 		ce.state.votes[sender] = vote
@@ -163,7 +177,8 @@ func (ce *ConsensusEngine) addVote(ctx context.Context, vote *vote, sender strin
 func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 	ce.log.Info("Processing votes", "height", ce.state.lc.height+1)
 
-	if ce.state.blkProp == nil || ce.state.blockRes == nil { // Moved onto the next round
+	if ce.state.blkProp == nil || ce.state.blockRes == nil {
+		// Moved onto the next round or leader still processing the current block
 		return nil
 	}
 
