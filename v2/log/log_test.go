@@ -35,10 +35,10 @@ func TestSanitizeArgs(t *testing.T) {
 				slog.SourceKey, "source_value",
 			},
 			want: []any{
-				"timekey", "time_value",
-				"levelkey", "level_value",
-				"message", "msg_value",
-				"soucekey", "source_value",
+				"time_", "time_value",
+				"level_", "level_value",
+				"msg_", "msg_value",
+				"source_", "source_value",
 			},
 		},
 		{

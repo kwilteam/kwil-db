@@ -31,6 +31,8 @@ const (
 	// ProtocolIDACKProposal  protocol.ID = "/kwil/blkack/1.0.0"
 
 	getMsg = "get" // context dependent, in open stream convo
+
+	discoverPeersMsg = "discover_peers" // ProtocolIDDiscover
 )
 
 func requestFrom(ctx context.Context, host host.Host, peer peer.ID, resID []byte,
@@ -121,7 +123,7 @@ func (n *Node) advertiseToPeer(ctx context.Context, peerID peer.ID, proto protoc
 	go func() {
 		defer s.Close()
 
-		// s.SetReadDeadline(time.Now().Add(annRespTimeout))
+		s.SetReadDeadline(time.Now().Add(annRespTimeout))
 
 		req := make([]byte, 128)
 		nr, err := s.Read(req)
@@ -147,10 +149,10 @@ func (n *Node) advertiseToPeer(ctx context.Context, peerID peer.ID, proto protoc
 
 // blockAnnMsg is for ProtocolIDBlkAnn "/kwil/blkann/1.0.0"
 type blockAnnMsg struct {
-	Hash    types.Hash
-	Height  int64
-	AppHash types.Hash // could be in the content/response
-	// LeaderSig []byte // to avoid having to get the block to realize if it is fake (spam)
+	Hash      types.Hash
+	Height    int64
+	AppHash   types.Hash // could be in the content/response
+	LeaderSig []byte     // to avoid having to get the block to realize if it is fake (spam)
 }
 
 var _ encoding.BinaryMarshaler = blockAnnMsg{}
@@ -195,6 +197,20 @@ func (m *blockAnnMsg) WriteTo(w io.Writer) (int64, error) {
 	}
 	n += nw
 
+	// first write length of leader sig (uint64 little endian)
+	err = binary.Write(w, binary.LittleEndian, uint64(len(m.LeaderSig)))
+	if err != nil {
+		return int64(n), err
+	}
+	n += 8
+
+	// then write the leader sig
+	nw, err = w.Write(m.LeaderSig)
+	if err != nil {
+		return int64(n), err
+	}
+	n += nw
+
 	return int64(n), nil
 }
 
@@ -211,6 +227,19 @@ func (m *blockAnnMsg) ReadFrom(r io.Reader) (int64, error) {
 	}
 	n += 8
 	if nr, err := io.ReadFull(r, m.AppHash[:]); err != nil {
+		return n + int64(nr), err
+	}
+	n += int64(nr)
+	var sigLen uint64
+	if err := binary.Read(r, binary.LittleEndian, &sigLen); err != nil {
+		return n, err
+	}
+	n += 8
+	if sigLen > 1000 {
+		return n, errors.New("unexpected leader sig length")
+	}
+	m.LeaderSig = make([]byte, sigLen)
+	if nr, err := io.ReadFull(r, m.LeaderSig); err != nil {
 		return n + int64(nr), err
 	}
 	n += int64(nr)

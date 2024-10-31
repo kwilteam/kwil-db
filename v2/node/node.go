@@ -19,6 +19,7 @@ import (
 	"kwil/log"
 	"kwil/node/consensus"
 	"kwil/node/mempool"
+	"kwil/node/peers"
 	"kwil/node/store"
 	"kwil/node/types"
 
@@ -83,13 +84,19 @@ type ConsensusEngineForToyNode interface { // quick and dirty for toy node proto
 	BlockLeaderStream() <-chan *types.QualifiedBlock
 }
 
+type PeerManager interface { // move to consumer (Node)
+	network.Notifiee
+	Start(context.Context) error
+	KnownPeers() []types.PeerInfo
+}
+
 type Node struct {
 	bki types.BlockStore
 	mp  types.MemPool
 	ce  ConsensusEngine
 	log log.Logger
 
-	pm *peerMan
+	pm PeerManager // *peers.PeerMan
 	// pf *prefetch
 
 	ackChan  chan AckRes         // from consensus engine, to gossip to leader
@@ -127,6 +134,11 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 	for _, opt := range opts {
 		opt(options)
 	}
+	logger := options.logger
+	if logger == nil {
+		// logger = log.DiscardLogger // prod
+		logger = log.New(log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
+	}
 
 	close := func() error { return nil }
 
@@ -144,13 +156,15 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 		mp = mempool.New()
 	}
 
-	pm := &peerMan{h: host, log: options.logger.New("PEERS")}
-	if options.pex {
-		host.SetStreamHandler(ProtocolIDDiscover, pm.discoveryStreamHandler)
-	} else {
-		host.SetStreamHandler(ProtocolIDDiscover, func(s network.Stream) {
-			s.Close()
+	addrBookPath := filepath.Join(dir, "addrbook.json")
+	pm, err := peers.NewPeerMan(options.pex, addrBookPath,
+		logger.New("PEERS"),
+		host, // tooo much, become minimal interface
+		func(ctx context.Context, peerID peer.ID) ([]peer.AddrInfo, error) {
+			return requestPeers(ctx, peerID, host, logger)
 		})
+	if err != nil {
+		return nil, err
 	}
 
 	bs := options.bs
@@ -164,8 +178,6 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 	}
 	close = addClose(close, bs.Close) //close db after stopping p2p
 	close = addClose(close, host.Close)
-
-	logger := options.logger
 
 	ceLogger := logger.New("CONS")
 	ce := consensus.New(options.role, host.ID(), dir, mp, bs, options.valSet, ceLogger)
@@ -200,6 +212,14 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 	host.SetStreamHandler(ProtocolIDBlockPropose, node.blkPropStreamHandler)
 	// host.SetStreamHandler(ProtocolIDACKProposal, node.blkAckStreamHandler)
 
+	if options.pex {
+		host.SetStreamHandler(ProtocolIDDiscover, node.peerDiscoveryStreamHandler)
+	} else {
+		host.SetStreamHandler(ProtocolIDDiscover, func(s network.Stream) {
+			s.Close()
+		})
+	}
+
 	return node, nil
 }
 
@@ -226,6 +246,9 @@ func (n *Node) Start(ctx context.Context, peers ...string) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
+	n.host.Network().Notify(n.pm)
+	defer n.host.Network().StopNotify(n.pm)
+
 	// connect to bootstrap peers, if any
 	for _, peer := range peers {
 		peerInfo, err := connectPeer(ctx, peer, n.host)
@@ -244,6 +267,25 @@ func (n *Node) Start(ctx context.Context, peers ...string) error {
 		}
 		// n.host.ConnManager().TagPeer(peerID, "validatorish", 1)
 	} // else would use persistent peer store (address book)
+	for _, peerID := range n.host.Peerstore().Peers() {
+		if n.host.ID() == peerID {
+			continue
+		}
+		peerAddrs := n.host.Peerstore().Addrs(peerID)
+		if len(peerAddrs) == 0 {
+			n.log.Warnf("No addresses found for peer %s, skipping.", peerID)
+			continue
+		}
+
+		// Create AddrInfo from peerID and known addresses
+		if err := n.host.Connect(ctx, peer.AddrInfo{
+			ID:    peerID,
+			Addrs: peerAddrs,
+		}); err != nil {
+			n.log.Warnf("Unable to connect to peer %s: %v", peerID, err)
+		}
+		n.log.Infof("Connected to peer %v", peerID)
+	}
 
 	ps, err := pubsub.NewGossipSub(ctx, n.host)
 	if err != nil {
@@ -271,39 +313,10 @@ func (n *Node) Start(ctx context.Context, peers ...string) error {
 		n.ce.Start(ctx, n.announceBlkProp, n.announceBlk, n.sendACK, n.getBlkHeight, n.sendReset)
 	}()
 
-	// mine is our block anns goroutine, which must be only for leader
-	// n.wg.Add(1)
-	// go func() {
-	// 	defer n.wg.Done()
-	// 	defer cancel()
-	// 	n.announceBlocks(ctx)
-	// }()
-
 	n.wg.Add(1)
 	go func() {
 		defer n.wg.Done()
-		if !n.pex {
-			return
-		}
-		for {
-			// discover for this node
-			peerChan, err := n.pm.FindPeers(ctx, "kwil_namespace")
-			if err != nil {
-				n.log.Errorf("FindPeers: %v", err)
-			} else {
-				go func() {
-					for peer := range peerChan {
-						addPeerToPeerStore(n.host.Peerstore(), peer)
-					}
-				}()
-			}
-
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(20 * time.Second):
-			}
-		}
+		n.pm.Start(ctx)
 	}()
 
 	n.log.Info("Node started.")
