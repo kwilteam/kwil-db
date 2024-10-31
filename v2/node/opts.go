@@ -8,6 +8,7 @@ import (
 )
 
 type options struct {
+	ip      string // netip.Addr maybe
 	port    uint64
 	privKey []byte
 	role    types.Role
@@ -26,6 +27,12 @@ type Option func(*options)
 func WithLogger(logger log.Logger) Option {
 	return func(o *options) {
 		o.logger = logger
+	}
+}
+
+func WithIP(ip string) Option {
+	return func(o *options) {
+		o.ip = ip
 	}
 }
 
