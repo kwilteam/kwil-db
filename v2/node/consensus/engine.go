@@ -297,16 +297,21 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 
 	ce.log.Info("Initial APP State", "height", ce.state.appState.Height, "appHash", ce.state.appState.AppHash)
 	// Replay blocks from the blockstore.
+	startHeight := ce.state.lc.height + 1
+	t0 := time.Now()
+
 	if err := ce.replayLocalBlocks(); err != nil {
 		return err
 	}
-	ce.log.Info("Replayed blocks from the blockstore", "height", ce.state.lc.height, "appHash", ce.state.lc.appHash)
+	ce.log.Info("Replayed blocks from the blockstore", "from", startHeight, "to (excluding)", ce.state.lc.height+1, "time", time.Since(t0), "appHash", ce.state.lc.appHash)
 
+	startHeight = ce.state.lc.height + 1
+	t0 = time.Now()
 	// Replay blocks from the network
 	if err := ce.replayBlockFromNetwork(ctx); err != nil {
 		return err
 	}
-	ce.log.Info("Replayed blocks from the network", "height", ce.state.lc.height, "appHash", ce.state.lc.appHash)
+	ce.log.Info("Replayed blocks from the network", "from", startHeight, "to (excluding)", ce.state.lc.height+1, "time", time.Since(t0), "appHash", ce.state.lc.appHash)
 
 	return nil
 }
@@ -368,10 +373,8 @@ func (ce *ConsensusEngine) replayLocalBlocks() error {
 // replayBlockFromNetwork requests the next blocks from the network and processes it
 // until it catches up with its peers.
 func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context) error {
-	ce.log.Info("Requesting blocks from network to catch up (staggered validator)", "height", ce.state.lc.height+1)
 	for {
 		_, appHash, rawblk, err := ce.blkRequester(ctx, ce.state.lc.height+1)
-		ce.log.Info("Requested block from network", "height", ce.state.lc.height+1, "appHash", appHash)
 		if err != nil { // all kinds of errors?
 			ce.log.Info("Error requesting block from network", "height", ce.state.lc.height+1, "error", err)
 			return nil // no more blocks to sync from network.
@@ -385,6 +388,7 @@ func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("failed to decode block: %w", err)
 		}
+
 		if err := ce.processAndCommit(blk, appHash); err != nil {
 			return err
 		}
@@ -434,7 +438,10 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) {
 	if ce.role != types.RoleLeader {
 		if ce.state.blkProp == nil && ce.state.blockRes == nil {
 			// catchup if needed with the leader/network.
+			startHeight := ce.state.lc.height + 1
+			t0 := time.Now()
 			ce.replayBlockFromNetwork(ctx)
+			ce.log.Info("Downloaded blocks from the network", "from", startHeight, "to (excluding)", ce.state.lc.height+1, "time", time.Since(t0), "appHash", ce.state.lc.appHash)
 		}
 	}
 }
