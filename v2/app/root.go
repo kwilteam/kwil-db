@@ -96,7 +96,7 @@ func SetupCmd() *cobra.Command {
 		Short: "The setup command provides functions for creating and managing node configuration and data.",
 		Long:  setupLong,
 	}
-	setupCmd.AddCommand(ResetCmd(), TestnetCmd(), KeygenCmd())
+	setupCmd.AddCommand(ResetCmd(), TestnetCmd(), KeyCmd())
 
 	return setupCmd
 }
