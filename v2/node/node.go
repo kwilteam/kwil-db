@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -29,6 +30,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	noise "github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
@@ -127,6 +129,7 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 	for _, opt := range opts {
 		opt(options)
 	}
+	logger := options.logger
 
 	close := func() error { return nil }
 
@@ -153,6 +156,13 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 		})
 	}
 
+	addrBookPath := filepath.Join(dir, "addrbook.json")
+	numPeers, err := loadPeers(host.Peerstore(), addrBookPath)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return nil, fmt.Errorf("failed to load address book %s", addrBookPath)
+	}
+	logger.Infof("Loaded address book with %d peers", numPeers)
+
 	bs := options.bs
 	if bs == nil {
 		blkStrDir := filepath.Join(dir, "blockstore")
@@ -164,8 +174,6 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 	}
 	close = addClose(close, bs.Close) //close db after stopping p2p
 	close = addClose(close, host.Close)
-
-	logger := options.logger
 
 	ceLogger := logger.New("CONS")
 	ce := consensus.New(options.role, host.ID(), dir, mp, bs, options.valSet, ceLogger)
@@ -244,6 +252,25 @@ func (n *Node) Start(ctx context.Context, peers ...string) error {
 		}
 		// n.host.ConnManager().TagPeer(peerID, "validatorish", 1)
 	} // else would use persistent peer store (address book)
+	for _, peerID := range n.host.Peerstore().Peers() {
+		if n.host.ID() == peerID {
+			continue
+		}
+		peerAddrs := n.host.Peerstore().Addrs(peerID)
+		if len(peerAddrs) == 0 {
+			n.log.Warnf("No addresses found for peer %s, skipping.", peerID)
+			continue
+		}
+
+		// Create AddrInfo from peerID and known addresses
+		if err := n.host.Connect(ctx, peer.AddrInfo{
+			ID:    peerID,
+			Addrs: peerAddrs,
+		}); err != nil {
+			n.log.Warnf("Unable to connect to peer %s: %v", peerID, err)
+		}
+		n.log.Infof("Connected to peer %v", peerID)
+	}
 
 	ps, err := pubsub.NewGossipSub(ctx, n.host)
 	if err != nil {
@@ -292,8 +319,15 @@ func (n *Node) Start(ctx context.Context, peers ...string) error {
 				n.log.Errorf("FindPeers: %v", err)
 			} else {
 				go func() {
+					var count int
 					for peer := range peerChan {
 						addPeerToPeerStore(n.host.Peerstore(), peer)
+						count++
+					}
+					if count > 0 {
+						if err := n.savePeers(); err != nil {
+							n.log.Warnf("Failed to write address book: %v", err)
+						}
 					}
 				}()
 			}
@@ -302,6 +336,10 @@ func (n *Node) Start(ctx context.Context, peers ...string) error {
 			case <-ctx.Done():
 				return
 			case <-time.After(20 * time.Second):
+			}
+
+			if err := n.savePeers(); err != nil {
+				n.log.Warnf("Failed to write address book: %v", err)
 			}
 		}
 	}()
@@ -312,7 +350,62 @@ func (n *Node) Start(ctx context.Context, peers ...string) error {
 
 	n.wg.Wait()
 
+	if err := n.savePeers(); err != nil {
+		n.log.Warnf("Failed to write address book: %v", err)
+	}
+
 	return n.close()
+}
+
+func (n *Node) savePeers() error {
+	peerList := getKnownPeers(n.host)
+	if err := persistPeers(peerList, filepath.Join(n.dir, "addrbook.json")); err != nil {
+		return err
+	}
+	return nil
+}
+
+// persistPeers saves known peers to a JSON file
+func persistPeers(peers []PeerInfo, filePath string) error {
+	// Marshal peerList to JSON
+	data, err := json.MarshalIndent(peers, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshaling peers to JSON: %v", err)
+	}
+
+	// Write to file
+	err = os.WriteFile(filePath, data, 0644)
+	if err != nil {
+		return fmt.Errorf("writing peers to file: %w", err)
+	}
+	return nil
+}
+
+func loadPeers(ps peerstore.Peerstore, filePath string) (int, error) {
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return 0, fmt.Errorf("failed to read peerstore file: %w", err)
+	}
+
+	var peerList []PeerInfo
+	if err := json.Unmarshal(data, &peerList); err != nil {
+		return 0, fmt.Errorf("failed to unmarshal peerstore data: %w", err)
+	}
+
+	var count int
+	for _, pInfo := range peerList {
+		for _, addr := range pInfo.Addrs {
+			ps.AddAddr(pInfo.ID, addr, peerstore.PermanentAddrTTL)
+		}
+		for _, proto := range pInfo.Protos {
+			if err := ps.AddProtocols(pInfo.ID, proto); err != nil {
+				fmt.Printf("Error adding protocol %s for peer %s: %v", proto, pInfo.ID, err)
+			}
+		}
+		count++
+	}
+
+	return count, nil
 }
 
 func (n *Node) checkPeerProtos(ctx context.Context, peer peer.ID) error {

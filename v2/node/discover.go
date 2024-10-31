@@ -136,6 +136,53 @@ type PeerInfo struct {
 	Protos []protocol.ID `json:"protos"`
 }
 
+func (p PeerInfo) MarshalJSON() ([]byte, error) {
+	var addrStrs []string
+	for _, addr := range p.Addrs {
+		addrStrs = append(addrStrs, addr.String())
+	}
+	var protoStrs []string
+	for _, proto := range p.Protos {
+		protoStrs = append(protoStrs, string(proto))
+	}
+	return json.Marshal(struct {
+		ID     string   `json:"id"`
+		Addrs  []string `json:"addrs"`
+		Protos []string `json:"protos"`
+	}{
+		ID:     p.ID.String(),
+		Addrs:  addrStrs,
+		Protos: protoStrs,
+	})
+}
+
+func (p *PeerInfo) UnmarshalJSON(data []byte) error {
+	aux := struct {
+		ID     string   `json:"id"`
+		Addrs  []string `json:"addrs"`
+		Protos []string `json:"protos"`
+	}{}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	peerID, err := peer.Decode(aux.ID)
+	if err != nil {
+		return err
+	}
+	p.ID = peerID
+	for _, addrStr := range aux.Addrs {
+		addr, err := multiaddr.NewMultiaddr(addrStr)
+		if err != nil {
+			return err
+		}
+		p.Addrs = append(p.Addrs, addr)
+	}
+	for _, protoStr := range aux.Protos {
+		p.Protos = append(p.Protos, protocol.ID(protoStr))
+	}
+	return nil
+}
+
 func getKnownPeers(h host.Host) []PeerInfo {
 	var peers []PeerInfo
 	for _, peerID := range h.Network().Peers() { // connected peers only
@@ -184,6 +231,7 @@ func addPeerToPeerStore(ps peerstore.Peerstore, p peer.AddrInfo) {
 			ps.AddAddr(p.ID, addr, time.Hour)
 			fmt.Println("Added new peer address to store:", p.ID, addr)
 		}
+		// TODO: we need a connect hook to change to forever on connect
 	}
 
 	// Add the peer's addresses to the peer store.
