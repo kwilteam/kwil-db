@@ -194,20 +194,54 @@ type logger struct {
 	log   *slog.Logger
 }
 
+// slog has reserved keys ("time", "level", "msg", and "source"), and it is
+// almost always unintended to override these values. Further, slog will
+// actually panic in cases where the value type is not as expected e.g. not a
+// time.Time for the "time" key! This helper ensures the application corrupt the
+// logs or crash in the event of a buggy log line.
+func sanitizeArgs(args []any) []any {
+	sanitized := make([]any, 0, len(args))
+	for i := 0; i < len(args); i += 2 {
+		key, ok := args[i].(string)
+		if !ok {
+			continue // Skip if key is not a string
+		}
+
+		// Rename reserved keys to avoid conflict with slog's internal fields.
+		// If you see these underscore-suffixed keys in the logs, fix your log.
+		switch key {
+		case slog.TimeKey:
+			key = "time_"
+		case slog.LevelKey:
+			key = "level_"
+		case slog.MessageKey: // "msg"
+			key = "msg_"
+		case slog.SourceKey:
+			key = "source_"
+		}
+
+		sanitized = append(sanitized, key)
+		if i+1 < len(args) { // don't panic if args len was odd
+			sanitized = append(sanitized, args[i+1])
+		}
+	}
+	return sanitized
+}
+
 func (l *logger) Debug(msg string, args ...any) {
-	l.log.Debug(msg, args...)
+	l.log.Debug(msg, sanitizeArgs(args)...)
 }
 func (l *logger) Info(msg string, args ...any) {
-	l.log.Info(msg, args...)
+	l.log.Info(msg, sanitizeArgs(args)...)
 }
 func (l *logger) Warn(msg string, args ...any) {
-	l.log.Warn(msg, args...)
+	l.log.Warn(msg, sanitizeArgs(args)...)
 }
 func (l *logger) Error(msg string, args ...any) {
-	l.log.Error(msg, args...)
+	l.log.Error(msg, sanitizeArgs(args)...)
 }
 func (l *logger) Log(level Level, msg string, args ...any) {
-	l.log.Log(context.Background(), levelToSlog(level), msg, args...)
+	l.log.Log(context.Background(), levelToSlog(level), msg, sanitizeArgs(args)...)
 }
 func (l *logger) Debugf(msg string, args ...any) {
 	l.log.Debug(fmt.Sprintf(msg, args...))
