@@ -357,7 +357,7 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 	if err := ce.replayLocalBlocks(); err != nil {
 		return err
 	}
-	ce.log.Info("Replayed blocks from the blockstore", "from", startHeight, "to (excluding)", ce.state.lc.height+1, "time", time.Since(t0), "appHash", ce.state.lc.appHash)
+	ce.log.Info("Replayed blocks from the blockstore", "from", startHeight, "to (excluding)", ce.state.lc.height+1, "elapsed", time.Since(t0), "appHash", ce.state.lc.appHash)
 
 	startHeight = ce.state.lc.height + 1
 	t0 = time.Now()
@@ -365,7 +365,7 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 	if err := ce.replayBlockFromNetwork(ctx); err != nil {
 		return err
 	}
-	ce.log.Info("Replayed blocks from the network", "from", startHeight, "to (excluding)", ce.state.lc.height+1, "time", time.Since(t0), "appHash", ce.state.lc.appHash)
+	ce.log.Info("Replayed blocks from the network", "from", startHeight, "to (excluding)", ce.state.lc.height+1, "elapsed", time.Since(t0), "appHash", ce.state.lc.appHash)
 
 	return nil
 }
