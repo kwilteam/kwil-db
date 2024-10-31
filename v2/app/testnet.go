@@ -8,10 +8,11 @@ import (
 	"os"
 	"path/filepath"
 
+	"kwil/crypto"
 	"kwil/node"
 	"kwil/node/types"
 
-	"github.com/libp2p/go-libp2p/core/crypto"
+	p2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/spf13/cobra"
@@ -52,11 +53,11 @@ func generateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, start
 		return err
 	}
 
-	if err := os.MkdirAll(rootDir, os.ModePerm); err != nil {
+	if err := os.MkdirAll(rootDir, 0755); err != nil {
 		return err
 	}
 
-	var keys []crypto.PrivKey
+	var keys []crypto.PrivateKey
 	// generate the configuration for the nodes
 	for i := range numVals + numNVals {
 		// generate Keys, so that the connection strings and the validator set can be generated before the node config files are generated
@@ -68,27 +69,28 @@ func generateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, start
 		keys = append(keys, priv)
 	}
 
-	leaderR, err := keys[0].GetPublic().Raw()
+	// key 0 is leader
+	leaderPub := keys[0].Public()
+	leaderRawPub := leaderPub.Bytes()
+	// See the comments on node.PeerConfig.BootNodes on the peer string format,
+	// and why we're still using go-libp2p crypto here.
+	leaderP2PPub, err := p2pcrypto.UnmarshalSecp256k1PublicKey(leaderRawPub)
 	if err != nil {
 		return err
 	}
-	leaderAddr, err := peer.IDFromPrivateKey(keys[0])
+	leaderP2PAddr, err := peer.IDFromPublicKey(leaderP2PPub)
 	if err != nil {
 		return err
 	}
 
 	genConfig := &node.GenesisConfig{
-		Leader:     leaderR,
+		Leader:     leaderRawPub,
 		Validators: make([]types.Validator, numVals),
 	}
 
 	for i := range numVals {
-		pub, err := keys[i].GetPublic().Raw()
-		if err != nil {
-			return err
-		}
 		genConfig.Validators[i] = types.Validator{
-			PubKey: pub,
+			PubKey: keys[i].Public().Bytes(),
 			Power:  1,
 		}
 	}
@@ -96,33 +98,29 @@ func generateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, start
 	// generate the configuration for the nodes
 	for i := range numVals + numNVals {
 		nodeDir := filepath.Join(rootDir, fmt.Sprintf("node%d", i))
-		if err := os.MkdirAll(nodeDir, os.ModePerm); err != nil {
+		if err := os.MkdirAll(nodeDir, 0755); err != nil {
 			return err
 		}
 
-		privKey, err := keys[i].Raw()
-		if err != nil {
-			return err
-		}
+		privKey := keys[i].Bytes()
 
-		nodeConfig := &node.NodeConfig{
-			Port:       startingPort + uint64(i),
-			IP:         "127.0.0.1",
-			SeedNode:   "",
-			Pex:        !noPex,
-			PrivateKey: privKey,
-		}
+		cfg := node.DefaultConfig()
+		cfg.PrivateKey = privKey
+		cfg.PeerConfig.Port = startingPort + uint64(i)
+		cfg.PeerConfig.IP = "127.0.0.1"
+		cfg.PeerConfig.Pex = !noPex
 
 		if i != 0 {
-			nodeConfig.SeedNode = fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s", nodeConfig.IP, startingPort, leaderAddr)
+			cfg.PeerConfig.BootNode = fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s",
+				cfg.PeerConfig.IP, startingPort, leaderP2PAddr)
 		}
 
-		if err := nodeConfig.SaveAs(filepath.Join(nodeDir, "config.json")); err != nil {
+		if err := cfg.SaveAs(filepath.Join(nodeDir, ConfigFileName)); err != nil {
 			return err
 		}
 
 		// save the genesis configuration to the root directory
-		genFile := filepath.Join(nodeDir, "genesis.json")
+		genFile := filepath.Join(nodeDir, GenesisFileName)
 		if err := genConfig.SaveAs(genFile); err != nil {
 			return err
 		}
