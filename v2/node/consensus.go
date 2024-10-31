@@ -108,7 +108,7 @@ func (n *Node) announceBlkProp(ctx context.Context, blk *types.Block, from peer.
 		}
 		prop := blockProp{Height: height, Hash: blkHash, PrevHash: blk.Header.PrevHash,
 			Stamp: blk.Header.Timestamp.UnixMilli(), LeaderSig: blk.Signature}
-		n.log.Infof("advertising block proposal %s (height %d / txs %d) to peer %v", blkHash, height, len(rawBlk), peerID)
+		n.log.Infof("advertising block proposal %s (height %d / txs %d) to peer %v", blkHash, height, len(blk.Txns), peerID)
 		// resID := annPropMsgPrefix + strconv.Itoa(int(height)) + ":" + prevHash + ":" + blkid
 		propID, _ := prop.MarshalBinary()
 		err := n.advertiseToPeer(ctx, peerID, ProtocolIDBlockPropose, contentAnn{prop.String(), propID, rawBlk},
@@ -421,7 +421,7 @@ func (n *Node) startConsensusResetGossip(ctx context.Context, ps *pubsub.PubSub)
 			// 	n.log.Infof("failed to extract pubkey from peer ID %v: %v", fromPeerID, err)
 			// 	continue
 			// }
-			// go n.ce.NotifyReset(reset, resetSenderPubKey)
+			go n.ce.NotifyResetState(reset.ToHeight) // Todo: add sender pubkey for validation
 		}
 	}()
 
