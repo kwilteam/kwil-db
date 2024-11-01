@@ -5,11 +5,414 @@ import (
 	"testing"
 	"unicode"
 
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/generate"
+	"github.com/kwilteam/kwil-db/parse"
 	"github.com/kwilteam/kwil-db/parse/postgres"
-	"github.com/stretchr/testify/assert"
 )
+
+func TestGenerateDDLStatement(t *testing.T) {
+	tests := []struct {
+		name    string
+		sql     parse.SQLStmt
+		want    string
+		wantErr bool
+	}{ // those are the same as what are in internal.parse.parse_test.Test_SQL, with 'want' and 'sql' swapped
+		{
+			name: "create table",
+			sql: &parse.CreateTableStatement{
+				Name: "users",
+				Columns: []*parse.Column{
+					{
+						Name: "id",
+						Type: types.IntType,
+						Constraints: []parse.Constraint{
+							&parse.ConstraintPrimaryKey{},
+						},
+					},
+					{
+						Name: "name",
+						Type: types.TextType,
+						Constraints: []parse.Constraint{
+							&parse.ConstraintCheck{
+								Param: &parse.ExpressionComparison{
+									Left: &parse.ExpressionFunctionCall{
+										Name: "length",
+										Args: []parse.Expression{
+											&parse.ExpressionColumn{
+												Table:  "",
+												Column: "name",
+											},
+										},
+									},
+									Right: &parse.ExpressionLiteral{
+										Type:  types.IntType,
+										Value: int64(10),
+									},
+									Operator: parse.ComparisonOperatorGreaterThan,
+								},
+							},
+						},
+					},
+					{
+						Name: "address",
+						Type: types.TextType,
+						Constraints: []parse.Constraint{
+							&parse.ConstraintNotNull{},
+							&parse.ConstraintDefault{
+								Value: &parse.ExpressionLiteral{
+									Type:  types.TextType,
+									Value: "usa",
+								},
+							},
+						},
+					},
+					{
+						Name: "email",
+						Type: types.TextType,
+						Constraints: []parse.Constraint{
+							&parse.ConstraintNotNull{},
+							&parse.ConstraintUnique{},
+						},
+					},
+					{
+						Name: "city_id",
+						Type: types.IntType,
+					},
+					{
+						Name: "group_id",
+						Type: types.IntType,
+						Constraints: []parse.Constraint{
+							&parse.ConstraintForeignKey{
+								RefTable:  "groups",
+								RefColumn: "id",
+								Ons:       []parse.ForeignKeyActionOn{parse.ON_DELETE},
+								Dos:       []parse.ForeignKeyActionDo{parse.DO_CASCADE},
+							},
+						},
+					},
+				},
+				Indexes: []*parse.TableIndex{
+					{
+						Name:    "group_name_unique",
+						Columns: []string{"group_id", "name"},
+						Type:    parse.IndexTypeUnique,
+					},
+					{
+						Name:    "ithome",
+						Columns: []string{"name", "address"},
+						Type:    parse.IndexTypeBTree,
+					},
+				},
+				Constraints: []parse.Constraint{
+					&parse.ConstraintForeignKey{
+						Name:      "city_fk",
+						RefTable:  "cities",
+						RefColumn: "id",
+						Column:    "city_id",
+						Ons:       []parse.ForeignKeyActionOn{parse.ON_UPDATE},
+						Dos:       []parse.ForeignKeyActionDo{parse.DO_NO_ACTION},
+					},
+					&parse.ConstraintCheck{
+						Param: &parse.ExpressionComparison{
+							Left: &parse.ExpressionFunctionCall{
+								Name: "length",
+								Args: []parse.Expression{
+									&parse.ExpressionColumn{
+										Table:  "",
+										Column: "email",
+									},
+								},
+							},
+							Right: &parse.ExpressionLiteral{
+								Type:  types.IntType,
+								Value: int64(1),
+							},
+							Operator: parse.ComparisonOperatorGreaterThan,
+						},
+					},
+					&parse.ConstraintUnique{
+						Columns: []string{
+							"city_id",
+							"address",
+						},
+					},
+				},
+			},
+			want: `CREATE TABLE users (
+  id int PRIMARY KEY,
+  name text CHECK(length(name) > 10),
+  address text NOT NULL DEFAULT 'usa',
+  email text NOT NULL UNIQUE,
+  city_id int,
+  group_id int REFERENCES groups(id) ON DELETE CASCADE,
+  CONSTRAINT city_fk FOREIGN KEY (city_id) REFERENCES cities(id) ON UPDATE NO ACTION,
+  CHECK(length(email) > 1),
+  UNIQUE (city_id, address),
+  UNIQUE INDEX group_name_unique (group_id, name),
+  INDEX ithome (name, address)
+);`,
+		},
+		{
+			name: "create table if not exists",
+			want: `CREATE TABLE IF NOT EXISTS users (
+  id int PRIMARY KEY
+);`,
+			sql: &parse.CreateTableStatement{
+				Name:        "users",
+				IfNotExists: true,
+				Columns: []*parse.Column{
+					{
+						Name: "id",
+						Type: types.IntType,
+						Constraints: []parse.Constraint{
+							&parse.ConstraintPrimaryKey{},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "alter table add column constraint NOT NULL",
+			sql: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.AddColumnConstraint{
+					Column: "name",
+					Type:   parse.NOT_NULL,
+				},
+			},
+			want: "ALTER TABLE user ALTER COLUMN name SET NOT NULL;",
+		},
+		{
+			name: "alter table add column constraint DEFAULT",
+			want: `ALTER TABLE user ALTER COLUMN name SET DEFAULT 10;`,
+			sql: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.AddColumnConstraint{
+					Column: "name",
+					Type:   parse.DEFAULT,
+					Value: &parse.ExpressionLiteral{
+						Type:  types.IntType,
+						Value: int64(10),
+					},
+				},
+			},
+		},
+		{
+			name: "alter table drop column constraint NOT NULL",
+			want: `ALTER TABLE user ALTER COLUMN name DROP NOT NULL;`,
+			sql: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.DropColumnConstraint{
+					Column: "name",
+					Type:   parse.NOT_NULL,
+				},
+			},
+		},
+		{
+			name: "alter table drop column constraint DEFAULT",
+			want: `ALTER TABLE user ALTER COLUMN name DROP DEFAULT;`,
+			sql: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.DropColumnConstraint{
+					Column: "name",
+					Type:   parse.DEFAULT,
+				},
+			},
+		},
+		{
+			name: "alter table drop column constraint named",
+			want: `ALTER TABLE user ALTER COLUMN name DROP CONSTRAINT abc;`,
+			sql: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.DropColumnConstraint{
+					Column: "name",
+					Name:   "abc",
+				},
+			},
+		},
+		{
+			name: "alter table add column",
+			want: `ALTER TABLE user ADD COLUMN abc int;`,
+			sql: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.AddColumn{
+					Name: "abc",
+					Type: types.IntType,
+				},
+			},
+		},
+		{
+			name: "alter table drop column",
+			want: `ALTER TABLE user DROP COLUMN abc;`,
+			sql: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.DropColumn{
+					Name: "abc",
+				},
+			},
+		},
+
+		{
+			name: "alter table rename column",
+			want: `ALTER TABLE user RENAME COLUMN abc TO def;`,
+			sql: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.RenameColumn{
+					OldName: "abc",
+					NewName: "def",
+				},
+			},
+		},
+		{
+			name: "alter table rename table",
+			want: `ALTER TABLE user RENAME TO account;`,
+			sql: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.RenameTable{
+					Name: "account",
+				},
+			},
+		},
+		{
+			name: "alter table add constraint fk",
+			want: `ALTER TABLE user ADD CONSTRAINT new_fk FOREIGN KEY (city_id) REFERENCES cities(id) ON DELETE CASCADE;`,
+			sql: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.AddTableConstraint{
+					Cons: &parse.ConstraintForeignKey{
+						Name:      "new_fk",
+						RefTable:  "cities",
+						RefColumn: "id",
+						Column:    "city_id",
+						Ons:       []parse.ForeignKeyActionOn{parse.ON_DELETE},
+						Dos:       []parse.ForeignKeyActionDo{parse.DO_CASCADE},
+					},
+				},
+			},
+		},
+		{
+			name: "alter table drop constraint",
+			want: `ALTER TABLE user DROP CONSTRAINT abc;`,
+			sql: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.DropTableConstraint{
+					Name: "abc",
+				},
+			},
+		},
+		{
+			name: "drop table",
+			want: `DROP TABLE users, posts;`,
+			sql: &parse.DropTableStatement{
+				Tables:   []string{"users", "posts"},
+				Behavior: parse.DropBehaviorNon,
+			},
+		},
+		{
+			name: "drop table single table",
+			want: `DROP TABLE users;`,
+			sql: &parse.DropTableStatement{
+				Tables:   []string{"users"},
+				Behavior: parse.DropBehaviorNon,
+			},
+		},
+		{
+			name: "drop table if exists",
+			want: `DROP TABLE IF EXISTS users, posts;`,
+			sql: &parse.DropTableStatement{
+				Tables:   []string{"users", "posts"},
+				IfExists: true,
+				Behavior: parse.DropBehaviorNon,
+			},
+		},
+		{
+			name: "drop table CASCADE",
+			want: `DROP TABLE IF EXISTS users, posts CASCADE;`,
+			sql: &parse.DropTableStatement{
+				Tables:   []string{"users", "posts"},
+				Behavior: parse.DropBehaviorCascade,
+				IfExists: true,
+			},
+		},
+		{
+			name: "drop table RESTRICT ",
+			want: `DROP TABLE users, posts RESTRICT;`,
+			sql: &parse.DropTableStatement{
+				Tables:   []string{"users", "posts"},
+				Behavior: parse.DropBehaviorRestrict,
+			},
+		},
+		{
+			name: "create index",
+			want: `CREATE INDEX abc ON user(name);`,
+			sql: &parse.CreateIndexStatement{
+				Name:    "abc",
+				On:      "user",
+				Columns: []string{"name"},
+				Type:    parse.IndexTypeBTree,
+			},
+		},
+		{
+			name: "create unique index",
+			want: `CREATE UNIQUE INDEX abc ON user(name);`,
+			sql: &parse.CreateIndexStatement{
+				Name:    "abc",
+				On:      "user",
+				Columns: []string{"name"},
+				Type:    parse.IndexTypeUnique,
+			},
+		},
+		{
+			name: "create index with no name",
+			want: `CREATE INDEX ON user(name);`,
+			sql: &parse.CreateIndexStatement{
+				On:      "user",
+				Columns: []string{"name"},
+				Type:    parse.IndexTypeBTree,
+			},
+		},
+		{
+			name: "create index if not exist",
+			want: `CREATE INDEX IF NOT EXISTS abc ON user(name);`,
+			sql: &parse.CreateIndexStatement{
+				IfNotExists: true,
+				Name:        "abc",
+				On:          "user",
+				Columns:     []string{"name"},
+				Type:        parse.IndexTypeBTree,
+			},
+		},
+		{
+			name: "drop index",
+			want: `DROP INDEX abc;`,
+			sql: &parse.DropIndexStatement{
+				Name: "abc",
+			},
+		},
+
+		{
+			name: "drop index if exist",
+			want: `DROP INDEX IF EXISTS abc;`,
+			sql: &parse.DropIndexStatement{
+				Name:       "abc",
+				CheckExist: true,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := generate.WriteDDL(tt.sql)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+
+}
 
 func TestGenerateDDL(t *testing.T) {
 	type args struct {

@@ -2051,6 +2051,26 @@ func (s *sqlAnalyzer) VisitOrderingTerm(p0 *OrderingTerm) any {
 	return nil
 }
 
+func (s *sqlAnalyzer) VisitCreateTableStatement(p0 *CreateTableStatement) any {
+	panic("sqlAnalyzer: not implemented")
+}
+
+func (s *sqlAnalyzer) VisitAlterTableStatement(p0 *AlterTableStatement) any {
+	panic("sqlAnalyzer: not implemented")
+}
+
+func (s *sqlAnalyzer) VisitDropTableStatement(p0 *DropTableStatement) any {
+	panic("sqlAnalyzer: not implemented")
+}
+
+func (s *sqlAnalyzer) VisitCreateIndexStatement(p0 *CreateIndexStatement) any {
+	panic("sqlAnalyzer: not implemented")
+}
+
+func (s *sqlAnalyzer) VisitDropIndexStatement(p0 *DropIndexStatement) any {
+	panic("sqlAnalyzer: not implemented")
+}
+
 // tableToRelation converts a table to a relation.
 func tableToRelation(t *types.Table) *Relation {
 	attrs := make([]*Attribute, len(t.Columns))

@@ -95,7 +95,15 @@ func (v *BaseKuneiformParserVisitor) VisitColumn_def(ctx *Column_defContext) int
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseKuneiformParserVisitor) VisitTable_column_def(ctx *Table_column_defContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseKuneiformParserVisitor) VisitIndex_def(ctx *Index_defContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitTable_index_def(ctx *Table_index_defContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -123,6 +131,18 @@ func (v *BaseKuneiformParserVisitor) VisitConstraint(ctx *ConstraintContext) int
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseKuneiformParserVisitor) VisitInline_constraint(ctx *Inline_constraintContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitFk_action(ctx *Fk_actionContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitFk_constraint(ctx *Fk_constraintContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseKuneiformParserVisitor) VisitAccess_modifier(ctx *Access_modifierContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -139,7 +159,11 @@ func (v *BaseKuneiformParserVisitor) VisitProcedure_return(ctx *Procedure_return
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitSql(ctx *SqlContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitSql_stmt(ctx *Sql_stmtContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitDdl_stmt(ctx *Ddl_stmtContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -148,6 +172,66 @@ func (v *BaseKuneiformParserVisitor) VisitSql_statement(ctx *Sql_statementContex
 }
 
 func (v *BaseKuneiformParserVisitor) VisitCommon_table_expression(ctx *Common_table_expressionContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitCreate_table_statement(ctx *Create_table_statementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitTable_constraint_def(ctx *Table_constraint_defContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitOpt_drop_behavior(ctx *Opt_drop_behaviorContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitDrop_table_statement(ctx *Drop_table_statementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitAlter_table_statement(ctx *Alter_table_statementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitAdd_column_constraint(ctx *Add_column_constraintContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitDrop_column_constraint(ctx *Drop_column_constraintContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitAdd_column(ctx *Add_columnContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitDrop_column(ctx *Drop_columnContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitRename_column(ctx *Rename_columnContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitRename_table(ctx *Rename_tableContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitAdd_table_constraint(ctx *Add_table_constraintContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitDrop_table_constraint(ctx *Drop_table_constraintContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitCreate_index_statement(ctx *Create_index_statementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitDrop_index_statement(ctx *Drop_index_statementContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

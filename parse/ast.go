@@ -507,11 +507,17 @@ func (c *CommonTableExpression) Accept(v Visitor) any {
 	return v.VisitCommonTableExpression(c)
 }
 
-// SQLStatement is a SQL statement.
+// SQLStmt is top-level statement, can be any SQL statement.
+type SQLStmt interface {
+	Node
+	StmtType() SQLStatementType
+}
+
+// SQLStatement is a DML statement with common table expression.
 type SQLStatement struct {
 	Position
 	CTEs []*CommonTableExpression
-	// Recursive is true if the RECUSRIVE keyword is present.
+	// Recursive is true if the RECURSIVE keyword is present.
 	Recursive bool
 	// SQL can be an insert, update, delete, or select statement.
 	SQL SQLCore
@@ -521,7 +527,11 @@ func (s *SQLStatement) Accept(v Visitor) any {
 	return v.VisitSQLStatement(s)
 }
 
-// SQLCore is a top-level statement.
+func (s *SQLStatement) StmtType() SQLStatementType {
+	return s.SQL.StmtType()
+}
+
+// SQLCore is a DML statement.
 // It can be INSERT, UPDATE, DELETE, SELECT.
 type SQLCore interface {
 	Node
@@ -531,11 +541,578 @@ type SQLCore interface {
 type SQLStatementType string
 
 const (
-	SQLStatementTypeInsert SQLStatementType = "insert"
-	SQLStatementTypeUpdate SQLStatementType = "update"
-	SQLStatementTypeDelete SQLStatementType = "delete"
-	SQLStatementTypeSelect SQLStatementType = "select"
+	SQLStatementTypeInsert      SQLStatementType = "insert"
+	SQLStatementTypeUpdate      SQLStatementType = "update"
+	SQLStatementTypeDelete      SQLStatementType = "delete"
+	SQLStatementTypeSelect      SQLStatementType = "select"
+	SQLStatementTypeCreateTable SQLStatementType = "create_table"
+	SQLStatementTypeAlterTable  SQLStatementType = "alter_table"
+	SQLStatementTypeDropTable   SQLStatementType = "drop_table"
+	SQLStatementTypeCreateIndex SQLStatementType = "create_index"
+	SQLStatementTypeDropIndex   SQLStatementType = "drop_index"
 )
+
+// CreateTableStatement is a CREATE TABLE statement.
+type CreateTableStatement struct {
+	Position
+
+	IfNotExists bool
+	Name        string
+	Columns     []*Column
+	// Indexes contains the non-inline indexes
+	Indexes []*TableIndex
+	// Constraints contains the non-inline constraints
+	Constraints []Constraint
+}
+
+func (c *CreateTableStatement) Accept(v Visitor) any {
+	return v.VisitCreateTableStatement(c)
+
+}
+
+func (c *CreateTableStatement) StmtType() SQLStatementType {
+	return SQLStatementTypeCreateTable
+}
+
+// Column represents a table column.
+type Column struct {
+	Position
+
+	Name        string
+	Type        *types.DataType
+	Constraints []Constraint
+}
+
+type ConstraintType string
+
+const (
+	PRIMARY_KEY ConstraintType = "PRIMARY KEY"
+	DEFAULT     ConstraintType = "DEFAULT"
+	NOT_NULL    ConstraintType = "NOT NULL"
+	UNIQUE      ConstraintType = "UNIQUE"
+	CHECK       ConstraintType = "CHECK"
+	FOREIGN_KEY ConstraintType = "FOREIGN KEY"
+	//CUSTOM      ConstraintType = "CUSTOM"
+)
+
+type Constraint interface {
+	Node
+
+	ConstraintType() ConstraintType
+	ToSQL() string
+}
+
+type ConstraintPrimaryKey struct {
+	Position
+
+	Columns []string
+}
+
+func (c *ConstraintPrimaryKey) Accept(visitor Visitor) any {
+	panic("implement me")
+}
+
+func (c *ConstraintPrimaryKey) ConstraintType() ConstraintType {
+	return PRIMARY_KEY
+}
+
+func (c *ConstraintPrimaryKey) ToSQL() string {
+	if len(c.Columns) == 0 {
+		return "PRIMARY KEY"
+	}
+
+	return "PRIMARY KEY (" + strings.Join(c.Columns, ", ") + ")"
+}
+
+type ConstraintUnique struct {
+	Position
+
+	Name    string
+	Columns []string
+}
+
+func (c *ConstraintUnique) Accept(visitor Visitor) any {
+	panic("implement me")
+}
+
+func (c *ConstraintUnique) ConstraintType() ConstraintType {
+	return UNIQUE
+}
+
+func (c *ConstraintUnique) ToSQL() string {
+	if len(c.Columns) == 0 {
+		return "UNIQUE"
+	}
+
+	s := "UNIQUE (" + strings.Join(c.Columns, ", ") + ")"
+	if c.Name == "" {
+		return s
+	}
+
+	return "CONSTRAINT " + c.Name + " " + s
+}
+
+type ConstraintDefault struct {
+	Position
+
+	Name   string
+	Column string
+	Value  *ExpressionLiteral
+}
+
+func (c *ConstraintDefault) Accept(visitor Visitor) any {
+	panic("implement me")
+}
+
+func (c *ConstraintDefault) ConstraintType() ConstraintType {
+	return DEFAULT
+}
+
+func (c *ConstraintDefault) ToSQL() string {
+	return "DEFAULT " + c.Value.String()
+}
+
+type ConstraintNotNull struct {
+	Position
+
+	Name   string
+	Column string
+}
+
+func (c *ConstraintNotNull) Accept(visitor Visitor) any {
+	panic("implement me")
+}
+
+func (c *ConstraintNotNull) ConstraintType() ConstraintType {
+	return NOT_NULL
+}
+
+func (c *ConstraintNotNull) ToSQL() string {
+	return "NOT NULL"
+}
+
+type ConstraintCheck struct {
+	Position
+
+	Name  string
+	Param Expression
+}
+
+func (c *ConstraintCheck) Accept(visitor Visitor) any {
+	panic("implement me")
+}
+
+func (c *ConstraintCheck) ConstraintType() ConstraintType {
+	return CHECK
+}
+
+func (c *ConstraintCheck) ToSQL() string {
+	return ""
+}
+
+type ConstraintForeignKey struct {
+	Position
+
+	Name      string
+	RefTable  string
+	RefColumn string
+	Column    string
+	Ons       []ForeignKeyActionOn
+	Dos       []ForeignKeyActionDo
+}
+
+func (c *ConstraintForeignKey) Accept(visitor Visitor) any {
+	panic("implement me")
+}
+
+func (c *ConstraintForeignKey) ConstraintType() ConstraintType {
+	return FOREIGN_KEY
+}
+
+func (c *ConstraintForeignKey) ToSQL() string {
+	s := "REFERENCES " + c.RefTable + "(" + c.RefColumn + ")"
+	if len(c.Ons) == 0 {
+		return s
+	}
+
+	for i, on := range c.Ons {
+		s += " ON " + string(on) + " " + string(c.Dos[i])
+	}
+
+	if c.Name == "" {
+		return s
+	}
+
+	return "CONSTRAINT " + c.Name + " FOREIGN KEY (" + c.Column + ") " + s
+}
+
+type IndexType string
+
+const (
+	// IndexTypePrimary is a primary index, created by using `PRIMARY KEY`.
+	// Only one primary index is allowed per table.
+	IndexTypePrimary IndexType = "primary"
+	// IndexTypeBTree is the default index, created by using `INDEX`.
+	IndexTypeBTree IndexType = "btree"
+	// IndexTypeUnique is a unique BTree index, created by using `UNIQUE INDEX`.
+	IndexTypeUnique IndexType = "unique"
+)
+
+// TableIndex represents table index declaration, both inline and non-inline.
+type TableIndex struct {
+	Position
+
+	Name    string
+	Columns []string
+	Type    IndexType
+}
+
+func (i *TableIndex) String() string {
+	if len(i.Columns) == 0 {
+		if i.Type == IndexTypeUnique {
+			return "UNIQUE"
+		}
+		panic("inline index can only be UNIQUE")
+	}
+
+	str := strings.Builder{}
+
+	switch i.Type {
+	case IndexTypeBTree:
+		str.WriteString("INDEX ")
+	case IndexTypeUnique:
+		str.WriteString("UNIQUE INDEX ")
+	default:
+		// should not happen
+		panic("unknown index type")
+	}
+
+	if i.Name != "" {
+		str.WriteString(i.Name + " ")
+	}
+
+	str.WriteString("(" + strings.Join(i.Columns, ", ") + ")")
+
+	return str.String()
+}
+
+// ForeignKey is a foreign key in a table.
+type ForeignKey struct {
+	// ChildKeys are the columns that are referencing another.
+	// For example, in FOREIGN KEY (a) REFERENCES tbl2(b), "a" is the child key
+	ChildKeys []string `json:"child_keys"`
+
+	// ParentKeys are the columns that are being referred to.
+	// For example, in FOREIGN KEY (a) REFERENCES tbl2(b), "b" is the parent key
+	ParentKeys []string `json:"parent_keys"`
+
+	// ParentTable is the table that holds the parent columns.
+	// For example, in FOREIGN KEY (a) REFERENCES tbl2(b), "tbl2" is the parent table
+	ParentTable string `json:"parent_table"`
+
+	// Do we need parent schema stored with meta data or should assume and
+	// enforce same schema when creating the dataset with generated DDL.
+	// ParentSchema string `json:"parent_schema"`
+
+	// Action refers to what the foreign key should do when the parent is altered.
+	// This is NOT the same as a database action;
+	// however sqlite's docs refer to these as actions,
+	// so we should be consistent with that.
+	// For example, ON DELETE CASCADE is a foreign key action
+	Actions []*ForeignKeyAction `json:"actions"`
+}
+
+// ForeignKeyActionOn specifies when a foreign key action should occur.
+// It can be either "UPDATE" or "DELETE".
+type ForeignKeyActionOn string
+
+// ForeignKeyActionOn types
+const (
+	// ON_UPDATE is used to specify an action should occur when a parent key is updated
+	ON_UPDATE ForeignKeyActionOn = "UPDATE"
+	// ON_DELETE is used to specify an action should occur when a parent key is deleted
+	ON_DELETE ForeignKeyActionOn = "DELETE"
+)
+
+// ForeignKeyActionDo specifies what should be done when a foreign key action is triggered.
+type ForeignKeyActionDo string
+
+// ForeignKeyActionDo types
+const (
+	// DO_NO_ACTION does nothing when a parent key is altered
+	DO_NO_ACTION ForeignKeyActionDo = "NO ACTION"
+
+	// DO_RESTRICT prevents the parent key from being altered
+	DO_RESTRICT ForeignKeyActionDo = "RESTRICT"
+
+	// DO_SET_NULL sets the child key(s) to NULL
+	DO_SET_NULL ForeignKeyActionDo = "SET NULL"
+
+	// DO_SET_DEFAULT sets the child key(s) to their default values
+	DO_SET_DEFAULT ForeignKeyActionDo = "SET DEFAULT"
+
+	// DO_CASCADE updates the child key(s) or deletes the records (depending on the action type)
+	DO_CASCADE ForeignKeyActionDo = "CASCADE"
+)
+
+// ForeignKeyAction is used to specify what should occur
+// if a parent key is updated or deleted
+type ForeignKeyAction struct {
+	// On can be either "UPDATE" or "DELETE"
+	On ForeignKeyActionOn `json:"on"`
+
+	// Do specifies what a foreign key action should do
+	Do ForeignKeyActionDo `json:"do"`
+}
+
+type DropBehavior string
+
+const (
+	DropBehaviorCascade  DropBehavior = "CASCADE"
+	DropBehaviorRestrict DropBehavior = "RESTRICT"
+	DropBehaviorNon      DropBehavior = ""
+)
+
+type DropTableStatement struct {
+	Position
+
+	Tables   []string
+	IfExists bool
+	Behavior DropBehavior
+}
+
+func (s *DropTableStatement) Accept(v Visitor) any {
+	return v.VisitDropTableStatement(s)
+}
+
+func (s *DropTableStatement) StmtType() SQLStatementType {
+	return SQLStatementTypeDropTable
+}
+
+type AlterTableAction interface {
+	Node
+
+	alterTableAction()
+	ToSQL() string
+}
+
+// AlterTableStatement is a ALTER TABLE statement.
+type AlterTableStatement struct {
+	Position
+
+	Table  string
+	Action AlterTableAction
+}
+
+func (a *AlterTableStatement) Accept(v Visitor) any {
+	return v.VisitAlterTableStatement(a)
+}
+
+func (a *AlterTableStatement) StmtType() SQLStatementType {
+	return SQLStatementTypeAlterTable
+}
+
+type AddColumnConstraint struct {
+	Position
+
+	Column string
+	Type   ConstraintType
+	Value  *ExpressionLiteral
+}
+
+func (a *AddColumnConstraint) Accept(v Visitor) any {
+	panic("implement me")
+}
+
+func (a *AddColumnConstraint) alterTableAction() {}
+
+func (a *AddColumnConstraint) ToSQL() string {
+	str := strings.Builder{}
+	str.WriteString("ALTER COLUMN ")
+	str.WriteString(a.Column)
+	str.WriteString(" SET ")
+	switch a.Type {
+	case NOT_NULL:
+		str.WriteString("NOT NULL")
+	case DEFAULT:
+		str.WriteString("DEFAULT ")
+		str.WriteString(a.Value.String())
+	default:
+		panic("unknown constraint type")
+	}
+
+	return str.String()
+}
+
+type DropColumnConstraint struct {
+	Position
+
+	Column string
+	Type   ConstraintType
+	Name   string // will be set when drop a named constraint
+}
+
+func (a *DropColumnConstraint) Accept(v Visitor) any {
+	panic("implement me")
+}
+
+func (a *DropColumnConstraint) alterTableAction() {}
+
+func (a *DropColumnConstraint) ToSQL() string {
+	str := strings.Builder{}
+	str.WriteString("ALTER COLUMN ")
+	str.WriteString(a.Column)
+	str.WriteString(" DROP ")
+
+	if a.Type != "" {
+		switch a.Type {
+		case NOT_NULL:
+			str.WriteString("NOT NULL")
+		case DEFAULT:
+			str.WriteString("DEFAULT")
+		default:
+			panic("unknown constraint type")
+		}
+	}
+
+	if a.Name != "" {
+		str.WriteString("CONSTRAINT ")
+		str.WriteString(a.Name)
+	}
+
+	return str.String()
+}
+
+type AddColumn struct {
+	Position
+
+	Name string
+	Type *types.DataType
+}
+
+func (a *AddColumn) Accept(v Visitor) any {
+	panic("implement me")
+}
+
+func (a *AddColumn) alterTableAction() {}
+
+func (a *AddColumn) ToSQL() string {
+	return "ADD COLUMN " + a.Name + " " + a.Type.String()
+}
+
+type DropColumn struct {
+	Position
+
+	Name string
+}
+
+func (a *DropColumn) Accept(v Visitor) any {
+	panic("implement me")
+}
+
+func (a *DropColumn) alterTableAction() {}
+
+func (a *DropColumn) ToSQL() string {
+	return "DROP COLUMN " + a.Name
+}
+
+type RenameColumn struct {
+	Position
+
+	OldName string
+	NewName string
+}
+
+func (a *RenameColumn) Accept(v Visitor) any {
+	panic("implement me")
+}
+
+func (a *RenameColumn) alterTableAction() {}
+
+func (a *RenameColumn) ToSQL() string {
+	return "RENAME COLUMN " + a.OldName + " TO " + a.NewName
+}
+
+type RenameTable struct {
+	Position
+
+	Name string
+}
+
+func (a *RenameTable) Accept(v Visitor) any {
+	panic("implement me")
+}
+
+func (a *RenameTable) alterTableAction() {}
+
+func (a *RenameTable) ToSQL() string {
+	return "RENAME TO " + a.Name
+}
+
+type AddTableConstraint struct {
+	Position
+
+	Cons Constraint
+}
+
+func (a *AddTableConstraint) Accept(v Visitor) any {
+	panic("implement me")
+}
+
+func (a *AddTableConstraint) alterTableAction() {}
+
+func (a *AddTableConstraint) ToSQL() string {
+	return ""
+}
+
+type DropTableConstraint struct {
+	Position
+
+	Name string
+}
+
+func (a *DropTableConstraint) Accept(v Visitor) any {
+	panic("implement me")
+}
+
+func (a *DropTableConstraint) alterTableAction() {}
+
+func (a *DropTableConstraint) ToSQL() string {
+	return "DROP CONSTRAINT " + a.Name
+}
+
+type CreateIndexStatement struct {
+	Position
+
+	IfNotExists bool
+	Name        string
+	On          string
+	Columns     []string
+	Type        IndexType
+}
+
+func (s *CreateIndexStatement) Accept(v Visitor) any {
+	return v.VisitCreateIndexStatement(s)
+}
+
+func (s *CreateIndexStatement) StmtType() SQLStatementType {
+	return SQLStatementTypeCreateIndex
+}
+
+type DropIndexStatement struct {
+	Position
+
+	Name       string
+	CheckExist bool
+}
+
+func (s *DropIndexStatement) Accept(v Visitor) any {
+	return v.VisitDropIndexStatement(s)
+}
+
+func (s *DropIndexStatement) StmtType() SQLStatementType {
+	return SQLStatementTypeDropIndex
+}
 
 // SelectStatement is a SELECT statement.
 type SelectStatement struct {
@@ -1095,6 +1672,12 @@ type SQLVisitor interface {
 	VisitInsertStatement(*InsertStatement) any
 	VisitUpsertClause(*OnConflict) any
 	VisitOrderingTerm(*OrderingTerm) any
+	// DDL
+	VisitCreateTableStatement(*CreateTableStatement) any
+	VisitAlterTableStatement(*AlterTableStatement) any
+	VisitDropTableStatement(*DropTableStatement) any
+	VisitCreateIndexStatement(*CreateIndexStatement) any
+	VisitDropIndexStatement(*DropIndexStatement) any
 }
 
 // UnimplementedSqlVisitor is meant to be used when an implementing visitor only intends

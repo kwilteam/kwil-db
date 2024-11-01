@@ -790,6 +790,151 @@ func (s *sqlGenerator) VisitOrderingTerm(p0 *parse.OrderingTerm) any {
 	return str.String()
 }
 
+func (s *sqlGenerator) VisitCreateTableStatement(p0 *parse.CreateTableStatement) any {
+	str := strings.Builder{}
+	indent := "  "
+	str.WriteString("CREATE TABLE ")
+	if p0.IfNotExists {
+		str.WriteString("IF NOT EXISTS ")
+	}
+	str.WriteString(p0.Name)
+	str.WriteString(" (\n")
+	for i, col := range p0.Columns {
+		str.WriteString(indent)
+		str.WriteString(col.Name)
+		str.WriteString(" ")
+		str.WriteString(col.Type.String())
+		for _, con := range col.Constraints {
+			str.WriteString(" ")
+			if cc, ok := con.(*parse.ConstraintCheck); ok {
+				str.WriteString("CHECK(")
+				str.WriteString(cc.Param.Accept(s).(string))
+				str.WriteString(")")
+			} else {
+				str.WriteString(con.ToSQL())
+			}
+		}
+		if i < len(p0.Columns)-1 {
+			str.WriteString(",\n")
+		}
+	}
+
+	if len(p0.Constraints) > 0 {
+		str.WriteString(",\n")
+		for i, con := range p0.Constraints {
+			str.WriteString(indent)
+			if cc, ok := con.(*parse.ConstraintCheck); ok {
+				str.WriteString("CHECK(")
+				str.WriteString(cc.Param.Accept(s).(string))
+				str.WriteString(")")
+			} else {
+				str.WriteString(con.ToSQL())
+			}
+
+			if i < len(p0.Constraints)-1 {
+				str.WriteString(",\n")
+			}
+		}
+	}
+
+	if len(p0.Indexes) > 0 {
+		str.WriteString(",\n")
+		for i, index := range p0.Indexes {
+			str.WriteString(indent)
+			str.WriteString(index.String())
+			if i < len(p0.Indexes)-1 {
+				str.WriteString(",\n")
+			}
+		}
+	}
+
+	str.WriteString("\n)")
+	return str.String()
+}
+
+func (s *sqlGenerator) VisitAlterTableStatement(p0 *parse.AlterTableStatement) any {
+	str := strings.Builder{}
+	str.WriteString("ALTER TABLE ")
+	str.WriteString(p0.Table)
+	str.WriteString(" ")
+
+	if action, ok := p0.Action.(*parse.AddTableConstraint); ok {
+		str.WriteString("ADD ")
+		switch cc := action.Cons.(type) {
+		case *parse.ConstraintCheck:
+			//str.WriteString(cc.Name)
+			str.WriteString("CHECK(")
+			str.WriteString(cc.Param.Accept(s).(string))
+			str.WriteString(")")
+		case *parse.ConstraintForeignKey:
+			//str.WriteString(cc.Name)
+			str.WriteString(cc.ToSQL())
+		default:
+			panic("unknown constraint type")
+		}
+	} else {
+		str.WriteString(p0.Action.ToSQL())
+	}
+
+	return str.String()
+}
+
+func (s *sqlGenerator) VisitDropTableStatement(p0 *parse.DropTableStatement) any {
+	str := strings.Builder{}
+	str.WriteString("DROP TABLE ")
+	if p0.IfExists {
+		str.WriteString("IF EXISTS ")
+	}
+
+	str.WriteString(strings.Join(p0.Tables, ", "))
+	switch p0.Behavior {
+	case parse.DropBehaviorCascade:
+		str.WriteString(" CASCADE")
+	case parse.DropBehaviorRestrict:
+		str.WriteString(" RESTRICT")
+	case parse.DropBehaviorNon:
+	default:
+		panic("unknown drop behavior")
+	}
+	return str.String()
+}
+
+func (s *sqlGenerator) VisitCreateIndexStatement(p0 *parse.CreateIndexStatement) any {
+	str := strings.Builder{}
+	str.WriteString("CREATE ")
+
+	switch p0.Type {
+	case parse.IndexTypeBTree:
+		str.WriteString("INDEX ")
+	case parse.IndexTypeUnique:
+		str.WriteString("UNIQUE INDEX ")
+	default:
+		// should not happen
+		panic("unknown index type")
+	}
+
+	if p0.IfNotExists {
+		str.WriteString("IF NOT EXISTS ")
+	}
+	if p0.Name != "" {
+		str.WriteString(p0.Name + " ")
+	}
+	str.WriteString("ON " + p0.On)
+	str.WriteString("(" + strings.Join(p0.Columns, ", ") + ")")
+
+	return str.String()
+}
+
+func (s *sqlGenerator) VisitDropIndexStatement(p0 *parse.DropIndexStatement) any {
+	str := strings.Builder{}
+	str.WriteString("DROP INDEX ")
+	if p0.CheckExist {
+		str.WriteString("IF EXISTS ")
+	}
+	str.WriteString(p0.Name)
+	return str.String()
+}
+
 // procedureGenerator is a visitor that generates plpgsql code.
 type procedureGenerator struct {
 	sqlGenerator
