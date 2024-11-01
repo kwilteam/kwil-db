@@ -77,7 +77,7 @@ func (ce *ConsensusEngine) NotifyACK(validatorPK []byte, ack types.AckRes) {
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
-	if ce.role != types.RoleLeader {
+	if ce.role.Load() != types.RoleLeader {
 		return
 	}
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"kwil/log"
@@ -31,7 +32,7 @@ const (
 // 3. BlockCommitPhase:
 // - Once the leader receives the threshold acks with the same appHash as the leader, the block is committed and the leader broadcasts the blockAnn message to the network. Nodes that receive this message will enter into the commit phase where they verify the appHash and commit the block.
 type ConsensusEngine struct {
-	role          types.Role
+	role          atomic.Value // types.Role, role can change over the lifetime of the node
 	host          peer.ID
 	dir           string
 	pubKey        []byte
@@ -127,8 +128,7 @@ func New(role types.Role, hostID peer.ID, dir string, mempool Mempool, bs BlockS
 
 	be := newBlockExecutor()
 	// rethink how this state is initialized
-	return &ConsensusEngine{
-		role:   role,
+	ce := &ConsensusEngine{
 		host:   hostID,
 		dir:    dir,
 		pubKey: pubKeyBytes,
@@ -152,6 +152,9 @@ func New(role types.Role, hostID peer.ID, dir string, mempool Mempool, bs BlockS
 		blockExecutor: be,
 		log:           logger,
 	}
+
+	ce.role.Store(role)
+	return ce
 }
 
 func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster ProposalBroadcaster,
@@ -221,7 +224,7 @@ func (ce *ConsensusEngine) runEventLoop(ctx context.Context) error {
 func (ce *ConsensusEngine) startMining(ctx context.Context) {
 	// Start the mining process if the node is a leader
 	// validators and sentry nodes get activated when they receive a block proposal or block announce msgs.
-	if ce.role == types.RoleLeader {
+	if ce.role.Load() == types.RoleLeader {
 		ce.log.Infof("Starting the leader node")
 		go ce.startNewRound(ctx)
 	} else {
@@ -247,7 +250,7 @@ func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg cons
 
 	case "vote":
 		// only leader should receive votes
-		if ce.role != types.RoleLeader {
+		if ce.role.Load() != types.RoleLeader {
 			return
 		}
 
@@ -403,7 +406,7 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 	ce.state.mtx.RLock()
 	defer ce.state.mtx.RUnlock()
 
-	if ce.role == types.RoleLeader {
+	if ce.role.Load() == types.RoleLeader {
 		// reannounce the blkProp message if the node is still waiting for the votes
 		if ce.state.blkProp != nil {
 			go ce.proposalBroadcaster(ctx, ce.state.blkProp.blk, ce.host)
@@ -415,7 +418,7 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 		return
 	}
 
-	if ce.role == types.RoleValidator {
+	if ce.role.Load() == types.RoleValidator {
 		// reannounce the acks, if still waiting for the commit message
 		if ce.state.blkProp != nil && ce.state.blockRes != nil &&
 			ce.state.blockRes.appHash != types.ZeroHash &&
@@ -436,7 +439,7 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) {
 		return
 	}
 
-	if ce.role != types.RoleLeader {
+	if ce.role.Load() != types.RoleLeader {
 		if ce.state.blkProp == nil && ce.state.blockRes == nil {
 			// catchup if needed with the leader/network.
 			startHeight := ce.state.lc.height + 1

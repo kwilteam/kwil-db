@@ -19,7 +19,7 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 
 	ce.updateNetworkHeight(height - 1)
 
-	if ce.role != types.RoleValidator {
+	if ce.role.Load() != types.RoleValidator {
 		return false
 	}
 
@@ -59,7 +59,7 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 // respCb is a callback function used to send the VoteMessage(ack/nack) back to the leader.
 func (ce *ConsensusEngine) NotifyBlockProposal(blk *types.Block) {
 	// ce.log.Infoln("Notify block proposal", blk.Header.Height, blk.Header.Hash())
-	if ce.role == types.RoleLeader {
+	if ce.role.Load() == types.RoleLeader {
 		return
 	}
 
@@ -105,7 +105,7 @@ func (ce *ConsensusEngine) NotifyBlockProposal(blk *types.Block) {
 // 2. If the node is a validator and missed the block proposal message.
 func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash types.Hash) bool {
 	// ce.log.Infoln("Accept commit?", height, blkID, appHash)
-	if ce.role == types.RoleLeader {
+	if ce.role.Load() == types.RoleLeader {
 		return false
 	}
 
@@ -173,7 +173,7 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash 
 // It validates blk height, appHash and blkHash and only then notifies the consensus engine to commit the block.
 func (ce *ConsensusEngine) NotifyBlockCommit(blk *types.Block, appHash types.Hash) {
 	// ce.log.Infoln("Notify block commit", blk.Header.Height, blk.Header.Hash(), appHash)
-	if ce.role == types.RoleLeader {
+	if ce.role.Load() == types.RoleLeader {
 		// Leader can also use this in blocksync mode, when it tries to replay the blocks or catchup with the network.
 		return
 	}
@@ -232,7 +232,7 @@ func (ce *ConsensusEngine) NotifyResetState(height int64) {
 
 	ce.log.Info("Notify reset state? ", "height", height)
 	// Leader is the sender of the reset message, only sentry and validators should accept this message.
-	if ce.role != types.RoleValidator {
+	if ce.role.Load() != types.RoleValidator {
 		return
 	}
 
@@ -260,7 +260,7 @@ func (ce *ConsensusEngine) NotifyResetState(height int64) {
 // report the result back to the leader.
 func (ce *ConsensusEngine) processBlockProposal(_ context.Context, blkPropMsg *blockProposal) error {
 	ce.log.Info("Processing block proposal", "height", blkPropMsg.blk.Header.Height, "header", blkPropMsg.blk.Header)
-	if ce.role != types.RoleValidator {
+	if ce.role.Load() != types.RoleValidator {
 		ce.log.Warn("Only validators can process block proposals")
 		return nil
 	}
@@ -300,7 +300,7 @@ func (ce *ConsensusEngine) processBlockProposal(_ context.Context, blkPropMsg *b
 // The nodes should only commit the block if the appHash is valid, else halt the node.
 func (ce *ConsensusEngine) commitBlock(blk *types.Block, appHash types.Hash) error {
 	// ce.log.Infoln("processing Commit block", blk.Header.Height, blk.Header.Hash(), appHash)
-	if ce.role == types.RoleLeader {
+	if ce.role.Load() == types.RoleLeader {
 		return nil
 	}
 
@@ -314,7 +314,7 @@ func (ce *ConsensusEngine) commitBlock(blk *types.Block, appHash types.Hash) err
 	// - Incorrect Block received: Rollback and reprocess the block sent as part of the commit message.
 	// - Incorrect AppHash: Halt the node.
 
-	if ce.role == types.RoleSentry {
+	if ce.role.Load() == types.RoleSentry {
 		// go ce.processAndCommit(blk, appHash)
 		return ce.processAndCommit(blk, appHash)
 	}
