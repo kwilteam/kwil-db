@@ -36,7 +36,7 @@ type ConsensusEngine struct {
 	host          peer.ID
 	dir           string
 	pubKey        []byte
-	networkHeight int64
+	networkHeight atomic.Int64
 	validatorSet  map[string]types.Validator
 
 	// store last commit info
@@ -142,10 +142,9 @@ func New(role types.Role, hostID peer.ID, dir string, mempool Mempool, bs BlockS
 			},
 			votes: make(map[string]*vote),
 		},
-		networkHeight: 0,
-		validatorSet:  vs,
-		msgChan:       make(chan consensusMessage, 1), // buffer size??
-		haltChan:      make(chan struct{}, 1),
+		validatorSet: vs,
+		msgChan:      make(chan consensusMessage, 1), // buffer size??
+		haltChan:     make(chan struct{}, 1),
 		// interfaces
 		mempool:       mempool,
 		blockStore:    bs,
@@ -154,6 +153,8 @@ func New(role types.Role, hostID peer.ID, dir string, mempool Mempool, bs BlockS
 	}
 
 	ce.role.Store(role)
+	ce.networkHeight.Store(0)
+
 	return ce
 }
 
@@ -422,7 +423,7 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 		// reannounce the acks, if still waiting for the commit message
 		if ce.state.blkProp != nil && ce.state.blockRes != nil &&
 			ce.state.blockRes.appHash != types.ZeroHash &&
-			ce.networkHeight <= ce.state.lc.height { // To ensure that we are not reannouncing the acks for very stale blocks
+			ce.networkHeight.Load() <= ce.state.lc.height { // To ensure that we are not reannouncing the acks for very stale blocks
 			// TODO: rethink what to broadcast here ack/nack, how do u remember the ack/nack
 			ce.log.Info("Reannouncing ACKs", "height", ce.state.blkProp.height, "hash", ce.state.blkProp.blkHash,
 				"appHash", ce.state.blockRes.appHash)
@@ -435,7 +436,7 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) {
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
-	if ce.state.lc.height >= ce.networkHeight {
+	if ce.state.lc.height >= ce.networkHeight.Load() {
 		return
 	}
 
@@ -451,8 +452,8 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) {
 }
 
 func (ce *ConsensusEngine) updateNetworkHeight(height int64) {
-	if height > ce.networkHeight {
-		ce.networkHeight = height
+	if height > ce.networkHeight.Load() {
+		ce.networkHeight.Store(height)
 	}
 }
 
