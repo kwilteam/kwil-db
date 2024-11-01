@@ -135,6 +135,10 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 		opt(options)
 	}
 	logger := options.logger
+	if logger == nil {
+		// logger = log.DiscardLogger // prod
+		logger = log.New(log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
+	}
 
 	close := func() error { return nil }
 
@@ -154,7 +158,7 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 
 	addrBookPath := filepath.Join(dir, "addrbook.json")
 	pm, err := peers.NewPeerMan(options.pex, addrBookPath,
-		options.logger.New("PEERS"),
+		logger.New("PEERS"),
 		host, // tooo much, become minimal interface
 		func(ctx context.Context, peerID peer.ID) ([]peer.AddrInfo, error) {
 			return requestPeers(ctx, peerID, host, logger)

@@ -2,7 +2,9 @@ package node
 
 import (
 	"bufio"
+	"bytes"
 	"context"
+	"encoding"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -23,6 +25,8 @@ type (
 type ackFrom struct {
 	fromPubKey []byte
 	res        AckRes
+	// This message is sent via gossipsub, which has a message format that
+	// includes original sender and their signature, so we don't need it here.
 }
 
 type blockProp struct {
@@ -39,9 +43,12 @@ func (bp blockProp) String() string {
 		bp.Height, bp.Hash, bp.PrevHash)
 }
 
+var _ encoding.BinaryMarshaler = blockProp{}
+var _ encoding.BinaryMarshaler = (*blockProp)(nil)
+
 func (bp blockProp) MarshalBinary() ([]byte, error) {
-	// 8 bytes for int64 + 2 hash lengths + 8 bytes for time stamp + len(sig)
-	buf := make([]byte, 8+2*types.HashLen+8+len(bp.LeaderSig))
+	// 8 bytes for int64 + 2 hash lengths + 8 bytes for time stamp + len(sig) + sig
+	buf := make([]byte, 8+2*types.HashLen+8+8+len(bp.LeaderSig))
 	var c int
 	binary.LittleEndian.PutUint64(buf[:8], uint64(bp.Height))
 	c += 8
@@ -51,41 +58,108 @@ func (bp blockProp) MarshalBinary() ([]byte, error) {
 	c += types.HashLen
 	binary.LittleEndian.PutUint64(buf[c:], uint64(bp.Stamp))
 	c += 8
+	binary.LittleEndian.PutUint64(buf[c:], uint64(len(bp.LeaderSig)))
+	c += 8
 	copy(buf[c:], bp.LeaderSig) // c += len(bp.LeaderSig)
 	return buf, nil
+
+	// NOTE: this can be written in terms of WriteTo, but it is more efficient
+	// given that we know the required lengths.
+	// var buf bytes.Buffer
+	// _, err := bp.WriteTo(&buf)
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// return buf.Bytes(), nil
 }
 
 func (bp *blockProp) UnmarshalBinary(data []byte) error {
-	const minLeaderSigLen = 0 // don't know length of a valid sig, but it's certainly more than 4 bytes
-	if len(data) < 8+2*types.HashLen+8+minLeaderSigLen {
-		return fmt.Errorf("insufficient data for blockProp")
-	}
-	var c int
-	bp.Height = int64(binary.LittleEndian.Uint64(data[:8]))
-	c += 8
-	copy(bp.Hash[:], data[c:c+types.HashLen])
-	c += types.HashLen
-	copy(bp.PrevHash[:], data[c:])
-	c += types.HashLen
-	bp.Stamp = int64(binary.LittleEndian.Uint64(data[c:]))
-	c += 8
-	bp.LeaderSig = data[c:] // c += len(bp.LeaderSig)
-	return nil
+	_, err := bp.ReadFrom(bytes.NewReader(data))
+	return err
 }
 
-func (bp *blockProp) UnmarshalFromReader(r io.Reader) error {
-	// var buf bytes.Buffer
-	// buf.Grow(8 + 2*types.HashLen + 8 + 96)
-	// _, err := buf.ReadFrom(r)
+var _ io.ReaderFrom = (*blockProp)(nil)
 
-	// buf := make([]byte, 8+2*types.HashLen+...); io.ReadFull(r, buf)
-
-	// buf, err := io.ReadAll(r)
-	buf := make([]byte, 8+2*types.HashLen+8)
-	if _, err := io.ReadFull(r, buf); err != nil {
-		return fmt.Errorf("reading blockProp: %w", err)
+func (bp *blockProp) ReadFrom(r io.Reader) (int64, error) {
+	var n int64
+	if err := binary.Read(r, binary.LittleEndian, &bp.Height); err != nil {
+		return n, err
 	}
-	return bp.UnmarshalBinary(buf)
+	n += 8
+	nr, err := io.ReadFull(r, bp.Hash[:])
+	if err != nil {
+		return int64(nr), err
+	}
+	n += int64(nr)
+	nr, err = io.ReadFull(r, bp.PrevHash[:])
+	if err != nil {
+		return int64(nr), err
+	}
+	n += int64(nr)
+	if err := binary.Read(r, binary.LittleEndian, &bp.Stamp); err != nil {
+		return n, err
+	}
+	n += 8
+	var sigLen int64
+	if err := binary.Read(r, binary.LittleEndian, &sigLen); err != nil {
+		return n, err
+	}
+	n += 8
+	if sigLen > 1000 { // TODO: smarter sanity check
+		return n, fmt.Errorf("invalid signature length")
+	}
+	bp.LeaderSig = make([]byte, sigLen)
+	nr, err = io.ReadFull(r, bp.LeaderSig)
+	if err != nil {
+		return int64(nr), err
+	}
+	n += int64(nr)
+	return n, nil
+}
+
+var _ io.WriterTo = (*blockProp)(nil)
+
+func (bp *blockProp) WriteTo(w io.Writer) (int64, error) {
+	data, err := bp.MarshalBinary()
+	if err != nil {
+		return 0, err
+	}
+	nr, err := w.Write(data)
+	return int64(nr), err
+
+	// NOTE: this can be written using binary.Write etc., but this may not be
+	// worth the maintenance cost, particularly if it is actually more efficient
+	// in terms of consolidating network writes.
+
+	/*var n int64
+	if err := binary.Write(w, binary.LittleEndian, bp.Height); err != nil {
+		return n, err
+	}
+	n += 8
+	nr, err := w.Write(bp.Hash[:])
+	if err != nil {
+		return int64(nr), err
+	}
+	n += int64(nr)
+	nr, err = w.Write(bp.PrevHash[:])
+	if err != nil {
+		return int64(nr), err
+	}
+	n += int64(nr)
+	if err := binary.Write(w, binary.LittleEndian, bp.Stamp); err != nil {
+		return n, err
+	}
+	n += 8
+	if err := binary.Write(w, binary.LittleEndian, int64(len(bp.LeaderSig))); err != nil {
+		return n, err
+	}
+	n += 8
+	nr, err = w.Write(bp.LeaderSig)
+	if err != nil {
+		return int64(nr), err
+	}
+	n += int64(nr)
+	return n, nil*/
 }
 
 func (n *Node) announceBlkProp(ctx context.Context, blk *types.Block, from peer.ID) {
@@ -142,14 +216,15 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 	}
 
 	var prop blockProp
-	err := prop.UnmarshalFromReader(s)
+	_, err := prop.ReadFrom(s)
 	if err != nil {
-		n.log.Infof("invalid block proposal message: %v", err)
+		n.log.Infof("invalid block proposal message:", err)
 		return
 	}
 
 	height := prop.Height
 
+	// TODO: prop.Stamp, prop.Hash, prop.LeaderSig => AcceptProposal
 	if !n.ce.AcceptProposal(height, prop.Hash, prop.PrevHash) {
 		// NOTE: if this is ahead of our last commit height, we have to try to catch up
 		n.log.Infof("don't want proposal content", height, prop.PrevHash)
