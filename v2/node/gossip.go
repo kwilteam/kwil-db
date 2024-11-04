@@ -1,20 +1,14 @@
 package node
 
-// WARNING: this is an OUT OF DATE gossipsub transaction gossip system.
-// Distinct mempool and confirmed tx index have since been added.
-
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
-	"errors"
-	"fmt"
-	"time"
-
-	"kwil/node/types"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/libp2p/go-libp2p/core/network"
+)
+
+const (
+	TopicACKs  = "acks"
+	TopicReset = "reset"
 )
 
 func subTopic(_ context.Context, ps *pubsub.PubSub, topic string) (*pubsub.Topic, *pubsub.Subscription, error) {
@@ -30,16 +24,10 @@ func subTopic(_ context.Context, ps *pubsub.PubSub, topic string) (*pubsub.Topic
 	return th, sub, nil
 }
 
-const (
-	TopicTxs   = "txs"
-	TopicReset = "reset"
-)
+// WARNING: startTxGossip is an OUT OF DATE gossipsub transaction gossip system.
+// Distinct mempool and confirmed tx index have since been added.
 
-func subTxs(ctx context.Context, ps *pubsub.PubSub) (*pubsub.Topic, *pubsub.Subscription, error) {
-	return subTopic(ctx, ps, TopicTxs)
-}
-
-func (n *Node) startTxGossip(ctx context.Context, ps *pubsub.PubSub) error {
+/* func (n *Node) startTxGossip(ctx context.Context, ps *pubsub.PubSub) error {
 	topicTx, subTx, err := subTxs(ctx, ps)
 	if err != nil {
 		return err
@@ -126,9 +114,4 @@ func (n *Node) startTxGossip(ctx context.Context, ps *pubsub.PubSub) error {
 
 	return nil
 }
-
-func randBytes(n int) []byte {
-	b := make([]byte, n)
-	rand.Read(b)
-	return b
-}
+*/

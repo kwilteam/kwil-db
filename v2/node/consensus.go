@@ -22,13 +22,6 @@ type (
 	AckRes         = types.AckRes
 )
 
-type ackFrom struct {
-	fromPubKey []byte
-	res        AckRes
-	// This message is sent via gossipsub, which has a message format that
-	// includes original sender and their signature, so we don't need it here.
-}
-
 type blockProp struct {
 	Height    int64
 	Hash      types.Hash
@@ -266,8 +259,6 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 	n.log.Info("processing block proposal", "height", height, "hash", hash)
 
 	go n.ce.NotifyBlockProposal(blk)
-
-	return
 }
 
 // sendACK is a callback for the result of validator block execution/precommit.
@@ -283,10 +274,6 @@ func (n *Node) sendACK(ack bool, height int64, blkID types.Hash, appHash *types.
 	}
 	return nil // actually gossip the nack
 }
-
-const (
-	TopicACKs = "acks"
-)
 
 func (n *Node) startAckGossip(ctx context.Context, ps *pubsub.PubSub) error {
 	topicAck, subAck, err := subTopic(ctx, ps, TopicACKs)
@@ -402,7 +389,7 @@ func (n *Node) blkAckStreamHandler(s network.Stream) {
 	}
 	isNACK := len(appHashStr) == 0
 	if isNACK {
-		// do somethign
+		// do something
 		n.log.Infof("got nACK for block %v", blkHash)
 		return
 	}

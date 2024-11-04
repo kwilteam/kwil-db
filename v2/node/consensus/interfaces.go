@@ -2,7 +2,7 @@ package consensus
 
 import (
 	"context"
-	
+
 	"kwil/node/types"
 )
 

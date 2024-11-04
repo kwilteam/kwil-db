@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"kwil/log"
 	"kwil/node/types"
 	"net"
 	"os"
@@ -45,6 +46,9 @@ func newTestHost(t *testing.T, mn mock.Mocknet) (host.Host, error) {
 }
 
 func TestDualNodeMocknet(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 	mn := mock.New()
 
 	h1, err := newTestHost(t, mn)
@@ -71,7 +75,8 @@ func TestDualNodeMocknet(t *testing.T) {
 		wg.Wait()
 	})
 
-	node1, err := NewNode(".testnet", WithHost(h1), WithRole(types.RoleLeader))
+	log1 := log.New(log.WithName("NODE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
+	node1, err := NewNode(".testnet", WithLogger(log1), WithHost(h1), WithRole(types.RoleLeader))
 	if err != nil {
 		t.Fatalf("Failed to create Node 1: %v", err)
 	}
@@ -82,7 +87,8 @@ func TestDualNodeMocknet(t *testing.T) {
 		node1.Start(ctx)
 	}()
 
-	node2, err := NewNode(".n2", WithHost(h2), WithRole(types.RoleValidator))
+	log2 := log.New(log.WithName("NODE2"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
+	node2, err := NewNode(".n2", WithLogger(log2), WithHost(h2), WithRole(types.RoleValidator))
 	if err != nil {
 		t.Fatalf("Failed to create Node 2: %v", err)
 	}
@@ -108,8 +114,8 @@ func TestDualNodeMocknet(t *testing.T) {
 	// peers := net.Peers()
 	// t.Log(peers)
 
-	// run for a bit, checks stuff, do tests...
-	time.Sleep(5 * time.Second)
+	// run for a bit, checks stuff, do tests, like ensure blocks mine (TODO)...
+	time.Sleep(3 * time.Second)
 	cancel()
 	wg.Wait()
 

@@ -68,7 +68,7 @@ func fakeAppHash(height int64) types.Hash {
 
 func createTestBlock(height int64, numTxns int) (*types.Block, types.Hash) {
 	txns := make([][]byte, numTxns)
-	for i := 0; i < numTxns; i++ {
+	for i := range numTxns {
 		txns[i] = []byte(strconv.FormatInt(height, 10) + strconv.Itoa(i) +
 			strings.Repeat("data", 1000))
 	}
@@ -269,9 +269,9 @@ func TestBlockStore_StoreConcurrent(t *testing.T) {
 	done := make(chan bool)
 	blockCount := 100
 
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		go func(start int) {
-			for j := 0; j < blockCount; j++ {
+			for j := range blockCount {
 				block, appHash := createTestBlock(int64(start*blockCount+j), 2)
 				err := bs.Store(block, appHash)
 				if err != nil {
@@ -282,12 +282,12 @@ func TestBlockStore_StoreConcurrent(t *testing.T) {
 		}(i)
 	}
 
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		<-done
 	}
 
-	for i := 0; i < 3; i++ {
-		for j := 0; j < blockCount; j++ {
+	for i := range 3 {
+		for j := range blockCount {
 			height := int64(i*blockCount + j)
 			_, blk, appHash, err := bs.GetByHeight(height)
 			if err != nil {
@@ -347,12 +347,15 @@ func TestBlockStore_StoreWithLargeTransactions(t *testing.T) {
 	}
 
 	blkHash := block.Hash()
-	bk, appHash, err := bs.Get(blkHash)
+	bk, gotAppHash, err := bs.Get(blkHash)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if bk.Hash() != blkHash {
 		t.Fatal("hash mismatch")
+	}
+	if gotAppHash != appHash {
+		t.Fatal("apphash mismatch")
 	}
 
 	for _, tx := range [][]byte{largeTx, otherTx} {
