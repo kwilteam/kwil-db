@@ -126,6 +126,9 @@ func NewBlockStore(dir string, opts ...Option) (*BlockStore, error) {
 				appHash = types.Hash(val)
 				return nil
 			})
+			if err != nil {
+				return err
+			}
 
 			bs.idx[hash] = height
 			bs.hashes[height] = blockHashes{
@@ -293,7 +296,6 @@ func (bki *BlockStore) Store(blk *types.Block, appHash types.Hash) error {
 	// this is possibly a suboptimal design.
 
 	// Store the txn index
-	txIDs := make([]byte, 0, len(blk.Txns)*types.HashLen)
 	for idx, tx := range blk.Txns {
 		txHash := types.HashBytes(tx)
 		key = slices.Concat(nsTxn, txHash[:]) // "t:txHash" => height + blkHash + blkIdx
@@ -303,7 +305,6 @@ func (bki *BlockStore) Store(blk *types.Block, appHash types.Hash) error {
 		if err != nil {
 			return err
 		}
-		txIDs = append(txIDs, txHash[:]...)
 	}
 
 	bki.mtx.Lock()
@@ -340,12 +341,6 @@ func (bki *BlockStore) PreFetch(blkid types.Hash) (bool, func()) { // TODO: remo
 		delete(bki.fetching, blkid)
 		bki.mtx.Unlock()
 	} // go get it
-}
-
-func (bki *BlockStore) size() int {
-	bki.mtx.RLock()
-	defer bki.mtx.RUnlock()
-	return len(bki.idx)
 }
 
 func (bki *BlockStore) Best() (int64, types.Hash, types.Hash) {

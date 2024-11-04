@@ -1,7 +1,6 @@
 package node
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -25,21 +24,6 @@ const (
 	txReadLimit  = 30_000_000
 	txGetTimeout = 20 * time.Second
 )
-
-func readTxResp(rd io.Reader) ([]byte, error) {
-	rd = io.LimitReader(rd, txReadLimit)
-	resp, err := io.ReadAll(rd)
-	if err != nil {
-		return nil, err
-	}
-	if len(resp) == 0 {
-		return nil, ErrNoResponse
-	}
-	if bytes.Equal(resp, noData) {
-		return nil, ErrTxNotFound
-	}
-	return resp, nil
-}
 
 func getTx(ctx context.Context, txHash types.Hash, peer peer.ID, host host.Host) ([]byte, error) {
 	resID, _ := newTxHashReq(txHash).MarshalBinary()

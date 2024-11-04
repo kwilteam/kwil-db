@@ -37,6 +37,12 @@ func LoadGenesisConfig(filename string) (*GenesisConfig, error) {
 	return &nc, nil
 }
 
+//   - toml tags are used to marshal into a toml file with pelletier's go-toml
+//     (gotoml.Marshal: Config{} => []byte(tomlString))
+//   - koanf tags are used to unmarshal into this struct from a koanf instance
+//     (k.Unmarshal: map[string]interface{} => Config{})
+//     These names have no underscores or dashes, to form the least common
+//     denominator between all of toml, env, and flags.
 type NodeConfig struct {
 	Port uint64 `json:"port"`
 	IP   string `json:"ip"`
