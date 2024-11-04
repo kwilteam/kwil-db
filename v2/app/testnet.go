@@ -1,7 +1,6 @@
 package app
 
 import (
-	"crypto/rand"
 	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
@@ -59,13 +58,12 @@ func generateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, start
 
 	var keys []crypto.PrivKey
 	// generate the configuration for the nodes
-	for i := 0; i < numVals+numNVals; i++ {
+	for i := range numVals + numNVals {
 		// generate Keys, so that the connection strings and the validator set can be generated before the node config files are generated
-		rr := rand.Reader
 		var seed [32]byte
 		binary.LittleEndian.PutUint64(seed[:], startingPort+uint64(i))
 		seed = sha256.Sum256(seed[:])
-		rr = mrand2.NewChaCha8(seed)
+		rr := mrand2.NewChaCha8(seed)
 		priv := node.NewKey(rr)
 		keys = append(keys, priv)
 	}
@@ -84,7 +82,7 @@ func generateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, start
 		Validators: make([]types.Validator, numVals),
 	}
 
-	for i := 0; i < numVals; i++ {
+	for i := range numVals {
 		pub, err := keys[i].GetPublic().Raw()
 		if err != nil {
 			return err
@@ -96,7 +94,7 @@ func generateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, start
 	}
 
 	// generate the configuration for the nodes
-	for i := 0; i < numVals+numNVals; i++ {
+	for i := range numVals + numNVals {
 		nodeDir := filepath.Join(rootDir, fmt.Sprintf("node%d", i))
 		if err := os.MkdirAll(nodeDir, os.ModePerm); err != nil {
 			return err

@@ -57,8 +57,8 @@ type ConsensusEngine interface {
 
 	Start(ctx context.Context, proposerBroadcaster consensus.ProposalBroadcaster, blkAnnouncer consensus.BlkAnnouncer, ackBroadcaster consensus.AckBroadcaster, blkRequester consensus.BlkRequester, stateResetter consensus.ResetStateBroadcaster)
 
-	// Note: Not sure if these are needed here, just for seperate of concerns:
-	// p2p stream handlers role is to downlaod the messages and pass it to the
+	// Note: Not sure if these are needed here, just for separate of concerns:
+	// p2p stream handlers role is to download the messages and pass it to the
 	// respective modules to process it and we probably should not be triggering any consensus
 	// affecting methods.
 

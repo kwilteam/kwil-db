@@ -241,7 +241,7 @@ func CalcMerkleRoot(leaves []Hash) Hash {
 
 		// Set the parent node to the hash of the concatenation of the left and
 		// right children.
-		for i := 0; i < len(leaves)/2; i++ {
+		for i := range len(leaves) / 2 {
 			copy(left, leaves[i*2][:])
 			copy(right, leaves[i*2+1][:])
 			leaves[i] = sha256.Sum256(both)

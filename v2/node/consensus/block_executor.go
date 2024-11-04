@@ -120,7 +120,6 @@ func (ce *ConsensusEngine) commit() error {
 	return nil
 }
 
-
 func (ce *ConsensusEngine) nextState() {
 	ce.state.lc = &lastCommit{
 		height:  ce.state.blkProp.height,

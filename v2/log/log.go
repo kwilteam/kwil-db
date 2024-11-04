@@ -302,15 +302,6 @@ type Logger interface {
 	// WithGroup(group string) Logger
 }
 
-var defaultHandlerOpts = &slog.HandlerOptions{
-	AddSource: true,
-	Level:     slog.LevelInfo,
-}
-
-var defaultHandler = slog.NewTextHandler(os.Stdout, defaultHandlerOpts)
-
-var defaultSLogger = slog.New(defaultHandler)
-
 func NewStdoutLogger() Logger {
 	return New(WithWriter(os.Stdout))
 }

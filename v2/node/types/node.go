@@ -26,8 +26,8 @@ func (r Role) String() string {
 }
 
 type Validator struct {
-	PubKey HexBytes
-	Power  int64
+	PubKey HexBytes `json:"pubkey"`
+	Power  int64    `json:"power"`
 }
 
 func (v Validator) String() string {
