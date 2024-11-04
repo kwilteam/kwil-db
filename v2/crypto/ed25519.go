@@ -19,9 +19,10 @@ type Ed25519PublicKey struct {
 	k ed25519.PublicKey
 }
 
-// GenerateEd25519Key generates a new ed25519 private and public key pair.
+// GenerateEd25519Key generates a new ed25519 private and public key pair.  The
+// returned keys may be cast to *Ed25519PrivateKey and *Ed25519PublicKey.
 func GenerateEd25519Key(src io.Reader) (PrivateKey, PublicKey, error) {
-	pub, priv, err := ed25519.GenerateKey(src)
+	pub, priv, err := ed25519.GenerateKey(src) // crypto/ed25519 will use crypto/rand.Reader if src is nil
 	if err != nil {
 		return nil, nil, err
 	}
@@ -61,7 +62,7 @@ func (k *Ed25519PrivateKey) pubKeyBytes() []byte {
 // Equals compares two ed25519 private keys.
 func (k *Ed25519PrivateKey) Equals(o Key) bool {
 	edk, ok := o.(*Ed25519PrivateKey)
-	if !ok {
+	if !ok { // if different concrete type, test based on returns form the interface's Type and Bytes
 		return keyEquals(k, o)
 	}
 
@@ -75,7 +76,7 @@ func (k *Ed25519PrivateKey) Public() PublicKey {
 
 // Sign returns a signature from an input message.
 func (k *Ed25519PrivateKey) Sign(msg []byte) (res []byte, err error) {
-	defer func() { HandlePanic(recover(), &err, "ed15519 signing") }()
+	defer func() { handlePanic(recover(), &err, "ed15519 signing") }()
 
 	return ed25519.Sign(k.k, msg), nil
 }
@@ -105,18 +106,14 @@ func (k *Ed25519PublicKey) Equals(o Key) bool {
 // Verify checks a signature against the input data.
 func (k *Ed25519PublicKey) Verify(data []byte, sig []byte) (success bool, err error) {
 	defer func() {
-		HandlePanic(recover(), &err, "ed15519 signature verification")
-
-		// To be safe.
-		if err != nil {
-			success = false
-		}
+		handlePanic(recover(), &err, "ed15519 signature verification")
+		success = success && err == nil // to be safe
 	}()
 	return ed25519.Verify(k.k, data, sig), nil
 }
 
 // UnmarshalEd25519PublicKey returns a public key from input bytes.
-func UnmarshalEd25519PublicKey(data []byte) (PublicKey, error) {
+func UnmarshalEd25519PublicKey(data []byte) (*Ed25519PublicKey, error) {
 	if len(data) != 32 {
 		return nil, errors.New("expect ed25519 public key data size to be 32")
 	}
@@ -127,9 +124,9 @@ func UnmarshalEd25519PublicKey(data []byte) (PublicKey, error) {
 }
 
 // UnmarshalEd25519PrivateKey returns a private key from input bytes.
-func UnmarshalEd25519PrivateKey(data []byte) (PrivateKey, error) {
+func UnmarshalEd25519PrivateKey(data []byte) (*Ed25519PrivateKey, error) {
 	switch len(data) {
-	case ed25519.PrivateKeySize + ed25519.PublicKeySize:
+	/*	case ed25519.PrivateKeySize + ed25519.PublicKeySize: // ?? no coverage!
 		// Remove the redundant public key. See issue #36.
 		redundantPk := data[ed25519.PrivateKeySize:]
 		pk := data[ed25519.PrivateKeySize-ed25519.PublicKeySize : ed25519.PrivateKeySize]
@@ -141,6 +138,7 @@ func UnmarshalEd25519PrivateKey(data []byte) (PrivateKey, error) {
 		newKey := make([]byte, ed25519.PrivateKeySize)
 		copy(newKey, data[:ed25519.PrivateKeySize])
 		data = newKey
+	*/
 	case ed25519.PrivateKeySize:
 	default:
 		return nil, fmt.Errorf(

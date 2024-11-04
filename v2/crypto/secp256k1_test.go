@@ -3,18 +3,24 @@ package crypto
 import (
 	"bytes"
 	"crypto/rand"
+	"io"
 	"testing"
 )
 
 func TestGenerateSecp256k1Key(t *testing.T) {
 	tests := []struct {
 		name    string
-		reader  *bytes.Reader
+		reader  io.Reader
 		wantErr bool
 	}{
 		{
 			name:    "valid random source",
 			reader:  bytes.NewReader(bytes.Repeat([]byte{1}, 64)),
+			wantErr: false,
+		},
+		{
+			name:    "nil source",
+			reader:  nil,
 			wantErr: false,
 		},
 		{
@@ -139,5 +145,41 @@ func TestSecp256k1KeyEquality(t *testing.T) {
 	}
 	if pub1.Equals(edPub) {
 		t.Error("Secp256k1 public key should not equal Ed25519 public key")
+	}
+
+	mockPriv := &mockPrivateKey{keyType: 99}
+	if priv1.Equals(mockPriv) {
+		t.Error("Different private key types should not be equal")
+	}
+
+	mockPriv = &mockPrivateKey{keyType: KeyTypeSecp256k1} // same KeyType, different bytes
+	if priv1.Equals(mockPriv) {
+		t.Error("Different bytes should not be equal")
+	}
+
+	mockPriv = &mockPrivateKey{
+		keyType: KeyTypeSecp256k1,
+		bytes:   priv1.Bytes(),
+	} // same KeyType, same bytes
+	if !priv1.Equals(mockPriv) {
+		t.Error("same Type and Bytes should be equal regardless of concrete impl")
+	}
+
+	mockPub := &mockPublicKey{keyType: 99}
+	if pub1.Equals(mockPub) {
+		t.Error("Different private key types should not be equal")
+	}
+
+	mockPub = &mockPublicKey{keyType: KeyTypeSecp256k1} // same KeyType, different bytes
+	if pub1.Equals(mockPub) {
+		t.Error("Different bytes should not be equal")
+	}
+
+	mockPub = &mockPublicKey{
+		keyType: KeyTypeSecp256k1,
+		bytes:   pub1.Bytes(),
+	} // same KeyType, same bytes
+	if !pub1.Equals(mockPub) {
+		t.Error("same Type and Bytes should be equal regardless of concrete impl")
 	}
 }
