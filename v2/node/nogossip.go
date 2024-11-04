@@ -3,6 +3,7 @@ package node
 import (
 	"bytes"
 	"context"
+	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -159,7 +160,7 @@ func (n *Node) startTxAnns(ctx context.Context, newPeriod, reannouncePeriod time
 			n.mp.Store(txHash, rawTx)
 
 			// n.log.Infof("announcing txid %v", txid)
-			n.announceTx(ctx, types.Hash(txHash), rawTx, n.host.ID())
+			n.announceTx(ctx, txHash, rawTx, n.host.ID())
 		}
 	}()
 
@@ -192,4 +193,10 @@ func (n *Node) startTxAnns(ctx context.Context, newPeriod, reannouncePeriod time
 			}()
 		}
 	}()
+}
+
+func randBytes(n int) []byte {
+	b := make([]byte, n)
+	rand.Read(b)
+	return b
 }

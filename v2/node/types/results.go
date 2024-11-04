@@ -56,7 +56,7 @@ func (tr *TxResult) UnmarshalBinary(data []byte) error {
 	tr.Log = string(data[6 : 6+logLen])
 
 	// Move cursor past the log
-	cursor := int(6 + logLen)
+	cursor := 6 + logLen
 
 	// Decode events
 	if len(data) < cursor+2 {

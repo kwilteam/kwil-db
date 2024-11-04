@@ -159,7 +159,6 @@ func (n *Node) announceBlk(ctx context.Context, blk *types.Block, appHash types.
 	fmt.Println("announceBlk", blk.Header.Height, blkHash, appHash, from)
 	rawBlk := types.EncodeBlock(blk)
 	n.announceRawBlk(ctx, blkHash, blk.Header.Height, rawBlk, appHash, from)
-	return
 }
 
 func (n *Node) announceRawBlk(ctx context.Context, blkHash types.Hash, height int64,
