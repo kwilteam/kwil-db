@@ -84,15 +84,6 @@ func (bam *blockAnnounce) String() string {
 // due to amnesia after leader restart.
 // 3. Nodes receive a blockAnn message from the leader for a different blk
 // than the one the node is currently processing or waiting on.
-type resetState struct {
-	height int64
-	// ignoreBlk types.Hash
-}
-
-func (rs *resetState) Type() string {
-	return "reset_state"
-}
-
-func (rs *resetState) String() string {
-	return fmt.Sprintf("ResetState {height: %d}", rs.height)
+func (ce *ConsensusEngine) sendResetMsg(height int64) {
+	ce.resetChan <- height
 }
