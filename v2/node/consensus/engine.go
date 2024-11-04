@@ -46,8 +46,9 @@ type ConsensusEngine struct {
 	stateInfo StateInfo
 
 	// Channels
-	msgChan  chan consensusMessage
-	haltChan chan struct{} // can take a msg or reason for halting the network
+	msgChan   chan consensusMessage
+	haltChan  chan struct{} // can take a msg or reason for halting the network
+	resetChan chan int64    // to reset the state of the consensus engine
 
 	// interfaces
 	log           log.Logger
@@ -178,6 +179,7 @@ func New(role types.Role, hostID peer.ID, dir string, mempool Mempool, bs BlockS
 		validatorSet: vs,
 		msgChan:      make(chan consensusMessage, 1), // buffer size??
 		haltChan:     make(chan struct{}, 1),
+		resetChan:    make(chan int64, 1),
 		// interfaces
 		mempool:       mempool,
 		blockStore:    bs,
@@ -248,6 +250,9 @@ func (ce *ConsensusEngine) runEventLoop(ctx context.Context) error {
 		case <-reannounceTicker.C:
 			ce.reannounceMsgs(ctx)
 
+		case height := <-ce.resetChan:
+			ce.resetBlockProp(height)
+
 		case m := <-ce.msgChan:
 			ce.handleConsensusMessages(ctx, m)
 		}
@@ -310,16 +315,34 @@ func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg cons
 			ce.log.Error("Error processing committing block", "error", err)
 			return
 		}
-
-	case "reset_state":
-		rstMsg, ok := msg.Msg.(*resetState)
-		if !ok {
-			ce.log.Error("Invalid reset state message")
-			return
-		}
-		ce.resetBlockProp(rstMsg)
 	}
 
+}
+
+// resetBlockProp aborts the block execution and resets the state to the last committed block.
+func (ce *ConsensusEngine) resetBlockProp(height int64) {
+	ce.state.mtx.Lock()
+	defer ce.state.mtx.Unlock()
+
+	// If we are currently executing any transactions corresponding to the blk at height +1
+	// 1. Cancel the execution context -> so that the transactions stop
+	// 2. Rollback the consensus tx
+	// 3. Reset the blkProp and blockRes
+	// 4. This should never happen after the commit phase, (blk should have never made it to the blockstore)
+
+	if ce.state.lc.height == height {
+		if ce.state.blkProp != nil {
+			// first cancel the context
+			ce.state.cancelFunc()
+			// rollback the pg tx
+			// ce.state.consensusTx.Rollback()
+
+			// reset the blkProp and blockRes
+			ce.log.Info("Resetting the block proposal", "height", height)
+			ce.resetState()
+			// no need to update the last commit info as commit phase is not reached yet
+		}
+	}
 }
 
 // catchup syncs the node first with the local blockstore and then with the network.
