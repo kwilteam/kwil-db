@@ -170,6 +170,11 @@ func New(role types.Role, hostID peer.ID, dir string, mempool Mempool, bs BlockS
 			},
 			votes: make(map[string]*vote),
 		},
+		stateInfo: StateInfo{
+			height:  0,
+			status:  Committed,
+			blkProp: nil,
+		},
 		validatorSet: vs,
 		msgChan:      make(chan consensusMessage, 1), // buffer size??
 		haltChan:     make(chan struct{}, 1),

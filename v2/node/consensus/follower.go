@@ -31,9 +31,11 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 		return false
 	}
 
+	ce.log.Info("Accept proposal", "height", height, "status ", ce.stateInfo.status)
 	// Check if the validator is busy processing a block.
 	if ce.stateInfo.status != Committed {
 		// check if we are processing a different block, if yes then reset the state.
+		ce.log.Info("processing blk: ", "block", ce.stateInfo.blkProp)
 		if ce.stateInfo.blkProp.blkHash != blkID {
 			ce.log.Info("Conflicting block proposals, abort block execution and requesting the new block: ", "height", height)
 			msg := &resetState{height: height - 1}
