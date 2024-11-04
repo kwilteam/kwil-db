@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
 	"testing"
 	"time"
@@ -69,6 +70,86 @@ func TestGetRawBlockTx(t *testing.T) {
 		_, err := GetRawBlockTx(rawBlock, 0)
 		if err != ErrNotFound {
 			t.Errorf("got err %v, want ErrNotFound", err)
+		}
+	})
+}
+func TestCalcMerkleRoot(t *testing.T) {
+	t.Run("empty slice", func(t *testing.T) {
+		root := CalcMerkleRoot([]Hash{})
+		if root != (Hash{}) {
+			t.Errorf("empty slice should return zero hash, got %x", root)
+		}
+	})
+
+	t.Run("single leaf", func(t *testing.T) {
+		leaf := Hash{1, 2, 3, 4}
+		root := CalcMerkleRoot([]Hash{leaf})
+		if root != leaf {
+			t.Errorf("single leaf should return same hash, got %x, want %x", root, leaf)
+		}
+	})
+
+	t.Run("two leaves", func(t *testing.T) {
+		leaf1 := Hash{1, 2, 3, 4}
+		leaf2 := Hash{5, 6, 7, 8}
+		root := CalcMerkleRoot([]Hash{leaf1, leaf2})
+
+		var buf [HashLen * 2]byte
+		copy(buf[:HashLen], leaf1[:])
+		copy(buf[HashLen:], leaf2[:])
+		expected := sha256.Sum256(buf[:])
+
+		if root != expected {
+			t.Errorf("got root %x, want %x", root, expected)
+		}
+	})
+
+	t.Run("three leaves", func(t *testing.T) {
+		leaves := []Hash{
+			{1, 1, 1, 1},
+			{2, 2, 2, 2},
+			{3, 3, 3, 3},
+		}
+		CalcMerkleRoot(leaves)
+
+		// Verify original slice not modified
+		if leaves[2] != (Hash{3, 3, 3, 3}) {
+			t.Error("original slice was modified")
+		}
+	})
+
+	t.Run("four leaves", func(t *testing.T) {
+		leaves := []Hash{
+			{1, 1, 1, 1},
+			{2, 2, 2, 2},
+			{3, 3, 3, 3},
+			{4, 4, 4, 4},
+		}
+		root1 := CalcMerkleRoot(leaves)
+
+		// Calculate same root with modified order
+		leaves[0], leaves[1] = leaves[1], leaves[0]
+		root2 := CalcMerkleRoot(leaves)
+
+		if root1 == root2 {
+			t.Error("roots should differ when leaf order changes")
+		}
+	})
+
+	t.Run("preserve input", func(t *testing.T) {
+		original := []Hash{
+			{1, 1, 1, 1},
+			{2, 2, 2, 2},
+		}
+		originalCopy := make([]Hash, len(original))
+		copy(originalCopy, original)
+
+		CalcMerkleRoot(original)
+
+		for i := range original {
+			if original[i] != originalCopy[i] {
+				t.Errorf("input slice was modified at index %d", i)
+			}
 		}
 	})
 }

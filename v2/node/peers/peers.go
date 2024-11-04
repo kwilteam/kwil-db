@@ -216,7 +216,7 @@ func (pm *PeerMan) KnownPeers() []types.PeerInfo {
 	return peers
 }
 
-func (pm *PeerMan) printKnownPeers() {
+func (pm *PeerMan) PrintKnownPeers() {
 	peers := pm.KnownPeers()
 	for _, p := range peers {
 		pm.log.Info("Known peer", "id", p.ID.String())

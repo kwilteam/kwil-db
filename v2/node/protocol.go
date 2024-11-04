@@ -84,7 +84,7 @@ func readResp(rd io.Reader, limit int64) ([]byte, error) {
 }
 
 const (
-	// annWriteTimeout the the content announcement write timeout when sending
+	// annWriteTimeout the content announcement write timeout when sending
 	// the resource identifier, which is very small.
 	annWriteTimeout = 5 * time.Second
 	// annRespTimeout is the timeout for the response to the resource
@@ -114,7 +114,7 @@ func (n *Node) advertiseToPeer(ctx context.Context, peerID peer.ID, proto protoc
 	s.SetWriteDeadline(time.Now().Add(annWriteTimeout))
 
 	// Send a lightweight advertisement with the object ID
-	_, err = s.Write([]byte(ann.ann))
+	_, err = s.Write(ann.ann)
 	if err != nil {
 		return fmt.Errorf("send content ID failed: %w", err)
 	}
