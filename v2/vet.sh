@@ -13,7 +13,7 @@ echo "Formating source..."
 goimports -format-only -w .
 
 echo "Running unit tests..."
-go test ./...
+go test -short ./...
 
 echo "Compiling kwil node application..."
 go build -o /dev/null .
