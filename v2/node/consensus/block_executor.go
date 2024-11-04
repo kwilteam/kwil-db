@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"kwil/node/types"
 	"os"
@@ -121,40 +120,6 @@ func (ce *ConsensusEngine) commit() error {
 	return nil
 }
 
-func (ce *ConsensusEngine) resetBlockProp(rstMsg *resetState) {
-	ce.state.mtx.Lock()
-	defer ce.state.mtx.Unlock()
-
-	// If we are currently executing any transactions corresponding to the blk at height +1
-	// 1. Cancel the execution context -> so that the transactions stop
-	// 2. Rollback the consensus tx
-	// 3. Reset the blkProp and blockRes
-	// 4. This should never happen after the commit phase, (blk should have never made it to the blockstore)
-
-	// Ensure that the block is not committed yet. Else, we should just ignore the reset message (potentially a stale one)
-	// TODO: this should probably be checked before accepting this message
-	_, _, _, err := ce.blockStore.GetByHeight(rstMsg.height)
-	if err != nil {
-		if !errors.Is(err, types.ErrNotFound) {
-			ce.log.Error("Error fetching block from blockstore", "height", rstMsg.height, "error", err)
-		}
-		// nothing to do here as the block is already committed
-		return
-	}
-
-	if ce.state.lc.height == rstMsg.height {
-		if ce.state.blkProp != nil {
-			// first cancel the context
-			ce.state.cancelFunc()
-			// rollback the pg tx
-			// ce.state.consensusTx.Rollback()
-
-			// reset the blkProp and blockRes
-			ce.resetState()
-			// no need to update the last commit info as commit phase is not reached yet
-		}
-	}
-}
 
 func (ce *ConsensusEngine) nextState() {
 	ce.state.lc = &lastCommit{
@@ -165,15 +130,6 @@ func (ce *ConsensusEngine) nextState() {
 	}
 
 	ce.resetState()
-
-	// update the stateInfo
-	ce.stateInfo.mtx.Lock()
-	defer ce.stateInfo.mtx.Unlock()
-
-	ce.stateInfo.status = Committed
-	ce.stateInfo.height = ce.state.lc.height
-	ce.stateInfo.blkProp = nil
-
 }
 
 func (ce *ConsensusEngine) resetState() {
@@ -190,9 +146,10 @@ func (ce *ConsensusEngine) resetState() {
 
 	// update the stateInfo
 	ce.stateInfo.mtx.Lock()
-	defer ce.stateInfo.mtx.Unlock()
 	ce.stateInfo.status = Committed
 	ce.stateInfo.blkProp = nil
+	ce.stateInfo.height = ce.state.lc.height
+	ce.stateInfo.mtx.Unlock()
 }
 
 // temporary placeholder as this will be in the PG chainstate in future (as was in previous kwil implementations)
