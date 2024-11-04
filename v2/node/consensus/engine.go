@@ -39,8 +39,11 @@ type ConsensusEngine struct {
 	networkHeight atomic.Int64
 	validatorSet  map[string]types.Validator
 
-	// store last commit info
+	// stores state machine state for the consensus engine
 	state state
+
+	// copy of the state info for the p2p layer usage.
+	stateInfo StateInfo
 
 	// Channels
 	msgChan  chan consensusMessage
@@ -59,6 +62,31 @@ type ConsensusEngine struct {
 	rstStateBroadcaster ResetStateBroadcaster
 
 	// logger log.Logger
+}
+
+type Status string
+
+const (
+	Proposed  Status = "proposed"  // SM has a proposed block for the current height
+	Executed  Status = "executed"  // SM has executed the proposed block
+	Committed Status = "committed" // SM has committed the block
+)
+
+// StateInfo contains the state information required by the p2p layer to
+// download the blocks and notify the consensus engine about the incoming blocks.
+type StateInfo struct {
+	// mtx protects the below fields and should be locked by the consensus engine
+	// only when updating the state and the locks should be released immediately.
+	mtx sync.RWMutex
+
+	// height of the last committed block
+	height int64
+
+	// status of the consensus engine
+	status Status
+
+	// proposed block for the current height
+	blkProp *blockProposal
 }
 
 // ProposalBroadcaster broadcasts the new block proposal message to the network
@@ -352,6 +380,10 @@ func (ce *ConsensusEngine) init() error {
 		ce.state.lc.blk = blk
 		ce.state.lc.appHash = state.AppHash
 		ce.state.lc.blkHash = hash
+
+		ce.stateInfo.height = state.Height
+		ce.stateInfo.status = Committed
+		ce.stateInfo.blkProp = nil
 	}
 
 	return nil
