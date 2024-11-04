@@ -44,6 +44,12 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	// Broadcast the block proposal to the network
 	go ce.proposalBroadcaster(ctx, blkProp.blk, ce.host)
 
+	// update the stateInfo
+	ce.stateInfo.mtx.Lock()
+	ce.stateInfo.status = Proposed
+	ce.stateInfo.blkProp = blkProp
+	ce.stateInfo.mtx.Unlock()
+
 	// Execute the block and generate the appHash
 	if err := ce.executeBlock(); err != nil {
 		ce.log.Errorf("Error executing the block: %v", err)
