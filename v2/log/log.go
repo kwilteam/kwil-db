@@ -12,6 +12,45 @@ import (
 	sublog "github.com/decred/slog"
 )
 
+type KVLogger interface {
+	Debug(msg string, args ...any)
+	Info(msg string, args ...any)
+	Warn(msg string, args ...any)
+	Error(msg string, args ...any)
+	Log(level Level, msg string, args ...any)
+}
+
+type Loggerf interface {
+	Debugf(msg string, args ...any)
+	Infof(msg string, args ...any)
+	Warnf(msg string, args ...any)
+	Errorf(msg string, args ...any)
+	Logf(level Level, msg string, args ...any)
+}
+
+type Loggerln interface {
+	Debugln(a ...any)
+	Infoln(a ...any)
+	Warnln(a ...any)
+	Errorln(a ...any)
+	Logln(level Level, a ...any)
+}
+
+type LoggerMaker interface {
+	// New creates a child logger using the same backend and options as the
+	// current logger, but with the specified name and level.
+	New(name string) Logger
+	NewWithLevel(lvl Level, name string) Logger
+}
+
+type Logger interface {
+	KVLogger // (msg string, args ...any) where args are key-value pairs
+	Loggerf  // (msg string, args ...any) where args are printf like arguments
+	Loggerln // (a ...any) in the manner of println
+
+	LoggerMaker
+}
+
 type Level int
 
 const (
@@ -21,6 +60,8 @@ const (
 	LevelError
 )
 
+// String returns the string representation of the log level. Use [ParseLevel]
+// to go from a string to a Level.
 func (lvl Level) String() string {
 	switch lvl {
 	case LevelDebug:
@@ -51,8 +92,10 @@ func levelToSlog(l Level) slog.Level {
 	}
 }
 
+// ParseLevel parses a string into a log level. Use [Level.String] to go from a
+// Level to a string.
 func ParseLevel(s string) (Level, error) {
-	switch s {
+	switch strings.ToLower(s) {
 	case "debug":
 		return LevelDebug, nil
 	case "info":
@@ -82,9 +125,12 @@ func formatArgs(args ...any) string {
 	msg.WriteString(" {")
 	// args are pairs of key-values, so we will print them in pairs after the message.
 	for i := 0; i < len(args); i += 2 {
+		if i == 2 {
+			sp = " "
+		}
 		// if odd, then we will just print the last value
 		if i+1 >= len(args) {
-			fmt.Fprintf(&msg, " %v", args[i])
+			fmt.Fprintf(&msg, "%s%v", sp, args[i])
 			break
 		}
 		key, val := args[i], args[i+1]
@@ -92,31 +138,34 @@ func formatArgs(args ...any) string {
 			val = hex.EncodeToString(v)
 		}
 		fmt.Fprintf(&msg, "%s%s=%v", sp, key, val)
-		if i == 0 {
-			sp = " "
-		}
 	}
 	msg.WriteString("}")
 	return msg.String()
 }
+
+var _ KVLogger = (*plainLogger)(nil)
 
 func (l *plainLogger) Debug(msg string, args ...any) {
 	// args are pairs of key-values, so we will print them in pairs after the message.
 	msg += formatArgs(args...)
 	l.log.Debugf(msg)
 }
+
 func (l *plainLogger) Info(msg string, args ...any) {
 	msg += formatArgs(args...)
 	l.log.Infof(msg)
 }
+
 func (l *plainLogger) Warn(msg string, args ...any) {
 	msg += formatArgs(args...)
 	l.log.Warnf(msg)
 }
+
 func (l *plainLogger) Error(msg string, args ...any) {
 	msg += formatArgs(args...)
 	l.log.Errorf(msg)
 }
+
 func (l *plainLogger) Log(level Level, msg string, args ...any) {
 	switch level {
 	case LevelDebug:
@@ -129,12 +178,48 @@ func (l *plainLogger) Log(level Level, msg string, args ...any) {
 		l.Error(msg, args...)
 	}
 }
+
+var _ Loggerln = (*plainLogger)(nil)
+
+func (l *plainLogger) Debugln(a ...any) {
+	l.log.Debug(a...)
+}
+
+func (l *plainLogger) Infoln(a ...any) {
+	l.log.Info(a...)
+}
+
+func (l *plainLogger) Warnln(a ...any) {
+	l.log.Warn(a...)
+}
+
+func (l *plainLogger) Errorln(a ...any) {
+	l.log.Error(a...)
+}
+
+func (l *plainLogger) Logln(level Level, a ...any) {
+	switch level {
+	case LevelDebug:
+		l.Debugln(a...)
+	case LevelInfo:
+		l.Infoln(a...)
+	case LevelWarn:
+		l.Warnln(a...)
+	case LevelError:
+		l.Errorln(a...)
+	}
+}
+
+var _ Loggerf = (*plainLogger)(nil)
+
 func (l *plainLogger) Debugf(msg string, args ...any) {
 	l.log.Debugf(msg, args...)
 }
+
 func (l *plainLogger) Infof(msg string, args ...any) {
 	l.log.Infof(msg, args...)
 }
+
 func (l *plainLogger) Warnf(msg string, args ...any) {
 	l.log.Warnf(msg, args...)
 }
@@ -142,6 +227,7 @@ func (l *plainLogger) Warnf(msg string, args ...any) {
 func (l *plainLogger) Errorf(msg string, args ...any) {
 	l.log.Errorf(msg, args...)
 }
+
 func (l *plainLogger) Logf(level Level, msg string, args ...any) {
 	switch level {
 	case LevelDebug:
@@ -155,6 +241,8 @@ func (l *plainLogger) Logf(level Level, msg string, args ...any) {
 	}
 }
 
+var _ LoggerMaker = (*plainLogger)(nil)
+
 func (l *plainLogger) NewWithLevel(lvl Level, name string) Logger {
 	logger := l.be.Logger(name)
 	logger.SetLevel(levelToSublog(lvl))
@@ -163,6 +251,7 @@ func (l *plainLogger) NewWithLevel(lvl Level, name string) Logger {
 		log: logger,
 	}
 }
+
 func (l *plainLogger) New(name string) Logger {
 	logger := l.be.Logger(name)
 	return &plainLogger{
@@ -228,6 +317,8 @@ func sanitizeArgs(args []any) []any {
 	return sanitized
 }
 
+var _ KVLogger = (*logger)(nil)
+
 func (l *logger) Debug(msg string, args ...any) {
 	l.log.Debug(msg, sanitizeArgs(args)...)
 }
@@ -243,6 +334,9 @@ func (l *logger) Error(msg string, args ...any) {
 func (l *logger) Log(level Level, msg string, args ...any) {
 	l.log.Log(context.Background(), levelToSlog(level), msg, sanitizeArgs(args)...)
 }
+
+var _ Loggerf = (*logger)(nil)
+
 func (l *logger) Debugf(msg string, args ...any) {
 	l.log.Debug(fmt.Sprintf(msg, args...))
 }
@@ -258,12 +352,34 @@ func (l *logger) Errorf(msg string, args ...any) {
 func (l *logger) Logf(level Level, msg string, args ...any) {
 	l.log.Log(context.Background(), levelToSlog(level), fmt.Sprintf(msg, args...))
 }
+
+var _ Loggerln = (*logger)(nil)
+
+func (l *logger) Debugln(a ...any) {
+	l.Debug(fmt.Sprintln(a...))
+}
+func (l *logger) Infoln(a ...any) {
+	l.Info(fmt.Sprintln(a...))
+}
+func (l *logger) Warnln(a ...any) {
+	l.Warn(fmt.Sprintln(a...))
+}
+func (l *logger) Errorln(a ...any) {
+	l.Error(fmt.Sprintln(a...))
+}
+func (l *logger) Logln(level Level, a ...any) {
+	l.Log(level, fmt.Sprintln(a...))
+}
+
+var _ LoggerMaker = (*logger)(nil)
+
 func (l *logger) NewWithLevel(lvl Level, name string) Logger {
 	opts := l.opts
 	opts.name = name
 	opts.level = lvl
 	return newLogger(&opts)
 }
+
 func (l *logger) New(name string) Logger {
 	opts := l.opts
 	opts.name = name
@@ -274,32 +390,6 @@ func (l *logger) WithGroup(group string) Logger {
 	return &logger{
 		log: l.log.WithGroup(group),
 	}
-}
-
-type LoggerMaker interface {
-	// New creates a child logger using the same backend and options as the
-	// current logger, but with the specified name and level.
-	New(name string) Logger
-	NewWithLevel(lvl Level, name string) Logger
-}
-
-type Logger interface {
-	Debug(msg string, args ...any)
-	Info(msg string, args ...any)
-	Warn(msg string, args ...any)
-	Error(msg string, args ...any)
-	Log(level Level, msg string, args ...any)
-
-	Debugf(msg string, args ...any)
-	Infof(msg string, args ...any)
-	Warnf(msg string, args ...any)
-	Errorf(msg string, args ...any)
-	Logf(level Level, msg string, args ...any)
-
-	LoggerMaker
-
-	// With
-	// WithGroup(group string) Logger
 }
 
 func NewStdoutLogger() Logger {
@@ -330,6 +420,12 @@ func (l *discardLogger) Infof(msg string, args ...any)             {}
 func (l *discardLogger) Warnf(msg string, args ...any)             {}
 func (l *discardLogger) Errorf(msg string, args ...any)            {}
 func (l *discardLogger) Logf(level Level, msg string, args ...any) {}
+
+func (l *discardLogger) Debugln(a ...any)            {}
+func (l *discardLogger) Infoln(a ...any)             {}
+func (l *discardLogger) Warnln(a ...any)             {}
+func (l *discardLogger) Errorln(a ...any)            {}
+func (l *discardLogger) Logln(level Level, a ...any) {}
 
 func New(opts ...Option) Logger {
 	options := &options{
