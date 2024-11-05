@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"fmt"
 	"time"
 
 	"kwil/node/types"
@@ -156,7 +155,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 
 func (n *Node) announceBlk(ctx context.Context, blk *types.Block, appHash types.Hash, from peer.ID) {
 	blkHash := blk.Hash()
-	fmt.Println("announceBlk", blk.Header.Height, blkHash, appHash, from)
+	n.log.Debugln("announceBlk", blk.Header.Height, blkHash, appHash, from)
 	rawBlk := types.EncodeBlock(blk)
 	n.announceRawBlk(ctx, blkHash, blk.Header.Height, rawBlk, appHash, from, blk.Signature)
 }
@@ -173,7 +172,7 @@ func (n *Node) announceRawBlk(ctx context.Context, blkHash types.Hash, height in
 		if peerID == from {
 			continue
 		}
-		n.log.Infof("advertising block %s (height %d / txs %d) to peer %v",
+		n.log.Infof("advertising block %s (height %d / sz %d) to peer %v",
 			blkHash, height, len(rawBlk), peerID)
 		resID, err := blockAnnMsg{
 			Hash:      blkHash,
