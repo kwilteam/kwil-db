@@ -75,7 +75,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 		return
 	}
 
-	height, blkHash, appHash := reqMsg.Height, reqMsg.Hash, reqMsg.AppHash
+	height, blkHash, appHash, sig := reqMsg.Height, reqMsg.Hash, reqMsg.AppHash, reqMsg.LeaderSig
 	blkid := blkHash.String()
 
 	// TODO: also get and pass the signature to AcceptCommit to ensure it's
@@ -90,7 +90,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 
 	// If we are a validator and this is the commit ann for a proposed block
 	// that we already started executing, consensus engine will handle it.
-	if !n.ce.AcceptCommit(height, blkHash, appHash) {
+	if !n.ce.AcceptCommit(height, blkHash, appHash, sig) {
 		return
 	}
 
@@ -150,7 +150,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 
 	go func() {
 		n.ce.NotifyBlockCommit(blk, appHash)
-		n.announceRawBlk(context.Background(), blkHash, height, rawBlk, appHash, s.Conn().RemotePeer())
+		n.announceRawBlk(context.Background(), blkHash, height, rawBlk, appHash, s.Conn().RemotePeer(), reqMsg.LeaderSig) // re-announce with the leader's signature
 	}()
 }
 
@@ -158,11 +158,11 @@ func (n *Node) announceBlk(ctx context.Context, blk *types.Block, appHash types.
 	blkHash := blk.Hash()
 	fmt.Println("announceBlk", blk.Header.Height, blkHash, appHash, from)
 	rawBlk := types.EncodeBlock(blk)
-	n.announceRawBlk(ctx, blkHash, blk.Header.Height, rawBlk, appHash, from)
+	n.announceRawBlk(ctx, blkHash, blk.Header.Height, rawBlk, appHash, from, blk.Signature)
 }
 
 func (n *Node) announceRawBlk(ctx context.Context, blkHash types.Hash, height int64,
-	rawBlk []byte, appHash types.Hash, from peer.ID) {
+	rawBlk []byte, appHash types.Hash, from peer.ID, blkSig []byte) {
 	peers := n.peers()
 	if len(peers) == 0 {
 		n.log.Warn("No peers to advertise block to")
@@ -176,10 +176,10 @@ func (n *Node) announceRawBlk(ctx context.Context, blkHash types.Hash, height in
 		n.log.Infof("advertising block %s (height %d / txs %d) to peer %v",
 			blkHash, height, len(rawBlk), peerID)
 		resID, err := blockAnnMsg{
-			Hash:    blkHash,
-			Height:  height,
-			AppHash: appHash,
-			// LeaderSig: leaderSig, // TODO: leader sig should be attached to the ann, not just in block
+			Hash:      blkHash,
+			Height:    height,
+			AppHash:   appHash,
+			LeaderSig: blkSig,
 		}.MarshalBinary()
 		if err != nil {
 			n.log.Error("Unable to marshal block announcement", "error", err)
