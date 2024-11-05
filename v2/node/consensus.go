@@ -191,7 +191,7 @@ func (n *Node) announceBlkProp(ctx context.Context, blk *types.Block, from peer.
 // protocol i.e. proposed block announcements, which originate from the leader,
 // but may be re-announced by other validators.
 //
-// This stream should:
+// This stream should:j
 //  1. provide the announcement to the consensus engine (CE)
 //  2. if the CE rejects the ann, close stream
 //  3. if the CE is ready for this proposed block, request the block
@@ -217,8 +217,7 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 
 	height := prop.Height
 
-	// TODO: prop.Stamp, prop.Hash, prop.LeaderSig => AcceptProposal
-	if !n.ce.AcceptProposal(height, prop.Hash, prop.PrevHash) {
+	if !n.ce.AcceptProposal(height, prop.Hash, prop.PrevHash, prop.LeaderSig, prop.Stamp) {
 		// NOTE: if this is ahead of our last commit height, we have to try to catch up
 		n.log.Infof("don't want proposal content", height, prop.PrevHash)
 		return
@@ -407,10 +406,11 @@ func (n *Node) blkAckStreamHandler(s network.Stream) {
 }
 */
 
-func (n *Node) sendReset(height int64) error {
+func (n *Node) sendReset(height int64, leaderSig []byte) error {
 	n.resetMsg <- types.ConsensusReset{
-		ToHeight: height,
-	} // ?
+		ToHeight:  height,
+		LeaderSig: leaderSig,
+	}
 	return nil
 }
 
@@ -478,12 +478,8 @@ func (n *Node) startConsensusResetGossip(ctx context.Context, ps *pubsub.PubSub)
 			n.log.Infof("received Consensus Reset msg from %s (rcvd from %s), data = %x",
 				fromPeerID, resetMsg.ReceivedFrom, resetMsg.Message.Data)
 
-			// resetSenderPubKey, err := fromPeerID.ExtractPublicKey()
-			// if err != nil {
-			// 	n.log.Infof("failed to extract pubkey from peer ID %v: %v", fromPeerID, err)
-			// 	continue
-			// }
-			go n.ce.NotifyResetState(reset.ToHeight) // Todo: add sender pubkey for validation
+			// source of the reset message should be the leader
+			go n.ce.NotifyResetState(reset.ToHeight, resetMsg.Signature)
 		}
 	}()
 

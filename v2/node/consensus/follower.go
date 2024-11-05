@@ -12,7 +12,7 @@ import (
 // the proposal is for the next block to be processed.
 // If we receive a conflicting proposal, abort the execution of the current proposal and
 // start processing the new proposal.
-func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types.Hash) bool {
+func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types.Hash, leaderSig []byte, timestamp int64) bool {
 	ce.updateNetworkHeight(height - 1)
 	// TODO: Should this be processed by the sentry node? In scenarios where the validator is connected to other
 	// validators through the sentry node, the sentry node should atleast download the block and forward it to the validator.
@@ -31,13 +31,24 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 		return false
 	}
 
-	ce.log.Info("Accept proposal", "height", height, "status ", ce.stateInfo.status)
+	// check if the blkProposal is from the leader
+	valid, err := ce.leader.Verify(blkID[:], leaderSig)
+	if err != nil {
+		ce.log.Error("Error verifying leader signature", "error", err)
+		return false
+	}
+
+	if !valid {
+		ce.log.Info("Invalid leader signature, ignoring the block proposal msg: ", "height", height)
+		return false
+	}
+
 	// Check if the validator is busy processing a block.
 	if ce.stateInfo.status != Committed {
 		// check if we are processing a different block, if yes then reset the state.
 		ce.log.Info("processing blk: ", "block", ce.stateInfo.blkProp)
-		if ce.stateInfo.blkProp.blkHash != blkID {
-			ce.log.Info("Conflicting block proposals, abort block execution and requesting the new block: ", "height", height)
+		if ce.stateInfo.blkProp.blkHash != blkID && ce.stateInfo.blkProp.blk.Header.Timestamp.UnixMilli() < timestamp {
+			ce.log.Info("Conflicting block proposals, abort block execution and requesting the latest block: ", "height", height)
 			ce.sendResetMsg(ce.stateInfo.height)
 			return true
 		}
@@ -67,8 +78,9 @@ func (ce *ConsensusEngine) NotifyBlockProposal(blk *types.Block) {
 		return
 	}
 
-	if ce.stateInfo.blkProp != nil {
-		if ce.stateInfo.blkProp.blkHash != blk.Header.Hash() {
+	curBlkProp := ce.stateInfo.blkProp
+	if curBlkProp != nil {
+		if curBlkProp.blkHash != blk.Header.Hash() && curBlkProp.blk.Header.Timestamp.Before(blk.Header.Timestamp) {
 			ce.log.Info("Conflicting block proposals, abort block execution and notify consensus engine of new block: ", "height", blk.Header.Height, "blkID", blk.Header.Hash())
 			ce.sendResetMsg(ce.stateInfo.height)
 			return
@@ -85,7 +97,7 @@ func (ce *ConsensusEngine) NotifyBlockProposal(blk *types.Block) {
 	ce.sendConsensusMessage(&consensusMessage{
 		MsgType: blkProp.Type(),
 		Msg:     blkProp,
-		Sender:  ce.pubKey,
+		Sender:  ce.signer.Public().Bytes(),
 	})
 }
 
@@ -94,7 +106,7 @@ func (ce *ConsensusEngine) NotifyBlockProposal(blk *types.Block) {
 // This also checks if the node should request the block from its peers. This can happen
 // 1. If the node is a sentry node and doesn't have the block.
 // 2. If the node is a validator and missed the block proposal message.
-func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash types.Hash) bool {
+func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash types.Hash, leaderSig []byte) bool {
 	// ce.log.Infoln("Accept commit?", height, blkID, appHash)
 	if ce.role.Load() == types.RoleLeader {
 		return false
@@ -108,6 +120,18 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash 
 
 	if ce.stateInfo.height+1 != height {
 		// This is not the next block to be committed by the node.
+		return false
+	}
+
+	// Verify the leader signature
+	valid, err := ce.leader.Verify(blkID[:], leaderSig)
+	if err != nil {
+		ce.log.Error("Error verifying leader signature", "error", err)
+		return false
+	}
+
+	if !valid {
+		ce.log.Info("Invalid leader signature, ignoring the blkAnn message ", "height", height)
 		return false
 	}
 
@@ -127,7 +151,7 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash 
 		ce.sendConsensusMessage(&consensusMessage{
 			MsgType: blkCommit.Type(),
 			Msg:     blkCommit,
-			Sender:  ce.pubKey,
+			Sender:  ce.signer.Public().Bytes(),
 		})
 		return false
 	}
@@ -149,7 +173,7 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash 
 	ce.sendConsensusMessage(&consensusMessage{
 		MsgType: blkCommit.Type(),
 		Msg:     blkCommit,
-		Sender:  ce.pubKey,
+		Sender:  ce.signer.Public().Bytes(),
 	})
 
 	return false
@@ -201,7 +225,7 @@ func (ce *ConsensusEngine) NotifyBlockCommit(blk *types.Block, appHash types.Has
 	ce.sendConsensusMessage(&consensusMessage{
 		MsgType: blkCommit.Type(),
 		Msg:     blkCommit,
-		Sender:  ce.pubKey,
+		Sender:  ce.signer.Public().Bytes(),
 	})
 	// ce.log.Infoln("Notified consensus engine to commit the block", blk.Header.Height, blk.Header.Hash(), appHash)
 }
@@ -209,7 +233,7 @@ func (ce *ConsensusEngine) NotifyBlockCommit(blk *types.Block, appHash types.Has
 // Accept ResetState message from the leader in the following scenarios:
 // 1. If we are currently processing block at height +1 and the leader wants to abort the block processing of height +1.
 // 2. If the block at height+1 is not already committed, else its a stale.
-func (ce *ConsensusEngine) NotifyResetState(height int64) {
+func (ce *ConsensusEngine) NotifyResetState(height int64, leaderSig []byte) {
 	// Leader is the sender of the reset message, only validators should accept this message.
 	if ce.role.Load() != types.RoleValidator {
 		return
@@ -228,6 +252,18 @@ func (ce *ConsensusEngine) NotifyResetState(height int64) {
 
 	if ce.stateInfo.status == Committed {
 		ce.log.Info("Not processing any block at the moment, reset message ignored.")
+		return
+	}
+
+	// Verify the leader signature
+	valid, err := ce.leader.Verify([]byte(fmt.Sprintf("%d", height)), leaderSig)
+	if err != nil {
+		ce.log.Error("Error verifying leader signature", "error", err)
+		return
+	}
+
+	if !valid {
+		ce.log.Info("Invalid leader signature, ignoring the reset message ", "height", height)
 		return
 	}
 

@@ -18,6 +18,7 @@ type options struct {
 	mp      types.MemPool
 	ce      ConsensusEngine
 	valSet  map[string]types.Validator
+	leader  []byte
 }
 
 type Option func(*options)
@@ -79,5 +80,11 @@ func WithConsensusEngine(ce ConsensusEngine) Option {
 func WithGenesisValidators(valSet map[string]types.Validator) Option {
 	return func(o *options) {
 		o.valSet = valSet
+	}
+}
+
+func WithLeader(leader []byte) Option {
+	return func(o *options) {
+		o.leader = leader
 	}
 }

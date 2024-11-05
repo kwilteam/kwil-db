@@ -2,7 +2,10 @@ package consensus
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 	"fmt"
+	"sort"
 	"time"
 
 	"kwil/node/types"
@@ -57,7 +60,7 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	}
 
 	// Add its own vote to the votes map
-	ce.state.votes[string(ce.pubKey)] = &vote{
+	ce.state.votes[string(ce.signer.Public().Bytes())] = &vote{
 		ack:     true,
 		appHash: &ce.state.blockRes.appHash,
 	}
@@ -65,9 +68,15 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	// TODO: test resetState
 	if ce.state.blkProp.height%10 == 0 && lastReset != ce.state.blkProp.height {
 		lastReset = ce.state.blkProp.height
+		sig, err := ce.signer.Sign([]byte(fmt.Sprintf("%d", ce.stateInfo.height)))
+		if err != nil {
+			ce.log.Errorf("Error signing the reset message: %v", err)
+			return err
+		}
+
 		ce.log.Info("Resetting the state (for testing purposes)", "height", lastReset, " blkHash", ce.state.blkProp.blkHash)
 		ce.resetState()
-		go ce.rstStateBroadcaster(ce.state.lc.height)
+		go ce.rstStateBroadcaster(ce.state.lc.height, sig)
 		go ce.startNewRound(ctx)
 		return nil
 	}
@@ -129,7 +138,11 @@ func (ce *ConsensusEngine) NotifyACK(validatorPK []byte, ack types.AckRes) {
 func (ce *ConsensusEngine) createBlockProposal() (*blockProposal, error) {
 	// fmt.Println("Creating a new block proposal")
 	_, txns := ce.mempool.ReapN(blockTxCount)
-	blk := types.NewBlock(ce.state.lc.height+1, ce.state.lc.blkHash, ce.state.lc.appHash, time.Now(), txns)
+	blk := types.NewBlock(ce.state.lc.height+1, ce.state.lc.blkHash, ce.state.lc.appHash, ce.ValidatorSetHash(), time.Now(), txns)
+
+	// Sign the block
+	blk.Sign(ce.signer)
+
 	return &blockProposal{
 		height:  ce.state.lc.height + 1,
 		blkHash: blk.Header.Hash(),
@@ -239,4 +252,24 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 
 	// No majority yet, wait for more votes
 	return nil
+}
+
+func (ce *ConsensusEngine) ValidatorSetHash() types.Hash {
+	hasher := sha256.New()
+
+	keys := make([]string, 0, len(ce.validatorSet))
+	for _, v := range ce.validatorSet {
+		keys = append(keys, v.PubKey.String())
+	}
+
+	// sort the keys
+	sort.Strings(keys)
+
+	for _, k := range keys {
+		val := ce.validatorSet[k]
+		hasher.Write(val.PubKey)
+		binary.Write(hasher, binary.BigEndian, val.Power)
+	}
+
+	return types.Hash(hasher.Sum(nil))
 }

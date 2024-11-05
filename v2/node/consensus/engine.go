@@ -10,6 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"kwil/crypto"
 	"kwil/log"
 	"kwil/node/types"
 
@@ -32,10 +33,12 @@ const (
 // 3. BlockCommitPhase:
 // - Once the leader receives the threshold acks with the same appHash as the leader, the block is committed and the leader broadcasts the blockAnn message to the network. Nodes that receive this message will enter into the commit phase where they verify the appHash and commit the block.
 type ConsensusEngine struct {
-	role          atomic.Value // types.Role, role can change over the lifetime of the node
-	host          peer.ID
-	dir           string
-	pubKey        []byte
+	role   atomic.Value // types.Role, role can change over the lifetime of the node
+	host   peer.ID
+	dir    string
+	signer crypto.PrivateKey
+	leader crypto.PublicKey
+
 	networkHeight atomic.Int64
 	validatorSet  map[string]types.Validator
 
@@ -65,6 +68,20 @@ type ConsensusEngine struct {
 	// logger log.Logger
 }
 
+// ProposalBroadcaster broadcasts the new block proposal message to the network
+type ProposalBroadcaster func(ctx context.Context, blk *types.Block, id peer.ID)
+
+// BlkAnnouncer broadcasts the new committed block to the network using the blockAnn message
+type BlkAnnouncer func(ctx context.Context, blk *types.Block, appHash types.Hash, from peer.ID)
+
+// AckBroadcaster gossips the ack/nack messages to the network
+type AckBroadcaster func(ack bool, height int64, blkID types.Hash, appHash *types.Hash) error
+
+// BlkRequester requests the block from the network based on the height
+type BlkRequester func(ctx context.Context, height int64) (types.Hash, types.Hash, []byte, error)
+
+type ResetStateBroadcaster func(height int64, leaderSig []byte) error
+
 type Status string
 
 const (
@@ -89,20 +106,6 @@ type StateInfo struct {
 	// proposed block for the current height
 	blkProp *blockProposal
 }
-
-// ProposalBroadcaster broadcasts the new block proposal message to the network
-type ProposalBroadcaster func(ctx context.Context, blk *types.Block, id peer.ID)
-
-// BlkAnnouncer broadcasts the new committed block to the network using the blockAnn message
-type BlkAnnouncer func(ctx context.Context, blk *types.Block, appHash types.Hash, from peer.ID)
-
-// AckBroadcaster gossips the ack/nack messages to the network
-type AckBroadcaster func(ack bool, height int64, blkID types.Hash, appHash *types.Hash) error
-
-// BlkRequester requests the block from the network based on the height
-type BlkRequester func(ctx context.Context, height int64) (types.Hash, types.Hash, []byte, error)
-
-type ResetStateBroadcaster func(height int64) error
 
 // Consensus state that is applicable for processing the blioc at a speociifc height.
 type state struct {
@@ -135,7 +138,7 @@ type lastCommit struct {
 	blk     *types.Block // why is this needed? can be fetched from the blockstore too.
 }
 
-func New(role types.Role, hostID peer.ID, dir string, mempool Mempool, bs BlockStore,
+func New(role types.Role, signer crypto.PrivateKey, hostID peer.ID, dir string, leader crypto.PublicKey, mempool Mempool, bs BlockStore,
 	vs map[string]types.Validator, logger log.Logger) *ConsensusEngine {
 
 	if logger == nil {
@@ -144,23 +147,13 @@ func New(role types.Role, hostID peer.ID, dir string, mempool Mempool, bs BlockS
 			log.WithWriter(os.Stdout), log.WithFormat(log.FormatUnstructured))
 	}
 
-	pubKey, err := hostID.ExtractPublicKey()
-	if err != nil {
-		fmt.Println("Error extracting public key: ", err)
-		return nil
-	}
-	pubKeyBytes, err := pubKey.Raw()
-	if err != nil {
-		fmt.Println("Error extracting public key bytes: ", err)
-		return nil
-	}
-
 	be := newBlockExecutor()
 	// rethink how this state is initialized
 	ce := &ConsensusEngine{
 		host:   hostID,
 		dir:    dir,
-		pubKey: pubKeyBytes,
+		signer: signer,
+		leader: leader,
 		state: state{
 			blkProp:  nil,
 			blockRes: nil,

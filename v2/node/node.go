@@ -16,6 +16,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	kcrypto "kwil/crypto"
 	"kwil/log"
 	"kwil/node/consensus"
 	"kwil/node/mempool"
@@ -44,14 +45,14 @@ const (
 )
 
 type ConsensusEngine interface {
-	AcceptProposal(height int64, blkID, prevBlkID types.Hash) bool
+	AcceptProposal(height int64, blkID, prevBlkID types.Hash, leaderSig []byte, timestamp int64) bool
 	NotifyBlockProposal(blk *types.Block)
 
-	AcceptCommit(height int64, blkID types.Hash, appHash types.Hash) bool
+	AcceptCommit(height int64, blkID types.Hash, appHash types.Hash, leaderSig []byte) bool
 	NotifyBlockCommit(blk *types.Block, appHash types.Hash)
 
 	NotifyACK(validatorPK []byte, ack types.AckRes)
-	NotifyResetState(height int64)
+	NotifyResetState(height int64, leaderSig []byte)
 
 	// Gonna remove this once we have the commit results such as app hash and the tx results stored in the block store.
 
@@ -102,12 +103,13 @@ type Node struct {
 	ackChan  chan AckRes         // from consensus engine, to gossip to leader
 	resetMsg chan ConsensusReset // gossiped in from peers, to consensus engine
 
-	host   host.Host
-	pex    bool
-	leader atomic.Bool
-	dir    string
-	wg     sync.WaitGroup
-	close  func() error
+	host         host.Host
+	pex          bool
+	leader       atomic.Bool
+	leaderPubKey []byte
+	dir          string
+	wg           sync.WaitGroup
+	close        func() error
 
 	role   types.Role
 	valSet map[string]types.Validator
@@ -179,8 +181,18 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 	close = addClose(close, bs.Close) //close db after stopping p2p
 	close = addClose(close, host.Close)
 
+	signer, err := kcrypto.UnmarshalSecp256k1PrivateKey(options.privKey)
+	if err != nil {
+		return nil, err
+	}
+
 	ceLogger := logger.New("CONS")
-	ce := consensus.New(options.role, host.ID(), dir, mp, bs, options.valSet, ceLogger)
+	leaderPubKey, err := kcrypto.UnmarshalSecp256k1PublicKey(options.leader)
+	if err != nil {
+		return nil, err
+	}
+
+	ce := consensus.New(options.role, signer, host.ID(), dir, leaderPubKey, mp, bs, options.valSet, ceLogger)
 	if ce == nil {
 		return nil, errors.New("failed to create consensus engine")
 	}
