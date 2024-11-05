@@ -52,7 +52,7 @@ type ConsensusEngine interface {
 	NotifyBlockCommit(blk *types.Block, appHash types.Hash)
 
 	NotifyACK(validatorPK []byte, ack types.AckRes)
-	NotifyResetState(height int64, leaderSig []byte)
+	NotifyResetState(height int64)
 
 	// Gonna remove this once we have the commit results such as app hash and the tx results stored in the block store.
 
