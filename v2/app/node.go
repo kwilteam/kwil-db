@@ -71,6 +71,7 @@ func runNode(ctx context.Context, rootDir string, logLevel log.Level, logFormat 
 
 	logger.Info("Parsing the pubkey", "key", hex.EncodeToString(pubKey))
 	// Check if u are the leader
+	// TODO:  the role assignement should be based on the current valset rather than the genesis config, once we have the persisted valset
 	var nRole types.Role
 	if bytes.Equal(pubKey, genConfig.Leader) {
 		nRole = types.RoleLeader
@@ -91,7 +92,7 @@ func runNode(ctx context.Context, rootDir string, logLevel log.Level, logFormat 
 	//  - change node.WithPrivateKey to []byte or our own PrivateKey type
 
 	nodeLogger := logger.NewWithLevel(logLevel, "NODE")
-	node, err := node.NewNode(rootDir, node.WithPort(cfg.Port), node.WithPrivKey(cfg.PrivateKey),
+	node, err := node.NewNode(rootDir, node.WithPort(cfg.Port), node.WithPrivKey(cfg.PrivateKey[:]), node.WithLeader(genConfig.Leader[:]),
 		node.WithRole(nRole), node.WithPex(cfg.Pex), node.WithGenesisValidators(valSet), node.WithLogger(nodeLogger))
 	if err != nil {
 		return err

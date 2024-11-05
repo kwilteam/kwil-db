@@ -7,7 +7,8 @@ import (
 )
 
 type ConsensusReset struct {
-	ToHeight int64
+	ToHeight  int64
+	LeaderSig []byte
 }
 
 func (cr ConsensusReset) String() string {

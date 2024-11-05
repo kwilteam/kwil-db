@@ -22,7 +22,7 @@ import (
 
 var blackholeIP6 = net.ParseIP("100::")
 
-func newTestHost(t *testing.T, mn mock.Mocknet) (host.Host, error) {
+func newTestHost(t *testing.T, mn mock.Mocknet) ([]byte, host.Host, error) {
 	privKey, _, err := crypto.GenerateSecp256k1Key(rand.Reader)
 	if err != nil {
 		t.Fatalf("Failed to generate private key: %v", err)
@@ -42,7 +42,16 @@ func newTestHost(t *testing.T, mn mock.Mocknet) (host.Host, error) {
 		t.Fatalf("Failed to create multiaddress: %v", err)
 	}
 	// t.Log(addr) // e.g. /ip6/100::1bb1:760e:df55:9ed1/tcp/4242
-	return mn.AddPeer(privKey, addr)
+	host, err := mn.AddPeer(privKey, addr)
+	if err != nil {
+		t.Fatalf("Failed to add peer to mocknet: %v", err)
+	}
+
+	pkBytes, err := privKey.Raw()
+	if err != nil {
+		t.Fatalf("Failed to get private key bytes: %v", err)
+	}
+	return pkBytes, host, nil
 }
 
 func TestDualNodeMocknet(t *testing.T) {
@@ -51,12 +60,12 @@ func TestDualNodeMocknet(t *testing.T) {
 	}
 	mn := mock.New()
 
-	h1, err := newTestHost(t, mn)
+	pk1, h1, err := newTestHost(t, mn)
 	if err != nil {
 		t.Fatalf("Failed to add peer to mocknet: %v", err)
 	}
 
-	h2, err := newTestHost(t, mn)
+	pk2, h2, err := newTestHost(t, mn)
 	if err != nil {
 		t.Fatalf("Failed to add peer to mocknet: %v", err)
 	}
@@ -75,8 +84,18 @@ func TestDualNodeMocknet(t *testing.T) {
 		wg.Wait()
 	})
 
+	privKey, err := crypto.UnmarshalSecp256k1PrivateKey(pk1)
+	if err != nil {
+		t.Fatalf("Failed to unmarshal private key: %v", err)
+	}
+
+	pubKey, err := privKey.GetPublic().Raw()
+	if err != nil {
+		t.Fatalf("Failed to get public key: %v", err)
+	}
+
 	log1 := log.New(log.WithName("NODE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
-	node1, err := NewNode(".testnet", WithLogger(log1), WithHost(h1), WithRole(types.RoleLeader))
+	node1, err := NewNode(".testnet", WithLogger(log1), WithHost(h1), WithRole(types.RoleLeader), WithPrivKey(pk1), WithLeader(pubKey))
 	if err != nil {
 		t.Fatalf("Failed to create Node 1: %v", err)
 	}
@@ -88,7 +107,7 @@ func TestDualNodeMocknet(t *testing.T) {
 	}()
 
 	log2 := log.New(log.WithName("NODE2"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
-	node2, err := NewNode(".n2", WithLogger(log2), WithHost(h2), WithRole(types.RoleValidator))
+	node2, err := NewNode(".n2", WithLogger(log2), WithHost(h2), WithRole(types.RoleValidator), WithPrivKey(pk2), WithLeader(pubKey))
 	if err != nil {
 		t.Fatalf("Failed to create Node 2: %v", err)
 	}
