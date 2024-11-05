@@ -2,9 +2,11 @@ package node
 
 import (
 	"bytes"
-	"kwil/node/types"
+	"errors"
 	"math"
 	"testing"
+
+	"kwil/node/types"
 )
 
 func TestBlockAnnMsg_MarshalUnmarshal(t *testing.T) {
@@ -335,4 +337,84 @@ func TestBlockHashReq_UnmarshalInvalidData(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestReadResp(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   []byte
+		limit   int64
+		want    []byte
+		wantErr error
+	}{
+		{
+			name:    "valid response",
+			input:   []byte("valid response data"),
+			limit:   100,
+			want:    []byte("valid response data"),
+			wantErr: nil,
+		},
+		{
+			name:    "empty response",
+			input:   []byte{},
+			limit:   100,
+			want:    nil,
+			wantErr: ErrNoResponse,
+		},
+		{
+			name:    "noData response",
+			input:   []byte{0},
+			limit:   100,
+			want:    nil,
+			wantErr: ErrNotFound,
+		},
+		{
+			name:    "response exceeds limit",
+			input:   bytes.Repeat([]byte("a"), 1000),
+			limit:   10,
+			want:    bytes.Repeat([]byte("a"), 10),
+			wantErr: nil,
+		},
+		{
+			name:    "zero limit",
+			input:   []byte("test data"),
+			limit:   0,
+			want:    nil,
+			wantErr: ErrNoResponse,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			reader := bytes.NewReader(tt.input)
+			got, err := readResp(reader, tt.limit)
+
+			if err != tt.wantErr {
+				t.Errorf("readResp() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+
+			if tt.wantErr == nil && !bytes.Equal(got, tt.want) {
+				t.Errorf("readResp() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestReadResp_BrokenReader(t *testing.T) {
+	errTest := errors.New("read error")
+	brokenReader := &brokenReader{err: errTest}
+
+	_, err := readResp(brokenReader, 100)
+	if err != errTest {
+		t.Errorf("readResp() error = %v, want %v", err, errTest)
+	}
+}
+
+type brokenReader struct {
+	err error
+}
+
+func (br *brokenReader) Read(p []byte) (n int, err error) {
+	return 0, br.err
 }

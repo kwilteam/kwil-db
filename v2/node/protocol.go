@@ -68,9 +68,11 @@ func request(rw io.ReadWriter, reqMsg []byte, readLimit int64) ([]byte, error) {
 
 var noData = []byte{0}
 
+// readResp reads a response of unknown length until an EOF is reached when
+// reading. As such, this is the end of a protocol.
 func readResp(rd io.Reader, limit int64) ([]byte, error) {
 	rd = io.LimitReader(rd, limit)
-	resp, err := io.ReadAll(rd)
+	resp, err := io.ReadAll(rd) // until EOF/hangup
 	if err != nil {
 		return nil, err
 	}
@@ -125,7 +127,7 @@ func (n *Node) advertiseToPeer(ctx context.Context, peerID peer.ID, proto protoc
 
 		s.SetReadDeadline(time.Now().Add(annRespTimeout))
 
-		req := make([]byte, 128)
+		req := make([]byte, len(getMsg))
 		nr, err := s.Read(req)
 		if err != nil && !errors.Is(err, io.EOF) {
 			n.log.Warn("bad advertise response", "error", err)
@@ -134,9 +136,7 @@ func (n *Node) advertiseToPeer(ctx context.Context, peerID peer.ID, proto protoc
 		if nr == 0 { // they didn't want it
 			return
 		}
-		req = req[:nr]
-		req, ok := bytes.CutPrefix(req, []byte(getMsg))
-		if !ok {
+		if getMsg != string(req) {
 			n.log.Warn("bad advertise response", "resp", hex.EncodeToString(req))
 			return
 		}
