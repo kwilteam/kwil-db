@@ -406,10 +406,9 @@ func (n *Node) blkAckStreamHandler(s network.Stream) {
 }
 */
 
-func (n *Node) sendReset(height int64, leaderSig []byte) error {
+func (n *Node) sendReset(height int64) error {
 	n.resetMsg <- types.ConsensusReset{
-		ToHeight:  height,
-		LeaderSig: leaderSig,
+		ToHeight: height,
 	}
 	return nil
 }
@@ -479,7 +478,7 @@ func (n *Node) startConsensusResetGossip(ctx context.Context, ps *pubsub.PubSub)
 				fromPeerID, resetMsg.ReceivedFrom, resetMsg.Message.Data)
 
 			// source of the reset message should be the leader
-			go n.ce.NotifyResetState(reset.ToHeight, resetMsg.Signature)
+			go n.ce.NotifyResetState(reset.ToHeight)
 		}
 	}()
 

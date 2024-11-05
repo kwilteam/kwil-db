@@ -233,7 +233,7 @@ func (ce *ConsensusEngine) NotifyBlockCommit(blk *types.Block, appHash types.Has
 // Accept ResetState message from the leader in the following scenarios:
 // 1. If we are currently processing block at height +1 and the leader wants to abort the block processing of height +1.
 // 2. If the block at height+1 is not already committed, else its a stale.
-func (ce *ConsensusEngine) NotifyResetState(height int64, leaderSig []byte) {
+func (ce *ConsensusEngine) NotifyResetState(height int64) {
 	// Leader is the sender of the reset message, only validators should accept this message.
 	if ce.role.Load() != types.RoleValidator {
 		return
@@ -252,18 +252,6 @@ func (ce *ConsensusEngine) NotifyResetState(height int64, leaderSig []byte) {
 
 	if ce.stateInfo.status == Committed {
 		ce.log.Info("Not processing any block at the moment, reset message ignored.")
-		return
-	}
-
-	// Verify the leader signature
-	valid, err := ce.leader.Verify([]byte(fmt.Sprintf("%d", height)), leaderSig)
-	if err != nil {
-		ce.log.Error("Error verifying leader signature", "error", err)
-		return
-	}
-
-	if !valid {
-		ce.log.Info("Invalid leader signature, ignoring the reset message ", "height", height)
 		return
 	}
 
