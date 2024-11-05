@@ -3,6 +3,7 @@ package crypto
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"io"
 
@@ -10,6 +11,27 @@ import (
 	"github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa" // signature algorithm
 	"golang.org/x/crypto/sha3"
 )
+
+// SignatureLength indicates the byte length required to carry a signature with recovery id.
+const SignatureLength = 64 + 1 // 64 bytes ECDSA signature + 1 byte recovery id
+
+// RecoveryIDOffset points to the byte offset within the signature that contains the recovery id.
+const RecoveryIDOffset = 64
+
+// RecoverSecp256k1Key recovers a secp256k1 public key from a signature and
+// signed hash. TODO: maybe have this take `msg []byte` and hash internally.
+func RecoverSecp256k1Key(hash, sig []byte) (*secp256k1.PublicKey, error) {
+	if len(sig) != SignatureLength {
+		return nil, errors.New("invalid signature")
+	}
+	// Convert to secp256k1 input format with 'recovery id' v at the beginning.
+	btcsig := make([]byte, SignatureLength)
+	btcsig[0] = sig[RecoveryIDOffset] + 27
+	copy(btcsig[1:], sig)
+
+	pub, _, err := ecdsa.RecoverCompact(btcsig, hash)
+	return pub, err
+}
 
 func EthereumAddressFromPubKey(pubKey *Secp256k1PublicKey) []byte {
 	// Serialize the public key to 65 bytes (uncompressed format).
