@@ -56,12 +56,12 @@ func requestFrom(ctx context.Context, host host.Host, peer peer.ID, resID []byte
 func request(rw io.ReadWriter, reqMsg []byte, readLimit int64) ([]byte, error) {
 	_, err := rw.Write(reqMsg)
 	if err != nil {
-		return nil, fmt.Errorf("resource get request failed: %v", err)
+		return nil, fmt.Errorf("resource get request failed: %w", err)
 	}
 
 	rawTx, err := readResp(rw, readLimit)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read resource get response: %v", err)
+		return nil, fmt.Errorf("failed to read resource get response: %w", err)
 	}
 	return rawTx, nil
 }
