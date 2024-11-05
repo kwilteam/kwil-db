@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
+	"kwil/crypto"
 	"slices"
 	"time"
 )
@@ -14,7 +15,7 @@ const (
 	BlockVersion = 0
 )
 
-func NewBlock(height int64, prevHash, appHash Hash, stamp time.Time, txns [][]byte) *Block {
+func NewBlock(height int64, prevHash, appHash, valSetHash Hash, stamp time.Time, txns [][]byte) *Block {
 	numTxns := len(txns)
 	txHashes := make([]Hash, numTxns)
 	for i := range txns {
@@ -29,6 +30,8 @@ func NewBlock(height int64, prevHash, appHash Hash, stamp time.Time, txns [][]by
 		NumTxns:     uint32(numTxns),
 		Timestamp:   stamp.UTC(),
 		MerkleRoot:  merkelRoot,
+
+		ValidatorSetHash: valSetHash,
 	}
 	return &Block{
 		Header: hdr,
@@ -46,8 +49,9 @@ type BlockHeader struct {
 	MerkleRoot  Hash // Merkle tree reference to hash of all transactions for the block
 
 	// Proposer []byte should be leader, so probably pointless here
+	ValidatorSetHash Hash // Hash of the validator set for the block
+	ValidatorUpdates []Validator
 
-	// ValidatorUpdates []ValidatorUpdate
 	// ConsensusUpdates []ConsensusUpdate
 
 	// ChainStateHash Hash // if we want to keep the "application" hash separate from state of consensus engine
@@ -70,6 +74,21 @@ func (b *Block) MerkleRoot() Hash {
 		txHashes[i] = HashBytes(b.Txns[i])
 	}
 	return CalcMerkleRoot(txHashes)
+}
+
+func (b *Block) Sign(signer crypto.PrivateKey) error {
+	hash := b.Hash()
+	sig, err := signer.Sign(hash[:])
+	if err != nil {
+		return fmt.Errorf("failed to sign block: %w", err)
+	}
+	b.Signature = sig
+	return nil
+}
+
+func (b *Block) VerifySignature(pubKey crypto.PublicKey) (bool, error) {
+	hash := b.Hash()
+	return pubKey.Verify(hash[:], b.Signature)
 }
 
 func DecodeBlockHeader(r io.Reader) (*BlockHeader, error) {
@@ -97,6 +116,11 @@ func DecodeBlockHeader(r io.Reader) (*BlockHeader, error) {
 		return nil, fmt.Errorf("failed to read previous block hash: %w", err)
 	}
 
+	_, err = io.ReadFull(r, hdr.ValidatorSetHash[:])
+	if err != nil {
+		return nil, fmt.Errorf("failed to read validator hash: %w", err)
+	}
+
 	var timeStamp uint64
 	if err := binary.Read(r, binary.LittleEndian, &timeStamp); err != nil {
 		return nil, fmt.Errorf("failed to read number of transactions: %w", err)
@@ -107,6 +131,8 @@ func DecodeBlockHeader(r io.Reader) (*BlockHeader, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to read merkel root: %w", err)
 	}
+
+	// Read validator updates
 
 	return hdr, nil
 }
@@ -143,6 +169,10 @@ func (bh *BlockHeader) writeBlockHeader(w io.Writer) error {
 		return fmt.Errorf("failed to write app hash: %w", err)
 	}
 
+	if _, err := w.Write(bh.ValidatorSetHash[:]); err != nil {
+		return fmt.Errorf("failed to write validator hash: %w", err)
+	}
+
 	if err := binary.Write(w, binary.LittleEndian, uint64(bh.Timestamp.UnixMilli())); err != nil {
 		return fmt.Errorf("failed to write timestamp: %w", err)
 	}
@@ -150,6 +180,16 @@ func (bh *BlockHeader) writeBlockHeader(w io.Writer) error {
 	if _, err := w.Write(bh.MerkleRoot[:]); err != nil {
 		return fmt.Errorf("failed to write merkel root: %w", err)
 	}
+
+	// for _, v := range bh.ValidatorUpdates {
+	// 	if err := binary.Write(w, binary.LittleEndian, v.PubKey); err != nil {
+	// 		return fmt.Errorf("failed to write validator pubkey: %w", err)
+	// 	}
+
+	// 	if err := binary.Write(w, binary.LittleEndian, v.Power); err != nil {
+	// 		return fmt.Errorf("failed to write validator power: %w", err)
+	// 	}
+	// }
 
 	return nil
 }
@@ -189,9 +229,14 @@ func EncodeBlock(block *Block) []byte {
 		totalSize += 4 + len(tx) // 4 bytes for transaction length
 	}
 
+	totalSize += 4 + len(block.Signature) // 4 bytes for signature length
+
 	buf := make([]byte, 0, totalSize)
 
 	buf = append(buf, headerBytes...)
+
+	buf = binary.LittleEndian.AppendUint32(buf, uint32(len(block.Signature)))
+	buf = append(buf, block.Signature...)
 
 	for _, tx := range block.Txns {
 		buf = binary.LittleEndian.AppendUint32(buf, uint32(len(tx)))
@@ -259,6 +304,20 @@ func DecodeBlock(rawBlk []byte) (*Block, error) {
 		return nil, err
 	}
 
+	var sigLen uint32
+	if err := binary.Read(r, binary.LittleEndian, &sigLen); err != nil {
+		return nil, fmt.Errorf("failed to read signature length: %w", err)
+	}
+
+	if int(sigLen) > len(rawBlk) { // TODO: do better than this
+		return nil, fmt.Errorf("invalid signature length %d", sigLen)
+	}
+
+	sig := make([]byte, sigLen)
+	if _, err := io.ReadFull(r, sig); err != nil {
+		return nil, fmt.Errorf("failed to read signature: %w", err)
+	}
+
 	txns := make([][]byte, hdr.NumTxns)
 
 	for i := range txns {
@@ -279,8 +338,9 @@ func DecodeBlock(rawBlk []byte) (*Block, error) {
 	}
 
 	return &Block{
-		Header: hdr,
-		Txns:   txns,
+		Header:    hdr,
+		Txns:      txns,
+		Signature: sig,
 	}, nil
 }
 
@@ -294,6 +354,20 @@ func GetRawBlockTx(rawBlk []byte, idx uint32) ([]byte, error) {
 	hdr, err := DecodeBlockHeader(r)
 	if err != nil {
 		return nil, err
+	}
+
+	var sigLen uint32
+	if err := binary.Read(r, binary.LittleEndian, &sigLen); err != nil {
+		return nil, fmt.Errorf("failed to read signature length: %w", err)
+	}
+
+	if int(sigLen) > len(rawBlk) { // TODO: do better than this
+		return nil, fmt.Errorf("invalid signature length %d", sigLen)
+	}
+
+	sig := make([]byte, sigLen)
+	if _, err := io.ReadFull(r, sig); err != nil {
+		return nil, fmt.Errorf("failed to read signature: %w", err)
 	}
 
 	for i := range hdr.NumTxns {

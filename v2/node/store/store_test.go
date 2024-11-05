@@ -72,7 +72,7 @@ func createTestBlock(height int64, numTxns int) (*types.Block, types.Hash) {
 		txns[i] = []byte(strconv.FormatInt(height, 10) + strconv.Itoa(i) +
 			strings.Repeat("data", 1000))
 	}
-	return types.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8},
+	return types.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{},
 		time.Unix(1729723553+height, 0), txns), fakeAppHash(height)
 }
 
@@ -220,7 +220,7 @@ func TestBlockStore_HaveTx(t *testing.T) {
 
 func TestBlockStore_StoreWithNoTransactions(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
-	block := types.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8},
+	block := types.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{},
 		time.Unix(1729723553, 0), [][]byte{})
 	appHash := fakeAppHash(1)
 
@@ -243,7 +243,7 @@ func TestBlockStore_StoreWithNoTransactions(t *testing.T) {
 
 func TestBlockStore_StoreWithEmptyTransactions(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
-	block := types.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8},
+	block := types.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{},
 		time.Unix(1729723553, 0), [][]byte{{}, {}})
 	appHash := fakeAppHash(1)
 
@@ -337,7 +337,7 @@ func TestBlockStore_StoreWithLargeTransactions(t *testing.T) {
 	}
 	otherTx := []byte{1, 2, 3}
 
-	block := types.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8},
+	block := types.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{},
 		time.Unix(1729723553, 0), [][]byte{largeTx, otherTx})
 	appHash := fakeAppHash(1)
 
@@ -419,7 +419,7 @@ func TestLargeBlockStore(t *testing.T) {
 		}
 
 		// Create and store block
-		block := types.NewBlock(height, prevHash, prevAppHash, time.Now(), txs)
+		block := types.NewBlock(height, prevHash, prevAppHash, types.Hash{}, time.Now(), txs)
 		appHash := types.HashBytes([]byte(fmt.Sprintf("app-%d", height)))
 		err = bs.Store(block, appHash)
 		if err != nil {
@@ -530,7 +530,7 @@ func TestBlockStore_StoreAndGetResults(t *testing.T) {
 func TestBlockStore_StoreResultsEmptyBlock(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
-	block := types.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8},
+	block := types.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{},
 		time.Unix(1729723553, 0), [][]byte{})
 	appHash := fakeAppHash(1)
 

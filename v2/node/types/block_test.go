@@ -4,15 +4,34 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/binary"
+	"kwil/crypto"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/require"
 )
 
 func TestGetRawBlockTx(t *testing.T) {
+	privKey, pubKey, err := crypto.GenerateSecp256k1Key(nil)
+	require.NoError(t, err)
+
 	makeRawBlock := func(txns [][]byte) []byte {
-		blk := NewBlock(1, Hash{1, 2, 3}, Hash{6, 7, 8}, time.Unix(1729890593, 0), txns)
+		blk := NewBlock(1, Hash{1, 2, 3}, Hash{6, 7, 8}, Hash{}, time.Unix(1729890593, 0), txns)
+		err := blk.Sign(privKey)
+		require.NoError(t, err)
 		return EncodeBlock(blk)
 	}
+
+	t.Run("valid block signature", func(t *testing.T) {
+		txns := [][]byte{[]byte("tx1")}
+		rawBlock := makeRawBlock(txns)
+		blk, err := DecodeBlock(rawBlock)
+		require.NoError(t, err)
+
+		valid, err := blk.VerifySignature(pubKey)
+		require.NoError(t, err)
+		require.True(t, valid)
+	})
 
 	t.Run("valid transaction index", func(t *testing.T) {
 		txns := [][]byte{
@@ -21,7 +40,6 @@ func TestGetRawBlockTx(t *testing.T) {
 			[]byte("tx3"),
 		}
 		rawBlock := makeRawBlock(txns)
-
 		tx, err := GetRawBlockTx(rawBlock, 1)
 		if err != nil {
 			t.Fatal(err)
@@ -56,9 +74,13 @@ func TestGetRawBlockTx(t *testing.T) {
 	t.Run("corrupted block data", func(t *testing.T) {
 		txns := [][]byte{[]byte("tx1")}
 		rawBlock := makeRawBlock(txns)
-		corrupted := rawBlock[:len(rawBlock)-1]
+		blk, err := DecodeBlock(rawBlock)
+		require.NoError(t, err)
 
-		_, err := GetRawBlockTx(corrupted, 0)
+		sigLen := len(blk.Signature) + 4
+		corrupted := rawBlock[:len(rawBlock)-1-sigLen]
+
+		_, err = GetRawBlockTx(corrupted, 0)
 		if err == nil {
 			t.Error("expected error for corrupted block data")
 		}
