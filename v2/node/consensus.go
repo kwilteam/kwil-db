@@ -211,7 +211,7 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 	var prop blockProp
 	_, err := prop.ReadFrom(s)
 	if err != nil {
-		n.log.Infof("invalid block proposal message:", err)
+		n.log.Warnf("invalid block proposal message: %v", err)
 		return
 	}
 
@@ -219,20 +219,21 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 
 	if !n.ce.AcceptProposal(height, prop.Hash, prop.PrevHash, prop.LeaderSig, prop.Stamp) {
 		// NOTE: if this is ahead of our last commit height, we have to try to catch up
-		n.log.Infof("don't want proposal content", height, prop.PrevHash)
+		n.log.Warn("do not want proposal content", "height", height, "hash", prop.Hash,
+			"prevHash", prop.PrevHash)
 		return
 	}
 
 	_, err = s.Write([]byte(getMsg))
 	if err != nil {
-		n.log.Infof("failed to request block proposal contents:", err)
+		n.log.Warnf("failed to request block proposal contents: %w", err)
 		return
 	}
 
 	rd := bufio.NewReader(s)
 	blkProp, err := io.ReadAll(rd)
 	if err != nil {
-		n.log.Infof("failed to read block proposal contents:", err)
+		n.log.Warnf("failed to read block proposal contents: %w", err)
 		return
 	}
 
@@ -240,18 +241,18 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 
 	blk, err := types.DecodeBlock(blkProp)
 	if err != nil {
-		n.log.Infof("decodeBlock failed for proposal at height %d: %v", height, err)
+		n.log.Warnf("decodeBlock failed for proposal at height %d: %v", height, err)
 		return
 	}
 	if blk.Header.Height != height {
-		n.log.Infof("unexpected height: wanted %d, got %d", height, blk.Header.Height)
+		n.log.Warnf("unexpected height: wanted %d, got %d", height, blk.Header.Height)
 		return
 	}
 
 	annHash := prop.Hash
 	hash := blk.Header.Hash()
 	if hash != annHash {
-		n.log.Infof("unexpected hash: wanted %s, got %s", hash, annHash)
+		n.log.Warnf("unexpected hash: wanted %s, got %s", hash, annHash)
 		return
 	}
 
@@ -298,7 +299,7 @@ func (n *Node) startAckGossip(ctx context.Context, ps *pubsub.PubSub) error {
 				ackMsg, _ := ack.MarshalBinary()
 				err := topicAck.Publish(ctx, ackMsg)
 				if err != nil {
-					fmt.Println("Publish:", err)
+					n.log.Warnf("Publish ACK failure (%v for %v): %v", ack.ACK, ack.BlkHash, err)
 					// TODO: queue the ack for retry (send back to ackChan or another delayed send queue)
 					return
 				}
