@@ -80,7 +80,7 @@ type AckBroadcaster func(ack bool, height int64, blkID types.Hash, appHash *type
 // BlkRequester requests the block from the network based on the height
 type BlkRequester func(ctx context.Context, height int64) (types.Hash, types.Hash, []byte, error)
 
-type ResetStateBroadcaster func(height int64, leaderSig []byte) error
+type ResetStateBroadcaster func(height int64) error
 
 type Status string
 
