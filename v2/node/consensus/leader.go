@@ -222,7 +222,7 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 			return err
 		}
 
-		ce.log.Info("Announce committed block", ce.state.blkProp.blk.Header.Height, ce.state.blkProp.blkHash)
+		ce.log.Infoln("Announce committed block", ce.state.blkProp.blk.Header.Height, ce.state.blkProp.blkHash)
 		// Broadcast the blockAnn message
 		go ce.blkAnnouncer(ctx, ce.state.blkProp.blk, ce.state.blockRes.appHash, ce.host)
 
@@ -238,7 +238,7 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 		go ce.startNewRound(ctx)
 	} else if nacks >= threshold {
 		// halt the network
-		ce.log.Info("Majority of the validators have rejected the block, halting the network",
+		ce.log.Warnln("Majority of the validators have rejected the block, halting the network",
 			ce.state.blkProp.blk.Header.Height, acks, nacks)
 		close(ce.haltChan)
 		return nil
