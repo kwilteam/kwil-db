@@ -54,7 +54,9 @@ type PeerMan struct {
 
 	done  chan struct{}
 	close func()
+	wg    sync.WaitGroup
 
+	// TODO: revise address book file format as needed if these should persist
 	mtx         sync.Mutex
 	retries     map[peer.ID]int       // Track retry attempts for each peer
 	disconnects map[peer.ID]time.Time // Track disconnection timestamps
@@ -86,7 +88,7 @@ func NewPeerMan(pex bool, addrBook string, logger log.Logger, h host.Host,
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("failed to load address book %s", pm.addrBook)
 	}
-	numPeers := pm.addPeers(peerInfo)
+	numPeers := pm.addPeers(peerInfo, peerstore.RecentlyConnectedAddrTTL)
 	logger.Infof("Loaded address book with %d peers", numPeers)
 
 	return pm, nil
@@ -95,19 +97,17 @@ func NewPeerMan(pex bool, addrBook string, logger log.Logger, h host.Host,
 var _ discovery.Discoverer = (*PeerMan)(nil) // FindPeers method
 
 func (pm *PeerMan) Start(ctx context.Context) error {
-	var wg sync.WaitGroup
-
 	if pm.pex {
-		wg.Add(1)
+		pm.wg.Add(1)
 		go func() {
-			defer wg.Done()
+			defer pm.wg.Done()
 			pm.startPex(ctx)
 		}()
 	}
 
-	wg.Add(1)
+	pm.wg.Add(1)
 	go func() {
-		defer wg.Done()
+		defer pm.wg.Done()
 		pm.removeOldPeers()
 	}()
 
@@ -115,7 +115,7 @@ func (pm *PeerMan) Start(ctx context.Context) error {
 
 	pm.close()
 
-	wg.Wait()
+	pm.wg.Wait()
 
 	return nil
 }
@@ -260,7 +260,7 @@ func loadPeers(filePath string) ([]types.PeerInfo, error) {
 	return peerList, nil
 }
 
-func (pm *PeerMan) addPeers(peerList []types.PeerInfo) int {
+func (pm *PeerMan) addPeers(peerList []types.PeerInfo, ttl time.Duration) int {
 	var count int
 	for _, pInfo := range peerList {
 		// for _, addr := range pInfo.Addrs {
@@ -269,7 +269,7 @@ func (pm *PeerMan) addPeers(peerList []types.PeerInfo) int {
 		addrs := pm.ps.Addrs(pInfo.ID)
 		for _, addr := range pInfo.Addrs {
 			if !multiaddr.Contains(addrs, addr) {
-				pm.ps.AddAddr(pInfo.ID, addr, time.Hour)
+				pm.ps.AddAddr(pInfo.ID, addr, ttl)
 				pm.log.Infof("Added new peer address to store: %v @ %v", pInfo.ID, addr)
 				count++
 			}
@@ -293,7 +293,7 @@ func (pm *PeerMan) addPeerAddrs(p peer.AddrInfo) (added bool) {
 			AddrInfo: types.AddrInfo(p),
 			// No known protocols, yet
 		},
-	})
+	}, peerstore.TempAddrTTL)
 	return added
 }
 
@@ -301,6 +301,8 @@ func (pm *PeerMan) addPeerAddrs(p peer.AddrInfo) (added bool) {
 func (pm *PeerMan) Connected(net network.Network, conn network.Conn) {
 	peerID := conn.RemotePeer()
 	pm.log.Infof("Connected to peer %s", peerID)
+
+	// pm.ps.UpdateAddrs(peerID, ttlProvisional, ttlKnown)
 
 	// Reset retries and disconnect timestamp on successful connection
 	pm.mtx.Lock()
@@ -317,7 +319,32 @@ func (pm *PeerMan) Disconnected(net network.Network, conn network.Conn) {
 	pm.mtx.Lock()
 	defer pm.mtx.Unlock()
 	pm.disconnects[peerID] = time.Now()
-	go pm.reconnectWithRetry(peerID)
+
+	select {
+	case <-pm.done:
+		return
+	default:
+	}
+
+	// Create a context that is canceled if pm.done is closed (Notifiee
+	// interface doesn't pass one).
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		defer cancel()
+		select {
+		case <-ctx.Done():
+			return
+		case <-pm.done:
+			return
+		}
+	}()
+
+	pm.wg.Add(1)
+	go func() {
+		defer pm.wg.Done()
+		defer cancel()
+		pm.reconnectWithRetry(ctx, peerID)
+	}()
 }
 
 func (pm *PeerMan) Listen(network.Network, multiaddr.Multiaddr)      {}
@@ -326,7 +353,7 @@ func (pm *PeerMan) ListenClose(network.Network, multiaddr.Multiaddr) {}
 // Reconnect logic with retry
 
 // Reconnect logic with exponential backoff and capped retries
-func (pm *PeerMan) reconnectWithRetry(peerID peer.ID) {
+func (pm *PeerMan) reconnectWithRetry(ctx context.Context, peerID peer.ID) {
 	for attempt := 1; attempt <= maxRetries; attempt++ {
 		addrInfo := peer.AddrInfo{
 			ID:    peerID,
@@ -339,7 +366,7 @@ func (pm *PeerMan) reconnectWithRetry(peerID peer.ID) {
 		}
 
 		pm.log.Infof("Attempting reconnection to peer %s (attempt %d/%d)", peerID, attempt, maxRetries)
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		if err := pm.c.Connect(ctx, addrInfo); err != nil {
 			cancel()
 			pm.log.Infof("Failed to reconnect to peer %s (trying again in %v): %v", peerID, delay, err)
