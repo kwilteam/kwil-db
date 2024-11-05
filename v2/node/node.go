@@ -68,24 +68,7 @@ type ConsensusEngine interface {
 	// CommitBlock(blk *types.Block, appHash types.Hash) error
 }
 
-// parallel CE dev is leading node and p2p dev, so this "Node" currently uses an
-// old interface for a working mock CE. Node code should be updated with final interface
-
-type ConsensusEngineForToyNode interface { // quick and dirty for toy node prototype
-	Start(context.Context) error
-
-	AcceptProposalID(height int64, prevHash types.Hash) bool
-	ProcessProposal(blk *types.Block, cb func(ack bool, appHash *types.Hash) error)
-
-	ProcessACK(validatorPK []byte, ack types.AckRes)
-
-	AcceptCommit(height int64, blkID types.Hash, appHash types.Hash) bool
-	CommitBlock(blk *types.Block, appHash types.Hash) error
-
-	BlockLeaderStream() <-chan *types.QualifiedBlock
-}
-
-type PeerManager interface { // move to consumer (Node)
+type PeerManager interface {
 	network.Notifiee
 	Start(context.Context) error
 	KnownPeers() []types.PeerInfo
@@ -345,11 +328,12 @@ func (n *Node) checkPeerProtos(ctx context.Context, peer peer.ID) error {
 		ProtocolIDDiscover,
 		ProtocolIDTx,
 		ProtocolIDTxAnn,
+		ProtocolIDBlockHeight,
 		ProtocolIDBlock,
 		ProtocolIDBlkAnn,
 		ProtocolIDBlockPropose,
+		pubsub.GossipSubID_v12,
 		// ProtocolIDACKProposal,
-		// pubsub.GossipSubID_v12,
 	} {
 		ok, err := checkProtocolSupport(ctx, n.host, peer, pid)
 		if err != nil {
