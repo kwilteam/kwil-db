@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -17,11 +18,12 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
+	"github.com/libp2p/go-libp2p/p2p/net/swarm"
 	"github.com/multiformats/go-multiaddr"
 )
 
 const (
-	maxRetries      = 5
+	maxRetries      = 500
 	baseDelay       = 2 * time.Second
 	disconnectLimit = 7 * 24 * time.Hour // 1 week
 )
@@ -58,7 +60,6 @@ type PeerMan struct {
 
 	// TODO: revise address book file format as needed if these should persist
 	mtx         sync.Mutex
-	retries     map[peer.ID]int       // Track retry attempts for each peer
 	disconnects map[peer.ID]time.Time // Track disconnection timestamps
 }
 
@@ -80,7 +81,6 @@ func NewPeerMan(pex bool, addrBook string, logger log.Logger, h host.Host,
 		pex:          pex,
 		requestPeers: requestPeers,
 		addrBook:     addrBook,
-		retries:      make(map[peer.ID]int),
 		disconnects:  make(map[peer.ID]time.Time),
 	}
 
@@ -304,10 +304,9 @@ func (pm *PeerMan) Connected(net network.Network, conn network.Conn) {
 
 	// pm.ps.UpdateAddrs(peerID, ttlProvisional, ttlKnown)
 
-	// Reset retries and disconnect timestamp on successful connection
+	// Reset disconnect timestamp on successful connection
 	pm.mtx.Lock()
 	defer pm.mtx.Unlock()
-	pm.retries[peerID] = 0
 	delete(pm.disconnects, peerID)
 }
 
@@ -354,22 +353,32 @@ func (pm *PeerMan) ListenClose(network.Network, multiaddr.Multiaddr) {}
 
 // Reconnect logic with exponential backoff and capped retries
 func (pm *PeerMan) reconnectWithRetry(ctx context.Context, peerID peer.ID) {
-	for attempt := 1; attempt <= maxRetries; attempt++ {
+	for attempt := range maxRetries {
 		addrInfo := peer.AddrInfo{
 			ID:    peerID,
 			Addrs: pm.ps.Addrs(peerID),
 		}
 
-		delay := baseDelay * (1 << (attempt - 1))
+		delay := baseDelay * (1 << attempt)
 		if delay > 1*time.Minute {
 			delay = 1 * time.Minute // Cap delay at 1 minute
 		}
 
-		pm.log.Infof("Attempting reconnection to peer %s (attempt %d/%d)", peerID, attempt, maxRetries)
+		pm.log.Infof("Attempting reconnection to peer %s (attempt %d/%d)", peerID, attempt+1, maxRetries)
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		if err := pm.c.Connect(ctx, addrInfo); err != nil {
 			cancel()
+			var dErr *swarm.DialError
+			if errors.Is(err, swarm.ErrAllDialsFailed) && errors.As(err, &dErr) {
+				// the actual DialError string is multi-line
+				addrs := make([]string, len(dErr.DialErrors))
+				for i, te := range dErr.DialErrors {
+					addrs[i] = te.Address.String()
+				}
+				err = fmt.Errorf("%w: [%s]", dErr.Cause, strings.Join(addrs, ", "))
+			}
 			pm.log.Infof("Failed to reconnect to peer %s (trying again in %v): %v", peerID, delay, err)
+
 		} else {
 			cancel()
 			pm.log.Infof("Successfully reconnected to peer %s", peerID)
