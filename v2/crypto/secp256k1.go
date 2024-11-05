@@ -117,16 +117,16 @@ func (k *Secp256k1PrivateKey) Equals(o Key) bool {
 	return k.Public().Equals(sk.Public())
 }
 
-// Sign returns a signature from input data. The signature is of the sha256 hash
-// of the data, not data itself. This is to  match the other key types that
-// internally use a hash function, unlike secp256k1, which does not.
+// Sign returns a signature (uncompressed) from input data. The signature is of
+// the sha256 hash of the data, not data itself. This is to  match the other key
+// types that internally use a hash function, unlike secp256k1, which does not.
 func (k *Secp256k1PrivateKey) Sign(data []byte) (rawSig []byte, err error) {
 	defer func() { handlePanic(recover(), &err, "secp256k1 signing") }()
 	key := (*secp256k1.PrivateKey)(k)
 	hash := sha256.Sum256(data)
-	sig := ecdsa.Sign(key, hash[:])
-
-	return sig.Serialize(), nil
+	// sig := ecdsa.Sign(key, hash[:]); sig.Serialize()
+	sig := ecdsa.SignCompact(key, hash[:], false)
+	return sig, nil
 }
 
 // Public returns a public key. This is a Secp256k1PublicKey as a PublicKey to
@@ -161,7 +161,7 @@ func (k *Secp256k1PublicKey) Equals(o Key) bool {
 
 // Verify compares a signature against the input data. The data is hashed with
 // sha256 internally.
-func (k *Secp256k1PublicKey) Verify(data, sigStr []byte) (success bool, err error) {
+func (k *Secp256k1PublicKey) Verify(data, rawSig []byte) (success bool, err error) {
 	defer func() {
 		handlePanic(recover(), &err, "secp256k1 signature verification")
 
@@ -170,10 +170,17 @@ func (k *Secp256k1PublicKey) Verify(data, sigStr []byte) (success bool, err erro
 			success = false
 		}
 	}()
-	sig, err := ecdsa.ParseDERSignature(sigStr)
-	if err != nil {
-		return false, err
+	if len(rawSig) != 64 {
+		return false, errors.New("invalid signature length")
 	}
+	var r, s secp256k1.ModNScalar
+	if r.SetByteSlice(rawSig[:32]) {
+		return false, errors.New("r value overflow")
+	}
+	if s.SetByteSlice(rawSig[32:]) {
+		return false, errors.New("s value overflow")
+	}
+	sig := ecdsa.NewSignature(&r, &s)
 
 	hash := sha256.Sum256(data)
 	return sig.Verify(hash[:], (*secp256k1.PublicKey)(k)), nil
