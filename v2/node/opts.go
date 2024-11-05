@@ -30,7 +30,7 @@ func WithLogger(logger log.Logger) Option {
 }
 
 func WithPort(port uint64) Option {
-return func(o *options) {
+	return func(o *options) {
 		o.port = port
 	}
 }
