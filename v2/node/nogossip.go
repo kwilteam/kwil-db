@@ -1,7 +1,6 @@
 package node
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"errors"
@@ -101,7 +100,7 @@ func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txHash typ
 		return fmt.Errorf("failed to open stream to peer: %w", err)
 	}
 
-	roundTripDeadline := time.Now().Add(txGetTimeout) // lower for this part?
+	roundTripDeadline := time.Now().Add(txAnnTimeout)
 	s.SetWriteDeadline(roundTripDeadline)
 
 	// Send a lightweight advertisement with the object ID
@@ -116,9 +115,9 @@ func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txHash typ
 	go func() {
 		defer s.Close()
 
-		s.SetReadDeadline(time.Now().Add(txGetTimeout))
+		s.SetReadDeadline(time.Now().Add(txAnnRespTimeout))
 
-		req := make([]byte, 128)
+		req := make([]byte, len(getMsg))
 		nr, err := s.Read(req)
 		if err != nil && !errors.Is(err, io.EOF) {
 			n.log.Warn("bad get tx req", "error", err)
@@ -127,14 +126,12 @@ func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txHash typ
 		if nr == 0 /*&& errors.Is(err, io.EOF)*/ {
 			return // they hung up, probably didn't want it
 		}
-		req = req[:nr]
-		req, ok := bytes.CutPrefix(req, []byte(getMsg))
-		if !ok {
+		if getMsg != string(req) {
 			n.log.Warnf("advertise wait: bad get tx request %q", string(req))
 			return
 		}
 
-		s.SetWriteDeadline(time.Now().Add(20 * time.Second))
+		s.SetWriteDeadline(time.Now().Add(txGetTimeout))
 		s.Write(rawTx)
 	}()
 
