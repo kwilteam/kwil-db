@@ -1,13 +1,15 @@
 package node
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"time"
+
 	"kwil/log"
 	"kwil/node/types"
-	"time"
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -17,25 +19,35 @@ import (
 func (n *Node) peerDiscoveryStreamHandler(s network.Stream) {
 	defer s.Close()
 
-	sc := bufio.NewScanner(s)
-	for sc.Scan() { // why am I doing this again? Probably just Read once...
-		msg := sc.Text()
-		if msg != discoverPeersMsg {
-			continue
-		}
+	s.SetReadDeadline(time.Now().Add(time.Second))
 
-		peers := n.pm.KnownPeers()
-		// filteredPeers := filterPeersForNodeType(peers, nodeType)
-		if err := sendPeersToStream(s, peers); err != nil {
-			fmt.Println("failed to send peer list to peer", err)
-			return
-		}
+	buf := make([]byte, len(discoverPeersMsg))
+	nr, err := s.Read(buf)
+	if err != nil && !errors.Is(err, io.EOF) {
+		n.log.Warn("failed to read peer discovery request", "error", err)
+		return
+	}
+	if nr == 0 { // they hung up
+		return
+	}
+	if string(buf) != discoverPeersMsg {
+		n.log.Warn("invalid discover peers request")
+		return
 	}
 
-	// fmt.Println("done sending peers on stream", s.ID())
+	peers := n.pm.KnownPeers()
+
+	s.SetWriteDeadline(time.Now().Add(4 * time.Second))
+	if err := writePeers(s, peers); err != nil {
+		n.log.Warn("failed to send peer list to peer", "error", err)
+		return
+	}
+
+	n.log.Info("sent peer list to remote peer", "num_peers", len(peers),
+		"to_peer", s.Conn().RemotePeer())
 }
 
-func sendPeersToStream(s network.Stream, peers []types.PeerInfo) error {
+func writePeers(s io.WriteCloser, peers []types.PeerInfo) error {
 	encoder := json.NewEncoder(s)
 	if err := encoder.Encode(peers); err != nil {
 		return fmt.Errorf("failed to encode peers: %w", err)
@@ -63,8 +75,7 @@ func requestPeers(ctx context.Context, peerID peer.ID, host host.Host, log log.L
 
 	stream.SetDeadline(deadline)
 
-	requestMessage := discoverPeersMsg
-	if _, err := stream.Write([]byte(requestMessage + "\n")); err != nil {
+	if _, err := stream.Write([]byte(discoverPeersMsg)); err != nil {
 		return nil, fmt.Errorf("failed to send request: %w", err)
 	}
 
