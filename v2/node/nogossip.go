@@ -21,7 +21,7 @@ func (n *Node) txAnnStreamHandler(s network.Stream) {
 
 	var ann txHashAnn
 	if _, err := ann.ReadFrom(s); err != nil {
-		fmt.Println("bad get tx req:", err)
+		n.log.Warnf("bad tx ann: %v", err)
 		return
 	}
 
@@ -49,12 +49,12 @@ func (n *Node) txAnnStreamHandler(s network.Stream) {
 	// First try to get from this stream.
 	rawTx, err := requestTx(s, []byte(getMsg))
 	if err != nil {
-		n.log.Infof("announcer failed to provide %v, trying other peers", txHash)
+		n.log.Warnf("announcer failed to provide %v, trying other peers", txHash)
 		// Since we are aware, ask other peers. we could also put this in a goroutine
 		s.Close() // close the announcers stream first
 		rawTx, err = n.getTxWithRetry(context.TODO(), txHash, 500*time.Millisecond, 10)
 		if err != nil {
-			n.log.Infof("unable to retrieve tx %v: %v", txHash, err)
+			n.log.Errorf("unable to retrieve tx %v: %v", txHash, err)
 			return
 		}
 	}

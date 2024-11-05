@@ -175,7 +175,7 @@ func (pm *PeerMan) FindPeers(ctx context.Context, ns string, opts ...discovery.O
 			defer cancel()
 			peers, err := pm.requestPeers(ctx, peerID)
 			if err != nil {
-				fmt.Printf("Failed to get peers from %v: %v", peerID, err)
+				pm.log.Warnf("Failed to get peers from %v: %v", peerID, err)
 				return
 			}
 
@@ -200,7 +200,7 @@ func (pm *PeerMan) KnownPeers() []types.PeerInfo {
 
 		supportedProtos, err := pm.ps.GetProtocols(peerID)
 		if err != nil {
-			fmt.Printf("GetProtocols for %v: %v\n", peerID, err)
+			pm.log.Errorf("GetProtocols for %v: %v", peerID, err)
 			continue
 		}
 
