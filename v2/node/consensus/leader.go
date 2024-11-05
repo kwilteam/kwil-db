@@ -68,15 +68,9 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	// TODO: test resetState
 	if ce.state.blkProp.height%10 == 0 && lastReset != ce.state.blkProp.height {
 		lastReset = ce.state.blkProp.height
-		sig, err := ce.signer.Sign([]byte(fmt.Sprintf("%d", ce.stateInfo.height)))
-		if err != nil {
-			ce.log.Errorf("Error signing the reset message: %v", err)
-			return err
-		}
-
 		ce.log.Info("Resetting the state (for testing purposes)", "height", lastReset, " blkHash", ce.state.blkProp.blkHash)
 		ce.resetState()
-		go ce.rstStateBroadcaster(ce.state.lc.height, sig)
+		go ce.rstStateBroadcaster(ce.state.lc.height)
 		go ce.startNewRound(ctx)
 		return nil
 	}
