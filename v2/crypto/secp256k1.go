@@ -8,7 +8,24 @@ import (
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"       // key/curve
 	"github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa" // signature algorithm
+	"golang.org/x/crypto/sha3"
 )
+
+func EthereumAddressFromPubKey(pubKey *Secp256k1PublicKey) []byte {
+	// Serialize the public key to 65 bytes (uncompressed format).
+	pubKeyBytes := (*secp256k1.PublicKey)(pubKey).SerializeUncompressed()
+
+	// Remove the first byte (0x04), which indicates that this is an uncompressed public key.
+	pubKeyBytes = pubKeyBytes[1:]
+
+	// Apply Keccak256 (SHA3-256) hashing.
+	hash := sha3.NewLegacyKeccak256()
+	hash.Write(pubKeyBytes)
+	fullHash := hash.Sum(nil)
+
+	// Take the last 20 bytes of the hash as the Ethereum address.
+	return fullHash[len(fullHash)-20:]
+}
 
 // Secp256k1PrivateKey is a Secp256k1 private key.
 type Secp256k1PrivateKey secp256k1.PrivateKey
