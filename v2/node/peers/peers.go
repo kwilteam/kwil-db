@@ -132,7 +132,9 @@ func (pm *PeerMan) startPex(ctx context.Context) {
 				for peer := range peerChan {
 					if pm.addPeerAddrs(peer) {
 						// TODO: connection manager, with limits
-						pm.c.Connect(ctx, peer)
+						if err = pm.c.Connect(ctx, peer); err != nil {
+							pm.log.Warnf("Failed to connect to %s: %v", peer.ID, err)
+						}
 					}
 					count++
 				}
@@ -193,27 +195,73 @@ func (pm *PeerMan) FindPeers(ctx context.Context, ns string, opts ...discovery.O
 	return peerChan, nil
 }
 
-func (pm *PeerMan) KnownPeers() []types.PeerInfo {
+// ConnectedPeers returns a list of peer info for all connected peers.
+func (pm *PeerMan) ConnectedPeers() []types.PeerInfo {
 	var peers []types.PeerInfo
-	for _, peerID := range pm.h.Network().Peers() { // connected peers only
-		addrs := pm.ps.Addrs(peerID)
-
-		supportedProtos, err := pm.ps.GetProtocols(peerID)
+	for _, peerID := range pm.h.Network().Peers() { // connected peers first
+		if peerID == pm.h.ID() { // me
+			continue
+		}
+		peerInfo, err := peerInfo(pm.ps, peerID)
 		if err != nil {
-			pm.log.Errorf("GetProtocols for %v: %v", peerID, err)
+			pm.log.Warnf("peerInfo for %v: %v", peerID, err)
 			continue
 		}
 
-		peers = append(peers, types.PeerInfo{
-			AddrInfo: types.AddrInfo{
-				ID:    peerID,
-				Addrs: addrs,
-			},
-			Protos: supportedProtos,
-		})
-
+		peers = append(peers, *peerInfo)
 	}
+
 	return peers
+}
+
+// KnownPeers returns a list of peer info for all known peers (connected or just
+// in peer store).
+func (pm *PeerMan) KnownPeers() []types.PeerInfo {
+	// connected peers first
+	peers := pm.ConnectedPeers()
+	connectedPeers := make(map[peer.ID]bool)
+	for _, peerInfo := range peers {
+		connectedPeers[peerInfo.ID] = true
+	}
+
+	// all others in peer store
+	for _, peerID := range pm.ps.Peers() {
+		if peerID == pm.h.ID() { // me
+			continue
+		}
+		if connectedPeers[peerID] {
+			continue // it is connected
+		}
+		peerInfo, err := peerInfo(pm.ps, peerID)
+		if err != nil {
+			pm.log.Warnf("peerInfo for %v: %v", peerID, err)
+			continue
+		}
+
+		peers = append(peers, *peerInfo)
+	}
+
+	return peers
+}
+
+func peerInfo(ps peerstore.Peerstore, peerID peer.ID) (*types.PeerInfo, error) {
+	addrs := ps.Addrs(peerID)
+	if len(addrs) == 0 {
+		return nil, fmt.Errorf("no addresses for peer %v", peerID)
+	}
+
+	supportedProtos, err := ps.GetProtocols(peerID)
+	if err != nil {
+		return nil, fmt.Errorf("GetProtocols for %v: %w", peerID, err)
+	}
+
+	return &types.PeerInfo{
+		AddrInfo: types.AddrInfo{
+			ID:    peerID,
+			Addrs: addrs,
+		},
+		Protos: supportedProtos,
+	}, nil
 }
 
 func (pm *PeerMan) PrintKnownPeers() {
@@ -225,6 +273,7 @@ func (pm *PeerMan) PrintKnownPeers() {
 
 func (pm *PeerMan) savePeers() error {
 	peerList := pm.KnownPeers()
+	pm.log.Infof("saving %d peers to address book", len(peerList))
 	if err := persistPeers(peerList, pm.addrBook); err != nil {
 		return err
 	}
@@ -288,13 +337,13 @@ func (pm *PeerMan) addPeers(peerList []types.PeerInfo, ttl time.Duration) int {
 
 // addPeerAddrs adds a discovered peer to the local peer store.
 func (pm *PeerMan) addPeerAddrs(p peer.AddrInfo) (added bool) {
-	pm.addPeers([]types.PeerInfo{
+	numAdded := pm.addPeers([]types.PeerInfo{
 		{
 			AddrInfo: types.AddrInfo(p),
 			// No known protocols, yet
 		},
 	}, peerstore.TempAddrTTL)
-	return added
+	return numAdded > 0
 }
 
 // Connected is triggered when a peer connects
