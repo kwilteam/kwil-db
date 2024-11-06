@@ -58,7 +58,12 @@ func (ce *ConsensusEngine) executeBlock() error {
 
 	// Execute the block and return the appHash and store the txResults
 	for _, tx := range ce.state.blkProp.blk.Txns {
-		res := ce.blockExecutor.Execute(ctx, tx) // TODO: this execute function should be context cancellable
+		res, err := ce.blockExecutor.Execute(ctx, tx) // TODO: this execute function should be context cancellable
+		if err != nil {
+			ce.log.Error("Failed to execute the block tx", "err", err)
+			return err
+		}
+
 		txResults = append(txResults, res)
 	}
 
@@ -83,9 +88,11 @@ func (ce *ConsensusEngine) executeBlock() error {
 
 	ce.log.Info("Executed Block", "height", ce.state.blkProp.blk.Header.Height, "blkHash", ce.state.blkProp.blkHash, "appHash", ce.state.blockRes.appHash.String())
 
-	ce.stateInfo.mtx.Lock()
+	// ce.stateInfo.mtx.Lock()
+	ce.stateLock("executeBlock")
 	ce.stateInfo.status = Executed
-	ce.stateInfo.mtx.Unlock()
+	// ce.stateInfo.mtx.Unlock()
+	ce.stateUnlock("executeBlock")
 
 	return nil
 }
@@ -146,11 +153,13 @@ func (ce *ConsensusEngine) resetState() {
 	ce.blockExecutor.Rollback()
 
 	// update the stateInfo
-	ce.stateInfo.mtx.Lock()
+	// ce.stateInfo.mtx.Lock()
+	ce.stateLock("resetState")
 	ce.stateInfo.status = Committed
 	ce.stateInfo.blkProp = nil
 	ce.stateInfo.height = ce.state.lc.height
-	ce.stateInfo.mtx.Unlock()
+	ce.stateUnlock("resetState")
+	// ce.stateInfo.mtx.Unlock()
 }
 
 // temporary placeholder as this will be in the PG chainstate in future (as was in previous kwil implementations)

@@ -3,7 +3,9 @@ package consensus
 import (
 	"context"
 	"crypto/sha256"
+	"fmt"
 
+	"kwil/crypto/auth"
 	"kwil/node/types"
 	ktypes "kwil/types"
 )
@@ -32,13 +34,50 @@ func newBlockExecutor() *blockExecutor {
 	return &blockExecutor{}
 }
 
-func (be *blockExecutor) Execute(_ context.Context, tx []byte) ktypes.TxResult {
-	hash, _ := types.NewHashFromBytes(tx) // TODO: may also include the txresult hash
+func (be *blockExecutor) Execute(_ context.Context, tx []byte) (ktypes.TxResult, error) {
+	// unmashal tx
+	var transaction ktypes.Transaction
+	err := transaction.UnmarshalBinary(tx)
+	if err != nil {
+		return ktypes.TxResult{}, err
+	}
+
+	// validate tx
+	if err := validateTransaction(&transaction); err != nil {
+		return ktypes.TxResult{}, fmt.Errorf("invalid transaction: %w", err)
+	}
+
+	// execute tx
+	hash := sha256.Sum256(tx)
 	be.changesets = append(be.changesets, hash)
 	return ktypes.TxResult{
 		Code: 0,
-		Log:  "success" + hash.String(),
+		Log:  fmt.Sprintf("Success: %x", hash),
+	}, nil
+}
+
+func validateTransaction(tx *ktypes.Transaction) error {
+	// Signature validation
+	authenticator := auth.GetAuthenticator(tx.Signature.Type)
+	if authenticator == nil {
+		return fmt.Errorf("unknown authenticator: %s", tx.Signature.Type)
 	}
+
+	txMsg, err := tx.SerializeMsg()
+	if err != nil {
+		return err
+	}
+
+	if err := authenticator.Verify(tx.Sender, txMsg, tx.Signature.Data); err != nil {
+		return err
+	}
+
+	// Payload validation
+	if !tx.Body.PayloadType.Valid() {
+		return fmt.Errorf("invalid payload type: %s", tx.Body.PayloadType)
+	}
+
+	return nil
 }
 
 // Precommit gives a deterministic hash based on the changesets resulting from the txs in a block
