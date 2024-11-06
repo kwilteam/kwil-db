@@ -35,7 +35,7 @@ func (n *Node) peerDiscoveryStreamHandler(s network.Stream) {
 		return
 	}
 
-	peers := n.pm.KnownPeers()
+	peers := n.pm.ConnectedPeers()
 
 	s.SetWriteDeadline(time.Now().Add(4 * time.Second))
 	if err := writePeers(s, peers); err != nil {
