@@ -70,6 +70,7 @@ type ConsensusEngine interface {
 type PeerManager interface {
 	network.Notifiee
 	Start(context.Context) error
+	ConnectedPeers() []types.PeerInfo
 	KnownPeers() []types.PeerInfo
 }
 
