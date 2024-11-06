@@ -12,10 +12,12 @@ import (
 )
 
 type GenesisConfig struct {
-	// Leader's public key
+	// Leader is the leader's public key.
 	Leader types.HexBytes `json:"leader"`
-	// List of validators (including the leader)
+	// Validators is the list of genesis validators (including the leader).
 	Validators []types.Validator `json:"validators"`
+
+	// TODO: more params like max block size, etc.
 }
 
 func (nc *GenesisConfig) SaveAs(filename string) error {
@@ -41,15 +43,17 @@ func LoadGenesisConfig(filename string) (*GenesisConfig, error) {
 	return &nc, nil
 }
 
+// DefaultConfig generates an instance of the default config.
 func DefaultConfig() *Config {
 	return &Config{
 		LogLevel:  log.LevelInfo,
-		LogFormat: log.FormatText,
+		LogFormat: log.FormatUnstructured,
+		// Private key is empty by default.
 		PeerConfig: PeerConfig{
-			IP:       "0.0.0.0",
-			Port:     6600,
-			Pex:      true,
-			BootNode: "/ip4/127.0.0.1/tcp/6600/p2p/16Uiu2HAkx2kfP117VnYnaQGprgXBoMpjfxGXCpizju3cX7ZUzRhv",
+			IP:        "0.0.0.0",
+			Port:      6600,
+			Pex:       true,
+			BootNodes: []string{},
 		},
 	}
 }
@@ -63,8 +67,9 @@ type Config struct {
 	//
 	//  - koanf tags are used to unmarshal into this struct from a koanf instance
 	//    (k.Unmarshal: map[string]interface{} => Config{})
-	//    These names have no underscores or dashes, to form the least common
-	//    denominator between all of toml, env, and flags.
+	//
+	// Presently these tags are the same. If we change the canonicalization,
+	// such as removing both dashes and underscores, the tags would be different.
 
 	LogLevel  log.Level  `koanf:"log_level" toml:"log_level"`
 	LogFormat log.Format `koanf:"log_format" toml:"log_format"`
@@ -74,18 +79,18 @@ type Config struct {
 	PeerConfig PeerConfig `koanf:"peer" toml:"peer"`
 }
 
+// PeerConfig corresponds to the [peer] section of the config.
 type PeerConfig struct {
-	IP       string `koanf:"ip" toml:"ip"`
-	Port     uint64 `koanf:"port" toml:"port"`
-	Pex      bool   `koanf:"pex" toml:"pex" comment:"enable peer exchange"`
-	BootNode string `koanf:"bootnode" toml:"bootnode"` // connection string to the seed node for simplicity.
+	IP        string   `koanf:"ip" toml:"ip"`
+	Port      uint64   `koanf:"port" toml:"port"`
+	Pex       bool     `koanf:"pex" toml:"pex" comment:"enable peer exchange"`
+	BootNodes []string `koanf:"bootnodes" toml:"bootnodes" comment:"list of bootnodes"`
 	// TODO: pubkey@ip:port
 	// BootNode is presently a libp2p multiaddress like
 	//  /ip4/127.0.0.1/tcp/6601/p2p/16Uiu2HAm8iRUsTzYepLP8pdJL3645ACP7VBfZQ7yFbLfdb7WvkL7
 	// but it could be different and we construct this format internally
 
 	// ListenAddr string // "127.0.0.1:6600"
-	// BootNodes []string // []string{"127.0.0.1:6601"}
 }
 
 func (nc *Config) SaveAs(filename string) error {

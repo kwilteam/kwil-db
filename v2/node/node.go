@@ -4,19 +4,22 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	mrand2 "math/rand/v2"
+	"net"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	kcrypto "kwil/crypto"
+	"kwil/crypto"
 	"kwil/log"
 	"kwil/node/consensus"
 	"kwil/node/mempool"
@@ -26,7 +29,7 @@ import (
 
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/libp2p/go-libp2p/core/crypto"
+	p2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -88,6 +91,7 @@ type Node struct {
 
 	host         host.Host
 	pex          bool
+	pubkey       crypto.PublicKey
 	leader       atomic.Bool
 	leaderPubKey []byte
 	dir          string
@@ -155,13 +159,13 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 	close = addClose(close, bs.Close) //close db after stopping p2p
 	close = addClose(close, host.Close)
 
-	signer, err := kcrypto.UnmarshalSecp256k1PrivateKey(options.privKey)
+	signer, err := crypto.UnmarshalSecp256k1PrivateKey(options.privKey)
 	if err != nil {
 		return nil, err
 	}
 
 	ceLogger := logger.New("CONS")
-	leaderPubKey, err := kcrypto.UnmarshalSecp256k1PublicKey(options.leader)
+	leaderPubKey, err := crypto.UnmarshalSecp256k1PublicKey(options.leader)
 	if err != nil {
 		return nil, err
 	}
@@ -175,6 +179,7 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 		log:      logger,
 		host:     host,
 		pm:       pm,
+		pubkey:   signer.Public(),
 		pex:      options.pex,
 		mp:       mp,
 		bki:      bs,
@@ -209,13 +214,36 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 	return node, nil
 }
 
-func (n *Node) Addr() string {
+func FormatPeerString(rawPubKey []byte, keyType crypto.KeyType, ip string, port int) string {
+	return fmt.Sprintf("%s#%d@%s", hex.EncodeToString(rawPubKey), keyType,
+		net.JoinHostPort(ip, strconv.Itoa(port)))
+}
+
+func (n *Node) Addrs() []string {
+	hosts, ports := hostPort(n.host)
+	if len(hosts) == 0 {
+		return nil
+	}
+
+	pubkeyType := n.pubkey.Type()
+	addrs := make([]string, len(hosts))
+	for i, h := range hosts {
+		addrs[i] = FormatPeerString(n.pubkey.Bytes(), pubkeyType, h, ports[i])
+	}
+	return addrs
+}
+
+func (n *Node) MultiAddrs() []string {
 	hosts, ports := hostPort(n.host)
 	id := n.host.ID()
 	if len(hosts) == 0 {
-		return ""
+		return nil
 	}
-	return fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s", hosts[0], ports[0], id)
+	addrs := make([]string, len(hosts))
+	for i, h := range hosts {
+		addrs[i] = fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s", h, ports[i], id)
+	}
+	return addrs
 }
 
 func (n *Node) Dir() string {
@@ -228,21 +256,25 @@ func (n *Node) ID() string {
 
 // Start begins tx and block gossip, connects to any bootstrap peers, and begins
 // peer discovery.
-func (n *Node) Start(ctx context.Context, peers ...string) error {
+func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	n.host.Network().Notify(n.pm)
 	defer n.host.Network().StopNotify(n.pm)
 
+	bootpeers, err := peers.ConvertPeersToMultiAddr(bootpeers)
+	if err != nil {
+		return err
+	}
+
 	// connect to bootstrap peers, if any
-	for _, peer := range peers {
+	for _, peer := range bootpeers {
 		peerInfo, err := connectPeer(ctx, peer, n.host)
 		if err != nil {
 			n.log.Errorf("failed to connect to %v: %v", peer, err)
 			continue
 		}
-		n.log.Info("Connected", "peer", peerInfo)
 		if err = n.checkPeerProtos(ctx, peerInfo.ID); err != nil {
 			n.log.Warnf("WARNING: peer does not support required protocols %v: %v", peer, err)
 			if err = n.host.Network().ClosePeer(peerInfo.ID); err != nil {
@@ -253,7 +285,15 @@ func (n *Node) Start(ctx context.Context, peers ...string) error {
 		}
 		// n.host.ConnManager().TagPeer(peerID, "validatorish", 1)
 	} // else would use persistent peer store (address book)
+
+	// Connect to peers in peer store.
+	bootedPeers := n.pm.ConnectedPeers()
 	for _, peerID := range n.host.Peerstore().Peers() {
+		if slices.ContainsFunc(bootedPeers, func(p types.PeerInfo) bool {
+			return p.ID == peerID
+		}) {
+			continue // already connected
+		}
 		if n.host.ID() == peerID {
 			continue
 		}
@@ -268,9 +308,8 @@ func (n *Node) Start(ctx context.Context, peers ...string) error {
 			ID:    peerID,
 			Addrs: peerAddrs,
 		}); err != nil {
-			n.log.Warnf("Unable to connect to peer %s: %v", peerID, err)
+			n.log.Warnf("Unable to connect to peer %s: %v", peerID, peers.CompressDialError(err))
 		}
-		n.log.Infof("Connected to peer %v", peerID)
 	}
 
 	ps, err := pubsub.NewGossipSub(ctx, n.host)
@@ -337,26 +376,6 @@ func (n *Node) checkPeerProtos(ctx context.Context, peer peer.ID) error {
 	return nil
 }
 
-// announceBlocks announces new committed and proposed blocks when the leader.
-// func (n *Node) announceBlocks(ctx context.Context) {
-// 	blkChan := n.ce.BlockLeaderStream()
-
-// 	for {
-// 		var blk *types.QualifiedBlock
-// 		select {
-// 		case <-ctx.Done():
-// 			return
-// 		case blk = <-blkChan:
-// 		}
-
-// 		if blk.Proposed {
-// 			go n.announceBlkProp(ctx, blk.Block, n.host.ID())
-// 		} else {
-// 			go n.announceBlk(ctx, blk.Block, blk.AppHash, n.host.ID())
-// 		}
-// 	}
-// }
-
 func (n *Node) txGetStreamHandler(s network.Stream) {
 	defer s.Close()
 
@@ -408,9 +427,8 @@ func (n *Node) peers() []peer.ID {
 }
 
 // NewKey generates a new private key from a reader, which should provide random data.
-func NewKey(r io.Reader) kcrypto.PrivateKey {
-	// priv := kcrypto.GenerateEd25519Key(r)
-	privKey, _, err := kcrypto.GenerateSecp256k1Key(r)
+func NewKey(r io.Reader) crypto.PrivateKey {
+	privKey, _, err := crypto.GenerateSecp256k1Key(r)
 	if err != nil {
 		panic(err)
 	}
@@ -419,7 +437,7 @@ func NewKey(r io.Reader) kcrypto.PrivateKey {
 }
 
 func newHost(ip string, port uint64, privKey []byte) (host.Host, error) {
-	privKeyP2P, err := crypto.UnmarshalSecp256k1PrivateKey(privKey) // rypto.UnmarshalECDSAPrivateKey(privKey)
+	privKeyP2P, err := p2pcrypto.UnmarshalSecp256k1PrivateKey(privKey)
 	if err != nil {
 		return nil, err
 	}
