@@ -95,14 +95,10 @@ func runNode(ctx context.Context, rootDir string, cfg *node.Config) error {
 		return err
 	}
 
-	addr := node.Addr()
-	logger.Infof("To connect: %s", addr)
+	addrs := node.Addrs()
+	logger.Infof("This node is %s", addrs)
 
-	var bootPeers []string
-	if cfg.PeerConfig.BootNode != "" {
-		bootPeers = append(bootPeers, cfg.PeerConfig.BootNode)
-	}
-	if err = node.Start(ctx, bootPeers...); err != nil {
+	if err = node.Start(ctx, cfg.PeerConfig.BootNodes...); err != nil {
 		return err
 	}
 	// Start is blocking, for now.
