@@ -3,6 +3,7 @@ package types
 import (
 	"context"
 	"errors"
+	"kwil/types"
 )
 
 var ErrNotFound = errors.New("not found")
@@ -36,7 +37,7 @@ type BlockStorer interface {
 }
 
 type BlockResultsStorer interface {
-	StoreResults(hash Hash, results []TxResult) error
+	StoreResults(hash Hash, results []types.TxResult) error
 }
 
 type TxGetter interface {
@@ -62,7 +63,7 @@ type QualifiedBlock struct { // basically just caches the hash
 }
 
 type Execution interface {
-	ExecBlock(blk *Block) (commit func(context.Context, bool) error, appHash Hash, res []TxResult, err error)
+	ExecBlock(blk *Block) (commit func(context.Context, bool) error, appHash Hash, res []types.TxResult, err error)
 }
 
 type NamedTx struct {
