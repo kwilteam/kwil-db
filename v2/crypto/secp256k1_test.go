@@ -3,6 +3,7 @@ package crypto
 import (
 	"bytes"
 	"crypto/rand"
+	"encoding/hex"
 	"io"
 	"testing"
 )
@@ -181,5 +182,66 @@ func TestSecp256k1KeyEquality(t *testing.T) {
 	} // same KeyType, same bytes
 	if !pub1.Equals(mockPub) {
 		t.Error("same Type and Bytes should be equal regardless of concrete impl")
+	}
+}
+
+func TestComputeEthereumAddress(t *testing.T) {
+	tests := []struct {
+		name     string
+		pubKey   func() *Secp256k1PublicKey
+		wantAddr string
+	}{
+		{
+			name: "expected key and address",
+			pubKey: func() *Secp256k1PublicKey {
+				privKey, _, _ := GenerateSecp256k1Key(bytes.NewReader(bytes.Repeat([]byte{1}, 64)))
+				return privKey.Public().(*Secp256k1PublicKey)
+			},
+			wantAddr: "1a642f0e3c3af545e7acbd38b07251b3990914f1",
+		},
+		{
+			name: "publicly known",
+			pubKey: func() *Secp256k1PublicKey {
+				pubkeyhex, _ := hex.DecodeString("0462117d6727ddd50b8f1d60ce50ef9fa511c7b43b6b6e6f763b32b942e515a4d47df6eb61d3dceb615176c80a16484e773885f3de31e0344ed3d74cce103646f4")
+				pubkey, err := UnmarshalSecp256k1PublicKey(pubkeyhex)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return pubkey
+			},
+			wantAddr: "9cea81b9d2e900d6027125378ee2ddfa15feeed1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pubKey := tt.pubKey()
+			addr := EthereumAddressFromPubKey(pubKey)
+
+			if tt.wantAddr != "" {
+				wantBytes, err := hex.DecodeString(tt.wantAddr)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if !bytes.Equal(addr, wantBytes) {
+					t.Errorf("ComputeEthereumAddress() = %x, want %s", addr, tt.wantAddr)
+				}
+			} else {
+				if len(addr) != 20 {
+					t.Errorf("ComputeEthereumAddress() returned address of length %d, want 20", len(addr))
+				}
+			}
+
+			// Verify address is always 20 bytes
+			if len(addr) != 20 {
+				t.Errorf("ComputeEthereumAddress() returned address of incorrect length: got %d, want 20", len(addr))
+			}
+
+			// Verify generating address twice for same key returns same result
+			addr2 := EthereumAddressFromPubKey(pubKey)
+			if !bytes.Equal(addr, addr2) {
+				t.Error("ComputeEthereumAddress() returned different addresses for same key")
+			}
+		})
 	}
 }
