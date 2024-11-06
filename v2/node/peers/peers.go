@@ -132,7 +132,9 @@ func (pm *PeerMan) startPex(ctx context.Context) {
 				for peer := range peerChan {
 					if pm.addPeerAddrs(peer) {
 						// TODO: connection manager, with limits
-						pm.c.Connect(ctx, peer)
+						if err = pm.c.Connect(ctx, peer); err != nil {
+							pm.log.Warnf("Failed to connect to %s: %v", peer.ID, err)
+						}
 					}
 					count++
 				}
@@ -288,13 +290,13 @@ func (pm *PeerMan) addPeers(peerList []types.PeerInfo, ttl time.Duration) int {
 
 // addPeerAddrs adds a discovered peer to the local peer store.
 func (pm *PeerMan) addPeerAddrs(p peer.AddrInfo) (added bool) {
-	pm.addPeers([]types.PeerInfo{
+	numAdded := pm.addPeers([]types.PeerInfo{
 		{
 			AddrInfo: types.AddrInfo(p),
 			// No known protocols, yet
 		},
 	}, peerstore.TempAddrTTL)
-	return added
+	return numAdded > 0
 }
 
 // Connected is triggered when a peer connects
