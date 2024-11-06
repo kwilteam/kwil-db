@@ -8,7 +8,10 @@ import (
 	"io"
 	"time"
 
+	"kwil/crypto"
+	"kwil/crypto/auth"
 	"kwil/node/types"
+	ktypes "kwil/types"
 
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -138,9 +141,32 @@ func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txHash typ
 	return nil
 }
 
+func randomTx(size int, signer auth.Signer) ([]byte, error) {
+	payload := &ktypes.KVPayload{
+		Key:   randBytes(32),
+		Value: randBytes(size),
+	}
+
+	tx, err := ktypes.CreateTransaction(payload, "test-chain", 1)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := tx.Sign(signer); err != nil {
+		return nil, err
+	}
+
+	return tx.MarshalBinary()
+}
+
 // startTxAnns creates pretend transactions, adds them to the tx index, and
 // announces them to peers.
 func (n *Node) startTxAnns(ctx context.Context, newPeriod, reannouncePeriod time.Duration, sz int) {
+	signer := secp256k1Signer()
+	if signer == nil {
+		panic("failed to create secp256k1 signer")
+	}
+
 	n.wg.Add(1)
 	go func() {
 		defer n.wg.Done()
@@ -152,8 +178,12 @@ func (n *Node) startTxAnns(ctx context.Context, newPeriod, reannouncePeriod time
 			case <-time.After(newPeriod):
 			}
 
-			txHash := types.Hash(randBytes(32))
-			rawTx := randBytes(sz)
+			rawTx, err := randomTx(sz, signer)
+			if err != nil {
+				n.log.Warnf("failed to create random tx: %v", err)
+				continue
+			}
+			txHash := types.HashBytes(rawTx)
 			n.mp.Store(txHash, rawTx)
 
 			// n.log.Infof("announcing txid %v", txid)
@@ -196,4 +226,19 @@ func randBytes(n int) []byte {
 	b := make([]byte, n)
 	rand.Read(b)
 	return b
+}
+
+func secp256k1Signer() *auth.EthPersonalSigner {
+	privKey, _, err := crypto.GenerateSecp256k1Key(nil)
+	if err != nil {
+		return nil
+	}
+
+	privKeyBytes := privKey.Bytes()
+	k, err := crypto.UnmarshalSecp256k1PrivateKey(privKeyBytes)
+	if err != nil {
+		return nil
+	}
+
+	return &auth.EthPersonalSigner{Key: *k}
 }

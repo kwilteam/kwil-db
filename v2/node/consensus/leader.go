@@ -25,8 +25,10 @@ var lastReset int64 = 0
 // startNewRound starts a new round of consensus process.
 func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	ce.log.Info("Starting a new round", "height", ce.state.lc.height+1)
-	ce.state.mtx.Lock()
-	defer ce.state.mtx.Unlock()
+	// ce.state.mtx.Lock()
+	// defer ce.state.mtx.Unlock()
+	ce.lock("startNewRound")
+	defer ce.unlock("startNewRound")
 
 	blkProp, err := ce.createBlockProposal()
 	if err != nil {
@@ -47,10 +49,12 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	go ce.proposalBroadcaster(ctx, blkProp.blk)
 
 	// update the stateInfo
-	ce.stateInfo.mtx.Lock()
+	// ce.stateInfo.mtx.Lock()
+	ce.stateLock("startNewRound")
 	ce.stateInfo.status = Proposed
 	ce.stateInfo.blkProp = blkProp
-	ce.stateInfo.mtx.Unlock()
+	// ce.stateInfo.mtx.Unlock()
+	ce.stateUnlock("startNewRound")
 
 	// Execute the block and generate the appHash
 	if err := ce.executeBlock(); err != nil {
@@ -82,31 +86,34 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 // This only notifies if leader is still processing the block the vote is for.
 func (ce *ConsensusEngine) NotifyACK(validatorPK []byte, ack types.AckRes) {
 	// fmt.Println("NotifyACK: Received ACK from validator", string(validatorPK), ack.Height, ack.ACK, ack.BlkHash, ack.AppHash)
-	ce.state.mtx.Lock()
-	defer ce.state.mtx.Unlock()
+	// ce.state.mtx.Lock()
+	// defer ce.state.mtx.Unlock()
 
 	if ce.role.Load() != types.RoleLeader {
 		return
 	}
 
+	// ce.stateRLock("NotifyACK")
+	// defer ce.stateRUnlock("NotifyACK")
+
 	// Check if the vote is for the current block
-	if ce.state.blkProp == nil {
-		ce.log.Warn("NotifyACK: Not processing any block proposal at the moment")
-		return
-	}
+	// if ce.stateInfo.blkProp == nil {
+	// 	ce.log.Warn("NotifyACK: Not processing any block proposal at the moment")
+	// 	return
+	// }
 
-	if ce.state.blkProp.height != ack.Height {
-		ce.log.Warn("NotifyACK: Vote received for a different block, ignore it.",
-			"got_height", ack.Height, "expected_height", ce.state.blkProp.height)
-		return
-	}
+	// if ce.stateInfo.blkProp.height != ack.Height {
+	// 	ce.log.Warn("NotifyACK: Vote received for a different block, ignore it.",
+	// 		"got_height", ack.Height, "expected_height", ce.stateInfo.blkProp.height)
+	// 	return
+	// }
 
-	// If the ack is for the current height, but the block hash is different? Ignore it.
-	if ce.state.blkProp.blkHash != ack.BlkHash {
-		ce.log.Warn("NotifyACK: Vote received for an incorrect block",
-			"got_hash", ack.BlkHash, "expected_hash", ce.state.blkProp.blkHash)
-		return
-	}
+	// // If the ack is for the current height, but the block hash is different? Ignore it.
+	// if ce.stateInfo.blkProp.blkHash != ack.BlkHash {
+	// 	ce.log.Warn("NotifyACK: Vote received for an incorrect block",
+	// 		"got_hash", ack.BlkHash, "expected_hash", ce.stateInfo.blkProp.blkHash)
+	// 	return
+	// }
 
 	// else notify the vote to the consensus engine
 	voteMsg := &vote{
@@ -115,6 +122,7 @@ func (ce *ConsensusEngine) NotifyACK(validatorPK []byte, ack types.AckRes) {
 		blkHash: ack.BlkHash,
 		height:  ack.Height,
 	}
+
 	ce.sendConsensusMessage(&consensusMessage{
 		MsgType: voteMsg.Type(),
 		Msg:     voteMsg,
@@ -146,8 +154,10 @@ func (ce *ConsensusEngine) createBlockProposal() (*blockProposal, error) {
 // addVote registers the vote received from the validator if it is for the current block.
 func (ce *ConsensusEngine) addVote(ctx context.Context, vote *vote, sender string) error {
 	// fmt.Println("Adding vote", vote, sender)
-	ce.state.mtx.Lock()
-	defer ce.state.mtx.Unlock()
+	// ce.state.mtx.Lock()
+	// defer ce.state.mtx.Unlock()
+	ce.lock("addVote")
+	defer ce.unlock("addVote")
 
 	if ce.state.blkProp == nil {
 		return fmt.Errorf("not processing any block proposal at the moment")

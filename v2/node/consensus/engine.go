@@ -338,8 +338,11 @@ func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg cons
 
 // resetBlockProp aborts the block execution and resets the state to the last committed block.
 func (ce *ConsensusEngine) resetBlockProp(height int64) {
-	ce.state.mtx.Lock()
-	defer ce.state.mtx.Unlock()
+	// ce.state.mtx.Lock()
+	// defer ce.state.mtx.Unlock()
+
+	ce.lock("resetBlockProp")
+	defer ce.unlock("resetBlockProp")
 
 	// If we are currently executing any transactions corresponding to the blk at height +1
 	// 1. Cancel the execution context -> so that the transactions stop
@@ -347,6 +350,7 @@ func (ce *ConsensusEngine) resetBlockProp(height int64) {
 	// 3. Reset the blkProp and blockRes
 	// 4. This should never happen after the commit phase, (blk should have never made it to the blockstore)
 
+	ce.log.Info("Reset msg: ", "height", height)
 	if ce.state.lc.height == height {
 		if ce.state.blkProp != nil {
 			// first cancel the context
@@ -365,8 +369,11 @@ func (ce *ConsensusEngine) resetBlockProp(height int64) {
 // catchup syncs the node first with the local blockstore and then with the network.
 func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 	// Figure out the app state and initialize the node state.
-	ce.state.mtx.Lock()
-	defer ce.state.mtx.Unlock()
+	// ce.state.mtx.Lock()
+	// defer ce.state.mtx.Unlock()
+
+	ce.lock("catchup")
+	defer ce.unlock("catchup")
 
 	// initialize the consensus engine state
 	if err := ce.init(); err != nil {
@@ -481,8 +488,11 @@ func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context) error {
 func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 	// Leader should reannounce the blkProp and blkAnn messages
 	// Validators should reannounce the Ack messages
-	ce.state.mtx.RLock()
-	defer ce.state.mtx.RUnlock()
+	// ce.state.mtx.RLock()
+	// defer ce.state.mtx.RUnlock()
+
+	ce.rlock("reannounceMsgs")
+	defer ce.runlock("reannounceMsgs")
 
 	if ce.role.Load() == types.RoleLeader {
 		// reannounce the blkProp message if the node is still waiting for the votes
@@ -510,8 +520,10 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 }
 
 func (ce *ConsensusEngine) doCatchup(ctx context.Context) {
-	ce.state.mtx.Lock()
-	defer ce.state.mtx.Unlock()
+	// ce.state.mtx.Lock()
+	// defer ce.state.mtx.Unlock()
+	ce.lock("doCatchup")
+	defer ce.unlock("doCatchup")
 
 	if ce.state.lc.height >= ce.networkHeight.Load() {
 		return
@@ -536,4 +548,44 @@ func (ce *ConsensusEngine) updateNetworkHeight(height int64) {
 
 func (ce *ConsensusEngine) requiredThreshold() int64 {
 	return int64(len(ce.validatorSet)/2 + 1)
+}
+
+func (ce *ConsensusEngine) lock(caller string) {
+	ce.state.mtx.Lock()
+	ce.log.Info("Lock acquired", "caller", caller)
+}
+
+func (ce *ConsensusEngine) unlock(caller string) {
+	ce.state.mtx.Unlock()
+	ce.log.Info("Lock released", "caller", caller)
+}
+
+func (ce *ConsensusEngine) rlock(caller string) {
+	ce.state.mtx.RLock()
+	ce.log.Info("RLock acquired", "caller", caller)
+}
+
+func (ce *ConsensusEngine) runlock(caller string) {
+	ce.state.mtx.RUnlock()
+	ce.log.Info("RLock released", "caller", caller)
+}
+
+func (ce *ConsensusEngine) stateLock(caller string) {
+	ce.stateInfo.mtx.Lock()
+	ce.log.Info("StateInfo Lock acquired", "caller", caller)
+}
+
+func (ce *ConsensusEngine) stateUnlock(caller string) {
+	ce.stateInfo.mtx.Unlock()
+	ce.log.Info("StateInfo Lock released", "caller", caller)
+}
+
+func (ce *ConsensusEngine) stateRLock(caller string) {
+	ce.stateInfo.mtx.RLock()
+	ce.log.Info("StateInfo RLock acquired", "caller", caller)
+}
+
+func (ce *ConsensusEngine) stateRUnlock(caller string) {
+	ce.stateInfo.mtx.RUnlock()
+	ce.log.Info("StateInfo RLock released", "caller", caller)
 }
