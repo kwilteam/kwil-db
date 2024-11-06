@@ -12,9 +12,6 @@ import (
 	"kwil/node"
 	"kwil/node/types"
 
-	p2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
-	"github.com/libp2p/go-libp2p/core/peer"
-
 	"github.com/spf13/cobra"
 )
 
@@ -71,20 +68,11 @@ func generateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, start
 
 	// key 0 is leader
 	leaderPub := keys[0].Public()
-	leaderRawPub := leaderPub.Bytes()
-	// See the comments on node.PeerConfig.BootNodes on the peer string format,
-	// and why we're still using go-libp2p crypto here.
-	leaderP2PPub, err := p2pcrypto.UnmarshalSecp256k1PublicKey(leaderRawPub)
-	if err != nil {
-		return err
-	}
-	leaderP2PAddr, err := peer.IDFromPublicKey(leaderP2PPub)
-	if err != nil {
-		return err
-	}
+	// leaderPeerID, err := node.PeerIDFromPubKey(leaderPub)
+	leaderPubType := leaderPub.Type()
 
 	genConfig := &node.GenesisConfig{
-		Leader:     leaderRawPub,
+		Leader:     leaderPub.Bytes(), // rethink this so it can be different key types?
 		Validators: make([]types.Validator, numVals),
 	}
 
@@ -111,8 +99,8 @@ func generateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, start
 		cfg.PeerConfig.Pex = !noPex
 
 		if i != 0 {
-			cfg.PeerConfig.BootNode = fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s",
-				cfg.PeerConfig.IP, startingPort, leaderP2PAddr)
+			cfg.PeerConfig.BootNodes = []string{node.FormatPeerString(
+				leaderPub.Bytes(), leaderPubType, cfg.PeerConfig.IP, int(startingPort))}
 		}
 
 		if err := cfg.SaveAs(filepath.Join(nodeDir, ConfigFileName)); err != nil {

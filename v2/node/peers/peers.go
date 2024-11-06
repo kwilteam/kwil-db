@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"strings"
 	"sync"
 	"time"
 
@@ -18,7 +17,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
-	"github.com/libp2p/go-libp2p/p2p/net/swarm"
 	"github.com/multiformats/go-multiaddr"
 )
 
@@ -349,7 +347,8 @@ func (pm *PeerMan) addPeerAddrs(p peer.AddrInfo) (added bool) {
 // Connected is triggered when a peer connects
 func (pm *PeerMan) Connected(net network.Network, conn network.Conn) {
 	peerID := conn.RemotePeer()
-	pm.log.Infof("Connected to peer %s", peerID)
+	addr := conn.RemoteMultiaddr()
+	pm.log.Infof("Connected to peer %s @ %v", peerID, addr.String())
 
 	// pm.ps.UpdateAddrs(peerID, ttlProvisional, ttlKnown)
 
@@ -417,15 +416,7 @@ func (pm *PeerMan) reconnectWithRetry(ctx context.Context, peerID peer.ID) {
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		if err := pm.c.Connect(ctx, addrInfo); err != nil {
 			cancel()
-			var dErr *swarm.DialError
-			if errors.Is(err, swarm.ErrAllDialsFailed) && errors.As(err, &dErr) {
-				// the actual DialError string is multi-line
-				addrs := make([]string, len(dErr.DialErrors))
-				for i, te := range dErr.DialErrors {
-					addrs[i] = te.Address.String()
-				}
-				err = fmt.Errorf("%w: [%s]", dErr.Cause, strings.Join(addrs, ", "))
-			}
+			err = CompressDialError(err)
 			pm.log.Infof("Failed to reconnect to peer %s (trying again in %v): %v", peerID, delay, err)
 
 		} else {

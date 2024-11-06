@@ -133,3 +133,25 @@ func Sha256(data []byte) []byte {
 	h.Write(data)
 	return h.Sum(nil)
 }
+
+func UnmarshalPublicKey(data []byte, keyType KeyType) (PublicKey, error) {
+	switch keyType {
+	case KeyTypeSecp256k1:
+		return UnmarshalSecp256k1PublicKey(data)
+	case KeyTypeEd25519:
+		return UnmarshalEd25519PublicKey(data)
+	default:
+		return nil, fmt.Errorf("invalid key type %v", keyType)
+	}
+}
+
+func UnmarshalPrivateKey(data []byte, keyType KeyType) (PrivateKey, error) {
+	switch keyType {
+	case KeyTypeSecp256k1:
+		return UnmarshalSecp256k1PrivateKey(data)
+	case KeyTypeEd25519:
+		return UnmarshalEd25519PrivateKey(data)
+	default:
+		return nil, fmt.Errorf("invalid key type %v", keyType)
+	}
+}
