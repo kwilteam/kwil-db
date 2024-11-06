@@ -7,6 +7,7 @@
 package crypto
 
 import (
+	"crypto/sha256"
 	"crypto/subtle"
 	"encoding/binary"
 	"errors"
@@ -125,4 +126,10 @@ func WireDecodePrivateKey(b []byte) (PrivateKey, error) {
 	default:
 		return nil, fmt.Errorf("invalid key type %v", keyType)
 	}
+}
+
+func Sha256(data []byte) []byte {
+	h := sha256.New()
+	h.Write(data)
+	return h.Sum(nil)
 }
