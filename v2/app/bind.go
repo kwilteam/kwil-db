@@ -50,6 +50,8 @@ func SetNodeFlags(cmd *cobra.Command) {
 	cmd.Flag("peer.pex").Hidden = true                     // maybe remove if we keep default to enable pex
 }
 
+// PreRunCmd is the function signature used with a cobra.Command.PreRunE or
+// PersistentPreRunE. Use [ChainPreRuns] to apply multiple PreRunCmds.
 type PreRunCmd func(*cobra.Command, []string) error
 
 // ChainPreRuns chains a list of PreRunCmd functions into a single PreRunCmd.
@@ -67,6 +69,9 @@ func ChainPreRuns(preRuns ...PreRunCmd) PreRunCmd {
 	}
 }
 
+// BindDefaults binds a struct to the koanf instance. The tags specified which
+// tag should be used to determine the names of the keys to bind for each field
+// of the struct.
 func BindDefaults(cfg interface{}, tag string) error {
 	err := k.Load(structs.Provider(cfg, tag), nil)
 	if err != nil {

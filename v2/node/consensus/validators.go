@@ -18,4 +18,3 @@ package consensus
 
 	similarly consensus param updates:
 */
-

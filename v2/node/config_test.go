@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"kwil/log"
 	"kwil/node/types"
+	"slices"
 	"strings"
 	"testing"
 
@@ -28,10 +29,10 @@ func TestMarshalConfig(t *testing.T) {
 		LogFormat:  log.FormatUnstructured,
 		PrivateKey: mustDecodeHex("ababababab"),
 		PeerConfig: PeerConfig{
-			IP:       "127.0.0.1",
-			Port:     6600,
-			Pex:      true,
-			BootNode: "/ip4/127.0.0.1/tcp/6600/p2p/16Uiu2HAkx2kfP117VnYnaQGprgXBoMpjfxGXCpizju3cX7ZUzRhv",
+			IP:        "127.0.0.1",
+			Port:      6600,
+			Pex:       true,
+			BootNodes: []string{"/ip4/127.0.0.1/tcp/6600/p2p/16Uiu2HAkx2kfP117VnYnaQGprgXBoMpjfxGXCpizju3cX7ZUzRhv"},
 		},
 	}
 
@@ -106,10 +107,10 @@ func TestConfigSaveAndLoad(t *testing.T) {
 				LogFormat:  log.FormatJSON,
 				PrivateKey: mustDecodeHex("1234567890"),
 				PeerConfig: PeerConfig{
-					IP:       "192.168.1.1",
-					Port:     8080,
-					Pex:      false,
-					BootNode: "/ip4/192.168.1.1/tcp/8080/p2p/test",
+					IP:        "192.168.1.1",
+					Port:      8080,
+					Pex:       false,
+					BootNodes: []string{"/ip4/192.168.1.1/tcp/8080/p2p/test"},
 				},
 			},
 			wantErr: false,
@@ -157,8 +158,8 @@ func TestConfigSaveAndLoad(t *testing.T) {
 				if loaded.PeerConfig.Pex != tt.config.PeerConfig.Pex {
 					t.Errorf("PeerConfig.Pex mismatch: got %v, want %v", loaded.PeerConfig.Pex, tt.config.PeerConfig.Pex)
 				}
-				if loaded.PeerConfig.BootNode != tt.config.PeerConfig.BootNode {
-					t.Errorf("PeerConfig.BootNode mismatch: got %v, want %v", loaded.PeerConfig.BootNode, tt.config.PeerConfig.BootNode)
+				if !slices.Equal(loaded.PeerConfig.BootNodes, tt.config.PeerConfig.BootNodes) {
+					t.Errorf("PeerConfig.BootNode mismatch: got %v, want %v", loaded.PeerConfig.BootNodes, tt.config.PeerConfig.BootNodes)
 				}
 			}
 		})
