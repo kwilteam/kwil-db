@@ -4,8 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"kwil/crypto"
-
-	ethCommon "github.com/ethereum/go-ethereum/common"
 )
 
 const (
@@ -30,7 +28,7 @@ var _ Authenticator = EthSecp256k1Authenticator{}
 // Identifier returns an ethereum address hex string from address bytes.
 // It will include the 0x prefix, and the address will be checksum-able.
 func (EthSecp256k1Authenticator) Identifier(ident []byte) (string, error) {
-	return ethCommon.BytesToAddress(ident).Hex(), nil
+	return fmt.Sprintf("0x%x", ident), nil
 }
 
 // Verify verifies applies the Ethereum TextHash digest and verifies the signature

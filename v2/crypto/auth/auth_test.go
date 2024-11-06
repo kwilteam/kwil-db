@@ -2,20 +2,24 @@ package auth_test
 
 import (
 	"encoding/hex"
+	"fmt"
 	"testing"
 
 	"kwil/crypto"
 	"kwil/crypto/auth"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 const (
-	secp256k1Key = "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"
-	ed25519Key   = "7c67e60fce0c403ff40193a3128e5f3d8c2139aed36d76d7b5f1e70ec19c43f00aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842"
+	secp256k1Key  = "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"
+	secp256k1Addr = "0xc89d42189f0450c2b2c3c61f58ec5d628176a1e7"
+	ed25519Key    = "7c67e60fce0c403ff40193a3128e5f3d8c2139aed36d76d7b5f1e70ec19c43f00aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842"
+	ed25519Addr   = "0aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842"
 )
 
-func Test_Auth(t *testing.T) {
+func Test_AuthSignAndVerify(t *testing.T) {
 
 	// testCase will take a signer
 	// it will sign a message and verify the signature using
@@ -31,18 +35,15 @@ func Test_Auth(t *testing.T) {
 	var msg = []byte("foo")
 
 	testCases := []testCase{
-		// {
-		// 	name:          "eth personal sign",
-		// 	signer:        newEthSigner(secp256k1Key),
-		// 	authenticator: auth.EthSecp256k1Authenticator{},
-		// 	address:       "0xc89D42189f0450C2b2c3c61f58Ec5d628176A1E7",
-		// },
+		{
+			name:          "eth personal sign",
+			signer:        secp256k1Signer(t),
+			authenticator: auth.EthSecp256k1Authenticator{},
+		},
 		{
 			name:          "ed25519",
-			signer:        newEd25519Signer(ed25519Key),
+			signer:        ed25519Signer(t),
 			authenticator: auth.Ed25519Authenticator{},
-			// ed25519 doesn't really have the concept of address, so it is just the hex public key
-			address: "0aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842",
 		},
 	}
 
@@ -58,35 +59,61 @@ func Test_Auth(t *testing.T) {
 			// check the address
 			address, err := tc.authenticator.Identifier(tc.signer.Identity())
 			assert.NoError(t, err)
-			assert.Equal(t, tc.address, address)
+
+			t.Log("Address:", address)
 		})
 	}
 }
 
-// func newEthSigner(pkey string) *auth.EthPersonalSigner {
-// 	pk, err := ethCrypto.HexToECDSA(pkey)
-// 	if err != nil {
-// 		return nil, err
-// 	}
+func TestSecp256k1Identifier(t *testing.T) {
+	pk, err := hex.DecodeString(secp256k1Key)
+	require.NoError(t, err)
 
-// 	secpKey, err := crypto.UnmarshalSecp256k1PrivateKey(pk)
-// 	if err != nil {
-// 		panic(err)
-// 	}
+	k, err := crypto.UnmarshalSecp256k1PrivateKey(pk)
+	require.NoError(t, err)
 
-// 	return &auth.EthPersonalSigner{Key: *secpKey}
-// }
+	signer := &auth.EthPersonalSigner{Key: *k}
+	authenticator := auth.EthSecp256k1Authenticator{}
 
-func newEd25519Signer(pkey string) *auth.Ed25519Signer {
-	pkeyBytes, err := hex.DecodeString(pkey)
-	if err != nil {
-		panic(err)
-	}
+	address, err := authenticator.Identifier(signer.Identity())
+	require.NoError(t, err)
 
-	edKey, err := crypto.UnmarshalEd25519PrivateKey(pkeyBytes)
-	if err != nil {
-		panic(err)
-	}
+	assert.Equal(t, secp256k1Addr, address)
+}
 
-	return &auth.Ed25519Signer{Ed25519PrivateKey: *edKey}
+func TestEd25519Identifier(t *testing.T) {
+	k, err := hex.DecodeString(ed25519Key)
+	require.NoError(t, err)
+
+	pk, err := crypto.UnmarshalEd25519PrivateKey(k)
+	require.NoError(t, err)
+
+	signer := &auth.Ed25519Signer{Ed25519PrivateKey: *pk}
+	authenticator := auth.Ed25519Authenticator{}
+
+	address, err := authenticator.Identifier(signer.Identity())
+	require.NoError(t, err)
+
+	assert.Equal(t, ed25519Addr, address)
+}
+
+func secp256k1Signer(t *testing.T) *auth.EthPersonalSigner {
+	privKey, _, err := crypto.GenerateSecp256k1Key(nil)
+	require.NoError(t, err)
+
+	fmt.Println("Private Key:", privKey)
+	privKeyBytes := privKey.Bytes()
+	k, err := crypto.UnmarshalSecp256k1PrivateKey(privKeyBytes)
+	require.NoError(t, err)
+
+	return &auth.EthPersonalSigner{Key: *k}
+}
+
+func ed25519Signer(t *testing.T) *auth.Ed25519Signer {
+	privKey, _, err := crypto.GenerateEd25519Key(nil)
+	require.NoError(t, err)
+
+	pBytes := privKey.Bytes()
+	k, err := crypto.UnmarshalEd25519PrivateKey(pBytes)
+	return &auth.Ed25519Signer{Ed25519PrivateKey: *k}
 }
