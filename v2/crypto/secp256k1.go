@@ -117,6 +117,13 @@ func (k *Secp256k1PublicKey) Bytes() []byte {
 	return (*secp256k1.PublicKey)(k).SerializeCompressed()
 }
 
+// BytesUncompressed returns the bytes of the key.
+func (k *Secp256k1PublicKey) BytesUncompressed() []byte {
+	var err error // discarded, since SerializeUncompressed returns no error
+	defer func() { handlePanic(recover(), &err, "secp256k1 public key marshaling") }()
+	return (*secp256k1.PublicKey)(k).SerializeUncompressed()
+}
+
 // Equals compares two public keys. This accepts a Key to satisfy the PublicKey interface.
 func (k *Secp256k1PublicKey) Equals(o Key) bool {
 	sk, ok := o.(*Secp256k1PublicKey)
@@ -163,18 +170,30 @@ const SignatureLength = 64 + 1 // 64 bytes ECDSA signature + 1 byte recovery id
 const RecoveryIDOffset = 64
 
 // RecoverSecp256k1Key recovers a secp256k1 public key from a signature and
-// signed hash. TODO: maybe have this take `msg []byte` and hash internally.
+// signed message, which is hashed with sha256 internally.
 func RecoverSecp256k1Key(msg, sig []byte) (*Secp256k1PublicKey, error) {
 	if len(sig) != SignatureLength {
 		return nil, errors.New("invalid signature")
 	}
 
-	// Convert to secp256k1 input format with 'recovery id' v at the beginning.
 	hash := sha256.Sum256(msg)
+	return RecoverSecp256k1KeyFromSigHash(hash[:], sig)
+}
+
+// RecoverSecp256k1KeyFromSigHash is like [RecoverSecp256k1Key], except the
+// input is the sighash, which was directly signed. This is the more proper
+// implementation of secp256k1 pubkey recovery since a specific hash function is
+// not associated with secp256k1 or ecdsa.
+func RecoverSecp256k1KeyFromSigHash(hash, sig []byte) (*Secp256k1PublicKey, error) {
+	if len(sig) != SignatureLength {
+		return nil, errors.New("invalid signature")
+	}
+
+	// Convert to secp256k1 input format with 'recovery id' v at the beginning.
 	btcsig := make([]byte, SignatureLength)
 	btcsig[0] = sig[RecoveryIDOffset] + 27
 	copy(btcsig[1:], sig)
-	pub, _, err := ecdsa.RecoverCompact(btcsig, hash[:])
+	pub, _, err := ecdsa.RecoverCompact(btcsig, hash)
 	return (*Secp256k1PublicKey)(pub), err
 }
 
