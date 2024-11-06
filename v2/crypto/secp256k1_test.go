@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"io"
+	"strings"
 	"testing"
 )
 
@@ -51,6 +52,34 @@ func TestGenerateSecp256k1Key(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestVitalik(t *testing.T) {
+	// sig and sig hash for mainnet eth tx
+	// 0x1190dd5cd7f1bed506aa7a76fe060d2fc6a0214543b701e01b6748eb6ed16196
+	var rawSig [65]byte
+	rB, _ := hex.DecodeString("8a1c54556e2aaaf86ade107060b55df9e7d53651158958f91b4c377d012894d6")
+	sB, _ := hex.DecodeString("5cd64506f16258f6d3831b3445cb94a0de70ff8943abb4a39a0a84ec1bb81d6d")
+	copy(rawSig[:], rB)
+	copy(rawSig[32:], sB)
+	rawSig[64] = 1 // v
+
+	// var r, s secp256k1.ModNScalar
+	// if r.SetByteSlice(rawSig[:32]) {
+	// 	t.Fatal("r value overflow")
+	// }
+	// if s.SetByteSlice(rawSig[32:]) {
+	// 	t.Fatal("s value overflow")
+	// }
+	// sig := ecdsa.NewSignature(&r, &s)
+
+	hash, _ := hex.DecodeString("a752f7d86cee4952d18b0976b84f1532f59a0ebc534e12ae1f99b75def8cff1d")
+
+	pub, err := RecoverSecp256k1Key(hash[:], rawSig[:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("%x", pub.SerializeUncompressed())
 }
 
 func TestSecp256k1KeySignVerify(t *testing.T) {
@@ -210,6 +239,18 @@ func TestComputeEthereumAddress(t *testing.T) {
 				return pubkey
 			},
 			wantAddr: "9cea81b9d2e900d6027125378ee2ddfa15feeed1",
+		},
+		{
+			name: "vitalik",
+			pubKey: func() *Secp256k1PublicKey {
+				pubkeyhex, _ := hex.DecodeString("04e95ba0b752d75197a8bad8d2e6ed4b9eb60a1e8b08d257927d0df4f3ea6860992aac5e614a83f1ebe4019300373591268da38871df019f694f8e3190e493e711")
+				pubkey, err := UnmarshalSecp256k1PublicKey(pubkeyhex)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return pubkey
+			},
+			wantAddr: strings.ToLower("d8dA6BF26964aF9D7eEd9e03E53415D37aA96045"),
 		},
 	}
 
