@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"kwil/node/types"
+	ktypes "kwil/types"
 )
 
 type Mempool interface {
@@ -18,12 +19,12 @@ type BlockStore interface {
 	Have(blkid types.Hash) bool
 	Get(blkid types.Hash) (*types.Block, types.Hash, error)
 	GetByHeight(height int64) (types.Hash, *types.Block, types.Hash, error)
-	StoreResults(hash types.Hash, results []types.TxResult) error
+	StoreResults(hash types.Hash, results []ktypes.TxResult) error
 	// Results(hash types.Hash) ([]types.TxResult, error)
 }
 
 type BlockExecutor interface {
-	Execute(ctx context.Context, tx []byte) types.TxResult
+	Execute(ctx context.Context, tx []byte) ktypes.TxResult
 	Precommit() (types.Hash, error)
 	Commit(func() error) error
 	Rollback() error
