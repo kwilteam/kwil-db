@@ -24,7 +24,7 @@ type BlockStore interface {
 }
 
 type BlockExecutor interface {
-	Execute(ctx context.Context, tx []byte) ktypes.TxResult
+	Execute(ctx context.Context, tx []byte) (ktypes.TxResult, error)
 	Precommit() (types.Hash, error)
 	Commit(func() error) error
 	Rollback() error

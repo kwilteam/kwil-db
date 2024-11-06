@@ -58,7 +58,12 @@ func (ce *ConsensusEngine) executeBlock() error {
 
 	// Execute the block and return the appHash and store the txResults
 	for _, tx := range ce.state.blkProp.blk.Txns {
-		res := ce.blockExecutor.Execute(ctx, tx) // TODO: this execute function should be context cancellable
+		res, err := ce.blockExecutor.Execute(ctx, tx) // TODO: this execute function should be context cancellable
+		if err != nil {
+			ce.log.Error("Failed to execute the block tx", "err", err)
+			return err
+		}
+
 		txResults = append(txResults, res)
 	}
 
