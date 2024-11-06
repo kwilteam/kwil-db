@@ -13,6 +13,7 @@ import (
 	"kwil/crypto"
 	"kwil/log"
 	"kwil/node/types"
+	ktypes "kwil/types"
 
 	"github.com/libp2p/go-libp2p/core/peer"
 )
@@ -127,7 +128,7 @@ type state struct {
 type blockResult struct {
 	ack       bool
 	appHash   types.Hash
-	txResults []types.TxResult
+	txResults []ktypes.TxResult
 }
 
 type lastCommit struct {
