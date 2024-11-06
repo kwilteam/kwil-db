@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"kwil/node/types"
+	ktypes "kwil/types"
 )
 
 func getFileSizes(dirPath string) ([][2]string, error) {
@@ -497,10 +498,10 @@ func TestBlockStore_StoreAndGetResults(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	results := []types.TxResult{
-		{Code: 0, Log: "result1", Events: []types.Event{}},
-		{Code: 1, Log: "result2", Events: []types.Event{{}}},
-		{Code: 2, Log: "result3", Events: []types.Event{{}, {}}},
+	results := []ktypes.TxResult{
+		{Code: 0, Log: "result1", Events: []ktypes.Event{}},
+		{Code: 1, Log: "result2", Events: []ktypes.Event{{}}},
+		{Code: 2, Log: "result3", Events: []ktypes.Event{{}, {}}},
 	}
 
 	err = bs.StoreResults(block.Hash(), results)
@@ -539,7 +540,7 @@ func TestBlockStore_StoreResultsEmptyBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	results := []types.TxResult{}
+	results := []ktypes.TxResult{}
 	err = bs.StoreResults(block.Hash(), results)
 	if err != nil {
 		t.Fatal(err)
@@ -578,7 +579,7 @@ func TestBlockStore_StoreResultsLargeData(t *testing.T) {
 	// rngSrc := rand.NewChaCha8([32]byte{}) // deterministic random data
 	crand.Read(largeData)
 
-	results := []types.TxResult{
+	results := []ktypes.TxResult{
 		{Code: 0, Log: string(largeData)},
 		{Code: 1, Log: "small result"},
 	}
@@ -610,7 +611,7 @@ func TestBlockStore_StoreResultsMismatchedCount(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	results := []types.TxResult{
+	results := []ktypes.TxResult{
 		{Code: 0, Log: "result1"},
 		{Code: 1, Log: "result2"},
 		{Code: 2, Log: "result3"}, // Extra result

@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 
 	"kwil/node/types"
+	ktypes "kwil/types"
 )
 
 // potentially our txApp
@@ -31,10 +32,10 @@ func newBlockExecutor() *blockExecutor {
 	return &blockExecutor{}
 }
 
-func (be *blockExecutor) Execute(_ context.Context, tx []byte) types.TxResult {
+func (be *blockExecutor) Execute(_ context.Context, tx []byte) ktypes.TxResult {
 	hash, _ := types.NewHashFromBytes(tx) // TODO: may also include the txresult hash
 	be.changesets = append(be.changesets, hash)
-	return types.TxResult{
+	return ktypes.TxResult{
 		Code: 0,
 		Log:  "success" + hash.String(),
 	}

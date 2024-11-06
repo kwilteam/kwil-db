@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"kwil/node/types"
+	ktypes "kwil/types"
 	"os"
 	"path/filepath"
 )
@@ -49,7 +50,7 @@ func (ce *ConsensusEngine) validateBlock(blk *types.Block) error {
 
 // TODO: need to stop execution when we receive a rollback signal of some sort.
 func (ce *ConsensusEngine) executeBlock() error {
-	var txResults []types.TxResult
+	var txResults []ktypes.TxResult
 
 	ctx, cancel := context.WithCancel(context.Background())
 	ce.state.cancelFunc = cancel
