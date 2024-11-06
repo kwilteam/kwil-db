@@ -11,6 +11,7 @@ import (
 
 	"kwil/log"
 	"kwil/node/types"
+	ktypes "kwil/types"
 
 	"github.com/dgraph-io/badger/v4"
 	boptions "github.com/dgraph-io/badger/v4/options"
@@ -182,7 +183,7 @@ func (bki *BlockStore) mayReplaceTx(txn *badger.Txn, err error) (*badger.Txn, er
 	return bki.db.NewTransaction(true), nil
 }
 
-func (bki *BlockStore) StoreResults(hash types.Hash, results []types.TxResult) error {
+func (bki *BlockStore) StoreResults(hash types.Hash, results []ktypes.TxResult) error {
 	txn := bki.db.NewTransaction(true)
 	defer txn.Discard()
 
@@ -206,7 +207,7 @@ func (bki *BlockStore) StoreResults(hash types.Hash, results []types.TxResult) e
 	return txn.Commit()
 }
 
-func (bki *BlockStore) Results(hash types.Hash) ([]types.TxResult, error) {
+func (bki *BlockStore) Results(hash types.Hash) ([]ktypes.TxResult, error) {
 	prefixLen := len(nsResults) + types.HashLen
 
 	// Get block header to determine number of transactions
@@ -230,7 +231,7 @@ func (bki *BlockStore) Results(hash types.Hash) ([]types.TxResult, error) {
 		return nil, err
 	}
 
-	results := make([]types.TxResult, txCount)
+	results := make([]ktypes.TxResult, txCount)
 
 	err = bki.db.View(func(txn *badger.Txn) error {
 		opts := badger.DefaultIteratorOptions
@@ -248,7 +249,7 @@ func (bki *BlockStore) Results(hash types.Hash) ([]types.TxResult, error) {
 			}
 
 			err := item.Value(func(val []byte) error {
-				var result types.TxResult
+				var result ktypes.TxResult
 				if err := result.UnmarshalBinary(val); err != nil {
 					return err
 				}

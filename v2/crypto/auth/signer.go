@@ -1,6 +1,10 @@
 package auth
 
 import (
+	"bytes"
+	"encoding/binary"
+	"fmt"
+	"io"
 	"kwil/crypto"
 )
 
@@ -14,6 +18,57 @@ type Signature struct {
 	// Type is the signature type, which must have a registered Authenticator of
 	// the same name for the Verify method to be usable.
 	Type string `json:"type"`
+}
+
+func (s Signature) MarshalBinary() ([]byte, error) {
+	buf := new(bytes.Buffer)
+	if err := binary.Write(buf, binary.LittleEndian, uint32(len(s.Data))); err != nil {
+		return nil, fmt.Errorf("failed to write signature length: %w", err)
+	}
+	if err := binary.Write(buf, binary.LittleEndian, s.Data); err != nil {
+		return nil, fmt.Errorf("failed to write signature data: %w", err)
+	}
+
+	if err := binary.Write(buf, binary.LittleEndian, uint32(len(s.Type))); err != nil {
+		return nil, fmt.Errorf("failed to write signature type length: %w", err)
+	}
+	if err := binary.Write(buf, binary.LittleEndian, []byte(s.Type)); err != nil {
+		return nil, fmt.Errorf("failed to write signature type: %w", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
+func (s *Signature) UnmarshalBinary(data []byte) error {
+	buf := bytes.NewBuffer(data)
+	if len(data) != 0 && len(data) < 8 {
+		return nil
+	}
+
+	var sigLen uint32
+	if err := binary.Read(buf, binary.LittleEndian, &sigLen); err != nil {
+		return fmt.Errorf("failed to read signature length: %w", err)
+	}
+	if sigLen > 0 {
+		s.Data = make([]byte, sigLen)
+		if _, err := io.ReadFull(buf, s.Data); err != nil {
+			return fmt.Errorf("failed to read signature data: %w", err)
+		}
+	}
+
+	var typeLen uint32
+	if err := binary.Read(buf, binary.LittleEndian, &typeLen); err != nil {
+		return fmt.Errorf("failed to read signature type length: %w", err)
+	}
+	if typeLen > 0 {
+		typeBytes := make([]byte, typeLen)
+		if _, err := io.ReadFull(buf, typeBytes); err != nil {
+			return fmt.Errorf("failed to read signature type: %w", err)
+		}
+		s.Type = string(typeBytes)
+	}
+
+	return nil
 }
 
 // Signer is an interface for something that can sign messages.
