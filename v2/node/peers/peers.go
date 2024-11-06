@@ -195,27 +195,73 @@ func (pm *PeerMan) FindPeers(ctx context.Context, ns string, opts ...discovery.O
 	return peerChan, nil
 }
 
-func (pm *PeerMan) KnownPeers() []types.PeerInfo {
+// ConnectedPeers returns a list of peer info for all connected peers.
+func (pm *PeerMan) ConnectedPeers() []types.PeerInfo {
 	var peers []types.PeerInfo
-	for _, peerID := range pm.h.Network().Peers() { // connected peers only
-		addrs := pm.ps.Addrs(peerID)
-
-		supportedProtos, err := pm.ps.GetProtocols(peerID)
+	for _, peerID := range pm.h.Network().Peers() { // connected peers first
+		if peerID == pm.h.ID() { // me
+			continue
+		}
+		peerInfo, err := peerInfo(pm.ps, peerID)
 		if err != nil {
-			pm.log.Errorf("GetProtocols for %v: %v", peerID, err)
+			pm.log.Warnf("peerInfo for %v: %v", peerID, err)
 			continue
 		}
 
-		peers = append(peers, types.PeerInfo{
-			AddrInfo: types.AddrInfo{
-				ID:    peerID,
-				Addrs: addrs,
-			},
-			Protos: supportedProtos,
-		})
-
+		peers = append(peers, *peerInfo)
 	}
+
 	return peers
+}
+
+// KnownPeers returns a list of peer info for all known peers (connected or just
+// in peer store).
+func (pm *PeerMan) KnownPeers() []types.PeerInfo {
+	// connected peers first
+	peers := pm.ConnectedPeers()
+	connectedPeers := make(map[peer.ID]bool)
+	for _, peerInfo := range peers {
+		connectedPeers[peerInfo.ID] = true
+	}
+
+	// all others in peer store
+	for _, peerID := range pm.ps.Peers() {
+		if peerID == pm.h.ID() { // me
+			continue
+		}
+		if connectedPeers[peerID] {
+			continue // it is connected
+		}
+		peerInfo, err := peerInfo(pm.ps, peerID)
+		if err != nil {
+			pm.log.Warnf("peerInfo for %v: %v", peerID, err)
+			continue
+		}
+
+		peers = append(peers, *peerInfo)
+	}
+
+	return peers
+}
+
+func peerInfo(ps peerstore.Peerstore, peerID peer.ID) (*types.PeerInfo, error) {
+	addrs := ps.Addrs(peerID)
+	if len(addrs) == 0 {
+		return nil, fmt.Errorf("no addresses for peer %v", peerID)
+	}
+
+	supportedProtos, err := ps.GetProtocols(peerID)
+	if err != nil {
+		return nil, fmt.Errorf("GetProtocols for %v: %w", peerID, err)
+	}
+
+	return &types.PeerInfo{
+		AddrInfo: types.AddrInfo{
+			ID:    peerID,
+			Addrs: addrs,
+		},
+		Protos: supportedProtos,
+	}, nil
 }
 
 func (pm *PeerMan) PrintKnownPeers() {
@@ -227,6 +273,7 @@ func (pm *PeerMan) PrintKnownPeers() {
 
 func (pm *PeerMan) savePeers() error {
 	peerList := pm.KnownPeers()
+	pm.log.Infof("saving %d peers to address book", len(peerList))
 	if err := persistPeers(peerList, pm.addrBook); err != nil {
 		return err
 	}
