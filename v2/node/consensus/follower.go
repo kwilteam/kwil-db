@@ -3,6 +3,7 @@ package consensus
 import (
 	"context"
 	"fmt"
+
 	"kwil/node/types"
 )
 

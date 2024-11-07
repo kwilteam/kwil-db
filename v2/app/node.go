@@ -83,14 +83,14 @@ func runNode(ctx context.Context, rootDir string, cfg *node.Config) error {
 	//  - node.WithGenesisConfig instead of WithGenesisValidators
 	//  - change node.WithPrivateKey to []byte or our own PrivateKey type
 
-	ip, port := cfg.PeerConfig.IP, cfg.PeerConfig.Port
+	ip, port := cfg.P2P.IP, cfg.P2P.Port
 
 	nodeLogger := logger.NewWithLevel(cfg.LogLevel, "NODE")
 	// wtf functional options; we're making a config struct soon
 	node, err := node.NewNode(rootDir, node.WithIP(ip), node.WithPort(port),
 		node.WithPrivKey(cfg.PrivateKey[:]), node.WithLeader(genConfig.Leader[:]),
 		node.WithRole(nRole), node.WithGenesisValidators(valSet),
-		node.WithPex(cfg.PeerConfig.Pex), node.WithLogger(nodeLogger))
+		node.WithPex(cfg.P2P.Pex), node.WithLogger(nodeLogger))
 	if err != nil {
 		return err
 	}
@@ -98,7 +98,7 @@ func runNode(ctx context.Context, rootDir string, cfg *node.Config) error {
 	addrs := node.Addrs()
 	logger.Infof("This node is %s", addrs)
 
-	if err = node.Start(ctx, cfg.PeerConfig.BootNodes...); err != nil {
+	if err = node.Start(ctx, cfg.P2P.BootNodes...); err != nil {
 		return err
 	}
 	// Start is blocking, for now.

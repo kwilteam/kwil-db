@@ -2,10 +2,9 @@ package consensus
 
 import (
 	"context"
-	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
-	"sort"
+	"slices"
 	"time"
 
 	"kwil/node/types"
@@ -229,11 +228,10 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 		// start the next round
 		ce.nextState()
 		// Wait for the timeout to start the next round
-		const blockTimeout = time.Second // TODO: config
 		select {
 		case <-ctx.Done():
 			return nil
-		case <-time.After(blockTimeout):
+		case <-time.After(ce.proposeTimeout):
 		}
 		go ce.startNewRound(ctx)
 	} else if nacks >= threshold {
@@ -249,7 +247,7 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 }
 
 func (ce *ConsensusEngine) ValidatorSetHash() types.Hash {
-	hasher := sha256.New()
+	hasher := types.NewHasher()
 
 	keys := make([]string, 0, len(ce.validatorSet))
 	for _, v := range ce.validatorSet {
@@ -257,7 +255,7 @@ func (ce *ConsensusEngine) ValidatorSetHash() types.Hash {
 	}
 
 	// sort the keys
-	sort.Strings(keys)
+	slices.Sort(keys)
 
 	for _, k := range keys {
 		val := ce.validatorSet[k]
@@ -265,5 +263,5 @@ func (ce *ConsensusEngine) ValidatorSetHash() types.Hash {
 		binary.Write(hasher, binary.BigEndian, val.Power)
 	}
 
-	return types.Hash(hasher.Sum(nil))
+	return hasher.Sum(nil)
 }

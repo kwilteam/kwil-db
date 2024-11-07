@@ -94,13 +94,13 @@ func generateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, start
 
 		cfg := node.DefaultConfig()
 		cfg.PrivateKey = privKey
-		cfg.PeerConfig.Port = startingPort + uint64(i)
-		cfg.PeerConfig.IP = "127.0.0.1"
-		cfg.PeerConfig.Pex = !noPex
+		cfg.P2P.Port = startingPort + uint64(i)
+		cfg.P2P.IP = "127.0.0.1"
+		cfg.P2P.Pex = !noPex
 
 		if i != 0 {
-			cfg.PeerConfig.BootNodes = []string{node.FormatPeerString(
-				leaderPub.Bytes(), leaderPubType, cfg.PeerConfig.IP, int(startingPort))}
+			cfg.P2P.BootNodes = []string{node.FormatPeerString(
+				leaderPub.Bytes(), leaderPubType, cfg.P2P.IP, int(startingPort))}
 		}
 
 		if err := cfg.SaveAs(filepath.Join(nodeDir, ConfigFileName)); err != nil {

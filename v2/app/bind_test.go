@@ -245,3 +245,113 @@ func TestMergeFunc(t *testing.T) {
 		assert.Equal(t, "new_value", dest["key"])
 	})
 }
+
+func TestSetNodeFlagsFromStruct(t *testing.T) {
+	type NestedConfig struct {
+		Host     string  `toml:"host" comment:"Host address"`
+		Port     uint16  `toml:"port" comment:"Port number"`
+		Enabled  bool    `toml:"enabled"`
+		Ratio    float64 `toml:"ratio"`
+		Tags     []string
+		Priority int32 `toml:"priority"`
+	}
+
+	type TestConfig struct {
+		Name            string       `toml:"name" comment:"Service name"`
+		Version         int          `toml:"version"`
+		Debug           bool         `toml:"debug" comment:"Enable debug mode"`
+		Nested          NestedConfig `toml:"nested"`
+		UnderscoredName string       `toml:"underscored_name" comment:"Custom service name"`
+		UntaggedName    string       `comment:"untagged service name"`
+	}
+
+	t.Run("basic flag creation", func(t *testing.T) {
+		cmd := &cobra.Command{Use: "test"}
+		cfg := TestConfig{}
+		SetNodeFlagsFromStruct(cmd, cfg)
+
+		flags := cmd.Flags()
+		assert.NotNil(t, flags.Lookup("name"))
+		assert.NotNil(t, flags.Lookup("version"))
+		assert.NotNil(t, flags.Lookup("debug"))
+		assert.NotNil(t, flags.Lookup("underscored-name"))
+		assert.NotNil(t, flags.Lookup("untaggedname"))
+	})
+
+	t.Run("nested struct flags", func(t *testing.T) {
+		cmd := &cobra.Command{Use: "test"}
+		cfg := TestConfig{}
+		SetNodeFlagsFromStruct(cmd, cfg)
+
+		flags := cmd.Flags()
+		assert.NotNil(t, flags.Lookup("nested.host"))
+		assert.NotNil(t, flags.Lookup("nested.port"))
+		assert.NotNil(t, flags.Lookup("nested.enabled"))
+		assert.NotNil(t, flags.Lookup("nested.ratio"))
+		assert.NotNil(t, flags.Lookup("nested.tags"))
+		assert.NotNil(t, flags.Lookup("nested.priority"))
+	})
+
+	t.Run("flag descriptions", func(t *testing.T) {
+		cmd := &cobra.Command{Use: "test"}
+		cfg := TestConfig{}
+		SetNodeFlagsFromStruct(cmd, cfg)
+
+		flags := cmd.Flags()
+		assert.Equal(t, "Service name", flags.Lookup("name").Usage)
+		assert.Equal(t, "Enable debug mode", flags.Lookup("debug").Usage)
+		assert.Equal(t, "Host address", flags.Lookup("nested.host").Usage)
+		assert.Equal(t, "nested.ratio", flags.Lookup("nested.ratio").Usage)
+	})
+
+	t.Run("flag types", func(t *testing.T) {
+		cmd := &cobra.Command{Use: "test"}
+		cfg := TestConfig{}
+		SetNodeFlagsFromStruct(cmd, cfg)
+
+		flags := cmd.Flags()
+		assert.Equal(t, "string", flags.Lookup("name").Value.Type())
+		assert.Equal(t, "int64", flags.Lookup("version").Value.Type())
+		assert.Equal(t, "bool", flags.Lookup("debug").Value.Type())
+		assert.Equal(t, "uint64", flags.Lookup("nested.port").Value.Type())
+		assert.Equal(t, "float64", flags.Lookup("nested.ratio").Value.Type())
+		assert.Equal(t, "stringSlice", flags.Lookup("nested.tags").Value.Type())
+	})
+
+	t.Run("empty struct", func(t *testing.T) {
+		cmd := &cobra.Command{Use: "test"}
+		type EmptyConfig struct{}
+		cfg := EmptyConfig{}
+		SetNodeFlagsFromStruct(cmd, cfg)
+		assert.Zero(t, cmd.Flags().NFlag())
+	})
+
+	t.Run("default values", func(t *testing.T) {
+		cmd := &cobra.Command{Use: "test"}
+		type DefaultConfig struct {
+			Host     string  `toml:"host" comment:"Host address"`
+			Port     uint16  `toml:"port" comment:"Port number"`
+			Enabled  bool    `toml:"enabled"`
+			Ratio    float64 `toml:"ratio"`
+			Tags     []string
+			Priority int32 `toml:"priority"`
+		}
+		cfg := DefaultConfig{
+			Host:     "localhost",
+			Port:     8080,
+			Enabled:  true,
+			Ratio:    0.5,
+			Tags:     []string{"tag1", "tag2"},
+			Priority: 10,
+		}
+		SetNodeFlagsFromStruct(cmd, cfg)
+
+		flags := cmd.Flags()
+		assert.Equal(t, "localhost", flags.Lookup("host").DefValue)
+		assert.Equal(t, "8080", flags.Lookup("port").DefValue)
+		assert.Equal(t, "true", flags.Lookup("enabled").DefValue)
+		assert.Equal(t, "0.5", flags.Lookup("ratio").DefValue)
+		assert.Equal(t, "[tag1,tag2]", flags.Lookup("tags").DefValue)
+		assert.Equal(t, "10", flags.Lookup("priority").DefValue)
+	})
+}
