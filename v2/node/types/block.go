@@ -6,14 +6,22 @@ import (
 	"encoding/binary"
 	"fmt"
 	"io"
-	"kwil/crypto"
 	"slices"
 	"time"
+
+	"kwil/crypto"
+	"kwil/types"
 )
 
 const (
 	BlockVersion = 0
 )
+
+var HashBytes = types.HashBytes
+
+const HashLen = types.HashLen
+
+type Hash = types.Hash
 
 func NewBlock(height int64, prevHash, appHash, valSetHash Hash, stamp time.Time, txns [][]byte) *Block {
 	numTxns := len(txns)

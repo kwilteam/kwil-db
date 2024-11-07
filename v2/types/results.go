@@ -13,7 +13,7 @@ type TxResult struct {
 }
 
 func (tr TxResult) MarshalBinary() ([]byte, error) {
-	data := make([]byte, 2+4, 2+4+4)
+	data := make([]byte, 2+4, 2+4+4) // put 6 bytes, append the rest
 
 	// Encode code as 2 bytes
 	binary.BigEndian.PutUint16(data, tr.Code)

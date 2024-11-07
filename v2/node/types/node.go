@@ -2,7 +2,11 @@ package types
 
 import (
 	"fmt"
+
+	"kwil/types"
 )
+
+type HexBytes = types.HexBytes
 
 type Role int
 

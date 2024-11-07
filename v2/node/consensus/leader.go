@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"kwil/node/types"
+	ktypes "kwil/types"
 )
 
 var lastReset int64 = 0
@@ -128,7 +129,6 @@ func (ce *ConsensusEngine) NotifyACK(validatorPK []byte, ack types.AckRes) {
 		Msg:     voteMsg,
 		Sender:  validatorPK,
 	})
-	return
 }
 
 // Create Proposal creates a new block proposal for the leader
@@ -145,7 +145,7 @@ func (ce *ConsensusEngine) createBlockProposal() (*blockProposal, error) {
 	blk.Sign(ce.signer)
 
 	return &blockProposal{
-		height:  ce.state.lc.height + 1,
+		height:  blk.Header.Height,
 		blkHash: blk.Header.Hash(),
 		blk:     blk,
 	}, nil
@@ -207,7 +207,7 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 
 	threshold := ce.requiredThreshold()
 	if len(ce.state.votes) < int(threshold) {
-		ce.log.Warn("Not enough votes received yet", "have", len(ce.state.votes), "need", threshold)
+		ce.log.Warn("Not enough votes received yet", "have", len(ce.state.votes), "need_at_least", threshold)
 		return nil
 	}
 
@@ -237,13 +237,16 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 
 		// start the next round
 		ce.nextState()
-		// Wait for the timeout to start the next round
-		select {
-		case <-ctx.Done():
-			return nil
-		case <-time.After(ce.proposeTimeout):
-		}
-		go ce.startNewRound(ctx)
+
+		go func() { // must not sleep with ce.state mutex locked
+			// Wait for the timeout to start the next round
+			select {
+			case <-ctx.Done():
+				return
+			case <-time.After(ce.proposeTimeout):
+			}
+			ce.startNewRound(ctx)
+		}()
 	} else if nacks >= threshold {
 		// halt the network
 		ce.log.Warnln("Majority of the validators have rejected the block, halting the network",
@@ -257,7 +260,7 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 }
 
 func (ce *ConsensusEngine) ValidatorSetHash() types.Hash {
-	hasher := types.NewHasher()
+	hasher := ktypes.NewHasher()
 
 	keys := make([]string, 0, len(ce.validatorSet))
 	for _, v := range ce.validatorSet {
