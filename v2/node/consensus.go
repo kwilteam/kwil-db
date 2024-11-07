@@ -155,7 +155,7 @@ func (bp *blockProp) WriteTo(w io.Writer) (int64, error) {
 	return n, nil*/
 }
 
-func (n *Node) announceBlkProp(ctx context.Context, blk *types.Block, from peer.ID) {
+func (n *Node) announceBlkProp(ctx context.Context, blk *types.Block) {
 	rawBlk := types.EncodeBlock(blk)
 	blkHash := blk.Hash()
 	height := blk.Header.Height
@@ -169,8 +169,9 @@ func (n *Node) announceBlkProp(ctx context.Context, blk *types.Block, from peer.
 		return
 	}
 
+	me := n.host.ID()
 	for _, peerID := range peers {
-		if peerID == from {
+		if peerID == me {
 			continue
 		}
 		prop := blockProp{Height: height, Hash: blkHash, PrevHash: blk.Header.PrevHash,

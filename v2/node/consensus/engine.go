@@ -15,8 +15,6 @@ import (
 	"kwil/log"
 	"kwil/node/types"
 	ktypes "kwil/types"
-
-	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 const (
@@ -36,7 +34,6 @@ const (
 // - Once the leader receives the threshold acks with the same appHash as the leader, the block is committed and the leader broadcasts the blockAnn message to the network. Nodes that receive this message will enter into the commit phase where they verify the appHash and commit the block.
 type ConsensusEngine struct {
 	role   atomic.Value // types.Role, role can change over the lifetime of the node
-	host   peer.ID
 	dir    string
 	signer crypto.PrivateKey
 	leader crypto.PublicKey
@@ -73,10 +70,10 @@ type ConsensusEngine struct {
 }
 
 // ProposalBroadcaster broadcasts the new block proposal message to the network
-type ProposalBroadcaster func(ctx context.Context, blk *types.Block, id peer.ID)
+type ProposalBroadcaster func(ctx context.Context, blk *types.Block)
 
 // BlkAnnouncer broadcasts the new committed block to the network using the blockAnn message
-type BlkAnnouncer func(ctx context.Context, blk *types.Block, appHash types.Hash, from peer.ID)
+type BlkAnnouncer func(ctx context.Context, blk *types.Block, appHash types.Hash)
 
 // AckBroadcaster gossips the ack/nack messages to the network
 type AckBroadcaster func(ack bool, height int64, blkID types.Hash, appHash *types.Hash) error
@@ -148,8 +145,6 @@ type Config struct {
 	Role types.Role
 	// Signer is the private key of the node.
 	Signer crypto.PrivateKey
-	// HostID is the ID of the node.
-	HostID peer.ID // TODO: not the libp2p2 peer.ID type
 	// Dir is the directory where the node stores its data.
 	Dir string
 	// Leader is the public key of the leader.
@@ -179,7 +174,6 @@ func New(cfg *Config) *ConsensusEngine {
 	be := newBlockExecutor()
 	// rethink how this state is initialized
 	ce := &ConsensusEngine{
-		host:           cfg.HostID,
 		dir:            cfg.Dir,
 		signer:         cfg.Signer,
 		leader:         cfg.Leader,
@@ -493,11 +487,11 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 	if ce.role.Load() == types.RoleLeader {
 		// reannounce the blkProp message if the node is still waiting for the votes
 		if ce.state.blkProp != nil {
-			go ce.proposalBroadcaster(ctx, ce.state.blkProp.blk, ce.host)
+			go ce.proposalBroadcaster(ctx, ce.state.blkProp.blk)
 		}
 		if ce.state.lc.height > 0 {
 			// Announce block commit message for the last committed block
-			go ce.blkAnnouncer(ctx, ce.state.lc.blk, ce.state.lc.appHash, ce.host) // TODO: can be made infrequent
+			go ce.blkAnnouncer(ctx, ce.state.lc.blk, ce.state.lc.appHash) // TODO: can be made infrequent
 		}
 		return
 	}
