@@ -21,8 +21,11 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 		return false
 	}
 
-	ce.stateInfo.mtx.RLock()
-	defer ce.stateInfo.mtx.RUnlock()
+	// ce.stateInfo.mtx.RLock()
+	// defer ce.stateInfo.mtx.RUnlock()
+
+	ce.stateRLock("AcceptProposal")
+	defer ce.stateRUnlock("AcceptProposal")
 
 	ce.log.Info("Accept proposal?", "height", height, "blkID", blkID, "prevHash", prevBlockID)
 
@@ -49,7 +52,7 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 		// check if we are processing a different block, if yes then reset the state.
 		if ce.stateInfo.blkProp.blkHash != blkID && ce.stateInfo.blkProp.blk.Header.Timestamp.UnixMilli() < timestamp {
 			ce.log.Info("Conflicting block proposals, abort block execution and requesting the latest block: ", "height", height)
-			ce.sendResetMsg(ce.stateInfo.height)
+			go ce.sendResetMsg(ce.stateInfo.height)
 			return true
 		}
 		ce.log.Info("Already processing the block proposal", "height", height, "blkID", blkID)
@@ -67,24 +70,6 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 func (ce *ConsensusEngine) NotifyBlockProposal(blk *types.Block) {
 	// ce.log.Infoln("Notify block proposal", blk.Header.Height, blk.Header.Hash())
 	if ce.role.Load() == types.RoleLeader {
-		return
-	}
-
-	ce.stateInfo.mtx.RLock()
-	defer ce.stateInfo.mtx.RUnlock()
-
-	if blk.Header.Height != ce.stateInfo.height+1 {
-		ce.log.Infof("proposal for height %d does not follow %d", blk.Header.Height, ce.state.lc.height)
-		return
-	}
-
-	curBlkProp := ce.stateInfo.blkProp
-	if curBlkProp != nil {
-		if curBlkProp.blkHash != blk.Header.Hash() && curBlkProp.blk.Header.Timestamp.Before(blk.Header.Timestamp) {
-			ce.log.Info("Conflicting block proposals, abort block execution and notify consensus engine of new block: ", "height", blk.Header.Height, "blkID", blk.Header.Hash())
-			ce.sendResetMsg(ce.stateInfo.height)
-			return
-		}
 		return
 	}
 
@@ -113,8 +98,11 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash 
 	}
 	ce.updateNetworkHeight(height)
 
-	ce.stateInfo.mtx.RLock()
-	defer ce.stateInfo.mtx.RUnlock()
+	// ce.stateInfo.mtx.RLock()
+	// defer ce.stateInfo.mtx.RUnlock()
+
+	ce.stateRLock("AcceptCommit")
+	defer ce.stateRUnlock("AcceptCommit")
 
 	ce.log.Infof("Accept commit? height: %d,  blockID: %s, appHash: %s, lastCommitHeight: %d", height, blkID, appHash, ce.stateInfo.height)
 
@@ -148,7 +136,7 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash 
 		}
 
 		blkCommit.blk = blk
-		ce.sendConsensusMessage(&consensusMessage{
+		go ce.sendConsensusMessage(&consensusMessage{
 			MsgType: blkCommit.Type(),
 			Msg:     blkCommit,
 			Sender:  ce.signer.Public().Bytes(),
@@ -160,7 +148,7 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash 
 	if ce.stateInfo.blkProp.blkHash != blkID {
 		// Rollback and reprocess the block sent as part of the commit message.
 		ce.log.Info("Processing incorrect block, notify consensus engine to abort: ", "height", height)
-		ce.sendResetMsg(ce.stateInfo.height)
+		go ce.sendResetMsg(ce.stateInfo.height)
 		return true // fetch the correct block
 	}
 
@@ -170,7 +158,7 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash 
 	}
 
 	blkCommit.blk = ce.stateInfo.blkProp.blk
-	ce.sendConsensusMessage(&consensusMessage{
+	go ce.sendConsensusMessage(&consensusMessage{
 		MsgType: blkCommit.Type(),
 		Msg:     blkCommit,
 		Sender:  ce.signer.Public().Bytes(),
@@ -185,29 +173,6 @@ func (ce *ConsensusEngine) NotifyBlockCommit(blk *types.Block, appHash types.Has
 	// ce.log.Infoln("Notify block commit", blk.Header.Height, blk.Header.Hash(), appHash)
 	if ce.role.Load() == types.RoleLeader {
 		// Leader can also use this in blocksync mode, when it tries to replay the blocks or catchup with the network.
-		return
-	}
-
-	ce.stateInfo.mtx.RLock()
-	defer ce.stateInfo.mtx.RUnlock()
-
-	ce.log.Info("Notify block commit", "height", blk.Header.Height, "hash", blk.Header.Hash(), "appHash", appHash)
-
-	if ce.stateInfo.height+1 != blk.Header.Height {
-		return
-	}
-
-	if ce.stateInfo.status != Committed {
-		// ensure that we are processing correct block
-		if ce.stateInfo.blkProp.blkHash != blk.Header.Hash() {
-			// Rollback and reprocess the block sent as part of the commit message.
-			ce.log.Info("Processing incorrect block, notify consensus engine to abort: ", "height", blk.Header.Height)
-			ce.sendResetMsg(ce.stateInfo.height)
-		}
-	}
-
-	if ce.stateInfo.status == Proposed {
-		// still processing the block, ignore the commit message for now and commit when ready.
 		return
 	}
 
@@ -239,22 +204,6 @@ func (ce *ConsensusEngine) NotifyResetState(height int64) {
 		return
 	}
 
-	ce.stateInfo.mtx.RLock()
-	defer ce.stateInfo.mtx.RUnlock()
-
-	ce.log.Info("Notify reset state? ", "height", height)
-
-	// Potentially stale reset message or in the future, ignore it.
-	if ce.stateInfo.height != height {
-		ce.log.Info("Stale reset message, ignoring it.", "resetToHeight", height, "lastCommitHeight", ce.stateInfo.height)
-		return
-	}
-
-	if ce.stateInfo.status == Committed {
-		ce.log.Info("Not processing any block at the moment, reset message ignored.")
-		return
-	}
-
 	// Reset the state and notify the consensus engine to abort the block processing.
 	ce.sendResetMsg(height)
 }
@@ -270,8 +219,10 @@ func (ce *ConsensusEngine) processBlockProposal(_ context.Context, blkPropMsg *b
 
 	ce.log.Info("Processing block proposal", "height", blkPropMsg.blk.Header.Height, "header", blkPropMsg.blk.Header)
 
-	ce.state.mtx.Lock()
-	defer ce.state.mtx.Unlock()
+	// ce.state.mtx.Lock()
+	// defer ce.state.mtx.Unlock()
+	ce.lock("processBlockProposal")
+	defer ce.unlock("processBlockProposal")
 
 	if ce.state.blkProp != nil {
 		return fmt.Errorf("We are in the process of executing a block, can't accept a new block proposal.")
@@ -285,10 +236,12 @@ func (ce *ConsensusEngine) processBlockProposal(_ context.Context, blkPropMsg *b
 	ce.state.blkProp = blkPropMsg
 
 	// Update the stateInfo
-	ce.stateInfo.mtx.Lock()
+	// ce.stateInfo.mtx.Lock()
+	ce.stateLock("processBlockProposal")
 	ce.stateInfo.status = Proposed
 	ce.stateInfo.blkProp = blkPropMsg
-	ce.stateInfo.mtx.Unlock()
+	// ce.stateInfo.mtx.Unlock()
+	ce.stateUnlock("processBlockProposal")
 
 	if err := ce.executeBlock(); err != nil {
 		// TODO: what to do if the block execution fails? Send NACK?
@@ -315,8 +268,10 @@ func (ce *ConsensusEngine) commitBlock(blk *types.Block, appHash types.Hash) err
 		return nil
 	}
 
-	ce.state.mtx.Lock()
-	defer ce.state.mtx.Unlock()
+	// ce.state.mtx.Lock()
+	// defer ce.state.mtx.Unlock()
+	ce.lock("commitBlock")
+	defer ce.unlock("commitBlock")
 
 	// Three different scenarios are possible here:
 	// 1. Sentry node: Execute the block, validate the appHash and commit the block.
@@ -383,10 +338,12 @@ func (ce *ConsensusEngine) processAndCommit(blk *types.Block, appHash types.Hash
 	}
 
 	// Update the stateInfo
-	ce.stateInfo.mtx.Lock()
+	// ce.stateInfo.mtx.Lock()
+	ce.stateLock("processAndCommit")
 	ce.stateInfo.status = Proposed
 	ce.stateInfo.blkProp = ce.state.blkProp
-	ce.stateInfo.mtx.Unlock()
+	// ce.stateInfo.mtx.Unlock()
+	ce.stateUnlock("processAndCommit")
 
 	if err := ce.executeBlock(); err != nil {
 		ce.log.Errorf("Error executing block: %v", err)
