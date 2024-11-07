@@ -75,6 +75,7 @@ func (ce *ConsensusEngine) executeBlock() error {
 	cHash, err := ce.blockExecutor.Precommit()
 	if err != nil {
 		ce.log.Error("Failed to precommit the block tx", "err", err)
+		// send a nack?
 		return err
 	}
 

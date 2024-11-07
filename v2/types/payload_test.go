@@ -1,9 +1,9 @@
 package types_test
 
 import (
-	"kwil/node/types/serialize"
-	"kwil/types"
 	"testing"
+
+	"kwil/types"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -13,12 +13,13 @@ type TestPayload struct {
 	val string
 }
 
-func (tp *TestPayload) MarshalBinary() (serialize.SerializedData, error) {
-	return serialize.Encode(tp.val)
+func (tp *TestPayload) MarshalBinary() ([]byte, error) {
+	return []byte(tp.val), nil
 }
 
-func (tp *TestPayload) UnmarshalBinary(data serialize.SerializedData) error {
-	return serialize.Decode(data, &tp.val)
+func (tp *TestPayload) UnmarshalBinary(data []byte) error {
+	tp.val = string(data)
+	return nil
 }
 
 func (tp *TestPayload) Type() types.PayloadType {

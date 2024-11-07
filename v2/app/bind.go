@@ -370,7 +370,7 @@ func mergeFunc(src, dest map[string]interface{}, keyFn func(s string) string) er
 		destMap, destIsMap := destVal.(map[string]interface{})
 
 		if srcIsMap != destIsMap {
-			return fmt.Errorf("conflict: attempting to replace non-map with a map")
+			return errors.New("conflict: attempting to replace non-map with a map")
 		}
 
 		if srcIsMap { // both are maps

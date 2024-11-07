@@ -287,5 +287,5 @@ func (n *Node) getBlkHeight(ctx context.Context, height int64) (types.Hash, type
 
 		return hash, appHash, rawBlk, nil
 	}
-	return types.Hash{}, types.ZeroHash, nil, ErrBlkNotFound
+	return types.Hash{}, types.Hash{}, nil, ErrBlkNotFound
 }

@@ -8,8 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-type SerializedData = []byte
-
 // EncodingType is the type used to enumerate different codecs for binary data.
 type EncodingType = uint16
 
@@ -68,13 +66,13 @@ func RegisterCodec(c *Codec) {
 }
 
 // Encode encodes the given value into the current serialized data format (RLP).
-func Encode(val any) (SerializedData, error) {
+func Encode(val any) ([]byte, error) {
 	return EncodeWithCodec(val, rlpCodec)
 }
 
 // EncodeWithCodec encodes the given value into a serialized data format with
 // the provided Codec.
-func EncodeWithCodec(val any, enc Codec) (SerializedData, error) {
+func EncodeWithCodec(val any, enc Codec) ([]byte, error) {
 	btsVal, err := enc.Encode(val)
 	if err != nil {
 		return nil, err
@@ -95,7 +93,7 @@ func requireNonNilPointer(v any) error {
 }
 
 // Decode decodes the data into a value, which should be passed as a pointer.
-func Decode(bts SerializedData, v any) error {
+func Decode(bts []byte, v any) error {
 	if err := requireNonNilPointer(v); err != nil {
 		return err
 	}
@@ -117,13 +115,15 @@ func Decode(bts SerializedData, v any) error {
 // also Decode for use with an existing instance. This is generally no more
 // useful than Decode; it is syntactic sugar that requires no existing instance
 // of the type, and returns a pointer to the declared type.
-func DecodeGeneric[T any](bts SerializedData) (*T, error) {
+func DecodeGeneric[T any](bts []byte) (*T, error) {
 	var val T
 	if err := Decode(bts, &val); err != nil {
 		return nil, err
 	}
 	return &val, nil
 }
+
+// TODO: probably remove all the below slice stuff if we don't use it
 
 func EncodeSlice[T any](kvs []T) ([]byte, error) {
 	marshaller := make([]*serialBinaryMarshaller[T], len(kvs))
