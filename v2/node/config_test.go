@@ -7,6 +7,7 @@ import (
 	"slices"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/davecgh/go-spew/spew"
 	"github.com/knadh/koanf/parsers/toml/v2"
@@ -23,12 +24,37 @@ func mustDecodeHex(s string) types.HexBytes {
 	return dec
 }
 
+// TestMarshalDuration ensures that a time.Duration can be marshaled and
+// unmarshaled with the pelletier/go-toml/v2 library. This wasn't always the
+// case for some reason **cough specs cough**.
+func TestMarshalDuration(t *testing.T) {
+	type td struct {
+		Duration Duration `koanf:"duration" toml:"duration"`
+	}
+	tt := td{
+		Duration: Duration(10 * time.Second),
+	}
+	bts, err := gotoml.Marshal(tt)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var tt2 td
+	err = gotoml.Unmarshal(bts, &tt2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if tt2.Duration != tt.Duration {
+		t.Fatalf("got %v, want %v", tt2.Duration, tt.Duration)
+	}
+}
+
 func TestMarshalConfig(t *testing.T) {
 	cfg := Config{
 		LogLevel:   log.LevelInfo,
 		LogFormat:  log.FormatUnstructured,
 		PrivateKey: mustDecodeHex("ababababab"),
-		PeerConfig: PeerConfig{
+		P2P: PeerConfig{
 			IP:        "127.0.0.1",
 			Port:      6600,
 			Pex:       true,
@@ -80,6 +106,7 @@ func TestMarshalConfig(t *testing.T) {
 	t.Log("gotoml:\n" + string(outToml))
 }
 
+// nolint I'm going to use this
 var testConfigToml = `
 log_level = 'info'
 log_format = 'plain'
@@ -106,7 +133,7 @@ func TestConfigSaveAndLoad(t *testing.T) {
 				LogLevel:   log.LevelDebug,
 				LogFormat:  log.FormatJSON,
 				PrivateKey: mustDecodeHex("1234567890"),
-				PeerConfig: PeerConfig{
+				P2P: PeerConfig{
 					IP:        "192.168.1.1",
 					Port:      8080,
 					Pex:       false,
@@ -149,17 +176,17 @@ func TestConfigSaveAndLoad(t *testing.T) {
 				if !loaded.PrivateKey.Equals(tt.config.PrivateKey) {
 					t.Errorf("PrivateKey mismatch: got %x, want %x", loaded.PrivateKey, tt.config.PrivateKey)
 				}
-				if loaded.PeerConfig.IP != tt.config.PeerConfig.IP {
-					t.Errorf("PeerConfig.IP mismatch: got %v, want %v", loaded.PeerConfig.IP, tt.config.PeerConfig.IP)
+				if loaded.P2P.IP != tt.config.P2P.IP {
+					t.Errorf("P2P.IP mismatch: got %v, want %v", loaded.P2P.IP, tt.config.P2P.IP)
 				}
-				if loaded.PeerConfig.Port != tt.config.PeerConfig.Port {
-					t.Errorf("PeerConfig.Port mismatch: got %v, want %v", loaded.PeerConfig.Port, tt.config.PeerConfig.Port)
+				if loaded.P2P.Port != tt.config.P2P.Port {
+					t.Errorf("P2P.Port mismatch: got %v, want %v", loaded.P2P.Port, tt.config.P2P.Port)
 				}
-				if loaded.PeerConfig.Pex != tt.config.PeerConfig.Pex {
-					t.Errorf("PeerConfig.Pex mismatch: got %v, want %v", loaded.PeerConfig.Pex, tt.config.PeerConfig.Pex)
+				if loaded.P2P.Pex != tt.config.P2P.Pex {
+					t.Errorf("P2P.Pex mismatch: got %v, want %v", loaded.P2P.Pex, tt.config.P2P.Pex)
 				}
-				if !slices.Equal(loaded.PeerConfig.BootNodes, tt.config.PeerConfig.BootNodes) {
-					t.Errorf("PeerConfig.BootNode mismatch: got %v, want %v", loaded.PeerConfig.BootNodes, tt.config.PeerConfig.BootNodes)
+				if !slices.Equal(loaded.P2P.BootNodes, tt.config.P2P.BootNodes) {
+					t.Errorf("P2P.BootNode mismatch: got %v, want %v", loaded.P2P.BootNodes, tt.config.P2P.BootNodes)
 				}
 			}
 		})
