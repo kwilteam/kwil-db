@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -39,6 +40,8 @@ type ConsensusEngine struct {
 	dir    string
 	signer crypto.PrivateKey
 	leader crypto.PublicKey
+
+	proposeTimeout time.Duration
 
 	networkHeight atomic.Int64
 	validatorSet  map[string]types.Validator
@@ -139,9 +142,34 @@ type lastCommit struct {
 	blk     *types.Block // why is this needed? can be fetched from the blockstore too.
 }
 
-func New(role types.Role, signer crypto.PrivateKey, hostID peer.ID, dir string, leader crypto.PublicKey, mempool Mempool, bs BlockStore,
-	vs map[string]types.Validator, logger log.Logger) *ConsensusEngine {
+// Config is the struct given to the constructor, [New].
+type Config struct {
+	// Role is the role of the node in the consensus engine.
+	Role types.Role
+	// Signer is the private key of the node.
+	Signer crypto.PrivateKey
+	// HostID is the ID of the node.
+	HostID peer.ID // TODO: not the libp2p2 peer.ID type
+	// Dir is the directory where the node stores its data.
+	Dir string
+	// Leader is the public key of the leader.
+	Leader crypto.PublicKey
+	// Mempool is the mempool of the node.
+	Mempool Mempool
+	// BlockStore is the blockstore of the node.
+	BlockStore BlockStore
+	// ValidatorSet is the set of validators in the network.
+	ValidatorSet map[string]types.Validator
+	// Logger is the logger of the node.
+	Logger log.Logger
 
+	// ProposeTimeout is the timeout for proposing a block.
+	ProposeTimeout time.Duration
+}
+
+// New creates a new consensus engine.
+func New(cfg *Config) *ConsensusEngine {
+	logger := cfg.Logger
 	if logger == nil {
 		// logger = log.DiscardLogger // for prod
 		logger = log.New(log.WithName("CONS"), log.WithLevel(log.LevelDebug),
@@ -151,10 +179,11 @@ func New(role types.Role, signer crypto.PrivateKey, hostID peer.ID, dir string, 
 	be := newBlockExecutor()
 	// rethink how this state is initialized
 	ce := &ConsensusEngine{
-		host:   hostID,
-		dir:    dir,
-		signer: signer,
-		leader: leader,
+		host:           cfg.HostID,
+		dir:            cfg.Dir,
+		signer:         cfg.Signer,
+		leader:         cfg.Leader,
+		proposeTimeout: cfg.ProposeTimeout,
 		state: state{
 			blkProp:  nil,
 			blockRes: nil,
@@ -170,18 +199,18 @@ func New(role types.Role, signer crypto.PrivateKey, hostID peer.ID, dir string, 
 			status:  Committed,
 			blkProp: nil,
 		},
-		validatorSet: vs,
+		validatorSet: maps.Clone(cfg.ValidatorSet),
 		msgChan:      make(chan consensusMessage, 1), // buffer size??
 		haltChan:     make(chan struct{}, 1),
 		resetChan:    make(chan int64, 1),
 		// interfaces
-		mempool:       mempool,
-		blockStore:    bs,
+		mempool:       cfg.Mempool,
+		blockStore:    cfg.BlockStore,
 		blockExecutor: be,
 		log:           logger,
 	}
 
-	ce.role.Store(role)
+	ce.role.Store(cfg.Role)
 	ce.networkHeight.Store(0)
 
 	return ce

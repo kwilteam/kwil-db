@@ -5,9 +5,13 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
+	"time"
 
 	"kwil/log"
+	"kwil/node"
+	"kwil/node/types"
 
 	"github.com/knadh/koanf/parsers/toml/v2"
 	"github.com/knadh/koanf/providers/env"
@@ -30,25 +34,145 @@ func RootDir(cmd *cobra.Command) (string, error) {
 	return cmd.Flags().GetString(RootFlagName)
 }
 
+func SetNodeFlagsFromStruct(cmd *cobra.Command, cfg interface{}) {
+	fs := cmd.Flags()
+	fs.SortFlags = false
+
+	val := reflect.ValueOf(cfg)
+	typ := val.Type()
+	if typ.Kind() == reflect.Ptr {
+		val = val.Elem()
+		typ = val.Type()
+	}
+
+	var setFlag func(field reflect.StructField, fieldVal reflect.Value, prefix string)
+	setFlag = func(field reflect.StructField, fieldVal reflect.Value, prefix string) {
+		// Get flag name from toml tag
+		flagName := field.Tag.Get("toml")
+		if flagName == "" {
+			flagName = strings.ToLower(field.Name)
+		}
+		flagName = strings.ReplaceAll(flagName, "_", "-")
+		if prefix != "" {
+			flagName = prefix + "." + flagName
+		}
+
+		// Get description from comment tag
+		desc := field.Tag.Get("comment")
+		if desc == "" {
+			desc = flagName // fallback to name if no comment
+		}
+
+		// Handle nested structs
+		if field.Type.Kind() == reflect.Struct {
+			for i := range field.Type.NumField() {
+				setFlag(field.Type.Field(i), fieldVal.Field(i), flagName)
+			}
+			return
+		}
+
+		// first catch special types like log.Level and log.Format
+		switch vt := fieldVal.Interface().(type) {
+		case log.Level:
+			fs.String(flagName, vt.String(), desc)
+			return
+		case log.Format:
+			fs.String(flagName, string(vt), desc)
+			return
+		case time.Duration:
+			fs.Duration(flagName, vt, desc)
+			return
+		case node.Duration:
+			fs.Duration(flagName, time.Duration(vt), desc)
+			return
+		case types.HexBytes:
+			fs.BytesHex(flagName, vt, desc)
+			return
+		}
+		// fallback to default flag set
+
+		// Set flag based on field type
+		switch field.Type.Kind() {
+		case reflect.String:
+			defaultVal := fieldVal.String()
+			fs.String(flagName, defaultVal, desc)
+		case reflect.Bool:
+			defaultVal := fieldVal.Bool()
+			fs.Bool(flagName, defaultVal, desc)
+		case reflect.Int, reflect.Int64, reflect.Int16, reflect.Int32, reflect.Int8:
+			defaultVal := fieldVal.Int()
+			fs.Int64(flagName, defaultVal, desc)
+		case reflect.Uint, reflect.Uint64, reflect.Uint16, reflect.Uint32, reflect.Uint8:
+			defaultVal := fieldVal.Uint()
+			fs.Uint64(flagName, defaultVal, desc)
+		case reflect.Float64, reflect.Float32:
+			defaultVal := fieldVal.Float()
+			fs.Float64(flagName, defaultVal, desc)
+		case reflect.Slice:
+			switch sv := fieldVal.Interface().(type) {
+			case []string:
+				fs.StringSlice(flagName, sv, desc)
+
+			// TODO: this will take some maint with different slice types
+			// fs.IntSlice(), etc
+			default:
+				fmt.Printf("Unsupported slice type for flag: %T\n", sv)
+			}
+		}
+	}
+
+	// Process all fields
+	for i := range typ.NumField() {
+		setFlag(typ.Field(i), val.Field(i), "")
+	}
+}
+
+func SetNodeFlagsFromDefaultInKoanf(cmd *cobra.Command, k *koanf.Koanf) error {
+	var cfg node.Config
+	err := k.UnmarshalWithConf("", &cfg, koanf.UnmarshalConf{Tag: "koanf"})
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal config: %w", err)
+	}
+	SetNodeFlagsFromStruct(cmd, &cfg)
+	return nil
+}
+
+/* SetNodeFlags is superseded by SetNodeFlagsFromStruct since the config struct
+field tags and types provide everything needed to bind pflags without
+maintaining and explicit list of flags as this did.
+
 func SetNodeFlags(cmd *cobra.Command) {
+	// TODO: do this automatically based on the node.Config struct, and the
+	// tags, including `toml` and `comment`. This will probably involve
+	// reflection unless the koanf instance that loaded the DefaultConfig
+	// somehow can provide everything to us. For the default values given to the
+	// flags, they can simply be the zero value for whatever type since we are
+	// currently binding defaults via the struct from DefaultConfig, meaning the
+	// flag defaults will never be used.
 
 	fs := cmd.Flags()
+	fs.SortFlags = false
 
 	// top level (for now, may be common, node, etc.)
 	fs.String("log-level", log.LevelInfo.String(), "log level")
 	fs.String("log-format", string(log.FormatUnstructured), "log format")
 	fs.BytesHex("privkey", nil, "private key to use for node")
 
-	// [peer]
-	fs.StringSlice("peer.bootnodes", nil, "bootnodes to connect to on startup")
-	// fs.StringSlice("peer.seeds", nil, "seeds to get peer addresses from (for pex only, not persistent peers)")
-	fs.String("peer.ip", "0.0.0.0", "ip to listen on for P2P connections")
-	fs.Uint64("peer.port", 6600, "port to listen on for P2P connections")
+	// [p2p]
+	fs.StringSlice("p2p.bootnodes", nil, "bootnodes to connect to on startup")
+	// fs.StringSlice("p2p.seeds", nil, "seeds to get peer addresses from (for pex only, not persistent peers)")
+	fs.String("p2p.ip", "0.0.0.0", "ip to listen on for P2P connections")
+	fs.Uint64("p2p.port", 6600, "port to listen on for P2P connections")
 
-	fs.Bool("peer.no-pex", false, "disable peer exchange") // default-false flag
-	fs.Bool("peer.pex", true, "enable peer exchange")      // default-true bool flag to match toml where it is best
-	cmd.Flag("peer.pex").Hidden = true                     // maybe remove if we keep default to enable pex
-}
+	fs.Bool("p2p.no-pex", false, "disable peer exchange") // default-false flag
+	fs.Bool("p2p.pex", true, "enable peer exchange")      // default-true bool flag to match toml where it is best
+	cmd.Flag("p2p.pex").Hidden = true                     // maybe remove if we keep default to enable pex
+
+	// [consensus]
+	fs.Duration("consensus.propose-timeout", 1000*time.Millisecond, "timeout for proposing a block (leader only)")
+	fs.Uint64("consensus.max-block-size", 50_000_000, "maximum size of a block (in bytes)")
+	fs.Uint64("consensus.max-txs-per-block", 20_000, "maximum number of transactions per block")
+}*/
 
 // PreRunCmd is the function signature used with a cobra.Command.PreRunE or
 // PersistentPreRunE. Use [ChainPreRuns] to apply multiple PreRunCmds.
@@ -99,8 +223,8 @@ func PreRunBindFlags(cmd *cobra.Command, args []string) error {
 			if f.Changed {
 				// special case translations
 				switch key {
-				case "peer.no-pex":
-					newKey := "peer.pex"
+				case "p2p.no-pex":
+					newKey := "p2p.pex"
 					if valB, ok := val.(bool); ok {
 						debugf("translating flag %s = %v => %s = %v", key, valB, newKey, !valB)
 						val = !valB // negate
