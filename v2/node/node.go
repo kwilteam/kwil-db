@@ -58,7 +58,9 @@ type ConsensusEngine interface {
 
 	// Gonna remove this once we have the commit results such as app hash and the tx results stored in the block store.
 
-	Start(ctx context.Context, proposerBroadcaster consensus.ProposalBroadcaster, blkAnnouncer consensus.BlkAnnouncer, ackBroadcaster consensus.AckBroadcaster, blkRequester consensus.BlkRequester, stateResetter consensus.ResetStateBroadcaster)
+	Start(ctx context.Context, proposerBroadcaster consensus.ProposalBroadcaster,
+		blkAnnouncer consensus.BlkAnnouncer, ackBroadcaster consensus.AckBroadcaster,
+		blkRequester consensus.BlkRequester, stateResetter consensus.ResetStateBroadcaster)
 
 	// Note: Not sure if these are needed here, just for separate of concerns:
 	// p2p stream handlers role is to download the messages and pass it to the
@@ -172,7 +174,6 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 	ceCfg := &consensus.Config{
 		Role:         options.role,
 		Signer:       signer,
-		HostID:       host.ID(),
 		Dir:          dir,
 		Leader:       leaderPubKey,
 		Mempool:      mp,
