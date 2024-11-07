@@ -300,7 +300,7 @@ func (r blockHashReq) MarshalBinary() ([]byte, error) {
 
 func (r *blockHashReq) UnmarshalBinary(data []byte) error {
 	if len(data) != types.HashLen {
-		return fmt.Errorf("invalid hash length")
+		return errors.New("invalid hash length")
 	}
 	copy(r.Hash[:], data)
 	return nil

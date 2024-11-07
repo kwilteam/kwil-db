@@ -8,11 +8,8 @@ import (
 	"io"
 	"math/big"
 
-	"kwil/types/serialize"
-
-	"kwil/crypto/auth"
-
 	"kwil/crypto"
+	"kwil/crypto/auth"
 )
 
 // MsgDescriptionMaxLength is the max length of Description filed in
@@ -38,31 +35,29 @@ type Transaction struct {
 // TransactionBody is the body of a transaction that gets included in the
 // signature. This type implements json.Marshaler and json.Unmarshaler to ensure
 // that the Fee field is represented as a string in JSON rather than a number.
-// RLP encoding will preserve the order of the fields.
 type TransactionBody struct {
-	// Description is a human-readable description of the transaction
+	// Description is a human-readable description of the transaction.
 	Description string `json:"desc"`
 
-	// Payload is the raw bytes of the payload data, it is RLP encoded
-	Payload serialize.SerializedData `json:"payload"`
+	// Payload is the raw bytes of the payload data.
+	Payload []byte `json:"payload"`
 
-	// PayloadType is the type of the payload
-	// This can be used to determine how to decode the payload
+	// PayloadType is the type of the payload, which may be used to determine
+	// how to decode the payload.
 	PayloadType PayloadType `json:"type"`
 
-	// Fee is the fee the sender is willing to pay for the transaction
+	// Fee is the fee the sender is willing to pay for the transaction.
 	Fee *big.Int `json:"fee"` // MarshalJSON and UnmarshalJSON handle this field, but still tagged for reflection
 
-	// Nonce is the next nonce of the sender
+	// Nonce should be the next nonce of the sender..
 	Nonce uint64 `json:"nonce"`
 
 	// ChainID identifies the Kwil chain for which the transaction is intended.
 	// Alternatively, this could be withheld from the TransactionBody and passed
-	// as an argument to SerializeMsg, as is seen in   ethereum signers and even
-	// CometBFT's SignProposal method. However, the full transaction
-	// serialization must include it anyway since it passes through the
-	// consensus engine and p2p systems as an opaque blob that must be
-	// unmarshalled with the chain ID in Kwil blockchain application.
+	// as an argument to SerializeMsg, as is seen in ethereum signers. However,
+	// the full transaction serialization must include it anyway since it passes
+	// through the consensus engine and p2p systems as an opaque blob that must
+	// be unmarshalled with the chain ID in Kwil blockchain application.
 	ChainID string `json:"chain_id"`
 }
 
@@ -337,14 +332,7 @@ func (t *Transaction) serialize(w io.Writer) (err error) {
 	}
 
 	// Sender
-	var senderBytes []byte
-	if t.Sender != nil {
-		senderBytes, err = t.Sender.MarshalJSON()
-		if err != nil {
-			return fmt.Errorf("failed to marshal transaction sender: %w", err)
-		}
-	}
-	if err := writeBytes(w, senderBytes); err != nil {
+	if err := writeBytes(w, t.Sender); err != nil {
 		return fmt.Errorf("failed to write transaction sender: %w", err)
 	}
 
@@ -391,14 +379,14 @@ func (t *Transaction) deserialize(r io.Reader) error {
 	if err != nil {
 		return fmt.Errorf("failed to read transaction sender: %w", err)
 	}
-	if len(senderBytes) != 0 {
-		if err := t.Sender.UnmarshalJSON(senderBytes); err != nil {
-			return fmt.Errorf("failed to unmarshal transaction sender: %w", err)
-		}
-	}
+	t.Sender = senderBytes
 
 	return nil
 }
+
+const (
+	lenSize = 4 // uint32
+)
 
 func writeBytes(w io.Writer, data []byte) error {
 	if err := binary.Write(w, binary.LittleEndian, uint32(len(data))); err != nil {
@@ -434,19 +422,6 @@ func readBytes(r io.Reader) ([]byte, error) {
 }
 
 func readString(r io.Reader) (string, error) {
-	var length uint32
-	if err := binary.Read(r, binary.LittleEndian, &length); err != nil {
-		return "", err
-	}
-
-	if length == 0 {
-		return "", nil
-	}
-
-	data := make([]byte, length)
-	if _, err := io.ReadFull(r, data); err != nil {
-		return "", err
-	}
-
-	return string(data), nil
+	bts, err := readBytes(r)
+	return string(bts), err
 }

@@ -13,9 +13,6 @@ const (
 	// is intended as the authenticator for the SDK-provided EthPersonalSigner,
 	// and must be registered with that name.
 	EthPersonalSignAuth = "secp256k1_ep"
-
-	// ethPersonalSignSignatureLength is the expected length of a signature
-	ethPersonalSignSignatureLength = 65
 )
 
 // EthSecp256k1Authenticator is the authenticator for the Ethereum "personal
