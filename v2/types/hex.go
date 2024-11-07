@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -37,8 +38,26 @@ func (hb HexBytes) MarshalJSON() ([]byte, error) {
 	return s, nil
 }
 
+func (hb HexBytes) MarshalText() ([]byte, error) {
+	return []byte(hb.String()), nil
+}
+
+func (hb *HexBytes) UnmarshalText(b []byte) error {
+	dec := make([]byte, hex.DecodedLen(len(b)))
+	_, err := hex.Decode(dec, b)
+	if err != nil {
+		return err
+	}
+	*hb = dec
+	return nil
+}
+
 var _ json.Marshaler = HexBytes{}
 var _ json.Unmarshaler = (*HexBytes)(nil)
+
+func (hb *HexBytes) Equals(other HexBytes) bool {
+	return bytes.Equal(*hb, other)
+}
 
 var _ fmt.Formatter = HexBytes{}
 

@@ -68,12 +68,12 @@ func (ar AckRes) MarshalBinary() ([]byte, error) {
 
 func (ar *AckRes) UnmarshalBinary(data []byte) error {
 	if len(data) < 1 {
-		return fmt.Errorf("insufficient data")
+		return errors.New("insufficient data")
 	}
 	ar.ACK = data[0] == 1
 	if !ar.ACK {
 		if len(data) > 1 {
-			return fmt.Errorf("too much data for nACK")
+			return errors.New("too much data for nACK")
 		}
 		ar.BlkHash = Hash{}
 		ar.AppHash = nil
@@ -81,7 +81,7 @@ func (ar *AckRes) UnmarshalBinary(data []byte) error {
 	}
 	data = data[1:]
 	if len(data) < 2*HashLen+8 {
-		return fmt.Errorf("insufficient data for ACK")
+		return errors.New("insufficient data for ACK")
 	}
 	ar.Height = int64(binary.LittleEndian.Uint64(data[:8]))
 	ar.AppHash = new(Hash)

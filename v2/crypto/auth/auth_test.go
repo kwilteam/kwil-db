@@ -3,6 +3,7 @@ package auth_test
 import (
 	"encoding/hex"
 	"fmt"
+	"math/rand/v2"
 	"testing"
 
 	"kwil/crypto"
@@ -37,13 +38,15 @@ func Test_AuthSignAndVerify(t *testing.T) {
 	testCases := []testCase{
 		{
 			name:          "eth personal sign",
-			signer:        secp256k1Signer(t),
+			signer:        secp256k1Signer(t, [32]byte{1, 2, 3}),
 			authenticator: auth.EthSecp256k1Authenticator{},
+			address:       "0x1b7c6c9938cd93c10910dbc4d4ac8c9275e96925",
 		},
 		{
 			name:          "ed25519",
-			signer:        ed25519Signer(t),
+			signer:        ed25519Signer(t, [32]byte{1, 2, 3}),
 			authenticator: auth.Ed25519Authenticator{},
+			address:       "57b8983ac97d18aaa1eb428890d0abe673a843cf4a42e83ab875efd250c9dcb1",
 		},
 	}
 
@@ -60,7 +63,9 @@ func Test_AuthSignAndVerify(t *testing.T) {
 			address, err := tc.authenticator.Identifier(tc.signer.Identity())
 			assert.NoError(t, err)
 
-			t.Log("Address:", address)
+			if tc.address != address {
+				t.Errorf("address mismatch, got %v want %v", address, tc.address)
+			}
 		})
 	}
 }
@@ -97,8 +102,9 @@ func TestEd25519Identifier(t *testing.T) {
 	assert.Equal(t, ed25519Addr, address)
 }
 
-func secp256k1Signer(t *testing.T) *auth.EthPersonalSigner {
-	privKey, _, err := crypto.GenerateSecp256k1Key(nil)
+func secp256k1Signer(t *testing.T, seed [32]byte) *auth.EthPersonalSigner {
+	rngSrc := rand.NewChaCha8(seed)
+	privKey, _, err := crypto.GenerateSecp256k1Key(rngSrc)
 	require.NoError(t, err)
 
 	fmt.Println("Private Key:", privKey)
@@ -109,11 +115,14 @@ func secp256k1Signer(t *testing.T) *auth.EthPersonalSigner {
 	return &auth.EthPersonalSigner{Key: *k}
 }
 
-func ed25519Signer(t *testing.T) *auth.Ed25519Signer {
-	privKey, _, err := crypto.GenerateEd25519Key(nil)
+func ed25519Signer(t *testing.T, seed [32]byte) *auth.Ed25519Signer {
+	rngSrc := rand.NewChaCha8(seed)
+	privKey, _, err := crypto.GenerateEd25519Key(rngSrc)
 	require.NoError(t, err)
 
 	pBytes := privKey.Bytes()
 	k, err := crypto.UnmarshalEd25519PrivateKey(pBytes)
+	require.NoError(t, err)
+
 	return &auth.Ed25519Signer{Ed25519PrivateKey: *k}
 }
