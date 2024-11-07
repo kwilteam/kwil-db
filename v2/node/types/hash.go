@@ -5,16 +5,50 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"hash"
+	"io"
 )
 
 const (
 	HashLen = 32
 )
 
+// Hash is the Kwil hash type. Use either [NewHash], or a [Hasher] created by
+// [NewHasher] to create a Hash from data.
 type Hash [HashLen]byte
 
 func HashBytes(b []byte) Hash {
 	return sha256.Sum256(b)
+}
+
+// Hasher is like the standard library's hash.Hash, but with fewer methods and
+// returning a Hash instead of a byte slice. Use [NewHasher] to get a Hasher.
+type Hasher interface {
+	// Write more data to the running hash. It never returns an error.
+	io.Writer
+
+	// Sum appends the current hash to b and returns the resulting slice.
+	// It does not change the underlying hash state.
+	Sum(b []byte) Hash
+
+	// Reset resets the Hash to its initial state.
+	Reset()
+}
+
+var _ Hasher = (*hasher)(nil)
+
+type hasher struct {
+	hash.Hash
+}
+
+func (h *hasher) Sum(b []byte) Hash {
+	return Hash(h.Hash.Sum(b))
+}
+
+// NewHasher returns a new instance of a Hasher. If you do not need to use the
+// Write or Reset methods, you can use [HashBytes] instead.
+func NewHasher() Hasher {
+	return &hasher{sha256.New()}
 }
 
 // String returns the hexadecimal representation of the hash (always 64 characters)

@@ -43,7 +43,9 @@ func PrintConfigCmd() *cobra.Command {
 		},
 	}
 
-	SetNodeFlags(cmd)
+	// SetNodeFlags(cmd)
+	defaultCfg := node.DefaultConfig()
+	SetNodeFlagsFromStruct(cmd, defaultCfg)
 
 	return cmd
 }
