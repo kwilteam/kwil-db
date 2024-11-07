@@ -44,7 +44,7 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	ce.state.blkProp = blkProp
 
 	// Broadcast the block proposal to the network
-	go ce.proposalBroadcaster(ctx, blkProp.blk, ce.host)
+	go ce.proposalBroadcaster(ctx, blkProp.blk)
 
 	// update the stateInfo
 	ce.stateInfo.mtx.Lock()
@@ -223,7 +223,7 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 
 		ce.log.Infoln("Announce committed block", ce.state.blkProp.blk.Header.Height, ce.state.blkProp.blkHash)
 		// Broadcast the blockAnn message
-		go ce.blkAnnouncer(ctx, ce.state.blkProp.blk, ce.state.blockRes.appHash, ce.host)
+		go ce.blkAnnouncer(ctx, ce.state.blkProp.blk, ce.state.blockRes.appHash)
 
 		// start the next round
 		ce.nextState()

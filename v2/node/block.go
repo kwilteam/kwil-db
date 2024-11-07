@@ -153,10 +153,11 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 	}()
 }
 
-func (n *Node) announceBlk(ctx context.Context, blk *types.Block, appHash types.Hash, from peer.ID) {
+func (n *Node) announceBlk(ctx context.Context, blk *types.Block, appHash types.Hash) {
 	blkHash := blk.Hash()
-	n.log.Debugln("announceBlk", blk.Header.Height, blkHash, appHash, from)
+	n.log.Debugln("announceBlk", blk.Header.Height, blkHash, appHash)
 	rawBlk := types.EncodeBlock(blk)
+	from := n.host.ID() // this announcement originates from us (not a reannouncement)
 	n.announceRawBlk(ctx, blkHash, blk.Header.Height, rawBlk, appHash, from, blk.Signature)
 }
 
