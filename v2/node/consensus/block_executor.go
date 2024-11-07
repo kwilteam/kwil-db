@@ -89,11 +89,9 @@ func (ce *ConsensusEngine) executeBlock() error {
 
 	ce.log.Info("Executed Block", "height", ce.state.blkProp.blk.Header.Height, "blkHash", ce.state.blkProp.blkHash, "appHash", ce.state.blockRes.appHash.String())
 
-	// ce.stateInfo.mtx.Lock()
-	ce.stateLock("executeBlock")
+	ce.stateInfo.mtx.Lock()
 	ce.stateInfo.status = Executed
-	// ce.stateInfo.mtx.Unlock()
-	ce.stateUnlock("executeBlock")
+	ce.stateInfo.mtx.Unlock()
 
 	return nil
 }
@@ -154,13 +152,11 @@ func (ce *ConsensusEngine) resetState() {
 	ce.blockExecutor.Rollback()
 
 	// update the stateInfo
-	// ce.stateInfo.mtx.Lock()
-	ce.stateLock("resetState")
+	ce.stateInfo.mtx.Lock()
 	ce.stateInfo.status = Committed
 	ce.stateInfo.blkProp = nil
 	ce.stateInfo.height = ce.state.lc.height
-	ce.stateUnlock("resetState")
-	// ce.stateInfo.mtx.Unlock()
+	ce.stateInfo.mtx.Unlock()
 }
 
 // temporary placeholder as this will be in the PG chainstate in future (as was in previous kwil implementations)

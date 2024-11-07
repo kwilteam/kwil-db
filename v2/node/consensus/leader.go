@@ -26,10 +26,8 @@ var lastReset int64 = 0
 // startNewRound starts a new round of consensus process.
 func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	ce.log.Info("Starting a new round", "height", ce.state.lc.height+1)
-	// ce.state.mtx.Lock()
-	// defer ce.state.mtx.Unlock()
-	ce.lock("startNewRound")
-	defer ce.unlock("startNewRound")
+	ce.state.mtx.Lock()
+	defer ce.state.mtx.Unlock()
 
 	blkProp, err := ce.createBlockProposal()
 	if err != nil {
@@ -50,12 +48,10 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	go ce.proposalBroadcaster(ctx, blkProp.blk)
 
 	// update the stateInfo
-	// ce.stateInfo.mtx.Lock()
-	ce.stateLock("startNewRound")
+	ce.stateInfo.mtx.Lock()
 	ce.stateInfo.status = Proposed
 	ce.stateInfo.blkProp = blkProp
-	// ce.stateInfo.mtx.Unlock()
-	ce.stateUnlock("startNewRound")
+	ce.stateInfo.mtx.Unlock()
 
 	// Execute the block and generate the appHash
 	if err := ce.executeBlock(); err != nil {
@@ -154,10 +150,8 @@ func (ce *ConsensusEngine) createBlockProposal() (*blockProposal, error) {
 // addVote registers the vote received from the validator if it is for the current block.
 func (ce *ConsensusEngine) addVote(ctx context.Context, vote *vote, sender string) error {
 	// fmt.Println("Adding vote", vote, sender)
-	// ce.state.mtx.Lock()
-	// defer ce.state.mtx.Unlock()
-	ce.lock("addVote")
-	defer ce.unlock("addVote")
+	ce.state.mtx.Lock()
+	defer ce.state.mtx.Unlock()
 
 	if ce.state.blkProp == nil {
 		return fmt.Errorf("not processing any block proposal at the moment")
