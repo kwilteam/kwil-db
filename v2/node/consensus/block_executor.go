@@ -5,10 +5,11 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"kwil/node/types"
-	ktypes "kwil/types"
 	"os"
 	"path/filepath"
+
+	"kwil/node/types"
+	ktypes "kwil/types"
 )
 
 var (

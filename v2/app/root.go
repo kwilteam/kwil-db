@@ -111,7 +111,9 @@ func StartCmd() *cobra.Command {
 
 	// Other node flags have config file and env analogs, and will be loaded
 	// into koanf where the values are merged.
-	SetNodeFlags(cmd)
+	// SetNodeFlags(cmd)
+	defaultCfg := node.DefaultConfig()
+	SetNodeFlagsFromStruct(cmd, defaultCfg)
 
 	cmd.SetVersionTemplate("kwil {{printf \"version %s\" .Version}}\n")
 

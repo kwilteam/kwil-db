@@ -21,9 +21,9 @@ import (
 )
 
 const (
-	maxRetries      = 500
-	baseDelay       = 2 * time.Second
-	disconnectLimit = 7 * 24 * time.Hour // 1 week
+	maxRetries         = 500
+	baseReconnectDelay = 2 * time.Second
+	disconnectLimit    = 7 * 24 * time.Hour // 1 week
 )
 
 type Connector interface {
@@ -407,7 +407,7 @@ func (pm *PeerMan) reconnectWithRetry(ctx context.Context, peerID peer.ID) {
 			Addrs: pm.ps.Addrs(peerID),
 		}
 
-		delay := baseDelay * (1 << attempt)
+		delay := baseReconnectDelay * (1 << attempt)
 		if delay > 1*time.Minute {
 			delay = 1 * time.Minute // Cap delay at 1 minute
 		}

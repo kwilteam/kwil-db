@@ -89,14 +89,13 @@ type Node struct {
 	ackChan  chan AckRes         // from consensus engine, to gossip to leader
 	resetMsg chan ConsensusReset // gossiped in from peers, to consensus engine
 
-	host         host.Host
-	pex          bool
-	pubkey       crypto.PublicKey
-	leader       atomic.Bool
-	leaderPubKey []byte
-	dir          string
-	wg           sync.WaitGroup
-	close        func() error
+	host   host.Host
+	pex    bool
+	pubkey crypto.PublicKey
+	leader atomic.Bool
+	dir    string
+	wg     sync.WaitGroup
+	close  func() error
 
 	role   types.Role
 	valSet map[string]types.Validator
@@ -170,7 +169,18 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 		return nil, err
 	}
 
-	ce := consensus.New(options.role, signer, host.ID(), dir, leaderPubKey, mp, bs, options.valSet, ceLogger)
+	ceCfg := &consensus.Config{
+		Role:         options.role,
+		Signer:       signer,
+		HostID:       host.ID(),
+		Dir:          dir,
+		Leader:       leaderPubKey,
+		Mempool:      mp,
+		BlockStore:   bs,
+		ValidatorSet: options.valSet,
+		Logger:       ceLogger,
+	}
+	ce := consensus.New(ceCfg)
 	if ce == nil {
 		return nil, errors.New("failed to create consensus engine")
 	}
