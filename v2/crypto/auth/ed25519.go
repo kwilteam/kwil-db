@@ -5,6 +5,7 @@ package auth
 import (
 	"crypto/ed25519"
 	"encoding/hex"
+	"errors"
 	"fmt"
 
 	"kwil/crypto"
@@ -51,7 +52,7 @@ func (e Ed25519Authenticator) Verify(publicKey []byte, msg []byte, signature []b
 	}
 
 	if !valid {
-		return fmt.Errorf("ed25519 signature verification failed")
+		return errors.New("ed25519 signature verification failed")
 	}
 
 	return nil
