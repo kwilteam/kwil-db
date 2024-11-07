@@ -49,22 +49,34 @@ func (ce *ConsensusEngine) validateBlock(blk *types.Block) error {
 	return nil
 }
 
-// TODO: need to stop execution when we receive a rollback signal of some sort.
 func (ce *ConsensusEngine) executeBlock() error {
 	var txResults []ktypes.TxResult
+
+	defer func() {
+		ce.stateInfo.mtx.Lock()
+		ce.stateInfo.status = Executed
+		ce.stateInfo.mtx.Unlock()
+	}()
 
 	ctx, cancel := context.WithCancel(context.Background())
 	ce.state.cancelFunc = cancel
 
-	// Execute the block and return the appHash and store the txResults
 	for _, tx := range ce.state.blkProp.blk.Txns {
-		res, err := ce.blockExecutor.Execute(ctx, tx) // TODO: this execute function should be context cancellable
-		if err != nil {
-			ce.log.Error("Failed to execute the block tx", "err", err)
-			return err
-		}
+		select {
+		case <-ctx.Done(): // is this the best way to abort the block execution?
+			ce.state.blockRes.ack = false
+			ce.log.Info("Block execution cancelled", "height", ce.state.blkProp.height)
+			return nil // or error? or trigger resetState?
+		default:
+			res, err := ce.blockExecutor.Execute(ctx, tx)
+			if err != nil {
+				ce.state.blockRes.ack = false
+				ce.log.Error("Failed to execute the block tx", "err", err)
+				return err
+			}
 
-		txResults = append(txResults, res)
+			txResults = append(txResults, res)
+		}
 	}
 
 	ce.state.appState.Height = ce.state.blkProp.height
@@ -85,16 +97,10 @@ func (ce *ConsensusEngine) executeBlock() error {
 	ce.state.blockRes = &blockResult{
 		txResults: txResults,
 		appHash:   appHash,
+		ack:       false,
 	}
 
 	ce.log.Info("Executed Block", "height", ce.state.blkProp.blk.Header.Height, "blkHash", ce.state.blkProp.blkHash, "appHash", ce.state.blockRes.appHash.String())
-
-	// ce.stateInfo.mtx.Lock()
-	ce.stateLock("executeBlock")
-	ce.stateInfo.status = Executed
-	// ce.stateInfo.mtx.Unlock()
-	ce.stateUnlock("executeBlock")
-
 	return nil
 }
 
@@ -146,21 +152,18 @@ func (ce *ConsensusEngine) resetState() {
 	ce.state.blockRes = nil
 	ce.state.votes = make(map[string]*vote)
 
-	// reset the ctx and tx
+	// reset the ctx
 	ce.state.cancelFunc = nil
-	// ce.state.tx = nil
 
-	// clear the changesets
-	ce.blockExecutor.Rollback()
+	// TODO: this will be gone in future
+	ce.blockExecutor.Rollback() // clear the changesets
 
 	// update the stateInfo
-	// ce.stateInfo.mtx.Lock()
-	ce.stateLock("resetState")
+	ce.stateInfo.mtx.Lock()
 	ce.stateInfo.status = Committed
 	ce.stateInfo.blkProp = nil
 	ce.stateInfo.height = ce.state.lc.height
-	ce.stateUnlock("resetState")
-	// ce.stateInfo.mtx.Unlock()
+	ce.stateInfo.mtx.Unlock()
 }
 
 // temporary placeholder as this will be in the PG chainstate in future (as was in previous kwil implementations)
