@@ -12,7 +12,7 @@ package serialize
 import (
 	"encoding"
 	"encoding/binary"
-	"fmt"
+	"errors"
 )
 
 // serializeSlice serializes a slice of binary marshalable items.
@@ -39,11 +39,11 @@ func deserializeSlice[T encoding.BinaryUnmarshaler](bts []byte, newFn func() T) 
 	var result []T
 	for len(bts) > 0 {
 		if len(bts) < 8 {
-			return nil, fmt.Errorf("insufficient bytes")
+			return nil, errors.New("insufficient bytes")
 		}
 		length := binary.BigEndian.Uint64(bts[:8])
 		if uint64(len(bts[8:])) < length {
-			return nil, fmt.Errorf("invalid length")
+			return nil, errors.New("invalid length")
 		}
 		bts = bts[8:]
 

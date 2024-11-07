@@ -99,7 +99,7 @@ func (bp *blockProp) ReadFrom(r io.Reader) (int64, error) {
 	}
 	n += 8
 	if sigLen > 1000 { // TODO: smarter sanity check
-		return n, fmt.Errorf("invalid signature length")
+		return n, errors.New("invalid signature length")
 	}
 	bp.LeaderSig = make([]byte, sigLen)
 	nr, err = io.ReadFull(r, bp.LeaderSig)

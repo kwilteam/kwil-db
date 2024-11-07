@@ -23,6 +23,8 @@ const (
 	blockTxCount = 50
 )
 
+var zeroHash = types.Hash{}
+
 // There are three phases in the consensus engine:
 // 1. BlockProposalPhase:
 //   - Depending on the role, the node is either preparing the block or waiting to receive the proposed block.
@@ -181,10 +183,10 @@ func New(cfg *Config) *ConsensusEngine {
 		state: state{
 			blkProp:  nil,
 			blockRes: nil,
-			lc: &lastCommit{
+			lc: &lastCommit{ // the zero values don't need to be specified, but for completeness...
 				height:  0,
-				blkHash: types.ZeroHash,
-				appHash: types.ZeroHash,
+				blkHash: zeroHash,
+				appHash: zeroHash,
 			},
 			votes: make(map[string]*vote),
 		},
@@ -294,44 +296,27 @@ func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg cons
 	// based on the message type, process the message
 	ce.log.Info("Consensus message received", "type", msg.MsgType, "sender", hex.EncodeToString(msg.Sender))
 
-	switch msg.MsgType {
-	case "block_proposal":
-		blkPropMsg, ok := msg.Msg.(*blockProposal)
-		if !ok {
-			ce.log.Warnf("Invalid block proposal message")
-			return // ignore the message
-		}
-		// go ce.processBlockProposal(ctx, blkPropMsg) // This triggers the processing of the block proposal
-		ce.processBlockProposal(ctx, blkPropMsg)
+	switch v := msg.Msg.(type) {
+	case *blockProposal:
+		ce.processBlockProposal(ctx, v)
 
-	case "vote":
-		// only leader should receive votes
+	case *vote:
 		if ce.role.Load() != types.RoleLeader {
 			return
 		}
-
-		vote, ok := msg.Msg.(*vote)
-		if !ok {
-			ce.log.Warnf("Invalid vote message")
+		if err := ce.addVote(ctx, v, hex.EncodeToString(msg.Sender)); err != nil {
+			ce.log.Error("Error adding vote", "vote", v, "error", err)
 			return
 		}
 
-		if err := ce.addVote(ctx, vote, hex.EncodeToString(msg.Sender)); err != nil {
-			ce.log.Error("Error adding vote", "vote", vote, "error", err)
-			return
-		}
-
-	case "block_ann":
-		blkAnn, ok := msg.Msg.(*blockAnnounce)
-		if !ok {
-			ce.log.Error("Invalid block announce message")
-			return
-		}
-
-		if err := ce.commitBlock(blkAnn.blk, blkAnn.appHash); err != nil {
+	case *blockAnnounce:
+		if err := ce.commitBlock(v.blk, v.appHash); err != nil {
 			ce.log.Error("Error processing committing block", "error", err)
 			return
 		}
+
+	default:
+		ce.log.Warnf("Invalid message type received")
 	}
 
 }
@@ -509,7 +494,7 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 	if ce.role.Load() == types.RoleValidator {
 		// reannounce the acks, if still waiting for the commit message
 		if ce.state.blkProp != nil && ce.state.blockRes != nil &&
-			ce.state.blockRes.appHash != types.ZeroHash &&
+			ce.state.blockRes.appHash != zeroHash &&
 			ce.networkHeight.Load() <= ce.state.lc.height { // To ensure that we are not reannouncing the acks for very stale blocks
 			// TODO: rethink what to broadcast here ack/nack, how do u remember the ack/nack
 			ce.log.Info("Reannouncing ACKs", "height", ce.state.blkProp.height, "hash", ce.state.blkProp.blkHash,

@@ -1,8 +1,9 @@
 package types
 
 import (
+	"bytes"
+	"encoding"
 	"fmt"
-	"kwil/types/serialize"
 )
 
 // PayloadType is the type of payload
@@ -15,20 +16,15 @@ func (p PayloadType) String() string {
 // Payload is the interface that all payloads must implement
 // Implementations should use Kwil's serialization package to encode and decode themselves
 type Payload interface {
-	MarshalBinary() (serialize.SerializedData, error)
-	UnmarshalBinary(serialize.SerializedData) error
+	encoding.BinaryMarshaler
+	encoding.BinaryUnmarshaler
+
 	Type() PayloadType
 }
 
 const (
 	PayloadTypeKV PayloadType = "kv"
 )
-
-// payloadConcreteTypes associates a payload type with the concrete type of
-// Payload. Use with UnmarshalPayload or reflect to instantiate.
-var payloadConcreteTypes = map[PayloadType]Payload{
-	PayloadTypeKV: &KVPayload{},
-}
 
 // payloadTypes includes native types and types registered from extensions.
 var payloadTypes = map[PayloadType]bool{
@@ -64,12 +60,45 @@ type KVPayload struct {
 	Value []byte
 }
 
-func (p *KVPayload) MarshalBinary() (serialize.SerializedData, error) {
-	return serialize.Encode(p)
+var _ Payload = &KVPayload{}
+
+var _ encoding.BinaryMarshaler = (*KVPayload)(nil)
+var _ encoding.BinaryMarshaler = KVPayload{}
+
+func (p KVPayload) MarshalBinary() ([]byte, error) {
+	var buf bytes.Buffer
+	buf.Grow(lenSize + len(p.Key) + lenSize + len(p.Value))
+	err := writeBytes(&buf, p.Key)
+	if err != nil {
+		return nil, err
+	}
+	err = writeBytes(&buf, p.Value)
+	if err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
-func (p *KVPayload) UnmarshalBinary(data serialize.SerializedData) error {
-	return serialize.Decode(data, p)
+var _ encoding.BinaryUnmarshaler = (*KVPayload)(nil)
+
+func (p *KVPayload) UnmarshalBinary(data []byte) error {
+	r := bytes.NewReader(data)
+	kb, err := readBytes(r)
+	if err != nil {
+		return err
+	}
+	vb, err := readBytes(r)
+	if err != nil {
+		return err
+	}
+	// if r.Len() > 0 {
+	// 	return fmt.Errorf("extra bytes after kv payload")
+	// }
+
+	p.Key = kb
+	p.Value = vb
+
+	return nil
 }
 
 func (p *KVPayload) Type() PayloadType {

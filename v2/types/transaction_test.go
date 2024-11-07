@@ -2,11 +2,12 @@ package types
 
 import (
 	"fmt"
+	"math/big"
+	"testing"
+
 	"kwil/crypto"
 	"kwil/crypto/auth"
 	"kwil/types/serialize"
-	"math/big"
-	"testing"
 
 	"github.com/stretchr/testify/require"
 )
@@ -191,6 +192,8 @@ func ed25519Signer(t *testing.T) *auth.Ed25519Signer {
 
 	pBytes := privKey.Bytes()
 	k, err := crypto.UnmarshalEd25519PrivateKey(pBytes)
+	require.NoError(t, err)
+
 	return &auth.Ed25519Signer{Ed25519PrivateKey: *k}
 }
 
