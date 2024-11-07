@@ -259,7 +259,7 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 
 	n.log.Info("processing block proposal", "height", height, "hash", hash)
 
-	go n.ce.NotifyBlockProposal(blk)
+	n.ce.NotifyBlockProposal(blk)
 }
 
 // sendACK is a callback for the result of validator block execution/precommit.
@@ -480,7 +480,7 @@ func (n *Node) startConsensusResetGossip(ctx context.Context, ps *pubsub.PubSub)
 				fromPeerID, resetMsg.ReceivedFrom, resetMsg.Message.Data)
 
 			// source of the reset message should be the leader
-			go n.ce.NotifyResetState(reset.ToHeight)
+			n.ce.NotifyResetState(reset.ToHeight)
 		}
 	}()
 

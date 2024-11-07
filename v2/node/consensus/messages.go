@@ -6,22 +6,26 @@ import (
 	"kwil/node/types"
 )
 
-// This file implements the consensus messages that are exchanged between the
-// node's p2p receiver and the consensus engine that trigger the state changes.
-// There are three types of consensus messages that the node can receive:
-// 1. BlockProposal
-// 2. Ack
-// 3. BlockAnn
-// NOTE: only send these messages to the consensus engine if the state machine is
-// expecting them.
+// consensusMessageType is the type of messages used to trigger the state changes in the consensus engine.
+type consensusMsgType string
+
+const (
+	BlockProposal consensusMsgType = "block_proposal"
+	BlockAnnounce consensusMsgType = "block_announce"
+	Vote          consensusMsgType = "vote"
+)
+
+func (mt consensusMsgType) String() string {
+	return string(mt)
+}
+
 type consensusMessage struct {
 	Sender  []byte
-	MsgType string
+	MsgType consensusMsgType
 	Msg     any
 }
 
 func (ce *ConsensusEngine) sendConsensusMessage(msg *consensusMessage) {
-	// should we validate the msg types?
 	ce.msgChan <- *msg
 }
 
@@ -32,12 +36,10 @@ type blockProposal struct {
 	height  int64
 	blkHash types.Hash
 	blk     *types.Block
-	// respCb is a callback function used to send the VoteMessage(ack/nack) back to the leader.
-	// respCb func(ack bool, appHash types.Hash) error
 }
 
-func (bpm *blockProposal) Type() string {
-	return "block_proposal"
+func (bpm *blockProposal) Type() consensusMsgType {
+	return BlockProposal
 }
 
 func (bpm *blockProposal) String() string {
@@ -51,8 +53,8 @@ type vote struct {
 	height  int64
 }
 
-func (vm *vote) Type() string {
-	return "vote"
+func (vm *vote) Type() consensusMsgType {
+	return Vote
 }
 
 func (vm *vote) String() string {
@@ -67,8 +69,8 @@ type blockAnnounce struct {
 	blk     *types.Block
 }
 
-func (bam *blockAnnounce) Type() string {
-	return "block_ann"
+func (bam *blockAnnounce) Type() consensusMsgType {
+	return BlockAnnounce
 }
 
 func (bam *blockAnnounce) String() string {
@@ -86,4 +88,73 @@ func (bam *blockAnnounce) String() string {
 // than the one the node is currently processing or waiting on.
 func (ce *ConsensusEngine) sendResetMsg(height int64) {
 	ce.resetChan <- height
+}
+
+// NotifyBlockProposal is used by the p2p stream handler to notify the consensus engine of a block proposal.
+// Only a validator should receive block proposals and notify the consensus engine, whereas others should ignore this message.
+func (ce *ConsensusEngine) NotifyBlockProposal(blk *types.Block) {
+	if ce.role.Load() == types.RoleLeader {
+		return
+	}
+
+	blkProp := &blockProposal{
+		height:  blk.Header.Height,
+		blkHash: blk.Header.Hash(),
+		blk:     blk,
+	}
+
+	go ce.sendConsensusMessage(&consensusMessage{
+		MsgType: blkProp.Type(),
+		Msg:     blkProp,
+		Sender:  ce.signer.Public().Bytes(),
+	})
+}
+
+// NotifyBlockCommit is used by the p2p stream handler to notify the consensus engine of a committed block.
+// Leader should ignore this message.
+func (ce *ConsensusEngine) NotifyBlockCommit(blk *types.Block, appHash types.Hash) {
+	if ce.role.Load() == types.RoleLeader {
+		return
+	}
+
+	blkCommit := &blockAnnounce{
+		blk:     blk,
+		appHash: appHash,
+	}
+
+	go ce.sendConsensusMessage(&consensusMessage{
+		MsgType: blkCommit.Type(),
+		Msg:     blkCommit,
+		Sender:  ce.signer.Public().Bytes(),
+	})
+}
+
+// NotifyACK notifies the consensus engine about the ACK received from the validator.
+func (ce *ConsensusEngine) NotifyACK(validatorPK []byte, ack types.AckRes) {
+	if ce.role.Load() != types.RoleLeader {
+		return
+	}
+
+	voteMsg := &vote{
+		ack:     ack.ACK,
+		appHash: ack.AppHash,
+		blkHash: ack.BlkHash,
+		height:  ack.Height,
+	}
+
+	ce.sendConsensusMessage(&consensusMessage{
+		MsgType: voteMsg.Type(),
+		Msg:     voteMsg,
+		Sender:  validatorPK,
+	})
+}
+
+// NotifyResetState is used by the p2p stream handler to notify the consensus engine to reset the state to the specified height.
+// Only a validator should receive this message to abort the current block execution.
+func (ce *ConsensusEngine) NotifyResetState(height int64) {
+	if ce.role.Load() != types.RoleValidator {
+		return
+	}
+
+	go ce.sendResetMsg(height)
 }
