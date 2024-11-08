@@ -62,13 +62,12 @@ type ConsensusEngine struct {
 	blockStore    BlockStore
 	blockExecutor BlockExecutor
 
+	// Broadcasters
 	proposalBroadcaster ProposalBroadcaster
 	blkAnnouncer        BlkAnnouncer
 	ackBroadcaster      AckBroadcaster
 	blkRequester        BlkRequester
 	rstStateBroadcaster ResetStateBroadcaster
-
-	// logger log.Logger
 }
 
 // ProposalBroadcaster broadcasts the new block proposal message to the network
@@ -292,8 +291,6 @@ func (ce *ConsensusEngine) startMining(ctx context.Context) {
 
 // handleConsensusMessages handles the consensus messages based on the message type.
 func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg consensusMessage) {
-	// validate the message
-	// based on the message type, process the message
 	ce.log.Info("Consensus message received", "type", msg.MsgType, "sender", hex.EncodeToString(msg.Sender))
 
 	switch v := msg.Msg.(type) {
@@ -485,12 +482,9 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 	if ce.role.Load() == types.RoleValidator {
 		// reannounce the acks, if still waiting for the commit message
 		if ce.state.blkProp != nil && ce.state.blockRes != nil &&
-			ce.state.blockRes.appHash != zeroHash &&
-			ce.networkHeight.Load() <= ce.state.lc.height { // To ensure that we are not reannouncing the acks for very stale blocks
-			// TODO: rethink what to broadcast here ack/nack, how do u remember the ack/nack
-			ce.log.Info("Reannouncing ACKs", "height", ce.state.blkProp.height, "hash", ce.state.blkProp.blkHash,
-				"appHash", ce.state.blockRes.appHash)
-			go ce.ackBroadcaster(true, ce.state.blkProp.height, ce.state.blkProp.blkHash, &ce.state.blockRes.appHash)
+			ce.state.blockRes.appHash.IsZero() &&
+			ce.networkHeight.Load() <= ce.state.lc.height {
+			go ce.ackBroadcaster(ce.state.blockRes.ack, ce.state.blkProp.height, ce.state.blkProp.blkHash, &ce.state.blockRes.appHash)
 		}
 	}
 }
@@ -499,21 +493,61 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) {
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
+	if ce.role.Load() == types.RoleLeader {
+		return
+	}
+
 	if ce.state.lc.height >= ce.networkHeight.Load() {
 		return
 	}
 
-	if ce.role.Load() != types.RoleLeader {
-		// TODO: If we are far behind the network, we should reset the state and catchup.
-		// Scenario: Executed block, but not committed yet and missed the blockAnn messages in between.
-		if ce.state.blkProp == nil && ce.state.blockRes == nil {
-			// catchup if needed with the leader/network.
-			startHeight := ce.state.lc.height + 1
-			t0 := time.Now()
-			ce.replayBlockFromNetwork(ctx)
-			ce.log.Info("Downloaded blocks from the network", "from", startHeight, "to (excluding)", ce.state.lc.height+1, "time", time.Since(t0), "appHash", ce.state.lc.appHash)
+	startHeight := ce.state.lc.height + 1
+	t0 := time.Now()
+
+	if ce.role.Load() == types.RoleValidator {
+		// If validator is in the middle of processing a block, finish it first
+
+		if ce.state.blkProp != nil && ce.state.blockRes != nil { // Waiting for the commit message
+			blkHash, appHash, rawBlk, err := ce.blkRequester(ctx, ce.state.blkProp.height)
+			if err != nil {
+				ce.log.Error("Error requesting block from network", "height", ce.state.blkProp.height, "error", err)
+				return
+			}
+
+			if blkHash != ce.state.blkProp.blkHash {
+				// processed incorrect block
+				ce.resetState()
+				blk, err := types.DecodeBlock(rawBlk)
+				if err != nil {
+					ce.log.Error("Failed to decode the block", "error", err)
+					return
+				}
+
+				if err := ce.processAndCommit(blk, appHash); err != nil {
+					ce.log.Error("Failed to process and commit the block", "error", err)
+					return
+				}
+			} else {
+				if appHash == ce.state.blockRes.appHash {
+					// commit the block
+					if err := ce.commit(); err != nil {
+						ce.log.Error("Failed to commit the block", "height", ce.state.blkProp.height, "error", err)
+						return
+					}
+
+					ce.nextState()
+				} else {
+					// halt the network
+					ce.log.Error("Incorrect AppHash, halting the node.", "received", appHash, "has", ce.state.blockRes.appHash)
+					close(ce.haltChan)
+				}
+			}
 		}
 	}
+
+	ce.replayBlockFromNetwork(ctx)
+
+	ce.log.Info("Network Sync: ", "from", startHeight, "to (excluding)", ce.state.lc.height+1, "time", time.Since(t0), "appHash", ce.state.lc.appHash)
 }
 
 func (ce *ConsensusEngine) updateNetworkHeight(height int64) {
@@ -522,8 +556,9 @@ func (ce *ConsensusEngine) updateNetworkHeight(height int64) {
 	}
 }
 
-func (ce *ConsensusEngine) requiredThreshold() int64 {
-	return int64(len(ce.validatorSet)/2 + 1)
+func (ce *ConsensusEngine) hasMajorityVotes(cnt int) bool {
+	threshold := len(ce.validatorSet)/2 + 1 // majority votes required
+	return cnt >= threshold
 }
 
 // func (ce *ConsensusEngine) lock(caller string) {
