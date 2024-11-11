@@ -144,18 +144,28 @@ func (ce *ConsensusEngine) processBlockProposal(_ context.Context, blkPropMsg *b
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
-	ce.log.Info("Processing block proposal", "height", blkPropMsg.blk.Header.Height, "header", blkPropMsg.blk.Header)
+	if ce.state.lc.height+1 != blkPropMsg.height {
+		ce.log.Info("Block proposal is not for the current height", "blkPropHeight", blkPropMsg.height, "expected", ce.state.lc.height+1)
+		return nil
+	}
+
 	if ce.state.blkProp != nil {
 		if ce.state.blkProp.blkHash == blkPropMsg.blkHash {
 			ce.log.Info("Already processing the block proposal", "height", blkPropMsg.height)
 			return nil
 		}
 
-		if ce.state.blkProp.blk.Header.Timestamp.Before(blkPropMsg.blk.Header.Timestamp) {
-			ce.state.cancelFunc() // abort the current block execution
-			return fmt.Errorf("We are in the process of executing a block, can't accept a new block proposal.")
+		if ce.state.blkProp.blk.Header.Timestamp.After(blkPropMsg.blk.Header.Timestamp) {
+			ce.log.Info("Received stale block proposal, Ignore", "height", blkPropMsg.height, "blkHash", blkPropMsg.blkHash)
+			return nil
 		}
+
+		ce.log.Info("Aborting execution of stale block proposal", "height", blkPropMsg.height, "blkHash", ce.state.blkProp.blkHash)
+		ce.state.cancelFunc() // abort the current block execution
+		ce.resetState()
 	}
+
+	ce.log.Info("Processing block proposal", "height", blkPropMsg.blk.Header.Height, "header", blkPropMsg.blk.Header)
 
 	if err := ce.validateBlock(blkPropMsg.blk); err != nil {
 		ce.log.Error("Error validating block, sending NACK", "error", err)

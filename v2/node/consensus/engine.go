@@ -561,6 +561,20 @@ func (ce *ConsensusEngine) hasMajorityVotes(cnt int) bool {
 	return cnt >= threshold
 }
 
+func (ce *ConsensusEngine) lastCommitHeight() int64 {
+	ce.stateInfo.mtx.RLock()
+	defer ce.stateInfo.mtx.RUnlock()
+
+	return ce.stateInfo.height
+}
+
+func (ce *ConsensusEngine) info() (int64, Status, *blockProposal) {
+	ce.stateInfo.mtx.RLock()
+	defer ce.stateInfo.mtx.RUnlock()
+
+	return ce.stateInfo.height, ce.stateInfo.status, ce.stateInfo.blkProp
+}
+
 // func (ce *ConsensusEngine) lock(caller string) {
 // 	ce.state.mtx.Lock()
 // 	ce.log.Info("Lock acquired", "caller", caller)
