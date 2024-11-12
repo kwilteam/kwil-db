@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -18,6 +19,7 @@ import (
 	"kwil/log"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func generateTestCEConfig(t *testing.T, nodes int) []*Config {
@@ -84,19 +86,28 @@ func generateTestCEConfig(t *testing.T, nodes int) []*Config {
 }
 
 type triggerFn func(*testing.T, *ConsensusEngine, *ConsensusEngine)
-type verifyFn func(*testing.T, *ConsensusEngine, *ConsensusEngine)
+type verifyFn func(*testing.T, *ConsensusEngine, *ConsensusEngine) error
 
-func verifyStatus(t *testing.T, val *ConsensusEngine, status Status, height int64, blkHash types.Hash) {
+func verifyStatus(_ *testing.T, val *ConsensusEngine, status Status, height int64, blkHash types.Hash) error {
 	h, s, b := val.info()
-	assert.Equal(t, h, int64(height))
-	assert.Equal(t, s, status)
-	if blkHash != zeroHash {
-		assert.NotNil(t, b)
-		assert.Equal(t, b.blkHash, blkHash)
+	if height != h {
+		return fmt.Errorf("expected height %d, got %d", height, h)
 	}
+
+	if status != s {
+		return fmt.Errorf("expected status %s, got %s", status, s)
+	}
+	if blkHash != zeroHash && b != nil {
+		if !bytes.Equal(blkHash[:], b.blkHash[:]) {
+			return fmt.Errorf("expected block hash %s, got %s", blkHash, b.blkHash)
+		}
+	}
+
+	return nil
 }
 
 func TestValidatorStateMachine(t *testing.T) {
+	t.Parallel()
 	type action struct {
 		name    string
 		trigger triggerFn
@@ -123,8 +134,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.NotifyBlockProposal(blkProp1.blk)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
 					},
 				},
 				{
@@ -132,8 +143,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.NotifyBlockCommit(blkProp1.blk, appHash)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Committed, 1, zeroHash)
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Committed, 1, zeroHash)
 					},
 				},
 			},
@@ -149,8 +160,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.NotifyBlockProposal(blkProp1.blk)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
 					},
 				},
 				{
@@ -158,11 +169,16 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.NotifyBlockCommit(blkProp1.blk, types.Hash{})
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						// ensure that the halt channel is closed
 						_, ok := <-val.haltChan
-						assert.False(t, ok)
-						assert.Equal(t, int64(0), val.lastCommitHeight())
+						if ok {
+							return errors.New("halt channel not closed")
+						}
+						if val.lastCommitHeight() != 0 {
+							return fmt.Errorf("expected height 0, got %d", val.lastCommitHeight())
+						}
+						return nil
 					},
 				},
 			},
@@ -178,8 +194,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.NotifyBlockProposal(blkProp1.blk)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
 					},
 				},
 				{
@@ -187,8 +203,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.NotifyBlockProposal(blkProp1.blk)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Executed, 0, blkProp2.blkHash)
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Executed, 0, blkProp2.blkHash)
 					},
 				},
 				{
@@ -196,8 +212,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.NotifyBlockCommit(blkProp2.blk, appHash)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Committed, 1, zeroHash)
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Committed, 1, zeroHash)
 					},
 				},
 			},
@@ -213,8 +229,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.NotifyBlockProposal(blkProp2.blk)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Executed, 0, blkProp2.blkHash)
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Executed, 0, blkProp2.blkHash)
 					},
 				},
 				{
@@ -222,8 +238,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.NotifyBlockProposal(blkProp1.blk)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Executed, 0, blkProp2.blkHash)
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Executed, 0, blkProp2.blkHash)
 					},
 				},
 				{
@@ -231,8 +247,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.NotifyBlockCommit(blkProp2.blk, appHash)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Committed, 1, zeroHash)
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Committed, 1, zeroHash)
 					},
 				},
 			},
@@ -248,8 +264,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.NotifyBlockProposal(blkProp1.blk)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
 					},
 				},
 				{
@@ -257,8 +273,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.NotifyBlockCommit(blkProp2.blk, appHash)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Committed, 1, zeroHash)
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Committed, 1, zeroHash)
 					},
 				},
 				{
@@ -266,8 +282,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.NotifyBlockProposal(blkProp1.blk)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Committed, 1, zeroHash)
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Committed, 1, zeroHash)
 					},
 				},
 			},
@@ -283,8 +299,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.NotifyBlockProposal(blkProp1.blk)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
 					},
 				},
 				{
@@ -292,8 +308,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.sendResetMsg(0)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Committed, 0, zeroHash)
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Committed, 0, zeroHash)
 					},
 				},
 				{
@@ -301,8 +317,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.NotifyBlockProposal(blkProp2.blk)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Executed, 0, blkProp2.blkHash)
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Executed, 0, blkProp2.blkHash)
 					},
 				},
 				{
@@ -310,8 +326,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.NotifyBlockCommit(blkProp2.blk, appHash)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Committed, 1, zeroHash)
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Committed, 1, zeroHash)
 					},
 				},
 			},
@@ -327,8 +343,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.NotifyBlockProposal(blkProp1.blk)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
 					},
 				},
 				{
@@ -336,9 +352,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.NotifyBlockCommit(blkProp2.blk, appHash)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Committed, 1, zeroHash)
-						assert.Equal(t, int64(1), val.lastCommitHeight())
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Committed, 1, zeroHash)
 					},
 				},
 				{
@@ -346,9 +361,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.sendResetMsg(0)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Committed, 1, zeroHash)
-						assert.Equal(t, int64(1), val.lastCommitHeight())
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Committed, 1, zeroHash)
 					},
 				},
 			},
@@ -364,8 +378,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.NotifyBlockProposal(blkProp1.blk)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
 					},
 				},
 				{
@@ -373,9 +387,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.sendResetMsg(0)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Committed, 0, zeroHash)
-						assert.Equal(t, int64(0), val.lastCommitHeight())
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Committed, 0, zeroHash)
 					},
 				},
 				{
@@ -383,9 +396,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.sendResetMsg(0)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Committed, 0, zeroHash)
-						assert.Equal(t, int64(0), val.lastCommitHeight())
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Committed, 0, zeroHash)
 					},
 				},
 				{
@@ -393,9 +405,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.NotifyBlockCommit(blkProp2.blk, appHash)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Committed, 1, zeroHash)
-						assert.Equal(t, int64(1), val.lastCommitHeight())
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Committed, 1, zeroHash)
 					},
 				},
 			},
@@ -411,8 +422,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.NotifyBlockProposal(blkProp1.blk)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
 					},
 				},
 				{
@@ -420,9 +431,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.sendResetMsg(1)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
-						assert.Equal(t, int64(0), val.lastCommitHeight())
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
 					},
 				},
 				{
@@ -430,9 +440,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.sendResetMsg(2)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
-						assert.Equal(t, int64(0), val.lastCommitHeight())
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
 					},
 				},
 				{
@@ -440,9 +449,8 @@ func TestValidatorStateMachine(t *testing.T) {
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						val.NotifyBlockCommit(blkProp2.blk, appHash)
 					},
-					verify: func(t *testing.T, leader, val *ConsensusEngine) {
-						verifyStatus(t, val, Committed, 1, zeroHash)
-						assert.Equal(t, int64(1), val.lastCommitHeight())
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Committed, 1, zeroHash)
 					},
 				},
 			},
@@ -465,14 +473,21 @@ func TestValidatorStateMachine(t *testing.T) {
 
 			for _, act := range tc.actions {
 				act.trigger(t, leader, val)
-				time.Sleep(500 * time.Millisecond)
-				act.verify(t, leader, val)
+				require.Eventually(t, func() bool {
+					err := act.verify(t, leader, val)
+					if err != nil {
+						t.Log(err)
+						return false
+					}
+					return true
+				}, 2*time.Second, 100*time.Millisecond)
 			}
 		})
 	}
 }
 
 func TestCELeaderSingleNode(t *testing.T) {
+	t.Parallel()
 	ceConfigs := generateTestCEConfig(t, 1)
 
 	// bring up the node
@@ -481,13 +496,13 @@ func TestCELeaderSingleNode(t *testing.T) {
 	ctx := context.Background()
 	go leader.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster)
 
-	time.Sleep(2 * time.Second)
-
-	// Ensure that the leader mines a block
-	assert.Greater(t, leader.lastCommitHeight(), int64(1))
+	require.Eventually(t, func() bool {
+		return leader.lastCommitHeight() >= 1 // Ensure that the leader mines a block
+	}, 2*time.Second, 100*time.Millisecond)
 }
 
 func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
+	t.Parallel()
 	// Majority > n/2 -> 2
 	ceConfigs := generateTestCEConfig(t, 2)
 
@@ -497,11 +512,11 @@ func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
 	ctx := context.Background()
 	go n1.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster)
 
-	time.Sleep(1 * time.Second)
+	require.Eventually(t, func() bool {
+		return verifyStatus(t, n1, Executed, 0, zeroHash) == nil
+	}, 2*time.Second, 100*time.Millisecond)
 
-	h, status, blProp := n1.info()
-	assert.Equal(t, h, int64(0))
-	assert.Equal(t, status, Executed)
+	_, _, blProp := n1.info()
 	apphash := nextAppHash(types.Hash{})
 
 	// node2 should send a vote to node1
@@ -520,13 +535,14 @@ func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
 	err = n1.addVote(ctx, vote, hex.EncodeToString(ceConfigs[1].Signer.Public().Bytes()))
 	assert.NoError(t, err)
 
-	time.Sleep(500 * time.Millisecond)
 	// ensure that the block is committed
-	h, _, _ = n1.info()
-	assert.Equal(t, h, int64(1))
+	require.Eventually(t, func() bool {
+		return n1.lastCommitHeight() == 1
+	}, 2*time.Second, 100*time.Millisecond)
 }
 
 func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
+	t.Parallel()
 	// Majority > n/2 -> 2
 	ceConfigs := generateTestCEConfig(t, 3)
 
@@ -536,12 +552,12 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 	ctx := context.Background()
 	go n1.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster)
 
-	time.Sleep(500 * time.Millisecond)
-	h, s, b := n1.info()
-	assert.Equal(t, h, int64(0))
-	assert.Equal(t, s, Executed)
-	assert.NotNil(t, b)
+	require.Eventually(t, func() bool {
+		return verifyStatus(t, n1, Executed, 0, zeroHash) == nil
+	}, 2*time.Second, 100*time.Millisecond)
 
+	_, _, b := n1.info()
+	assert.NotNil(t, b)
 	nextAppHash := nextAppHash(nextAppHash(zeroHash))
 
 	// node2 should send a vote to node1
@@ -562,8 +578,8 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 	err = n1.addVote(ctx, vote, hex.EncodeToString(ceConfigs[2].Signer.Public().Bytes()))
 	assert.NoError(t, err)
 
-	time.Sleep(500 * time.Millisecond)
 	// node should not commit the block and halt
+	time.Sleep(500 * time.Millisecond)
 	assert.Equal(t, n1.lastCommitHeight(), int64(0))
 	_, ok := <-n1.haltChan
 	assert.False(t, ok)
