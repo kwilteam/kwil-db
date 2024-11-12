@@ -127,7 +127,10 @@ func (s *sqlGenerator) VisitExpressionVariable(p0 *parse.ExpressionVariable) any
 		// if it already exists, we write it as that index.
 		for i, v := range s.orderedParams {
 			if v == str {
-				return "$" + strconv.Itoa(i+1)
+				res := strings.Builder{}
+				res.WriteString("$" + strconv.Itoa(i+1))
+				typeCast(p0, &res)
+				return res.String()
 			}
 		}
 
