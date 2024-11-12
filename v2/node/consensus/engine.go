@@ -250,6 +250,7 @@ func (ce *ConsensusEngine) runEventLoop(ctx context.Context) error {
 	// TODO: make these configurable?
 	catchUpTicker := time.NewTicker(5 * time.Second)
 	reannounceTicker := time.NewTicker(3 * time.Second)
+	blkPropTicker := time.NewTicker(1 * time.Second)
 
 	for {
 		select {
@@ -273,6 +274,9 @@ func (ce *ConsensusEngine) runEventLoop(ctx context.Context) error {
 
 		case m := <-ce.msgChan:
 			ce.handleConsensusMessages(ctx, m)
+
+		case <-blkPropTicker.C:
+			ce.rebroadcastBlkProposal(ctx)
 		}
 	}
 }
@@ -468,10 +472,10 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 	defer ce.state.mtx.RUnlock()
 
 	if ce.role.Load() == types.RoleLeader {
-		// reannounce the blkProp message if the node is still waiting for the votes
-		if ce.state.blkProp != nil {
-			go ce.proposalBroadcaster(ctx, ce.state.blkProp.blk)
-		}
+		// // reannounce the blkProp message if the node is still waiting for the votes
+		// if ce.state.blkProp != nil {
+		// 	go ce.proposalBroadcaster(ctx, ce.state.blkProp.blk)
+		// }
 		if ce.state.lc.height > 0 {
 			// Announce block commit message for the last committed block
 			go ce.blkAnnouncer(ctx, ce.state.lc.blk, ce.state.lc.appHash) // TODO: can be made infrequent
@@ -486,6 +490,15 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 			ce.networkHeight.Load() <= ce.state.lc.height {
 			go ce.ackBroadcaster(ce.state.blockRes.ack, ce.state.blkProp.height, ce.state.blkProp.blkHash, &ce.state.blockRes.appHash)
 		}
+	}
+}
+
+func (ce *ConsensusEngine) rebroadcastBlkProposal(ctx context.Context) {
+	ce.state.mtx.RLock()
+	defer ce.state.mtx.RUnlock()
+
+	if ce.role.Load() == types.RoleLeader && ce.state.blkProp != nil {
+		go ce.proposalBroadcaster(ctx, ce.state.blkProp.blk)
 	}
 }
 
