@@ -4,8 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
-	"kwil/log"
-	"kwil/node/types"
 	"net"
 	"os"
 	"os/signal"
@@ -13,7 +11,12 @@ import (
 	"testing"
 	"time"
 
-	"github.com/libp2p/go-libp2p/core/crypto"
+	"kwil/config"
+	"kwil/crypto"
+	"kwil/log"
+	"kwil/node/types"
+
+	p2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	mock "github.com/libp2p/go-libp2p/p2p/net/mock"
@@ -23,7 +26,7 @@ import (
 var blackholeIP6 = net.ParseIP("100::")
 
 func newTestHost(t *testing.T, mn mock.Mocknet) ([]byte, host.Host, error) {
-	privKey, _, err := crypto.GenerateSecp256k1Key(rand.Reader)
+	privKey, _, err := p2pcrypto.GenerateSecp256k1Key(rand.Reader)
 	if err != nil {
 		t.Fatalf("Failed to generate private key: %v", err)
 	}
@@ -84,18 +87,44 @@ func TestDualNodeMocknet(t *testing.T) {
 		wg.Wait()
 	})
 
-	privKey, err := crypto.UnmarshalSecp256k1PrivateKey(pk1)
+	privKey1, err := crypto.UnmarshalSecp256k1PrivateKey(pk1)
 	if err != nil {
 		t.Fatalf("Failed to unmarshal private key: %v", err)
 	}
+	pubKey1 := privKey1.Public().Bytes()
 
-	pubKey, err := privKey.GetPublic().Raw()
+	privKey2, err := crypto.UnmarshalSecp256k1PrivateKey(pk2)
 	if err != nil {
-		t.Fatalf("Failed to get public key: %v", err)
+		t.Fatalf("Failed to unmarshal private key: %v", err)
+	}
+	pubKey2 := privKey2.Public().Bytes()
+
+	genCfg := config.GenesisConfig{
+		Leader: pubKey1,
+		Validators: []types.Validator{
+			{
+				PubKey: pubKey1,
+				Power:  1,
+			},
+			{
+				PubKey: pubKey2,
+				Power:  1,
+			},
+		},
 	}
 
+	defaultConfigSet := config.DefaultConfig()
+
 	log1 := log.New(log.WithName("NODE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
-	node1, err := NewNode(".testnet", WithLogger(log1), WithHost(h1), WithRole(types.RoleLeader), WithPrivKey(pk1), WithLeader(pubKey))
+	cfg1 := &Config{
+		RootDir:   ".n1",
+		PrivKey:   privKey1,
+		Logger:    log1,
+		Genesis:   genCfg,
+		Consensus: defaultConfigSet.Consensus,
+		P2P:       defaultConfigSet.P2P, // mostly ignored as we are using WithHost below
+	}
+	node1, err := NewNode(cfg1, WithHost(h1))
 	if err != nil {
 		t.Fatalf("Failed to create Node 1: %v", err)
 	}
@@ -107,7 +136,15 @@ func TestDualNodeMocknet(t *testing.T) {
 	}()
 
 	log2 := log.New(log.WithName("NODE2"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
-	node2, err := NewNode(".n2", WithLogger(log2), WithHost(h2), WithRole(types.RoleValidator), WithPrivKey(pk2), WithLeader(pubKey))
+	cfg2 := &Config{
+		RootDir:   ".n2",
+		PrivKey:   privKey2,
+		Logger:    log2,
+		Genesis:   genCfg,
+		Consensus: defaultConfigSet.Consensus,
+		P2P:       defaultConfigSet.P2P,
+	}
+	node2, err := NewNode(cfg2, WithHost(h2))
 	if err != nil {
 		t.Fatalf("Failed to create Node 2: %v", err)
 	}
@@ -134,7 +171,7 @@ func TestDualNodeMocknet(t *testing.T) {
 	// t.Log(peers)
 
 	// run for a bit, checks stuff, do tests, like ensure blocks mine (TODO)...
-	time.Sleep(3 * time.Second)
+	time.Sleep(4 * time.Second)
 	cancel()
 	wg.Wait()
 
