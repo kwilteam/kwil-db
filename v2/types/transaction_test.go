@@ -1,15 +1,16 @@
 package types
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"kwil/crypto"
 	"kwil/crypto/auth"
-	"kwil/types/serialize"
-
-	"github.com/stretchr/testify/require"
 )
 
 type TestPayload struct {
@@ -18,11 +19,17 @@ type TestPayload struct {
 }
 
 func (p *TestPayload) MarshalBinary() ([]byte, error) {
-	return serialize.Encode(p)
+	return []byte(fmt.Sprintf("%s=%s", p.Key, p.Value)), nil
 }
 
 func (p *TestPayload) UnmarshalBinary(data []byte) error {
-	return serialize.Decode(data, p)
+	key, value, ok := bytes.Cut(data, []byte("="))
+	if !ok {
+		return errors.New("invalid payload format")
+	}
+	p.Key = string(key)
+	p.Value = string(value)
+	return nil
 }
 
 func (p *TestPayload) Type() PayloadType {
