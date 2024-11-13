@@ -1,7 +1,6 @@
 package app
 
 import (
-	"bytes"
 	"context"
 	"encoding/hex"
 	"fmt"
@@ -9,15 +8,14 @@ import (
 	"os"
 	"path/filepath"
 
+	"kwil/config"
+	"kwil/crypto"
 	"kwil/log"
 	"kwil/node"
-	"kwil/node/types"
 	"kwil/version"
-
-	"github.com/libp2p/go-libp2p/core/crypto" // TODO: isolate to config package not main
 )
 
-func runNode(ctx context.Context, rootDir string, cfg *node.Config) error {
+func runNode(ctx context.Context, rootDir string, cfg *config.Config) error {
 	// Writing to stdout and a log file.  TODO: config outputs
 	rot, err := log.NewRotatorWriter(filepath.Join(rootDir, "kwild.log"), 10_000, 0)
 	if err != nil {
@@ -41,56 +39,28 @@ func runNode(ctx context.Context, rootDir string, cfg *node.Config) error {
 
 	logger.Infof("Loading the genesis configuration from %s", genFile)
 
-	genConfig, err := node.LoadGenesisConfig(genFile)
+	genConfig, err := config.LoadGenesisConfig(genFile)
 	if err != nil {
 		return fmt.Errorf("failed to load genesis config: %w", err)
-	}
-
-	// assuming static validators
-	valSet := make(map[string]types.Validator)
-	for _, val := range genConfig.Validators {
-		valSet[hex.EncodeToString(val.PubKey)] = val
 	}
 
 	privKey, err := crypto.UnmarshalSecp256k1PrivateKey(cfg.PrivateKey)
 	if err != nil {
 		return err
 	}
-	pubKey, err := privKey.GetPublic().Raw()
-	if err != nil {
-		return err
-	}
+	pubKey := privKey.Public().Bytes()
 
 	logger.Info("Parsing the pubkey", "key", hex.EncodeToString(pubKey))
-	// Check if u are the leader
-	// TODO:  the role assignement should be based on the current valset rather than the genesis config, once we have the persisted valset
-	var nRole types.Role
-	if bytes.Equal(pubKey, genConfig.Leader) {
-		nRole = types.RoleLeader
-		logger.Info("You are the leader")
-	} else {
-		// check if you are a validator
-		if _, ok := valSet[hex.EncodeToString(pubKey)]; ok {
-			nRole = types.RoleValidator
-			logger.Info("You are a validator")
-		} else {
-			nRole = types.RoleSentry
-			logger.Info("You are a sentry")
-		}
+
+	nodeCfg := &node.Config{
+		RootDir:   rootDir,
+		PrivKey:   privKey,
+		Logger:    logger.NewWithLevel(cfg.LogLevel, "NODE"),
+		Consensus: cfg.Consensus,
+		Genesis:   *genConfig,
+		P2P:       cfg.P2P,
 	}
-
-	// TODOs:
-	//  - node.WithGenesisConfig instead of WithGenesisValidators
-	//  - change node.WithPrivateKey to []byte or our own PrivateKey type
-
-	ip, port := cfg.P2P.IP, cfg.P2P.Port
-
-	nodeLogger := logger.NewWithLevel(cfg.LogLevel, "NODE")
-	// wtf functional options; we're making a config struct soon
-	node, err := node.NewNode(rootDir, node.WithIP(ip), node.WithPort(port),
-		node.WithPrivKey(cfg.PrivateKey[:]), node.WithLeader(genConfig.Leader[:]),
-		node.WithRole(nRole), node.WithGenesisValidators(valSet),
-		node.WithPex(cfg.P2P.Pex), node.WithLogger(nodeLogger))
+	node, err := node.NewNode(nodeCfg)
 	if err != nil {
 		return err
 	}
