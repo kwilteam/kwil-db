@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"slices"
 	"strconv"
 	"strings"
@@ -16,7 +17,6 @@ import (
 
 	"kwil/node/types/sql"
 	"kwil/types"
-	"kwil/types/serialize"
 )
 
 type changesetIoWriter struct {
@@ -100,14 +100,136 @@ func (ce *ChangesetEntry) Prefix() byte {
 	return ChangesetEntryType
 }
 
-func (ce *ChangesetEntry) MarshalBinary() ([]byte, error) {
-	return serialize.Encode(ce)
+func (ce ChangesetEntry) SerializeSize() int {
+	var oldTupsSize int
+	for _, col := range ce.OldTuple {
+		oldTupsSize += col.SerializeSize()
+	}
+	var newTupsSize int
+	for _, col := range ce.NewTuple {
+		newTupsSize += col.SerializeSize()
+	}
+	return 2 + 4 + 4 + oldTupsSize + 4 + newTupsSize
+}
+
+func (ce ChangesetEntry) MarshalBinary() ([]byte, error) {
+	b := make([]byte, ce.SerializeSize())
+
+	// version
+	const ver uint16 = 0
+	binary.LittleEndian.PutUint16(b[:2], ver)
+	offset := 2
+
+	binary.LittleEndian.PutUint32(b[offset:], ce.RelationIdx)
+	offset += 4
+
+	binary.LittleEndian.PutUint32(b[offset:], uint32(len(ce.OldTuple)))
+	offset += 4
+
+	for _, col := range ce.OldTuple {
+		cb, err := col.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		if offset+len(cb) > len(b) {
+			return nil, errors.New("buffer too small for old tuple column")
+		}
+		copy(b[offset:], cb)
+		offset += len(cb)
+	}
+
+	binary.LittleEndian.PutUint32(b[offset:], uint32(len(ce.NewTuple)))
+	offset += 4
+
+	for _, col := range ce.NewTuple {
+		cb, err := col.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		if offset+len(cb) > len(b) {
+			return nil, errors.New("buffer too small for old tuple column")
+		}
+		copy(b[offset:], cb)
+		offset += len(cb)
+	}
+
+	if ss := ce.SerializeSize(); ss != offset { // bug, must match
+		return nil, fmt.Errorf("serialize size %d != offset %d", ss, offset)
+	}
+
+	return b, nil
 }
 
 var _ encoding.BinaryUnmarshaler = (*ChangesetEntry)(nil)
 
 func (ce *ChangesetEntry) UnmarshalBinary(data []byte) error {
-	return serialize.Decode(data, ce)
+	rd := bytes.NewReader(data)
+	var ver uint16
+	err := binary.Read(rd, binary.LittleEndian, &ver)
+	if err != nil {
+		return err
+	}
+
+	if ver != 0 {
+		return fmt.Errorf("unsupported version %d", ver)
+	}
+
+	err = binary.Read(rd, binary.LittleEndian, &ce.RelationIdx)
+	if err != nil {
+		return err
+	}
+
+	// var numOld uint32
+	// err = binary.Read(rd, binary.LittleEndian, &numOld)
+	// if err != nil {
+	// 	return err
+	// }
+
+	offset := int(rd.Size()) - rd.Len() // rd.Seek(0, io.SeekCurrent)
+
+	numOld := binary.LittleEndian.Uint32(data[offset:])
+	offset += 4
+
+	ce.OldTuple = make([]*TupleColumn, numOld)
+	for i := range ce.OldTuple {
+		if offset >= len(data) {
+			return errors.New("unexpected end of data")
+		}
+
+		ce.OldTuple[i] = &TupleColumn{}
+		err = ce.OldTuple[i].UnmarshalBinary(data[offset:])
+		if err != nil {
+			return err
+		}
+		offset += ce.OldTuple[i].SerializeSize()
+	}
+
+	if offset+4 >= len(data) {
+		return errors.New("unexpected end of data")
+	}
+
+	numNew := binary.LittleEndian.Uint32(data[offset:])
+	offset += 4
+
+	ce.NewTuple = make([]*TupleColumn, numNew)
+	for i := range ce.NewTuple {
+		if offset >= len(data) {
+			return errors.New("unexpected end of data")
+		}
+
+		ce.NewTuple[i] = &TupleColumn{}
+		err = ce.NewTuple[i].UnmarshalBinary(data[offset:])
+		if err != nil {
+			return err
+		}
+		offset += ce.NewTuple[i].SerializeSize()
+	}
+
+	if ss := ce.SerializeSize(); offset != ss { // bug, must match
+		return fmt.Errorf("read %d bytes, expected %d", offset, ss)
+	}
+
+	return nil
 }
 
 func (ce *ChangesetEntry) ApplyChangesetEntry(ctx context.Context, tx sql.DB, relation *Relation) error {
@@ -524,26 +646,177 @@ func (r *Relation) String() string {
 	return fmt.Sprintf("%s.%s", r.Schema, r.Table)
 }
 
-var _ ChangeStreamer = (*Relation)(nil)
-
-func (r *Relation) MarshalBinary() ([]byte, error) {
-	return serialize.Encode(r)
-}
-
 func (r *Relation) Prefix() byte {
 	return RelationType
+}
+
+var _ ChangeStreamer = (*Relation)(nil)
+
+func (r *Relation) SerializeSize() int {
+	var colsSize int
+	for _, c := range r.Columns {
+		colsSize += c.SerializeSize()
+	}
+	return 2 + 4 + len(r.Schema) + 4 + len(r.Table) + 4 + colsSize
+}
+
+func (r *Relation) MarshalBinary() ([]byte, error) {
+	b := make([]byte, r.SerializeSize())
+
+	const ver uint16 = 0 // future proofing
+	binary.BigEndian.PutUint16(b[:2], ver)
+	offset := 2
+
+	schemaNameBts := []byte(r.Schema)
+	binary.BigEndian.PutUint32(b[offset:], uint32(len(schemaNameBts)))
+	offset += 4
+	copy(b[offset:], schemaNameBts)
+	offset += len(schemaNameBts)
+
+	tableNameBts := []byte(r.Table)
+	binary.BigEndian.PutUint32(b[offset:], uint32(len(tableNameBts)))
+	offset += 4
+	copy(b[offset:], tableNameBts)
+	offset += len(tableNameBts)
+
+	if r.Columns == nil {
+		binary.BigEndian.PutUint32(b[offset:], math.MaxUint32)
+	} else {
+		binary.BigEndian.PutUint32(b[offset:], uint32(len(r.Columns)))
+	}
+	offset += 4
+
+	for _, c := range r.Columns {
+		if offset >= len(b) {
+			return nil, errors.New("insufficient buffer size") // SerializeSize bug
+		}
+		colb, err := c.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		if copy(b[offset:], colb) != len(colb) {
+			return nil, errors.New("failed to copy column")
+		}
+		offset += len(colb)
+	}
+
+	return b, nil
 }
 
 var _ encoding.BinaryUnmarshaler = (*Relation)(nil)
 
 func (r *Relation) UnmarshalBinary(data []byte) error {
-	return serialize.Decode(data, r)
+	if len(data) < 6 {
+		return errors.New("invalid data")
+	}
+	ver := binary.BigEndian.Uint16(data[:2])
+	if ver != 0 {
+		return fmt.Errorf("unknown version %d", ver)
+	}
+	offset := 2
+	schemaLen := int(binary.BigEndian.Uint32(data[offset:]))
+	offset += 4
+	if offset+schemaLen > len(data) {
+		return errors.New("insufficient data")
+	}
+	r.Schema = string(data[offset : offset+schemaLen])
+	offset += schemaLen
+
+	tableLen := int(binary.BigEndian.Uint32(data[offset:]))
+	offset += 4
+	if offset+tableLen > len(data) {
+		return errors.New("insufficient data")
+	}
+	r.Table = string(data[offset : offset+tableLen])
+	offset += tableLen
+
+	colLen := binary.BigEndian.Uint32(data[offset:])
+	if colLen == math.MaxUint32 { // r.Columns = nil
+		colLen = 0
+	} else {
+		r.Columns = make([]*Column, 0, colLen)
+	}
+	offset += 4
+	for range colLen {
+		if offset >= len(data) {
+			return errors.New("insufficient data")
+		}
+		col := &Column{}
+		if err := col.UnmarshalBinary(data[offset:]); err != nil {
+			return err
+		}
+		r.Columns = append(r.Columns, col)
+		offset += col.SerializeSize()
+	}
+
+	if ss := r.SerializeSize(); offset != ss { // bug, must match
+		return fmt.Errorf("read %d bytes, expected %d", offset, ss)
+	}
+
+	return nil
 }
 
 // Column is a column name and value.
 type Column struct {
 	Name string
 	Type *types.DataType
+}
+
+func (c Column) MarshalBinary() ([]byte, error) {
+	b := make([]byte, 2+4+len(c.Name), c.SerializeSize())
+	const ver uint16 = 0 // future proofing
+	binary.BigEndian.PutUint16(b[:2], ver)
+	offset := 2
+	binary.BigEndian.PutUint32(b[offset:], uint32(len(c.Name)))
+	offset += 4
+	copy(b[offset:], []byte(c.Name))
+	// offset += len(c.Name)
+	if c.Type == nil {
+		return b, nil
+	}
+	dtb, err := c.Type.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+	return append(b, dtb...), nil
+}
+
+func (c *Column) UnmarshalBinary(b []byte) error {
+	if len(b) < 6 {
+		return errors.New("invalid data")
+	}
+	ver := binary.BigEndian.Uint16(b[:2])
+	if ver != 0 {
+		return fmt.Errorf("invalid column data, unknown version %d", ver)
+	}
+	offset := 2
+	nameLen := int(binary.BigEndian.Uint32(b[offset:]))
+	offset += 4
+	if nameLen+offset > len(b) {
+		return errors.New("invalid data, name length too long")
+	}
+	c.Name = string(b[offset : offset+nameLen])
+	offset += nameLen
+	if offset == len(b) { // nil *Datatype
+		return nil
+	}
+	c.Type = new(types.DataType)
+	if err := c.Type.UnmarshalBinary(b[offset:]); err != nil {
+		return err
+	}
+	offset += c.Type.SerializeSize()
+	if ss := c.SerializeSize(); offset != ss { // bug, must match
+		return fmt.Errorf("read %d bytes, expected %d", offset, ss)
+	}
+	return nil
+}
+
+func (c Column) SerializeSize() int {
+	base := 2 + 4 + len(c.Name)
+	if c.Type == nil {
+		return base
+	}
+	return base + c.Type.SerializeSize()
 }
 
 // Tuple is a tuple of values.
@@ -554,6 +827,69 @@ type Tuple struct {
 	Columns []*TupleColumn
 }
 
+func (tup Tuple) MarshalBinary() ([]byte, error) {
+	var colsSize int
+	for _, col := range tup.Columns {
+		colsSize += col.SerializeSize()
+	}
+	// 2 bytes for version, 4 bytes for RelationIdx, 4 bytes for length of
+	// columns slice, and then each column for which size is unknown until we
+	// call the (*TupleColumn).MarshalBinary method.
+	b := make([]byte, 2+4+4, 2+4+4+colsSize)
+	const ver uint16 = 0 // future proofing
+	binary.BigEndian.PutUint16(b[:2], ver)
+	binary.BigEndian.PutUint32(b[2:6], tup.RelationIdx)
+	binary.BigEndian.PutUint32(b[6:10], uint32(len(tup.Columns)))
+	for _, col := range tup.Columns {
+		colBytes, err := col.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		b = append(b, colBytes...)
+	}
+	return b, nil
+}
+
+func (tup Tuple) SerializeSize() int {
+	var colsSize int
+	for _, col := range tup.Columns {
+		colsSize += col.SerializeSize()
+	}
+	return 2 + 4 + 4 + colsSize
+}
+
+func (tup *Tuple) UnmarshalBinary(data []byte) error {
+	if len(data) < 10 {
+		return errors.New("invalid tuple data, too short")
+	}
+	ver := binary.BigEndian.Uint16(data[:2])
+	if ver != 0 {
+		return fmt.Errorf("invalid tuple data, unknown version %d", ver)
+	}
+	tup.RelationIdx = binary.BigEndian.Uint32(data[2:6])
+	numCols := binary.BigEndian.Uint32(data[6:10])
+	tup.Columns = make([]*TupleColumn, 0, numCols)
+	offset := 10
+	for {
+		if offset >= len(data) {
+			break
+		}
+		col := &TupleColumn{}
+		if err := col.UnmarshalBinary(data[offset:]); err != nil {
+			return err
+		}
+		tup.Columns = append(tup.Columns, col)
+		offset += col.SerializeSize()
+		if len(tup.Columns) == int(numCols) {
+			break
+		}
+	}
+	if ss := tup.SerializeSize(); offset != ss { // bug, must match
+		return fmt.Errorf("read %d bytes, expected %d", offset, ss)
+	}
+	return nil
+}
+
 // TupleColumn is a column within a tuple.
 type TupleColumn struct {
 	// ValueType gives information on the type of data in the column. If the
@@ -561,6 +897,56 @@ type TupleColumn struct {
 	ValueType ValueType
 	// Data is the actual data in the column.
 	Data []byte
+}
+
+func (tc TupleColumn) MarshalBinary() ([]byte, error) {
+	// 2 bytes for version, 1 byte for value type, 8 bytes for length, and the data
+	b := make([]byte, tc.SerializeSize())
+	const ver uint16 = 0 // future proofing
+	binary.BigEndian.PutUint16(b[:2], ver)
+	b[2] = byte(tc.ValueType)
+	binary.BigEndian.PutUint64(b[3:], uint64(len(tc.Data)))
+	copy(b[11:], tc.Data)
+	return b, nil
+}
+
+// SerializeSize returns the size of the serialized tuple column as serialized
+// via [MarshalBinary].
+func (tc TupleColumn) SerializeSize() int {
+	return 2 + 1 + 8 + len(tc.Data)
+}
+
+func (tc *TupleColumn) UnmarshalBinary(data []byte) error {
+	if len(data) < 11 { // 2 + 1 + 8
+		return errors.New("invalid tuple column data")
+	}
+	ver := binary.BigEndian.Uint16(data[:2])
+	if ver != 0 {
+		return fmt.Errorf("invalid tuple column version: %d", ver)
+	}
+	offset := 2
+	tc.ValueType = ValueType(data[offset])
+	offset++
+	dataLen := binary.BigEndian.Uint64(data[offset:])
+	offset += 8
+	if dataLen >= math.MaxUint32 { // just some sanity, and for safe conversions
+		return fmt.Errorf("data length too long: %d", dataLen)
+	}
+	if tc.ValueType == NullValue {
+		if dataLen != 0 {
+			return fmt.Errorf("invalid tuple column data length: %d", dataLen)
+		}
+		return nil
+	}
+	if len(data) < offset+int(dataLen) {
+		return fmt.Errorf("invalid tuple column data length: %d", dataLen)
+	}
+	tc.Data = data[offset : offset+int(dataLen)]
+	offset += int(dataLen)
+	if ss := tc.SerializeSize(); offset != ss { // bug, must match
+		return fmt.Errorf("read %d bytes, expected %d", offset, ss)
+	}
+	return nil
 }
 
 // ValueType gives information on the type of data in a tuple column.
