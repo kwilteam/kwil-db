@@ -142,8 +142,6 @@ type lastCommit struct {
 
 // Config is the struct given to the constructor, [New].
 type Config struct {
-	// Role is the role of the node in the consensus engine.
-	Role types.Role
 	// Signer is the private key of the node.
 	Signer crypto.PrivateKey
 	// Dir is the directory where the node stores its data.
@@ -170,6 +168,23 @@ func New(cfg *Config) *ConsensusEngine {
 		// logger = log.DiscardLogger // for prod
 		logger = log.New(log.WithName("CONS"), log.WithLevel(log.LevelDebug),
 			log.WithWriter(os.Stdout), log.WithFormat(log.FormatUnstructured))
+	}
+
+	// Determine *genesis* role based on leader pubkey and validator set.
+	var role types.Role
+	pubKey := cfg.Signer.Public()
+	if pubKey.Equals(cfg.Leader) {
+		role = types.RoleLeader
+		logger.Info("You are the leader")
+	} else {
+		pubKeyBts := pubKey.Bytes()
+		if _, in := cfg.ValidatorSet[hex.EncodeToString(pubKeyBts)]; in {
+			role = types.RoleValidator
+			logger.Info("You are a validator")
+		} else {
+			role = types.RoleSentry
+			logger.Info("You are a sentry")
+		}
 	}
 
 	be := newBlockExecutor()
@@ -205,7 +220,7 @@ func New(cfg *Config) *ConsensusEngine {
 		log:           logger,
 	}
 
-	ce.role.Store(cfg.Role)
+	ce.role.Store(role)
 	ce.networkHeight.Store(0)
 
 	return ce

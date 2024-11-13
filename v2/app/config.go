@@ -3,7 +3,7 @@ package app
 import (
 	"fmt"
 
-	"kwil/node"
+	"kwil/config"
 
 	"github.com/knadh/koanf/v2"
 	gotoml "github.com/pelletier/go-toml/v2"
@@ -25,8 +25,8 @@ func PrintConfigCmd() *cobra.Command {
 				return err // the parent command needs to set a persistent flag named "root"
 			}
 
-			// k => node.Config
-			var cfg node.Config
+			// k => config.Config
+			var cfg config.Config
 			err = k.UnmarshalWithConf("", &cfg, koanf.UnmarshalConf{Tag: "koanf"})
 			if err != nil {
 				return fmt.Errorf("failed to unmarshal config: %w", err)
@@ -44,7 +44,7 @@ func PrintConfigCmd() *cobra.Command {
 	}
 
 	// SetNodeFlags(cmd)
-	defaultCfg := node.DefaultConfig()
+	defaultCfg := config.DefaultConfig()
 	SetNodeFlagsFromStruct(cmd, defaultCfg)
 
 	return cmd

@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"kwil/config"
 	"kwil/log"
-	"kwil/node"
 	"kwil/node/types"
 
 	"github.com/knadh/koanf/parsers/toml/v2"
@@ -82,7 +82,7 @@ func SetNodeFlagsFromStruct(cmd *cobra.Command, cfg interface{}) {
 		case time.Duration:
 			fs.Duration(flagName, vt, desc)
 			return
-		case node.Duration:
+		case config.Duration:
 			fs.Duration(flagName, time.Duration(vt), desc)
 			return
 		case types.HexBytes:
@@ -128,7 +128,7 @@ func SetNodeFlagsFromStruct(cmd *cobra.Command, cfg interface{}) {
 }
 
 func SetNodeFlagsFromDefaultInKoanf(cmd *cobra.Command, k *koanf.Koanf) error {
-	var cfg node.Config
+	var cfg config.Config
 	err := k.UnmarshalWithConf("", &cfg, koanf.UnmarshalConf{Tag: "koanf"})
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal config: %w", err)

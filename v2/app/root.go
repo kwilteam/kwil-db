@@ -3,7 +3,7 @@ package app
 import (
 	"fmt"
 
-	"kwil/node"
+	"kwil/config"
 	"kwil/version"
 
 	"github.com/knadh/koanf/v2"
@@ -18,11 +18,11 @@ const RootFlagName = "root"
 func RootCmd() *cobra.Command {
 	var rootDir string
 	BindDefaults(struct {
-		RootDir      string `koanf:"root" toml:"root"`
-		*node.Config `koanf:",flatten"`
+		RootDir        string `koanf:"root" toml:"root"`
+		*config.Config `koanf:",flatten"`
 	}{
 		RootDir: ".testnet",
-		Config:  node.DefaultConfig(),
+		Config:  config.DefaultConfig(),
 	}, "koanf")
 
 	cmd := &cobra.Command{
@@ -90,8 +90,8 @@ func StartCmd() *cobra.Command {
 				return err // the parent command needs to set a persistent flag named "root"
 			}
 
-			// k => node.Config
-			var cfg node.Config
+			// k => config.Config
+			var cfg config.Config
 			err = k.UnmarshalWithConf("", &cfg, koanf.UnmarshalConf{Tag: "koanf"})
 			if err != nil {
 				return fmt.Errorf("failed to unmarshal config: %w", err)
@@ -112,7 +112,7 @@ func StartCmd() *cobra.Command {
 	// Other node flags have config file and env analogs, and will be loaded
 	// into koanf where the values are merged.
 	// SetNodeFlags(cmd)
-	defaultCfg := node.DefaultConfig()
+	defaultCfg := config.DefaultConfig()
 	SetNodeFlagsFromStruct(cmd, defaultCfg)
 
 	cmd.SetVersionTemplate("kwil {{printf \"version %s\" .Version}}\n")
