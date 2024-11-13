@@ -10,6 +10,7 @@ import (
 	"kwil/node/types"
 
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
 
@@ -90,4 +91,36 @@ func (n *Node) getTxWithRetry(ctx context.Context, txHash types.Hash, baseDelay 
 			return nil, ErrTxNotFound
 		}
 	}
+}
+
+func (n *Node) txGetStreamHandler(s network.Stream) {
+	defer s.Close()
+
+	var req txHashReq
+	if _, err := req.ReadFrom(s); err != nil {
+		n.log.Warn("bad get tx req", "error", err)
+		return
+	}
+
+	// first check mempool
+	rawTx := n.mp.Get(req.Hash)
+	if rawTx != nil {
+		s.Write(rawTx)
+		return
+	}
+
+	// this is racy, and should be different in product
+
+	// then confirmed tx index
+	_, rawTx, err := n.bki.GetTx(req.Hash)
+	if err != nil {
+		if !errors.Is(err, types.ErrNotFound) {
+			n.log.Errorf("unexpected GetTx error: %v", err)
+		}
+		s.Write(noData) // don't have it
+	} else {
+		s.Write(rawTx)
+	}
+
+	// NOTE: response could also include conf/unconf or block height (-1 or N)
 }
