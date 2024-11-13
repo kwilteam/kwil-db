@@ -59,7 +59,6 @@ func generateTestCEConfig(t *testing.T, nodes int) []*Config {
 		assert.NoError(t, err)
 
 		ceConfigs[i] = &Config{
-			Role:           types.RoleValidator,
 			Signer:         privKeys[i],
 			Dir:            nodeDir,
 			Leader:         pubKeys[0],
@@ -75,7 +74,6 @@ func generateTestCEConfig(t *testing.T, nodes int) []*Config {
 		}
 	}
 
-	ceConfigs[0].Role = types.RoleLeader
 	t.Cleanup(func() {
 		for _, closerFn := range closers {
 			closerFn()

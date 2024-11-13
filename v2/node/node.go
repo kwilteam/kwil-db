@@ -99,6 +99,7 @@ type Node struct {
 	wg     sync.WaitGroup
 	close  func() error
 
+	// TODO: get both rol and valSet from CE, if really needed by Node
 	role   types.Role
 	valSet map[string]types.Validator
 }
@@ -110,15 +111,17 @@ func addClose(close, top func() error) func() error {
 // NewNode creates a new node. For now we are using functional options, but this
 // may be better suited by a config struct, or a hybrid where some settings are
 // required, such as identity.
-func NewNode(dir string, opts ...Option) (*Node, error) {
+func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 	options := &options{}
 	for _, opt := range opts {
 		opt(options)
 	}
-	logger := options.logger
+
+	logger := cfg.Logger
 	if logger == nil {
 		// logger = log.DiscardLogger // prod
-		logger = log.New(log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
+		logger = log.New(log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug),
+			log.WithFormat(log.FormatUnstructured)) // dev
 	}
 
 	close := func() error { return nil }
@@ -126,7 +129,7 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 	host := options.host
 	if host == nil {
 		var err error
-		host, err = newHost(options.ip, options.port, options.privKey)
+		host, err = newHost(cfg.P2P.IP, cfg.P2P.Port, cfg.PrivKey)
 		if err != nil {
 			return nil, err
 		}
@@ -137,8 +140,8 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 		mp = mempool.New()
 	}
 
-	addrBookPath := filepath.Join(dir, "addrbook.json")
-	pm, err := peers.NewPeerMan(options.pex, addrBookPath,
+	addrBookPath := filepath.Join(cfg.RootDir, "addrbook.json")
+	pm, err := peers.NewPeerMan(cfg.P2P.Pex, addrBookPath,
 		logger.New("PEERS"),
 		host, // tooo much, become minimal interface
 		func(ctx context.Context, peerID peer.ID) ([]peer.AddrInfo, error) {
@@ -150,7 +153,7 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 
 	bs := options.bs
 	if bs == nil {
-		blkStrDir := filepath.Join(dir, "blockstore")
+		blkStrDir := filepath.Join(cfg.RootDir, "blockstore")
 		var err error
 		bs, err = store.NewBlockStore(blkStrDir)
 		if err != nil {
@@ -160,29 +163,34 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 	close = addClose(close, bs.Close) //close db after stopping p2p
 	close = addClose(close, host.Close)
 
-	signer, err := crypto.UnmarshalSecp256k1PrivateKey(options.privKey)
+	privKey := cfg.PrivKey
+	pubkey := privKey.Public()
+
+	leader := cfg.Genesis.Validators[0].PubKey
+	valSet := make(map[string]types.Validator)
+	for _, val := range cfg.Genesis.Validators {
+		valSet[hex.EncodeToString(val.PubKey)] = val
+	}
+
+	leaderPubKey, err := crypto.UnmarshalSecp256k1PublicKey(leader)
 	if err != nil {
 		return nil, err
 	}
 
-	ceLogger := logger.New("CONS")
-	leaderPubKey, err := crypto.UnmarshalSecp256k1PublicKey(options.leader)
-	if err != nil {
-		return nil, err
+	role := types.RoleValidator
+	if pubkey.Equals(leaderPubKey) {
+		role = types.RoleLeader
 	}
-
-	propTimeout := time.Second // TODO: get from config (*node.Config)!
 
 	ceCfg := &consensus.Config{
-		Role:           options.role,
-		Signer:         signer,
-		Dir:            dir,
+		Signer:         privKey,
+		Dir:            cfg.RootDir,
 		Leader:         leaderPubKey,
 		Mempool:        mp,
 		BlockStore:     bs,
-		ValidatorSet:   options.valSet,
-		Logger:         ceLogger,
-		ProposeTimeout: propTimeout,
+		ValidatorSet:   valSet,
+		Logger:         logger.New("CONS"),
+		ProposeTimeout: cfg.Consensus.ProposeTimeout,
 	}
 	ce := consensus.New(ceCfg)
 	if ce == nil {
@@ -193,20 +201,20 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 		log:      logger,
 		host:     host,
 		pm:       pm,
-		pubkey:   signer.Public(),
-		pex:      options.pex,
+		pubkey:   pubkey,
+		pex:      cfg.P2P.Pex,
 		mp:       mp,
 		bki:      bs,
 		ce:       ce,
-		dir:      dir,
+		dir:      cfg.RootDir,
 		ackChan:  make(chan AckRes, 1),
 		resetMsg: make(chan ConsensusReset, 1),
 		close:    close,
-		role:     options.role,
-		valSet:   options.valSet,
+		role:     role,
+		valSet:   valSet,
 	}
 
-	node.leader.Store(options.role == types.RoleLeader)
+	node.leader.Store(role == types.RoleLeader)
 
 	host.SetStreamHandler(ProtocolIDTxAnn, node.txAnnStreamHandler)
 	host.SetStreamHandler(ProtocolIDBlkAnn, node.blkAnnStreamHandler)
@@ -217,7 +225,7 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 	host.SetStreamHandler(ProtocolIDBlockPropose, node.blkPropStreamHandler)
 	// host.SetStreamHandler(ProtocolIDACKProposal, node.blkAckStreamHandler)
 
-	if options.pex {
+	if cfg.P2P.Pex {
 		host.SetStreamHandler(ProtocolIDDiscover, node.peerDiscoveryStreamHandler)
 	} else {
 		host.SetStreamHandler(ProtocolIDDiscover, func(s network.Stream) {
@@ -390,38 +398,6 @@ func (n *Node) checkPeerProtos(ctx context.Context, peer peer.ID) error {
 	return nil
 }
 
-func (n *Node) txGetStreamHandler(s network.Stream) {
-	defer s.Close()
-
-	var req txHashReq
-	if _, err := req.ReadFrom(s); err != nil {
-		n.log.Warn("bad get tx req", "error", err)
-		return
-	}
-
-	// first check mempool
-	rawTx := n.mp.Get(req.Hash)
-	if rawTx != nil {
-		s.Write(rawTx)
-		return
-	}
-
-	// this is racy, and should be different in product
-
-	// then confirmed tx index
-	_, rawTx, err := n.bki.GetTx(req.Hash)
-	if err != nil {
-		if !errors.Is(err, types.ErrNotFound) {
-			n.log.Errorf("unexpected GetTx error: %v", err)
-		}
-		s.Write(noData) // don't have it
-	} else {
-		s.Write(rawTx)
-	}
-
-	// NOTE: response could also include conf/unconf or block height (-1 or N)
-}
-
 type randSrc struct{}
 
 func (randSrc) Uint64() uint64 {
@@ -450,16 +426,25 @@ func NewKey(r io.Reader) crypto.PrivateKey {
 	return privKey
 }
 
-func newHost(ip string, port uint64, privKey []byte) (host.Host, error) {
-	privKeyP2P, err := p2pcrypto.UnmarshalSecp256k1PrivateKey(privKey)
+func newHost(ip string, port uint64, privKey crypto.PrivateKey) (host.Host, error) {
+	// convert to the libp2p crypto key type
+	var privKeyP2P p2pcrypto.PrivKey
+	var err error
+	switch kt := privKey.(type) {
+	case *crypto.Secp256k1PrivateKey:
+		privKeyP2P, err = p2pcrypto.UnmarshalSecp256k1PrivateKey(privKey.Bytes())
+	case *crypto.Ed25519PrivateKey: // TODO
+		privKeyP2P, err = p2pcrypto.UnmarshalEd25519PrivateKey(privKey.Bytes())
+	default:
+		err = fmt.Errorf("unknown private key type %T", kt)
+	}
 	if err != nil {
 		return nil, err
 	}
+
 	sourceMultiAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ip, port))
 
 	// listenAddrs := libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0", "/ip4/0.0.0.0/tcp/0/ws")
-
-	// TODO: use persistent peerstore
 
 	return libp2p.New(
 		libp2p.Transport(tcp.NewTCPTransport),

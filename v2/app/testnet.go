@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"kwil/config"
 	"kwil/crypto"
 	"kwil/node"
 	"kwil/node/types"
@@ -71,7 +72,7 @@ func generateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, start
 	// leaderPeerID, err := node.PeerIDFromPubKey(leaderPub)
 	leaderPubType := leaderPub.Type()
 
-	genConfig := &node.GenesisConfig{
+	genConfig := &config.GenesisConfig{
 		Leader:     leaderPub.Bytes(), // rethink this so it can be different key types?
 		Validators: make([]types.Validator, numVals),
 	}
@@ -92,7 +93,7 @@ func generateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, start
 
 		privKey := keys[i].Bytes()
 
-		cfg := node.DefaultConfig()
+		cfg := config.DefaultConfig()
 		cfg.PrivateKey = privKey
 		cfg.P2P.Port = startingPort + uint64(i)
 		cfg.P2P.IP = "127.0.0.1"
