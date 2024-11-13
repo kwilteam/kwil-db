@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"slices"
@@ -1101,6 +1102,63 @@ type DataType struct {
 	IsArray bool `json:"is_array"`
 	// Metadata is the metadata of the type.
 	Metadata [2]uint16 `json:"metadata"`
+}
+
+func (c DataType) SerializeSize() int {
+	// uint16 version + uint32 name length + name + uint8 is_array + 2 x uint16 metadata
+	return 2 + 4 + len(c.Name) + 1 + 4
+}
+
+func boolToByte(b bool) byte {
+	if b {
+		return 1
+	}
+	return 0
+}
+
+func (c DataType) MarshalBinary() ([]byte, error) {
+	b := make([]byte, c.SerializeSize())
+	const ver uint16 = 0
+	binary.BigEndian.PutUint16(b, ver)
+	offset := 2
+	binary.BigEndian.PutUint32(b[offset:], uint32(len(c.Name)))
+	offset += 4
+	copy(b[offset:], c.Name)
+	offset += len(c.Name)
+	b[offset] = boolToByte(c.IsArray)
+	offset++
+	binary.BigEndian.PutUint16(b[offset:], c.Metadata[0])
+	offset += 2
+	binary.BigEndian.PutUint16(b[offset:], c.Metadata[1])
+	return b, nil
+}
+
+func (c *DataType) UnmarshalBinary(data []byte) error {
+	if len(data) < 6 {
+		return fmt.Errorf("invalid data length: %d", len(data))
+	}
+	ver := binary.BigEndian.Uint16(data)
+	if ver != 0 {
+		return fmt.Errorf("invalid tuple data, unknown version %d", ver)
+	}
+	offset := 2
+	nameLen := int(binary.BigEndian.Uint32(data[offset:]))
+	offset += 4
+	if len(data) < offset+nameLen+1+2*2 {
+		return fmt.Errorf("invalid data length: %d", len(data))
+	}
+	c.Name = string(data[offset : offset+nameLen])
+	offset += nameLen
+	c.IsArray = data[offset] == 1
+	offset++
+	c.Metadata[0] = binary.BigEndian.Uint16(data[offset : offset+2])
+	offset += 2
+	c.Metadata[1] = binary.BigEndian.Uint16(data[offset : offset+2])
+	offset += 2
+	if offset != c.SerializeSize() { // bug, must match
+		return fmt.Errorf("invalid data length: %d", len(data))
+	}
+	return nil
 }
 
 // String returns the string representation of the type.
