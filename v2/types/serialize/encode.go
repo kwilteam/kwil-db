@@ -1,6 +1,7 @@
 package serialize
 
 import (
+	"encoding"
 	"errors"
 	"fmt"
 	"reflect"
@@ -65,8 +66,13 @@ func RegisterCodec(c *Codec) {
 	encodings[encType] = *c
 }
 
-// Encode encodes the given value into the current serialized data format (RLP).
+// Encode encodes the given value. If the value is an encoding.BinaryMarshaler,
+// its MarshalBinary method is used, otherwise it uses this package's current
+// serialized data format (RLP).
 func Encode(val any) ([]byte, error) {
+	if bm, ok := val.(encoding.BinaryMarshaler); ok {
+		return bm.MarshalBinary()
+	}
 	return EncodeWithCodec(val, rlpCodec)
 }
 
@@ -92,10 +98,17 @@ func requireNonNilPointer(v any) error {
 	return nil
 }
 
-// Decode decodes the data into a value, which should be passed as a pointer.
+// Decode decodes the data into a value, which should be passed as a pointer. If
+// the value is an encoding.BinaryUnmarshaler, its UnmarshalBinary method is
+// used, otherwise it will attempt to decode the data using as if it were
+// encoded with EncodeWithCodec (checking for a serialized type prefix).
 func Decode(bts []byte, v any) error {
 	if err := requireNonNilPointer(v); err != nil {
 		return err
+	}
+
+	if bu, ok := v.(encoding.BinaryUnmarshaler); ok {
+		return bu.UnmarshalBinary(bts)
 	}
 
 	encType, val, err := removeSerializedTypePrefix(bts)

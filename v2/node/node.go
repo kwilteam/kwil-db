@@ -171,15 +171,18 @@ func NewNode(dir string, opts ...Option) (*Node, error) {
 		return nil, err
 	}
 
+	propTimeout := time.Second // TODO: get from config (*node.Config)!
+
 	ceCfg := &consensus.Config{
-		Role:         options.role,
-		Signer:       signer,
-		Dir:          dir,
-		Leader:       leaderPubKey,
-		Mempool:      mp,
-		BlockStore:   bs,
-		ValidatorSet: options.valSet,
-		Logger:       ceLogger,
+		Role:           options.role,
+		Signer:         signer,
+		Dir:            dir,
+		Leader:         leaderPubKey,
+		Mempool:        mp,
+		BlockStore:     bs,
+		ValidatorSet:   options.valSet,
+		Logger:         ceLogger,
+		ProposeTimeout: propTimeout,
 	}
 	ce := consensus.New(ceCfg)
 	if ce == nil {
