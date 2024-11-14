@@ -15,8 +15,17 @@ import (
 // Accounts represents an in-memory cache of accounts stored in a PostgreSQL database.
 // This is primarily used to optimize data reads.
 type Accounts struct {
-	mtx     sync.RWMutex
-	records map[string]*types.Account // hex encoded account identifier
+	mtx sync.RWMutex
+	// records is an in-memory cache of account records.
+	records map[string]*types.Account
+	// updates is a map of account identifiers (hex-encoded) to updated record values.
+	// These updates are applied to the records at the end of the block.
+	updates map[string]*types.Account
+
+	// TODO: use lru cache of a capacity
+	// lru "github.com/hashicorp/golang-lru/v2"
+	// cache   *lru.Cache[string, *types.Account]
+
 }
 
 func InitializeAccountStore(ctx context.Context, db sql.DB) (*Accounts, error) {
@@ -31,13 +40,14 @@ func InitializeAccountStore(ctx context.Context, db sql.DB) (*Accounts, error) {
 
 	return &Accounts{
 		records: make(map[string]*types.Account),
+		updates: make(map[string]*types.Account),
 	}, nil
 }
 
 // GetAccount retrieves the account with the given identifier. If the account does not exist,
 // it will return an account with a balance of 0 and a nonce of 0.
 func (a *Accounts) GetAccount(ctx context.Context, tx sql.Executor, account []byte) (*types.Account, error) {
-	acct, err := a.getAccount(ctx, tx, account)
+	acct, err := a.getAccount(ctx, tx, account, false)
 	if err != nil {
 		if err == ErrAccountNotFound {
 			return &types.Account{
@@ -48,23 +58,30 @@ func (a *Accounts) GetAccount(ctx context.Context, tx sql.Executor, account []by
 		}
 		return nil, err
 	}
-
-	// Add the account to the in-memory cache
 	return acct, nil
 }
 
-// getAccount retrieves the account with the given identifier. If the account does not exist,
-// it will return an error.
-func (a *Accounts) getAccount(ctx context.Context, tx sql.Executor, account []byte) (*types.Account, error) {
+// getAccount retrieves the account with the given identifier.
+// If the account does not exist, it will return an error.
+// If uncommitted is true, it will check the in-memory cache for the account.
+func (a *Accounts) getAccount(ctx context.Context, tx sql.Executor, account []byte, uncommitted bool) (acct *types.Account, err error) {
 	a.mtx.RLock()
 	defer a.mtx.RUnlock()
 
-	acct, ok := a.records[hex.EncodeToString(account)]
+	var ok bool
+	if uncommitted {
+		acct, ok = a.updates[hex.EncodeToString(account)]
+		if ok {
+			return acct, nil
+		}
+	}
+
+	acct, ok = a.records[hex.EncodeToString(account)]
 	if ok {
 		return acct, nil
 	}
 
-	acct, err := getAccount(ctx, tx, account)
+	acct, err = getAccount(ctx, tx, account)
 	if err != nil {
 		return nil, err
 	}
@@ -79,7 +96,7 @@ func (a *Accounts) getAccount(ctx context.Context, tx sql.Executor, account []by
 // return an error if the amount would cause the balance to go negative.
 // It also adds a record to the in-memory cache.
 func (a *Accounts) Credit(ctx context.Context, tx sql.Executor, account []byte, amt *big.Int) error {
-	acct, err := a.getAccount(ctx, tx, account)
+	acct, err := a.getAccount(ctx, tx, account, true)
 	if err != nil {
 		if errors.Is(err, ErrAccountNotFound) {
 			if amt.Sign() < 0 {
@@ -105,7 +122,7 @@ func (a *Accounts) Credit(ctx context.Context, tx sql.Executor, account []byte, 
 // The nonce passed must be exactly one greater than the account's nonce. If the nonce is not valid, the spend will fail.
 // If the account does not have enough funds to spend the amount, an ErrInsufficientFunds error will be returned.
 func (a *Accounts) Spend(ctx context.Context, tx sql.Executor, account []byte, amount *big.Int, nonce int64) error {
-	acct, err := a.getAccount(ctx, tx, account)
+	acct, err := a.getAccount(ctx, tx, account, true)
 	if err != nil {
 		// If amount is 0 and account does not exist, create the account
 		// Ensure that the nonce is 1, as this is the first tx spend on this account
@@ -135,7 +152,7 @@ func (a *Accounts) Spend(ctx context.Context, tx sql.Executor, account []byte, a
 // If the account does not have enough funds to spend the amount, spend the entire balance.
 // Nonces on the new network take precedence over the old network, so the nonces are not checked.
 func (a *Accounts) ApplySpend(ctx context.Context, tx sql.Executor, account []byte, amount *big.Int, nonce int64) error {
-	acct, err := a.getAccount(ctx, tx, account)
+	acct, err := a.getAccount(ctx, tx, account, true)
 	if err != nil {
 		// Spends should not occur on accounts that do not exist during migration as credits are disabled.
 		return err
@@ -164,7 +181,7 @@ func (a *Accounts) Transfer(ctx context.Context, db sql.TxMaker, from, to []byte
 	defer tx.Rollback(ctx)
 
 	// Ensure that the from account balance is sufficient.
-	account, err := a.getAccount(ctx, tx, from)
+	account, err := a.getAccount(ctx, tx, from, true)
 	if err != nil {
 		return err
 	}
@@ -175,7 +192,7 @@ func (a *Accounts) Transfer(ctx context.Context, db sql.TxMaker, from, to []byte
 	}
 
 	// add the balance to the to new account
-	receiver, err := a.getAccount(ctx, tx, to)
+	receiver, err := a.getAccount(ctx, tx, to, true)
 	if err != nil {
 		if errors.Is(err, ErrAccountNotFound) {
 			err2 := a.createAccount(ctx, tx, to, amt, 0)
@@ -202,15 +219,29 @@ func (a *Accounts) Transfer(ctx context.Context, db sql.TxMaker, from, to []byte
 	return tx.Commit(ctx)
 }
 
+// Commit applies all the updates to the in-memory cache.
+// This is called after the updates are written to the pg database.
+func (a *Accounts) Commit() error {
+	a.mtx.Lock()
+	defer a.mtx.Unlock()
+
+	for k, v := range a.updates {
+		a.records[k] = v
+	}
+
+	a.updates = make(map[string]*types.Account)
+	return nil
+}
+
 func (a *Accounts) createAccount(ctx context.Context, tx sql.Executor, account []byte, amt *big.Int, nonce int64) error {
 	if err := createAccount(ctx, tx, account, amt, nonce); err != nil {
 		return err
 	}
 
-	// Update the in-memory cache
+	// Record the account creation in the updates
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
-	a.records[hex.EncodeToString(account)] = &types.Account{
+	a.updates[hex.EncodeToString(account)] = &types.Account{
 		Identifier: account,
 		Balance:    amt,
 		Nonce:      nonce,
@@ -224,11 +255,11 @@ func (a *Accounts) updateAccount(ctx context.Context, tx sql.Executor, account [
 		return err
 	}
 
-	// Update the in-memory cache
+	// Record the account update in the updates
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
-	acct, ok := a.records[hex.EncodeToString(account)]
+	acct, ok := a.updates[hex.EncodeToString(account)]
 	if ok {
 		acct.Balance = amount
 		acct.Nonce = nonce
