@@ -2,6 +2,7 @@ package accounts
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"kwil/node/types/sql"
 	"kwil/types"
@@ -137,12 +138,23 @@ var acctsTestCases = []acctsTestCase{
 		fn: func(t *testing.T, db sql.DB, a *Accounts, c counter, skip bool) {
 			ctx := context.Background()
 
-			err := a.Credit(ctx, db, account1, big.NewInt(100))
+			tx, err := db.BeginTx(ctx)
+			require.NoError(t, err)
+			defer tx.Rollback(ctx)
+
+			err = a.Credit(ctx, tx, account1, big.NewInt(100))
 			require.NoError(t, err)
 			// first credit, access db
 			verifyDBAccessCount(t, c, 1, skip)
 
-			err = a.Credit(ctx, db, account1, big.NewInt(-100))
+			_, ok := a.records[hex.EncodeToString(account1)]
+			require.False(t, ok)
+
+			acct, ok := a.updates[hex.EncodeToString(account1)]
+			require.True(t, ok)
+			assert.Equal(t, int64(100), acct.Balance.Int64())
+
+			err = a.Credit(ctx, tx, account1, big.NewInt(-100))
 			require.NoError(t, err)
 			// hits the cache
 			verifyDBAccessCount(t, c, 1, skip)
@@ -361,6 +373,7 @@ func Test_Accounts(t *testing.T) {
 
 			accounts := &Accounts{
 				records: make(map[string]*types.Account),
+				updates: make(map[string]*types.Account),
 			}
 
 			tc.fn(t, tx, accounts, db, true)
