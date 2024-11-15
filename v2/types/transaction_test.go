@@ -37,6 +37,7 @@ func (p *TestPayload) Type() PayloadType {
 }
 
 func TestTransactionSerialization(t *testing.T) {
+	t.Parallel()
 	payload := &TestPayload{
 		Key:   "dummy",
 		Value: "data",
@@ -106,6 +107,7 @@ func TestTransactionSerialization(t *testing.T) {
 }
 
 func TestTransactionSign(t *testing.T) {
+	t.Parallel()
 	// Test scenarios:
 	// 1. Invalid signer
 	// 2. Valid signer: Sign + Verify
@@ -182,29 +184,9 @@ func TestTransactionSign(t *testing.T) {
 	}
 }
 
-func secp256k1Signer(t *testing.T) *auth.EthPersonalSigner {
-	privKey, _, err := crypto.GenerateSecp256k1Key(nil)
-	require.NoError(t, err)
-
-	privKeyBytes := privKey.Bytes()
-	k, err := crypto.UnmarshalSecp256k1PrivateKey(privKeyBytes)
-	require.NoError(t, err)
-
-	return &auth.EthPersonalSigner{Key: *k}
-}
-
-func ed25519Signer(t *testing.T) *auth.Ed25519Signer {
-	privKey, _, err := crypto.GenerateEd25519Key(nil)
-	require.NoError(t, err)
-
-	pBytes := privKey.Bytes()
-	k, err := crypto.UnmarshalEd25519PrivateKey(pBytes)
-	require.NoError(t, err)
-
-	return &auth.Ed25519Signer{Ed25519PrivateKey: *k}
-}
-
 func TestTransactionBodyMarshalUnmarshal(t *testing.T) {
+	t.Parallel()
+
 	payload := &TestPayload{
 		Key:   "dummy",
 		Value: "data",
@@ -308,6 +290,8 @@ func TestTransactionBodyMarshalUnmarshal(t *testing.T) {
 }
 
 func TestTransactionMarshalUnmarshal(t *testing.T) {
+	t.Parallel()
+
 	payload := &TestPayload{
 		Key:   "dummy",
 		Value: "data",
@@ -491,4 +475,26 @@ func TestTransactionMarshalUnmarshal(t *testing.T) {
 			require.Equal(t, tx, newTx)
 		})
 	}
+}
+
+func secp256k1Signer(t *testing.T) *auth.EthPersonalSigner {
+	privKey, _, err := crypto.GenerateSecp256k1Key(nil)
+	require.NoError(t, err)
+
+	privKeyBytes := privKey.Bytes()
+	k, err := crypto.UnmarshalSecp256k1PrivateKey(privKeyBytes)
+	require.NoError(t, err)
+
+	return &auth.EthPersonalSigner{Key: *k}
+}
+
+func ed25519Signer(t *testing.T) *auth.Ed25519Signer {
+	privKey, _, err := crypto.GenerateEd25519Key(nil)
+	require.NoError(t, err)
+
+	pBytes := privKey.Bytes()
+	k, err := crypto.UnmarshalEd25519PrivateKey(pBytes)
+	require.NoError(t, err)
+
+	return &auth.Ed25519Signer{Ed25519PrivateKey: *k}
 }
