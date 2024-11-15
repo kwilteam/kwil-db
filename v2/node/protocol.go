@@ -89,6 +89,11 @@ const (
 	// annWriteTimeout the content announcement write timeout when sending
 	// the resource identifier, which is very small.
 	annWriteTimeout = 5 * time.Second
+
+	// reqRWTimeout is the timeout for either writing or reading a resource ID,
+	// which is generally short and probably a packet or two.
+	reqRWTimeout = annWriteTimeout
+
 	// annRespTimeout is the timeout for the response to the resource
 	// announcement, which is also small e.g. "get".
 	annRespTimeout = 5 * time.Second

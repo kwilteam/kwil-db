@@ -21,17 +21,22 @@ const (
 func (n *Node) blkGetStreamHandler(s network.Stream) {
 	defer s.Close()
 
+	s.SetReadDeadline(time.Now().Add(reqRWTimeout))
+
 	var req blockHashReq
 	if _, err := req.ReadFrom(s); err != nil {
 		n.log.Warn("Bad get block (hash) request", "error", err) // Debug when we ship
 		return
 	}
+	n.log.Debug("Peer requested block", "hash", req.Hash)
 
 	blk, appHash, err := n.bki.Get(req.Hash)
 	if err != nil {
+		s.SetWriteDeadline(time.Now().Add(reqRWTimeout))
 		s.Write(noData) // don't have it
 	} else {
 		rawBlk := types.EncodeBlock(blk)
+		s.SetWriteDeadline(time.Now().Add(blkSendTimeout))
 		binary.Write(s, binary.LittleEndian, blk.Header.Height)
 		s.Write(appHash[:])
 		s.Write(rawBlk)
@@ -40,6 +45,8 @@ func (n *Node) blkGetStreamHandler(s network.Stream) {
 
 func (n *Node) blkGetHeightStreamHandler(s network.Stream) {
 	defer s.Close()
+
+	s.SetReadDeadline(time.Now().Add(reqRWTimeout))
 
 	var req blockHeightReq
 	if _, err := req.ReadFrom(s); err != nil {
@@ -50,11 +57,13 @@ func (n *Node) blkGetHeightStreamHandler(s network.Stream) {
 
 	hash, blk, appHash, err := n.bki.GetByHeight(req.Height)
 	if err != nil {
+		s.SetWriteDeadline(time.Now().Add(reqRWTimeout))
 		s.Write(noData) // don't have it
 	} else {
 		rawBlk := types.EncodeBlock(blk) // blkHash := blk.Hash()
 		// maybe we remove hash from the protocol, was thinking receiver could
 		// hang up earlier depending...
+		s.SetWriteDeadline(time.Now().Add(blkSendTimeout))
 		s.Write(hash[:])
 		s.Write(appHash[:])
 		s.Write(rawBlk)
@@ -99,6 +108,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 	need, done := n.bki.PreFetch(blkHash)
 	defer done()
 	if !need {
+		n.log.Debug("ALREADY HAVE OR FETCHING BLOCK")
 		return // we have or are currently fetching it, do nothing, assuming we have already re-announced
 	}
 
