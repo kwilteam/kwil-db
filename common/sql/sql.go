@@ -5,12 +5,29 @@ package sql
 import (
 	"context"
 	"errors"
+	"strings"
+
+	"github.com/jackc/pgx/v5/pgconn"
 )
 
 var (
 	ErrNoTransaction = errors.New("no transaction")
 	ErrNoRows        = errors.New("no rows in result set")
+	ErrDBFailure     = errors.New("database failure") // fatal! should kill node
 )
+
+func IsFatalDBError(err error) bool {
+	if errors.Is(err, ErrDBFailure) {
+		return true
+	}
+	// In case it wasn't already joined with ErrDBFailure, catch a fatal PgError by code.
+	var pgErr *pgconn.PgError
+	return errors.As(err, &pgErr) &&
+		(strings.HasPrefix(pgErr.Code, "53") || // Class 53 — Insufficient Resources
+			strings.HasPrefix(pgErr.Code, "58") || // Class 58 — System Error (errors external to PostgreSQL itself)
+			strings.HasPrefix(pgErr.Code, "XX")) // Class XX — Internal Error (internal_error, data_corrupted, index_corrupted)
+
+}
 
 // ResultSet is the result of a query or execution.
 // It contains the returned columns and the rows.
