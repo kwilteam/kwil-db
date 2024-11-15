@@ -384,10 +384,6 @@ func (t *Transaction) deserialize(r io.Reader) error {
 	return nil
 }
 
-const (
-	lenSize = 4 // uint32
-)
-
 func writeBytes(w io.Writer, data []byte) error {
 	if err := binary.Write(w, binary.LittleEndian, uint32(len(data))); err != nil {
 		return err

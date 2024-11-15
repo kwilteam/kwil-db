@@ -68,18 +68,20 @@ func UnmarshalPayload(payloadType PayloadType, payload []byte) (Payload, error) 
 		return nil, errors.New("unknown payload type")
 	}
 
-	t := reflect.TypeOf(prototype).Elem()
-	elem := reflect.New(t)       // reflect.Type => reflect.Value
-	instance := elem.Interface() // reflect.Type => any
+	t := reflect.TypeOf(prototype).Elem() // deref ptr
+	elem := reflect.New(t)                // reflect.Type => reflect.Value
+	instance := elem.Interface()          // reflect.Type => any
 
-	err := serialize.Decode(payload, instance)
-	if err != nil {
-		return nil, err
-	}
 	payloadIface, ok := instance.(Payload)
 	if !ok { // should be impossible since payloadConcreteTypes maps to a Payload
 		return nil, errors.New("instance not a payload")
 	}
+
+	err := payloadIface.UnmarshalBinary(payload)
+	if err != nil {
+		return nil, err
+	}
+
 	return payloadIface, nil
 }
 
