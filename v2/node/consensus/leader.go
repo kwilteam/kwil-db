@@ -3,6 +3,7 @@ package consensus
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"slices"
 	"time"
@@ -63,6 +64,8 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	ce.state.votes[string(ce.signer.Public().Bytes())] = &vote{
 		ack:     true,
 		appHash: &ce.state.blockRes.appHash,
+		blkHash: blkProp.blkHash,
+		height:  blkProp.height,
 	}
 
 	// TODO: test resetState
@@ -103,17 +106,17 @@ func (ce *ConsensusEngine) createBlockProposal() (*blockProposal, error) {
 
 // addVote registers the vote received from the validator if it is for the current block.
 func (ce *ConsensusEngine) addVote(ctx context.Context, vote *vote, sender string) error {
-	// fmt.Println("Adding vote", vote, sender)
+	// ce.log.Debugln("Adding vote", vote, sender)
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
 	if ce.state.blkProp == nil {
-		return fmt.Errorf("not processing any block proposal at the moment")
+		return errors.New("not processing any block proposal at the moment")
 	}
 
 	// check if the vote is for the current height
 	if ce.state.blkProp.height != vote.height {
-		return fmt.Errorf("vote received for a different block height, ignore it")
+		return errors.New("vote received for a different block height, ignore it")
 	}
 
 	// check if the vote is for the current block and from a validator

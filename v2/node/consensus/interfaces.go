@@ -16,7 +16,7 @@ type Mempool interface {
 type BlockStore interface {
 	// GetBlockByHeight(height int64) (types.Block, error)
 	Store(block *types.Block, appHash types.Hash) error
-	Have(blkid types.Hash) bool
+	// Have(blkid types.Hash) bool
 	Get(blkid types.Hash) (*types.Block, types.Hash, error)
 	GetByHeight(height int64) (types.Hash, *types.Block, types.Hash, error)
 	StoreResults(hash types.Hash, results []ktypes.TxResult) error

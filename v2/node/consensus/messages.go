@@ -58,7 +58,11 @@ func (vm *vote) Type() consensusMsgType {
 }
 
 func (vm *vote) String() string {
-	return fmt.Sprintf("Vote {height: %d, ack: %t, blkHash: %s, appHash: %s}", vm.height, vm.ack, vm.blkHash.String(), vm.appHash.String())
+	if vm.ack {
+		return fmt.Sprintf("Vote {ack: %t, height: %d, blkHash: %s, appHash: %s}",
+			vm.ack, vm.height, vm.blkHash, vm.appHash)
+	}
+	return fmt.Sprintf("Vote {ack: %t, height: %d, blkHash: %s}", vm.ack, vm.height, vm.blkHash)
 }
 
 // BlockAnnounce is a message that is sent to the consensus engine to notify
