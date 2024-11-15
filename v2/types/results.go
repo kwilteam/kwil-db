@@ -6,6 +6,41 @@ import (
 	"math"
 )
 
+type TxCode uint16
+
+const (
+	CodeOk                  TxCode = 0
+	CodeEncodingError       TxCode = 1
+	CodeInvalidTxType       TxCode = 2
+	CodeInvalidSignature    TxCode = 3
+	CodeInvalidNonce        TxCode = 4
+	CodeWrongChain          TxCode = 5
+	CodeInsufficientBalance TxCode = 6
+	CodeInsufficientFee     TxCode = 7
+	CodeInvalidAmount       TxCode = 8
+	CodeInvalidSender       TxCode = 9
+
+	// engine-related error code
+	CodeInvalidSchema         TxCode = 100
+	CodeDatasetMissing        TxCode = 110
+	CodeDatasetExists         TxCode = 120
+	CodeInvalidResolutionType TxCode = 130
+
+	CodeNetworkInMigration TxCode = 200
+
+	CodeUnknownError TxCode = math.MaxUint16
+)
+
+var (
+	// ErrTxNotFound is indicates when the a transaction was not found in the
+	// nodes blocks or mempool.
+	ErrTxNotFound          = errors.New("transaction not found")
+	ErrWrongChain          = errors.New("wrong chain ID")
+	ErrInvalidNonce        = errors.New("invalid nonce")
+	ErrInvalidAmount       = errors.New("invalid amount")
+	ErrInsufficientBalance = errors.New("insufficient balance")
+)
+
 type TxResult struct {
 	Code   uint16
 	Log    string
