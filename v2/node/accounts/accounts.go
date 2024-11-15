@@ -233,6 +233,18 @@ func (a *Accounts) Commit() error {
 	return nil
 }
 
+func (a *Accounts) Updates() []*types.Account {
+	a.mtx.RLock()
+	defer a.mtx.RUnlock()
+
+	var updates []*types.Account
+	for _, v := range a.updates {
+		updates = append(updates, v)
+	}
+
+	return updates
+}
+
 func (a *Accounts) createAccount(ctx context.Context, tx sql.Executor, account []byte, amt *big.Int, nonce int64) error {
 	if err := createAccount(ctx, tx, account, amt, nonce); err != nil {
 		return err

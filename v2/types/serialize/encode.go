@@ -1,13 +1,14 @@
 package serialize
 
 import (
-	"encoding"
 	"errors"
 	"fmt"
 	"reflect"
 
 	"github.com/ethereum/go-ethereum/rlp"
 )
+
+type SerializedData = []byte
 
 // EncodingType is the type used to enumerate different codecs for binary data.
 type EncodingType = uint16
@@ -70,9 +71,9 @@ func RegisterCodec(c *Codec) {
 // its MarshalBinary method is used, otherwise it uses this package's current
 // serialized data format (RLP).
 func Encode(val any) ([]byte, error) {
-	if bm, ok := val.(encoding.BinaryMarshaler); ok {
-		return bm.MarshalBinary()
-	}
+	// if bm, ok := val.(encoding.BinaryMarshaler); ok {
+	// 	return bm.MarshalBinary()
+	// }
 	return EncodeWithCodec(val, rlpCodec)
 }
 
@@ -107,9 +108,9 @@ func Decode(bts []byte, v any) error {
 		return err
 	}
 
-	if bu, ok := v.(encoding.BinaryUnmarshaler); ok {
-		return bu.UnmarshalBinary(bts)
-	}
+	// if bu, ok := v.(encoding.BinaryUnmarshaler); ok {
+	// 	return bu.UnmarshalBinary(bts)
+	// }
 
 	encType, val, err := removeSerializedTypePrefix(bts)
 	if err != nil {
