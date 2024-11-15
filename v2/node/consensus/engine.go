@@ -417,8 +417,10 @@ func (ce *ConsensusEngine) init() error {
 			// This is not possible. The state.json will have the height, only when the block is committed.
 			return err
 		}
+		ce.log.Info("Last committed block", "height", blk.Header.Height, "hash", hash)
 
 		if state.AppHash == dirtyHash {
+			ce.log.Warnf("Fixing dirty apphash!")
 			// This implies that the commit was successful, but the final appHash is not yet updated.
 			state.AppHash = hash
 			ce.persistAppState()
@@ -501,8 +503,8 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 	if ce.role.Load() == types.RoleValidator {
 		// reannounce the acks, if still waiting for the commit message
 		if ce.state.blkProp != nil && ce.state.blockRes != nil &&
-			ce.state.blockRes.appHash.IsZero() &&
-			ce.networkHeight.Load() <= ce.state.lc.height {
+			!ce.state.blockRes.appHash.IsZero() && ce.networkHeight.Load() <= ce.state.lc.height {
+			ce.log.Info("Reannouncing ACK", "ack", ce.state.blockRes.ack, "height", ce.state.blkProp.height, "hash", ce.state.blkProp.blkHash)
 			go ce.ackBroadcaster(ce.state.blockRes.ack, ce.state.blkProp.height, ce.state.blkProp.blkHash, &ce.state.blockRes.appHash)
 		}
 	}

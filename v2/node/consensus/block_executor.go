@@ -97,7 +97,7 @@ func (ce *ConsensusEngine) executeBlock() error {
 	ce.state.blockRes = &blockResult{
 		txResults: txResults,
 		appHash:   appHash,
-		ack:       false,
+		ack:       true, // for reannounce
 	}
 
 	ce.log.Info("Executed Block", "height", ce.state.blkProp.blk.Header.Height, "blkHash", ce.state.blkProp.blkHash, "appHash", ce.state.blockRes.appHash.String())
@@ -112,8 +112,14 @@ func (ce *ConsensusEngine) commit() error {
 	// we are updating the state and the tx checks should be done against the new state.
 
 	// Add the block to the blockstore
-	ce.blockStore.Store(ce.state.blkProp.blk, ce.state.blockRes.appHash)
-	ce.blockStore.StoreResults(ce.state.blkProp.blk.Header.Hash(), ce.state.blockRes.txResults)
+	err := ce.blockStore.Store(ce.state.blkProp.blk, ce.state.blockRes.appHash)
+	if err != nil {
+		return err
+	}
+	err = ce.blockStore.StoreResults(ce.state.blkProp.blk.Hash(), ce.state.blockRes.txResults)
+	if err != nil {
+		return err
+	}
 
 	// Commit the block to the postgres database
 	if err := ce.blockExecutor.Commit(ce.persistAppState); err != nil {
