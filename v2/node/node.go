@@ -159,8 +159,8 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 		if err != nil {
 			return nil, err
 		}
+		close = addClose(close, bs.Close) //close db after stopping p2p
 	}
-	close = addClose(close, bs.Close) //close db after stopping p2p
 	close = addClose(close, host.Close)
 
 	privKey := cfg.PrivKey
@@ -182,19 +182,23 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 		role = types.RoleLeader
 	}
 
-	ceCfg := &consensus.Config{
-		Signer:         privKey,
-		Dir:            cfg.RootDir,
-		Leader:         leaderPubKey,
-		Mempool:        mp,
-		BlockStore:     bs,
-		ValidatorSet:   valSet,
-		Logger:         logger.New("CONS"),
-		ProposeTimeout: cfg.Consensus.ProposeTimeout,
-	}
-	ce := consensus.New(ceCfg)
+	ce := options.ce
 	if ce == nil {
-		return nil, errors.New("failed to create consensus engine")
+		ceCfg := &consensus.Config{
+			Signer:         privKey,
+			Dir:            cfg.RootDir,
+			Leader:         leaderPubKey,
+			Mempool:        mp,
+			BlockStore:     bs,
+			ValidatorSet:   valSet,
+			Logger:         logger.New("CONS"),
+			ProposeTimeout: cfg.Consensus.ProposeTimeout,
+		}
+		ceEng := consensus.New(ceCfg)
+		if ceEng == nil {
+			return nil, errors.New("failed to create consensus engine")
+		}
+		ce = ceEng
 	}
 
 	node := &Node{
