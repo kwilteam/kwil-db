@@ -8,8 +8,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 )
 
-type SerializedData = []byte
-
 // EncodingType is the type used to enumerate different codecs for binary data.
 type EncodingType = uint16
 

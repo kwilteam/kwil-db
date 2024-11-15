@@ -266,7 +266,7 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 // After then consensus engine executes the block, this is used to gossip the
 // result back to the leader.
 func (n *Node) sendACK(ack bool, height int64, blkID types.Hash, appHash *types.Hash) error {
-	// fmt.Println("sending ACK", height, ack, blkID, appHash)
+	// n.log.Debugln("sending ACK", height, ack, blkID, appHash)
 	n.ackChan <- types.AckRes{
 		ACK:     ack,
 		AppHash: appHash,
@@ -296,7 +296,7 @@ func (n *Node) startAckGossip(ctx context.Context, ps *pubsub.PubSub) error {
 			case <-ctx.Done():
 				return
 			case ack := <-n.ackChan:
-				// fmt.Println("received ACK:::", ack.ACK, ack.Height, ack.BlkHash, ack.AppHash)
+				n.log.Debugln("publishing ACK", ack.ACK, ack.Height, ack.BlkHash, ack.AppHash)
 				ackMsg, _ := ack.MarshalBinary()
 				err := topicAck.Publish(ctx, ackMsg)
 				if err != nil {
@@ -325,11 +325,12 @@ func (n *Node) startAckGossip(ctx context.Context, ps *pubsub.PubSub) error {
 
 			// We're only interested if we are the leader.
 			if !n.leader.Load() {
+				// n.log.Debugln("discarding ack meant for leader")
 				continue // discard, we are just relaying to leader
 			}
 
 			if peer.ID(ackMsg.From) == me {
-				// n.log.Infof("message from me ignored")
+				// n.log.Infof("ACK message from me ignored")
 				continue
 			}
 

@@ -4,8 +4,9 @@ import (
 	"encoding"
 	"errors"
 	"fmt"
-	"kwil/types/serialize"
 	"reflect"
+
+	"kwil/types/serialize"
 )
 
 // PayloadType is the type of payload
@@ -172,11 +173,11 @@ type DropSchema struct {
 
 var _ Payload = (*DropSchema)(nil)
 
-func (s *DropSchema) MarshalBinary() (serialize.SerializedData, error) {
+func (s *DropSchema) MarshalBinary() ([]byte, error) {
 	return serialize.Encode(s)
 }
 
-func (s *DropSchema) UnmarshalBinary(b serialize.SerializedData) error {
+func (s *DropSchema) UnmarshalBinary(b []byte) error {
 	return serialize.Decode(b, s)
 }
 
@@ -193,11 +194,11 @@ type ActionExecution struct {
 
 var _ Payload = (*ActionExecution)(nil)
 
-func (a *ActionExecution) MarshalBinary() (serialize.SerializedData, error) {
+func (a *ActionExecution) MarshalBinary() ([]byte, error) {
 	return serialize.Encode(a)
 }
 
-func (a *ActionExecution) UnmarshalBinary(b serialize.SerializedData) error {
+func (a *ActionExecution) UnmarshalBinary(b []byte) error {
 	return serialize.Decode(b, a)
 }
 
@@ -612,7 +613,7 @@ type ValidatorVoteIDs struct {
 
 var _ Payload = (*ValidatorVoteIDs)(nil)
 
-func (v *ValidatorVoteIDs) MarshalBinary() (serialize.SerializedData, error) {
+func (v *ValidatorVoteIDs) MarshalBinary() ([]byte, error) {
 	return serialize.Encode(v)
 }
 
@@ -620,7 +621,7 @@ func (v *ValidatorVoteIDs) Type() PayloadType {
 	return PayloadTypeValidatorVoteIDs
 }
 
-func (v *ValidatorVoteIDs) UnmarshalBinary(p0 serialize.SerializedData) error {
+func (v *ValidatorVoteIDs) UnmarshalBinary(p0 []byte) error {
 	return serialize.Decode(p0, v)
 }
 
@@ -632,7 +633,7 @@ type ValidatorVoteBodies struct {
 
 var _ Payload = (*ValidatorVoteBodies)(nil)
 
-func (v *ValidatorVoteBodies) MarshalBinary() (serialize.SerializedData, error) {
+func (v *ValidatorVoteBodies) MarshalBinary() ([]byte, error) {
 	return serialize.Encode(v)
 }
 
@@ -640,7 +641,7 @@ func (v *ValidatorVoteBodies) Type() PayloadType {
 	return PayloadTypeValidatorVoteBodies
 }
 
-func (v *ValidatorVoteBodies) UnmarshalBinary(p0 serialize.SerializedData) error {
+func (v *ValidatorVoteBodies) UnmarshalBinary(p0 []byte) error {
 	return serialize.Decode(p0, v)
 }
 
@@ -651,7 +652,7 @@ type CreateResolution struct {
 
 var _ Payload = (*CreateResolution)(nil)
 
-func (v *CreateResolution) MarshalBinary() (serialize.SerializedData, error) {
+func (v *CreateResolution) MarshalBinary() ([]byte, error) {
 	return serialize.Encode(v)
 }
 
@@ -659,7 +660,7 @@ func (v *CreateResolution) Type() PayloadType {
 	return PayloadTypeCreateResolution
 }
 
-func (v *CreateResolution) UnmarshalBinary(p0 serialize.SerializedData) error {
+func (v *CreateResolution) UnmarshalBinary(p0 []byte) error {
 	return serialize.Decode(p0, v)
 }
 
@@ -670,7 +671,7 @@ type ApproveResolution struct {
 
 var _ Payload = (*ApproveResolution)(nil)
 
-func (v *ApproveResolution) MarshalBinary() (serialize.SerializedData, error) {
+func (v *ApproveResolution) MarshalBinary() ([]byte, error) {
 	return serialize.Encode(v)
 }
 
@@ -678,7 +679,7 @@ func (v *ApproveResolution) Type() PayloadType {
 	return PayloadTypeApproveResolution
 }
 
-func (v *ApproveResolution) UnmarshalBinary(p0 serialize.SerializedData) error {
+func (v *ApproveResolution) UnmarshalBinary(p0 []byte) error {
 	return serialize.Decode(p0, v)
 }
 
@@ -689,7 +690,7 @@ type DeleteResolution struct {
 
 var _ Payload = (*DeleteResolution)(nil)
 
-func (d *DeleteResolution) MarshalBinary() (serialize.SerializedData, error) {
+func (d *DeleteResolution) MarshalBinary() ([]byte, error) {
 	return serialize.Encode(d)
 }
 
@@ -697,6 +698,6 @@ func (d *DeleteResolution) Type() PayloadType {
 	return PayloadTypeDeleteResolution
 }
 
-func (d *DeleteResolution) UnmarshalBinary(p0 serialize.SerializedData) error {
+func (d *DeleteResolution) UnmarshalBinary(p0 []byte) error {
 	return serialize.Decode(p0, d)
 }
