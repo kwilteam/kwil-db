@@ -146,7 +146,7 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 		host, // tooo much, become minimal interface
 		func(ctx context.Context, peerID peer.ID) ([]peer.AddrInfo, error) {
 			return requestPeers(ctx, peerID, host, logger)
-		})
+		}, neededProtocols)
 	if err != nil {
 		return nil, err
 	}
@@ -285,7 +285,12 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 	n.host.Network().Notify(n.pm)
 	defer n.host.Network().StopNotify(n.pm)
 
-	bootpeers, err := peers.ConvertPeersToMultiAddr(bootpeers)
+	ps, err := pubsub.NewGossipSub(ctx, n.host)
+	if err != nil {
+		return err
+	}
+
+	bootpeers, err = peers.ConvertPeersToMultiAddr(bootpeers)
 	if err != nil {
 		return err
 	}
@@ -305,6 +310,7 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 			// n.host.Peerstore().RemovePeer()
 			continue
 		}
+		n.log.Infof("Connected to bootstrap peer %v", peer)
 		// n.host.ConnManager().TagPeer(peerID, "validatorish", 1)
 	} // else would use persistent peer store (address book)
 
@@ -332,12 +338,9 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 		}); err != nil {
 			n.log.Warnf("Unable to connect to peer %s: %v", peerID, peers.CompressDialError(err))
 		}
+		n.log.Infof("Connected to address book peer %v", peerID)
 	}
 
-	ps, err := pubsub.NewGossipSub(ctx, n.host)
-	if err != nil {
-		return err
-	}
 	if err := n.startAckGossip(ctx, ps); err != nil {
 		cancel()
 		return err
@@ -375,27 +378,19 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 	return n.close()
 }
 
+var neededProtocols = []protocol.ID{
+	ProtocolIDDiscover,
+	ProtocolIDTx,
+	ProtocolIDTxAnn,
+	ProtocolIDBlockHeight,
+	ProtocolIDBlock,
+	ProtocolIDBlkAnn,
+	ProtocolIDBlockPropose,
+	pubsub.GossipSubID_v12,
+}
+
 func (n *Node) checkPeerProtos(ctx context.Context, peer peer.ID) error {
-	for _, pid := range []protocol.ID{
-		ProtocolIDDiscover,
-		ProtocolIDTx,
-		ProtocolIDTxAnn,
-		ProtocolIDBlockHeight,
-		ProtocolIDBlock,
-		ProtocolIDBlkAnn,
-		ProtocolIDBlockPropose,
-		pubsub.GossipSubID_v12,
-		// ProtocolIDACKProposal,
-	} {
-		ok, err := checkProtocolSupport(ctx, n.host, peer, pid)
-		if err != nil {
-			return err
-		}
-		if !ok {
-			return fmt.Errorf("protocol not supported: %v", pid)
-		}
-	}
-	return nil
+	return peers.RequirePeerProtos(ctx, n.host.Peerstore(), peer, neededProtocols...)
 }
 
 type randSrc struct{}
@@ -446,13 +441,23 @@ func newHost(ip string, port uint64, privKey crypto.PrivateKey) (host.Host, erro
 
 	// listenAddrs := libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0", "/ip4/0.0.0.0/tcp/0/ws")
 
-	return libp2p.New(
+	// cg := peers.NewProtocolGater(neededProtocols)
+
+	h, err := libp2p.New(
 		libp2p.Transport(tcp.NewTCPTransport),
 		libp2p.Security(noise.ID, noise.New), // modified TLS based on node-ID
 		libp2p.ListenAddrs(sourceMultiAddr),
 		// listenAddrs,
 		libp2p.Identity(privKeyP2P),
+		// libp2p.ConnectionGater(cg),
 	) // libp2p.RandomIdentity, in-mem peer store, ...
+	if err != nil {
+		return nil, err
+	}
+
+	// cg.SetPeerStore(h.Peerstore())
+
+	return h, nil
 }
 
 func hostPort(host host.Host) ([]string, []int) {
@@ -490,27 +495,6 @@ func connectPeer(ctx context.Context, addr string, host host.Host) (*peer.AddrIn
 	// host.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.PermanentAddrTTL)
 
 	return info, host.Connect(ctx, *info)
-}
-
-func checkProtocolSupport(_ context.Context, h host.Host, peerID peer.ID, protoIDs ...protocol.ID) (bool, error) {
-	supported, err := h.Peerstore().SupportsProtocols(peerID, protoIDs...)
-	if err != nil {
-		return false, fmt.Errorf("Failed to check protocols for peer %v: %w", peerID, err)
-	}
-	return len(protoIDs) == len(supported), nil
-
-	// supportedProtos, err := h.Peerstore().GetProtocols(peerID)
-	// if err != nil {
-	// 	return false, err
-	// }
-	// log.Printf("protos supported by %v: %v\n", peerID, supportedProtos)
-
-	// for _, protoID := range protoIDs {
-	// 	if !slices.Contains(supportedProtos, protoID) {
-	// 		return false, nil
-	// 	}
-	// }
-	// return true, nil
 }
 
 func ExpandPath(path string) (string, error) {

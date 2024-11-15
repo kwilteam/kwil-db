@@ -17,6 +17,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
 )
 
@@ -49,6 +50,8 @@ type PeerMan struct {
 
 	requestPeers RemotePeersFn
 
+	requiredProtocols []protocol.ID
+
 	pex      bool
 	addrBook string
 
@@ -59,10 +62,11 @@ type PeerMan struct {
 	// TODO: revise address book file format as needed if these should persist
 	mtx         sync.Mutex
 	disconnects map[peer.ID]time.Time // Track disconnection timestamps
+	noReconnect map[peer.ID]bool
 }
 
 func NewPeerMan(pex bool, addrBook string, logger log.Logger, h host.Host,
-	requestPeers RemotePeersFn) (*PeerMan, error) {
+	requestPeers RemotePeersFn, requiredProtocols []protocol.ID) (*PeerMan, error) {
 	if logger == nil {
 		logger = log.DiscardLogger
 	}
@@ -76,10 +80,12 @@ func NewPeerMan(pex bool, addrBook string, logger log.Logger, h host.Host,
 		close: sync.OnceFunc(func() {
 			close(done)
 		}),
-		pex:          pex,
-		requestPeers: requestPeers,
-		addrBook:     addrBook,
-		disconnects:  make(map[peer.ID]time.Time),
+		requiredProtocols: requiredProtocols,
+		pex:               pex,
+		requestPeers:      requestPeers,
+		addrBook:          addrBook,
+		disconnects:       make(map[peer.ID]time.Time),
+		noReconnect:       make(map[peer.ID]bool),
 	}
 
 	peerInfo, err := loadPeers(pm.addrBook)
@@ -242,6 +248,42 @@ func (pm *PeerMan) KnownPeers() []types.PeerInfo {
 	return peers
 }
 
+func CheckProtocolSupport(_ context.Context, ps peerstore.Peerstore, peerID peer.ID, protoIDs ...protocol.ID) (bool, error) {
+	// all, err := ps.GetProtocols(peerID)
+	// fmt.Println(all, err)
+	supported, err := ps.SupportsProtocols(peerID, protoIDs...)
+	if err != nil {
+		return false, fmt.Errorf("Failed to check protocols for peer %v: %w", peerID, err)
+	}
+	return len(protoIDs) == len(supported), nil
+
+	// supportedProtos, err := h.Peerstore().GetProtocols(peerID)
+	// if err != nil {
+	// 	return false, err
+	// }
+	// log.Printf("protos supported by %v: %v\n", peerID, supportedProtos)
+
+	// for _, protoID := range protoIDs {
+	// 	if !slices.Contains(supportedProtos, protoID) {
+	// 		return false, nil
+	// 	}
+	// }
+	// return true, nil
+}
+
+func RequirePeerProtos(ctx context.Context, ps peerstore.Peerstore, peer peer.ID, protoIDs ...protocol.ID) error {
+	for _, pid := range protoIDs {
+		ok, err := CheckProtocolSupport(ctx, ps, peer, pid)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return fmt.Errorf("protocol not supported: %v", pid)
+		}
+	}
+	return nil
+}
+
 func peerInfo(ps peerstore.Peerstore, peerID peer.ID) (*types.PeerInfo, error) {
 	addrs := ps.Addrs(peerID)
 	if len(addrs) == 0 {
@@ -348,9 +390,30 @@ func (pm *PeerMan) addPeerAddrs(p peer.AddrInfo) (added bool) {
 func (pm *PeerMan) Connected(net network.Network, conn network.Conn) {
 	peerID := conn.RemotePeer()
 	addr := conn.RemoteMultiaddr()
-	pm.log.Infof("Connected to peer %s @ %v", peerID, addr.String())
+	pm.log.Infof("Connected to peer (%s) %s @ %v", conn.Stat().Direction, peerID, addr.String())
 
 	// pm.ps.UpdateAddrs(peerID, ttlProvisional, ttlKnown)
+
+	go func() {
+		// Particularly for inbound, there seems to be a race condition with
+		// protocol negotiation after connect. We have to delay this check.
+		// https://github.com/libp2p/go-libp2p/issues/2643
+		select {
+		case <-pm.done:
+		case <-time.After(500 * time.Millisecond):
+		}
+		if conn.IsClosed() {
+			return
+		}
+		if err := RequirePeerProtos(context.TODO(), pm.ps, peerID, pm.requiredProtocols...); err != nil {
+			pm.log.Warnf("Peer %v does not support required protocols: %v", peerID, err)
+			// pm.mtx.Lock()
+			// pm.noReconnect[peerID] = true
+			// pm.mtx.Unlock()
+			// conn.Close()
+			return
+		}
+	}()
 
 	// Reset disconnect timestamp on successful connection
 	pm.mtx.Lock()
@@ -365,6 +428,10 @@ func (pm *PeerMan) Disconnected(net network.Network, conn network.Conn) {
 	// Store disconnection timestamp
 	pm.mtx.Lock()
 	defer pm.mtx.Unlock()
+	// if pm.noReconnect[peerID] {
+	// 	delete(pm.noReconnect, peerID)
+	// 	return
+	// }
 	pm.disconnects[peerID] = time.Now()
 
 	select {
@@ -390,6 +457,14 @@ func (pm *PeerMan) Disconnected(net network.Network, conn network.Conn) {
 	go func() {
 		defer pm.wg.Done()
 		defer cancel()
+		var delay = time.Second
+		if time.Since(conn.Stat().Opened) < time.Second {
+			delay *= 3 // ugh, but what was the reason
+		}
+		select {
+		case <-ctx.Done():
+		case <-time.After(delay):
+		}
 		pm.reconnectWithRetry(ctx, peerID)
 	}()
 }
