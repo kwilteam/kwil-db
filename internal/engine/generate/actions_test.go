@@ -105,7 +105,7 @@ func TestGenerateActionBody(t *testing.T) {
 					Statement: `
 INSERT INTO test_schema.id_and_int (id, intval) 
 VALUES 
-(uuid_generate_v5('31276fd4-105f-4ff7-9f64-644942c14b79'::UUID, format('%s-%s'::TEXT, $1::TEXT, $2::TEXT)), $2::INT8);`,
+(uuid_generate_v5('31276fd4-105f-4ff7-9f64-644942c14b79'::UUID, format('%s-%s', $1::TEXT, $2::TEXT)), $2::INT8);`,
 				},
 			},
 		},
