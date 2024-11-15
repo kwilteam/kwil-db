@@ -4,6 +4,7 @@ package pg
 
 import (
 	"context"
+	"errors"
 
 	"github.com/jackc/pgx/v5"
 	common "github.com/kwilteam/kwil-db/common/sql"
@@ -44,13 +45,21 @@ func (tx *nestedTx) BeginTx(ctx context.Context) (common.Tx, error) {
 }
 
 func (tx *nestedTx) Query(ctx context.Context, stmt string, args ...any) (*common.ResultSet, error) {
-	return query(ctx, tx.oidTypes, tx.Tx, stmt, args...)
+	resSet, err := query(ctx, tx.oidTypes, tx.Tx, stmt, args...)
+	if errors.Is(err, common.ErrDBFailure) {
+		tx.Tx.Conn().Close(ctx) // do not allow the outer txn to commit!
+	}
+	return resSet, err
 }
 
 // Execute is now literally identical to Query in both semantics and syntax. We
 // might remove one or the other in this context (transaction methods).
 func (tx *nestedTx) Execute(ctx context.Context, stmt string, args ...any) (*common.ResultSet, error) {
-	return query(ctx, tx.oidTypes, tx.Tx, stmt, args...)
+	resSet, err := query(ctx, tx.oidTypes, tx.Tx, stmt, args...)
+	if errors.Is(err, common.ErrDBFailure) {
+		tx.Tx.Conn().Close(ctx) // do not allow the outer txn to commit!
+	}
+	return resSet, err
 }
 
 // QueryScanFn satisfies sql.QueryScanner.
@@ -58,7 +67,11 @@ func (tx *nestedTx) QueryScanFn(ctx context.Context, sql string,
 	scans []any, fn func() error, args ...any) error {
 
 	conn := tx.Conn()
-	return queryRowFunc(ctx, conn, sql, scans, fn, args...)
+	err := queryRowFunc(ctx, conn, sql, scans, fn, args...)
+	if errors.Is(err, common.ErrDBFailure) {
+		tx.Tx.Conn().Close(ctx) // do not allow the outer txn to commit!
+	}
+	return err
 }
 
 // AccessMode returns the access mode of the transaction.
