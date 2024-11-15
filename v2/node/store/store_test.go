@@ -73,7 +73,7 @@ func createTestBlock(height int64, numTxns int) (*types.Block, types.Hash) {
 		txns[i] = []byte(strconv.FormatInt(height, 10) + strconv.Itoa(i) +
 			strings.Repeat("data", 1000))
 	}
-	return types.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{},
+	return types.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5},
 		time.Unix(1729723553+height, 0), txns), fakeAppHash(height)
 }
 
