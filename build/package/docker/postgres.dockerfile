@@ -1,4 +1,4 @@
-FROM postgres:16.2
+FROM postgres:16.5
 
 # Inject the init script that makes the kwild superuser and a kwild database
 # owned by that kwild user, as well as a kwil_test_db database for tests.
@@ -14,4 +14,5 @@ COPY ./pginit.sql /docker-entrypoint-initdb.d/init.sql
 
 # Override the default entrypoint/command to include the additional configuration
 CMD ["postgres", "-c", "wal_level=logical", "-c", "max_wal_senders=10", "-c", "max_replication_slots=10", \
-	"-c", "track_commit_timestamp=true", "-c", "wal_sender_timeout=0", "-c", "max_prepared_transactions=2"]
+	"-c", "track_commit_timestamp=true", "-c", "wal_sender_timeout=0", "-c", "max_prepared_transactions=2", \
+	"-c", "max_locks_per_transaction=256", "-c", "max_connections=128"]

@@ -175,6 +175,9 @@ func query(ctx context.Context, cq connQueryer, stmt string, args ...any) (*sql.
 
 	rows, err := q(ctx, stmt, args...)
 	if err != nil {
+		if sql.IsFatalDBError(err) {
+			return nil, errors.Join(err, sql.ErrDBFailure)
+		}
 		if errors.Is(err, pgx.ErrNoRows) {
 			return nil, sql.ErrNoRows
 		}
@@ -202,6 +205,9 @@ func query(ctx context.Context, cq connQueryer, stmt string, args ...any) (*sql.
 		}
 		return decodeFromPGType(pgxVals...)
 	})
+	if sql.IsFatalDBError(err) { // would probably happen above when executing, but maybe here too
+		return nil, errors.Join(err, sql.ErrDBFailure)
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, sql.ErrNoRows
 	}
