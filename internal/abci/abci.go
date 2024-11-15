@@ -676,6 +676,13 @@ func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinal
 
 		abciRes := &abciTypes.ExecTxResult{}
 		if txRes.Error != nil {
+			// Ensure the node halt if a fatal DB error occurs (e.g. out of memory/disk,
+			// corruption, etc.), rather than allowing non-determinism with a failed txn.
+			if sql.IsFatalDBError(txRes.Error) {
+				return nil, txRes.Error
+			}
+
+			// If the transaction failed for user reasons, we still want to include it in the block.
 			abciRes.Log = txRes.Error.Error()
 			a.log.Debug("failed to execute transaction", zap.Error(txRes.Error))
 		} else {
