@@ -13,7 +13,10 @@ import (
 
 	"kwil/crypto"
 	"kwil/log"
+	"kwil/node/meta"
+	"kwil/node/pg"
 	"kwil/node/types"
+	"kwil/node/types/sql"
 	ktypes "kwil/types"
 )
 
@@ -43,7 +46,7 @@ type ConsensusEngine struct {
 	proposeTimeout time.Duration
 
 	networkHeight atomic.Int64
-	validatorSet  map[string]types.Validator
+	validatorSet  map[string]ktypes.Validator
 
 	// stores state machine state for the consensus engine
 	state state
@@ -57,10 +60,13 @@ type ConsensusEngine struct {
 	resetChan chan int64    // to reset the state of the consensus engine
 
 	// interfaces
-	log           log.Logger
-	mempool       Mempool
-	blockStore    BlockStore
-	blockExecutor BlockExecutor
+	db         *pg.DB
+	mempool    Mempool
+	blockStore BlockStore
+	txapp      TxApp
+	accounts   Accounts
+	validators Validators
+	log        log.Logger
 
 	// Broadcasters
 	proposalBroadcaster ProposalBroadcaster
@@ -113,17 +119,18 @@ type StateInfo struct {
 type state struct {
 	mtx sync.RWMutex
 
-	cancelFunc context.CancelFunc
-	// consensusTx sql.Tx
+	consensusTx sql.PreparedTx
+	cancelFunc  context.CancelFunc
 
 	blkProp  *blockProposal
 	blockRes *blockResult
 	lc       *lastCommit
-	appState *appState
 
 	// Votes: Applicable only to the leader
 	// These are the Acks received from the validators.
 	votes map[string]*vote
+
+	chainContext *ktypes.ChainContext
 }
 
 type blockResult struct {
@@ -148,12 +155,24 @@ type Config struct {
 	Dir string
 	// Leader is the public key of the leader.
 	Leader crypto.PublicKey
+
+	DB *pg.DB
 	// Mempool is the mempool of the node.
 	Mempool Mempool
 	// BlockStore is the blockstore of the node.
 	BlockStore BlockStore
+
+	// ValidatorStore is the store of the validators.
+	ValidatorStore Validators
+
+	// Accounts is the store of the accounts.
+	Accounts Accounts
+
+	// TxApp is the transaction application layer.
+	TxApp TxApp
+
 	// ValidatorSet is the set of validators in the network.
-	ValidatorSet map[string]types.Validator
+	ValidatorSet map[string]ktypes.Validator
 	// Logger is the logger of the node.
 	Logger log.Logger
 
@@ -187,13 +206,13 @@ func New(cfg *Config) *ConsensusEngine {
 		}
 	}
 
-	be := newBlockExecutor()
 	// rethink how this state is initialized
 	ce := &ConsensusEngine{
 		dir:            cfg.Dir,
 		signer:         cfg.Signer,
 		leader:         cfg.Leader,
 		proposeTimeout: cfg.ProposeTimeout,
+		db:             cfg.DB,
 		state: state{
 			blkProp:  nil,
 			blockRes: nil,
@@ -214,10 +233,9 @@ func New(cfg *Config) *ConsensusEngine {
 		haltChan:     make(chan struct{}, 1),
 		resetChan:    make(chan int64, 1),
 		// interfaces
-		mempool:       cfg.Mempool,
-		blockStore:    cfg.BlockStore,
-		blockExecutor: be,
-		log:           logger,
+		mempool:    cfg.Mempool,
+		blockStore: cfg.BlockStore,
+		log:        logger,
 	}
 
 	ce.role.Store(role)
@@ -375,7 +393,7 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 		return err
 	}
 
-	ce.log.Info("Initial APP State", "height", ce.state.appState.Height, "appHash", ce.state.appState.AppHash)
+	ce.log.Info("Initial APP State", "height", ce.state.lc.height, "appHash", ce.state.lc.appHash)
 	// Replay blocks from the blockstore.
 	startHeight := ce.state.lc.height + 1
 	t0 := time.Now()
@@ -398,39 +416,35 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 
 // init initializes the node state based on the appState info.
 func (ce *ConsensusEngine) init() error {
-	state, err := ce.loadAppState()
+	ctx := context.Background()
+	height, appHash, dirty, err := meta.GetChainState(ctx, ce.db)
 	if err != nil {
 		return err
 	}
 
-	ce.state.appState = state
-	ce.persistAppState()
-
 	// Retrieve the last commit info from the blockstore based on the appState info.
-	if state.Height > 0 {
-		ce.state.lc.height = state.Height
+	if height > 0 {
 
 		// TODO: check for any uncommitted transaction in PG and rollback
 		// retrieve the block from the blockstore
-		hash, blk, _, err := ce.blockStore.GetByHeight(ce.state.lc.height)
+		hash, blk, _, err := ce.blockStore.GetByHeight(height)
 		if err != nil {
 			// This is not possible. The state.json will have the height, only when the block is committed.
 			return err
 		}
 		ce.log.Info("Last committed block", "height", blk.Header.Height, "hash", hash)
 
-		if state.AppHash == dirtyHash {
+		if dirty {
 			ce.log.Warnf("Fixing dirty apphash!")
 			// This implies that the commit was successful, but the final appHash is not yet updated.
-			state.AppHash = hash
-			ce.persistAppState()
 		}
 
-		ce.state.lc.blk = blk
-		ce.state.lc.appHash = state.AppHash
+		ce.state.lc.height = height
+		ce.state.lc.appHash = ktypes.Hash(appHash)
 		ce.state.lc.blkHash = hash
+		ce.state.lc.blk = blk
 
-		ce.stateInfo.height = state.Height
+		ce.stateInfo.height = height
 		ce.stateInfo.status = Committed
 		ce.stateInfo.blkProp = nil
 	}

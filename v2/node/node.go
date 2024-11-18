@@ -21,11 +21,16 @@ import (
 
 	"kwil/crypto"
 	"kwil/log"
+	"kwil/node/accounts"
 	"kwil/node/consensus"
 	"kwil/node/mempool"
 	"kwil/node/peers"
+	"kwil/node/pg"
 	"kwil/node/store"
+	"kwil/node/txapp"
 	"kwil/node/types"
+	"kwil/node/voting"
+	ktypes "kwil/types"
 
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -101,7 +106,7 @@ type Node struct {
 
 	// TODO: get both rol and valSet from CE, if really needed by Node
 	role   types.Role
-	valSet map[string]types.Validator
+	valSet map[string]ktypes.Validator
 }
 
 func addClose(close, top func() error) func() error {
@@ -167,7 +172,7 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 	pubkey := privKey.Public()
 
 	leader := cfg.Genesis.Validators[0].PubKey
-	valSet := make(map[string]types.Validator)
+	valSet := make(map[string]ktypes.Validator)
 	for _, val := range cfg.Genesis.Validators {
 		valSet[hex.EncodeToString(val.PubKey)] = val
 	}
@@ -181,9 +186,29 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 	if pubkey.Equals(leaderPubKey) {
 		role = types.RoleLeader
 	}
+	ctx := context.Background()
+
+	db := buildDB(ctx, cfg)
+
+	// Initialize the accounts store
+	accounts, err := accounts.InitializeAccountStore(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+
+	// Initialize the VoteStore
+	_, voteStore, err := buildEventStore(ctx, cfg)
+	if err != nil {
+		return nil, err
+	}
+
+	service := &ktypes.Service{}
+	// txAPP
+	txApp, err := txapp.NewTxApp(ctx, db, nil, privKey, nil, service, accounts, voteStore)
 
 	ce := options.ce
 	if ce == nil {
+
 		ceCfg := &consensus.Config{
 			Signer:         privKey,
 			Dir:            cfg.RootDir,
@@ -193,6 +218,10 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 			ValidatorSet:   valSet,
 			Logger:         logger.New("CONS"),
 			ProposeTimeout: cfg.Consensus.ProposeTimeout,
+			DB:             db,
+			Accounts:       accounts,
+			ValidatorStore: voteStore,
+			TxApp:          txApp,
 		}
 		ceEng := consensus.New(ceCfg)
 		if ceEng == nil {
@@ -238,6 +267,67 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 	}
 
 	return node, nil
+}
+
+func buildDB(ctx context.Context, cfg *Config) *pg.DB {
+	dbOpener := newDBOpener(cfg.PG.Host, cfg.PG.Port, cfg.PG.User, cfg.PG.Pass)
+	db, err := dbOpener(ctx, cfg.PG.DBName, cfg.PG.MaxConnections)
+	if err != nil {
+		panic(err)
+	}
+	return db
+}
+
+// dbOpener opens a sessioned database connection.  Note that in this function the
+// dbName is not a Kwil dataset, but a database that can contain multiple
+// datasets in different postgresql "schema".
+type dbOpener func(ctx context.Context, dbName string, maxConns uint32) (*pg.DB, error)
+
+func newDBOpener(host, port, user, pass string) dbOpener {
+	return func(ctx context.Context, dbName string, maxConns uint32) (*pg.DB, error) {
+		cfg := &pg.DBConfig{
+			PoolConfig: pg.PoolConfig{
+				ConnConfig: pg.ConnConfig{
+					Host:   host,
+					Port:   port,
+					User:   user,
+					Pass:   pass,
+					DBName: dbName,
+				},
+				MaxConns: maxConns,
+			},
+		}
+		return pg.NewDB(ctx, cfg)
+	}
+}
+
+// poolOpener opens a basic database connection pool.
+type poolOpener func(ctx context.Context, dbName string, maxConns uint32) (*pg.Pool, error)
+
+func newPoolDBOpener(host, port, user, pass string) poolOpener {
+	return func(ctx context.Context, dbName string, maxConns uint32) (*pg.Pool, error) {
+		cfg := &pg.PoolConfig{
+			ConnConfig: pg.ConnConfig{
+				Host:   host,
+				Port:   port,
+				User:   user,
+				Pass:   pass,
+				DBName: dbName,
+			},
+			MaxConns: maxConns,
+		}
+		return pg.NewPool(ctx, cfg)
+	}
+}
+
+func buildEventStore(ctx context.Context, cfg *Config) (*voting.EventStore, *voting.VoteStore, error) {
+	poolOpener := newPoolDBOpener(cfg.PG.Host, cfg.PG.Port, cfg.PG.User, cfg.PG.Pass)
+	poolDB, err := poolOpener(ctx, cfg.PG.DBName, cfg.PG.MaxConnections)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return voting.NewResolutionStore(ctx, poolDB)
 }
 
 func FormatPeerString(rawPubKey []byte, keyType crypto.KeyType, ip string, port int) string {

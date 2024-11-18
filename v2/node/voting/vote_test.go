@@ -92,8 +92,7 @@ func Test_Voting(t *testing.T) {
 				err = v.SetValidatorPower(ctx, db, []byte("b"), 100)
 				require.NoError(t, err)
 
-				voters, err := v.GetValidators()
-				require.NoError(t, err)
+				voters := v.GetValidators()
 				// Before commit
 				require.Len(t, voters, 0)
 
@@ -101,8 +100,7 @@ func Test_Voting(t *testing.T) {
 				require.NoError(t, err)
 
 				// After commit
-				voters, err = v.GetValidators()
-				require.NoError(t, err)
+				voters = v.GetValidators()
 				require.Len(t, voters, 2)
 
 				voterAPower, err := v.GetValidatorPower(ctx, db, []byte("a"))
