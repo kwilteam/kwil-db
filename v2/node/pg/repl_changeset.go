@@ -12,6 +12,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/jackc/pglogrepl"
 
@@ -23,6 +24,14 @@ type changesetIoWriter struct {
 	metadata  *changesetMetadata   // reset at end of each commit, builds new list of relations for each db tx
 	oidToType map[uint32]*datatype // immutable map of OIDs to Kwil data types
 	csChan    chan<- any           // *Relation / *ChangesetEntry
+	chanMtx   sync.Mutex
+}
+
+func (cs *changesetIoWriter) setChangesetWriter(ch chan<- any) {
+	cs.chanMtx.Lock()
+	defer cs.chanMtx.Unlock()
+
+	cs.csChan = ch
 }
 
 // ChangeStreamer is a type that supports streaming with StreamElement.
@@ -424,6 +433,9 @@ func (ce *ChangesetEntry) applyDeletes(ctx context.Context, tx sql.DB, rel *Rela
 // registerMetadata registers a relation with the changeset metadata.
 // it returns the index of the relation in the metadata.
 func (c *changesetIoWriter) registerMetadata(relation *pglogrepl.RelationMessageV2) uint32 {
+	c.chanMtx.Lock()
+	defer c.chanMtx.Unlock()
+
 	idx, ok := c.metadata.relationIdx[[2]string{relation.Namespace, relation.RelationName}]
 	if ok {
 		return uint32(idx)
@@ -458,7 +470,10 @@ func (c *changesetIoWriter) registerMetadata(relation *pglogrepl.RelationMessage
 }
 
 func (c *changesetIoWriter) WriteNewRelation(relation *pglogrepl.RelationMessageV2) error {
-	if c == nil || c.csChan == nil {
+	c.chanMtx.Lock()
+	defer c.chanMtx.Unlock()
+
+	if c.csChan == nil {
 		return nil
 	}
 
@@ -467,7 +482,10 @@ func (c *changesetIoWriter) WriteNewRelation(relation *pglogrepl.RelationMessage
 }
 
 func (c *changesetIoWriter) decodeInsert(insert *pglogrepl.InsertMessageV2, relation *pglogrepl.RelationMessageV2) error {
-	if c == nil || c.csChan == nil {
+	c.chanMtx.Lock()
+	defer c.chanMtx.Unlock()
+
+	if c.csChan == nil {
 		return nil
 	}
 
@@ -489,7 +507,10 @@ func (c *changesetIoWriter) decodeInsert(insert *pglogrepl.InsertMessageV2, rela
 }
 
 func (c *changesetIoWriter) decodeUpdate(update *pglogrepl.UpdateMessageV2, relation *pglogrepl.RelationMessageV2) error {
-	if c == nil || c.csChan == nil {
+	c.chanMtx.Lock()
+	defer c.chanMtx.Unlock()
+
+	if c.csChan == nil {
 		return nil
 	}
 
@@ -526,7 +547,10 @@ func (c *changesetIoWriter) decodeUpdate(update *pglogrepl.UpdateMessageV2, rela
 }
 
 func (c *changesetIoWriter) decodeDelete(delete *pglogrepl.DeleteMessageV2, relation *pglogrepl.RelationMessageV2) error {
-	if c == nil || c.csChan == nil {
+	c.chanMtx.Lock()
+	defer c.chanMtx.Unlock()
+
+	if c.csChan == nil {
 		return nil
 	}
 
@@ -554,10 +578,12 @@ func (c *changesetIoWriter) decodeDelete(delete *pglogrepl.DeleteMessageV2, rela
 // It zeroes the metadata, so that the changeset can be reused,
 // and send a finish signal to the writer.
 func (c *changesetIoWriter) commit() error {
-	if c == nil || c.csChan == nil {
+	c.chanMtx.Lock()
+	defer c.chanMtx.Unlock()
+
+	if c.csChan == nil {
 		return nil
 	}
-
 	// clear the relation index list for the next block
 	c.metadata = &changesetMetadata{
 		relationIdx: map[[2]string]int{},
@@ -573,10 +599,12 @@ func (c *changesetIoWriter) commit() error {
 // fail is called when the changeset is incomplete.
 // It zeroes the metadata and writer, so that another changeset may be collected.
 func (c *changesetIoWriter) fail() {
-	if c == nil || c.csChan == nil {
+	c.chanMtx.Lock()
+	defer c.chanMtx.Unlock()
+
+	if c.csChan == nil {
 		return
 	}
-
 	// clear the relation index list for the next block
 	c.metadata = &changesetMetadata{
 		relationIdx: map[[2]string]int{},

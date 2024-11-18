@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"kwil/config"
 	"kwil/node/pg"
 )
 
@@ -87,6 +88,25 @@ func NewTestDB(t *testing.T) (db *pg.DB, err error) {
 				User:   "kwild",
 				Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
 				DBName: "kwil_test_db",
+			},
+			MaxConns: 11,
+		},
+		SchemaFilter: func(s string) bool {
+			return strings.Contains(s, pg.DefaultSchemaFilterPrefix)
+		},
+	}
+	return pg.NewDB(context.Background(), cfg)
+}
+
+func NewTestDBWithCfg(t *testing.T, dbCfg *config.DBConfig) (db *pg.DB, err error) {
+	cfg := &pg.DBConfig{
+		PoolConfig: pg.PoolConfig{
+			ConnConfig: pg.ConnConfig{
+				Host:   dbCfg.Host,
+				Port:   dbCfg.Port,
+				User:   dbCfg.User,
+				Pass:   dbCfg.Pass, // would be ignored if pg_hba.conf set with trust
+				DBName: dbCfg.DBName,
 			},
 			MaxConns: 11,
 		},

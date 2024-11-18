@@ -3,9 +3,21 @@ package consensus
 import (
 	"context"
 
+	"kwil/node/txapp"
 	"kwil/node/types"
+	"kwil/node/types/sql"
 	ktypes "kwil/types"
 )
+
+// DB is the interface for the main SQL database. All queries must be executed
+// from within a transaction. A DB can create read transactions or the special
+// two-phase outer write transaction.
+type DB interface {
+	sql.TxMaker // for out-of-consensus writes e.g. setup and meta table writes
+	sql.PreparedTxMaker
+	sql.ReadTxMaker
+	sql.SnapshotTxMaker
+}
 
 type Mempool interface {
 	ReapN(maxSize int) ([]types.Hash, [][]byte)
@@ -28,6 +40,22 @@ type BlockExecutor interface {
 	Precommit() (types.Hash, error)
 	Commit(func() error) error
 	Rollback() error
+}
+
+type Accounts interface {
+	Updates() []*ktypes.Account
+}
+
+type Validators interface {
+	GetValidators() []*ktypes.Validator
+	ValidatorUpdates() map[string]*ktypes.Validator
+}
+
+type TxApp interface {
+	Begin(ctx context.Context, height int64) error
+	Execute(ctx *ktypes.TxContext, db sql.DB, tx *ktypes.Transaction) *txapp.TxResponse
+	Finalize(ctx context.Context, db sql.DB, block *ktypes.BlockContext) (finalValidators []*ktypes.Validator, err error)
+	Commit() error
 }
 
 // Question:

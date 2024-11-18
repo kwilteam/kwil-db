@@ -90,6 +90,7 @@ func Test_Routes(t *testing.T) {
 					types.NewUUIDV5([]byte("test")),
 				},
 			},
+			from: signer1,
 		},
 		{
 			// this test tests vote_id, as a non-local validator
@@ -142,7 +143,8 @@ func Test_Routes(t *testing.T) {
 					types.NewUUIDV5([]byte("test")),
 				},
 			},
-			err: ErrCallerNotValidator,
+			err:  ErrCallerNotValidator,
+			from: signer1,
 		},
 		{
 			// testing validator_vote_bodies, as the proposer
@@ -177,7 +179,7 @@ func Test_Routes(t *testing.T) {
 			},
 			ctx: &types.TxContext{
 				BlockContext: &types.BlockContext{
-					Proposer: signer1.Identity(),
+					Proposer: signer1.Identity(), // TODO: Proposer in the new model is always the leader
 				},
 			},
 			from: signer1,
@@ -212,7 +214,7 @@ func Test_Routes(t *testing.T) {
 			},
 			ctx: &types.TxContext{
 				BlockContext: &types.BlockContext{
-					Proposer: signer1.Identity(),
+					Proposer: signer1.Identity(), // TODO: Proposer in the new model is always the leader
 				},
 			},
 			from: signer2,
@@ -222,10 +224,6 @@ func Test_Routes(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.from == nil {
-				tc.from = signer1
-			}
-
 			// mock getAccount, which is func declared in interfaces.go
 			account := &mockAccount{}
 			Validators := &mockValidator{
@@ -254,9 +252,11 @@ func Test_Routes(t *testing.T) {
 					Accounts:   account,
 					Validators: Validators,
 				}
+
 				if app.signer == nil {
 					app.signer = signer1
 				}
+
 				if app.service == nil {
 					app.service = &types.Service{
 						Logger:   log.DiscardLogger,
@@ -314,7 +314,7 @@ func (a *mockAccount) Credit(_ context.Context, _ sql.Executor, acctID []byte, a
 	return nil
 }
 
-func (a *mockAccount) Transfer(_ context.Context, _ sql.Executor, from, to []byte, amount *big.Int) error {
+func (a *mockAccount) Transfer(_ context.Context, _ sql.TxMaker, from, to []byte, amount *big.Int) error {
 	return nil
 }
 
@@ -329,8 +329,8 @@ type mockValidator struct {
 	getVoterFn getVoterPowerFunc
 }
 
-func (v *mockValidator) GetValidators() ([]*types.Validator, error) {
-	return nil, nil
+func (v *mockValidator) GetValidators() []*types.Validator {
+	return nil
 }
 
 func (v *mockValidator) GetValidatorPower(_ context.Context, _ sql.Executor, pubKey []byte) (int64, error) {
@@ -345,7 +345,7 @@ func (v *mockValidator) Commit() error {
 	return nil
 }
 
-func getSigner(hexPrivKey string) *auth.Ed25519Signer {
+func getSigner(hexPrivKey string) auth.Signer {
 	bts, err := hex.DecodeString(hexPrivKey)
 	if err != nil {
 		panic(err)
@@ -355,7 +355,5 @@ func getSigner(hexPrivKey string) *auth.Ed25519Signer {
 		panic(err)
 	}
 
-	return &auth.Ed25519Signer{
-		Ed25519PrivateKey: *pk,
-	}
+	return auth.GetSigner(pk)
 }

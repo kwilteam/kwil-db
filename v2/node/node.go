@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	mrand2 "math/rand/v2"
@@ -21,11 +20,9 @@ import (
 
 	"kwil/crypto"
 	"kwil/log"
-	"kwil/node/consensus"
-	"kwil/node/mempool"
 	"kwil/node/peers"
-	"kwil/node/store"
 	"kwil/node/types"
+	ktypes "kwil/types"
 
 	"github.com/libp2p/go-libp2p"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -46,193 +43,77 @@ const (
 	dummyTxInterval = 1 * time.Second // broadcast freq
 )
 
-type ConsensusEngine interface {
-	AcceptProposal(height int64, blkID, prevBlkID types.Hash, leaderSig []byte, timestamp int64) bool
-	NotifyBlockProposal(blk *types.Block)
-
-	AcceptCommit(height int64, blkID types.Hash, appHash types.Hash, leaderSig []byte) bool
-	NotifyBlockCommit(blk *types.Block, appHash types.Hash)
-
-	NotifyACK(validatorPK []byte, ack types.AckRes)
-	NotifyResetState(height int64)
-
-	// Gonna remove this once we have the commit results such as app hash and the tx results stored in the block store.
-
-	Start(ctx context.Context, proposerBroadcaster consensus.ProposalBroadcaster,
-		blkAnnouncer consensus.BlkAnnouncer, ackBroadcaster consensus.AckBroadcaster,
-		blkRequester consensus.BlkRequester, stateResetter consensus.ResetStateBroadcaster)
-
-	// Note: Not sure if these are needed here, just for separate of concerns:
-	// p2p stream handlers role is to download the messages and pass it to the
-	// respective modules to process it and we probably should not be triggering any consensus
-	// affecting methods.
-
-	// ProcessProposal(blk *types.Block, cb func(ack bool, appHash types.Hash) error)
-	// ProcessACK(validatorPK []byte, ack types.AckRes)
-	// CommitBlock(blk *types.Block, appHash types.Hash) error
-}
-
-type PeerManager interface {
-	network.Notifiee
-	Start(context.Context) error
-	ConnectedPeers() []types.PeerInfo
-	KnownPeers() []types.PeerInfo
-}
-
 type Node struct {
-	bki types.BlockStore
-	mp  types.MemPool
-	ce  ConsensusEngine
-	log log.Logger
-
-	pm PeerManager // *peers.PeerMan
+	// cfg
+	pex    bool
+	pubkey crypto.PublicKey
+	dir    string
 	// pf *prefetch
 
+	role   atomic.Value
+	valSet map[string]ktypes.Validator
+
+	// interfaces
+	bki  types.BlockStore
+	mp   types.MemPool
+	ce   ConsensusEngine
+	pm   PeerManager // *peers.PeerMan
+	host host.Host
+
+	// broadcast channels
 	ackChan  chan AckRes         // from consensus engine, to gossip to leader
 	resetMsg chan ConsensusReset // gossiped in from peers, to consensus engine
 
-	host   host.Host
-	pex    bool
-	pubkey crypto.PublicKey
-	leader atomic.Bool
-	dir    string
-	wg     sync.WaitGroup
-	close  func() error
-
-	// TODO: get both rol and valSet from CE, if really needed by Node
-	role   types.Role
-	valSet map[string]types.Validator
-}
-
-func addClose(close, top func() error) func() error {
-	return func() error { err := top(); return errors.Join(err, close()) }
+	wg  sync.WaitGroup
+	log log.Logger
 }
 
 // NewNode creates a new node. For now we are using functional options, but this
 // may be better suited by a config struct, or a hybrid where some settings are
 // required, such as identity.
-func NewNode(cfg *Config, opts ...Option) (*Node, error) {
-	options := &options{}
-	for _, opt := range opts {
-		opt(options)
-	}
-
-	logger := cfg.Logger
-	if logger == nil {
-		// logger = log.DiscardLogger // prod
-		logger = log.New(log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug),
-			log.WithFormat(log.FormatUnstructured)) // dev
-	}
-
-	close := func() error { return nil }
-
-	host := options.host
-	if host == nil {
-		var err error
-		host, err = newHost(cfg.P2P.IP, cfg.P2P.Port, cfg.PrivKey)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	mp := options.mp
-	if options.mp == nil {
-		mp = mempool.New()
-	}
-
-	addrBookPath := filepath.Join(cfg.RootDir, "addrbook.json")
-	pm, err := peers.NewPeerMan(cfg.P2P.Pex, addrBookPath,
-		logger.New("PEERS"),
-		host, // tooo much, become minimal interface
-		func(ctx context.Context, peerID peer.ID) ([]peer.AddrInfo, error) {
-			return requestPeers(ctx, peerID, host, logger)
-		}, neededProtocols)
-	if err != nil {
-		return nil, err
-	}
-
-	bs := options.bs
-	if bs == nil {
-		blkStrDir := filepath.Join(cfg.RootDir, "blockstore")
-		var err error
-		bs, err = store.NewBlockStore(blkStrDir)
-		if err != nil {
-			return nil, err
-		}
-		close = addClose(close, bs.Close) //close db after stopping p2p
-	}
-	close = addClose(close, host.Close)
-
-	privKey := cfg.PrivKey
-	pubkey := privKey.Public()
-
-	leader := cfg.Genesis.Validators[0].PubKey
-	valSet := make(map[string]types.Validator)
-	for _, val := range cfg.Genesis.Validators {
-		valSet[hex.EncodeToString(val.PubKey)] = val
-	}
+func NewNode(nc *Config) (*Node, error) {
+	leader := nc.Genesis.Validators[0].PubKey
 
 	leaderPubKey, err := crypto.UnmarshalSecp256k1PublicKey(leader)
 	if err != nil {
 		return nil, err
 	}
-
+	pubkey := nc.PrivKey.Public()
 	role := types.RoleValidator
 	if pubkey.Equals(leaderPubKey) {
 		role = types.RoleLeader
 	}
 
-	ce := options.ce
-	if ce == nil {
-		ceCfg := &consensus.Config{
-			Signer:         privKey,
-			Dir:            cfg.RootDir,
-			Leader:         leaderPubKey,
-			Mempool:        mp,
-			BlockStore:     bs,
-			ValidatorSet:   valSet,
-			Logger:         logger.New("CONS"),
-			ProposeTimeout: cfg.Consensus.ProposeTimeout,
-		}
-		ceEng := consensus.New(ceCfg)
-		if ceEng == nil {
-			return nil, errors.New("failed to create consensus engine")
-		}
-		ce = ceEng
-	}
-
 	node := &Node{
-		log:      logger,
-		host:     host,
-		pm:       pm,
+		log:      nc.Logger,
+		host:     nc.Host,
+		pm:       nc.PeerMgr,
 		pubkey:   pubkey,
-		pex:      cfg.P2P.Pex,
-		mp:       mp,
-		bki:      bs,
-		ce:       ce,
-		dir:      cfg.RootDir,
+		pex:      nc.Cfg.P2P.Pex,
+		mp:       nc.Mempool,
+		bki:      nc.BlockStore,
+		ce:       nc.Consensus,
+		dir:      nc.RootDir,
 		ackChan:  make(chan AckRes, 1),
 		resetMsg: make(chan ConsensusReset, 1),
-		close:    close,
-		role:     role,
-		valSet:   valSet,
+		valSet:   nc.ValSet,
 	}
 
-	node.leader.Store(role == types.RoleLeader)
+	node.role.Store(role)
 
-	host.SetStreamHandler(ProtocolIDTxAnn, node.txAnnStreamHandler)
-	host.SetStreamHandler(ProtocolIDBlkAnn, node.blkAnnStreamHandler)
-	host.SetStreamHandler(ProtocolIDBlock, node.blkGetStreamHandler)
-	host.SetStreamHandler(ProtocolIDBlockHeight, node.blkGetHeightStreamHandler)
-	host.SetStreamHandler(ProtocolIDTx, node.txGetStreamHandler)
+	nc.Host.SetStreamHandler(ProtocolIDTxAnn, node.txAnnStreamHandler)
+	nc.Host.SetStreamHandler(ProtocolIDBlkAnn, node.blkAnnStreamHandler)
+	nc.Host.SetStreamHandler(ProtocolIDBlock, node.blkGetStreamHandler)
+	nc.Host.SetStreamHandler(ProtocolIDBlockHeight, node.blkGetHeightStreamHandler)
+	nc.Host.SetStreamHandler(ProtocolIDTx, node.txGetStreamHandler)
 
-	host.SetStreamHandler(ProtocolIDBlockPropose, node.blkPropStreamHandler)
-	// host.SetStreamHandler(ProtocolIDACKProposal, node.blkAckStreamHandler)
+	nc.Host.SetStreamHandler(ProtocolIDBlockPropose, node.blkPropStreamHandler)
+	// nc.Host.SetStreamHandler(ProtocolIDACKProposal, node.blkAckStreamHandler)
 
-	if cfg.P2P.Pex {
-		host.SetStreamHandler(ProtocolIDDiscover, node.peerDiscoveryStreamHandler)
+	if nc.Cfg.P2P.Pex {
+		nc.Host.SetStreamHandler(ProtocolIDDiscover, node.peerDiscoveryStreamHandler)
 	} else {
-		host.SetStreamHandler(ProtocolIDDiscover, func(s network.Stream) {
+		nc.Host.SetStreamHandler(ProtocolIDDiscover, func(s network.Stream) {
 			s.Close()
 		})
 	}
@@ -364,6 +245,7 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 	go func() {
 		defer n.wg.Done()
 		defer cancel()
+		// TODO: umm, should node bringup the consensus engine? or server?
 		n.ce.Start(ctx, n.announceBlkProp, n.announceBlk, n.sendACK, n.getBlkHeight, n.sendReset)
 	}()
 
@@ -376,13 +258,14 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 	n.log.Info("Node started.")
 
 	<-ctx.Done()
-
 	n.wg.Wait()
 
-	return n.close()
+	n.log.Info("Node stopped.")
+	return nil
+	// return n.closers.closeAll()
 }
 
-var neededProtocols = []protocol.ID{
+var RequiredStreamProtocols = []protocol.ID{
 	ProtocolIDDiscover,
 	ProtocolIDTx,
 	ProtocolIDTxAnn,
@@ -394,7 +277,7 @@ var neededProtocols = []protocol.ID{
 }
 
 func (n *Node) checkPeerProtos(ctx context.Context, peer peer.ID) error {
-	return peers.RequirePeerProtos(ctx, n.host.Peerstore(), peer, neededProtocols...)
+	return peers.RequirePeerProtos(ctx, n.host.Peerstore(), peer, RequiredStreamProtocols...)
 }
 
 type randSrc struct{}
@@ -425,7 +308,7 @@ func NewKey(r io.Reader) crypto.PrivateKey {
 	return privKey
 }
 
-func newHost(ip string, port uint64, privKey crypto.PrivateKey) (host.Host, error) {
+func NewHost(ip string, port uint64, privKey crypto.PrivateKey) (host.Host, error) {
 	// convert to the libp2p crypto key type
 	var privKeyP2P p2pcrypto.PrivKey
 	var err error
@@ -445,7 +328,7 @@ func newHost(ip string, port uint64, privKey crypto.PrivateKey) (host.Host, erro
 
 	// listenAddrs := libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0", "/ip4/0.0.0.0/tcp/0/ws")
 
-	// cg := peers.NewProtocolGater(neededProtocols)
+	// cg := peers.NewProtocolGater()
 
 	h, err := libp2p.New(
 		libp2p.Transport(tcp.NewTCPTransport),

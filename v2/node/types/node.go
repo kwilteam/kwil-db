@@ -1,8 +1,6 @@
 package types
 
 import (
-	"fmt"
-
 	"kwil/types"
 )
 
@@ -27,13 +25,4 @@ func (r Role) String() string {
 	default:
 		return "unknown"
 	}
-}
-
-type Validator struct {
-	PubKey HexBytes `json:"pubkey"`
-	Power  int64    `json:"power"`
-}
-
-func (v Validator) String() string {
-	return fmt.Sprintf("Validator{PubKey: %s, Power: %d}", v.PubKey, v.Power)
 }

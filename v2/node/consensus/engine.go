@@ -12,8 +12,12 @@ import (
 	"time"
 
 	"kwil/crypto"
+	"kwil/crypto/auth"
 	"kwil/log"
+	"kwil/node/meta"
+	"kwil/node/pg"
 	"kwil/node/types"
+	"kwil/node/types/sql"
 	ktypes "kwil/types"
 )
 
@@ -35,15 +39,17 @@ var zeroHash = types.Hash{}
 // 3. BlockCommitPhase:
 // - Once the leader receives the threshold acks with the same appHash as the leader, the block is committed and the leader broadcasts the blockAnn message to the network. Nodes that receive this message will enter into the commit phase where they verify the appHash and commit the block.
 type ConsensusEngine struct {
-	role   atomic.Value // types.Role, role can change over the lifetime of the node
-	dir    string
-	signer crypto.PrivateKey
-	leader crypto.PublicKey
+	role    atomic.Value // types.Role, role can change over the lifetime of the node
+	signer  auth.Signer
+	privKey crypto.PrivateKey
+	pubKey  crypto.PublicKey
+	leader  crypto.PublicKey
+	log     log.Logger
 
 	proposeTimeout time.Duration
 
 	networkHeight atomic.Int64
-	validatorSet  map[string]types.Validator
+	validatorSet  map[string]ktypes.Validator
 
 	// stores state machine state for the consensus engine
 	state state
@@ -57,10 +63,12 @@ type ConsensusEngine struct {
 	resetChan chan int64    // to reset the state of the consensus engine
 
 	// interfaces
-	log           log.Logger
-	mempool       Mempool
-	blockStore    BlockStore
-	blockExecutor BlockExecutor
+	db         DB
+	mempool    Mempool
+	blockStore BlockStore
+	txapp      TxApp
+	accounts   Accounts
+	validators Validators
 
 	// Broadcasters
 	proposalBroadcaster ProposalBroadcaster
@@ -113,17 +121,17 @@ type StateInfo struct {
 type state struct {
 	mtx sync.RWMutex
 
-	cancelFunc context.CancelFunc
-	// consensusTx sql.Tx
+	consensusTx sql.PreparedTx
 
 	blkProp  *blockProposal
 	blockRes *blockResult
 	lc       *lastCommit
-	appState *appState
 
 	// Votes: Applicable only to the leader
 	// These are the Acks received from the validators.
 	votes map[string]*vote
+
+	// chainContext *ktypes.ChainContext
 }
 
 type blockResult struct {
@@ -143,17 +151,27 @@ type lastCommit struct {
 // Config is the struct given to the constructor, [New].
 type Config struct {
 	// Signer is the private key of the node.
-	Signer crypto.PrivateKey
-	// Dir is the directory where the node stores its data.
-	Dir string
+	PrivateKey crypto.PrivateKey
 	// Leader is the public key of the leader.
 	Leader crypto.PublicKey
+
+	DB *pg.DB
 	// Mempool is the mempool of the node.
 	Mempool Mempool
 	// BlockStore is the blockstore of the node.
 	BlockStore BlockStore
+
+	// ValidatorStore is the store of the validators.
+	ValidatorStore Validators
+
+	// Accounts is the store of the accounts.
+	Accounts Accounts
+
+	// TxApp is the transaction application layer.
+	TxApp TxApp
+
 	// ValidatorSet is the set of validators in the network.
-	ValidatorSet map[string]types.Validator
+	ValidatorSet map[string]ktypes.Validator
 	// Logger is the logger of the node.
 	Logger log.Logger
 
@@ -172,7 +190,8 @@ func New(cfg *Config) *ConsensusEngine {
 
 	// Determine *genesis* role based on leader pubkey and validator set.
 	var role types.Role
-	pubKey := cfg.Signer.Public()
+	pubKey := cfg.PrivateKey.Public()
+
 	if pubKey.Equals(cfg.Leader) {
 		role = types.RoleLeader
 		logger.Info("You are the leader")
@@ -187,13 +206,16 @@ func New(cfg *Config) *ConsensusEngine {
 		}
 	}
 
-	be := newBlockExecutor()
+	signer := auth.GetSigner(cfg.PrivateKey)
+
 	// rethink how this state is initialized
 	ce := &ConsensusEngine{
-		dir:            cfg.Dir,
-		signer:         cfg.Signer,
+		signer:         signer,
+		pubKey:         pubKey,
+		privKey:        cfg.PrivateKey,
 		leader:         cfg.Leader,
 		proposeTimeout: cfg.ProposeTimeout,
+		db:             cfg.DB,
 		state: state{
 			blkProp:  nil,
 			blockRes: nil,
@@ -214,10 +236,12 @@ func New(cfg *Config) *ConsensusEngine {
 		haltChan:     make(chan struct{}, 1),
 		resetChan:    make(chan int64, 1),
 		// interfaces
-		mempool:       cfg.Mempool,
-		blockStore:    cfg.BlockStore,
-		blockExecutor: be,
-		log:           logger,
+		mempool:    cfg.Mempool,
+		blockStore: cfg.BlockStore,
+		txapp:      cfg.TxApp,
+		accounts:   cfg.Accounts,
+		validators: cfg.ValidatorStore,
+		log:        logger,
 	}
 
 	ce.role.Store(role)
@@ -227,24 +251,25 @@ func New(cfg *Config) *ConsensusEngine {
 }
 
 func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster ProposalBroadcaster,
-	blkAnnouncer BlkAnnouncer, ackBroadcaster AckBroadcaster, blkRequester BlkRequester, stateResetter ResetStateBroadcaster) {
+	blkAnnouncer BlkAnnouncer, ackBroadcaster AckBroadcaster, blkRequester BlkRequester, stateResetter ResetStateBroadcaster) error {
 	ce.proposalBroadcaster = proposerBroadcaster
 	ce.blkAnnouncer = blkAnnouncer
 	ce.ackBroadcaster = ackBroadcaster
 	ce.blkRequester = blkRequester
 	ce.rstStateBroadcaster = stateResetter
 
+	ce.log.Info("Starting the consensus engine")
+
 	// Fast catchup the node with the network height
 	if err := ce.catchup(ctx); err != nil {
-		ce.log.Errorf("Error catching up: %v", err)
-		return
+		return fmt.Errorf("error catching up: %w", err)
 	}
 
 	// start mining
 	ce.startMining(ctx)
 
 	// start the event loop
-	ce.runEventLoop(ctx)
+	return ce.runEventLoop(ctx)
 }
 
 // runEventLoop starts the event loop for the consensus engine.
@@ -275,11 +300,15 @@ func (ce *ConsensusEngine) runEventLoop(ctx context.Context) error {
 
 		case <-ce.haltChan:
 			// Halt the network
+			ce.resetState(ctx) // rollback the current block execution and stop the node
 			ce.log.Error("Received halt signal, stopping the consensus engine")
 			return nil
 
 		case <-catchUpTicker.C:
-			ce.doCatchup(ctx) // better name??
+			err := ce.doCatchup(ctx) // better name??
+			if err != nil {
+				panic(err) // TODO: should we panic here?
+			}
 
 		case <-reannounceTicker.C:
 			ce.reannounceMsgs(ctx)
@@ -351,15 +380,10 @@ func (ce *ConsensusEngine) resetBlockProp(height int64) {
 	ce.log.Info("Reset msg: ", "height", height)
 	if ce.state.lc.height == height {
 		if ce.state.blkProp != nil {
-			// first cancel the context
-			ce.state.cancelFunc()
-			// rollback the pg tx
-			// ce.state.consensusTx.Rollback()
-
-			// reset the blkProp and blockRes
 			ce.log.Info("Resetting the block proposal", "height", height)
-			ce.resetState()
-			// no need to update the last commit info as commit phase is not reached yet
+			if err := ce.resetState(context.Background()); err != nil {
+				ce.log.Error("Error resetting the state", "error", err) // panic? or consensus error?
+			}
 		}
 	}
 }
@@ -375,7 +399,7 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 		return err
 	}
 
-	ce.log.Info("Initial APP State", "height", ce.state.appState.Height, "appHash", ce.state.appState.AppHash)
+	ce.log.Info("Initial APP State", "height", ce.state.lc.height, "appHash", ce.state.lc.appHash)
 	// Replay blocks from the blockstore.
 	startHeight := ce.state.lc.height + 1
 	t0 := time.Now()
@@ -398,39 +422,42 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 
 // init initializes the node state based on the appState info.
 func (ce *ConsensusEngine) init() error {
-	state, err := ce.loadAppState()
+	ctx := context.Background()
+
+	readTx, err := ce.db.BeginReadTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer readTx.Rollback(ctx)
+
+	height, appHash, dirty, err := meta.GetChainState(ctx, readTx)
 	if err != nil {
 		return err
 	}
 
-	ce.state.appState = state
-	ce.persistAppState()
-
 	// Retrieve the last commit info from the blockstore based on the appState info.
-	if state.Height > 0 {
-		ce.state.lc.height = state.Height
+	if height > 0 {
 
 		// TODO: check for any uncommitted transaction in PG and rollback
 		// retrieve the block from the blockstore
-		hash, blk, _, err := ce.blockStore.GetByHeight(ce.state.lc.height)
+		hash, blk, _, err := ce.blockStore.GetByHeight(height)
 		if err != nil {
 			// This is not possible. The state.json will have the height, only when the block is committed.
 			return err
 		}
 		ce.log.Info("Last committed block", "height", blk.Header.Height, "hash", hash)
 
-		if state.AppHash == dirtyHash {
+		if dirty {
 			ce.log.Warnf("Fixing dirty apphash!")
 			// This implies that the commit was successful, but the final appHash is not yet updated.
-			state.AppHash = hash
-			ce.persistAppState()
 		}
 
-		ce.state.lc.blk = blk
-		ce.state.lc.appHash = state.AppHash
+		ce.state.lc.height = height
+		ce.state.lc.appHash = ktypes.Hash(appHash)
 		ce.state.lc.blkHash = hash
+		ce.state.lc.blk = blk
 
-		ce.stateInfo.height = state.Height
+		ce.stateInfo.height = height
 		ce.stateInfo.status = Committed
 		ce.stateInfo.blkProp = nil
 	}
@@ -488,15 +515,9 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 	ce.state.mtx.RLock()
 	defer ce.state.mtx.RUnlock()
 
-	if ce.role.Load() == types.RoleLeader {
-		// // reannounce the blkProp message if the node is still waiting for the votes
-		// if ce.state.blkProp != nil {
-		// 	go ce.proposalBroadcaster(ctx, ce.state.blkProp.blk)
-		// }
-		if ce.state.lc.height > 0 {
-			// Announce block commit message for the last committed block
-			go ce.blkAnnouncer(ctx, ce.state.lc.blk, ce.state.lc.appHash) // TODO: can be made infrequent
-		}
+	if ce.role.Load() == types.RoleLeader && ce.state.lc.height > 0 {
+		// Announce block commit message for the last committed block
+		go ce.blkAnnouncer(ctx, ce.state.lc.blk, ce.state.lc.appHash) // TODO: can be made infrequent
 		return
 	}
 
@@ -519,16 +540,16 @@ func (ce *ConsensusEngine) rebroadcastBlkProposal(ctx context.Context) {
 	}
 }
 
-func (ce *ConsensusEngine) doCatchup(ctx context.Context) {
+func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
 	if ce.role.Load() == types.RoleLeader {
-		return
+		return nil
 	}
 
 	if ce.state.lc.height >= ce.networkHeight.Load() {
-		return
+		return nil
 	}
 
 	startHeight := ce.state.lc.height + 1
@@ -540,29 +561,28 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) {
 		if ce.state.blkProp != nil && ce.state.blockRes != nil { // Waiting for the commit message
 			blkHash, appHash, rawBlk, err := ce.blkRequester(ctx, ce.state.blkProp.height)
 			if err != nil {
-				ce.log.Error("Error requesting block from network", "height", ce.state.blkProp.height, "error", err)
-				return
+				ce.log.Warn("Error requesting block from network", "height", ce.state.blkProp.height, "error", err)
+				return nil // not an error, just retry later
 			}
 
-			if blkHash != ce.state.blkProp.blkHash {
-				// processed incorrect block
-				ce.resetState()
+			if blkHash != ce.state.blkProp.blkHash { // processed incorrect block
+				if err := ce.resetState(ctx); err != nil {
+					return fmt.Errorf("error aborting incorrect block execution: height: %d, blkID: %x, error: %w", ce.state.blkProp.height, blkHash, err)
+				}
+
 				blk, err := types.DecodeBlock(rawBlk)
 				if err != nil {
-					ce.log.Error("Failed to decode the block", "error", err)
-					return
+					return fmt.Errorf("failed to decode the block, blkHeight: %d, blkID: %x, error: %w", ce.state.blkProp.height, blkHash, err)
 				}
 
 				if err := ce.processAndCommit(blk, appHash); err != nil {
-					ce.log.Error("Failed to process and commit the block", "error", err)
-					return
+					return fmt.Errorf("failed to replay the block: blkHeight: %d, blkID: %x, error: %w", ce.state.blkProp.height, blkHash, err)
 				}
 			} else {
 				if appHash == ce.state.blockRes.appHash {
 					// commit the block
 					if err := ce.commit(); err != nil {
-						ce.log.Error("Failed to commit the block", "height", ce.state.blkProp.height, "error", err)
-						return
+						return fmt.Errorf("failed to commit the block: height: %d, error: %w", ce.state.blkProp.height, err)
 					}
 
 					ce.nextState()
@@ -575,9 +595,14 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) {
 		}
 	}
 
-	ce.replayBlockFromNetwork(ctx)
+	err := ce.replayBlockFromNetwork(ctx)
+	if err != nil {
+		return err
+	}
 
 	ce.log.Info("Network Sync: ", "from", startHeight, "to (excluding)", ce.state.lc.height+1, "time", time.Since(t0), "appHash", ce.state.lc.appHash)
+
+	return nil
 }
 
 func (ce *ConsensusEngine) updateNetworkHeight(height int64) {
@@ -605,42 +630,9 @@ func (ce *ConsensusEngine) info() (int64, Status, *blockProposal) {
 	return ce.stateInfo.height, ce.stateInfo.status, ce.stateInfo.blkProp
 }
 
-// func (ce *ConsensusEngine) lock(caller string) {
-// 	ce.state.mtx.Lock()
-// 	ce.log.Info("Lock acquired", "caller", caller)
-// }
+func (ce *ConsensusEngine) blockResult() *blockResult {
+	ce.state.mtx.RLock()
+	defer ce.state.mtx.RUnlock()
 
-// func (ce *ConsensusEngine) unlock(caller string) {
-// 	ce.state.mtx.Unlock()
-// 	ce.log.Info("Lock released", "caller", caller)
-// }
-
-// func (ce *ConsensusEngine) rlock(caller string) {
-// 	ce.state.mtx.RLock()
-// 	ce.log.Info("RLock acquired", "caller", caller)
-// }
-
-// func (ce *ConsensusEngine) runlock(caller string) {
-// 	ce.state.mtx.RUnlock()
-// 	ce.log.Info("RLock released", "caller", caller)
-// }
-
-// func (ce *ConsensusEngine) stateLock(caller string) {
-// 	ce.stateInfo.mtx.Lock()
-// 	ce.log.Info("StateInfo Lock acquired", "caller", caller)
-// }
-
-// func (ce *ConsensusEngine) stateUnlock(caller string) {
-// 	ce.stateInfo.mtx.Unlock()
-// 	ce.log.Info("StateInfo Lock released", "caller", caller)
-// }
-
-// func (ce *ConsensusEngine) stateRLock(caller string) {
-// 	ce.stateInfo.mtx.RLock()
-// 	ce.log.Info("StateInfo RLock acquired", "caller", caller)
-// }
-
-// func (ce *ConsensusEngine) stateRUnlock(caller string) {
-// 	ce.stateInfo.mtx.RUnlock()
-// 	ce.log.Info("StateInfo RLock released", "caller", caller)
-// }
+	return ce.state.blockRes
+}

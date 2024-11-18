@@ -7,6 +7,7 @@ import (
 
 	"kwil/log"
 	"kwil/node/types"
+	ktypes "kwil/types"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -33,7 +34,7 @@ type GenesisConfig struct {
 	// Leader is the leader's public key.
 	Leader types.HexBytes `json:"leader"`
 	// Validators is the list of genesis validators (including the leader).
-	Validators []types.Validator `json:"validators"`
+	Validators []ktypes.Validator `json:"validators"`
 
 	// TODO: more params like max block size, etc.
 }
@@ -108,9 +109,8 @@ type Config struct {
 	P2P PeerConfig `koanf:"p2p" toml:"p2p"`
 
 	Consensus ConsensusConfig `koanf:"consensus" toml:"consensus"`
-
 	// RPC RPCConfig `koanf:"rpc" toml:"rpc"`
-	// DB DBConfig `koanf:"db" toml:"db"`
+	DB DBConfig `koanf:"db" toml:"db"`
 }
 
 // PeerConfig corresponds to the [peer] section of the config.

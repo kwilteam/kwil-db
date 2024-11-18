@@ -16,9 +16,10 @@ import (
 	"kwil/utils/order"
 	"math/big"
 	"slices"
+	"sync"
 )
 
-// TxApp is the transaction processer for the Kwil node.
+// TxApp is the transaction processor for the Kwil node.
 // It is responsible for interpreting payload bodies and routing them properly,
 // maintaining a mempool for uncommitted accounts, pricing transactions,
 // managing atomicity of the database, and managing the validator set.
@@ -31,13 +32,14 @@ type TxApp struct {
 	// forks forks.Forks
 
 	events Rebroadcaster
-	signer *auth.Ed25519Signer
+	signer auth.Signer
 
 	mempool *mempool
 
 	// channels to notify the subscriber about validator updates
 	// TODO: ListenerMgr is the only subscriber for now. Potentially ConsensusEngine could be another subscriber? or not as it can decide to update the validators based on the updates.
 	valChans []chan []*types.Validator
+	valMtx   sync.RWMutex
 
 	// list of resolution types
 	resTypes []string // How do these get updated runtime?
@@ -47,7 +49,7 @@ type TxApp struct {
 }
 
 // NewTxApp creates a new router.
-func NewTxApp(ctx context.Context, db sql.Executor, engine types.Engine, signer *auth.Ed25519Signer,
+func NewTxApp(ctx context.Context, db sql.Executor, engine types.Engine, signer auth.Signer,
 	events Rebroadcaster, service *types.Service, accounts Accounts, validators Validators) (*TxApp, error) {
 	resTypes := resolutions.ListResolutions()
 	slices.Sort(resTypes)
@@ -59,8 +61,9 @@ func NewTxApp(ctx context.Context, db sql.Executor, engine types.Engine, signer 
 
 		events: events,
 		mempool: &mempool{
-			accounts:     make(map[string]*types.Account),
-			nodeAddr:     signer.Identity(),
+			accounts: make(map[string]*types.Account),
+			// TODO: what is this nodeAddr used for?
+			// nodeAddr:     signer.Identity(),
 			accountMgr:   accounts,
 			validatorMgr: validators,
 		},
@@ -80,14 +83,11 @@ func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.
 	initialHeight int64, chain *types.ChainContext) error {
 
 	// Add Genesis Validators
-	var voters []*types.Validator
-
 	for _, validator := range validators {
 		err := r.Validators.SetValidatorPower(ctx, db, validator.PubKey, validator.Power)
 		if err != nil {
 			return err
 		}
-		voters = append(voters, validator)
 	}
 
 	// Fund Genesis Accounts
@@ -150,18 +150,11 @@ func (r *TxApp) Finalize(ctx context.Context, db sql.DB, block *types.BlockConte
 		return nil, err
 	}
 
-	finalValidators, err = r.Validators.GetValidators()
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO: forks and endblock hooks
-
-	return finalValidators, nil
+	return r.Validators.GetValidators(), nil
 }
 
 // Commit signals that a block's state changes should be committed.
-func (r *TxApp) Commit(ctx context.Context) {
+func (r *TxApp) Commit() error {
 	r.Accounts.Commit()
 	r.Validators.Commit()
 
@@ -169,6 +162,8 @@ func (r *TxApp) Commit(ctx context.Context) {
 	r.mempool.reset()
 
 	r.spends = nil // reset spends for the next block
+
+	return nil
 }
 
 // processVotes confirms resolutions that have been approved by the network,
@@ -558,6 +553,9 @@ func (r *TxApp) UpdateValidator(ctx context.Context, db sql.DB, validator []byte
 func (r *TxApp) SubscribeValidators() <-chan []*types.Validator {
 	// There's only supposed to be one user of this method, and they should
 	// only get one channel and listen, but play it safe and use a slice.
+	r.valMtx.Lock()
+	defer r.valMtx.Unlock()
+
 	c := make(chan []*types.Validator, 1)
 	r.valChans = append(r.valChans, c)
 	return c
@@ -568,16 +566,14 @@ func (r *TxApp) SubscribeValidators() <-chan []*types.Validator {
 func (r *TxApp) announceValidators() {
 	// dev note: this method should not be blocked by receivers. Keep a default
 	// case and create buffered channels.
+	r.valMtx.RLock()
+	defer r.valMtx.RUnlock()
 
 	if len(r.valChans) == 0 {
 		return // no subscribers, skip the slice clone
 	}
 
-	vals, err := r.Validators.GetValidators()
-	if err != nil {
-		r.service.Logger.Error("error getting validators", "error", err)
-		return
-	}
+	vals := r.Validators.GetValidators()
 
 	for _, c := range r.valChans {
 		select {
@@ -599,10 +595,7 @@ func validatorSetPower(validators []*types.Validator) int64 {
 // validatorsPower returns the total power of the current validator set
 // according to the DB.
 func (r *TxApp) validatorSetPower() (int64, error) {
-	validators, err := r.Validators.GetValidators()
-	if err != nil {
-		return 0, err
-	}
+	validators := r.Validators.GetValidators()
 	return validatorSetPower(validators), nil
 }
 
