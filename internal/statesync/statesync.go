@@ -75,10 +75,10 @@ func NewStateSyncer(ctx context.Context, cfg *DBConfig, snapshotDir string, prov
 	}
 
 	// Ensure that the snapshot directory exists and is empty
-	if err := os.RemoveAll(snapshotDir); err != nil {
-		logger.Error("Failed to delete snapshot directory", log.String("dir", snapshotDir), log.Error(err))
-		return nil
-	}
+	// if err := os.RemoveAll(snapshotDir); err != nil {
+	// 	logger.Error("Failed to delete snapshot directory", log.String("dir", snapshotDir), log.Error(err))
+	// 	return nil
+	// }
 	if err := os.MkdirAll(snapshotDir, 0755); err != nil {
 		logger.Error("Failed to create snapshot directory", log.String("dir", snapshotDir), log.Error(err))
 		return nil
