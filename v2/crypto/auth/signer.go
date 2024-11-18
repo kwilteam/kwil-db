@@ -3,6 +3,7 @@ package auth
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"kwil/crypto"
@@ -40,35 +41,69 @@ func (s Signature) MarshalBinary() ([]byte, error) {
 }
 
 func (s *Signature) UnmarshalBinary(data []byte) error {
-	buf := bytes.NewBuffer(data)
-	if len(data) != 0 && len(data) < 8 {
-		return nil
+	r := bytes.NewReader(data)
+	n, err := s.ReadFrom(r)
+	if err != nil {
+		return err
 	}
+	if len(data) != int(n) {
+		return errors.New("extra signature data")
+	}
+	if r.Len() != 0 {
+		return errors.New("extra signature data (reader)")
+	}
+	return nil
+}
 
+func (s *Signature) ReadFrom(r io.Reader) (int64, error) {
+	rl, _ := r.(interface{ Len() int })
+	var n int64
 	var sigLen uint32
-	if err := binary.Read(buf, binary.LittleEndian, &sigLen); err != nil {
-		return fmt.Errorf("failed to read signature length: %w", err)
+	if err := binary.Read(r, binary.LittleEndian, &sigLen); err != nil {
+		return 0, fmt.Errorf("failed to read signature length: %w", err)
 	}
+	n += 4
+
 	if sigLen > 0 {
-		s.Data = make([]byte, sigLen)
-		if _, err := io.ReadFull(buf, s.Data); err != nil {
-			return fmt.Errorf("failed to read signature data: %w", err)
+		if rl != nil {
+			if int(sigLen) > rl.Len() {
+				return 0, fmt.Errorf("impossibly long signature length: %d", sigLen)
+			}
+			s.Data = make([]byte, sigLen)
+			if _, err := io.ReadFull(r, s.Data); err != nil {
+				return 0, fmt.Errorf("failed to read signature data: %w", err)
+			}
+		} else {
+			sigBuf := &bytes.Buffer{}
+			_, err := io.CopyN(sigBuf, r, int64(sigLen))
+			if err != nil {
+				return 0, fmt.Errorf("failed to read signature data: %w", err)
+			}
+			s.Data = sigBuf.Bytes()
 		}
+
 	}
+	n += int64(sigLen)
 
 	var typeLen uint32
-	if err := binary.Read(buf, binary.LittleEndian, &typeLen); err != nil {
-		return fmt.Errorf("failed to read signature type length: %w", err)
+	if err := binary.Read(r, binary.LittleEndian, &typeLen); err != nil {
+		return 0, fmt.Errorf("failed to read signature type length: %w", err)
 	}
+	n += 4
+
 	if typeLen > 0 {
+		if rl != nil && int(typeLen) > rl.Len() {
+			return 0, fmt.Errorf("impossibly long sig type length: %d", typeLen)
+		}
 		typeBytes := make([]byte, typeLen)
-		if _, err := io.ReadFull(buf, typeBytes); err != nil {
-			return fmt.Errorf("failed to read signature type: %w", err)
+		if _, err := io.ReadFull(r, typeBytes); err != nil {
+			return 0, fmt.Errorf("failed to read signature type: %w", err)
 		}
 		s.Type = string(typeBytes)
 	}
+	n += int64(typeLen)
 
-	return nil
+	return n, nil
 }
 
 // Signer is an interface for something that can sign messages.
