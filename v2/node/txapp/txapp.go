@@ -6,7 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"kwil/crypto/auth"
+	"kwil/crypto"
 	"kwil/extensions/resolutions"
 	"kwil/log"
 	"kwil/node/accounts"
@@ -31,7 +31,7 @@ type TxApp struct {
 	// forks forks.Forks
 
 	events Rebroadcaster
-	signer *auth.Ed25519Signer
+	signer crypto.PrivateKey
 
 	mempool *mempool
 
@@ -47,7 +47,7 @@ type TxApp struct {
 }
 
 // NewTxApp creates a new router.
-func NewTxApp(ctx context.Context, db sql.Executor, engine types.Engine, signer *auth.Ed25519Signer,
+func NewTxApp(ctx context.Context, db sql.Executor, engine types.Engine, signer crypto.PrivateKey,
 	events Rebroadcaster, service *types.Service, accounts Accounts, validators Validators) (*TxApp, error) {
 	resTypes := resolutions.ListResolutions()
 	slices.Sort(resTypes)
@@ -59,8 +59,9 @@ func NewTxApp(ctx context.Context, db sql.Executor, engine types.Engine, signer 
 
 		events: events,
 		mempool: &mempool{
-			accounts:     make(map[string]*types.Account),
-			nodeAddr:     signer.Identity(),
+			accounts: make(map[string]*types.Account),
+			// TODO: what is this nodeAddr used for?
+			// nodeAddr:     signer.Identity(),
 			accountMgr:   accounts,
 			validatorMgr: validators,
 		},
@@ -150,18 +151,11 @@ func (r *TxApp) Finalize(ctx context.Context, db sql.DB, block *types.BlockConte
 		return nil, err
 	}
 
-	finalValidators, err = r.Validators.GetValidators()
-	if err != nil {
-		return nil, err
-	}
-
-	// TODO: forks and endblock hooks
-
-	return finalValidators, nil
+	return r.Validators.GetValidators(), nil
 }
 
 // Commit signals that a block's state changes should be committed.
-func (r *TxApp) Commit(ctx context.Context) {
+func (r *TxApp) Commit() error {
 	r.Accounts.Commit()
 	r.Validators.Commit()
 
@@ -169,6 +163,8 @@ func (r *TxApp) Commit(ctx context.Context) {
 	r.mempool.reset()
 
 	r.spends = nil // reset spends for the next block
+
+	return nil
 }
 
 // processVotes confirms resolutions that have been approved by the network,
@@ -573,11 +569,7 @@ func (r *TxApp) announceValidators() {
 		return // no subscribers, skip the slice clone
 	}
 
-	vals, err := r.Validators.GetValidators()
-	if err != nil {
-		r.service.Logger.Error("error getting validators", "error", err)
-		return
-	}
+	vals := r.Validators.GetValidators()
 
 	for _, c := range r.valChans {
 		select {
@@ -599,10 +591,7 @@ func validatorSetPower(validators []*types.Validator) int64 {
 // validatorsPower returns the total power of the current validator set
 // according to the DB.
 func (r *TxApp) validatorSetPower() (int64, error) {
-	validators, err := r.Validators.GetValidators()
-	if err != nil {
-		return 0, err
-	}
+	validators := r.Validators.GetValidators()
 	return validatorSetPower(validators), nil
 }
 

@@ -15,4 +15,5 @@ type Config struct {
 	Genesis   config.GenesisConfig
 	Consensus config.ConsensusConfig
 	P2P       config.PeerConfig
+	PG        config.PGConfig
 }

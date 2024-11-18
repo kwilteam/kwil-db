@@ -1,5 +1,6 @@
 package types
 
+// TODO: review these contexts and see if all the fields are necessary
 // ChainContext provides context for all chain operations.
 // Fields in ChainContext should never be mutated, except
 // NetworkParameters can be deterministically mutated as part

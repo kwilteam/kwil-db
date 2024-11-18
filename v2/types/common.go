@@ -114,7 +114,7 @@ type Accounts interface {
 	// from account does not have enough funds to transfer the amount,
 	// it will fail. If the to account does not exist, it will be
 	// created. The amount must be greater than 0.
-	Transfer(ctx context.Context, tx sql.Executor, from, to []byte, amt *big.Int) error
+	Transfer(ctx context.Context, tx sql.TxMaker, from, to []byte, amt *big.Int) error
 	// GetAccount retrieves the account with the given identifier. If the
 	// account does not exist, it will return an account with a balance
 	// of 0 and a nonce of 0.
@@ -132,7 +132,7 @@ type Validators interface {
 	// the validator does not exist, it will return 0.
 	GetValidatorPower(ctx context.Context, tx sql.Executor, validator []byte) (int64, error)
 	// GetValidators retrieves all validators.
-	GetValidators() ([]*Validator, error)
+	GetValidators() []*Validator
 	// SetValidatorPower sets the power of a validator. If the target
 	// validator does not exist, it will be created with the given power.
 	// If set to 0, the target validator will be deleted, and will no

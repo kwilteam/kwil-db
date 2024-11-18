@@ -3,7 +3,9 @@ package consensus
 import (
 	"context"
 
+	"kwil/node/txapp"
 	"kwil/node/types"
+	"kwil/node/types/sql"
 	ktypes "kwil/types"
 )
 
@@ -28,6 +30,21 @@ type BlockExecutor interface {
 	Precommit() (types.Hash, error)
 	Commit(func() error) error
 	Rollback() error
+}
+
+type Accounts interface {
+}
+
+type Validators interface {
+	GetValidators() []*ktypes.Validator
+	ValidatorUpdates() map[string]*ktypes.Validator
+}
+
+type TxApp interface {
+	Begin(ctx context.Context, height int64) error
+	Execute(ctx *ktypes.TxContext, db sql.DB, tx *ktypes.Transaction) *txapp.TxResponse
+	Finalize(ctx context.Context, db sql.DB, block *ktypes.BlockContext) (finalValidators []*ktypes.Validator, err error)
+	Commit() error
 }
 
 // Question:
