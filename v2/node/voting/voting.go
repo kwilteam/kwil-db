@@ -595,7 +595,7 @@ func (v *VoteStore) GetValidatorPower(ctx context.Context, db sql.Executor, iden
 	return val.Power, nil
 }
 
-func (v *VoteStore) GetValidators() ([]*types.Validator, error) {
+func (v *VoteStore) GetValidators() []*types.Validator {
 	v.mtx.Lock()
 	defer v.mtx.Unlock()
 
@@ -604,7 +604,7 @@ func (v *VoteStore) GetValidators() ([]*types.Validator, error) {
 		vals = append(vals, val)
 	}
 
-	return vals, nil
+	return vals
 }
 
 // getValidators gets all voters in the vote store, along with their power.
@@ -662,4 +662,11 @@ func (v *VoteStore) Commit() error {
 
 	v.valUpdates = make(map[string]*types.Validator)
 	return nil
+}
+
+func (v *VoteStore) ValidatorUpdates() map[string]*types.Validator {
+	v.mtx.Lock()
+	defer v.mtx.Unlock()
+
+	return v.valUpdates
 }

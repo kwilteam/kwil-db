@@ -22,6 +22,7 @@ import (
 	"kwil/node/consensus"
 	"kwil/node/store/memstore"
 	"kwil/node/types"
+	ktypes "kwil/types"
 
 	p2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -91,10 +92,10 @@ func newGenesis(t *testing.T, nodekeys [][]byte) ([]crypto.PrivateKey, *config.G
 
 	genCfg := config.GenesisConfig{
 		Leader:     privKeys[0].Public().Bytes(),
-		Validators: []types.Validator{},
+		Validators: []ktypes.Validator{},
 	}
 	for _, priv := range privKeys {
-		genCfg.Validators = append(genCfg.Validators, types.Validator{
+		genCfg.Validators = append(genCfg.Validators, ktypes.Validator{
 			PubKey: priv.Public().Bytes(),
 			Power:  1,
 		})

@@ -11,7 +11,7 @@ import (
 type Accounts interface {
 	Spend(ctx context.Context, tx sql.Executor, acctID []byte, amount *big.Int, nonce int64) error
 	Credit(ctx context.Context, tx sql.Executor, acctID []byte, amount *big.Int) error
-	Transfer(ctx context.Context, tx sql.Executor, from, to []byte, amount *big.Int) error
+	Transfer(ctx context.Context, tx sql.TxMaker, from, to []byte, amount *big.Int) error
 	GetAccount(ctx context.Context, tx sql.Executor, acctID []byte) (*types.Account, error)
 	ApplySpend(ctx context.Context, tx sql.Executor, acctID []byte, amount *big.Int, nonce int64) error
 	Commit() error
@@ -20,7 +20,7 @@ type Accounts interface {
 type Validators interface {
 	SetValidatorPower(ctx context.Context, tx sql.Executor, pubKey []byte, power int64) error
 	GetValidatorPower(ctx context.Context, tx sql.Executor, pubKey []byte) (int64, error)
-	GetValidators() ([]*types.Validator, error)
+	GetValidators() []*types.Validator
 	Commit() error
 }
 

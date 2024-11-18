@@ -29,9 +29,9 @@ func init() {
 }
 
 var (
-	signer1 = getSigner("7c67e60fce0c403ff40193a3128e5f3d8c2139aed36d76d7b5f1e70ec19c43f00aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842")
+	priv1, signer1 = getPrivKey("7c67e60fce0c403ff40193a3128e5f3d8c2139aed36d76d7b5f1e70ec19c43f00aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842")
 
-	signer2 = getSigner("2b8615d7ee7b7d3fc7d6b89d9b31c045ca5c4d220c82eab25420873c99010422fb35029f37e80148ae89588710eb7d692e96a070d48e579cad51a253e9d1c030")
+	priv2, signer2 = getPrivKey("2b8615d7ee7b7d3fc7d6b89d9b31c045ca5c4d220c82eab25420873c99010422fb35029f37e80148ae89588710eb7d692e96a070d48e579cad51a253e9d1c030")
 )
 
 type getVoterPowerFunc func() (int64, error)
@@ -46,7 +46,7 @@ func Test_Routes(t *testing.T) {
 		payload       types.Payload                       // required
 		fee           int64                               // optional, if nil, will automatically use 0
 		ctx           *types.TxContext                    // optional, if nil, will automatically create a mock
-		from          auth.Signer                         // optional, if nil, will automatically use default validatorSigner1
+		from          auth.Ed25519Signer                  // optional, if nil, will automatically use default validatorSigner1
 		getVoterPower getVoterPowerFunc
 		err           error // if not nil, expect this error
 	}
@@ -90,6 +90,7 @@ func Test_Routes(t *testing.T) {
 					types.NewUUIDV5([]byte("test")),
 				},
 			},
+			from: signer1,
 		},
 		{
 			// this test tests vote_id, as a non-local validator
@@ -142,7 +143,8 @@ func Test_Routes(t *testing.T) {
 					types.NewUUIDV5([]byte("test")),
 				},
 			},
-			err: ErrCallerNotValidator,
+			err:  ErrCallerNotValidator,
+			from: signer1,
 		},
 		{
 			// testing validator_vote_bodies, as the proposer
@@ -177,7 +179,7 @@ func Test_Routes(t *testing.T) {
 			},
 			ctx: &types.TxContext{
 				BlockContext: &types.BlockContext{
-					Proposer: signer1.Identity(),
+					// Proposer: signer1.Identity(),
 				},
 			},
 			from: signer1,
@@ -212,7 +214,7 @@ func Test_Routes(t *testing.T) {
 			},
 			ctx: &types.TxContext{
 				BlockContext: &types.BlockContext{
-					Proposer: signer1.Identity(),
+					// Proposer: signer1.Identity(),
 				},
 			},
 			from: signer2,
@@ -222,10 +224,6 @@ func Test_Routes(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.from == nil {
-				tc.from = signer1
-			}
-
 			// mock getAccount, which is func declared in interfaces.go
 			account := &mockAccount{}
 			Validators := &mockValidator{
@@ -241,7 +239,7 @@ func Test_Routes(t *testing.T) {
 				tx.Body.Fee = big.NewInt(tc.fee)
 			}
 
-			err = tx.Sign(tc.from)
+			err = tx.Sign(&tc.from)
 			require.NoError(t, err)
 
 			if tc.fn == nil {
@@ -253,14 +251,15 @@ func Test_Routes(t *testing.T) {
 				app := &TxApp{
 					Accounts:   account,
 					Validators: Validators,
+					signer:     &tc.from.Ed25519PrivateKey,
 				}
 				if app.signer == nil {
-					app.signer = signer1
+					app.signer = &signer1.Ed25519PrivateKey
 				}
 				if app.service == nil {
 					app.service = &types.Service{
 						Logger:   log.DiscardLogger,
-						Identity: app.signer.Identity(),
+						Identity: tc.from.Identity(),
 					}
 				}
 
@@ -314,7 +313,7 @@ func (a *mockAccount) Credit(_ context.Context, _ sql.Executor, acctID []byte, a
 	return nil
 }
 
-func (a *mockAccount) Transfer(_ context.Context, _ sql.Executor, from, to []byte, amount *big.Int) error {
+func (a *mockAccount) Transfer(_ context.Context, _ sql.TxMaker, from, to []byte, amount *big.Int) error {
 	return nil
 }
 
@@ -329,8 +328,8 @@ type mockValidator struct {
 	getVoterFn getVoterPowerFunc
 }
 
-func (v *mockValidator) GetValidators() ([]*types.Validator, error) {
-	return nil, nil
+func (v *mockValidator) GetValidators() []*types.Validator {
+	return nil
 }
 
 func (v *mockValidator) GetValidatorPower(_ context.Context, _ sql.Executor, pubKey []byte) (int64, error) {
@@ -345,7 +344,7 @@ func (v *mockValidator) Commit() error {
 	return nil
 }
 
-func getSigner(hexPrivKey string) *auth.Ed25519Signer {
+func getPrivKey(hexPrivKey string) (crypto.PrivateKey, auth.Ed25519Signer) {
 	bts, err := hex.DecodeString(hexPrivKey)
 	if err != nil {
 		panic(err)
@@ -355,7 +354,7 @@ func getSigner(hexPrivKey string) *auth.Ed25519Signer {
 		panic(err)
 	}
 
-	return &auth.Ed25519Signer{
+	return pk, auth.Ed25519Signer{
 		Ed25519PrivateKey: *pk,
 	}
 }
