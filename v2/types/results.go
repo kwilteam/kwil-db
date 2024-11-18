@@ -43,6 +43,7 @@ var (
 
 type TxResult struct {
 	Code   uint16
+	Gas    int64
 	Log    string
 	Events []Event
 }

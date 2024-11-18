@@ -58,7 +58,6 @@ type BlockHeader struct {
 
 	// Proposer []byte should be leader, so probably pointless here
 	ValidatorSetHash Hash // Hash of the validator set for the block
-	ValidatorUpdates []Validator
 
 	// ConsensusUpdates []ConsensusUpdate
 

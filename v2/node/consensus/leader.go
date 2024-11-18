@@ -92,6 +92,8 @@ func (ce *ConsensusEngine) createBlockProposal() (*blockProposal, error) {
 	_, txns := ce.mempool.ReapN(blockTxCount)
 	blk := types.NewBlock(ce.state.lc.height+1, ce.state.lc.blkHash, ce.state.lc.appHash, ce.ValidatorSetHash(), time.Now(), txns)
 
+	// ValSet + valUpdatesHash
+
 	// Sign the block
 	if err := blk.Sign(ce.signer); err != nil {
 		return nil, err

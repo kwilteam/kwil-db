@@ -11,7 +11,7 @@ import (
 	"kwil/config"
 	"kwil/crypto"
 	"kwil/node"
-	"kwil/node/types"
+	"kwil/types"
 
 	"github.com/spf13/cobra"
 )

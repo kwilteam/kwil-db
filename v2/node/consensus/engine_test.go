@@ -12,11 +12,11 @@ import (
 	"time"
 
 	"kwil/crypto"
+	"kwil/log"
 	"kwil/node/mempool"
 	"kwil/node/store"
 	"kwil/node/types"
-
-	"kwil/log"
+	ktypes "kwil/types"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -40,9 +40,9 @@ func generateTestCEConfig(t *testing.T, nodes int) []*Config {
 		pubKeys[i] = pubKey
 	}
 
-	validatorSet := make(map[string]types.Validator)
+	validatorSet := make(map[string]ktypes.Validator)
 	for _, pubKey := range pubKeys {
-		validatorSet[hex.EncodeToString(pubKey.Bytes())] = types.Validator{
+		validatorSet[hex.EncodeToString(pubKey.Bytes())] = ktypes.Validator{
 			PubKey: types.HexBytes(pubKey.Bytes()),
 			Power:  1,
 		}

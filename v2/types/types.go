@@ -40,8 +40,8 @@ type JoinRequest struct {
 }
 
 type Validator struct {
-	PubKey []byte `json:"pubkey"`
-	Power  int64  `json:"power"`
+	PubKey HexBytes `json:"pubkey"`
+	Power  int64    `json:"power"`
 }
 
 // ValidatorRemoveProposal is a proposal from an existing validator (remover) to
@@ -52,7 +52,7 @@ type ValidatorRemoveProposal struct {
 }
 
 func (v *Validator) String() string {
-	return fmt.Sprintf("{pubkey = %x, power = %d}", v.PubKey, v.Power)
+	return fmt.Sprintf("Validator{pubkey = %x, power = %d}", v.PubKey, v.Power)
 }
 
 // DatasetIdentifier contains the information required to identify a dataset.
