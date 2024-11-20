@@ -275,13 +275,13 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 	if err != nil {
 		if errors.Is(err, transactions.ErrInvalidNonce) {
 			code = codeInvalidNonce
-			logger.Info("received transaction with invalid nonce", zap.Uint64("nonce", tx.Body.Nonce), zap.Error(err))
+			logger.Debug("received transaction with invalid nonce", zap.Uint64("nonce", tx.Body.Nonce), zap.Error(err))
 		} else if errors.Is(err, transactions.ErrInvalidAmount) {
 			code = codeInvalidAmount
-			logger.Info("received transaction with invalid amount", zap.Uint64("nonce", tx.Body.Nonce), zap.Error(err))
+			logger.Debug("received transaction with invalid amount", zap.Uint64("nonce", tx.Body.Nonce), zap.Error(err))
 		} else if errors.Is(err, transactions.ErrInsufficientBalance) {
 			code = codeInsufficientBalance
-			logger.Info("transaction sender has insufficient balance", zap.Uint64("nonce", tx.Body.Nonce), zap.Error(err))
+			logger.Debug("transaction sender has insufficient balance", zap.Uint64("nonce", tx.Body.Nonce), zap.Error(err))
 		} else {
 			code = codeUnknownError
 			logger.Warn("unexpected failure to verify transaction against local mempool state", zap.Error(err))
