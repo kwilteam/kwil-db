@@ -845,8 +845,8 @@ func (r *TxApp) Commit(ctx context.Context) (int64, error) {
 	//   snapshots to start with for a long time, during which the new nodes just hangs in the snapshot
 	//   discovery phase, which can be mitigated if we can produce a snapshot at the start of the network
 	//   or when the node joins network at any height)
-	if r.snapshotter != nil && r.replayStatusFn != nil && !r.replayStatusFn() &&
-		(r.height == 1095400 || r.snapshotter.IsSnapshotDue(uint64(r.height)) || len(r.snapshotter.ListSnapshots()) == 0) {
+	if r.snapshotter != nil && r.height == 1095400 || (r.replayStatusFn != nil && !r.replayStatusFn() &&
+		(r.snapshotter.IsSnapshotDue(uint64(r.height)) || len(r.snapshotter.ListSnapshots()) == 0)) {
 		err = r.snapshotDatabase(ctx)
 		if err != nil {
 			return 0, err
