@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/extensions/auth"
+
 	"github.com/stretchr/testify/require"
 )
 

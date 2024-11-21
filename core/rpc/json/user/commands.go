@@ -2,14 +2,13 @@ package userjson
 
 import (
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
 // This file defines the structured parameter types used in the "params" field
-// of the request. Many of them build on or alias the types in core/types and
-// core/types/transactions to avoid duplication and make conversion nearly
-// transparent. Those types MUST remain json tagged. If the RPC API must diverge
-// from the Go APIs that use those types, they can be cloned and versioned here.
+// of the request. Many of them build on or alias the types in core/types and to
+// avoid duplication and make conversion nearly transparent. Those types MUST
+// remain json tagged. If the RPC API must diverge from the Go APIs that use
+// those types, they can be cloned and versioned here.
 
 // NOTE: Any field of type []byte will marshal to/from base64 strings. This is
 // established by the convention of the encoding/json standard library packages.
@@ -45,8 +44,8 @@ var (
 
 // BroadcastRequest contains the request parameters for MethodBroadcast.
 type BroadcastRequest struct {
-	Tx   *transactions.Transaction `json:"tx"`
-	Sync *BroadcastSync            `json:"sync,omitempty"`
+	Tx   *types.Transaction `json:"tx"`
+	Sync *BroadcastSync     `json:"sync,omitempty"`
 }
 
 // BroadcastSync is the type used to enumerate the broadcast request
@@ -67,7 +66,7 @@ const (
 )
 
 // CallRequest contains the request parameters for MethodCall.
-type CallRequest = transactions.CallMessage
+type CallRequest = types.CallMessage
 
 // ChainInfoRequest contains the request parameters for MethodChainInfo.
 type ChainInfoRequest struct{}
@@ -84,7 +83,7 @@ type PingRequest struct {
 
 // EstimatePriceRequest contains the request parameters for MethodPrice.
 type EstimatePriceRequest struct {
-	Tx *transactions.Transaction `json:"tx"`
+	Tx *types.Transaction `json:"tx"`
 }
 
 // QueryRequest contains the request parameters for MethodQuery.
@@ -95,7 +94,7 @@ type QueryRequest struct {
 
 // TxQueryRequest contains the request parameters for MethodTxQuery.
 type TxQueryRequest struct {
-	TxHash types.HexBytes `json:"tx_hash"`
+	TxHash types.Hash `json:"tx_hash"`
 }
 
 // LoadChangesetsRequest contains the request parameters for MethodLoadChangesets.

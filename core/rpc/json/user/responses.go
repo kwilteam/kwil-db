@@ -2,7 +2,6 @@ package userjson
 
 import (
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
 // This file defines the response types. There is one for each request type.
@@ -26,7 +25,7 @@ type AccountResponse struct {
 
 // BroadcastResponse contains the response object for MethodBroadcast.
 type BroadcastResponse struct {
-	TxHash types.HexBytes `json:"tx_hash,omitempty"`
+	TxHash types.Hash `json:"tx_hash,omitempty"`
 }
 
 type Result struct { // for other types, but embedding it is kinda annoying when instantiating
@@ -74,11 +73,11 @@ type EstimatePriceResponse struct {
 }
 
 // TxQueryResponse contains the response object for MethodTxQuery.
-type TxQueryResponse struct { // transactions.TcTxQueryResponse but pointers
-	Hash     types.HexBytes                  `json:"hash,omitempty"`
-	Height   int64                           `json:"height,omitempty"`
-	Tx       *transactions.Transaction       `json:"tx,omitempty"`
-	TxResult *transactions.TransactionResult `json:"tx_result,omitempty"`
+type TxQueryResponse struct { // types.TcTxQueryResponse but pointers
+	Hash     types.Hash               `json:"hash,omitempty"`
+	Height   int64                    `json:"height,omitempty"`
+	Tx       *types.Transaction       `json:"tx,omitempty"`
+	TxResult *types.TransactionResult `json:"tx_result,omitempty"`
 }
 
 type ChangesetsResponse struct {
