@@ -7,7 +7,6 @@ import (
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/common/functions"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 )
@@ -92,6 +91,6 @@ var resolutionConfig = resolutions.ResolutionConfig{
 		}
 
 		// Credit the account with the given amount
-		return functions.Accounts.Credit(ctx, app.DB, credit.Account, credit.Amount)
+		return app.Accounts.Credit(ctx, app.DB, credit.Account, credit.Amount)
 	},
 }

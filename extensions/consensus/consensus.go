@@ -30,15 +30,14 @@ package consensus
 import (
 	"context"
 	"fmt"
-	"slices"
 
 	"github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/common/chain"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
-	authExt "github.com/kwilteam/kwil-db/extensions/auth"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
+
+	authExt "github.com/kwilteam/kwil-db/extensions/auth"
 )
 
 // Need fork order defined for unambiguous application of many at same height,
@@ -59,7 +58,7 @@ func RegisterHardfork(hf *Hardfork) {
 	Hardforks[hf.Name] = hf
 
 	for _, newPayload := range hf.TxPayloads {
-		transactions.RegisterPayload(newPayload.Type)
+		types.RegisterPayload(newPayload.Type)
 		// NOTE: newPayload.Route stays in the []Hardfork.TxPayloads until
 		// activation, when TxApp/ABCI enable the tx route.
 	}
@@ -139,12 +138,6 @@ type Hardfork struct {
 // ParamUpdates is much like common/chain.BaseConsensusParams, but uses
 // pointer fields since updates are typically sparse.
 type ParamUpdates struct {
-	Block     *chain.BlockParams     `json:"block,omitempty"`
-	Evidence  *chain.EvidenceParams  `json:"evidence,omitempty"`
-	Version   *VersionParams         `json:"version,omitempty"`
-	Validator *chain.ValidatorParams `json:"validator,omitempty"`
-	Votes     *chain.VoteParams      `json:"votes,omitempty"`
-	ABCI      *chain.ABCIParams      `json:"abci,omitempty"`
 }
 
 // VersionParams contains an update to the application protocol version to give
@@ -185,85 +178,5 @@ type AuthMod struct {
 // fields of each input may be nil. Each value is only updated if it is not the
 // zero value. Any exceptions should be noted.
 func MergeConsensusUpdates(params, update *ParamUpdates) {
-	if update == nil {
-		return
-	}
 
-	if update.Block != nil {
-		if update.Block.MaxBytes > 0 { //allow setting just MaxGas
-			if params.Block == nil {
-				params.Block = new(chain.BlockParams)
-			}
-			params.Block.MaxBytes = update.Block.MaxBytes
-			params.Block.AbciBlockSizeHandling = update.Block.AbciBlockSizeHandling // must specify
-		}
-		if update.Block.MaxGas != 0 {
-			if params.Block == nil {
-				params.Block = new(chain.BlockParams)
-			}
-			params.Block.MaxGas = update.Block.MaxGas
-		}
-	}
-	if update.Evidence != nil {
-		if update.Evidence.MaxAgeNumBlocks > 0 {
-			if params.Evidence == nil {
-				params.Evidence = new(chain.EvidenceParams)
-			}
-			params.Evidence.MaxAgeNumBlocks = update.Evidence.MaxAgeNumBlocks
-		}
-		if update.Evidence.MaxAgeDuration > 0 {
-			if params.Evidence == nil {
-				params.Evidence = new(chain.EvidenceParams)
-			}
-			params.Evidence.MaxAgeDuration = update.Evidence.MaxAgeDuration
-		}
-		if update.Evidence.MaxBytes > 0 {
-			if params.Evidence == nil {
-				params.Evidence = new(chain.EvidenceParams)
-			}
-			params.Evidence.MaxBytes = update.Evidence.MaxBytes
-		}
-	}
-	if update.Validator != nil {
-		if len(update.Validator.PubKeyTypes) > 0 {
-			if params.Validator == nil {
-				params.Validator = new(chain.ValidatorParams)
-			}
-			params.Validator.PubKeyTypes = slices.Clone(update.Validator.PubKeyTypes)
-		}
-		if update.Validator.JoinExpiry != 0 { // a kwil param
-			if params.Validator == nil {
-				params.Validator = new(chain.ValidatorParams)
-			}
-			params.Validator.JoinExpiry = update.Validator.JoinExpiry
-		}
-	}
-	if update.Votes != nil { // entirely kwil params
-		if params.Votes == nil {
-			params.Votes = new(chain.VoteParams)
-		}
-		if ve := update.Votes.VoteExpiry; ve != 0 {
-			params.Votes.VoteExpiry = ve
-		}
-		if mv := update.Votes.MaxVotesPerTx; mv != 0 {
-			params.Votes.MaxVotesPerTx = mv
-		}
-	}
-	if update.Version != nil {
-		if update.Version.App > 0 {
-			if params.Version == nil {
-				params.Version = new(VersionParams)
-			}
-			params.Version.App = update.Version.App
-		}
-	}
-	if update.ABCI != nil {
-		if params.ABCI == nil {
-			params.ABCI = new(chain.ABCIParams)
-		}
-		// NOTE: this will allow changing it from non-zero to zero. However,
-		// vote extensions may not be disabled once enabled, so this should only
-		// be done to "cancel" a planned upgrade that would enable them at a future height.
-		params.ABCI.VoteExtensionsEnableHeight = update.ABCI.VoteExtensionsEnableHeight
-	}
 }

@@ -42,26 +42,26 @@ var _ admin.AdminClient = (*Client)(nil) // with extra methods
 // Approve approves a validator join request for the validator identified by a
 // public key. The transaction hash for the broadcasted approval transaction is
 // returned.
-func (cl *Client) Approve(ctx context.Context, publicKey []byte) ([]byte, error) {
+func (cl *Client) Approve(ctx context.Context, publicKey []byte) (types.Hash, error) {
 	cmd := &adminjson.ApproveRequest{
 		PubKey: publicKey,
 	}
 	res := &userjson.BroadcastResponse{}
 	err := cl.CallMethod(ctx, string(adminjson.MethodValApprove), cmd, res)
 	if err != nil {
-		return nil, err
+		return types.Hash{}, err
 	}
 	return res.TxHash, err
 }
 
 // Join makes a validator join request for the node being administered. The
 // transaction hash for the broadcasted join transaction is returned.
-func (cl *Client) Join(ctx context.Context) ([]byte, error) {
+func (cl *Client) Join(ctx context.Context) (types.Hash, error) {
 	cmd := &adminjson.JoinRequest{}
 	res := &userjson.BroadcastResponse{}
 	err := cl.CallMethod(ctx, string(adminjson.MethodValJoin), cmd, res)
 	if err != nil {
-		return nil, err
+		return types.Hash{}, err
 	}
 	return res.TxHash, err
 }
@@ -82,12 +82,12 @@ func (cl *Client) JoinStatus(ctx context.Context, pubkey []byte) (*types.JoinReq
 
 // Leave makes a validator leave request for the node being administered. The
 // transaction hash for the broadcasted leave transaction is returned.
-func (cl *Client) Leave(ctx context.Context) ([]byte, error) {
+func (cl *Client) Leave(ctx context.Context) (types.Hash, error) {
 	cmd := &adminjson.LeaveRequest{}
 	res := &userjson.BroadcastResponse{}
 	err := cl.CallMethod(ctx, string(adminjson.MethodValLeave), cmd, res)
 	if err != nil {
-		return nil, err
+		return types.Hash{}, err
 	}
 	return res.TxHash, err
 }
@@ -115,14 +115,14 @@ func (cl *Client) Peers(ctx context.Context) ([]*adminTypes.PeerInfo, error) {
 }
 
 // Remove votes to remove the validator specified by the given public key.
-func (cl *Client) Remove(ctx context.Context, publicKey []byte) ([]byte, error) {
+func (cl *Client) Remove(ctx context.Context, publicKey []byte) (types.Hash, error) {
 	cmd := &adminjson.RemoveRequest{
 		PubKey: publicKey,
 	}
 	res := &userjson.BroadcastResponse{}
 	err := cl.CallMethod(ctx, string(adminjson.MethodValRemove), cmd, res)
 	if err != nil {
-		return nil, err
+		return types.Hash{}, err
 	}
 	return res.TxHash, err
 }
@@ -230,7 +230,7 @@ func (cl *Client) ListPeers(ctx context.Context) ([]string, error) {
 }
 
 // Create Resolution broadcasts a resolution to the network.
-func (cl *Client) CreateResolution(ctx context.Context, resolution []byte, resolutionType string) ([]byte, error) {
+func (cl *Client) CreateResolution(ctx context.Context, resolution []byte, resolutionType string) (types.Hash, error) {
 	cmd := &adminjson.CreateResolutionRequest{
 		Resolution:     resolution,
 		ResolutionType: resolutionType,
@@ -238,26 +238,26 @@ func (cl *Client) CreateResolution(ctx context.Context, resolution []byte, resol
 	res := &userjson.BroadcastResponse{}
 	err := cl.CallMethod(ctx, string(adminjson.MethodCreateResolution), cmd, res)
 	if err != nil {
-		return nil, err
+		return types.Hash{}, err
 	}
 	return res.TxHash, nil
 }
 
 // ApproveResolution approves a resolution.
-func (cl *Client) ApproveResolution(ctx context.Context, resolutionID *types.UUID) ([]byte, error) {
+func (cl *Client) ApproveResolution(ctx context.Context, resolutionID *types.UUID) (types.Hash, error) {
 	cmd := &adminjson.ApproveResolutionRequest{
 		ResolutionID: resolutionID,
 	}
 	res := &userjson.BroadcastResponse{}
 	err := cl.CallMethod(ctx, string(adminjson.MethodApproveResolution), cmd, res)
 	if err != nil {
-		return nil, err
+		return types.Hash{}, err
 	}
 	return res.TxHash, nil
 }
 
 /* DeleteResolution deletes a resolution. This is disabled until the tx route is tested.
-func (cl *Client) DeleteResolution(ctx context.Context, resolutionID *types.UUID) ([]byte, error) {
+func (cl *Client) DeleteResolution(ctx context.Context, resolutionID *types.UUID) (types.Hash, error) {
 	cmd := &adminjson.DeleteResolutionRequest{
 		ResolutionID: resolutionID,
 	}
