@@ -209,6 +209,16 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	}
 	txApp.SetReplayStatusChecker(cometBftNode.IsCatchup)
 
+	// we need to get the last known block info
+	block, err := cometBftClient.Block(d.ctx, nil)
+	if err != nil {
+		failBuild(err, "unable to fetch latest height")
+	}
+	// if initial startup, block will be nil
+	if block.Block != nil {
+		lastBlock.Set(block.Block.Height, block.Block.Time.Unix())
+	}
+
 	eventBroadcaster := buildEventBroadcaster(d, ev, wrappedCmtClient, txApp)
 	abciApp.SetEventBroadcaster(eventBroadcaster.RunBroadcast)
 
