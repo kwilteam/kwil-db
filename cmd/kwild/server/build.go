@@ -15,6 +15,7 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/kwilteam/kwil-db/cmd/kwild/config"
@@ -182,6 +183,10 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	snapshotter := buildSnapshotter(d)
 	statesyncer := buildStatesyncer(d)
 
+	// lastBlock is a threadsafe store where abci can set the latest block info, which can be accessed
+	// by other services.
+	lastBlock := &latestBlock{}
+
 	// this is a hack
 	// we need the cometbft client to broadcast txs.
 	// in order to get this, we need the comet node
@@ -190,7 +195,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 	// but the tx router needs the cometbft client
 	txApp := buildTxApp(d, db, e, ev, snapshotter, closers)
 
-	abciApp := buildAbci(d, txApp, snapshotter, statesyncer)
+	abciApp := buildAbci(d, txApp, snapshotter, statesyncer, lastBlock)
 
 	// NOTE: buildCometNode immediately starts talking to the abciApp and
 	// replaying blocks (and using atomic db tx commits), i.e. calling
@@ -219,7 +224,7 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 			d.cfg.AppCfg.RPCMaxReqSize, d.cfg.ChainCfg.Mempool.MaxTxBytes)
 	}
 
-	jsonRPCTxSvc := usersvc.NewService(db, e, wrappedCmtClient, txApp,
+	jsonRPCTxSvc := usersvc.NewService(db, e, wrappedCmtClient, txApp, lastBlock,
 		*rpcSvcLogger, usersvc.WithReadTxTimeout(time.Duration(d.cfg.AppCfg.ReadTxTimeout)))
 	jsonRPCServer, err := rpcserver.NewServer(d.cfg.AppCfg.JSONRPCListenAddress,
 		*rpcServerLogger, rpcserver.WithTimeout(time.Duration(d.cfg.AppCfg.RPCTimeout)),
@@ -257,6 +262,40 @@ func buildServer(d *coreDependencies, closers *closeFuncs) *Server {
 		dbCtx:              db,
 	}
 }
+
+// latestBlock is a threadsafe store where abci can set the latest block info, which can be accessed
+// by other services.
+type latestBlock struct {
+	mu                   sync.RWMutex
+	height               int64
+	timestamp            int64
+	isSet                bool
+	uncommittedHeight    int64
+	uncommittedTimestamp int64
+}
+
+func (l *latestBlock) LastBlockTime() (height int64, timestamp int64, isSet bool) {
+	l.mu.RLock()
+	defer l.mu.RUnlock()
+	return l.height, l.timestamp, l.isSet
+}
+
+func (l *latestBlock) Set(height int64, timestamp int64) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.uncommittedHeight = height
+	l.uncommittedTimestamp = timestamp
+}
+
+func (l *latestBlock) Commit() {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.height = l.uncommittedHeight
+	l.timestamp = l.uncommittedTimestamp
+	l.isSet = true
+}
+
+var _ usersvc.LastBlockInfoer = (*latestBlock)(nil)
 
 // dbOpener opens a sessioned database connection.  Note that in this function the
 // dbName is not a Kwil dataset, but a database that can contain multiple
@@ -358,7 +397,7 @@ func buildTxApp(d *coreDependencies, db *pg.DB, engine *execution.GlobalContext,
 	return txApp
 }
 
-func buildAbci(d *coreDependencies, txApp abci.TxApp, snapshotter *statesync.SnapshotStore, statesyncer *statesync.StateSyncer) *abci.AbciApp {
+func buildAbci(d *coreDependencies, txApp abci.TxApp, snapshotter *statesync.SnapshotStore, statesyncer *statesync.StateSyncer, lb *latestBlock) *abci.AbciApp {
 	var sh abci.SnapshotModule
 	if snapshotter != nil {
 		sh = snapshotter
@@ -378,7 +417,7 @@ func buildAbci(d *coreDependencies, txApp abci.TxApp, snapshotter *statesync.Sna
 		ForkHeights:        d.genesisCfg.ForkHeights,
 	}
 	app, err := abci.NewAbciApp(d.ctx, cfg, sh, ss, txApp,
-		d.genesisCfg.ConsensusParams, *d.log.Named("abci"))
+		d.genesisCfg.ConsensusParams, lb, *d.log.Named("abci"))
 	if err != nil {
 		failBuild(err, "failed to build ABCI application")
 	}

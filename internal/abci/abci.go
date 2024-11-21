@@ -49,14 +49,20 @@ type AbciConfig struct {
 	ForkHeights        map[string]*uint64
 }
 
+type LastBlockStore interface {
+	Set(height int64, timestamp int64)
+	Commit()
+}
+
 func NewAbciApp(ctx context.Context, cfg *AbciConfig, snapshotter SnapshotModule, statesyncer StateSyncModule,
-	txRouter TxApp, consensusParams *chain.ConsensusParams, log log.Logger) (*AbciApp, error) {
+	txRouter TxApp, consensusParams *chain.ConsensusParams, lb LastBlockStore, log log.Logger) (*AbciApp, error) {
 	app := &AbciApp{
 		cfg:             *cfg,
 		statesyncer:     statesyncer,
 		snapshotter:     snapshotter,
 		txApp:           txRouter,
 		consensusParams: consensusParams,
+		lastBlockStore:  lb,
 
 		log: log,
 
@@ -168,6 +174,8 @@ type AbciApp struct {
 	// https://github.com/kwilteam/kwil-db/issues/714
 	txCache   map[string]bool
 	txCacheMu sync.RWMutex
+	// lastBlockStore is used to store the last block height and timestamp
+	lastBlockStore LastBlockStore
 }
 
 func (a *AbciApp) ChainID() string {
@@ -304,6 +312,7 @@ func (a *AbciApp) CheckTx(ctx context.Context, incoming *abciTypes.RequestCheckT
 // the next block."
 func (a *AbciApp) FinalizeBlock(ctx context.Context, req *abciTypes.RequestFinalizeBlock) (*abciTypes.ResponseFinalizeBlock, error) {
 	logger := a.log.With(zap.String("stage", "ABCI FinalizeBlock"), zap.Int64("height", req.Height))
+	a.lastBlockStore.Set(req.Height, req.Time.Unix())
 
 	err := a.txApp.Begin(ctx, req.Height)
 	if err != nil {
@@ -498,6 +507,7 @@ func (a *AbciApp) Commit(ctx context.Context, _ *abciTypes.RequestCommit) (*abci
 	a.height.Store(height)
 	// If a broadcast was accepted during execution of that block, it will be
 	// rechecked and possibly evicted immediately following our commit Response.
+	a.lastBlockStore.Commit()
 
 	return &abciTypes.ResponseCommit{}, nil // RetainHeight stays 0 to not prune any blocks
 }

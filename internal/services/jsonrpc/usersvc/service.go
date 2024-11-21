@@ -32,10 +32,11 @@ type Service struct {
 	log           log.Logger
 	readTxTimeout time.Duration
 
-	engine      EngineReader
-	db          sql.ReadTxMaker // this should only ever make a read-only tx
-	nodeApp     NodeApplication // so we don't have to do ABCIQuery (indirect)
-	chainClient BlockchainTransactor
+	engine         EngineReader
+	db             sql.ReadTxMaker // this should only ever make a read-only tx
+	nodeApp        NodeApplication // so we don't have to do ABCIQuery (indirect)
+	chainClient    BlockchainTransactor
+	lastBlockTimer LastBlockInfoer
 }
 
 type serviceCfg struct {
@@ -57,7 +58,7 @@ const defaultReadTxTimeout = 5 * time.Second
 
 // NewService creates a new instance of the user RPC service.
 func NewService(db sql.ReadTxMaker, engine EngineReader, chainClient BlockchainTransactor,
-	nodeApp NodeApplication, logger log.Logger, opts ...Opt) *Service {
+	nodeApp NodeApplication, blockInfoer LastBlockInfoer, logger log.Logger, opts ...Opt) *Service {
 	cfg := &serviceCfg{
 		readTxTimeout: defaultReadTxTimeout,
 	}
@@ -65,12 +66,13 @@ func NewService(db sql.ReadTxMaker, engine EngineReader, chainClient BlockchainT
 		opt(cfg)
 	}
 	return &Service{
-		log:           logger,
-		readTxTimeout: cfg.readTxTimeout,
-		engine:        engine,
-		nodeApp:       nodeApp,
-		chainClient:   chainClient,
-		db:            db,
+		log:            logger,
+		readTxTimeout:  cfg.readTxTimeout,
+		engine:         engine,
+		nodeApp:        nodeApp,
+		chainClient:    chainClient,
+		db:             db,
+		lastBlockTimer: blockInfoer,
 	}
 }
 
@@ -464,12 +466,17 @@ func resultMap(r *sql.ResultSet) []map[string]any {
 	return m
 }
 
+// LastBlockInfoer gets the information for the last block timestamp.
+// If no last blocks are known, it returns false.
+type LastBlockInfoer interface {
+	LastBlockTime() (height int64, timestamp int64, found bool)
+}
+
 func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userjson.CallResponse, *jsonrpc.Error) {
 	body, msg, err := convertActionCall(req)
 	if err != nil {
 		// NOTE: http api needs to be able to get the error message
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "failed to convert action call: "+err.Error(), nil)
-
 	}
 
 	args := make([]any, len(body.Arguments))
@@ -498,15 +505,22 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 	ctxExec, cancel := context.WithTimeout(ctx, svc.readTxTimeout)
 	defer cancel()
 
+	height, timestamp, ok := svc.lastBlockTimer.LastBlockTime()
+	if !ok {
+		height = -1
+		timestamp = -1
+	}
+
 	executeResult, err := svc.engine.Procedure(ctxExec, tx, &common.ExecutionData{
 		Dataset:   body.DBID,
 		Procedure: body.Action,
 		Args:      args,
 		TransactionData: common.TransactionData{
-			Signer:        signer,
-			Caller:        caller,
-			Height:        -1, // not available
-			Authenticator: msg.AuthType,
+			Signer:         signer,
+			Caller:         caller,
+			Height:         height,
+			BlockTimestamp: timestamp,
+			Authenticator:  msg.AuthType,
 		},
 	})
 	if err != nil {
