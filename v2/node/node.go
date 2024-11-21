@@ -1,6 +1,7 @@
 package node
 
 import (
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/binary"
@@ -20,10 +21,12 @@ import (
 	"time"
 
 	"kwil/crypto"
+	"kwil/crypto/auth"
 	"kwil/log"
 	"kwil/node/accounts"
 	"kwil/node/consensus"
 	"kwil/node/mempool"
+	"kwil/node/meta"
 	"kwil/node/peers"
 	"kwil/node/pg"
 	"kwil/node/store"
@@ -51,43 +54,13 @@ const (
 	dummyTxInterval = 1 * time.Second // broadcast freq
 )
 
-type ConsensusEngine interface {
-	AcceptProposal(height int64, blkID, prevBlkID types.Hash, leaderSig []byte, timestamp int64) bool
-	NotifyBlockProposal(blk *types.Block)
-
-	AcceptCommit(height int64, blkID types.Hash, appHash types.Hash, leaderSig []byte) bool
-	NotifyBlockCommit(blk *types.Block, appHash types.Hash)
-
-	NotifyACK(validatorPK []byte, ack types.AckRes)
-	NotifyResetState(height int64)
-
-	// Gonna remove this once we have the commit results such as app hash and the tx results stored in the block store.
-
-	Start(ctx context.Context, proposerBroadcaster consensus.ProposalBroadcaster,
-		blkAnnouncer consensus.BlkAnnouncer, ackBroadcaster consensus.AckBroadcaster,
-		blkRequester consensus.BlkRequester, stateResetter consensus.ResetStateBroadcaster)
-
-	// Note: Not sure if these are needed here, just for separate of concerns:
-	// p2p stream handlers role is to download the messages and pass it to the
-	// respective modules to process it and we probably should not be triggering any consensus
-	// affecting methods.
-
-	// ProcessProposal(blk *types.Block, cb func(ack bool, appHash types.Hash) error)
-	// ProcessACK(validatorPK []byte, ack types.AckRes)
-	// CommitBlock(blk *types.Block, appHash types.Hash) error
-}
-
-type PeerManager interface {
-	network.Notifiee
-	Start(context.Context) error
-	ConnectedPeers() []types.PeerInfo
-	KnownPeers() []types.PeerInfo
-}
-
 type Node struct {
-	bki types.BlockStore
-	mp  types.MemPool
-	ce  ConsensusEngine
+	bki   types.BlockStore
+	mp    types.MemPool
+	ce    ConsensusEngine
+	txapp TxApp
+	// accounts, votestore etc. if needed
+
 	log log.Logger
 
 	pm PeerManager // *peers.PeerMan
@@ -99,18 +72,13 @@ type Node struct {
 	host   host.Host
 	pex    bool
 	pubkey crypto.PublicKey
-	leader atomic.Bool
 	dir    string
 	wg     sync.WaitGroup
-	close  func() error
+	// close  func() error
+	closers *closeFuncs
 
-	// TODO: get both rol and valSet from CE, if really needed by Node
-	role   types.Role
+	role   atomic.Value
 	valSet map[string]ktypes.Validator
-}
-
-func addClose(close, top func() error) func() error {
-	return func() error { err := top(); return errors.Join(err, close()) }
 }
 
 // NewNode creates a new node. For now we are using functional options, but this
@@ -129,7 +97,13 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 			log.WithFormat(log.FormatUnstructured)) // dev
 	}
 
-	close := func() error { return nil }
+	closers := &closeFuncs{
+		closers: []func() error{},
+		logger:  logger,
+	}
+
+	// close := func() error { return nil }
+	ctx := context.Background()
 
 	host := options.host
 	if host == nil {
@@ -140,11 +114,13 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 		}
 	}
 
+	// Mempool
 	mp := options.mp
 	if options.mp == nil {
 		mp = mempool.New()
 	}
 
+	// Peer Manager
 	addrBookPath := filepath.Join(cfg.RootDir, "addrbook.json")
 	pm, err := peers.NewPeerMan(cfg.P2P.Pex, addrBookPath,
 		logger.New("PEERS"),
@@ -156,6 +132,7 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 		return nil, err
 	}
 
+	// BlockStore
 	bs := options.bs
 	if bs == nil {
 		blkStrDir := filepath.Join(cfg.RootDir, "blockstore")
@@ -164,12 +141,42 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 		if err != nil {
 			return nil, err
 		}
-		close = addClose(close, bs.Close) //close db after stopping p2p
+		closers.addCloser(bs.Close, "Closing BlockStore") //close db after stopping p2p
 	}
-	close = addClose(close, host.Close)
+	closers.addCloser(host.Close, "Closing P2P")
 
+	db := buildDB(ctx, cfg, closers)
+
+	// Metastore
+	err = meta.InitializeMetaStore(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+
+	// Account Store
+	accounts, err := accounts.InitializeAccountStore(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+
+	// VoteStore
+	_, voteStore, err := buildVoteStore(ctx, cfg, closers) // TODO: also expose the event store and pass it to the consensus engine or txapp. (whoever broadcasts the voteID transactions)
+	if err != nil {
+		return nil, err
+	}
+
+	// TxApp
 	privKey := cfg.PrivKey
 	pubkey := privKey.Public()
+	signer := auth.GetSigner(privKey)
+	service := &ktypes.Service{
+		Logger:   logger.New("TXAPP"),
+		Identity: signer.Identity(),
+		// TODO: pass extension configs
+		// ExtensionConfigs: make(map[string]map[string]string),
+	}
+
+	txApp, err := txapp.NewTxApp(ctx, db, nil, signer, nil, service, accounts, voteStore)
 
 	leader := cfg.Genesis.Validators[0].PubKey
 	valSet := make(map[string]ktypes.Validator)
@@ -186,31 +193,12 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 	if pubkey.Equals(leaderPubKey) {
 		role = types.RoleLeader
 	}
-	ctx := context.Background()
-
-	db := buildDB(ctx, cfg)
-
-	// Initialize the accounts store
-	accounts, err := accounts.InitializeAccountStore(ctx, db)
-	if err != nil {
-		return nil, err
-	}
-
-	// Initialize the VoteStore
-	_, voteStore, err := buildEventStore(ctx, cfg)
-	if err != nil {
-		return nil, err
-	}
-
-	service := &ktypes.Service{}
-	// txAPP
-	txApp, err := txapp.NewTxApp(ctx, db, nil, privKey, nil, service, accounts, voteStore)
 
 	ce := options.ce
 	if ce == nil {
 
 		ceCfg := &consensus.Config{
-			Signer:         privKey,
+			PrivateKey:     privKey,
 			Dir:            cfg.RootDir,
 			Leader:         leaderPubKey,
 			Mempool:        mp,
@@ -242,12 +230,12 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 		dir:      cfg.RootDir,
 		ackChan:  make(chan AckRes, 1),
 		resetMsg: make(chan ConsensusReset, 1),
-		close:    close,
-		role:     role,
+		closers:  closers,
 		valSet:   valSet,
+		txapp:    txApp,
 	}
 
-	node.leader.Store(role == types.RoleLeader)
+	node.role.Store(role)
 
 	host.SetStreamHandler(ProtocolIDTxAnn, node.txAnnStreamHandler)
 	host.SetStreamHandler(ProtocolIDBlkAnn, node.blkAnnStreamHandler)
@@ -269,12 +257,13 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 	return node, nil
 }
 
-func buildDB(ctx context.Context, cfg *Config) *pg.DB {
+func buildDB(ctx context.Context, cfg *Config, closers *closeFuncs) *pg.DB {
 	dbOpener := newDBOpener(cfg.PG.Host, cfg.PG.Port, cfg.PG.User, cfg.PG.Pass)
 	db, err := dbOpener(ctx, cfg.PG.DBName, cfg.PG.MaxConnections)
 	if err != nil {
 		panic(err)
 	}
+	closers.addCloser(db.Close, "Closing DB")
 	return db
 }
 
@@ -320,12 +309,13 @@ func newPoolDBOpener(host, port, user, pass string) poolOpener {
 	}
 }
 
-func buildEventStore(ctx context.Context, cfg *Config) (*voting.EventStore, *voting.VoteStore, error) {
+func buildVoteStore(ctx context.Context, cfg *Config, closers *closeFuncs) (*voting.EventStore, *voting.VoteStore, error) {
 	poolOpener := newPoolDBOpener(cfg.PG.Host, cfg.PG.Port, cfg.PG.User, cfg.PG.Pass)
 	poolDB, err := poolOpener(ctx, cfg.PG.DBName, cfg.PG.MaxConnections)
 	if err != nil {
 		return nil, nil, err
 	}
+	closers.addCloser(poolDB.Close, "Closing Eventstore DB")
 
 	return voting.NewResolutionStore(ctx, poolDB)
 }
@@ -465,11 +455,31 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 
 	n.log.Info("Node started.")
 
-	<-ctx.Done()
+	valChan := n.txapp.SubscribeValidators()
+
+loop:
+	for {
+		select {
+		case <-ctx.Done():
+			break loop
+		case validators := <-valChan:
+			if n.role.Load() != types.RoleLeader { // skip if we are already a leader
+				isVal := slices.ContainsFunc(validators, func(v *ktypes.Validator) bool {
+					return bytes.Equal(v.PubKey, n.pubkey.Bytes())
+				})
+
+				if isVal {
+					n.role.Store(types.RoleValidator)
+				} else {
+					n.role.Store(types.RoleSentry)
+				}
+			}
+		}
+	}
 
 	n.wg.Wait()
 
-	return n.close()
+	return n.closers.closeAll()
 }
 
 var neededProtocols = []protocol.ID{
@@ -600,4 +610,29 @@ func ExpandPath(path string) (string, error) {
 		path = filepath.Join(home, path[2:])
 	}
 	return filepath.Abs(path)
+}
+
+// closeFuncs holds a list of closers
+// it is used to close all resources on shutdown
+type closeFuncs struct {
+	closers []func() error
+	logger  log.Logger
+}
+
+func (c *closeFuncs) addCloser(f func() error, msg string) {
+	// push to top of stack
+	c.closers = slices.Insert(c.closers, 0, func() error {
+		c.logger.Info(msg)
+		return f()
+	})
+}
+
+// closeAll closes all closers
+func (c *closeFuncs) closeAll() error {
+	var err error
+	for _, closer := range c.closers {
+		err = errors.Join(closer())
+	}
+
+	return err
 }

@@ -63,17 +63,14 @@ func (ce *ConsensusEngine) executeBlock() (err error) {
 
 	ctx := context.Background() // TODO: Use block context with the chain params and stuff.
 
-	blkCtx, cancel := context.WithCancel(ctx)
-	ce.state.cancelFunc = cancel
-
 	blkProp := ce.state.blkProp
 
 	// Begin the block execution session
-	if err := ce.txapp.Begin(blkCtx, blkProp.height); err != nil {
+	if err := ce.txapp.Begin(ctx, blkProp.height); err != nil {
 		ce.log.Error("Failed to begin the block execution", "height", blkProp.height, "err", err)
 	}
 
-	ce.state.consensusTx, err = ce.db.BeginPreparedTx(blkCtx)
+	ce.state.consensusTx, err = ce.db.BeginPreparedTx(ctx)
 	if err != nil {
 		return fmt.Errorf("begin outer tx failed: %w", err)
 	}
@@ -98,7 +95,7 @@ func (ce *ConsensusEngine) executeBlock() (err error) {
 		}
 
 		txCtx := &ktypes.TxContext{
-			Ctx:           blkCtx,
+			Ctx:           ctx,
 			TxID:          hex.EncodeToString(txHash[:]),
 			Signer:        decodedTx.Sender,
 			Authenticator: decodedTx.Signature.Type,
@@ -134,16 +131,25 @@ func (ce *ConsensusEngine) executeBlock() (err error) {
 
 	// TODO: Notify the changesets to the migrator
 
-	// tODO: Do we need to update the chain meta store with the new height and the dirty flag? or is it done only in the commit?
-
-	_, err = ce.txapp.Finalize(ctx, ce.state.consensusTx, nil) // TODO: replace nil with the block context
+	blockCtx := &ktypes.BlockContext{ // TODO: fill in the network params once we have them
+		Height: ce.state.blkProp.height,
+		ChainContext: &ktypes.ChainContext{
+			NetworkParameters: &ktypes.NetworkParameters{
+				DisabledGasCosts: true,
+				JoinExpiry:       14400,
+				MaxBlockSize:     6 * 1024 * 1024,
+			},
+		},
+		Proposer: ce.leader.Bytes(),
+	}
+	_, err = ce.txapp.Finalize(ctx, ce.state.consensusTx, blockCtx)
 	if err != nil {
 		ce.log.Error("Failed to finalize txapp", "err", err)
 		// send a nack?
 		return err
 	}
 
-	if err := meta.SetChainState(ctx, ce.db, ce.state.lc.height+1, ce.state.lc.appHash[:], true); err != nil {
+	if err := meta.SetChainState(ctx, ce.state.consensusTx, ce.state.lc.height+1, ce.state.lc.appHash[:], true); err != nil {
 		ce.log.Error("Failed to set chain state", "err", err)
 		return err
 	}
@@ -156,7 +162,7 @@ func (ce *ConsensusEngine) executeBlock() (err error) {
 	// TODO: Subscribe to the changesets
 	go csp.BroadcastChangesets(ctx)
 
-	appHash, err := ce.state.consensusTx.Precommit(blkCtx, csp.csChan)
+	appHash, err := ce.state.consensusTx.Precommit(ctx, csp.csChan)
 	if err != nil {
 		ce.log.Error("Failed to precommit the changeset", "err", err)
 	}
@@ -174,21 +180,59 @@ func (ce *ConsensusEngine) executeBlock() (err error) {
 		}
 	}
 
-	// Calculate the new apphash by hashing the previous apphash and the changeset hash and the validators hash
-	appHash = append(ce.state.blkProp.blk.Header.PrevAppHash[:], appHash[:]...)
-	appHash = append(appHash, valUpdatesHash[:]...)
+	accountsHash := ce.accountsHash()
+	txResultsHash := txResultsHash(txResults)
+
+	nextHash := ce.nextAppHash(ce.state.lc.appHash, types.Hash(appHash), valUpdatesHash, accountsHash, txResultsHash)
 
 	ce.state.blockRes = &blockResult{
 		txResults: txResults,
-		appHash:   types.HashBytes(appHash),
+		appHash:   nextHash,
 		ack:       true, // for reannounce
 	}
 
-	ce.log.Info("Executed Block", "height", ce.state.blkProp.blk.Header.Height, "blkHash", ce.state.blkProp.blkHash, "appHash", ce.state.blockRes.appHash.String())
+	ce.log.Info("Executed Block", "height", ce.state.blkProp.blk.Header.Height, "blkHash", ce.state.blkProp.blkHash, "appHash", ce.state.blockRes.appHash)
 	return nil
 }
 
-func validatorUpdatesHash(updates map[string]*ktypes.Validator) []byte {
+// nextAppHash calculates the appHash that encapsulates the state changes occurred during the block execution.
+// sha256(prevAppHash || changesetHash || valUpdatesHash || accountsHash || txResultsHash)
+func (ce *ConsensusEngine) nextAppHash(prevAppHash, changesetHash, valUpdatesHash, accountsHash, txResultsHash types.Hash) types.Hash {
+	hasher := sha256.New()
+
+	hasher.Write(prevAppHash[:])
+	hasher.Write(changesetHash[:])
+	hasher.Write(valUpdatesHash[:])
+	hasher.Write(accountsHash[:])
+	hasher.Write(txResultsHash[:])
+
+	ce.log.Info("AppState updates: ", "prevAppHash", prevAppHash, "changesetsHash", changesetHash, "valUpdatesHash", valUpdatesHash, "accountsHash", accountsHash, "txResultsHash", txResultsHash)
+	return types.Hash(hasher.Sum(nil))
+}
+
+func txResultsHash(results []ktypes.TxResult) types.Hash {
+	hasher := sha256.New()
+	for _, res := range results {
+		binary.Write(hasher, binary.BigEndian, res.Code)
+		binary.Write(hasher, binary.BigEndian, res.Gas)
+	}
+
+	return types.Hash(hasher.Sum(nil))
+}
+
+func (ce *ConsensusEngine) accountsHash() types.Hash {
+	accounts := ce.accounts.Updates()
+	hasher := sha256.New()
+	for _, acc := range accounts {
+		hasher.Write(acc.Identifier)
+		binary.Write(hasher, binary.BigEndian, acc.Balance)
+		binary.Write(hasher, binary.BigEndian, acc.Nonce)
+	}
+
+	return types.Hash(hasher.Sum(nil))
+}
+
+func validatorUpdatesHash(updates map[string]*ktypes.Validator) types.Hash {
 	// sort the updates by the validator address
 	// hash the validator address and the validator struct
 
@@ -206,7 +250,7 @@ func validatorUpdatesHash(updates map[string]*ktypes.Validator) []byte {
 		binary.Write(hash, binary.BigEndian, updates[k].Power)
 	}
 
-	return hash.Sum(nil)
+	return types.Hash(hash.Sum(nil))
 }
 
 // Commit method commits the block to the blockstore and postgres database.
@@ -276,19 +320,10 @@ func (ce *ConsensusEngine) nextState() {
 		blk:     ce.state.blkProp.blk,
 	}
 
-	ce.resetState()
-}
-
-func (ce *ConsensusEngine) resetState() {
 	ce.state.blkProp = nil
 	ce.state.blockRes = nil
 	ce.state.votes = make(map[string]*vote)
-
-	// reset the ctx
-	ce.state.cancelFunc = nil
-
-	// TODO: this will be gone in future
-	ce.state.consensusTx.Rollback(context.Background()) // clear the changesets
+	ce.state.consensusTx = nil
 
 	// update the stateInfo
 	ce.stateInfo.mtx.Lock()
@@ -298,51 +333,28 @@ func (ce *ConsensusEngine) resetState() {
 	ce.stateInfo.mtx.Unlock()
 }
 
-// temporary placeholder as this will be in the PG chainstate in future (as was in previous kwil implementations)
-// type appState struct {
-// 	Height  int64      `json:"height"`
-// 	AppHash types.Hash `json:"app_hash"`
-// }
+func (ce *ConsensusEngine) resetState(ctx context.Context) error {
+	if ce.state.consensusTx != nil {
+		err := ce.state.consensusTx.Rollback(ctx)
+		if err != nil {
+			return err
+		}
+	}
 
-// func (ce *ConsensusEngine) persistAppState() error {
-// 	bts, err := json.MarshalIndent(ce.state.appState, "", "  ")
-// 	if err != nil {
-// 		ce.log.Errorf("Error marshalling appstate: %v", err)
-// 		return err // fatal or warn?
-// 	}
-// 	return os.WriteFile(ce.stateFile(), bts, 0644)
-// }
+	ce.state.blkProp = nil
+	ce.state.blockRes = nil
+	ce.state.votes = make(map[string]*vote)
+	ce.state.consensusTx = nil
 
-// func (ce *ConsensusEngine) loadAppState() (*appState, error) {
-// 	bts, err := os.ReadFile(ce.stateFile())
-// 	if err != nil {
-// 		if os.IsNotExist(err) {
-// 			return &appState{}, nil
-// 		}
-// 		return nil, fmt.Errorf("error reading appstate file: %w", err)
-// 	}
-// 	var state appState
-// 	if err := json.Unmarshal(bts, &state); err != nil {
-// 		return nil, fmt.Errorf("error unmarshalling appstate: %w", err)
-// 	}
-// 	return &state, nil
-// }
+	// update the stateInfo
+	ce.stateInfo.mtx.Lock()
+	ce.stateInfo.status = Committed
+	ce.stateInfo.blkProp = nil
+	ce.stateInfo.height = ce.state.lc.height
+	ce.stateInfo.mtx.Unlock()
 
-// func (ce *ConsensusEngine) stateFile() string {
-// 	return filepath.Join(ce.dir, "state.json")
-// }
-
-// func LoadState(filename string) (int64, types.Hash) {
-// 	state := &appState{}
-// 	bts, err := os.ReadFile(filename)
-// 	if err != nil {
-// 		return 0, types.Hash{}
-// 	}
-// 	if err := json.Unmarshal(bts, state); err != nil {
-// 		return 0, types.Hash{}
-// 	}
-// 	return state.Height, state.AppHash
-// }
+	return nil
+}
 
 // ChangesetProcessor is a PubSub that listens for changesets and broadcasts them to the receivers.
 // Subscribers can be added and removed to listen for changesets.

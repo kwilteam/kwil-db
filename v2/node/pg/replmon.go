@@ -146,7 +146,7 @@ func (rm *replMon) recvID(seq int64, changes chan<- any) (chan []byte, bool) {
 	}
 	rm.promises[seq] = c
 
-	rm.changesetWriter.csChan = changes // set the changeset writer to the changes channel
+	rm.changesetWriter.setChangesetWriter(changes) // set the changeset writer to the changes channel
 	return c, true
 }
 
