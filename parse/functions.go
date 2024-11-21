@@ -758,7 +758,7 @@ var (
 				case args[0].EqualsStrict(types.Uint256Type):
 					retType = decimal1000.Copy()
 				default:
-					panic(fmt.Sprintf("unexpected numeric type: %s", retType.String()))
+					panic("unexpected numeric type: " + retType.String())
 				}
 
 				return retType, nil

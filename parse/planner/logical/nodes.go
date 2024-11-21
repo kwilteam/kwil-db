@@ -498,7 +498,7 @@ func (f *Filter) Children() []Traversable {
 }
 
 func (f *Filter) String() string {
-	return fmt.Sprintf("Filter: %s", f.Condition.String())
+	return "Filter: " + f.Condition.String()
 }
 
 func (f *Filter) Plans() []Plan {

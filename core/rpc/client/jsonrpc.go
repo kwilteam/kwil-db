@@ -61,7 +61,7 @@ func NewJSONRPCClient(url *url.URL, opts ...RPCClientOpts) *JSONRPCClient {
 
 	clientOpts := &clientOptions{
 		client: &http.Client{},
-		log:    log.NewNoOp(), // log.NewStdOut(log.InfoLevel),
+		log:    log.DiscardLogger, // log.NewStdOut(log.InfoLevel),
 	}
 	for _, opt := range opts {
 		opt(clientOpts)

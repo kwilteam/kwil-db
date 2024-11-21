@@ -1,8 +1,0 @@
-p2p
-/kwil
-setup/setup
-.vscode/
-go.work
-go.work.sum
-.data-*
-**/.testnet

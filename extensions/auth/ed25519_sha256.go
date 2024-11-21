@@ -37,7 +37,7 @@ func (e Ed22519Sha256Authenticator) Identifier(publicKey []byte) (string, error)
 
 // Verify verifies the signature against the given public key and data.
 func (e Ed22519Sha256Authenticator) Verify(publicKey []byte, msg []byte, signature []byte) error {
-	pubkey, err := crypto.Ed25519PublicKeyFromBytes(publicKey)
+	pubkey, err := crypto.UnmarshalEd25519PublicKey(publicKey)
 	if err != nil {
 		return err
 	}
@@ -47,5 +47,15 @@ func (e Ed22519Sha256Authenticator) Verify(publicKey []byte, msg []byte, signatu
 	}
 
 	hash := sha256.Sum256(msg)
-	return pubkey.Verify(signature, hash[:])
+
+	valid, err := pubkey.Verify(hash[:], signature)
+	if err != nil {
+		return err
+	}
+
+	if !valid {
+		return fmt.Errorf("signature verification failed")
+	}
+
+	return nil
 }

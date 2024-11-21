@@ -4,6 +4,7 @@ package common
 // Fields in ChainContext should never be mutated, except
 // NetworkParameters can be deterministically mutated as part
 // of block execution.
+// TODO: review these contexts and see if all the fields are necessary
 type ChainContext struct {
 	// ChainID is the unique identifier for the chain.
 	ChainID string

@@ -13,27 +13,39 @@ output:
   formats:
     - format: colored-line-number
 
+linters-settings:
+  sloglint:
+    forbidden-keys: ["time","level","msg","source"]
+
 linters:
   disable-all: true
   enable:
     - asciicheck
     - bidichk
     - durationcheck
+    - canonicalheader
     - copyloopvar
+    - fatcontext
+    - gocheckcompilerdirectives
+    - gochecksumtype
     - gofmt
     - goimports
     - gosimple
     - govet
     - grouper
     - ineffassign
+    - intrange
     - makezero
     - misspell
+    - musttag
     - nosprintfhostport
+    - perfsprint
     - reassign
     - rowserrcheck
+    - sloglint
     - staticcheck
     - sqlclosecheck
-    - tparallel
     - typecheck
     - unconvert
     - unused
+    - usestdlibvars

@@ -1,84 +1,170 @@
-package crypto_test
+package crypto
 
 import (
-	"encoding/hex"
+	"bytes"
+	"crypto/rand"
+	"io"
 	"testing"
-
-	"github.com/kwilteam/kwil-db/core/crypto"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
-func TestEd25519PrivateKey_Sign(t *testing.T) {
-	key := "7c67e60fce0c403ff40193a3128e5f3d8c2139aed36d76d7b5f1e70ec19c43f00aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842"
-	pk, err := crypto.Ed25519PrivateKeyFromHex(key)
-	require.NoError(t, err, "error parse private key")
-
-	msg := []byte("foo")
-
-	sig, err := pk.Sign(msg)
-	require.NoError(t, err, "error sign")
-
-	expectSignature := "59b2db2d1e4ce6f8771453cfc78d1f943723528f00fa14adf574600f15c601d591fa2ba29c94d9ed694db324f9e8671bdfbcba4b8e10f6a8733682fa3d115f0c"
-	assert.Equal(t, expectSignature, hex.EncodeToString(sig), "unexpect signature")
-}
-
-func TestEd25519PublicKey_Verify(t *testing.T) {
-	key := "0aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842"
-	keyBytes, err := hex.DecodeString(key)
-	require.NoError(t, err, "error decode public key")
-
-	pubKey, err := crypto.Ed25519PublicKeyFromBytes(keyBytes)
-	require.NoError(t, err, "error parse public key")
-
-	msg := []byte("foo")
-	sig := "59b2db2d1e4ce6f8771453cfc78d1f943723528f00fa14adf574600f15c601d591fa2ba29c94d9ed694db324f9e8671bdfbcba4b8e10f6a8733682fa3d115f0c"
-	sigBytes, _ := hex.DecodeString(sig)
-
+func TestGenerateEd25519Key(t *testing.T) {
 	tests := []struct {
-		name     string
-		msg      []byte
-		sigBytes []byte
-		wantErr  error
+		name    string
+		reader  io.Reader
+		wantErr bool
 	}{
 		{
-			name:     "verify success",
-			msg:      msg,
-			sigBytes: sigBytes,
-			wantErr:  nil,
+			name:    "valid random source",
+			reader:  bytes.NewReader(bytes.Repeat([]byte{1}, 64)),
+			wantErr: false,
 		},
 		{
-			name:     "invalid signature length",
-			msg:      msg,
-			sigBytes: sigBytes[1:],
-			wantErr:  crypto.ErrInvalidSignatureLength,
+			name:    "nil source",
+			reader:  nil,
+			wantErr: false,
 		},
 		{
-			name:     "wrong signature",
-			msg:      []byte("bar"),
-			sigBytes: sigBytes,
-			wantErr:  crypto.ErrInvalidSignature,
+			name:    "empty random source",
+			reader:  bytes.NewReader([]byte{}),
+			wantErr: true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := pubKey.Verify(tt.sigBytes, tt.msg)
-			if tt.wantErr != nil {
-				assert.ErrorIs(t, err, tt.wantErr, "verify error")
+			priv, pub, err := GenerateEd25519Key(tt.reader)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("GenerateEd25519Key() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-
-			assert.NoError(t, err, "verify error")
+			if !tt.wantErr {
+				if priv == nil {
+					t.Error("GenerateEd25519Key() private key is nil")
+				}
+				if pub == nil {
+					t.Error("GenerateEd25519Key() public key is nil")
+				}
+				if !bytes.Equal(priv.Public().Bytes(), pub.Bytes()) {
+					t.Error("GenerateEd25519Key() public key mismatch")
+				}
+			}
 		})
 	}
 }
 
-func Test_GenerateEd25518PrivateKey(t *testing.T) {
-	pk, err := crypto.GenerateEd25519Key()
-	require.NoError(t, err, "error generate key")
+func TestEd25519KeySignVerify(t *testing.T) {
+	priv, pub, err := GenerateEd25519Key(rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
 
-	if len(pk.Bytes()) != 64 {
-		t.Errorf("invalid private key length: %d", len(pk.Bytes()))
+	msg := []byte("test message")
+	sig, err := priv.Sign(msg)
+	if err != nil {
+		t.Fatalf("Sign() error = %v", err)
+	}
+
+	valid, err := pub.Verify(msg, sig)
+	if err != nil {
+		t.Fatalf("Verify() error = %v", err)
+	}
+	if !valid {
+		t.Error("Verify() failed for valid signature")
+	}
+
+	// Test invalid signature
+	invalidSig := make([]byte, len(sig))
+	copy(invalidSig, sig)
+	invalidSig[0] ^= 0xff
+	valid, err = pub.Verify(msg, invalidSig)
+	if err != nil {
+		t.Fatalf("Verify() error = %v", err)
+	}
+	if valid {
+		t.Error("Verify() succeeded for invalid signature")
+	}
+}
+
+func TestEd25519KeyEquality(t *testing.T) {
+	priv1, pub1, _ := GenerateEd25519Key(rand.Reader)
+	priv2, pub2, _ := GenerateEd25519Key(rand.Reader)
+
+	if priv1.Equals(priv2) {
+		t.Error("Different private keys should not be equal")
+	}
+	if pub1.Equals(pub2) {
+		t.Error("Different public keys should not be equal")
+	}
+	if !priv1.Public().Equals(pub1) {
+		t.Error("Derived public key should equal original public key")
+	}
+
+	mockPriv := &mockPrivateKey{keyType: 99}
+	if priv1.Equals(mockPriv) {
+		t.Error("Different private key types should not be equal")
+	}
+
+	mockPriv = &mockPrivateKey{keyType: KeyTypeEd25519} // same KeyType, different bytes
+	if priv1.Equals(mockPriv) {
+		t.Error("Different bytes should not be equal")
+	}
+
+	mockPriv = &mockPrivateKey{
+		keyType: KeyTypeEd25519,
+		bytes:   priv1.Bytes(),
+	} // same KeyType, same bytes
+	if !priv1.Equals(mockPriv) {
+		t.Error("same Type and Bytes should be equal regardless of concrete impl")
+	}
+
+	mockPub := &mockPublicKey{keyType: 99}
+	if pub1.Equals(mockPub) {
+		t.Error("Different private key types should not be equal")
+	}
+
+	mockPub = &mockPublicKey{keyType: KeyTypeEd25519} // same KeyType, different bytes
+	if pub1.Equals(mockPub) {
+		t.Error("Different bytes should not be equal")
+	}
+
+	mockPub = &mockPublicKey{
+		keyType: KeyTypeEd25519,
+		bytes:   pub1.Bytes(),
+	} // same KeyType, same bytes
+	if !pub1.Equals(mockPub) {
+		t.Error("same Type and Bytes should be equal regardless of concrete impl")
+	}
+}
+
+func TestUnmarshalEd25519Keys(t *testing.T) {
+	priv, pub, _ := GenerateEd25519Key(rand.Reader)
+	privBytes := priv.Bytes()
+	pubBytes := pub.Bytes()
+
+	recoveredPub, err := UnmarshalEd25519PublicKey(pubBytes)
+	if err != nil {
+		t.Fatalf("UnmarshalEd25519PublicKey() error = %v", err)
+	}
+	if !pub.Equals(recoveredPub) {
+		t.Error("Unmarshaled public key does not match original")
+	}
+
+	recoveredPriv, err := UnmarshalEd25519PrivateKey(privBytes)
+	if err != nil {
+		t.Fatalf("UnmarshalEd25519PrivateKey() error = %v", err)
+	}
+	if !priv.Equals(recoveredPriv) {
+		t.Error("Unmarshaled private key does not match original")
+	}
+
+	// Test invalid key sizes
+	_, err = UnmarshalEd25519PublicKey(make([]byte, 31))
+	if err == nil {
+		t.Error("UnmarshalEd25519PublicKey() should fail with invalid size")
+	}
+
+	_, err = UnmarshalEd25519PrivateKey(make([]byte, 63))
+	if err == nil {
+		t.Error("UnmarshalEd25519PrivateKey() should fail with invalid size")
 	}
 }

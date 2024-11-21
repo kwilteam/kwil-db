@@ -1,19 +1,18 @@
 package auth
 
-// ed25519 is a standard signature scheme that uses the ed25519 curve, it is a
-// required component for kwild.
+// ed25519 is a standard signature scheme that uses the ed25519 curve
 
 import (
 	"crypto/ed25519"
 	"encoding/hex"
+	"errors"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 )
 
 const (
-	// Ed25519Auth is a plain ed25519 authenticator. This is used for validator
-	// signature verification. This is intended as the authenticator for the
+	// Ed25519Auth is a plain ed25519 authenticator. This is intended as the authenticator for the
 	// SDK-provided Ed25519Signer, and must be registered with that name.
 	Ed25519Auth = "ed25519"
 
@@ -38,7 +37,7 @@ func (e Ed25519Authenticator) Identifier(publicKey []byte) (string, error) {
 // Verify verifies the signature against the given user identifier and data. The
 // identifier must be the ed25519 public key bytes.
 func (e Ed25519Authenticator) Verify(publicKey []byte, msg []byte, signature []byte) error {
-	pubkey, err := crypto.Ed25519PublicKeyFromBytes(publicKey)
+	pubkey, err := crypto.UnmarshalEd25519PublicKey(publicKey)
 	if err != nil {
 		return err
 	}
@@ -47,5 +46,14 @@ func (e Ed25519Authenticator) Verify(publicKey []byte, msg []byte, signature []b
 		return fmt.Errorf("invalid signature length: expected %d, received %d", ed25519SignatureLength, len(signature))
 	}
 
-	return pubkey.Verify(signature, msg)
+	valid, err := pubkey.Verify(msg, signature)
+	if err != nil {
+		return err
+	}
+
+	if !valid {
+		return errors.New("ed25519 signature verification failed")
+	}
+
+	return nil
 }
