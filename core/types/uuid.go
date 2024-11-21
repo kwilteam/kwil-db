@@ -134,7 +134,7 @@ func (u *UUIDArray) Scan(src any) error {
 			ux[i] = ui
 		}
 	}
-	return errors.New("not a byte slice slice")
+	return errors.New("not a byte slice")
 }
 
 func (u UUIDArray) Bytes() [][]byte {

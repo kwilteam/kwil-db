@@ -39,3 +39,14 @@ type Authenticator interface {
 	// the `@caller` variable in the engine.
 	Identifier(sender []byte) (string, error)
 }
+
+func GetAuthenticator(authType string) Authenticator {
+	switch authType {
+	case EthPersonalSignAuth:
+		return EthSecp256k1Authenticator{}
+	case Ed25519Auth:
+		return Ed25519Authenticator{}
+	default:
+		return nil
+	}
+}

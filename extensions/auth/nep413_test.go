@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/extensions/auth"
+
 	borsch "github.com/near/borsh-go"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"

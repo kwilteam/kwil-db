@@ -10,6 +10,7 @@ import (
 	"encoding"
 	"encoding/binary"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -420,7 +421,7 @@ var _ encoding.BinaryUnmarshaler = (*Decimal)(nil)
 // UnmarshalBinary implements the encoding.BinaryUnmarshaler interface.
 func (d *Decimal) UnmarshalBinary(data []byte) error {
 	if len(data) < 4 {
-		return fmt.Errorf("invalid binary data")
+		return errors.New("invalid binary data")
 	}
 
 	d.precision = binary.BigEndian.Uint16(data[:2])
@@ -429,7 +430,7 @@ func (d *Decimal) UnmarshalBinary(data []byte) error {
 	return d.dec.UnmarshalText(data[4:])
 }
 
-var ErrOverflow = fmt.Errorf("overflow")
+var ErrOverflow = errors.New("overflow")
 
 // context returns the context of the decimal.
 func (d *Decimal) context() *apd.Context {

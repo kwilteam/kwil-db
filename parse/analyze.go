@@ -9,7 +9,7 @@ import (
 
 /*
 	this file performs analysis of SQL and procedures. It performs several main types of validation:
-	1. Type checking: it ensures that all all statements and expressions return correct types.
+	1. Type checking: it ensures that all statements and expressions return correct types.
 	This is critical because plpgsql only throws type errors at runtime, which is really bad
 	for a smart contract language.
 	2. Deterministic ordering: it ensures that all queries have deterministic ordering, even if
@@ -1377,7 +1377,7 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 	// then be referenced in order bys and limits. If there are column conflicts in the flattened column,
 	// we should return an error, since there will be no way for us to inform postgres of our default ordering.
 	if isCompound {
-		// we can simply assign this to the rel1Scope, since we we will not
+		// we can simply assign this to the rel1Scope, since we will not
 		// need it past this point. We can add it as an unnamed relation.
 		rel1Scope.joinedRelations = []*Relation{{Attributes: rel1}}
 

@@ -3,11 +3,8 @@ go 1.22
 
 use (
 	.
-	./core
-	./parse
 	./test
 )
 
 // replace github.com/kwilteam/kuneiform => ../kuneiform
 // replace github.com/kwilteam/kwil-extensions => ../../kwil-extensions
-// replace github.com/cometbft/cometbft => ../../../github/cometbft/cometbft
