@@ -110,7 +110,7 @@ func (ce *ConsensusEngine) NotifyBlockProposal(blk *types.Block) {
 	go ce.sendConsensusMessage(&consensusMessage{
 		MsgType: blkProp.Type(),
 		Msg:     blkProp,
-		Sender:  ce.signer.Public().Bytes(),
+		Sender:  ce.pubKey.Bytes(),
 	})
 }
 
@@ -129,7 +129,7 @@ func (ce *ConsensusEngine) NotifyBlockCommit(blk *types.Block, appHash types.Has
 	go ce.sendConsensusMessage(&consensusMessage{
 		MsgType: blkCommit.Type(),
 		Msg:     blkCommit,
-		Sender:  ce.signer.Public().Bytes(),
+		Sender:  ce.pubKey.Bytes(),
 	})
 }
 

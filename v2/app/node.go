@@ -59,6 +59,7 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config) error {
 		Consensus: cfg.Consensus,
 		Genesis:   *genConfig,
 		P2P:       cfg.P2P,
+		PG:        cfg.PGConfig,
 	}
 	node, err := node.NewNode(nodeCfg)
 	if err != nil {

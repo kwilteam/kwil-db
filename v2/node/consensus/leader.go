@@ -61,7 +61,7 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	}
 
 	// Add its own vote to the votes map
-	ce.state.votes[string(ce.signer.Public().Bytes())] = &vote{
+	ce.state.votes[string(ce.pubKey.Bytes())] = &vote{
 		ack:     true,
 		appHash: &ce.state.blockRes.appHash,
 		blkHash: blkProp.blkHash,
@@ -72,7 +72,10 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	if ce.state.blkProp.height%10 == 0 && lastReset != ce.state.blkProp.height {
 		lastReset = ce.state.blkProp.height
 		ce.log.Info("Resetting the state (for testing purposes)", "height", lastReset, " blkHash", ce.state.blkProp.blkHash)
-		ce.resetState()
+		if err := ce.resetState(ctx); err != nil {
+			ce.log.Errorf("Error resetting the state: %v", err)
+			return err
+		}
 		go ce.rstStateBroadcaster(ce.state.lc.height)
 		go ce.startNewRound(ctx)
 		return nil

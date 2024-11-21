@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/hex"
+	"fmt"
 	"kwil/log"
 	"kwil/node/types"
 	"slices"
@@ -112,6 +113,14 @@ log_level = 'info'
 log_format = 'plain'
 private_key = "ababababab"
 
+[pg]
+host = '127.0.0.1'
+port = 5435
+user = 'kwild'
+pass = 'kwild'
+dbname = 'kwild'
+max_connections = 10
+
 [peer]
 ip = '127.0.0.1'
 port = 6600
@@ -138,6 +147,14 @@ func TestConfigSaveAndLoad(t *testing.T) {
 					Port:      8080,
 					Pex:       false,
 					BootNodes: []string{"/ip4/192.168.1.1/tcp/8080/p2p/test"},
+				},
+				PGConfig: PGConfig{
+					Host:           "127.0.0.1",
+					Port:           "5432",
+					User:           "kwild",
+					Pass:           "kwild",
+					DBName:         "kwild",
+					MaxConnections: 10,
 				},
 			},
 			wantErr: false,
@@ -187,6 +204,16 @@ func TestConfigSaveAndLoad(t *testing.T) {
 				}
 				if !slices.Equal(loaded.P2P.BootNodes, tt.config.P2P.BootNodes) {
 					t.Errorf("P2P.BootNode mismatch: got %v, want %v", loaded.P2P.BootNodes, tt.config.P2P.BootNodes)
+				}
+				fmt.Println(loaded.PGConfig)
+				if loaded.PGConfig.Host != tt.config.PGConfig.Host {
+					t.Errorf("PGConfig.Host mismatch: got %v, want %v", loaded.PGConfig.Host, tt.config.PGConfig.Host)
+				}
+				if loaded.PGConfig.Port != tt.config.PGConfig.Port {
+					t.Errorf("PGConfig.Port mismatch: got %v, want %v", loaded.PGConfig.Port, tt.config.PGConfig.Port)
+				}
+				if loaded.PGConfig.User != tt.config.PGConfig.User {
+					t.Errorf("PGConfig.User mismatch: got %v, want %v", loaded.PGConfig.User, tt.config.PGConfig.User)
 				}
 			}
 		})

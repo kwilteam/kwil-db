@@ -21,7 +21,7 @@ const (
 
 	initChainTable = `CREATE TABLE IF NOT EXISTS ` + chainSchemaName + `.chain (
 		height INT8 NOT NULL,
-		app_hash BYTEA
+		app_hash BYTEA,
 		dirty BOOLEAN DEFAULT FALSE
 	);` // no primary key, only one row
 
