@@ -6,7 +6,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"kwil/crypto"
+	"kwil/crypto/auth"
 	"kwil/extensions/resolutions"
 	"kwil/log"
 	"kwil/node/accounts"
@@ -16,6 +16,7 @@ import (
 	"kwil/utils/order"
 	"math/big"
 	"slices"
+	"sync"
 )
 
 // TxApp is the transaction processer for the Kwil node.
@@ -31,13 +32,14 @@ type TxApp struct {
 	// forks forks.Forks
 
 	events Rebroadcaster
-	signer crypto.PrivateKey
+	signer auth.Signer
 
 	mempool *mempool
 
 	// channels to notify the subscriber about validator updates
 	// TODO: ListenerMgr is the only subscriber for now. Potentially ConsensusEngine could be another subscriber? or not as it can decide to update the validators based on the updates.
 	valChans []chan []*types.Validator
+	valMtx   sync.RWMutex
 
 	// list of resolution types
 	resTypes []string // How do these get updated runtime?
@@ -47,7 +49,7 @@ type TxApp struct {
 }
 
 // NewTxApp creates a new router.
-func NewTxApp(ctx context.Context, db sql.Executor, engine types.Engine, signer crypto.PrivateKey,
+func NewTxApp(ctx context.Context, db sql.Executor, engine types.Engine, signer auth.Signer,
 	events Rebroadcaster, service *types.Service, accounts Accounts, validators Validators) (*TxApp, error) {
 	resTypes := resolutions.ListResolutions()
 	slices.Sort(resTypes)
@@ -554,6 +556,9 @@ func (r *TxApp) UpdateValidator(ctx context.Context, db sql.DB, validator []byte
 func (r *TxApp) SubscribeValidators() <-chan []*types.Validator {
 	// There's only supposed to be one user of this method, and they should
 	// only get one channel and listen, but play it safe and use a slice.
+	r.valMtx.Lock()
+	defer r.valMtx.Unlock()
+
 	c := make(chan []*types.Validator, 1)
 	r.valChans = append(r.valChans, c)
 	return c
@@ -564,6 +569,8 @@ func (r *TxApp) SubscribeValidators() <-chan []*types.Validator {
 func (r *TxApp) announceValidators() {
 	// dev note: this method should not be blocked by receivers. Keep a default
 	// case and create buffered channels.
+	r.valMtx.RLock()
+	defer r.valMtx.RUnlock()
 
 	if len(r.valChans) == 0 {
 		return // no subscribers, skip the slice clone
