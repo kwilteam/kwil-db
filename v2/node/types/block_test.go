@@ -5,7 +5,6 @@ import (
 	"crypto/sha256"
 	"encoding/binary"
 	"kwil/crypto"
-	"kwil/crypto/auth"
 	"testing"
 	"time"
 
@@ -15,11 +14,10 @@ import (
 func TestGetRawBlockTx(t *testing.T) {
 	privKey, pubKey, err := crypto.GenerateSecp256k1Key(nil)
 	require.NoError(t, err)
-	signer := auth.GetSigner(privKey)
 
 	makeRawBlock := func(txns [][]byte) []byte {
 		blk := NewBlock(1, Hash{1, 2, 3}, Hash{6, 7, 8}, Hash{}, time.Unix(1729890593, 0), txns)
-		err := blk.Sign(signer)
+		err := blk.Sign(privKey)
 		require.NoError(t, err)
 		return EncodeBlock(blk)
 	}

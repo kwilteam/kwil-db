@@ -39,12 +39,13 @@ var zeroHash = types.Hash{}
 // 3. BlockCommitPhase:
 // - Once the leader receives the threshold acks with the same appHash as the leader, the block is committed and the leader broadcasts the blockAnn message to the network. Nodes that receive this message will enter into the commit phase where they verify the appHash and commit the block.
 type ConsensusEngine struct {
-	role   atomic.Value // types.Role, role can change over the lifetime of the node
-	dir    string
-	signer auth.Signer
-	pubKey crypto.PublicKey
-	leader crypto.PublicKey
-	log    log.Logger
+	role    atomic.Value // types.Role, role can change over the lifetime of the node
+	dir     string
+	signer  auth.Signer
+	privKey crypto.PrivateKey
+	pubKey  crypto.PublicKey
+	leader  crypto.PublicKey
+	log     log.Logger
 
 	proposeTimeout time.Duration
 
@@ -214,6 +215,7 @@ func New(cfg *Config) *ConsensusEngine {
 		dir:            cfg.Dir,
 		signer:         signer,
 		pubKey:         pubKey,
+		privKey:        cfg.PrivateKey,
 		leader:         cfg.Leader,
 		proposeTimeout: cfg.ProposeTimeout,
 		db:             cfg.DB,
