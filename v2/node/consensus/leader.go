@@ -98,7 +98,7 @@ func (ce *ConsensusEngine) createBlockProposal() (*blockProposal, error) {
 	// ValSet + valUpdatesHash
 
 	// Sign the block
-	if err := blk.Sign(ce.signer); err != nil {
+	if err := blk.Sign(ce.privKey); err != nil {
 		return nil, err
 	}
 

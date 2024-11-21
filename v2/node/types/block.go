@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"kwil/crypto"
-	"kwil/crypto/auth"
 	"kwil/types"
 )
 
@@ -84,13 +83,13 @@ func (b *Block) MerkleRoot() Hash {
 	return CalcMerkleRoot(txHashes)
 }
 
-func (b *Block) Sign(signer auth.Signer) error {
+func (b *Block) Sign(signer crypto.PrivateKey) error {
 	hash := b.Hash()
 	sig, err := signer.Sign(hash[:])
 	if err != nil {
 		return fmt.Errorf("failed to sign block: %w", err)
 	}
-	b.Signature = sig.Data
+	b.Signature = sig
 	return nil
 }
 
