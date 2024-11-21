@@ -104,7 +104,7 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash 
 		go ce.sendConsensusMessage(&consensusMessage{
 			MsgType: blkCommit.Type(),
 			Msg:     blkCommit,
-			Sender:  ce.signer.Public().Bytes(),
+			Sender:  ce.pubKey.Bytes(),
 		})
 		return false
 	}
@@ -126,7 +126,7 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash 
 	go ce.sendConsensusMessage(&consensusMessage{
 		MsgType: blkCommit.Type(),
 		Msg:     blkCommit,
-		Sender:  ce.signer.Public().Bytes(),
+		Sender:  ce.pubKey.Bytes(),
 	})
 
 	return false
@@ -135,7 +135,7 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash 
 // ProcessBlockProposal is used by the validator's consensus engine to process the new block proposal message.
 // This method is used to validate the received block, execute the block and generate appHash and
 // report the result back to the leader.
-func (ce *ConsensusEngine) processBlockProposal(_ context.Context, blkPropMsg *blockProposal) error {
+func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg *blockProposal) error {
 	if ce.role.Load() != types.RoleValidator {
 		ce.log.Warn("Only validators can process block proposals")
 		return nil
@@ -161,8 +161,10 @@ func (ce *ConsensusEngine) processBlockProposal(_ context.Context, blkPropMsg *b
 		}
 
 		ce.log.Info("Aborting execution of stale block proposal", "height", blkPropMsg.height, "blkHash", ce.state.blkProp.blkHash)
-		ce.state.cancelFunc() // abort the current block execution
-		ce.resetState()
+		if err := ce.resetState(ctx); err != nil {
+			ce.log.Error("Error aborting execution of block", "height", blkPropMsg.height, "blkID", ce.state.blkProp.blkHash, "error", err)
+			return err
+		}
 	}
 
 	ce.log.Info("Processing block proposal", "height", blkPropMsg.blk.Header.Height, "header", blkPropMsg.blk.Header)
@@ -225,7 +227,9 @@ func (ce *ConsensusEngine) commitBlock(blk *types.Block, appHash types.Hash) err
 
 	if ce.state.blkProp.blkHash != blk.Header.Hash() {
 		// ce.state.cancelFunc() // abort the current block execution ??
-		ce.resetState()
+		if err := ce.resetState(context.Background()); err != nil {
+			ce.log.Error("error aborting execution of incorrect block proposal", "height", blk.Header.Height, "blkID", blk.Header.Hash(), "error", err)
+		}
 		return ce.processAndCommit(blk, appHash)
 	}
 

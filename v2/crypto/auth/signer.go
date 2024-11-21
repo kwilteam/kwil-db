@@ -125,6 +125,17 @@ type Signer interface {
 	AuthType() string
 }
 
+func GetSigner(key crypto.PrivateKey) Signer {
+	switch key := key.(type) {
+	case *crypto.Secp256k1PrivateKey:
+		return &EthPersonalSigner{Key: *key}
+	case *crypto.Ed25519PrivateKey:
+		return &Ed25519Signer{Ed25519PrivateKey: *key}
+	default:
+		return nil
+	}
+}
+
 // EthPersonalSecp256k1Signer is a signer that signs messages using the
 // secp256k1 curve, using ethereum's personal_sign signature scheme.
 type EthPersonalSigner struct {

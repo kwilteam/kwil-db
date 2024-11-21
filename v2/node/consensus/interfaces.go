@@ -9,6 +9,16 @@ import (
 	ktypes "kwil/types"
 )
 
+// DB is the interface for the main SQL database. All queries must be executed
+// from within a transaction. A DB can create read transactions or the special
+// two-phase outer write transaction.
+type DB interface {
+	sql.TxMaker // for out-of-consensus writes e.g. setup and meta table writes
+	sql.PreparedTxMaker
+	sql.ReadTxMaker
+	sql.SnapshotTxMaker
+}
+
 type Mempool interface {
 	ReapN(maxSize int) ([]types.Hash, [][]byte)
 	Store(txid types.Hash, tx []byte)
@@ -33,6 +43,7 @@ type BlockExecutor interface {
 }
 
 type Accounts interface {
+	Updates() []*ktypes.Account
 }
 
 type Validators interface {
