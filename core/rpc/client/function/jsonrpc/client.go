@@ -40,7 +40,7 @@ func (c *Client) VerifySignature(ctx context.Context, sender []byte, signature *
 		Sender: sender,
 		Msg:    message,
 		Signature: &jsonFunction.TxSignature{
-			SignatureBytes: signature.Signature,
+			SignatureBytes: signature.Data,
 			SignatureType:  signature.Type,
 		},
 	}, result)

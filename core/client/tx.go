@@ -4,9 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	clientType "github.com/kwilteam/kwil-db/core/client/types"
 	"github.com/kwilteam/kwil-db/core/types"
-	clientType "github.com/kwilteam/kwil-db/core/types/client"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
 // NewSignedTx creates a signed transaction with a prepared payload. This will
@@ -16,12 +15,12 @@ import (
 //
 // WARNING: This is an advanced method, and most applications should use the
 // other Client methods to interact with a Kwil network.
-func (c *Client) NewSignedTx(ctx context.Context, data transactions.Payload, txOpts *clientType.TxOptions) (*transactions.Transaction, error) {
+func (c *Client) NewSignedTx(ctx context.Context, data types.Payload, txOpts *clientType.TxOptions) (*types.Transaction, error) {
 	return c.newTx(ctx, data, txOpts)
 }
 
 // newTx creates a new Transaction signed by the Client's Signer
-func (c *Client) newTx(ctx context.Context, data transactions.Payload, txOpts *clientType.TxOptions) (*transactions.Transaction, error) {
+func (c *Client) newTx(ctx context.Context, data types.Payload, txOpts *clientType.TxOptions) (*types.Transaction, error) {
 	if c.Signer == nil {
 		return nil, fmt.Errorf("signer must be set to create a transaction")
 	}
@@ -49,7 +48,7 @@ func (c *Client) newTx(ctx context.Context, data transactions.Payload, txOpts *c
 	}
 
 	// build transaction
-	tx, err := transactions.CreateTransaction(data, c.chainID, nonce)
+	tx, err := types.CreateTransaction(data, c.chainID, nonce)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create transaction: %w", err)
 	}

@@ -15,7 +15,6 @@ import (
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	userjson "github.com/kwilteam/kwil-db/core/rpc/json/user"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
 	jsonUtil "github.com/kwilteam/kwil-db/core/utils/json"
 )
 
@@ -46,7 +45,7 @@ func (cl *Client) Ping(ctx context.Context) (string, error) {
 	return res.Message, nil
 }
 
-func (cl *Client) Broadcast(ctx context.Context, tx *transactions.Transaction, sync rpcclient.BroadcastWait) ([]byte, error) {
+func (cl *Client) Broadcast(ctx context.Context, tx *types.Transaction, sync rpcclient.BroadcastWait) (types.Hash, error) {
 	cmd := &userjson.BroadcastRequest{
 		Tx:   tx,
 		Sync: (*userjson.BroadcastSync)(&sync),
@@ -59,28 +58,28 @@ func (cl *Client) Broadcast(ctx context.Context, tx *transactions.Transaction, s
 			var berr userjson.BroadcastError
 			jsonErr := json.Unmarshal(jsonRPCErr.Data, &berr)
 			if jsonErr != nil {
-				return nil, errors.Join(jsonErr, err)
+				return types.Hash{}, errors.Join(jsonErr, err)
 			}
 
 			err = errors.Join(berr, err)
 
-			switch transactions.TxCode(berr.TxCode) {
-			case transactions.CodeWrongChain:
-				return nil, errors.Join(transactions.ErrWrongChain, err)
-			case transactions.CodeInvalidNonce:
-				return nil, errors.Join(transactions.ErrInvalidNonce, err)
-			case transactions.CodeInvalidAmount:
-				return nil, errors.Join(transactions.ErrInvalidAmount, err)
-			case transactions.CodeInsufficientBalance:
-				return nil, errors.Join(transactions.ErrInsufficientBalance, err)
+			switch types.TxCode(berr.TxCode) {
+			case types.CodeWrongChain:
+				return types.Hash{}, errors.Join(types.ErrWrongChain, err)
+			case types.CodeInvalidNonce:
+				return types.Hash{}, errors.Join(types.ErrInvalidNonce, err)
+			case types.CodeInvalidAmount:
+				return types.Hash{}, errors.Join(types.ErrInvalidAmount, err)
+			case types.CodeInsufficientBalance:
+				return types.Hash{}, errors.Join(types.ErrInsufficientBalance, err)
 			}
 		}
-		return nil, err
+		return types.Hash{}, err
 	}
 	return res.TxHash, nil
 }
 
-func (cl *Client) Call(ctx context.Context, msg *transactions.CallMessage, opts ...rpcclient.ActionCallOption) ([]map[string]any, []string, error) {
+func (cl *Client) Call(ctx context.Context, msg *types.CallMessage, opts ...rpcclient.ActionCallOption) ([]map[string]any, []string, error) {
 	cmd := msg // same underlying type presently
 	res := &userjson.CallResponse{}
 	err := cl.CallMethod(ctx, string(userjson.MethodCall), cmd, res)
@@ -106,7 +105,7 @@ func (cl *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
 	return res, nil
 }
 
-func (cl *Client) EstimateCost(ctx context.Context, tx *transactions.Transaction) (*big.Int, error) {
+func (cl *Client) EstimateCost(ctx context.Context, tx *types.Transaction) (*big.Int, error) {
 	cmd := &userjson.EstimatePriceRequest{
 		Tx: tx,
 	}
@@ -196,7 +195,7 @@ func (cl *Client) Query(ctx context.Context, dbid, query string) ([]map[string]a
 	return jsonUtil.UnmarshalMapWithoutFloat[[]map[string]any](res.Result)
 }
 
-func (cl *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcTxQueryResponse, error) {
+func (cl *Client) TxQuery(ctx context.Context, txHash types.Hash) (*types.TcTxQueryResponse, error) {
 	cmd := &userjson.TxQueryRequest{
 		TxHash: txHash,
 	}
@@ -206,7 +205,7 @@ func (cl *Client) TxQuery(ctx context.Context, txHash []byte) (*transactions.TcT
 		return nil, err
 	}
 
-	return &transactions.TcTxQueryResponse{
+	return &types.TcTxQueryResponse{
 		Hash:     res.Hash,
 		Height:   res.Height,
 		Tx:       res.Tx,

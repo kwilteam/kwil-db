@@ -1,6 +1,7 @@
 package validation
 
 import (
+	"errors"
 	"fmt"
 	"regexp"
 )
@@ -12,7 +13,7 @@ func ValidateIdentifier(name string) error {
 		return fmt.Errorf("name too long: %s", name)
 	}
 	if len(name) == 0 {
-		return fmt.Errorf("name cannot be empty")
+		return errors.New("name cannot be empty")
 	}
 
 	ok := validNameRegex.MatchString(name)

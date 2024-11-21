@@ -4,8 +4,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/core/utils"
 	"github.com/stretchr/testify/assert"
+
+	"github.com/kwilteam/kwil-db/core/utils"
 )
 
 // testing dbid is case insensitive

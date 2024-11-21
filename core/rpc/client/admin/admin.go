@@ -9,13 +9,13 @@ import (
 )
 
 type AdminClient interface {
-	Approve(ctx context.Context, publicKey []byte) ([]byte, error)
-	Join(ctx context.Context) ([]byte, error)
+	Approve(ctx context.Context, publicKey []byte) (types.Hash, error)
+	Join(ctx context.Context) (types.Hash, error)
 	JoinStatus(ctx context.Context, pubkey []byte) (*types.JoinRequest, error)
-	Leave(ctx context.Context) ([]byte, error)
+	Leave(ctx context.Context) (types.Hash, error)
 	ListValidators(ctx context.Context) ([]*types.Validator, error)
 	Peers(ctx context.Context) ([]*adminTypes.PeerInfo, error)
-	Remove(ctx context.Context, publicKey []byte) ([]byte, error)
+	Remove(ctx context.Context, publicKey []byte) (types.Hash, error)
 	Status(ctx context.Context) (*adminTypes.Status, error)
 	Version(ctx context.Context) (string, error)
 	ListPendingJoins(ctx context.Context) ([]*types.JoinRequest, error)
@@ -29,8 +29,8 @@ type AdminClient interface {
 	ListPeers(ctx context.Context) ([]string, error)
 
 	// Resolutions
-	CreateResolution(ctx context.Context, resolution []byte, resolutionType string) ([]byte, error)
-	ApproveResolution(ctx context.Context, resolutionID *types.UUID) ([]byte, error)
-	// DeleteResolution(ctx context.Context, resolutionID *types.UUID) ([]byte, error)
+	CreateResolution(ctx context.Context, resolution []byte, resolutionType string) (types.Hash, error)
+	ApproveResolution(ctx context.Context, resolutionID *types.UUID) (types.Hash, error)
+	// DeleteResolution(ctx context.Context, resolutionID *types.UUID) (types.Hash, error)
 	ResolutionStatus(ctx context.Context, resolutionID *types.UUID) (*types.PendingResolution, error)
 }
