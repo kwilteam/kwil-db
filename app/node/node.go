@@ -1,4 +1,4 @@
-package app
+package node
 
 import (
 	"context"
@@ -35,7 +35,7 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config) error {
 
 	logger.Infof("Starting kwild version %v", version.KwilVersion)
 
-	genFile := filepath.Join(rootDir, GenesisFileName)
+	genFile := filepath.Join(rootDir, config.GenesisFileName)
 
 	logger.Infof("Loading the genesis configuration from %s", genFile)
 
@@ -59,7 +59,7 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config) error {
 		Consensus: cfg.Consensus,
 		Genesis:   *genConfig,
 		P2P:       cfg.P2P,
-		PG:        cfg.PGConfig,
+		PG:        cfg.DB,
 	}
 	node, err := node.NewNode(nodeCfg)
 	if err != nil {

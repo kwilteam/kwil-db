@@ -1,4 +1,4 @@
-package app
+package shared
 
 import (
 	"os"
@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/knadh/koanf/v2"
+	"github.com/kwilteam/kwil-db/config"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 )
@@ -114,7 +115,7 @@ number = 42
 [nested]
 string_value = "nested-string"
 `
-	configPath := filepath.Join(tmpDir, ConfigFileName)
+	configPath := filepath.Join(tmpDir, config.ConfigFileName)
 	err := os.WriteFile(configPath, []byte(configContent), 0644)
 	assert.NoError(t, err)
 

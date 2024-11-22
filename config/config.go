@@ -12,6 +12,11 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
+const (
+	ConfigFileName  = "kwil.toml"
+	GenesisFileName = "genesis.json"
+)
+
 // Duration is a wrapper around time.Duration that implements text
 // (un)marshalling for the go-toml package to work with Go duration strings
 // instead of integers.
@@ -79,6 +84,15 @@ func DefaultConfig() *Config {
 			MaxBlockSize:   50_000_000,
 			MaxTxsPerBlock: 20_000,
 		},
+		DB: DBConfig{
+			Host:          "127.0.0.1",
+			Port:          "5432",
+			User:          "kwild",
+			Pass:          "",
+			DBName:        "kwild",
+			ReadTxTimeout: Duration(45 * time.Second),
+			MaxConns:      60,
+		},
 	}
 }
 
@@ -109,9 +123,8 @@ type Config struct {
 	P2P PeerConfig `koanf:"p2p" toml:"p2p"`
 
 	Consensus ConsensusConfig `koanf:"consensus" toml:"consensus"`
-	PGConfig  PGConfig        `koanf:"pg" toml:"pg"`
+	DB        DBConfig        `koanf:"db" toml:"db"`
 	// RPC RPCConfig `koanf:"rpc" toml:"rpc"`
-	// DB DBConfig `koanf:"db" toml:"db"`
 }
 
 // PeerConfig corresponds to the [peer] section of the config.
@@ -124,16 +137,26 @@ type PeerConfig struct {
 	// ListenAddr string // "127.0.0.1:6600"
 }
 
-type PGConfig struct {
-	// Host, Port, User, Pass, and DBName are used verbatim to create a
-	// connection string in DSN format.
-	// https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
-	Host           string `koanf:"host" toml:"host"`
-	Port           string `koanf:"port" toml:"port"`
-	User           string `koanf:"user" toml:"user"`
-	Pass           string `koanf:"pass" toml:"pass"`
-	DBName         string `koanf:"dbname" toml:"dbname"`
-	MaxConnections uint32 `koanf:"max_connections" toml:"max_connections"`
+type DBConfig struct {
+	// PostgreSQL DB settings. DBName is the name if the PostgreSQL database to
+	// connect to. The different data stores (e.g. engine, acct store, event
+	// store, etc.) are all in the same database. Assuming "kwild" is the
+	// DBName, this would be created with psql with the commands:
+	//  CREATE USER kwild WITH SUPERUSER REPLICATION;
+	//  CREATE DATABASE kwild OWNER kwild;
+	//
+	// All of these settings are strings and separate, but it is possible to
+	// have a single DB "connection string" to pass to the PostgreSQL backend.
+	// However, this is less error prone, and prevents passing settings that
+	// would alter the functionality of the connection. An advanced option could
+	// be added to supplement the conn string if that seems useful.
+	Host          string   `koanf:"host" toml:"host"`
+	Port          string   `koanf:"port" toml:"port"`
+	User          string   `koanf:"user" toml:"user"`
+	Pass          string   `koanf:"pass" toml:"pass"`
+	DBName        string   `koanf:"dbname" toml:"dbname"`
+	ReadTxTimeout Duration `koanf:"read_timeout" toml:"read_timeout"`
+	MaxConns      uint32   `koanf:"max_connections" toml:"max_connections"`
 }
 
 type ConsensusConfig struct {
@@ -150,28 +173,6 @@ type RPCConfig struct {
 	// Private         bool          `koanf:"private" toml:"private"`
 	// ChallengeExpiry    time.Duration `koanf:"challenge_expiry" toml:"challenge_expiry"`
 	// ChallengeRateLimit float64       `koanf:"challenge_rate_limit" toml:"challenge_rate_limit"`
-}
-
-type DBConfig struct {
-	// PostgreSQL DB settings. DBName is the name if the PostgreSQL database to
-	// connect to. The different data stores (e.g. engine, acct store, event
-	// store, etc.) are all in the same database. Assuming "kwild" is the
-	// DBName, this would be created with psql with the commands:
-	//  CREATE USER kwild WITH SUPERUSER REPLICATION;
-	//  CREATE DATABASE kwild OWNER kwild;
-	//
-	// All of these settings are strings and separate, but it is possible to
-	// have a single DB "connection string" to pass to the PostgreSQL backend.
-	// However, this is less error prone, and prevents passing settings that
-	// would alter the functionality of the connection. An advanced option could
-	// be added to supplement the conn string if that seems useful.
-	Host          string        `koanf:"host" toml:"host"`
-	Port          string        `koanf:"port" toml:"port"`
-	User          string        `koanf:"user" toml:"user"`
-	Pass          string        `koanf:"pass" toml:"pass"`
-	DBName        string        `koanf:"dbname" toml:"dbname"`
-	ReadTxTimeout time.Duration `koanf:"read_timeout" toml:"read_timeout"`
-	MaxConns      uint32        `koanf:"max_connections" toml:"max_connections"`
 }
 
 func (nc *Config) SaveAs(filename string) error {

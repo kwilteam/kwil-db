@@ -260,7 +260,7 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 
 func buildDB(ctx context.Context, cfg *Config, closers *closeFuncs) *pg.DB {
 	dbOpener := newDBOpener(cfg.PG.Host, cfg.PG.Port, cfg.PG.User, cfg.PG.Pass)
-	db, err := dbOpener(ctx, cfg.PG.DBName, cfg.PG.MaxConnections)
+	db, err := dbOpener(ctx, cfg.PG.DBName, cfg.PG.MaxConns)
 	if err != nil {
 		panic(err)
 	}
@@ -312,7 +312,7 @@ func newPoolDBOpener(host, port, user, pass string) poolOpener {
 
 func buildVoteStore(ctx context.Context, cfg *Config, closers *closeFuncs) (*voting.EventStore, *voting.VoteStore, error) {
 	poolOpener := newPoolDBOpener(cfg.PG.Host, cfg.PG.Port, cfg.PG.User, cfg.PG.Pass)
-	poolDB, err := poolOpener(ctx, cfg.PG.DBName, cfg.PG.MaxConnections)
+	poolDB, err := poolOpener(ctx, cfg.PG.DBName, cfg.PG.MaxConns)
 	if err != nil {
 		return nil, nil, err
 	}
