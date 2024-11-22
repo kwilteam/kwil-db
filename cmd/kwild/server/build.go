@@ -272,7 +272,7 @@ func (c *coreDependencies) service(loggerName string) *common.Service {
 		GenesisConfig:    c.genesisCfg,
 		LocalConfig:      c.cfg,
 		Identity:         c.privKey.PubKey().Bytes(),
-		ExtensionConfigs: make(map[string]map[string]string),
+		ExtensionConfigs: c.cfg.AppConfig.Extensions,
 	}
 }
 
