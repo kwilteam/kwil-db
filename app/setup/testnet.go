@@ -1,4 +1,4 @@
-package app
+package setup
 
 import (
 	"crypto/sha256"
@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/kwilteam/kwil-db/app/shared"
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
@@ -27,7 +28,7 @@ func TestnetCmd() *cobra.Command {
 		Use:   "testnet",
 		Short: "Generate configuration for multiple nodes",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			rootDir, err := RootDir(cmd)
+			rootDir, err := shared.RootDir(cmd)
 			if err != nil {
 				return err // the parent command needs to set a persistent flag named "root"
 			}
@@ -93,7 +94,7 @@ func generateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, start
 
 		privKey := keys[i].Bytes()
 
-		cfg := config.DefaultConfig()
+		cfg := shared.DefaultConfig() // not config.DefaultConfig(), so custom command config is used
 		cfg.PrivateKey = privKey
 		cfg.P2P.Port = startingPort + uint64(i)
 		cfg.P2P.IP = "127.0.0.1"
@@ -104,12 +105,12 @@ func generateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, start
 				leaderPub.Bytes(), leaderPubType, cfg.P2P.IP, int(startingPort))}
 		}
 
-		if err := cfg.SaveAs(filepath.Join(nodeDir, ConfigFileName)); err != nil {
+		if err := cfg.SaveAs(filepath.Join(nodeDir, config.ConfigFileName)); err != nil {
 			return err
 		}
 
 		// save the genesis configuration to the root directory
-		genFile := filepath.Join(nodeDir, GenesisFileName)
+		genFile := filepath.Join(nodeDir, config.GenesisFileName)
 		if err := genConfig.SaveAs(genFile); err != nil {
 			return err
 		}

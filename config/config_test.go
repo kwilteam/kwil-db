@@ -150,12 +150,13 @@ func TestConfigSaveAndLoad(t *testing.T) {
 					BootNodes: []string{"/ip4/192.168.1.1/tcp/8080/p2p/test"},
 				},
 				DB: DBConfig{
-					Host:     "127.0.0.1",
-					Port:     "5432",
-					User:     "kwild",
-					Pass:     "kwild",
-					DBName:   "kwild",
-					MaxConns: 10,
+					Host:          "127.0.0.1",
+					Port:          "5432",
+					User:          "kwild",
+					Pass:          "kwild",
+					DBName:        "kwild",
+					ReadTxTimeout: Duration(45 * time.Second),
+					MaxConns:      10,
 				},
 			},
 			wantErr: false,
@@ -208,13 +209,13 @@ func TestConfigSaveAndLoad(t *testing.T) {
 				}
 				fmt.Println(loaded.DB)
 				if loaded.DB.Host != tt.config.DB.Host {
-					t.Errorf("PGConfig.Host mismatch: got %v, want %v", loaded.DB.Host, tt.config.DB.Host)
+					t.Errorf("DB.Host mismatch: got %v, want %v", loaded.DB.Host, tt.config.DB.Host)
 				}
 				if loaded.DB.Port != tt.config.DB.Port {
-					t.Errorf("PGConfig.Port mismatch: got %v, want %v", loaded.DB.Port, tt.config.DB.Port)
+					t.Errorf("DB.Port mismatch: got %v, want %v", loaded.DB.Port, tt.config.DB.Port)
 				}
 				if loaded.DB.User != tt.config.DB.User {
-					t.Errorf("PGConfig.User mismatch: got %v, want %v", loaded.DB.User, tt.config.DB.User)
+					t.Errorf("DB.User mismatch: got %v, want %v", loaded.DB.User, tt.config.DB.User)
 				}
 			}
 		})

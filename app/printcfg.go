@@ -3,16 +3,10 @@ package app
 import (
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/config"
+	"github.com/kwilteam/kwil-db/app/shared"
 
-	"github.com/knadh/koanf/v2"
 	gotoml "github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
-)
-
-const (
-	ConfigFileName  = "kwil.toml"
-	GenesisFileName = "genesis.json"
 )
 
 func PrintConfigCmd() *cobra.Command {
@@ -20,19 +14,14 @@ func PrintConfigCmd() *cobra.Command {
 		Use:   "print-config",
 		Short: "Print the node configuration",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, err := RootDir(cmd)
+			_, err := shared.RootDir(cmd)
 			if err != nil {
 				return err // the parent command needs to set a persistent flag named "root"
 			}
 
-			// k => config.Config
-			var cfg config.Config
-			err = k.UnmarshalWithConf("", &cfg, koanf.UnmarshalConf{Tag: "koanf"})
-			if err != nil {
-				return fmt.Errorf("failed to unmarshal config: %w", err)
-			}
+			cfg := shared.ActiveConfig()
 
-			rawToml, err := gotoml.Marshal(&cfg)
+			rawToml, err := gotoml.Marshal(cfg)
 			if err != nil {
 				return fmt.Errorf("failed to marshal config to toml: %w", err)
 			}
@@ -44,8 +33,8 @@ func PrintConfigCmd() *cobra.Command {
 	}
 
 	// SetNodeFlags(cmd)
-	defaultCfg := config.DefaultConfig()
-	SetNodeFlagsFromStruct(cmd, defaultCfg)
+	defaultCfg := shared.DefaultConfig() // not config.DefaultConfig(), so custom command config is used
+	shared.SetNodeFlagsFromStruct(cmd, defaultCfg)
 
 	return cmd
 }
