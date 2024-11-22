@@ -7,7 +7,8 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/kwilteam/kwil-db/cmd/common/display"
+	"github.com/kwilteam/kwil-db/app/shared/display"
+	"github.com/kwilteam/kwil-db/core/crypto"
 
 	"github.com/spf13/cobra"
 )
@@ -18,13 +19,13 @@ var (
 The private key can either be passed as a key file path, or as a hex-encoded string.`
 
 	infoExample = `# Using a key file
-kwil-admin key info --key-file ~/.kwild/private_key
+kwild key info --key-file ~/.kwild/private_key
 
 # Using a hex-encoded string
-kwil-admin key info 381d28cf348c9efbf7d26ea54b647e2cb646d3b98cdeec0f1053a5ff599a036a0aa381bd4aad1670a39977d5416bfac7bd060765adc58a4bb16bbbafeefbae34`
+kwild key info 381d28cf348c9efbf7d26ea54b647e2cb646d3b98cdeec0f1053a5ff599a036a0aa381bd4aad1670a39977d5416bfac7bd060765adc58a4bb16bbbafeefbae34`
 )
 
-func infoCmd() *cobra.Command {
+func InfoCmd() *cobra.Command {
 	var privkeyFile string
 
 	cmd := &cobra.Command{
@@ -41,13 +42,13 @@ func infoCmd() *cobra.Command {
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("private key not valid hex: %w", err))
 				}
-				return display.PrintCmd(cmd, privKeyInfo(key))
+				return display.PrintCmd(cmd, privKeyInfo(key, crypto.KeyTypeSecp256k1))
 			} else if privkeyFile != "" {
 				key, err := readKeyFile(privkeyFile)
 				if err != nil {
 					return display.PrintErr(cmd, err)
 				}
-				return display.PrintCmd(cmd, privKeyInfo(key))
+				return display.PrintCmd(cmd, privKeyInfo(key, crypto.KeyTypeSecp256k1))
 			}
 
 			cmd.Usage()

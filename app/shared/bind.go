@@ -1,4 +1,4 @@
-package app
+package shared
 
 import (
 	"errors"
@@ -19,10 +19,61 @@ import (
 	"github.com/knadh/koanf/providers/posflag"
 	"github.com/knadh/koanf/providers/structs"
 	"github.com/knadh/koanf/v2"
+	gotoml "github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
 
+// The functions in this file are centered around this global koanf instance
+// that combines multiple config sources according to the enabled preruns.
+var k = koanf.New(".")
+
+// DefaultConfig is the function to return the default to all commands in this
+// app package. This is a var so that a custom binary may override the defaults,
+// which many commands obtain with this function.
+var DefaultConfig = config.DefaultConfig
+
+// ActiveConfig retrieves the current merged config. This is influenced by the
+// other functions in this package, including: BindDefaults,
+// SetNodeFlagsFromStruct, PreRunBindFlags, PreRunBindEnvMatching,
+// PreRunBindEnvAllSections, and PreRunBindConfigFile. The merge result is
+// determined by the order in which they source are bound (see PreRunBindConfigFile).
+func ActiveConfig() *config.Config {
+	// k => config.Config
+	var cfg config.Config
+	err := k.UnmarshalWithConf("", &cfg, koanf.UnmarshalConf{Tag: "koanf"})
+	if err != nil {
+		panic(fmt.Sprintf("failed to unmarshal config: %v", err))
+	}
+	return &cfg
+}
+
+// ConfigToTOML marshals the config to TOML.
+func ConfigToTOML(cfg *config.Config) (string, error) {
+	rawToml, err := gotoml.Marshal(&cfg)
+	if err != nil {
+		return "", fmt.Errorf("failed to marshal config to toml: %w", err)
+	}
+	return string(rawToml), nil
+}
+
+const (
+	RootFlagName  = "root"
+	rootShortName = "r"
+)
+
+// BindRootDirVar is used to bind the RootFlagName with a local command
+// variable. The flag "root" does not have config file analog, so binds with
+// local var, which is then available to all subcommands via RootDir(cmd).
+func BindRootDirVar(cmd *cobra.Command, rootDir *string, defaultVal, desc string) {
+	cmd.PersistentFlags().StringVarP(rootDir, RootFlagName, rootShortName,
+		defaultVal, desc)
+}
+
+// RootDir complements BindRootDirVar by returning the value of the root
+// directory flag bound by BindRootDirVar. This is available for commands that
+// do not have direct access to the local string pointer bound to the flag, such
+// as subcommands.
 func RootDir(cmd *cobra.Command) (string, error) {
 	// We have to get this from the flagset directly since PreRunBindConfigFile,
 	// which is executed *before* PreRunBindFlags, needs to get the root
@@ -34,6 +85,11 @@ func RootDir(cmd *cobra.Command) (string, error) {
 	return cmd.Flags().GetString(RootFlagName)
 }
 
+// SetNodeFlagsFromStruct is used to automate the creation of flags in the
+// provided command's pflag set from a tagged struct. This uses the field tags:
+// "toml" for the flag name, and "comment" for the help string. Any "_"
+// characters in the "toml" tag are converted to "-" when defining the flag.
+// This recurses into nested structs.
 func SetNodeFlagsFromStruct(cmd *cobra.Command, cfg interface{}) {
 	fs := cmd.Flags()
 	fs.SortFlags = false
@@ -172,6 +228,8 @@ func SetNodeFlags(cmd *cobra.Command) {
 	fs.Duration("consensus.propose-timeout", 1000*time.Millisecond, "timeout for proposing a block (leader only)")
 	fs.Uint64("consensus.max-block-size", 50_000_000, "maximum size of a block (in bytes)")
 	fs.Uint64("consensus.max-txs-per-block", 20_000, "maximum number of transactions per block")
+
+	...
 }*/
 
 // PreRunCmd is the function signature used with a cobra.Command.PreRunE or
@@ -216,7 +274,7 @@ func PreRunBindFlags(cmd *cobra.Command, args []string) error {
 	flagSet := cmd.Flags()
 	err := k.Load(posflag.ProviderWithFlag(flagSet, ".", nil, /* <- k if we want defaults from the flags*/
 		func(f *pflag.Flag) (string, interface{}) {
-			// if !f.Changed { debugf("not changed %v", f.Name) }
+			// if !f.Changed { Debugf("not changed %v", f.Name) }
 			key := strings.ToLower(f.Name)
 			val := posflag.FlagVal(flagSet, f)
 
@@ -226,7 +284,7 @@ func PreRunBindFlags(cmd *cobra.Command, args []string) error {
 				case "p2p.no-pex":
 					newKey := "p2p.pex"
 					if valB, ok := val.(bool); ok {
-						debugf("translating flag %s = %v => %s = %v", key, valB, newKey, !valB)
+						Debugf("translating flag %s = %v => %s = %v", key, valB, newKey, !valB)
 						val = !valB // negate
 						key = newKey
 					}
@@ -271,7 +329,7 @@ func PreRunBindEnvMatching(cmd *cobra.Command, args []string) error {
 	for key, val := range k.All() { // flattened keys+vals map
 		envEquivKey := strings.NewReplacer(".", "_", "-", "_").Replace(key) // e.g. "section.sub.some-key" => "section_sub_some_key"
 		if envVal, ok := envKeyMap[envEquivKey]; ok {
-			debugf("Merging env var: %s (%v) <= %s (%v)", key, val,
+			Debugf("Merging env var: %s (%v) <= %s (%v)", key, val,
 				strings.ToUpper(envEquivKey), envVal)
 			k.Set(key, kEnv.Get(envEquivKey))
 			delete(envKeyMap, envEquivKey)
@@ -279,7 +337,7 @@ func PreRunBindEnvMatching(cmd *cobra.Command, args []string) error {
 	}
 	// Set the remaining unmatched env vars into k.
 	for key, val := range envKeyMap {
-		debugf("Unmatched env var: %s", key)
+		Debugf("Unmatched env var: %s", key)
 		k.Set(strings.ReplaceAll(key, "_", "."), val)
 	}
 	return nil
@@ -326,13 +384,13 @@ func PreRunBindConfigFile(cmd *cobra.Command, args []string) error {
 	// The above can be modified to standardize to "-".
 
 	// Load config from file
-	confPath, _ := filepath.Abs(filepath.Join(rootDir, ConfigFileName))
+	confPath, _ := filepath.Abs(filepath.Join(rootDir, config.ConfigFileName))
 	if err := k.Load(file.Provider(confPath), toml.Parser() /*, mergeFn*/); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("error loading config: %v", err)
 		}
 		// Not an error, just no config file present.
-		debugf("No config file present at %v", confPath)
+		Debugf("No config file present at %v", confPath)
 	}
 	return nil
 }
@@ -341,7 +399,7 @@ func PreRunBindConfigFile(cmd *cobra.Command, args []string) error {
 // is enabled (the `--debug` flag is set), otherwise this does nothing. It may
 // be specified multiple times in a PreRun chain.
 func PreRunPrintEffectiveConfig(cmd *cobra.Command, args []string) error {
-	debugf("merged config map:\n%s\n", lazyPrinter(func() string {
+	Debugf("merged config map:\n%s\n", LazyPrinter(func() string {
 		return k.Sprint()
 	}))
 	return nil
