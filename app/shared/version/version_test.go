@@ -1,7 +1,7 @@
 package version
 
 import (
-	"github.com/kwilteam/kwil-db/app/common/display"
+	"github.com/kwilteam/kwil-db/app/shared/display"
 )
 
 func Example_versionInfo_text() {
