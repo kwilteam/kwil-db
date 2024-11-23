@@ -14,10 +14,6 @@ import (
 	ktypes "kwil/types"
 )
 
-var (
-	dirtyHash = types.HashBytes([]byte("0x42"))
-)
-
 // Block processing methods
 func (ce *ConsensusEngine) validateBlock(blk *types.Block) error {
 	// Validate if this is the correct block proposal to be processed.
@@ -225,7 +221,7 @@ func (ce *ConsensusEngine) accountsHash() types.Hash {
 	hasher := sha256.New()
 	for _, acc := range accounts {
 		hasher.Write(acc.Identifier)
-		binary.Write(hasher, binary.BigEndian, acc.Balance)
+		binary.Write(hasher, binary.BigEndian, acc.Balance.Bytes())
 		binary.Write(hasher, binary.BigEndian, acc.Nonce)
 	}
 

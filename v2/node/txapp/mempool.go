@@ -64,23 +64,23 @@ func (m *mempool) applyTransaction(ctx *types.TxContext, tx *types.Transaction, 
 	if inMigration {
 		switch tx.Body.PayloadType {
 		case types.PayloadTypeValidatorJoin:
-			return fmt.Errorf("validator joins are not allowed during migration")
+			return errors.New("validator joins are not allowed during migration")
 		case types.PayloadTypeValidatorLeave:
-			return fmt.Errorf("validator leaves are not allowed during migration")
+			return errors.New("validator leaves are not allowed during migration")
 		case types.PayloadTypeValidatorApprove:
-			return fmt.Errorf("validator approvals are not allowed during migration")
+			return errors.New("validator approvals are not allowed during migration")
 		case types.PayloadTypeValidatorRemove:
-			return fmt.Errorf("validator removals are not allowed during migration")
+			return errors.New("validator removals are not allowed during migration")
 		case types.PayloadTypeValidatorVoteIDs:
-			return fmt.Errorf("validator vote ids are not allowed during migration")
+			return errors.New("validator vote ids are not allowed during migration")
 		case types.PayloadTypeValidatorVoteBodies:
-			return fmt.Errorf("validator vote bodies are not allowed during migration")
+			return errors.New("validator vote bodies are not allowed during migration")
 		// case types.PayloadTypeDeploySchema:
-		// 	return fmt.Errorf("deploy schema transactions are not allowed during migration")
+		// 	return errors.New("deploy schema transactions are not allowed during migration")
 		// case types.PayloadTypeDropSchema:
-		// 	return fmt.Errorf("drop schema transactions are not allowed during migration")
+		// 	return errors.New("drop schema transactions are not allowed during migration")
 		case types.PayloadTypeTransfer:
-			return fmt.Errorf("transfer transactions are not allowed during migration")
+			return errors.New("transfer transactions are not allowed during migration")
 		}
 	}
 
@@ -91,7 +91,7 @@ func (m *mempool) applyTransaction(ctx *types.TxContext, tx *types.Transaction, 
 			return err
 		}
 		if (activeMigration || genesisMigration) && res.Resolution.Type == voting.StartMigrationEventType {
-			return fmt.Errorf(" migration resolutions are not allowed during migration")
+			return errors.New(" migration resolutions are not allowed during migration")
 		}
 	}
 
@@ -108,7 +108,7 @@ func (m *mempool) applyTransaction(ctx *types.TxContext, tx *types.Transaction, 
 		}
 
 		if (activeMigration || genesisMigration) && resolution.Type == voting.StartMigrationEventType {
-			return fmt.Errorf("approving migration resolutions are not allowed during migration")
+			return errors.New("approving migration resolutions are not allowed during migration")
 		}
 	}
 
@@ -121,7 +121,7 @@ func (m *mempool) applyTransaction(ctx *types.TxContext, tx *types.Transaction, 
 		}
 
 		if power == 0 {
-			return fmt.Errorf("only validators can submit validator vote transactions")
+			return errors.New("only validators can submit validator vote transactions")
 		}
 
 		// reject the transaction if the number of voteIDs exceeds the limit
@@ -137,7 +137,7 @@ func (m *mempool) applyTransaction(ctx *types.TxContext, tx *types.Transaction, 
 
 	if tx.Body.PayloadType == types.PayloadTypeValidatorVoteBodies {
 		// not sure if this is the right error code
-		return fmt.Errorf("validator vote bodies can not enter the mempool, and can only be submitted during block proposal")
+		return errors.New("validator vote bodies can not enter the mempool, and can only be submitted during block proposal")
 	}
 
 	// get account info from mempool state or account store

@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"kwil/node/types/sql"
 	"kwil/node/versioning"
@@ -499,7 +500,7 @@ func FilterNotProcessed(ctx context.Context, db sql.Executor, ids []*types.UUID)
 	for _, row := range res.Rows {
 		if len(row) != 1 {
 			// this should never happen, just for safety
-			return nil, fmt.Errorf("invalid number of columns returned. this is an internal bug")
+			return nil, errors.New("invalid number of columns returned. this is an internal bug")
 		}
 		idBts := slices.Clone(row[0].([]byte))
 		processed[types.UUID(idBts)] = true
@@ -553,7 +554,7 @@ func ReadjustExpirations(ctx context.Context, db sql.Executor, startHeight int64
 // If set to 0, the voter will be deleted.
 func (v *VoteStore) SetValidatorPower(ctx context.Context, db sql.Executor, recipient []byte, power int64) error {
 	if power < 0 {
-		return fmt.Errorf("cannot set a negative power")
+		return errors.New("cannot set a negative power")
 	}
 
 	uuid := types.NewUUIDV5(recipient)
@@ -620,23 +621,23 @@ func getValidators(ctx context.Context, db sql.Executor) ([]*types.Validator, er
 
 	if len(res.Rows[0]) != 2 {
 		// this should never happen, just for safety
-		return nil, fmt.Errorf("invalid number of columns returned. this is an internal bug")
+		return nil, errors.New("invalid number of columns returned. this is an internal bug")
 	}
 
 	voters := make([]*types.Validator, len(res.Rows))
 	for i, row := range res.Rows {
 		if len(row) != 2 {
 			// this should never happen, just for safety
-			return nil, fmt.Errorf("invalid number of columns returned. this is an internal bug")
+			return nil, errors.New("invalid number of columns returned. this is an internal bug")
 		}
 
 		voterBts, ok := row[0].([]byte)
 		if !ok {
-			return nil, fmt.Errorf("invalid type for voter")
+			return nil, errors.New("invalid type for voter")
 		}
 		power, ok := sql.Int64(row[1])
 		if !ok {
-			return nil, fmt.Errorf("invalid type for power")
+			return nil, errors.New("invalid type for power")
 		}
 		voters[i] = &types.Validator{
 			PubKey: slices.Clone(voterBts),

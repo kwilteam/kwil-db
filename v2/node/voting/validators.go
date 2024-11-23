@@ -3,6 +3,7 @@ package voting
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"kwil/extensions/resolutions"
 	"kwil/types"
@@ -42,7 +43,7 @@ func init() {
 			if removeReq.Power != 0 {
 				// this should never happen since UpdatePowerRequest is only used for internal communication
 				// between modules. Removes are sent from the client in a separate message.
-				return fmt.Errorf("remove request with non-zero power")
+				return errors.New("remove request with non-zero power")
 			}
 
 			return app.Validators.SetValidatorPower(ctx, app.DB, removeReq.PubKey, 0)
@@ -70,7 +71,7 @@ func (j *UpdatePowerRequest) MarshalBinary() ([]byte, error) {
 // UnmarshalBinary unmarshals the join request from its binary representation
 func (j *UpdatePowerRequest) UnmarshalBinary(data []byte) error {
 	if len(data) < 8 {
-		return fmt.Errorf("data too short")
+		return errors.New("data too short")
 	}
 	j.PubKey = data[:len(data)-8]
 	j.Power = int64(binary.BigEndian.Uint64(data[len(data)-8:]))
