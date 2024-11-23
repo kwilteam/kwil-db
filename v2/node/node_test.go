@@ -10,6 +10,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -20,6 +21,8 @@ import (
 	"kwil/crypto"
 	"kwil/log"
 	"kwil/node/consensus"
+	"kwil/node/mempool"
+	"kwil/node/peers"
 	"kwil/node/store/memstore"
 	"kwil/node/types"
 	ktypes "kwil/types"
@@ -30,6 +33,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	mock "github.com/libp2p/go-libp2p/p2p/net/mock"
 	ma "github.com/multiformats/go-multiaddr"
+	"github.com/stretchr/testify/require"
 )
 
 var blackholeIP6 = net.ParseIP("100::")
@@ -104,7 +108,7 @@ func newGenesis(t *testing.T, nodekeys [][]byte) ([]crypto.PrivateKey, *config.G
 }
 
 func setHupStreamHandlers(t *testing.T, h host.Host) {
-	for _, proto := range neededProtocols {
+	for _, proto := range RequiredStreamProtocols {
 		h.SetStreamHandler(proto, func(s network.Stream) {
 			t.Log("handling incoming stream for", proto)
 			s.Close()
@@ -179,12 +183,13 @@ func (ce *dummyCE) NotifyBlockProposal(blk *types.Block) {
 
 func (ce *dummyCE) Start(ctx context.Context, proposerBroadcaster consensus.ProposalBroadcaster,
 	blkAnnouncer consensus.BlkAnnouncer, ackBroadcaster consensus.AckBroadcaster,
-	blkRequester consensus.BlkRequester, stateResetter consensus.ResetStateBroadcaster) {
+	blkRequester consensus.BlkRequester, stateResetter consensus.ResetStateBroadcaster) error {
 	ce.proposerBroadcaster = proposerBroadcaster
 	ce.blkAnnouncer = blkAnnouncer
 	ce.ackBroadcaster = ackBroadcaster
 	ce.blkRequester = blkRequester
 	ce.stateResetter = stateResetter
+	return nil
 }
 
 // Fake gets the methods to talk back to the Node, dictating CE logic manually.
@@ -239,102 +244,16 @@ func (f *faker) SetResetStateHandler(resetStateHandler func(height int64)) {
 	f.resetStateHandler = resetStateHandler
 }
 
-func TestDualNodeMocknet(t *testing.T) {
-	if testing.Short() {
-		t.Skip()
-	}
-	mn := mock.New()
+func newPeerManager(t *testing.T, rootDir string, h host.Host, logger log.Logger) PeerManager {
+	addrBookPath := filepath.Join(rootDir, "addrbook.json")
 
-	pk1, h1, err := newTestHost(t, mn)
-	if err != nil {
-		t.Fatalf("Failed to add peer to mocknet: %v", err)
-	}
-	bs1 := memstore.NewMemBS()
+	pm, err := peers.NewPeerMan(true, addrBookPath, logger, h,
+		func(ctx context.Context, peerID peer.ID) ([]peer.AddrInfo, error) {
+			return RequestPeers(ctx, h.ID(), h, logger)
+		}, RequiredStreamProtocols)
+	require.NoError(t, err)
 
-	pk2, h2, err := newTestHost(t, mn)
-	if err != nil {
-		t.Fatalf("Failed to add peer to mocknet: %v", err)
-	}
-	bs2 := memstore.NewMemBS()
-
-	root1 := t.TempDir()
-	root2 := t.TempDir()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
-
-	t.Cleanup(func() {
-		cancel()
-		wg.Wait()
-	})
-
-	privKeys, genCfg := newGenesis(t, [][]byte{pk1, pk2})
-
-	defaultConfigSet := config.DefaultConfig()
-
-	log1 := log.New(log.WithName("NODE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
-	cfg1 := &Config{
-		RootDir:   root1,
-		PrivKey:   privKeys[0],
-		Logger:    log1,
-		Genesis:   *genCfg,
-		Consensus: defaultConfigSet.Consensus,
-		P2P:       defaultConfigSet.P2P, // mostly ignored as we are using WithHost below
-	}
-	node1, err := NewNode(cfg1, WithHost(h1), WithBlockStore(bs1))
-	if err != nil {
-		t.Fatalf("Failed to create Node 1: %v", err)
-	}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer os.RemoveAll(node1.Dir())
-		node1.Start(ctx)
-	}()
-
-	// time.Sleep(200 * time.Millisecond) // !!!! apparently, needs this if block store does not have latency, so there is a race condition somewhere in CE
-	time.Sleep(20 * time.Millisecond)
-
-	log2 := log.New(log.WithName("NODE2"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
-	cfg2 := &Config{
-		RootDir:   root2,
-		PrivKey:   privKeys[1],
-		Logger:    log2,
-		Genesis:   *genCfg,
-		Consensus: defaultConfigSet.Consensus,
-		P2P:       defaultConfigSet.P2P,
-	}
-	node2, err := NewNode(cfg2, WithHost(h2), WithBlockStore(bs2))
-	if err != nil {
-		t.Fatalf("Failed to create Node 2: %v", err)
-	}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer os.RemoveAll(node2.Dir())
-		node2.Start(ctx)
-	}()
-
-	// Link and connect the hosts
-	if err := mn.LinkAll(); err != nil {
-		t.Fatalf("Failed to link hosts: %v", err)
-	}
-	if err := mn.ConnectAllButSelf(); err != nil {
-		t.Fatalf("Failed to connect hosts: %v", err)
-	}
-
-	// n1 := mn.Net(h1.ID())
-	// links := mn.LinksBetweenPeers(h1.ID(), h2.ID())
-	// ln := links[0]
-	// net := ln.Networks()[0]
-	// peers := net.Peers()
-	// t.Log(peers)
-
-	// run for a bit, checks stuff, do tests, like ensure blocks mine (TODO)...
-	time.Sleep(4 * time.Second)
-	cancel()
-	wg.Wait()
-
+	return pm
 }
 
 func TestStreamsBlockFetch(t *testing.T) {
@@ -375,15 +294,19 @@ func TestStreamsBlockFetch(t *testing.T) {
 
 	// log1 := log.New(log.WithName("NODE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
 	cfg1 := &Config{
-		RootDir:   rootDir,
-		PrivKey:   privKeys[0],
-		Logger:    log.DiscardLogger, // log1,
-		Genesis:   *genCfg,
-		Consensus: defaultConfigSet.Consensus,
-		P2P:       defaultConfigSet.P2P, // mostly ignored as we are using WithHost below
+		RootDir: rootDir,
+		PrivKey: privKeys[0],
+		Logger:  log.DiscardLogger,
+		Cfg:     defaultConfigSet,
+		Genesis: genCfg,
+
+		Host:       h1,
+		PeerMgr:    newPeerManager(t, rootDir, h1, log.DiscardLogger),
+		Mempool:    mempool.New(),
+		BlockStore: bs,
+		Consensus:  ce,
 	}
-	node1, err := NewNode(cfg1, WithHost(h1), WithBlockStore(bs),
-		WithConsensusEngine(ce))
+	node1, err := NewNode(cfg1)
 	if err != nil {
 		t.Fatalf("Failed to create Node 1: %v", err)
 	}

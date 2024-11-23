@@ -1,12 +1,10 @@
 package node
 
 import (
-	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"io"
 	mrand2 "math/rand/v2"
@@ -21,18 +19,9 @@ import (
 	"time"
 
 	"kwil/crypto"
-	"kwil/crypto/auth"
 	"kwil/log"
-	"kwil/node/accounts"
-	"kwil/node/consensus"
-	"kwil/node/mempool"
-	"kwil/node/meta"
 	"kwil/node/peers"
-	"kwil/node/pg"
-	"kwil/node/store"
-	"kwil/node/txapp"
 	"kwil/node/types"
-	"kwil/node/voting"
 	ktypes "kwil/types"
 
 	"github.com/libp2p/go-libp2p"
@@ -55,269 +44,81 @@ const (
 )
 
 type Node struct {
-	bki   types.BlockStore
-	mp    types.MemPool
-	ce    ConsensusEngine
-	txapp TxApp
-	// accounts, votestore etc. if needed
-
-	log log.Logger
-
-	pm PeerManager // *peers.PeerMan
-	// pf *prefetch
-
-	ackChan  chan AckRes         // from consensus engine, to gossip to leader
-	resetMsg chan ConsensusReset // gossiped in from peers, to consensus engine
-
-	host   host.Host
+	// cfg
 	pex    bool
 	pubkey crypto.PublicKey
 	dir    string
-	wg     sync.WaitGroup
-	// close  func() error
-	closers *closeFuncs
+	// pf *prefetch
 
 	role   atomic.Value
 	valSet map[string]ktypes.Validator
+
+	// interfaces
+	bki  types.BlockStore
+	mp   types.MemPool
+	ce   ConsensusEngine
+	pm   PeerManager // *peers.PeerMan
+	host host.Host
+
+	// broadcast channels
+	ackChan  chan AckRes         // from consensus engine, to gossip to leader
+	resetMsg chan ConsensusReset // gossiped in from peers, to consensus engine
+
+	wg  sync.WaitGroup
+	log log.Logger
 }
 
 // NewNode creates a new node. For now we are using functional options, but this
 // may be better suited by a config struct, or a hybrid where some settings are
 // required, such as identity.
-func NewNode(cfg *Config, opts ...Option) (*Node, error) {
-	options := &options{}
-	for _, opt := range opts {
-		opt(options)
-	}
-
-	logger := cfg.Logger
-	if logger == nil {
-		// logger = log.DiscardLogger // prod
-		logger = log.New(log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug),
-			log.WithFormat(log.FormatUnstructured)) // dev
-	}
-
-	closers := &closeFuncs{
-		closers: []func() error{},
-		logger:  logger,
-	}
-
-	// close := func() error { return nil }
-	ctx := context.Background()
-
-	host := options.host
-	if host == nil {
-		var err error
-		host, err = newHost(cfg.P2P.IP, cfg.P2P.Port, cfg.PrivKey)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	// Mempool
-	mp := options.mp
-	if options.mp == nil {
-		mp = mempool.New()
-	}
-
-	// Peer Manager
-	addrBookPath := filepath.Join(cfg.RootDir, "addrbook.json")
-	pm, err := peers.NewPeerMan(cfg.P2P.Pex, addrBookPath,
-		logger.New("PEERS"),
-		host, // tooo much, become minimal interface
-		func(ctx context.Context, peerID peer.ID) ([]peer.AddrInfo, error) {
-			return requestPeers(ctx, peerID, host, logger)
-		}, neededProtocols)
-	if err != nil {
-		return nil, err
-	}
-
-	// BlockStore
-	bs := options.bs
-	if bs == nil {
-		blkStrDir := filepath.Join(cfg.RootDir, "blockstore")
-		var err error
-		bs, err = store.NewBlockStore(blkStrDir)
-		if err != nil {
-			return nil, err
-		}
-		closers.addCloser(bs.Close, "Closing BlockStore") //close db after stopping p2p
-	}
-	closers.addCloser(host.Close, "Closing P2P")
-
-	db := buildDB(ctx, cfg, closers)
-
-	// Metastore
-	err = meta.InitializeMetaStore(ctx, db)
-	if err != nil {
-		return nil, err
-	}
-
-	// Account Store
-	accounts, err := accounts.InitializeAccountStore(ctx, db)
-	if err != nil {
-		return nil, err
-	}
-
-	// VoteStore
-	_, voteStore, err := buildVoteStore(ctx, cfg, closers) // TODO: also expose the event store and pass it to the consensus engine or txapp. (whoever broadcasts the voteID transactions)
-	if err != nil {
-		return nil, err
-	}
-
-	// TxApp
-	privKey := cfg.PrivKey
-	pubkey := privKey.Public()
-	signer := auth.GetSigner(privKey)
-	service := &ktypes.Service{
-		Logger:   logger.New("TXAPP"),
-		Identity: signer.Identity(),
-		// TODO: pass extension configs
-		// ExtensionConfigs: make(map[string]map[string]string),
-	}
-
-	txApp, err := txapp.NewTxApp(ctx, db, nil, signer, nil, service, accounts, voteStore)
-
-	leader := cfg.Genesis.Validators[0].PubKey
-	valSet := make(map[string]ktypes.Validator)
-	for _, val := range cfg.Genesis.Validators {
-		valSet[hex.EncodeToString(val.PubKey)] = val
-	}
+func NewNode(nc *Config) (*Node, error) {
+	leader := nc.Genesis.Validators[0].PubKey
 
 	leaderPubKey, err := crypto.UnmarshalSecp256k1PublicKey(leader)
 	if err != nil {
 		return nil, err
 	}
-
+	pubkey := nc.PrivKey.Public()
 	role := types.RoleValidator
 	if pubkey.Equals(leaderPubKey) {
 		role = types.RoleLeader
 	}
 
-	ce := options.ce
-	if ce == nil {
-
-		ceCfg := &consensus.Config{
-			PrivateKey:     privKey,
-			Dir:            cfg.RootDir,
-			Leader:         leaderPubKey,
-			Mempool:        mp,
-			BlockStore:     bs,
-			ValidatorSet:   valSet,
-			Logger:         logger.New("CONS"),
-			ProposeTimeout: cfg.Consensus.ProposeTimeout,
-			DB:             db,
-			Accounts:       accounts,
-			ValidatorStore: voteStore,
-			TxApp:          txApp,
-		}
-		ceEng := consensus.New(ceCfg)
-		if ceEng == nil {
-			return nil, errors.New("failed to create consensus engine")
-		}
-		ce = ceEng
-	}
-
 	node := &Node{
-		log:      logger,
-		host:     host,
-		pm:       pm,
+		log:      nc.Logger,
+		host:     nc.Host,
+		pm:       nc.PeerMgr,
 		pubkey:   pubkey,
-		pex:      cfg.P2P.Pex,
-		mp:       mp,
-		bki:      bs,
-		ce:       ce,
-		dir:      cfg.RootDir,
+		pex:      nc.Cfg.P2P.Pex,
+		mp:       nc.Mempool,
+		bki:      nc.BlockStore,
+		ce:       nc.Consensus,
+		dir:      nc.RootDir,
 		ackChan:  make(chan AckRes, 1),
 		resetMsg: make(chan ConsensusReset, 1),
-		closers:  closers,
-		valSet:   valSet,
-		txapp:    txApp,
+		valSet:   nc.ValSet,
 	}
 
 	node.role.Store(role)
 
-	host.SetStreamHandler(ProtocolIDTxAnn, node.txAnnStreamHandler)
-	host.SetStreamHandler(ProtocolIDBlkAnn, node.blkAnnStreamHandler)
-	host.SetStreamHandler(ProtocolIDBlock, node.blkGetStreamHandler)
-	host.SetStreamHandler(ProtocolIDBlockHeight, node.blkGetHeightStreamHandler)
-	host.SetStreamHandler(ProtocolIDTx, node.txGetStreamHandler)
+	nc.Host.SetStreamHandler(ProtocolIDTxAnn, node.txAnnStreamHandler)
+	nc.Host.SetStreamHandler(ProtocolIDBlkAnn, node.blkAnnStreamHandler)
+	nc.Host.SetStreamHandler(ProtocolIDBlock, node.blkGetStreamHandler)
+	nc.Host.SetStreamHandler(ProtocolIDBlockHeight, node.blkGetHeightStreamHandler)
+	nc.Host.SetStreamHandler(ProtocolIDTx, node.txGetStreamHandler)
 
-	host.SetStreamHandler(ProtocolIDBlockPropose, node.blkPropStreamHandler)
-	// host.SetStreamHandler(ProtocolIDACKProposal, node.blkAckStreamHandler)
+	nc.Host.SetStreamHandler(ProtocolIDBlockPropose, node.blkPropStreamHandler)
+	// nc.Host.SetStreamHandler(ProtocolIDACKProposal, node.blkAckStreamHandler)
 
-	if cfg.P2P.Pex {
-		host.SetStreamHandler(ProtocolIDDiscover, node.peerDiscoveryStreamHandler)
+	if nc.Cfg.P2P.Pex {
+		nc.Host.SetStreamHandler(ProtocolIDDiscover, node.peerDiscoveryStreamHandler)
 	} else {
-		host.SetStreamHandler(ProtocolIDDiscover, func(s network.Stream) {
+		nc.Host.SetStreamHandler(ProtocolIDDiscover, func(s network.Stream) {
 			s.Close()
 		})
 	}
 
 	return node, nil
-}
-
-func buildDB(ctx context.Context, cfg *Config, closers *closeFuncs) *pg.DB {
-	dbOpener := newDBOpener(cfg.PG.Host, cfg.PG.Port, cfg.PG.User, cfg.PG.Pass)
-	db, err := dbOpener(ctx, cfg.PG.DBName, cfg.PG.MaxConnections)
-	if err != nil {
-		panic(err)
-	}
-	closers.addCloser(db.Close, "Closing DB")
-	return db
-}
-
-// dbOpener opens a sessioned database connection.  Note that in this function the
-// dbName is not a Kwil dataset, but a database that can contain multiple
-// datasets in different postgresql "schema".
-type dbOpener func(ctx context.Context, dbName string, maxConns uint32) (*pg.DB, error)
-
-func newDBOpener(host, port, user, pass string) dbOpener {
-	return func(ctx context.Context, dbName string, maxConns uint32) (*pg.DB, error) {
-		cfg := &pg.DBConfig{
-			PoolConfig: pg.PoolConfig{
-				ConnConfig: pg.ConnConfig{
-					Host:   host,
-					Port:   port,
-					User:   user,
-					Pass:   pass,
-					DBName: dbName,
-				},
-				MaxConns: maxConns,
-			},
-		}
-		return pg.NewDB(ctx, cfg)
-	}
-}
-
-// poolOpener opens a basic database connection pool.
-type poolOpener func(ctx context.Context, dbName string, maxConns uint32) (*pg.Pool, error)
-
-func newPoolDBOpener(host, port, user, pass string) poolOpener {
-	return func(ctx context.Context, dbName string, maxConns uint32) (*pg.Pool, error) {
-		cfg := &pg.PoolConfig{
-			ConnConfig: pg.ConnConfig{
-				Host:   host,
-				Port:   port,
-				User:   user,
-				Pass:   pass,
-				DBName: dbName,
-			},
-			MaxConns: maxConns,
-		}
-		return pg.NewPool(ctx, cfg)
-	}
-}
-
-func buildVoteStore(ctx context.Context, cfg *Config, closers *closeFuncs) (*voting.EventStore, *voting.VoteStore, error) {
-	poolOpener := newPoolDBOpener(cfg.PG.Host, cfg.PG.Port, cfg.PG.User, cfg.PG.Pass)
-	poolDB, err := poolOpener(ctx, cfg.PG.DBName, cfg.PG.MaxConnections)
-	if err != nil {
-		return nil, nil, err
-	}
-	closers.addCloser(poolDB.Close, "Closing Eventstore DB")
-
-	return voting.NewResolutionStore(ctx, poolDB)
 }
 
 func FormatPeerString(rawPubKey []byte, keyType crypto.KeyType, ip string, port int) string {
@@ -444,6 +245,7 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 	go func() {
 		defer n.wg.Done()
 		defer cancel()
+		// TODO: umm, should node bringup the consensus engine? or server?
 		n.ce.Start(ctx, n.announceBlkProp, n.announceBlk, n.sendACK, n.getBlkHeight, n.sendReset)
 	}()
 
@@ -455,34 +257,15 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 
 	n.log.Info("Node started.")
 
-	valChan := n.txapp.SubscribeValidators()
-
-loop:
-	for {
-		select {
-		case <-ctx.Done():
-			break loop
-		case validators := <-valChan:
-			if n.role.Load() != types.RoleLeader { // skip if we are already a leader
-				isVal := slices.ContainsFunc(validators, func(v *ktypes.Validator) bool {
-					return bytes.Equal(v.PubKey, n.pubkey.Bytes())
-				})
-
-				if isVal {
-					n.role.Store(types.RoleValidator)
-				} else {
-					n.role.Store(types.RoleSentry)
-				}
-			}
-		}
-	}
-
+	<-ctx.Done()
 	n.wg.Wait()
 
-	return n.closers.closeAll()
+	n.log.Info("Node stopped.")
+	return nil
+	// return n.closers.closeAll()
 }
 
-var neededProtocols = []protocol.ID{
+var RequiredStreamProtocols = []protocol.ID{
 	ProtocolIDDiscover,
 	ProtocolIDTx,
 	ProtocolIDTxAnn,
@@ -494,7 +277,7 @@ var neededProtocols = []protocol.ID{
 }
 
 func (n *Node) checkPeerProtos(ctx context.Context, peer peer.ID) error {
-	return peers.RequirePeerProtos(ctx, n.host.Peerstore(), peer, neededProtocols...)
+	return peers.RequirePeerProtos(ctx, n.host.Peerstore(), peer, RequiredStreamProtocols...)
 }
 
 type randSrc struct{}
@@ -525,7 +308,7 @@ func NewKey(r io.Reader) crypto.PrivateKey {
 	return privKey
 }
 
-func newHost(ip string, port uint64, privKey crypto.PrivateKey) (host.Host, error) {
+func NewHost(ip string, port uint64, privKey crypto.PrivateKey) (host.Host, error) {
 	// convert to the libp2p crypto key type
 	var privKeyP2P p2pcrypto.PrivKey
 	var err error
@@ -545,7 +328,7 @@ func newHost(ip string, port uint64, privKey crypto.PrivateKey) (host.Host, erro
 
 	// listenAddrs := libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0", "/ip4/0.0.0.0/tcp/0/ws")
 
-	// cg := peers.NewProtocolGater(neededProtocols)
+	// cg := peers.NewProtocolGater()
 
 	h, err := libp2p.New(
 		libp2p.Transport(tcp.NewTCPTransport),
@@ -610,29 +393,4 @@ func ExpandPath(path string) (string, error) {
 		path = filepath.Join(home, path[2:])
 	}
 	return filepath.Abs(path)
-}
-
-// closeFuncs holds a list of closers
-// it is used to close all resources on shutdown
-type closeFuncs struct {
-	closers []func() error
-	logger  log.Logger
-}
-
-func (c *closeFuncs) addCloser(f func() error, msg string) {
-	// push to top of stack
-	c.closers = slices.Insert(c.closers, 0, func() error {
-		c.logger.Info(msg)
-		return f()
-	})
-}
-
-// closeAll closes all closers
-func (c *closeFuncs) closeAll() error {
-	var err error
-	for _, closer := range c.closers {
-		err = errors.Join(closer())
-	}
-
-	return err
 }

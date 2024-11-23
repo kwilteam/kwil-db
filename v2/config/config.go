@@ -109,9 +109,8 @@ type Config struct {
 	P2P PeerConfig `koanf:"p2p" toml:"p2p"`
 
 	Consensus ConsensusConfig `koanf:"consensus" toml:"consensus"`
-	PGConfig  PGConfig        `koanf:"pg" toml:"pg"`
 	// RPC RPCConfig `koanf:"rpc" toml:"rpc"`
-	// DB DBConfig `koanf:"db" toml:"db"`
+	DB DBConfig `koanf:"db" toml:"db"`
 }
 
 // PeerConfig corresponds to the [peer] section of the config.
@@ -122,18 +121,6 @@ type PeerConfig struct {
 	BootNodes []string `koanf:"bootnodes" toml:"bootnodes" comment:"bootnodes to connect to on startup"`
 
 	// ListenAddr string // "127.0.0.1:6600"
-}
-
-type PGConfig struct {
-	// Host, Port, User, Pass, and DBName are used verbatim to create a
-	// connection string in DSN format.
-	// https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
-	Host           string `koanf:"host" toml:"host"`
-	Port           string `koanf:"port" toml:"port"`
-	User           string `koanf:"user" toml:"user"`
-	Pass           string `koanf:"pass" toml:"pass"`
-	DBName         string `koanf:"dbname" toml:"dbname"`
-	MaxConnections uint32 `koanf:"max_connections" toml:"max_connections"`
 }
 
 type ConsensusConfig struct {

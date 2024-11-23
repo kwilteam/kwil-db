@@ -3,6 +3,7 @@ package app
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -12,8 +13,28 @@ import (
 	"kwil/crypto"
 	"kwil/log"
 	"kwil/node"
+	"kwil/node/consensus"
 	"kwil/version"
+
+	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
+
+type server struct {
+	cfg *config.Config // KwildConfig
+	log log.Logger
+
+	cancelCtxFunc context.CancelFunc
+	closers       *closeFuncs
+	dbCtx         interface {
+		Done() <-chan struct{}
+		Err() error
+	}
+
+	// Modules
+	node *node.Node
+	ce   *consensus.ConsensusEngine
+}
 
 func runNode(ctx context.Context, rootDir string, cfg *config.Config) error {
 	// Writing to stdout and a log file.  TODO: config outputs
@@ -52,27 +73,83 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config) error {
 
 	logger.Info("Parsing the pubkey", "key", hex.EncodeToString(pubKey))
 
-	nodeCfg := &node.Config{
-		RootDir:   rootDir,
-		PrivKey:   privKey,
-		Logger:    logger.NewWithLevel(cfg.LogLevel, "NODE"),
-		Consensus: cfg.Consensus,
-		Genesis:   *genConfig,
-		P2P:       cfg.P2P,
-		PG:        cfg.PGConfig,
-	}
-	node, err := node.NewNode(nodeCfg)
-	if err != nil {
-		return err
+	host, port, user, pass := cfg.DB.Host, cfg.DB.Port, cfg.DB.User, cfg.DB.Pass
+
+	d := &coreDependencies{
+		ctx:        ctx,
+		rootDir:    rootDir,
+		cfg:        cfg,
+		genesisCfg: genConfig,
+		privKey:    privKey,
+		logger:     logger,
+		dbOpener:   newDBOpener(host, port, user, pass),
+		poolOpener: newPoolBOpener(host, port, user, pass),
 	}
 
-	addrs := node.Addrs()
-	logger.Infof("This node is %s", addrs)
+	server := buildServer(ctx, d)
 
-	if err = node.Start(ctx, cfg.P2P.BootNodes...); err != nil {
-		return err
-	}
+	// start the server
 	// Start is blocking, for now.
+	return server.Start(ctx)
+}
+
+func (s *server) Start(ctx context.Context) error {
+	defer func() {
+		if err := recover(); err != nil {
+			s.log.Error("Panic in server", "error", err)
+		}
+
+		s.log.Info("Closing server resources...")
+		err := s.closers.closeAll()
+		if err != nil {
+			s.log.Error("failed to close resource:", "error", err)
+		}
+		s.log.Info("Server is now shut down.")
+	}()
+
+	s.log.Info("Starting the server")
+
+	cancelCtx, done := context.WithCancel(ctx)
+	s.cancelCtxFunc = done
+
+	group, groupCtx := errgroup.WithContext(cancelCtx)
+
+	group.Go(func() error {
+		// If the DB dies unexpectedly, stop the entire error group.
+		select {
+		case <-s.dbCtx.Done(): // DB died
+			return s.dbCtx.Err() // shutdown the server
+		case <-groupCtx.Done(): // something else died or was shut down
+			return nil
+		}
+	})
+
+	// start rpc services
+
+	// start node (p2p)
+	group.Go(func() error {
+		if err := s.node.Start(groupCtx, s.cfg.P2P.BootNodes...); err != nil {
+			s.log.Error("failed to start node", "error", err)
+			return err
+		}
+		return nil
+	})
+
+	// TODO: node is starting the consensus engine for ease of testing
+	// Start the consensus engine
+
+	err := group.Wait()
+
+	if err != nil {
+		if errors.Is(err, context.Canceled) {
+			s.log.Info("server context is canceled")
+			return nil
+		}
+
+		s.log.Error("server error", zap.Error(err))
+		s.cancelCtxFunc()
+		return err
+	}
 
 	return nil
 }

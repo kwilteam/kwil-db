@@ -1,3 +1,5 @@
+//go:build pglive
+
 package consensus
 
 import (
@@ -91,7 +93,6 @@ func generateTestCEConfig(t *testing.T, nodes int) []*Config {
 		ceConfigs[i] = &Config{
 			DB:             db,
 			PrivateKey:     privKeys[i],
-			Dir:            nodeDir,
 			Leader:         pubKeys[0],
 			Mempool:        mempool.New(),
 			BlockStore:     bs,
@@ -659,7 +660,6 @@ func mockBlockRequester(_ context.Context, height int64) (types.Hash, types.Hash
 }
 
 func mockBlockPropBroadcaster(_ context.Context, blk *types.Block) {
-	return
 }
 
 func mockVoteBroadcaster(ack bool, height int64, blkID types.Hash, appHash *types.Hash) error {
@@ -667,7 +667,6 @@ func mockVoteBroadcaster(ack bool, height int64, blkID types.Hash, appHash *type
 }
 
 func mockBlkAnnouncer(_ context.Context, blk *types.Block, appHash types.Hash) {
-	return
 }
 
 func mockResetStateBroadcaster(_ int64) error {
@@ -681,8 +680,7 @@ func nextAppHash(prevHash types.Hash) types.Hash {
 }
 
 type dummyTxApp struct {
-	changesets []types.Hash
-	vals       []*ktypes.Validator
+	vals []*ktypes.Validator
 }
 
 func newDummyTxApp(valset []*ktypes.Validator) *dummyTxApp {

@@ -19,7 +19,7 @@ import (
 	"sync"
 )
 
-// TxApp is the transaction processer for the Kwil node.
+// TxApp is the transaction processor for the Kwil node.
 // It is responsible for interpreting payload bodies and routing them properly,
 // maintaining a mempool for uncommitted accounts, pricing transactions,
 // managing atomicity of the database, and managing the validator set.
@@ -83,14 +83,11 @@ func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.
 	initialHeight int64, chain *types.ChainContext) error {
 
 	// Add Genesis Validators
-	var voters []*types.Validator
-
 	for _, validator := range validators {
 		err := r.Validators.SetValidatorPower(ctx, db, validator.PubKey, validator.Power)
 		if err != nil {
 			return err
 		}
-		voters = append(voters, validator)
 	}
 
 	// Fund Genesis Accounts
