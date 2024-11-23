@@ -6,6 +6,7 @@ package voting
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"kwil/extensions/resolutions"
 	"kwil/node/types/sql"
@@ -304,7 +305,7 @@ func GetEvents(ctx context.Context, db sql.Executor) ([]*types.VotableEvent, err
 
 	var events []*types.VotableEvent
 	if len(res.Columns) != 2 {
-		return nil, fmt.Errorf("expected 2 columns getting events. this is an internal bug")
+		return nil, errors.New("expected 2 columns getting events. this is an internal bug")
 	}
 	for _, row := range res.Rows {
 		// rows[0] is the raw data of the event

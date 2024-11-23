@@ -42,7 +42,7 @@ type DB interface {
 var (
 	// getEvents gets all events, even if they have been
 	// marked received
-	getEvents = voting.GetEvents
+	// getEvents = voting.GetEvents
 
 	// deleteEvent deletes an event. It will no longer
 	// be broadcasted.
@@ -60,5 +60,5 @@ var (
 	approveResolution                = voting.ApproveResolution
 	resolutionExists                 = voting.ResolutionExists
 	resolutionByID                   = voting.GetResolutionInfo
-	deleteResolution                 = voting.DeleteResolution
+	// deleteResolution                 = voting.DeleteResolution
 )

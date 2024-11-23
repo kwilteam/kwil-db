@@ -55,7 +55,7 @@ func writePeers(s io.WriteCloser, peers []types.PeerInfo) error {
 	return nil
 }
 
-func requestPeers(ctx context.Context, peerID peer.ID, host host.Host, log log.Logger) ([]peer.AddrInfo, error) {
+func RequestPeers(ctx context.Context, peerID peer.ID, host host.Host, log log.Logger) ([]peer.AddrInfo, error) {
 	if peerID == host.ID() {
 		return nil, nil
 	}
