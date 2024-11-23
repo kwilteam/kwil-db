@@ -74,12 +74,12 @@ type Pricer interface {
 	Price(ctx context.Context, router *TxApp, db sql.DB, tx *types.Transaction) (*big.Int, error)
 }
 
-func codeForEngineError(err error) types.TxCode {
-	if err == nil {
-		return types.CodeOk
-	}
-	return types.CodeUnknownError
-}
+// func codeForEngineError(err error) types.TxCode {
+// 	if err == nil {
+// 		return types.CodeOk
+// 	}
+// 	return types.CodeUnknownError
+// }
 
 // routes is a map of transaction payload types to their respective routes. This
 // should be updated if a coordinated height-based update introduces new routes
@@ -307,7 +307,7 @@ func (d *validatorJoinRoute) InTx(ctx *types.TxContext, app *types.App, tx *type
 		return types.CodeUnknownError, err
 	}
 	if len(pending) > 0 {
-		return types.CodeInvalidSender, fmt.Errorf("validator already has a pending join request")
+		return types.CodeInvalidSender, errors.New("validator already has a pending join request")
 	}
 
 	// there are no pending join requests, so we can create a new one
@@ -375,11 +375,11 @@ func (d *validatorApproveRoute) InTx(ctx *types.TxContext, app *types.App, tx *t
 		return types.CodeUnknownError, err
 	}
 	if len(pending) == 0 {
-		return types.CodeInvalidSender, fmt.Errorf("validator does not have a pending join request")
+		return types.CodeInvalidSender, errors.New("validator does not have a pending join request")
 	}
 	if len(pending) > 1 {
 		// this should never happen, but if it does, we should not allow it
-		return types.CodeUnknownError, fmt.Errorf("validator has more than one pending join request. this is an internal bug")
+		return types.CodeUnknownError, errors.New("validator has more than one pending join request. this is an internal bug")
 	}
 
 	// ensure that sender is a validator
@@ -709,7 +709,7 @@ func (d *createResolutionRoute) Price(ctx context.Context, app *types.App, tx *t
 	}
 
 	if res.Resolution == nil {
-		return nil, fmt.Errorf("resolution is nil")
+		return nil, errors.New("resolution is nil")
 	}
 
 	// similar to the vote body route, pricing is based on the size of the resolution body
@@ -740,7 +740,7 @@ func (d *createResolutionRoute) PreTx(ctx *types.TxContext, svc *types.Service, 
 		return types.CodeInvalidResolutionType, err
 	}
 
-	d.resolution = (*types.VotableEvent)(res.Resolution)
+	d.resolution = res.Resolution
 	d.expiry = resCfg.ExpirationPeriod + ctx.BlockContext.Height
 
 	return 0, nil
@@ -790,7 +790,7 @@ func (d *approveResolutionRoute) Price(ctx context.Context, app *types.App, tx *
 func (d *approveResolutionRoute) PreTx(ctx *types.TxContext, svc *types.Service, tx *types.Transaction) (types.TxCode, error) {
 	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationInProgress ||
 		ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationCompleted {
-		return types.CodeNetworkInMigration, fmt.Errorf("cannot approve a resolution during migration")
+		return types.CodeNetworkInMigration, errors.New("cannot approve a resolution during migration")
 	}
 
 	res := &types.ApproveResolution{}
@@ -825,7 +825,7 @@ func (d *approveResolutionRoute) InTx(ctx *types.TxContext, app *types.App, tx *
 
 	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus != types.NoActiveMigration &&
 		resolution.Type == voting.StartMigrationEventType {
-		return types.CodeNetworkInMigration, fmt.Errorf("migration is about to start, cannot accept new migration proposals")
+		return types.CodeNetworkInMigration, errors.New("migration is about to start, cannot accept new migration proposals")
 	}
 
 	// vote on the resolution

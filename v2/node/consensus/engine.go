@@ -40,7 +40,6 @@ var zeroHash = types.Hash{}
 // - Once the leader receives the threshold acks with the same appHash as the leader, the block is committed and the leader broadcasts the blockAnn message to the network. Nodes that receive this message will enter into the commit phase where they verify the appHash and commit the block.
 type ConsensusEngine struct {
 	role    atomic.Value // types.Role, role can change over the lifetime of the node
-	dir     string
 	signer  auth.Signer
 	privKey crypto.PrivateKey
 	pubKey  crypto.PublicKey
@@ -132,7 +131,7 @@ type state struct {
 	// These are the Acks received from the validators.
 	votes map[string]*vote
 
-	chainContext *ktypes.ChainContext
+	// chainContext *ktypes.ChainContext
 }
 
 type blockResult struct {
@@ -153,8 +152,6 @@ type lastCommit struct {
 type Config struct {
 	// Signer is the private key of the node.
 	PrivateKey crypto.PrivateKey
-	// Dir is the directory where the node stores its data.
-	Dir string
 	// Leader is the public key of the leader.
 	Leader crypto.PublicKey
 
@@ -194,6 +191,7 @@ func New(cfg *Config) *ConsensusEngine {
 	// Determine *genesis* role based on leader pubkey and validator set.
 	var role types.Role
 	pubKey := cfg.PrivateKey.Public()
+
 	if pubKey.Equals(cfg.Leader) {
 		role = types.RoleLeader
 		logger.Info("You are the leader")
@@ -212,7 +210,6 @@ func New(cfg *Config) *ConsensusEngine {
 
 	// rethink how this state is initialized
 	ce := &ConsensusEngine{
-		dir:            cfg.Dir,
 		signer:         signer,
 		pubKey:         pubKey,
 		privKey:        cfg.PrivateKey,
@@ -254,24 +251,25 @@ func New(cfg *Config) *ConsensusEngine {
 }
 
 func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster ProposalBroadcaster,
-	blkAnnouncer BlkAnnouncer, ackBroadcaster AckBroadcaster, blkRequester BlkRequester, stateResetter ResetStateBroadcaster) {
+	blkAnnouncer BlkAnnouncer, ackBroadcaster AckBroadcaster, blkRequester BlkRequester, stateResetter ResetStateBroadcaster) error {
 	ce.proposalBroadcaster = proposerBroadcaster
 	ce.blkAnnouncer = blkAnnouncer
 	ce.ackBroadcaster = ackBroadcaster
 	ce.blkRequester = blkRequester
 	ce.rstStateBroadcaster = stateResetter
 
+	ce.log.Info("Starting the consensus engine")
+
 	// Fast catchup the node with the network height
 	if err := ce.catchup(ctx); err != nil {
-		ce.log.Errorf("Error catching up: %v", err)
-		return
+		return fmt.Errorf("error catching up: %w", err)
 	}
 
 	// start mining
 	ce.startMining(ctx)
 
 	// start the event loop
-	ce.runEventLoop(ctx)
+	return ce.runEventLoop(ctx)
 }
 
 // runEventLoop starts the event loop for the consensus engine.

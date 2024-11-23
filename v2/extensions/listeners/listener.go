@@ -7,6 +7,7 @@ package listeners
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"kwil/types"
 	"strings"
@@ -41,7 +42,7 @@ func RegisterListener(name string, listener ListenFunc) error {
 	// to prevent collisions in the KV.
 	for _, r := range name {
 		if r == ' ' {
-			return fmt.Errorf("listener name cannot have spaces")
+			return errors.New("listener name cannot have spaces")
 		}
 	}
 

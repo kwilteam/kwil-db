@@ -179,7 +179,7 @@ func Test_Routes(t *testing.T) {
 			},
 			ctx: &types.TxContext{
 				BlockContext: &types.BlockContext{
-					// Proposer: signer1.Identity(),
+					Proposer: signer1.Identity(), // TODO: Proposer in the new model is always the leader
 				},
 			},
 			from: signer1,
@@ -214,7 +214,7 @@ func Test_Routes(t *testing.T) {
 			},
 			ctx: &types.TxContext{
 				BlockContext: &types.BlockContext{
-					// Proposer: signer1.Identity(),
+					Proposer: signer1.Identity(), // TODO: Proposer in the new model is always the leader
 				},
 			},
 			from: signer2,
@@ -251,15 +251,16 @@ func Test_Routes(t *testing.T) {
 				app := &TxApp{
 					Accounts:   account,
 					Validators: Validators,
-					signer:     tc.from,
 				}
+
 				if app.signer == nil {
 					app.signer = signer1
 				}
+
 				if app.service == nil {
 					app.service = &types.Service{
 						Logger:   log.DiscardLogger,
-						Identity: tc.from.Identity(),
+						Identity: app.signer.Identity(),
 					}
 				}
 

@@ -1,3 +1,5 @@
+//go:build pglive
+
 package meta_test
 
 import (
