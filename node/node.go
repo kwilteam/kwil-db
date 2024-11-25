@@ -43,6 +43,13 @@ const (
 	dummyTxInterval = 1 * time.Second // broadcast freq
 )
 
+type peerManager interface {
+	network.Notifiee
+	Start(context.Context) error
+	ConnectedPeers() []peers.PeerInfo
+	KnownPeers() []peers.PeerInfo
+}
+
 type Node struct {
 	// cfg
 	pex    bool
@@ -57,7 +64,7 @@ type Node struct {
 	bki  types.BlockStore
 	mp   types.MemPool
 	ce   ConsensusEngine
-	pm   PeerManager // *peers.PeerMan
+	pm   peerManager // *peers.PeerMan
 	host host.Host
 
 	// broadcast channels
@@ -231,7 +238,7 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 	// Connect to peers in peer store.
 	bootedPeers := n.pm.ConnectedPeers()
 	for _, peerID := range n.host.Peerstore().Peers() {
-		if slices.ContainsFunc(bootedPeers, func(p types.PeerInfo) bool {
+		if slices.ContainsFunc(bootedPeers, func(p peers.PeerInfo) bool {
 			return p.ID == peerID
 		}) {
 			continue // already connected

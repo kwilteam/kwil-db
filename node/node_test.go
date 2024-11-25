@@ -10,7 +10,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -23,7 +22,6 @@ import (
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/consensus"
 	"github.com/kwilteam/kwil-db/node/mempool"
-	"github.com/kwilteam/kwil-db/node/peers"
 	"github.com/kwilteam/kwil-db/node/store/memstore"
 	"github.com/kwilteam/kwil-db/node/types"
 
@@ -33,7 +31,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	mock "github.com/libp2p/go-libp2p/p2p/net/mock"
 	ma "github.com/multiformats/go-multiaddr"
-	"github.com/stretchr/testify/require"
 )
 
 var blackholeIP6 = net.ParseIP("100::")
@@ -242,18 +239,6 @@ func (f *faker) SetBlockPropHandler(blockPropHandler func(blk *types.Block)) {
 
 func (f *faker) SetResetStateHandler(resetStateHandler func(height int64)) {
 	f.resetStateHandler = resetStateHandler
-}
-
-func newPeerManager(t *testing.T, rootDir string, h host.Host, logger log.Logger) PeerManager {
-	addrBookPath := filepath.Join(rootDir, "addrbook.json")
-
-	pm, err := peers.NewPeerMan(true, addrBookPath, logger, h,
-		func(ctx context.Context, peerID peer.ID) ([]peer.AddrInfo, error) {
-			return RequestPeers(ctx, h.ID(), h, logger)
-		}, RequiredStreamProtocols)
-	require.NoError(t, err)
-
-	return pm
 }
 
 func TestStreamsBlockFetch(t *testing.T) {

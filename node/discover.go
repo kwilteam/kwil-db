@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/node/types"
+	"github.com/kwilteam/kwil-db/node/peers"
 
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -47,7 +47,7 @@ func (n *Node) peerDiscoveryStreamHandler(s network.Stream) {
 		"to_peer", s.Conn().RemotePeer())
 }
 
-func writePeers(s io.WriteCloser, peers []types.PeerInfo) error {
+func writePeers(s io.WriteCloser, peers []peers.PeerInfo) error {
 	encoder := json.NewEncoder(s)
 	if err := encoder.Encode(peers); err != nil {
 		return fmt.Errorf("failed to encode peers: %w", err)

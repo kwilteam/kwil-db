@@ -1,4 +1,4 @@
-package types
+package peers
 
 import (
 	"encoding/json"
