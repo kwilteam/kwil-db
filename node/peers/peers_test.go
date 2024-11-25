@@ -5,8 +5,6 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/node/types"
-
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	ma "github.com/multiformats/go-multiaddr"
@@ -23,16 +21,16 @@ func TestPersistAndLoadPeers(t *testing.T) {
 	tempDir := t.TempDir()
 	testFile := filepath.Join(tempDir, "test_peers.json")
 
-	testPeers := []types.PeerInfo{
+	testPeers := []PeerInfo{
 		{
-			AddrInfo: types.AddrInfo{
+			AddrInfo: AddrInfo{
 				ID:    pid1,
 				Addrs: []ma.Multiaddr{ma1, ma1b},
 			},
 			Protos: []protocol.ID{"ProtocolWhatever"},
 		},
 		{
-			AddrInfo: types.AddrInfo{
+			AddrInfo: AddrInfo{
 				ID:    pid2,
 				Addrs: []ma.Multiaddr{ma2},
 			},
@@ -51,7 +49,7 @@ func TestPersistAndLoadPeers(t *testing.T) {
 
 	t.Run("persist empty peer list", func(t *testing.T) {
 		emptyFile := filepath.Join(tempDir, "empty_peers.json")
-		err := persistPeers([]types.PeerInfo{}, emptyFile)
+		err := persistPeers([]PeerInfo{}, emptyFile)
 		require.NoError(t, err)
 
 		loadedPeers, err := loadPeers(emptyFile)

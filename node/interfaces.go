@@ -3,10 +3,8 @@ package node
 import (
 	"context"
 
-	// ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/consensus"
 	"github.com/kwilteam/kwil-db/node/types"
-	"github.com/libp2p/go-libp2p/core/network"
 )
 
 type ConsensusEngine interface {
@@ -33,11 +31,4 @@ type ConsensusEngine interface {
 	// ProcessProposal(blk *types.Block, cb func(ack bool, appHash types.Hash) error)
 	// ProcessACK(validatorPK []byte, ack types.AckRes)
 	// CommitBlock(blk *types.Block, appHash types.Hash) error
-}
-
-type PeerManager interface {
-	network.Notifiee
-	Start(context.Context) error
-	ConnectedPeers() []types.PeerInfo
-	KnownPeers() []types.PeerInfo
 }
