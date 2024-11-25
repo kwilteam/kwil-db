@@ -1,8 +1,6 @@
 package node
 
 import (
-	"github.com/libp2p/go-libp2p/core/host"
-
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
@@ -15,12 +13,10 @@ type Config struct {
 	RootDir string
 	PrivKey crypto.PrivateKey
 
-	Cfg     *config.Config
-	Genesis *config.GenesisConfig
-	ValSet  map[string]ktypes.Validator
+	P2P     *config.PeerConfig
+	Genesis *config.GenesisConfig       // TODO: remove
+	ValSet  map[string]ktypes.Validator // TODO: remove
 
-	Host       host.Host
-	PeerMgr    PeerManager
 	Mempool    types.MemPool
 	BlockStore types.BlockStore
 	Consensus  ConsensusEngine

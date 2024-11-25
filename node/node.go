@@ -18,7 +18,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	// "github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
@@ -69,52 +68,81 @@ type Node struct {
 	log log.Logger
 }
 
-// NewNode creates a new node. For now we are using functional options, but this
-// may be better suited by a config struct, or a hybrid where some settings are
-// required, such as identity.
-func NewNode(nc *Config) (*Node, error) {
-	leader := nc.Genesis.Validators[0].PubKey
+// NewNode creates a new node. The config struct is for required configuration,
+// and the functional options for optional settings, like dependency overrides.
+func NewNode(cfg *Config, opts ...Option) (*Node, error) {
+	options := &options{}
+	for _, opt := range opts {
+		opt(options)
+	}
+
+	logger := cfg.Logger
+	if logger == nil {
+		logger = log.DiscardLogger
+	}
+
+	leader := cfg.Genesis.Validators[0].PubKey
 
 	leaderPubKey, err := crypto.UnmarshalSecp256k1PublicKey(leader)
 	if err != nil {
 		return nil, err
 	}
-	pubkey := nc.PrivKey.Public()
+	pubkey := cfg.PrivKey.Public()
 	role := types.RoleValidator
 	if pubkey.Equals(leaderPubKey) {
 		role = types.RoleLeader
 	}
 
+	host := options.host
+	if host == nil {
+		host, err = newHost(cfg.P2P.IP, cfg.P2P.Port, cfg.PrivKey)
+		if err != nil {
+			return nil, fmt.Errorf("cannot create host: %w", err)
+		}
+	}
+
+	addrBookPath := filepath.Join(cfg.RootDir, "addrbook.json")
+
+	pm, err := peers.NewPeerMan(cfg.P2P.Pex, addrBookPath,
+		logger.New("PEERS"),
+		host, // tooo much, become minimal interface
+		func(ctx context.Context, peerID peer.ID) ([]peer.AddrInfo, error) {
+			return RequestPeers(ctx, host.ID(), host, logger)
+		}, RequiredStreamProtocols)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create peer manager: %w", err)
+	}
+
 	node := &Node{
-		log:      nc.Logger,
-		host:     nc.Host,
-		pm:       nc.PeerMgr,
+		log:      logger,
 		pubkey:   pubkey,
-		pex:      nc.Cfg.P2P.Pex,
-		mp:       nc.Mempool,
-		bki:      nc.BlockStore,
-		ce:       nc.Consensus,
-		dir:      nc.RootDir,
+		pex:      cfg.P2P.Pex,
+		host:     host,
+		pm:       pm,
+		mp:       cfg.Mempool,
+		bki:      cfg.BlockStore,
+		ce:       cfg.Consensus,
+		dir:      cfg.RootDir,
 		ackChan:  make(chan AckRes, 1),
 		resetMsg: make(chan ConsensusReset, 1),
-		valSet:   nc.ValSet,
+		valSet:   cfg.ValSet,
 	}
 
 	node.role.Store(role)
 
-	nc.Host.SetStreamHandler(ProtocolIDTxAnn, node.txAnnStreamHandler)
-	nc.Host.SetStreamHandler(ProtocolIDBlkAnn, node.blkAnnStreamHandler)
-	nc.Host.SetStreamHandler(ProtocolIDBlock, node.blkGetStreamHandler)
-	nc.Host.SetStreamHandler(ProtocolIDBlockHeight, node.blkGetHeightStreamHandler)
-	nc.Host.SetStreamHandler(ProtocolIDTx, node.txGetStreamHandler)
+	host.SetStreamHandler(ProtocolIDTxAnn, node.txAnnStreamHandler)
+	host.SetStreamHandler(ProtocolIDBlkAnn, node.blkAnnStreamHandler)
+	host.SetStreamHandler(ProtocolIDBlock, node.blkGetStreamHandler)
+	host.SetStreamHandler(ProtocolIDBlockHeight, node.blkGetHeightStreamHandler)
+	host.SetStreamHandler(ProtocolIDTx, node.txGetStreamHandler)
 
-	nc.Host.SetStreamHandler(ProtocolIDBlockPropose, node.blkPropStreamHandler)
-	// nc.Host.SetStreamHandler(ProtocolIDACKProposal, node.blkAckStreamHandler)
+	host.SetStreamHandler(ProtocolIDBlockPropose, node.blkPropStreamHandler)
+	// host.SetStreamHandler(ProtocolIDACKProposal, node.blkAckStreamHandler)
 
-	if nc.Cfg.P2P.Pex {
-		nc.Host.SetStreamHandler(ProtocolIDDiscover, node.peerDiscoveryStreamHandler)
+	if cfg.P2P.Pex {
+		host.SetStreamHandler(ProtocolIDDiscover, node.peerDiscoveryStreamHandler)
 	} else {
-		nc.Host.SetStreamHandler(ProtocolIDDiscover, func(s network.Stream) {
+		host.SetStreamHandler(ProtocolIDDiscover, func(s network.Stream) {
 			s.Close()
 		})
 	}
@@ -309,7 +337,7 @@ func NewKey(r io.Reader) crypto.PrivateKey {
 	return privKey
 }
 
-func NewHost(ip string, port uint64, privKey crypto.PrivateKey) (host.Host, error) {
+func newHost(ip string, port uint64, privKey crypto.PrivateKey) (host.Host, error) {
 	// convert to the libp2p crypto key type
 	var privKeyP2P p2pcrypto.PrivKey
 	var err error
