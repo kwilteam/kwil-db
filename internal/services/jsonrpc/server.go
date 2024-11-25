@@ -23,6 +23,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus"
 
 	"github.com/kwilteam/kwil-db/core/log"
@@ -286,6 +287,9 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 	if cfg.enableCORS {
 		h = corsHandler(h)
 	}
+
+	compMW := middleware.Compress(5)
+	h = compMW(h)
 	h = reqCounter(h, metrics[reqCounterName])
 	h = realIPHandler(h, cfg.proxyCount) // for effective rate limiting
 	h = recoverer(h, log)                // first, wrap with defer and call next ^
@@ -305,6 +309,7 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 		w.Header().Set("content-type", "application/json; charset=utf-8")
 		http.ServeContent(w, r, "openrpc.json", time.Time{}, bytes.NewReader(s.spec))
 	})
+	h = compMW(h)
 	if cfg.enableCORS {
 		specHandler = corsHandler(specHandler)
 	}
@@ -317,6 +322,7 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 	if cfg.enableCORS {
 		healthHandler = corsHandler(healthHandler)
 	}
+	h = compMW(h)
 	healthHandler = recoverer(healthHandler, log)
 	mux.Handle(pathHealthV1, healthHandler)
 
@@ -326,6 +332,7 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 	if cfg.enableCORS {
 		userHealthHandler = corsHandler(userHealthHandler)
 	}
+	h = compMW(h)
 	userHealthHandler = recoverer(userHealthHandler, log)
 	mux.Handle(pathSvcHealthV1, userHealthHandler)
 
