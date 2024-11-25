@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/node/types"
 
 	"github.com/libp2p/go-libp2p/core/discovery"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -200,8 +199,8 @@ func (pm *PeerMan) FindPeers(ctx context.Context, ns string, opts ...discovery.O
 }
 
 // ConnectedPeers returns a list of peer info for all connected peers.
-func (pm *PeerMan) ConnectedPeers() []types.PeerInfo {
-	var peers []types.PeerInfo
+func (pm *PeerMan) ConnectedPeers() []PeerInfo {
+	var peers []PeerInfo
 	for _, peerID := range pm.h.Network().Peers() { // connected peers first
 		if peerID == pm.h.ID() { // me
 			continue
@@ -220,7 +219,7 @@ func (pm *PeerMan) ConnectedPeers() []types.PeerInfo {
 
 // KnownPeers returns a list of peer info for all known peers (connected or just
 // in peer store).
-func (pm *PeerMan) KnownPeers() []types.PeerInfo {
+func (pm *PeerMan) KnownPeers() []PeerInfo {
 	// connected peers first
 	peers := pm.ConnectedPeers()
 	connectedPeers := make(map[peer.ID]bool)
@@ -284,7 +283,7 @@ func RequirePeerProtos(ctx context.Context, ps peerstore.Peerstore, peer peer.ID
 	return nil
 }
 
-func peerInfo(ps peerstore.Peerstore, peerID peer.ID) (*types.PeerInfo, error) {
+func peerInfo(ps peerstore.Peerstore, peerID peer.ID) (*PeerInfo, error) {
 	addrs := ps.Addrs(peerID)
 	if len(addrs) == 0 {
 		return nil, fmt.Errorf("no addresses for peer %v", peerID)
@@ -295,8 +294,8 @@ func peerInfo(ps peerstore.Peerstore, peerID peer.ID) (*types.PeerInfo, error) {
 		return nil, fmt.Errorf("GetProtocols for %v: %w", peerID, err)
 	}
 
-	return &types.PeerInfo{
-		AddrInfo: types.AddrInfo{
+	return &PeerInfo{
+		AddrInfo: AddrInfo{
 			ID:    peerID,
 			Addrs: addrs,
 		},
@@ -321,7 +320,7 @@ func (pm *PeerMan) savePeers() error {
 }
 
 // persistPeers saves known peers to a JSON file
-func persistPeers(peers []types.PeerInfo, filePath string) error {
+func persistPeers(peers []PeerInfo, filePath string) error {
 	// Marshal peerList to JSON
 	data, err := json.MarshalIndent(peers, "", "  ")
 	if err != nil {
@@ -336,20 +335,20 @@ func persistPeers(peers []types.PeerInfo, filePath string) error {
 	return nil
 }
 
-func loadPeers(filePath string) ([]types.PeerInfo, error) {
+func loadPeers(filePath string) ([]PeerInfo, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read peerstore file: %w", err)
 	}
 
-	var peerList []types.PeerInfo
+	var peerList []PeerInfo
 	if err := json.Unmarshal(data, &peerList); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal peerstore data: %w", err)
 	}
 	return peerList, nil
 }
 
-func (pm *PeerMan) addPeers(peerList []types.PeerInfo, ttl time.Duration) int {
+func (pm *PeerMan) addPeers(peerList []PeerInfo, ttl time.Duration) int {
 	var count int
 	for _, pInfo := range peerList {
 		// for _, addr := range pInfo.Addrs {
@@ -377,9 +376,9 @@ func (pm *PeerMan) addPeers(peerList []types.PeerInfo, ttl time.Duration) int {
 
 // addPeerAddrs adds a discovered peer to the local peer store.
 func (pm *PeerMan) addPeerAddrs(p peer.AddrInfo) (added bool) {
-	numAdded := pm.addPeers([]types.PeerInfo{
+	numAdded := pm.addPeers([]PeerInfo{
 		{
-			AddrInfo: types.AddrInfo(p),
+			AddrInfo: AddrInfo(p),
 			// No known protocols, yet
 		},
 	}, peerstore.TempAddrTTL)
