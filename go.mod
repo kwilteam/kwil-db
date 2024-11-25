@@ -7,6 +7,7 @@ require (
 	github.com/cometbft/cometbft v0.38.12
 	github.com/dgraph-io/badger/v3 v3.2103.5
 	github.com/ethereum/go-ethereum v1.14.8
+	github.com/go-chi/chi/v5 v5.1.0
 	github.com/jackc/pglogrepl v0.0.0-20240307033717-828fbfe908e9
 	github.com/jackc/pgx/v5 v5.6.0
 	github.com/jpillora/backoff v1.0.0
