@@ -42,7 +42,7 @@ func TestDualNodeMocknet(t *testing.T) {
 	bs1 := memstore.NewMemBS()
 	mp1 := mempool.New()
 
-	db1 := initDB(t, "5432")
+	db1 := initDB(t, "5432", "kwil_test_db")
 
 	pk2, h2, err := newTestHost(t, mn)
 	if err != nil {
@@ -50,7 +50,7 @@ func TestDualNodeMocknet(t *testing.T) {
 	}
 	bs2 := memstore.NewMemBS()
 	mp2 := mempool.New()
-	db2 := initDB(t, "5433")
+	db2 := initDB(t, "5432", "kwil_test_db2")
 
 	root1 := t.TempDir()
 	root2 := t.TempDir()
@@ -102,19 +102,16 @@ func TestDualNodeMocknet(t *testing.T) {
 
 	log1 := log.New(log.WithName("NODE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
 	cfg1 := &Config{
-		RootDir: root1,
-		PrivKey: privKeys[0],
-		Logger:  log1,
-		Cfg:     defaultConfigSet,
-		Genesis: genCfg,
-
-		Host:       h1,
-		PeerMgr:    newPeerManager(t, root1, h1, log.DiscardLogger),
+		RootDir:    root1,
+		PrivKey:    privKeys[0],
+		Logger:     log1,
+		P2P:        &defaultConfigSet.P2P,
+		Genesis:    genCfg,
 		Mempool:    mp1,
 		BlockStore: bs1,
 		Consensus:  ce1,
 	}
-	node1, err := NewNode(cfg1)
+	node1, err := NewNode(cfg1, WithHost(h1))
 	if err != nil {
 		t.Fatalf("Failed to create Node 1: %v", err)
 	}
@@ -145,19 +142,16 @@ func TestDualNodeMocknet(t *testing.T) {
 
 	log2 := log.New(log.WithName("NODE2"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
 	cfg2 := &Config{
-		RootDir: root2,
-		PrivKey: privKeys[1],
-		Logger:  log2,
-		Cfg:     defaultConfigSet,
-		Genesis: genCfg,
-
-		Host:       h2,
-		PeerMgr:    newPeerManager(t, root2, h2, log.DiscardLogger),
+		RootDir:    root2,
+		PrivKey:    privKeys[1],
+		Logger:     log2,
+		P2P:        &defaultConfigSet.P2P,
+		Genesis:    genCfg,
 		Mempool:    mp2,
 		BlockStore: bs2,
 		Consensus:  ce2,
 	}
-	node2, err := NewNode(cfg2)
+	node2, err := NewNode(cfg2, WithHost(h2))
 	if err != nil {
 		t.Fatalf("Failed to create Node 2: %v", err)
 	}
@@ -200,13 +194,13 @@ func TestDualNodeMocknet(t *testing.T) {
 
 }
 
-func initDB(t *testing.T, port string) *pg.DB {
+func initDB(t *testing.T, port, dbName string) *pg.DB {
 	cfg := &config.DBConfig{
 		Host:   "127.0.0.1",
 		Port:   port,
 		User:   "kwild",
 		Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
-		DBName: "kwil_test_db",
+		DBName: dbName,
 	}
 	db, err := pgtest.NewTestDBWithCfg(t, cfg)
 	require.NoError(t, err)
