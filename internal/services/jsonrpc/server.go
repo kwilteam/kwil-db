@@ -309,7 +309,7 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 		w.Header().Set("content-type", "application/json; charset=utf-8")
 		http.ServeContent(w, r, "openrpc.json", time.Time{}, bytes.NewReader(s.spec))
 	})
-	h = compMW(h)
+	specHandler = compMW(specHandler)
 	if cfg.enableCORS {
 		specHandler = corsHandler(specHandler)
 	}
@@ -322,7 +322,7 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 	if cfg.enableCORS {
 		healthHandler = corsHandler(healthHandler)
 	}
-	h = compMW(h)
+	healthHandler = compMW(healthHandler)
 	healthHandler = recoverer(healthHandler, log)
 	mux.Handle(pathHealthV1, healthHandler)
 
@@ -332,7 +332,7 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 	if cfg.enableCORS {
 		userHealthHandler = corsHandler(userHealthHandler)
 	}
-	h = compMW(h)
+	userHealthHandler = compMW(userHealthHandler)
 	userHealthHandler = recoverer(userHealthHandler, log)
 	mux.Handle(pathSvcHealthV1, userHealthHandler)
 
