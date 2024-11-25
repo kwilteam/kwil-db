@@ -294,19 +294,16 @@ func TestStreamsBlockFetch(t *testing.T) {
 
 	// log1 := log.New(log.WithName("NODE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
 	cfg1 := &Config{
-		RootDir: rootDir,
-		PrivKey: privKeys[0],
-		Logger:  log.DiscardLogger,
-		Cfg:     defaultConfigSet,
-		Genesis: genCfg,
-
-		Host:       h1,
-		PeerMgr:    newPeerManager(t, rootDir, h1, log.DiscardLogger),
+		RootDir:    rootDir,
+		PrivKey:    privKeys[0],
+		Logger:     log.DiscardLogger,
+		P2P:        &defaultConfigSet.P2P,
+		Genesis:    genCfg,
 		Mempool:    mempool.New(),
 		BlockStore: bs,
 		Consensus:  ce,
 	}
-	node1, err := NewNode(cfg1)
+	node1, err := NewNode(cfg1, WithHost(h1))
 	if err != nil {
 		t.Fatalf("Failed to create Node 1: %v", err)
 	}

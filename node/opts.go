@@ -1,17 +1,15 @@
 package node
 
 import (
-	"github.com/kwilteam/kwil-db/node/types"
-
 	"github.com/libp2p/go-libp2p/core/host"
 )
 
 type options struct {
 	// dependency overrides
 	host host.Host
-	bs   types.BlockStore
-	mp   types.MemPool
-	ce   ConsensusEngine
+	// bs   types.BlockStore
+	// mp   types.MemPool
+	// ce   ConsensusEngine
 }
 
 type Option func(*options)
@@ -22,7 +20,7 @@ func WithHost(host host.Host) Option {
 	}
 }
 
-func WithBlockStore(bs types.BlockStore) Option {
+/*func WithBlockStore(bs types.BlockStore) Option {
 	return func(o *options) {
 		o.bs = bs
 	}
@@ -38,4 +36,4 @@ func WithConsensusEngine(ce ConsensusEngine) Option {
 	return func(o *options) {
 		o.ce = ce
 	}
-}
+}*/

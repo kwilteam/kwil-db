@@ -3,3 +3,4 @@ CREATE USER kwild WITH PASSWORD 'kwild' SUPERUSER REPLICATION;
 CREATE DATABASE kwild OWNER kwild;
 -- the tests db:
 CREATE DATABASE kwil_test_db OWNER kwild;
+CREATE DATABASE kwil_test_db2 OWNER kwild;
