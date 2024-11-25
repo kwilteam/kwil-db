@@ -16,14 +16,10 @@ import (
 	"github.com/kwilteam/kwil-db/node/consensus"
 	"github.com/kwilteam/kwil-db/node/mempool"
 	"github.com/kwilteam/kwil-db/node/meta"
-	"github.com/kwilteam/kwil-db/node/peers"
 	"github.com/kwilteam/kwil-db/node/pg"
 	"github.com/kwilteam/kwil-db/node/store"
 	"github.com/kwilteam/kwil-db/node/txapp"
 	"github.com/kwilteam/kwil-db/node/voting"
-
-	"github.com/libp2p/go-libp2p/core/host"
-	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 func buildServer(ctx context.Context, d *coreDependencies) *server {
@@ -49,11 +45,6 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	// Mempool
 	mp := mempool.New()
 
-	host := newHost(d, closers)
-
-	// PeerManager
-	pm := buildPeerManager(d, host)
-
 	// accounts
 	accounts := buildAccountStore(ctx, db)
 
@@ -67,7 +58,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	ce := buildConsensusEngine(ctx, d, db, accounts, vs, mp, bs, txapp, valSet)
 
 	// Node
-	node := buildNode(d, host, pm, mp, bs, ce, valSet)
+	node := buildNode(d, mp, bs, ce, valSet)
 
 	// RPC Services
 
@@ -105,32 +96,6 @@ func buildBlockStore(d *coreDependencies, closers *closeFuncs) *store.BlockStore
 	closers.addCloser(bs.Close, "closing blockstore") // Close DB after stopping p2p
 
 	return bs
-}
-
-func newHost(d *coreDependencies, closers *closeFuncs) host.Host {
-	host, err := node.NewHost(d.cfg.P2P.IP, d.cfg.P2P.Port, d.privKey)
-	if err != nil {
-		failBuild(err, "failed to create libp2p host")
-	}
-	closers.addCloser(host.Close, "closing libp2p host")
-
-	return host
-}
-
-func buildPeerManager(d *coreDependencies, host host.Host) *peers.PeerMan {
-	addrBookPath := filepath.Join(d.rootDir, "addrbook.json")
-
-	pm, err := peers.NewPeerMan(d.cfg.P2P.Pex, addrBookPath,
-		d.logger.New("PEERS"),
-		host, // tooo much, become minimal interface
-		func(ctx context.Context, peerID peer.ID) ([]peer.AddrInfo, error) {
-			return node.RequestPeers(ctx, host.ID(), host, d.logger)
-		}, node.RequiredStreamProtocols)
-	if err != nil {
-		failBuild(err, "failed to create peer manager")
-	}
-
-	return pm
 }
 
 func buildAccountStore(ctx context.Context, db *pg.DB) *accounts.Accounts {
@@ -211,15 +176,13 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB, acc
 	return ce
 }
 
-func buildNode(d *coreDependencies, h host.Host, pm *peers.PeerMan, mp *mempool.Mempool, bs *store.BlockStore, ce *consensus.ConsensusEngine, valSet map[string]ktypes.Validator) *node.Node {
+func buildNode(d *coreDependencies, mp *mempool.Mempool, bs *store.BlockStore, ce *consensus.ConsensusEngine, valSet map[string]ktypes.Validator) *node.Node {
 	logger := d.logger.New("NODE")
 	nc := &node.Config{
 		RootDir:    d.rootDir,
 		PrivKey:    d.privKey,
-		Cfg:        d.cfg,
+		P2P:        &d.cfg.P2P,
 		Genesis:    d.genesisCfg,
-		Host:       h,
-		PeerMgr:    pm,
 		Mempool:    mp,
 		BlockStore: bs,
 		Consensus:  ce,
