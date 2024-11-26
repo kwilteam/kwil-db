@@ -469,7 +469,6 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 	if err != nil {
 		// NOTE: http api needs to be able to get the error message
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "failed to convert action call: "+err.Error(), nil)
-
 	}
 
 	args := make([]any, len(body.Arguments))
@@ -489,6 +488,16 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 		}
 	}
 
+	chainStat, err := svc.chainClient.Status(ctx)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to get chain status: "+err.Error(), nil)
+	}
+	height, stamp := chainStat.Sync.BestBlockHeight, chainStat.Sync.BestBlockTime.Unix()
+	if chainStat.Sync.Syncing { // don't use known stale height and time stamp if node is syncing
+		height = -1
+		stamp = -1
+	}
+
 	tx, err := svc.db.BeginReadTx(ctx)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to create read tx", nil)
@@ -503,10 +512,11 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 		Procedure: body.Action,
 		Args:      args,
 		TransactionData: common.TransactionData{
-			Signer:        signer,
-			Caller:        caller,
-			Height:        -1, // not available
-			Authenticator: msg.AuthType,
+			Signer:         signer,
+			Caller:         caller,
+			Height:         height,
+			BlockTimestamp: stamp,
+			Authenticator:  msg.AuthType,
 		},
 	})
 	if err != nil {
