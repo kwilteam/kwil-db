@@ -60,7 +60,7 @@ func testCmd() *cobra.Command {
 			l := log.NewStdoutLogger()
 
 			opts := testing.Options{
-				Logger: testing.LoggerFromKwilLogger(&l),
+				Logger: testing.LoggerFromKwilLogger(l),
 			}
 
 			userHasSetPgConn := false
