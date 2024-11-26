@@ -34,7 +34,7 @@ func PrintConfigCmd() *cobra.Command {
 
 	// SetNodeFlags(cmd)
 	defaultCfg := shared.DefaultConfig() // not config.DefaultConfig(), so custom command config is used
-	shared.SetNodeFlagsFromStruct(cmd, defaultCfg)
+	shared.SetFlagsFromStruct(cmd.Flags(), defaultCfg)
 
 	return cmd
 }

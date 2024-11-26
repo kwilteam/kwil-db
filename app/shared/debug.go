@@ -41,7 +41,6 @@ func MaybeEnableCLIDebug(cmd *cobra.Command, args []string) error {
 	}
 	if debug {
 		EnableCLIDebugging()
-		k.Set("log_level", "debug")
 	}
 	return nil
 }

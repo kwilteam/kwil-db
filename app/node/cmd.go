@@ -46,7 +46,7 @@ func StartCmd() *cobra.Command {
 	// into koanf where the values are merged.
 	// SetNodeFlags(cmd)
 	defaultCfg := shared.DefaultConfig() // not config.DefaultConfig(), so custom command config is used
-	shared.SetNodeFlagsFromStruct(cmd, defaultCfg)
+	shared.SetFlagsFromStruct(cmd.Flags(), defaultCfg)
 
 	cmd.SetVersionTemplate(custom.BinaryConfig.NodeCmd + " {{printf \"version %s\" .Version}}\n")
 
