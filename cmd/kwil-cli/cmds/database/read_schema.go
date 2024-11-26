@@ -35,13 +35,11 @@ func readSchemaCmd() *cobra.Command {
 			return client.DialClient(cmd.Context(), cmd, client.WithoutPrivateKey, func(ctx context.Context, client clientType.Client, conf *config.KwilCliConfig) error {
 				dbid, err := getSelectedDbid(cmd, conf)
 				if err != nil {
-
-					return display.PrintErr(cmd, fmt.Errorf("you must specify either a database name with the --name, or a database id with the --dbid flag"))
+					return display.PrintErr(cmd, err)
 				}
 
 				schema, err := client.GetSchema(ctx, dbid)
 				if err != nil {
-
 					return display.PrintErr(cmd, fmt.Errorf("error getting schema: %w", err))
 				}
 

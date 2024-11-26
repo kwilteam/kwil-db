@@ -2,6 +2,7 @@ package utils
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 
@@ -24,11 +25,11 @@ func newParseCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if args[0] == "" {
-				return display.PrintErr(cmd, fmt.Errorf("file path is required"))
+				return display.PrintErr(cmd, errors.New("file path is required"))
 			}
 
 			if includePositions && !debug {
-				return display.PrintErr(cmd, fmt.Errorf("include-positions flag can only be used with debug"))
+				return display.PrintErr(cmd, errors.New("include-positions flag can only be used with debug"))
 			}
 
 			file, err := os.ReadFile(args[0])
@@ -62,7 +63,7 @@ func newParseCmd() *cobra.Command {
 					return display.PrintErr(cmd, err)
 				}
 
-				return display.PrintCmd(cmd, display.RespString(fmt.Sprintf("Schema written to %s", out)))
+				return display.PrintCmd(cmd, display.RespString("Schema written to "+out))
 			}
 
 			// if in debug mode, output the schema and the debug information.
@@ -92,7 +93,7 @@ func newParseCmd() *cobra.Command {
 				return display.PrintErr(cmd, err)
 			}
 
-			return display.PrintCmd(cmd, display.RespString(fmt.Sprintf("Debug information written to %s", out)))
+			return display.PrintCmd(cmd, display.RespString("Debug information written to "+out))
 		},
 	}
 

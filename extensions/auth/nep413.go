@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 
+	"github.com/kwilteam/kwil-db/core/crypto"
 	borsch "github.com/near/borsh-go"
 )
 
@@ -110,7 +111,7 @@ func (n Nep413Authenticator) Verify(sender []byte, msg []byte, signature []byte)
 
 	// verify the signature
 	if !ed25519.Verify(sender, hash[:], sig) {
-		return errors.New("signature verification failed")
+		return crypto.ErrInvalidSignature
 	}
 
 	return nil

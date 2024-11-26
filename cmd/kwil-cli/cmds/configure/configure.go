@@ -2,6 +2,7 @@ package configure
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/app/shared/display"
@@ -30,7 +31,7 @@ func NewCmdConfigure() *cobra.Command {
 		Example: configureExample,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if display.ShouldSilence(cmd) {
-				return display.PrintErr(cmd, fmt.Errorf("cannot configure run in silence mode"))
+				return display.PrintErr(cmd, errors.New("cannot configure run in silence mode"))
 			}
 
 			conf, err := config.LoadPersistedConfig()

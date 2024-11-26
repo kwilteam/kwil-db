@@ -2,6 +2,7 @@ package execution
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/common"
@@ -34,8 +35,8 @@ type baseDataset struct {
 var _ precompiles.Instance = (*baseDataset)(nil)
 
 var (
-	ErrPrivate   = fmt.Errorf("procedure/action is not public")
-	ErrOwnerOnly = fmt.Errorf("procedure/action is owner only")
+	ErrPrivate   = errors.New("procedure/action is not public")
+	ErrOwnerOnly = errors.New("procedure/action is owner only")
 )
 
 // Call calls a procedure from the dataset.

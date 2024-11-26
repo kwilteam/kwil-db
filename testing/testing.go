@@ -142,7 +142,7 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 		for _, tc := range tc.TestCases {
 			tc2 := tc // copy to avoid loop variable capture
 			testFns = append(testFns, tc2.runExecution)
-			testFnIdentifiers = append(testFnIdentifiers, fmt.Sprintf("TestCase.Execution: %s", tc2.Name))
+			testFnIdentifiers = append(testFnIdentifiers, "TestCase.Execution: "+tc2.Name)
 			testNames = append(testNames, tc2.Name)
 		}
 
@@ -504,8 +504,8 @@ const ContainerName = "kwil-testing-postgres"
 
 // dockerStartArgs returns the docker start command args
 func dockerStartArgs(port string) (args []string) {
-	return []string{"run", "-d", "-p", fmt.Sprintf("%s:5432", port), "--name", ContainerName,
-		"-e", "POSTGRES_HOST_AUTH_METHOD=trust", "kwildb/postgres:16.4-1"}
+	return []string{"run", "-d", "-p", port + ":5432", "--name", ContainerName,
+		"-e", "POSTGRES_HOST_AUTH_METHOD=trust", "kwildb/postgres:16.5-1"}
 }
 
 // connectWithRetry tries to connect to Postgres, and will retry n times at

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -162,7 +163,7 @@ func buildExecutionInputs(ctx context.Context, client clientType.Client, dbid st
 		}
 	}
 
-	return nil, fmt.Errorf("procedure/action not found")
+	return nil, errors.New("procedure/action not found")
 }
 
 // decodeMany attempts to parse command-line inputs as base64 encoded values.
@@ -320,7 +321,7 @@ func splitIgnoringQuotedCommas(input string) ([]string, error) {
 	result = append(result, string(currentToken))
 
 	if inSingleQuote || inDoubleQuote {
-		return nil, fmt.Errorf("unclosed quote in array inputs")
+		return nil, errors.New("unclosed quote in array inputs")
 	}
 
 	return result, nil

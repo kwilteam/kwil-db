@@ -3,7 +3,8 @@ go 1.22
 
 use (
 	.
-	./test
+	./core
+	./example
 )
 
 // replace github.com/kwilteam/kuneiform => ../kuneiform

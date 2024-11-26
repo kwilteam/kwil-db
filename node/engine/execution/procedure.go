@@ -95,7 +95,7 @@ func prepareActions(schema *types.Schema) ([]*preparedAction, error) {
 		if action.IsOwnerOnly() {
 			instructions = append(instructions, instructionFunc(func(scope *precompiles.ProcedureContext, global *GlobalContext, db sql.DB) error {
 				if !bytes.Equal(scope.TxCtx.Signer, owner) {
-					return fmt.Errorf("cannot call owner action, not owner")
+					return errors.New("cannot call owner action, not owner")
 				}
 
 				return nil
@@ -254,7 +254,7 @@ func (e *callMethod) execute(scope *precompiles.ProcedureContext, global *Global
 
 	scope.UsedGas += 10
 	if scope.UsedGas >= 10000000 {
-		return fmt.Errorf("out of gas")
+		return errors.New("out of gas")
 	}
 
 	newScope := scope.NewScope()

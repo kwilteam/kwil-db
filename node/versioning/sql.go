@@ -2,6 +2,7 @@ package versioning
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/node/types/sql"
@@ -36,16 +37,16 @@ func getCurrentVersion(ctx context.Context, db sql.Executor, schema string) (int
 	}
 
 	if len(res.Rows) == 0 {
-		return 0, fmt.Errorf("version table has no rows")
+		return 0, errors.New("version table has no rows")
 	}
 
 	if len(res.Rows[0]) > 1 {
-		return 0, fmt.Errorf("version table has more than one row")
+		return 0, errors.New("version table has more than one row")
 	}
 
 	val, ok := sql.Int64(res.Rows[0][0])
 	if !ok {
-		return 0, fmt.Errorf("version table has invalid version")
+		return 0, errors.New("version table has invalid version")
 	}
 
 	return val, nil

@@ -2,6 +2,7 @@ package client
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 
@@ -46,7 +47,7 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 	}
 
 	if conf.Provider == "" {
-		return fmt.Errorf("rpc provider url is required")
+		return errors.New("rpc provider url is required")
 	}
 
 	needPrivateKey := flags&WithoutPrivateKey == 0
@@ -61,7 +62,7 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 	} else if needPrivateKey && !authCalls {
 		// private key checks for call messages are done after creating the client
 		// as this requires whether the Kwild node is in private mode or not.
-		return fmt.Errorf("private key not provided")
+		return errors.New("private key not provided")
 	}
 
 	// if not using the gateway, then we can simply create a regular client and return
@@ -74,7 +75,7 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 		// if we are making authenticated calls, we need to ensure that the private key is provided
 		// if the Kwild node is in private mode.
 		if authCalls && client.PrivateMode() && conf.PrivateKey == nil {
-			return fmt.Errorf("private key not provided for authenticated calls")
+			return errors.New("private key not provided for authenticated calls")
 		}
 
 		return fn(ctx, client, conf)
@@ -163,7 +164,7 @@ func promptMessage(msg string) error {
 
 	_, err := prompt.Run()
 	if err != nil {
-		return fmt.Errorf("you declined to sign")
+		return errors.New("you declined to sign")
 	}
 
 	return nil

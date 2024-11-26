@@ -2,18 +2,16 @@ module github.com/kwilteam/kwil-db
 
 go 1.23.2
 
+// These replaces can be removed after this is merged to main.
+replace (
+	github.com/kwilteam/kwil-db/core => ./core
+	github.com/kwilteam/kwil-db/parse => ./parse
+)
+
 require (
-	github.com/antlr4-go/antlr/v4 v4.13.1
-	github.com/cockroachdb/apd/v3 v3.2.1
-	github.com/decred/dcrd/certgen v1.2.0
-	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0
-	github.com/decred/slog v1.2.0
 	github.com/dgraph-io/badger/v4 v4.3.1
-	github.com/google/go-cmp v0.6.0
-	github.com/holiman/uint256 v1.3.1
 	github.com/jackc/pglogrepl v0.0.0-20240307033717-828fbfe908e9
 	github.com/jackc/pgx/v5 v5.7.1
-	github.com/jrick/logrotate v1.1.2
 	github.com/knadh/koanf/parsers/json v0.1.0
 	github.com/knadh/koanf/parsers/toml/v2 v2.1.0
 	github.com/knadh/koanf/providers/env v1.0.0
@@ -22,6 +20,8 @@ require (
 	github.com/knadh/koanf/providers/rawbytes v0.1.0
 	github.com/knadh/koanf/providers/structs v0.1.0
 	github.com/knadh/koanf/v2 v2.1.1
+	github.com/kwilteam/kwil-db/core v0.3.1
+	github.com/kwilteam/kwil-db/parse v0.3.3
 	github.com/libp2p/go-libp2p v0.37.1
 	github.com/libp2p/go-libp2p-kad-dht v0.28.1
 	github.com/libp2p/go-libp2p-pubsub v0.12.0
@@ -34,9 +34,14 @@ require (
 )
 
 require (
+	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
 	github.com/chzyer/readline v1.5.1 // indirect
+	github.com/cockroachdb/apd/v3 v3.2.1 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.4 // indirect
+	github.com/decred/dcrd/certgen v1.2.0 // indirect
 	github.com/decred/dcrd/crypto/rand v1.0.0 // indirect
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0 // indirect
+	github.com/decred/slog v1.2.0 // indirect
 	github.com/fatih/structs v1.1.0 // indirect
 	github.com/fsnotify/fsnotify v1.8.0 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
@@ -45,6 +50,7 @@ require (
 	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/hashicorp/golang-lru v1.0.2 // indirect
+	github.com/holiman/uint256 v1.3.1 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/ipfs/boxo v0.24.3 // indirect
 	github.com/ipfs/go-datastore v0.6.0 // indirect
@@ -54,6 +60,7 @@ require (
 	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jbenet/goprocess v0.1.4 // indirect
+	github.com/jrick/logrotate v1.1.2 // indirect
 	github.com/knadh/koanf/maps v0.1.1 // indirect
 	github.com/libp2p/go-cidranger v1.1.0 // indirect
 	github.com/libp2p/go-libp2p-kbucket v0.6.4 // indirect
@@ -84,7 +91,7 @@ require (
 	github.com/docker/go-units v0.5.0 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/elastic/gosigar v0.14.3 // indirect
-	github.com/ethereum/go-ethereum v1.14.11
+	github.com/ethereum/go-ethereum v1.14.11 // indirect
 	github.com/flynn/noise v1.1.0 // indirect
 	github.com/francoispqt/gojay v1.2.13 // indirect
 	github.com/go-task/slim-sprig/v3 v3.0.0 // indirect
@@ -95,7 +102,7 @@ require (
 	github.com/google/flatbuffers v24.3.25+incompatible // indirect
 	github.com/google/gopacket v1.1.19 // indirect
 	github.com/google/pprof v0.0.0-20241017200806-017d972448fc // indirect
-	github.com/google/uuid v1.6.0
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/huin/goupnp v1.3.0 // indirect
@@ -171,7 +178,7 @@ require (
 	go.uber.org/mock v0.5.0 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
 	go.uber.org/zap v1.27.0 // indirect
-	golang.org/x/crypto v0.29.0
+	golang.org/x/crypto v0.29.0 // indirect
 	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f // indirect
 	golang.org/x/mod v0.22.0 // indirect
 	golang.org/x/net v0.31.0 // indirect

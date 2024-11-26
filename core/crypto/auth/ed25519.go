@@ -5,7 +5,6 @@ package auth
 import (
 	"crypto/ed25519"
 	"encoding/hex"
-	"errors"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -52,7 +51,7 @@ func (e Ed25519Authenticator) Verify(publicKey []byte, msg []byte, signature []b
 	}
 
 	if !valid {
-		return errors.New("ed25519 signature verification failed")
+		return crypto.ErrInvalidSignature
 	}
 
 	return nil
