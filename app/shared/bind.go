@@ -35,7 +35,7 @@ var DefaultConfig = config.DefaultConfig
 
 // ActiveConfig retrieves the current merged config. This is influenced by the
 // other functions in this package, including: BindDefaults,
-// SetNodeFlagsFromStruct, PreRunBindFlags, PreRunBindEnvMatching,
+// SetFlagsFromStruct, PreRunBindFlags, PreRunBindEnvMatching,
 // PreRunBindEnvAllSections, and PreRunBindConfigFile. The merge result is
 // determined by the order in which they source are bound (see PreRunBindConfigFile).
 func ActiveConfig() *config.Config {
@@ -85,13 +85,18 @@ func RootDir(cmd *cobra.Command) (string, error) {
 	return cmd.Flags().GetString(RootFlagName)
 }
 
-// SetNodeFlagsFromStruct is used to automate the creation of flags in the
-// provided command's pflag set from a tagged struct. This uses the field tags:
+// SetFlagsFromStruct is used to automate the creation of flags in the
+// provided pflag set from a tagged struct. This uses the field tags:
 // "toml" for the flag name, and "comment" for the help string. Any "_"
 // characters in the "toml" tag are converted to "-" when defining the flag.
 // This recurses into nested structs.
-func SetNodeFlagsFromStruct(cmd *cobra.Command, cfg interface{}) {
-	fs := cmd.Flags()
+func SetFlagsFromStruct(fs *pflag.FlagSet, cfg interface{}) {
+	SetFlagsFromStructTags(fs, cfg, "toml", "comment")
+}
+
+// SetFlagsFromStructTags is a more generalized version of [SetFlagsFromStruct]
+// that allows setting the field tags used to get flag name and description.
+func SetFlagsFromStructTags(fs *pflag.FlagSet, cfg interface{}, nameTag, descTag string) {
 	fs.SortFlags = false
 
 	val := reflect.ValueOf(cfg)
@@ -104,17 +109,18 @@ func SetNodeFlagsFromStruct(cmd *cobra.Command, cfg interface{}) {
 	var setFlag func(field reflect.StructField, fieldVal reflect.Value, prefix string)
 	setFlag = func(field reflect.StructField, fieldVal reflect.Value, prefix string) {
 		// Get flag name from toml tag
-		flagName := field.Tag.Get("toml")
+		flagName := field.Tag.Get(nameTag)
 		if flagName == "" {
 			flagName = strings.ToLower(field.Name)
 		}
+		flagName, _, _ = strings.Cut(flagName, ",")
 		flagName = strings.ReplaceAll(flagName, "_", "-")
 		if prefix != "" {
 			flagName = prefix + "." + flagName
 		}
 
 		// Get description from comment tag
-		desc := field.Tag.Get("comment")
+		desc := field.Tag.Get(descTag)
 		if desc == "" {
 			desc = flagName // fallback to name if no comment
 		}
@@ -183,17 +189,17 @@ func SetNodeFlagsFromStruct(cmd *cobra.Command, cfg interface{}) {
 	}
 }
 
-func SetNodeFlagsFromDefaultInKoanf(cmd *cobra.Command, k *koanf.Koanf) error {
+/*func SetNodeFlagsFromDefaultInKoanf(cmd *cobra.Command, k *koanf.Koanf) error {
 	var cfg config.Config
 	err := k.UnmarshalWithConf("", &cfg, koanf.UnmarshalConf{Tag: "koanf"})
 	if err != nil {
 		return fmt.Errorf("failed to unmarshal config: %w", err)
 	}
-	SetNodeFlagsFromStruct(cmd, &cfg)
+	SetFlagsFromStruct(cmd.Flags(), &cfg)
 	return nil
-}
+}*/
 
-/* SetNodeFlags is superseded by SetNodeFlagsFromStruct since the config struct
+/* SetNodeFlags is superseded by SetFlagsFromStruct since the config struct
 field tags and types provide everything needed to bind pflags without
 maintaining and explicit list of flags as this did.
 
@@ -255,6 +261,12 @@ func ChainPreRuns(preRuns ...PreRunCmd) PreRunCmd {
 // tag should be used to determine the names of the keys to bind for each field
 // of the struct.
 func BindDefaults(cfg interface{}, tag string) error {
+	return BindDefaultsTo(cfg, tag, k)
+}
+
+// BindDefaultsTo loads the defaults from the provided config struct into a
+// Koanf instance, using field names according to the given struct tag.
+func BindDefaultsTo(cfg interface{}, tag string, k *koanf.Koanf) error {
 	err := k.Load(structs.Provider(cfg, tag), nil)
 	if err != nil {
 		return fmt.Errorf("error loading config from struct: %v", err)
@@ -314,13 +326,17 @@ func PreRunBindFlags(cmd *cobra.Command, args []string) error {
 // preceded env, they are loaded assuming every "_" is a section delimiter,
 // which may be incorrect for multi-word keys like KWIL_SECTION_SOME_KEY.
 func PreRunBindEnvMatching(cmd *cobra.Command, args []string) error {
+	return PreRunBindEnvMatchingTo(cmd, args, "KWIL_", k)
+}
+
+func PreRunBindEnvMatchingTo(cmd *cobra.Command, args []string, prefix string, k *koanf.Koanf) error {
 	kEnv := koanf.New(".")
-	kEnv.Load(env.Provider("KWIL_", ".", func(s string) string {
-		s, _ = strings.CutPrefix(s, "KWIL_")
+	kEnv.Load(env.Provider(prefix, ".", func(s string) string {
+		s, _ = strings.CutPrefix(s, prefix)
 		return strings.ToLower(s) // no sections here
 	}), nil)
 
-	// Merge into global k by mapping keys into env var format to find matches.
+	// Merge into k by mapping keys into env var format to find matches.
 	// Matches will come from either a previously loaded default config struct
 	// (PreRunBindConfigFile) or pflags (PreRunBindFlags). If neither sources
 	// preceded env, they are loaded assuming every "_" is a section delimiter,

@@ -21,7 +21,7 @@ const (
 
 // KGWAuthTokenFilePath returns the path to the file that stores the Gateway Authn cookies.
 func KGWAuthTokenFilePath() string {
-	return filepath.Join(config.DefaultConfigDir, kgwAuthTokenFileName)
+	return filepath.Join(config.ConfigDir(), kgwAuthTokenFileName)
 }
 
 // cookie is a copy of http.Cookie struct, with explicit json tags

@@ -1,19 +1,157 @@
 package config
 
 import (
-	"bytes"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
+	jsoncfg "github.com/knadh/koanf/parsers/json"
+	"github.com/knadh/koanf/providers/file"
+	"github.com/knadh/koanf/providers/posflag" // for spf13/pflag
+	"github.com/knadh/koanf/v2"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag" // with providers/posflag
+
+	"github.com/kwilteam/kwil-db/app/shared"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/helpers"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/helpers/prompt"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
-
-	"github.com/spf13/viper"
 )
+
+const (
+	defaultConfigDirName  = ".kwil-cli"
+	defaultConfigFileName = "config.json"
+
+	configFileFlag      = "config"
+	configFileFlagShort = "c"
+)
+
+var (
+	// configFile default is set in init(), and bound to the --config flag in
+	// BindConfigPath. It is global for PersistConfig/LoadPersistedConfig.
+	configFile string
+
+	cliCfg = DefaultKwilCliPersistedConfig()
+)
+
+func init() {
+	dirname, err := os.UserHomeDir()
+	if err != nil {
+		dirname = os.TempDir()
+	}
+
+	configFile = filepath.Join(dirname, defaultConfigDirName, defaultConfigFileName)
+}
+
+var k = koanf.New(".")
+
+func ActiveConfig() (*KwilCliConfig, error) {
+	var cfg kwilCliPersistedConfig
+	err := k.UnmarshalWithConf("", &cfg, koanf.UnmarshalConf{Tag: "json"})
+	if err != nil {
+		panic(fmt.Sprintf("failed to unmarshal config: %v", err))
+	}
+	return cfg.toKwilCliConfig()
+}
+
+// BindDefaults initializes the active configuration with the defaults set by
+// DefaultKwilCliPersistedConfig.
+func BindDefaults() error {
+	return shared.BindDefaultsTo(cliCfg, "json", k)
+}
+
+// SetFlags defines flags for all fields of the default config set by
+// DefaultKwilCliPersistedConfig.
+func SetFlags(fs *pflag.FlagSet) {
+	shared.SetFlagsFromStructTags(fs, cliCfg, "json", "comment")
+}
+
+// BindConfigPath defines the `--config` flag. Use [ConfigFilePath] to retrieve
+// the value. The value of this flag informs [PreRunBindConfigFile].
+func BindConfigPath(cmd *cobra.Command) {
+	desc := "the path to the Kwil CLI persistent global settings file"
+	cmd.PersistentFlags().StringVarP(&configFile, configFileFlag, configFileFlagShort,
+		configFile, desc)
+}
+
+func ConfigFilePath(cmd *cobra.Command) string {
+	// path, err := cmd.Flags().GetString(configFileFlag)
+	// if err != nil {
+	// 	fmt.Println("Unable to retrieve config file flag value:", err)
+	// 	return configFile
+	// }
+	return configFile // bound to configFileFlag by pointer
+}
+
+func ConfigDir() string {
+	return filepath.Dir(configFile)
+}
+
+// PreRunBindConfigFile loads and merges settings from the JSON config file.
+func PreRunBindConfigFile(cmd *cobra.Command, args []string) error {
+	cfgPath := ConfigFilePath(cmd)
+	cfgPath, err := helpers.ExpandPath(cfgPath)
+	if err != nil {
+		return err
+	}
+
+	// Load config from file
+	confPath, _ := filepath.Abs(cfgPath)
+	if err := k.Load(file.Provider(confPath), jsoncfg.Parser() /*, mergeFn*/); err != nil {
+		if !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("error loading config from %v: %w", confPath, err)
+		}
+		// Not an error, just no config file present.
+		shared.Debugf("No config file present at %v", confPath)
+	}
+	return nil
+}
+
+func PreRunBindFlags(cmd *cobra.Command, args []string) error {
+	flagSet := cmd.Flags()
+	err := k.Load(posflag.ProviderWithFlag(flagSet, ".", nil, /* <- k if we want defaults from the flags' defaults*/
+		func(f *pflag.Flag) (string, interface{}) {
+			// if !f.Changed { Debugf("not changed %v", f.Name) }
+			key := strings.ToLower(f.Name)
+			val := posflag.FlagVal(flagSet, f)
+
+			if f.Changed {
+				// special case translations
+				switch key {
+				/*case "p2p.no-pex":
+				newKey := "p2p.pex"
+				if valB, ok := val.(bool); ok {
+					Debugf("translating flag %s = %v => %s = %v", key, valB, newKey, !valB)
+					val = !valB // negate
+					key = newKey
+				}
+				*/
+				}
+			}
+
+			return strings.ReplaceAll(key, "-", "_"), val
+		}), nil /*no parser for flags*/ /*, mergeFn*/)
+	if err != nil {
+		return fmt.Errorf("error loading config: %v", err)
+	}
+	return nil
+}
+
+func PreRunPrintEffectiveConfig(cmd *cobra.Command, args []string) error {
+	shared.Debugf("merged config map:\n%s\n", shared.LazyPrinter(func() string {
+		return k.Sprint()
+	}))
+	return nil
+}
+
+func PreRunBindEnv(cmd *cobra.Command, args []string) error {
+	return shared.PreRunBindEnvMatchingTo(cmd, args, "KWILCLI_", k)
+}
 
 type KwilCliConfig struct {
 	PrivateKey *crypto.Secp256k1PrivateKey
@@ -50,12 +188,10 @@ func DefaultKwilCliPersistedConfig() *kwilCliPersistedConfig {
 }
 
 // kwilCliPersistedConfig is the config that is used to persist the config file
-// and also to work with viper(flags)
 type kwilCliPersistedConfig struct {
-	// NOTE: `mapstructure` is used by viper, name is same as the viper key name
-	PrivateKey string `mapstructure:"private_key" json:"private_key,omitempty"`
-	Provider   string `mapstructure:"provider" json:"provider,omitempty"`
-	ChainID    string `mapstructure:"chain_id" json:"chain_id,omitempty"`
+	PrivateKey string `json:"private_key,omitempty" comment:"the private key of the wallet that will be used for signing"`
+	Provider   string `json:"provider,omitempty" comment:"the Kwil provider RPC endpoint"`
+	ChainID    string `json:"chain_id,omitempty" comment:"the expected/intended Kwil Chain ID"`
 }
 
 func (c *kwilCliPersistedConfig) toKwilCliConfig() (*KwilCliConfig, error) {
@@ -84,13 +220,6 @@ func (c *kwilCliPersistedConfig) toKwilCliConfig() (*KwilCliConfig, error) {
 }
 
 func PersistConfig(conf *KwilCliConfig) error {
-	persistable := conf.ToPersistedConfig()
-
-	jsonBytes, err := json.Marshal(persistable)
-	if err != nil {
-		return fmt.Errorf("failed to marshal config: %w", err)
-	}
-
 	file, err := helpers.CreateOrOpenFile(configFile)
 	if err != nil {
 		return fmt.Errorf("failed to create or open config file: %w", err)
@@ -101,7 +230,10 @@ func PersistConfig(conf *KwilCliConfig) error {
 		return fmt.Errorf("failed to truncate config file: %w", err)
 	}
 
-	_, err = file.Write(jsonBytes)
+	persistable := conf.ToPersistedConfig()
+	enc := json.NewEncoder(file)
+	enc.SetIndent("", "  ")
+	err = enc.Encode(persistable)
 	if err != nil {
 		return fmt.Errorf("failed to write to config file: %w", err)
 	}
@@ -129,57 +261,24 @@ func LoadPersistedConfig() (*KwilCliConfig, error) {
 	return conf.toKwilCliConfig()
 }
 
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return !os.IsNotExist(err)
-}
-
 // LoadCliConfig loads the config.
 // The precedence order is following, each item takes precedence over the item below it:
 //  1. flags
 //  2. config file
 //  3. default config
-func LoadCliConfig() (*KwilCliConfig, error) {
-	// NOTE: flags are already parsed, and viper also have the bind flags value
-	// since flags has higher precedence, all below config values will be
-	// overwritten by flags(if flags are set)
-
-	// create default config and set to viper
-	defaultCfg := DefaultKwilCliPersistedConfig()
-	bs, err := json.Marshal(defaultCfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal default config: %w", err)
-	}
-
-	defaultConfig := bytes.NewReader(bs)
-	viper.SetConfigType("json")
-	if err := viper.MergeConfig(defaultConfig); err != nil {
-		return nil, err
-	}
-
-	// If the config file exists, override viper values from the config file
-	// The config file is set through the flag and has the default value as
-	// defaultConfigFile set in the init function in flags.go
-	if fileExists(configFile) {
-		viper.SetConfigFile(configFile)
-		if err := viper.MergeInConfig(); err != nil {
-			fmt.Printf("Error reading config file: %s\n", err)
-			askAndDeleteConfig()
-		}
-	}
-
-	// populate a new config with viper values(by viper key name)
-	cfg := &kwilCliPersistedConfig{}
-	if err := viper.Unmarshal(cfg); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
-	}
-
-	return cfg.toKwilCliConfig()
-}
+// func LoadCliConfig() (*KwilCliConfig, error) {
+// 	return nil, nil
+// }
 
 func askAndDeleteConfig() {
+	cfgPath := k.String(configFileFlag)
+	if cfgPath == "" {
+		fmt.Printf("Unable to retrieve config file path")
+		return
+	}
+
 	askDelete := &prompt.Prompter{
-		Label: fmt.Sprintf("Would you like to delete the corrupted config file at %s? (y/n) ", viper.ConfigFileUsed()),
+		Label: fmt.Sprintf("Would you like to delete the corrupted config file at %s? (y/n) ", cfgPath),
 	}
 
 	response, err := askDelete.Run()
@@ -193,7 +292,7 @@ func askAndDeleteConfig() {
 		return
 	}
 
-	err = os.Remove(viper.ConfigFileUsed())
+	err = os.Remove(cfgPath)
 	if err != nil {
 		fmt.Printf("Error deleting config file: %s\n", err)
 		return

@@ -49,7 +49,7 @@ func generateKeyCmd() *cobra.Command {
 					return display.PrintErr(cmd, err)
 				}
 
-				err = os.WriteFile(out, []byte(hex.EncodeToString(pk.Bytes())), 0644)
+				err = os.WriteFile(out, []byte(hex.EncodeToString(pk.Bytes())+"\n"), 0644)
 				if err != nil {
 					return display.PrintErr(cmd, err)
 				}

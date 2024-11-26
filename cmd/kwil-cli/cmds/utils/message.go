@@ -6,7 +6,9 @@ import (
 	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"reflect"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
@@ -123,11 +125,7 @@ func (r *respKwilCliConfig) MarshalJSON() ([]byte, error) {
 	return json.Marshal(cfg)
 }
 
-func (r *respKwilCliConfig) MarshalText() ([]byte, error) {
-	var msg bytes.Buffer
-	cfg := r.cfg.ToPersistedConfig()
-	cfg.PrivateKey = "***"
-
+func printStruct(cfg interface{}, w io.StringWriter, prefix string) error {
 	v := reflect.ValueOf(cfg)
 	t := v.Type()
 
@@ -135,11 +133,29 @@ func (r *respKwilCliConfig) MarshalText() ([]byte, error) {
 		v = v.Elem()
 		t = t.Elem()
 	}
+	if t.Kind() != reflect.Struct {
+		return errors.New("not a struct")
+	}
 
 	for i := range v.NumField() {
 		field := t.Field(i)
 		fieldValue := v.Field(i)
-		msg.WriteString(fmt.Sprintf("%s: %v\n", field.Name, fieldValue))
+		if field.Type.Kind() == reflect.Struct {
+			w.WriteString(field.Name + ":\n")
+			return printStruct(fieldValue.Interface(), w, prefix+"    ")
+		}
+		w.WriteString(fmt.Sprintf("%s%s: %v\n", prefix, field.Name, fieldValue))
+	}
+	return nil
+}
+
+func (r *respKwilCliConfig) MarshalText() ([]byte, error) {
+	var msg bytes.Buffer
+	cfg := r.cfg.ToPersistedConfig()
+	cfg.PrivateKey = "***"
+
+	if err := printStruct(cfg, &msg, ""); err != nil {
+		return nil, err
 	}
 
 	return msg.Bytes(), nil
