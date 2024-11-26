@@ -1,0 +1,66 @@
+package cmds
+
+import (
+	"fmt"
+
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config" // migrate !
+
+	"github.com/spf13/cobra"
+	"github.com/spf13/viper" // migrate !
+
+	"github.com/kwilteam/kwil-db/app/custom"
+	"github.com/kwilteam/kwil-db/app/shared/display"
+	"github.com/kwilteam/kwil-db/app/shared/version"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/account"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/configure"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/database"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/utils"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/helpers"
+)
+
+var longDesc = `Command line interface client for using %s.
+	
+` + "`" + `%s` + "`" + ` is a command line interface for interacting with %s. It can be used to deploy, update, and query databases.
+	
+` + "`" + `%s` + "`" + ` can be configured with a persistent configuration file. This file can be configured with the '%s configure' command.
+` + "`" + `%s` + "`" + ` will look for a configuration file at ` + "`" + `$HOME/.kwil-cli/config.json` + "`" + `.`
+
+func NewRootCmd() *cobra.Command {
+	rootCmd := &cobra.Command{
+		Use:   custom.BinaryConfig.ClientCmd,
+		Short: fmt.Sprintf("Command line interface client for using %s.", custom.BinaryConfig.ProjectName),
+		Long: fmt.Sprintf(longDesc, custom.BinaryConfig.ProjectName, custom.BinaryConfig.ClientUsage(),
+			custom.BinaryConfig.ProjectName, custom.BinaryConfig.ClientUsage(), custom.BinaryConfig.ClientUsage(), custom.BinaryConfig.ClientUsage()),
+		SilenceUsage:      true,
+		DisableAutoGenTag: true,
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			// for backwards compatibility, we need to check if the deprecated flag is set.
+			// If the new flag is set and the deprecated flag is not, we can proceed.
+			// If both are set, we should return an error.
+			if cmd.Flags().Changed("kwil-provider") {
+				if cmd.Flags().Changed(config.GlobalProviderFlag) {
+					return fmt.Errorf("cannot use both --provider and --kwil-provider flags")
+				} else {
+					viper.BindPFlag(config.GlobalProviderFlag, cmd.Flags().Lookup("kwil-provider"))
+				}
+			}
+
+			return nil
+		},
+	}
+
+	config.BindGlobalFlags(rootCmd.PersistentFlags())
+	display.BindOutputFormatFlag(rootCmd)
+	display.BindSilenceFlag(rootCmd)
+	helpers.BindAssumeYesFlag(rootCmd)
+
+	rootCmd.AddCommand(
+		account.NewCmdAccount(),
+		configure.NewCmdConfigure(),
+		database.NewCmdDatabase(),
+		utils.NewCmdUtils(),
+		version.NewVersionCmd(),
+	)
+
+	return rootCmd
+}
