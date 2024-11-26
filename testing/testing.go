@@ -11,23 +11,24 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"os/exec"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/cometbft/cometbft/test/e2e/pkg/exec"
+	"github.com/stretchr/testify/assert"
+
 	"github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/common/config"
-	"github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/utils"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
-	"github.com/kwilteam/kwil-db/internal/engine/execution"
-	"github.com/kwilteam/kwil-db/internal/sql/pg"
+	"github.com/kwilteam/kwil-db/node/engine/execution"
+	"github.com/kwilteam/kwil-db/node/pg"
+	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/parse"
-	"github.com/stretchr/testify/assert"
 )
 
 // RunSchemaTest runs a SchemaTest.
@@ -91,11 +92,9 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 	}
 
 	if opts.Logger == nil {
-		l := log.New(log.Config{
-			Level: "info",
-		})
+		l := log.New(log.WithLevel(log.LevelInfo))
 		opts.Logger = &kwilLoggerWrapper{
-			Logger: &l,
+			Logger: l,
 		}
 	}
 
@@ -168,26 +167,21 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 					return err
 				}
 
-				var logger log.SugaredLogger
+				var logger log.Logger
 				// if this is a kwil logger, we can keep using it.
 				// If it is from testing.T, we should make a Kwil logger.
 				if wrapped, ok := opts.Logger.(*kwilLoggerWrapper); ok {
-					logger = wrapped.Sugar()
+					logger = wrapped.Logger
 				} else {
-					logger = log.New(log.Config{
-						Level: "info",
-					}).Sugar()
+					logger = log.New(log.WithLevel(log.LevelInfo))
 				}
 
-				engine, err := execution.NewGlobalContext(ctx, outerTx, maps.Clone(precompiles.RegisteredPrecompiles()), &common.Service{
-					Logger: logger,
-					LocalConfig: &config.KwildConfig{
-						AppConfig: &config.AppConfig{
-							Extensions: map[string]map[string]string{},
-						},
-					},
-					Identity: []byte("node"),
-				})
+				engine, err := execution.NewGlobalContext(ctx, outerTx, maps.Clone(precompiles.RegisteredPrecompiles()),
+					&common.Service{
+						Logger:      logger,
+						LocalConfig: &config.Config{},
+						Identity:    []byte("node"),
+					})
 				if err != nil {
 					return err
 				}
@@ -441,7 +435,8 @@ func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context
 	port := "52853" // random port
 
 	// Run the container
-	bts, err := exec.CommandOutput(ctx, startCommand(port)...)
+	cmd := exec.CommandContext(ctx, "docker", dockerStartArgs(port)...)
+	err = cmd.Run() // run and wait for completion
 	switch {
 	case err == nil:
 		// do nothing
@@ -460,12 +455,14 @@ func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context
 			return fmt.Errorf(`cannot create test-container: conflicting container name: "%s"`, ContainerName)
 		}
 
-		err = exec.Command(ctx, "docker", "rm", "-f", ContainerName)
+		cmdStop := exec.CommandContext(ctx, "docker", "rm", "-f", ContainerName)
+		err = cmdStop.Run()
 		if err != nil {
 			return fmt.Errorf("error removing conflicting container: %w", err)
 		}
 
-		bts, err = exec.CommandOutput(ctx, startCommand(port)...)
+		cmd = exec.CommandContext(ctx, "docker", dockerStartArgs(port)...)
+		err = cmd.Run()
 		if err != nil {
 			return fmt.Errorf("error running test container: %w", err)
 		}
@@ -474,7 +471,8 @@ func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context
 	}
 
 	defer func() {
-		err2 := exec.Command(ctx, "docker", "rm", "-f", ContainerName)
+		cmdStop := exec.CommandContext(ctx, "docker", "rm", "-f", ContainerName)
+		err2 := cmdStop.Run()
 		if err2 != nil {
 			if err == nil {
 				err = err2
@@ -484,7 +482,12 @@ func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context
 		}
 	}()
 
-	opts.Logger.Logf("running test container: %s", string(bts))
+	out, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to get output from container: %w", err)
+	}
+
+	opts.Logger.Logf("running test container: %s", string(out))
 
 	db, err := connectWithRetry(ctx, port, 10) // might take a while to start up on slower machines
 	if err != nil {
@@ -499,9 +502,9 @@ func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context
 // ContainerName is the name of the test container
 const ContainerName = "kwil-testing-postgres"
 
-// startCommand returns the docker start command
-func startCommand(port string) []string {
-	return []string{"docker", "run", "-d", "-p", fmt.Sprintf("%s:5432", port), "--name", ContainerName,
+// dockerStartArgs returns the docker start command args
+func dockerStartArgs(port string) (args []string) {
+	return []string{"run", "-d", "-p", fmt.Sprintf("%s:5432", port), "--name", ContainerName,
 		"-e", "POSTGRES_HOST_AUTH_METHOD=trust", "kwildb/postgres:16.4-1"}
 }
 
@@ -577,16 +580,16 @@ type Logger interface {
 
 // LoggerFromKwilLogger wraps the Kwil standard logger so
 // so that it can be used in tests
-func LoggerFromKwilLogger(log *log.Logger) Logger {
+func LoggerFromKwilLogger(log log.Logger) Logger {
 	return &kwilLoggerWrapper{
 		Logger: log,
 	}
 }
 
 type kwilLoggerWrapper struct {
-	*log.Logger
+	log.Logger
 }
 
 func (k *kwilLoggerWrapper) Logf(s string, a ...any) {
-	k.Logger.Logf(k.L.Level(), s, a...)
+	k.Logger.Logf(log.LevelInfo /*fix*/, s, a...)
 }

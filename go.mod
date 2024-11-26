@@ -23,9 +23,12 @@ require (
 	github.com/knadh/koanf/v2 v2.1.1
 	github.com/libp2p/go-libp2p v0.37.0
 	github.com/libp2p/go-libp2p-pubsub v0.12.0
+	github.com/manifoldco/promptui v0.9.0
 	github.com/multiformats/go-multiaddr v0.13.0
+	github.com/olekukonko/tablewriter v0.0.5
 	github.com/pelletier/go-toml/v2 v2.2.3
 	github.com/spf13/pflag v1.0.5
+	github.com/spf13/viper v1.19.0
 	golang.org/x/sync v0.9.0
 )
 
@@ -44,12 +47,10 @@ require (
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/knadh/koanf/maps v0.1.1 // indirect
 	github.com/magiconair/properties v1.8.7 // indirect
-	github.com/manifoldco/promptui v0.9.0 // indirect
 	github.com/mattn/go-runewidth v0.0.16 // indirect
 	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
 	github.com/mitchellh/reflectwalk v1.0.2 // indirect
-	github.com/olekukonko/tablewriter v0.0.5 // indirect
 	github.com/rivo/uniseg v0.4.7 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/sagikazarmark/locafero v0.6.0 // indirect
@@ -57,7 +58,6 @@ require (
 	github.com/sourcegraph/conc v0.3.0 // indirect
 	github.com/spf13/afero v1.11.0 // indirect
 	github.com/spf13/cast v1.7.0 // indirect
-	github.com/spf13/viper v1.19.0 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	gopkg.in/ini.v1 v1.67.0 // indirect
 )
