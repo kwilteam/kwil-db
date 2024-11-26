@@ -205,9 +205,9 @@ func (n *Node) announceBlkProp(ctx context.Context, blk *types.Block) {
 func (n *Node) blkPropStreamHandler(s network.Stream) {
 	defer s.Close()
 
-	if n.role.Load() == types.RoleLeader {
-		return
-	}
+	// if n.role.Load() == types.RoleLeader {
+	// 	return
+	// }
 
 	var prop blockProp
 	_, err := prop.ReadFrom(s)
@@ -324,7 +324,7 @@ func (n *Node) startAckGossip(ctx context.Context, ps *pubsub.PubSub) error {
 			}
 
 			// We're only interested if we are the leader.
-			if n.role.Load() != types.RoleLeader {
+			if !n.ce.AcceptACK() {
 				// n.log.Debugln("discarding ack meant for leader")
 				continue // discard, we are just relaying to leader
 			}
