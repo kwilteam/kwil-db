@@ -97,7 +97,7 @@ func prepareHTTPDialerURL(target string) (*neturl.URL, dialerFunc, error) {
 	case url.HTTP: // includes unix targets with no scheme like /var/run/kwild.socket
 	case url.HTTPS:
 		if parsedURL.Host == "" {
-			return nil, nil, fmt.Errorf("https with a unix socket not allowed")
+			return nil, nil, errors.New("https with a unix socket not allowed")
 		}
 	case url.UNIX:
 		// reparse with http scheme to make a url we can use with http.Client requests

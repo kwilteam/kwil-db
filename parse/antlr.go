@@ -2,7 +2,6 @@ package parse
 
 import (
 	"encoding/hex"
-	"fmt"
 	"math"
 	"math/big"
 	"strconv"
@@ -909,7 +908,7 @@ func (s *schemaVisitor) VisitProcedure_return(ctx *gen.Procedure_returnContext) 
 		ret.Fields = make([]*types.NamedType, len(ctx.GetUnnamed_return_types().AllType_()))
 		for i, t := range ctx.GetUnnamed_return_types().AllType_() {
 			ret.Fields[i] = &types.NamedType{
-				Name: "col" + fmt.Sprint(i),
+				Name: "col" + strconv.Itoa(i),
 				Type: t.Accept(s).(*types.DataType),
 			}
 		}

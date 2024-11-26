@@ -581,7 +581,7 @@ func Test_OrderSchemas(t *testing.T) {
 	// create random schemas, and randomly add others as dependencies
 	schemas := make([]*types.Schema, 0)
 
-	for i := 0; i < 100; i++ {
+	for range 100 {
 		schema := randomSchema()
 
 		for _, schema2 := range schemas {
@@ -596,7 +596,7 @@ func Test_OrderSchemas(t *testing.T) {
 
 	// add some more that have zero dependencies
 	for _, schema := range schemas {
-		for i := 0; i < 10; i++ {
+		for range 10 {
 			dep := randomSchema()
 			schema.Extensions = append(schema.Extensions, &types.Extension{
 				Name:  dep.DBID(),

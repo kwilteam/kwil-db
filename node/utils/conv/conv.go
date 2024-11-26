@@ -1,6 +1,7 @@
 package conv
 
 import (
+	"errors"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -48,7 +49,7 @@ func String(a any) (string, error) {
 		if utf8.Valid(xt) {
 			return string(xt), nil
 		} else {
-			return "", fmt.Errorf("cannot convert invalid utf8 []byte to string")
+			return "", errors.New("cannot convert invalid utf8 []byte to string")
 		}
 	}
 	return "", fmt.Errorf("cannot convert %T to string", a)

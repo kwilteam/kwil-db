@@ -18,7 +18,6 @@ import (
 
 	"github.com/kwilteam/kwil-db/app/shared"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/helpers"
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/helpers/prompt"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 )
@@ -261,16 +260,7 @@ func LoadPersistedConfig() (*KwilCliConfig, error) {
 	return conf.toKwilCliConfig()
 }
 
-// LoadCliConfig loads the config.
-// The precedence order is following, each item takes precedence over the item below it:
-//  1. flags
-//  2. config file
-//  3. default config
-// func LoadCliConfig() (*KwilCliConfig, error) {
-// 	return nil, nil
-// }
-
-func askAndDeleteConfig() {
+/*func askAndDeleteConfig() {
 	cfgPath := k.String(configFileFlag)
 	if cfgPath == "" {
 		fmt.Printf("Unable to retrieve config file path")
@@ -297,4 +287,4 @@ func askAndDeleteConfig() {
 		fmt.Printf("Error deleting config file: %s\n", err)
 		return
 	}
-}
+}*/

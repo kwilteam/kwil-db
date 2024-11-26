@@ -2,6 +2,7 @@ package utils
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -87,7 +88,7 @@ func testCmd() *cobra.Command {
 				opts.UseTestContainer = true
 			} else {
 				if !userHasSetPgConn {
-					return display.PrintErr(cmd, fmt.Errorf("must specify either postgres connection flags or --test-container"))
+					return display.PrintErr(cmd, errors.New("must specify either postgres connection flags or --test-container"))
 				}
 
 				opts.Conn = &pg.ConnConfig{
@@ -190,7 +191,7 @@ func (t *testsPassed) MarshalJSON() ([]byte, error) {
 
 func (t *testsPassed) MarshalText() (text []byte, err error) {
 	if !t.Passing {
-		return []byte(fmt.Sprintf("\nTests failed:\n%s", t.Reason)), nil
+		return []byte("\nTests failed:\n" + t.Reason), nil
 	}
 
 	return []byte("\nAll tests passed successfully."), nil
@@ -222,7 +223,7 @@ func adjustPath(path, relativeTo string) (string, error) {
 // has a ~. If it doesn't, it does not change the input
 func expandHome(s *string) (changed bool, err error) {
 	if s == nil {
-		return false, fmt.Errorf("input string pointer is nil")
+		return false, errors.New("input string pointer is nil")
 	}
 
 	// If the path is ~/..., expand it to the user's home directory.
