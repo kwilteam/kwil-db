@@ -326,12 +326,12 @@ func (g *GlobalContext) GetSchema(dbid string) (*types.Schema, error) {
 func (g *GlobalContext) Execute(ctx *common.TxContext, tx sql.DB, dbid, query string, values map[string]any) (*sql.ResultSet, error) {
 	g.mu.RLock()
 	defer g.mu.RUnlock()
-	dataset, ok := g.datasets[dbid]
+	_, ok := g.datasets[dbid]
 	if !ok {
 		return nil, ErrDatasetNotFound
 	}
 
-	res, err := parse.ParseSQL(query, dataset.schema, false)
+	res, err := parse.ParseSQL(query)
 	if err != nil {
 		return nil, err
 	}

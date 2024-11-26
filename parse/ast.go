@@ -14,15 +14,19 @@ import (
 
 // Node is a node in the AST.
 type Node interface {
-	GetPositioner
+	Positionable
 	Accept(Visitor) any
-	Set(r antlr.ParserRuleContext)
-	SetToken(t antlr.Token)
 }
 
 type GetPositioner interface {
 	GetPosition() *Position
 	Clear()
+}
+
+type Positionable interface {
+	GetPositioner
+	Set(r antlr.ParserRuleContext)
+	SetToken(t antlr.Token)
 }
 
 type Typecastable struct {
@@ -521,6 +525,8 @@ type SQLStatement struct {
 	Recursive bool
 	// SQL can be an insert, update, delete, or select statement.
 	SQL SQLCore
+	// raw is the raw SQL string.
+	raw *string
 }
 
 func (s *SQLStatement) Accept(v Visitor) any {
@@ -529,6 +535,14 @@ func (s *SQLStatement) Accept(v Visitor) any {
 
 func (s *SQLStatement) StmtType() SQLStatementType {
 	return s.SQL.StmtType()
+}
+
+func (s *SQLStatement) Raw() (string, error) {
+	if s.raw == nil {
+		return "", fmt.Errorf("raw SQL is not set")
+	}
+
+	return *s.raw, nil
 }
 
 // SQLCore is a DML statement.
@@ -562,7 +576,7 @@ type CreateTableStatement struct {
 	// Indexes contains the non-inline indexes
 	Indexes []*TableIndex
 	// Constraints contains the non-inline constraints
-	Constraints []Constraint
+	Constraints []*OutOfLineConstraint
 }
 
 func (c *CreateTableStatement) Accept(v Visitor) any {
@@ -580,171 +594,104 @@ type Column struct {
 
 	Name        string
 	Type        *types.DataType
-	Constraints []Constraint
+	Constraints []InlineConstraint2
 }
 
-type ConstraintType string
-
-const (
-	PRIMARY_KEY ConstraintType = "PRIMARY KEY"
-	DEFAULT     ConstraintType = "DEFAULT"
-	NOT_NULL    ConstraintType = "NOT NULL"
-	UNIQUE      ConstraintType = "UNIQUE"
-	CHECK       ConstraintType = "CHECK"
-	FOREIGN_KEY ConstraintType = "FOREIGN KEY"
-	//CUSTOM      ConstraintType = "CUSTOM"
-)
-
-type Constraint interface {
-	Node
-
-	ConstraintType() ConstraintType
-	ToSQL() string
-}
-
-type ConstraintPrimaryKey struct {
+// OutOfLineConstraint is a constraint that is not inline with the column.
+// e.g. CREATE TABLE t (a INT, CONSTRAINT c CHECK (a > 0))
+type OutOfLineConstraint struct {
 	Position
+	Name       string // can be empty if the name should be auto-generated
+	Constraint OutOfLineConstraintClause
+}
 
+// InlineConstraint is a constraint that is inline with the column.
+type InlineConstraint2 interface {
+	Positionable
+	inlineConstraint()
+}
+
+// OutOfLineConstraintClause is a constraint that is not inline with the column.
+type OutOfLineConstraintClause interface {
+	Positionable
+	outOfLineConstraintClause()
+	// LocalColumns returns the local columns that the constraint is applied to.
+	LocalColumns() []string
+}
+
+type PrimaryKeyInlineConstraint struct {
+	Position
+}
+
+func (c *PrimaryKeyInlineConstraint) inlineConstraint() {}
+
+type PrimaryKeyOutOfLineConstraint struct {
+	Position
 	Columns []string
 }
 
-func (c *ConstraintPrimaryKey) Accept(visitor Visitor) any {
-	panic("implement me")
-}
+func (c *PrimaryKeyOutOfLineConstraint) outOfLineConstraintClause() {}
 
-func (c *ConstraintPrimaryKey) ConstraintType() ConstraintType {
-	return PRIMARY_KEY
-}
+func (c *PrimaryKeyOutOfLineConstraint) LocalColumns() []string { return c.Columns }
 
-func (c *ConstraintPrimaryKey) ToSQL() string {
-	if len(c.Columns) == 0 {
-		return "PRIMARY KEY"
-	}
-
-	return "PRIMARY KEY (" + strings.Join(c.Columns, ", ") + ")"
-}
-
-type ConstraintUnique struct {
+type UniqueInlineConstraint struct {
 	Position
+}
 
-	Name    string
+func (c *UniqueInlineConstraint) inlineConstraint() {}
+
+type UniqueOutOfLineConstraint struct {
+	Position
 	Columns []string
 }
 
-func (c *ConstraintUnique) Accept(visitor Visitor) any {
-	panic("implement me")
+func (c *UniqueOutOfLineConstraint) outOfLineConstraintClause() {}
+
+func (c *UniqueOutOfLineConstraint) LocalColumns() []string { return c.Columns }
+
+type DefaultConstraint struct {
+	Position
+	Value *ExpressionLiteral
 }
 
-func (c *ConstraintUnique) ConstraintType() ConstraintType {
-	return UNIQUE
+func (c *DefaultConstraint) inlineConstraint() {}
+
+type NotNullConstraint struct {
+	Position
 }
 
-func (c *ConstraintUnique) ToSQL() string {
-	if len(c.Columns) == 0 {
-		return "UNIQUE"
-	}
+func (c *NotNullConstraint) inlineConstraint() {}
 
-	s := "UNIQUE (" + strings.Join(c.Columns, ", ") + ")"
-	if c.Name == "" {
-		return s
-	}
-
-	return "CONSTRAINT " + c.Name + " " + s
+type CheckConstraint struct {
+	Position
+	Expression Expression
 }
 
-type ConstraintDefault struct {
+func (c *CheckConstraint) inlineConstraint() {}
+
+func (c *CheckConstraint) outOfLineConstraintClause() {}
+
+func (c *CheckConstraint) LocalColumns() []string { return nil }
+
+type ForeignKeyReferences struct {
 	Position
 
-	Name   string
-	Column string
-	Value  *ExpressionLiteral
+	RefTable   string
+	RefColumns []string
+	Actions    []*ForeignKeyAction
 }
 
-func (c *ConstraintDefault) Accept(visitor Visitor) any {
-	panic("implement me")
-}
+func (c *ForeignKeyReferences) inlineConstraint() {}
 
-func (c *ConstraintDefault) ConstraintType() ConstraintType {
-	return DEFAULT
-}
-
-func (c *ConstraintDefault) ToSQL() string {
-	return "DEFAULT " + c.Value.String()
-}
-
-type ConstraintNotNull struct {
+type ForeignKeyOutOfLineConstraint struct {
 	Position
-
-	Name   string
-	Column string
+	Columns    []string
+	References *ForeignKeyReferences
 }
 
-func (c *ConstraintNotNull) Accept(visitor Visitor) any {
-	panic("implement me")
-}
+func (c *ForeignKeyOutOfLineConstraint) outOfLineConstraintClause() {}
 
-func (c *ConstraintNotNull) ConstraintType() ConstraintType {
-	return NOT_NULL
-}
-
-func (c *ConstraintNotNull) ToSQL() string {
-	return "NOT NULL"
-}
-
-type ConstraintCheck struct {
-	Position
-
-	Name  string
-	Param Expression
-}
-
-func (c *ConstraintCheck) Accept(visitor Visitor) any {
-	panic("implement me")
-}
-
-func (c *ConstraintCheck) ConstraintType() ConstraintType {
-	return CHECK
-}
-
-func (c *ConstraintCheck) ToSQL() string {
-	return ""
-}
-
-type ConstraintForeignKey struct {
-	Position
-
-	Name      string
-	RefTable  string
-	RefColumn string
-	Column    string
-	Ons       []ForeignKeyActionOn
-	Dos       []ForeignKeyActionDo
-}
-
-func (c *ConstraintForeignKey) Accept(visitor Visitor) any {
-	panic("implement me")
-}
-
-func (c *ConstraintForeignKey) ConstraintType() ConstraintType {
-	return FOREIGN_KEY
-}
-
-func (c *ConstraintForeignKey) ToSQL() string {
-	s := "REFERENCES " + c.RefTable + "(" + c.RefColumn + ")"
-	if len(c.Ons) == 0 {
-		return s
-	}
-
-	for i, on := range c.Ons {
-		s += " ON " + string(on) + " " + string(c.Dos[i])
-	}
-
-	if c.Name == "" {
-		return s
-	}
-
-	return "CONSTRAINT " + c.Name + " FOREIGN KEY (" + c.Column + ") " + s
-}
+func (c *ForeignKeyOutOfLineConstraint) LocalColumns() []string { return c.Columns }
 
 type IndexType string
 
@@ -810,14 +757,8 @@ type ForeignKey struct {
 	// For example, in FOREIGN KEY (a) REFERENCES tbl2(b), "tbl2" is the parent table
 	ParentTable string `json:"parent_table"`
 
-	// Do we need parent schema stored with meta data or should assume and
-	// enforce same schema when creating the dataset with generated DDL.
-	// ParentSchema string `json:"parent_schema"`
-
 	// Action refers to what the foreign key should do when the parent is altered.
-	// This is NOT the same as a database action;
-	// however sqlite's docs refer to these as actions,
-	// so we should be consistent with that.
+	// This is NOT the same as a database action.
 	// For example, ON DELETE CASCADE is a foreign key action
 	Actions []*ForeignKeyAction `json:"actions"`
 }
@@ -912,29 +853,71 @@ func (a *AlterTableStatement) StmtType() SQLStatementType {
 	return SQLStatementTypeAlterTable
 }
 
-type AddColumnConstraint struct {
-	Position
-
-	Column string
-	Type   ConstraintType
-	Value  *ExpressionLiteral
+// ConstraintType is a constraint in a table.
+type ConstraintType interface {
+	String() string
+	constraint()
 }
 
-func (a *AddColumnConstraint) Accept(v Visitor) any {
+// SingleColumnConstraintType is a constraint type that can only ever
+// be applied to a single column. These are NOT NULL and DEFAULT.
+type SingleColumnConstraintType string
+
+func (t SingleColumnConstraintType) String() string {
+	return string(t)
+}
+
+func (t SingleColumnConstraintType) constraint() {}
+
+const (
+	ConstraintTypeNotNull SingleColumnConstraintType = "NOT NULL"
+	ConstraintTypeDefault SingleColumnConstraintType = "DEFAULT"
+)
+
+// MultiColumnConstraintType is a constraint type that can be applied
+// to multiple columns. These are PRIMARY KEY, FOREIGN KEY, UNIQUE, and CHECK.
+
+type MultiColumnConstraintType string
+
+func (t MultiColumnConstraintType) String() string {
+	return string(t)
+}
+
+func (t MultiColumnConstraintType) constraint() {}
+
+const (
+	ConstraintTypeUnique     MultiColumnConstraintType = "UNIQUE"
+	ConstraintTypeCheck      MultiColumnConstraintType = "CHECK"
+	ConstraintTypeForeignKey MultiColumnConstraintType = "FOREIGN KEY"
+	ConstraintTypePrimaryKey MultiColumnConstraintType = "PRIMARY KEY"
+)
+
+type SetColumnConstraint struct {
+	Position
+	// Column is the column that is being altered.
+	Column string
+	// Type is the type of constraint that is being set.
+	Type SingleColumnConstraintType
+	// Value is the value of the constraint.
+	// It is only set if the type is DEFAULT.
+	Value *ExpressionLiteral
+}
+
+func (a *SetColumnConstraint) Accept(v Visitor) any {
 	panic("implement me")
 }
 
-func (a *AddColumnConstraint) alterTableAction() {}
+func (a *SetColumnConstraint) alterTableAction() {}
 
-func (a *AddColumnConstraint) ToSQL() string {
+func (a *SetColumnConstraint) ToSQL() string {
 	str := strings.Builder{}
 	str.WriteString("ALTER COLUMN ")
 	str.WriteString(a.Column)
 	str.WriteString(" SET ")
 	switch a.Type {
-	case NOT_NULL:
+	case ConstraintTypeNotNull:
 		str.WriteString("NOT NULL")
-	case DEFAULT:
+	case ConstraintTypeDefault:
 		str.WriteString("DEFAULT ")
 		str.WriteString(a.Value.String())
 	default:
@@ -948,8 +931,7 @@ type DropColumnConstraint struct {
 	Position
 
 	Column string
-	Type   ConstraintType
-	Name   string // will be set when drop a named constraint
+	Type   SingleColumnConstraintType
 }
 
 func (a *DropColumnConstraint) Accept(v Visitor) any {
@@ -966,18 +948,13 @@ func (a *DropColumnConstraint) ToSQL() string {
 
 	if a.Type != "" {
 		switch a.Type {
-		case NOT_NULL:
+		case ConstraintTypeNotNull:
 			str.WriteString("NOT NULL")
-		case DEFAULT:
+		case ConstraintTypeDefault:
 			str.WriteString("DEFAULT")
 		default:
 			panic("unknown constraint type")
 		}
-	}
-
-	if a.Name != "" {
-		str.WriteString("CONSTRAINT ")
-		str.WriteString(a.Name)
 	}
 
 	return str.String()
@@ -1049,10 +1026,12 @@ func (a *RenameTable) ToSQL() string {
 	return "RENAME TO " + a.Name
 }
 
+// AddTableConstraint is a constraint that is being added to a table.
+// It is used to specify multi-column constraints.
 type AddTableConstraint struct {
 	Position
 
-	Cons Constraint
+	Constraint *OutOfLineConstraint
 }
 
 func (a *AddTableConstraint) Accept(v Visitor) any {
@@ -1112,6 +1091,29 @@ func (s *DropIndexStatement) Accept(v Visitor) any {
 
 func (s *DropIndexStatement) StmtType() SQLStatementType {
 	return SQLStatementTypeDropIndex
+}
+
+type GrantOrRevokeStatement struct {
+	Position
+	// IsGrant is true if the statement is a GRANT statement.
+	// If it is false, then it is a REVOKE statement.
+	IsGrant bool
+	// Privileges are the privileges that are being granted.
+	// Either Privileges or Role must be set, but not both.
+	Privileges []string
+	// Role is the role being granted
+	// Either Privileges or Role must be set, but not both.
+	GrantRole string
+	// ToRole is the role being granted to.
+	// Either ToUser or ToRole must be set, but not both.
+	ToRole string
+	// ToUser is the user being granted to.
+	// Either ToUser or ToRole must be set, but not both.
+	ToUser string
+}
+
+func (g *GrantOrRevokeStatement) Accept(v Visitor) any {
+	return v.VisitGrantOrRevokeStatement(g)
 }
 
 // SelectStatement is a SELECT statement.
@@ -1609,9 +1611,21 @@ func (p *ProcedureStmtReturnNext) Accept(v Visitor) any {
 // Visitor is an interface for visiting nodes in the parse tree.
 type Visitor interface {
 	ProcedureVisitor
+	DDLVisitor
 	VisitActionStmtSQL(*ActionStmtSQL) any
 	VisitActionStmtExtensionCall(*ActionStmtExtensionCall) any
 	VisitActionStmtActionCall(*ActionStmtActionCall) any
+}
+
+// DDLVisitor includes visit methods only needed to analyze DDL statements.
+type DDLVisitor interface {
+	// DDL
+	VisitCreateTableStatement(*CreateTableStatement) any
+	VisitAlterTableStatement(*AlterTableStatement) any
+	VisitDropTableStatement(*DropTableStatement) any
+	VisitCreateIndexStatement(*CreateIndexStatement) any
+	VisitDropIndexStatement(*DropIndexStatement) any
+	VisitGrantOrRevokeStatement(*GrantOrRevokeStatement) any
 }
 
 // ProcedureVisitor includes visit methods only needed to analyze procedures.
@@ -1672,12 +1686,6 @@ type SQLVisitor interface {
 	VisitInsertStatement(*InsertStatement) any
 	VisitUpsertClause(*OnConflict) any
 	VisitOrderingTerm(*OrderingTerm) any
-	// DDL
-	VisitCreateTableStatement(*CreateTableStatement) any
-	VisitAlterTableStatement(*AlterTableStatement) any
-	VisitDropTableStatement(*DropTableStatement) any
-	VisitCreateIndexStatement(*CreateIndexStatement) any
-	VisitDropIndexStatement(*DropIndexStatement) any
 }
 
 // UnimplementedSqlVisitor is meant to be used when an implementing visitor only intends

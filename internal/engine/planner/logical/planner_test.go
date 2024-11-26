@@ -6,8 +6,9 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/engine"
+	"github.com/kwilteam/kwil-db/internal/engine/planner/logical"
 	"github.com/kwilteam/kwil-db/parse"
-	"github.com/kwilteam/kwil-db/parse/planner/logical"
 	"github.com/stretchr/testify/require"
 )
 
@@ -593,14 +594,22 @@ func Test_Planner(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			schema, err := parse.Parse([]byte(testSchema))
-			require.NoError(t, err)
-
-			parsedSql, err := parse.ParseSQL(test.sql, schema, true)
+			parsedSql, err := parse.ParseSQL(test.sql)
 			require.NoError(t, err)
 			require.NoError(t, parsedSql.ParseErrs.Err())
 
-			plan, err := logical.CreateLogicalPlan(parsedSql.AST, schema, test.vars, test.objects, false)
+			plan, err := logical.CreateLogicalPlan(parsedSql.AST,
+				func(namespace, tableName string) (table *engine.Table, found bool) {
+					m := map[string]*engine.Table{
+						"users": {
+							Name: "users", // TODO: replace this with a parsed table once gavin adds it
+							// I am intentionally leaving this bug here so I do not forget to fix it
+						},
+					}
+
+					table, found = m[tableName]
+					return table, found
+				}, parsedSql, test.vars, test.objects, false)
 			if test.err != nil {
 				require.Error(t, err)
 

@@ -178,6 +178,24 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#drop_index_statement.
 	VisitDrop_index_statement(ctx *Drop_index_statementContext) interface{}
 
+	// Visit a parse tree produced by KuneiformParser#create_role_statement.
+	VisitCreate_role_statement(ctx *Create_role_statementContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#drop_role_statement.
+	VisitDrop_role_statement(ctx *Drop_role_statementContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#grant_statement.
+	VisitGrant_statement(ctx *Grant_statementContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#revoke_statement.
+	VisitRevoke_statement(ctx *Revoke_statementContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#privilege_list.
+	VisitPrivilege_list(ctx *Privilege_listContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#privilege.
+	VisitPrivilege(ctx *PrivilegeContext) interface{}
+
 	// Visit a parse tree produced by KuneiformParser#select_statement.
 	VisitSelect_statement(ctx *Select_statementContext) interface{}
 

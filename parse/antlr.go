@@ -37,6 +37,8 @@ type schemaVisitor struct {
 	procedures map[string][]ProcedureStmt
 	// actions maps the asts of all parsed actions
 	actions map[string][]ActionStmt
+	// includeRawSQL is true if raw SQL should be included in the output.
+	includeRawSQL bool
 }
 
 // getTextFromStream gets the text from the input stream for a given range.
@@ -941,6 +943,11 @@ func (s *schemaVisitor) VisitSql_statement(ctx *gen.Sql_statementContext) any {
 		panic("unknown dml statement")
 	}
 
+	if s.includeRawSQL {
+		sql := s.getTextFromStream(ctx.GetStart().GetStart(), ctx.GetStop().GetStop())
+		stmt.raw = &sql
+	}
+
 	stmt.Set(ctx)
 	return stmt
 }
@@ -963,21 +970,16 @@ func (s *schemaVisitor) VisitCommon_table_expression(ctx *gen.Common_table_expre
 
 func (s *schemaVisitor) VisitCreate_table_statement(ctx *gen.Create_table_statementContext) any {
 	stmt := &CreateTableStatement{
-		Name:        ctx.GetName().Accept(s).(string),
+		Name:        s.getIdent(ctx.GetName().IDENTIFIER()),
+		IfNotExists: ctx.EXISTS() != nil,
 		Columns:     arr[*Column](len(ctx.AllTable_column_def())),
-		Constraints: arr[Constraint](len(ctx.AllTable_constraint_def())),
+		Constraints: arr[*OutOfLineConstraint](len(ctx.AllTable_constraint_def())),
 		Indexes:     arr[*TableIndex](len(ctx.AllTable_index_def())),
-	}
-
-	if ctx.EXISTS() != nil {
-		stmt.IfNotExists = true
 	}
 
 	// for basic validation
 	var primaryKey []string
 	allColumns := make(map[string]bool)
-	allConstraints := make(map[string]bool)
-	allIndexes := make(map[string]bool)
 
 	if len(ctx.AllTable_column_def()) == 0 {
 		s.errs.RuleErr(ctx, ErrTableDefinition, "no column definitions found")
@@ -992,84 +994,47 @@ func (s *schemaVisitor) VisitCreate_table_statement(ctx *gen.Create_table_statem
 		}
 	}
 
+	// we iterate through all columns to see if the primary key has been declared.
+	// This allows us to check if it gets doubley declared.
 	for _, column := range stmt.Columns {
 		for _, constraint := range column.Constraints {
 			switch constraint.(type) {
-			case *ConstraintPrimaryKey:
+			case *PrimaryKeyInlineConstraint:
+				// ensure that the primary key is not redeclared
+				if len(primaryKey) != 0 {
+					s.errs.AddErr(column, ErrRedeclarePrimaryKey, "primary key redeclared")
+					continue
+				}
 				primaryKey = []string{column.Name}
 			}
 		}
 	}
 
+	// we will validate that columns referenced in constraints exist.
+	// We will also check that the primary key is not redeclared.
 	for i, c := range ctx.AllTable_constraint_def() {
-		constraint := c.Accept(s).(Constraint)
+		constraint := c.Accept(s).(*OutOfLineConstraint)
 		stmt.Constraints[i] = constraint
 
-		switch cc := constraint.(type) {
-		case *ConstraintPrimaryKey:
+		// if it is a primary key, we need to check that it is not redeclared
+		if pk, ok := constraint.Constraint.(*PrimaryKeyOutOfLineConstraint); ok {
 			if len(primaryKey) != 0 {
-				s.errs.RuleErr(c, ErrRedeclarePrimaryKey, "primary key redeclared")
+				s.errs.AddErr(constraint, ErrRedeclarePrimaryKey, "primary key redeclared")
 				continue
 			}
+			primaryKey = pk.Columns
+		}
 
-			for _, col := range cc.Columns {
-				if !allColumns[col] {
-					s.errs.RuleErr(c, ErrUnknownColumn, "primary key on unknown column")
-				}
+		for _, col := range constraint.Constraint.LocalColumns() {
+			if !allColumns[col] {
+				s.errs.RuleErr(c, ErrUnknownColumn, "constraint on unknown column")
 			}
-
-			primaryKey = cc.Columns
-		case *ConstraintCheck:
-			if cc.Name != "" {
-				if allConstraints[cc.Name] {
-					s.errs.RuleErr(c, ErrCollation, "constraint name exists")
-				} else {
-					allConstraints[cc.Name] = true
-				}
-			}
-		case *ConstraintUnique:
-			if cc.Name != "" {
-				if allConstraints[cc.Name] {
-					s.errs.RuleErr(c, ErrCollation, "constraint name exists")
-				} else {
-					allConstraints[cc.Name] = true
-				}
-			}
-
-			for _, col := range cc.Columns {
-				if !allColumns[col] {
-					s.errs.RuleErr(c, ErrUnknownColumn, "primary key on unknown column")
-				}
-			}
-		case *ConstraintForeignKey:
-			if cc.Name != "" {
-				if allConstraints[cc.Name] {
-					s.errs.RuleErr(c, ErrCollation, "constraint name exists")
-				} else {
-					allConstraints[cc.Name] = true
-				}
-			}
-
-			if !allColumns[cc.RefColumn] {
-				s.errs.RuleErr(c, ErrUnknownColumn, "index on unknown column")
-			}
-		default:
-			// should not happen
-			panic("unknown constraint type")
 		}
 	}
 
 	for i, c := range ctx.AllTable_index_def() {
 		idx := c.Accept(s).(*TableIndex)
 		stmt.Indexes[i] = idx
-
-		if idx.Name != "" {
-			if allIndexes[idx.Name] {
-				s.errs.RuleErr(c, ErrCollation, "index name exists")
-			} else {
-				allIndexes[idx.Name] = true
-			}
-		}
 
 		for _, col := range idx.Columns {
 			if !allColumns[col] {
@@ -1090,11 +1055,11 @@ func (s *schemaVisitor) VisitTable_column_def(ctx *gen.Table_column_defContext) 
 	column := &Column{
 		Name:        s.getIdent(ctx.IDENTIFIER()),
 		Type:        ctx.Type_().Accept(s).(*types.DataType),
-		Constraints: arr[Constraint](len(ctx.AllInline_constraint())),
+		Constraints: arr[InlineConstraint2](len(ctx.AllInline_constraint())),
 	}
 
 	for i, c := range ctx.AllInline_constraint() {
-		column.Constraints[i] = c.Accept(s).(Constraint)
+		column.Constraints[i] = c.Accept(s).(InlineConstraint2)
 	}
 
 	column.Set(ctx)
@@ -1102,37 +1067,30 @@ func (s *schemaVisitor) VisitTable_column_def(ctx *gen.Table_column_defContext) 
 }
 
 func (s *schemaVisitor) VisitInline_constraint(ctx *gen.Inline_constraintContext) any {
+	var c InlineConstraint2
 	switch {
 	case ctx.PRIMARY() != nil:
-		c := &ConstraintPrimaryKey{}
-		c.Set(ctx)
-		return c
+		c = &PrimaryKeyInlineConstraint{}
 	case ctx.UNIQUE() != nil:
-		c := &ConstraintUnique{}
-		c.Set(ctx)
-		return c
+		c = &UniqueInlineConstraint{}
 	case ctx.NOT() != nil:
-		c := &ConstraintNotNull{}
-		c.Set(ctx)
-		return c
+		c = &NotNullConstraint{}
 	case ctx.DEFAULT() != nil:
-		c := &ConstraintDefault{
+		c = &DefaultConstraint{
 			Value: ctx.Literal().Accept(s).(*ExpressionLiteral),
 		}
-		c.Set(ctx)
-		return c
 	case ctx.CHECK() != nil:
-		c := &ConstraintCheck{
-			Param: ctx.Sql_expr().Accept(s).(Expression),
+		c = &CheckConstraint{
+			Expression: ctx.Sql_expr().Accept(s).(Expression),
 		}
-		c.Set(ctx)
-		return c
 	case ctx.Fk_constraint() != nil:
-		c := ctx.Fk_constraint().Accept(s).(*ConstraintForeignKey)
-		return c
+		c = ctx.Fk_constraint().Accept(s).(*ForeignKeyReferences)
 	default:
 		panic("unknown constraint")
 	}
+
+	c.Set(ctx)
+	return c
 }
 
 func (s *schemaVisitor) VisitFk_constraint(ctx *gen.Fk_constraintContext) any {
@@ -1180,41 +1138,36 @@ func (s *schemaVisitor) VisitFk_action(ctx *gen.Fk_actionContext) interface{} {
 func (s *schemaVisitor) VisitTable_constraint_def(ctx *gen.Table_constraint_defContext) any {
 	name := ""
 	if ctx.GetName() != nil {
-		name = ctx.GetName().Accept(s).(string)
+		name = s.getIdent(ctx.GetName().IDENTIFIER())
 	}
 
+	var c OutOfLineConstraintClause
 	switch {
 	case ctx.PRIMARY() != nil:
-		if name != "" {
-			s.errs.RuleErr(ctx, ErrTableDefinition, "primary key has name")
-		}
-		c := &ConstraintPrimaryKey{
+		c = &PrimaryKeyOutOfLineConstraint{
 			Columns: ctx.Identifier_list().Accept(s).([]string),
 		}
-		c.Set(ctx)
-		return c
 	case ctx.UNIQUE() != nil:
-		c := &ConstraintUnique{
-			Name:    name,
+		c = &UniqueOutOfLineConstraint{
 			Columns: ctx.Identifier_list().Accept(s).([]string),
 		}
-		c.Set(ctx)
-		return c
 	case ctx.CHECK() != nil:
-		param := ctx.Sql_expr().Accept(s).(Expression)
-		c := &ConstraintCheck{
-			Name:  name,
-			Param: param,
+		c = &CheckConstraint{
+			Expression: ctx.Sql_expr().Accept(s).(Expression),
 		}
-		c.Set(ctx)
-		return c
 	case ctx.FOREIGN() != nil:
-		c := ctx.Fk_constraint().Accept(s).(*ConstraintForeignKey)
-		c.Name = name
-		c.Column = ctx.GetColumn().Accept(s).(string)
-		return c
+		c = &ForeignKeyOutOfLineConstraint{
+			Columns:    ctx.Identifier_list().Accept(s).([]string),
+			References: ctx.Fk_constraint().Accept(s).(*ForeignKeyReferences),
+		}
 	default:
 		panic("unknown constraint")
+	}
+
+	c.Set(ctx)
+	return &OutOfLineConstraint{
+		Name:       name,
+		Constraint: c,
 	}
 }
 
@@ -1270,14 +1223,14 @@ func (s *schemaVisitor) VisitAlter_table_statement(ctx *gen.Alter_table_statemen
 }
 
 func (s *schemaVisitor) VisitAdd_column_constraint(ctx *gen.Add_column_constraintContext) any {
-	a := &AddColumnConstraint{
+	a := &SetColumnConstraint{
 		Column: ctx.Identifier().Accept(s).(string),
 	}
 
 	if ctx.NULL() != nil {
-		a.Type = NOT_NULL
+		a.Type = ConstraintTypeNotNull
 	} else {
-		a.Type = DEFAULT
+		a.Type = ConstraintTypeDefault
 		a.Value = ctx.Literal().Accept(s).(*ExpressionLiteral)
 	}
 
@@ -1287,16 +1240,14 @@ func (s *schemaVisitor) VisitAdd_column_constraint(ctx *gen.Add_column_constrain
 
 func (s *schemaVisitor) VisitDrop_column_constraint(ctx *gen.Drop_column_constraintContext) any {
 	a := &DropColumnConstraint{
-		Column: ctx.Identifier(0).Accept(s).(string),
+		Column: ctx.Identifier().Accept(s).(string),
 	}
 
 	switch {
 	case ctx.NULL() != nil:
-		a.Type = NOT_NULL
+		a.Type = ConstraintTypeNotNull
 	case ctx.DEFAULT() != nil:
-		a.Type = DEFAULT
-	case ctx.CONSTRAINT() != nil:
-		a.Name = ctx.Identifier(1).Accept(s).(string)
+		a.Type = ConstraintTypeDefault
 	default:
 		panic("unknown constraint")
 	}
@@ -1345,7 +1296,7 @@ func (s *schemaVisitor) VisitRename_table(ctx *gen.Rename_tableContext) any {
 
 func (s *schemaVisitor) VisitAdd_table_constraint(ctx *gen.Add_table_constraintContext) any {
 	a := &AddTableConstraint{
-		Cons: ctx.Table_constraint_def().Accept(s).(Constraint),
+		Constraint: ctx.Table_constraint_def().Accept(s).(InlineConstraint),
 	}
 
 	a.Set(ctx)
@@ -1395,6 +1346,76 @@ func (s *schemaVisitor) VisitDrop_index_statement(ctx *gen.Drop_index_statementC
 
 	a.Set(ctx)
 	return a
+}
+
+func (s *schemaVisitor) VisitCreate_role_statement(ctx *gen.Create_role_statementContext) any {
+	panic("implement me")
+}
+
+func (s *schemaVisitor) VisitDrop_role_statement(ctx *gen.Drop_role_statementContext) any {
+	panic("implement me")
+}
+
+func (s *schemaVisitor) VisitGrant_statement(ctx *gen.Grant_statementContext) any {
+	c := s.parseGrantOrRevoke(ctx)
+	c.IsGrant = true
+	return c
+}
+
+func (s *schemaVisitor) VisitRevoke_statement(ctx *gen.Revoke_statementContext) any {
+	c := s.parseGrantOrRevoke(ctx)
+	c.IsGrant = false // not necessary, but for clarity
+	return c
+}
+
+// parseGrantOrRevoke parses a GRANT or REVOKE statement.
+// It is the responsibility of the caller to set the correct IsGrant field.
+func (s *schemaVisitor) parseGrantOrRevoke(ctx interface {
+	antlr.ParserRuleContext
+	Privilege_list() gen.IPrivilege_listContext
+	GetGrant_role() gen.IIdentifierContext
+	GetRole() gen.IIdentifierContext
+	GetUser() antlr.Token
+}) *GrantOrRevokeStatement {
+	// can be:
+	// GRANT/REVOKE privilege_list/role TO/FROM role/user
+
+	c := &GrantOrRevokeStatement{}
+	switch {
+	case ctx.Privilege_list() != nil:
+		c.Privileges = ctx.Privilege_list().Accept(s).([]string)
+	case ctx.GetGrant_role() != nil:
+		c.GrantRole = ctx.GetGrant_role().Accept(s).(string)
+	default:
+		// should not happen, as this would suggest a bug in the parser
+		panic("invalid grant/revoke statement")
+	}
+
+	switch {
+	case ctx.GetRole() != nil:
+		c.ToRole = ctx.GetRole().Accept(s).(string)
+	case ctx.GetUser() != nil:
+		c.ToUser = ctx.GetUser().GetText()
+	default:
+		// should not happen, as this would suggest a bug in the parser
+		panic("invalid grant/revoke statement")
+	}
+	c.Set(ctx)
+	return c
+}
+
+func (s *schemaVisitor) VisitPrivilege_list(ctx *gen.Privilege_listContext) any {
+	var privs []string
+	for _, p := range ctx.AllPrivilege() {
+		privs = append(privs, p.Accept(s).(string))
+	}
+
+	return privs
+}
+
+func (s *schemaVisitor) VisitPrivilege(ctx *gen.PrivilegeContext) any {
+	// since there is only one token, we can just get all text
+	return ctx.GetText()
 }
 
 func (s *schemaVisitor) VisitSelect_statement(ctx *gen.Select_statementContext) any {

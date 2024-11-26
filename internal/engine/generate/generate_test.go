@@ -29,14 +29,14 @@ func TestGenerateDDLStatement(t *testing.T) {
 					{
 						Name: "id",
 						Type: types.IntType,
-						Constraints: []parse.Constraint{
+						Constraints: []parse.InlineConstraint{
 							&parse.ConstraintPrimaryKey{},
 						},
 					},
 					{
 						Name: "name",
 						Type: types.TextType,
-						Constraints: []parse.Constraint{
+						Constraints: []parse.InlineConstraint{
 							&parse.ConstraintCheck{
 								Param: &parse.ExpressionComparison{
 									Left: &parse.ExpressionFunctionCall{
@@ -60,7 +60,7 @@ func TestGenerateDDLStatement(t *testing.T) {
 					{
 						Name: "address",
 						Type: types.TextType,
-						Constraints: []parse.Constraint{
+						Constraints: []parse.InlineConstraint{
 							&parse.ConstraintNotNull{},
 							&parse.ConstraintDefault{
 								Value: &parse.ExpressionLiteral{
@@ -73,7 +73,7 @@ func TestGenerateDDLStatement(t *testing.T) {
 					{
 						Name: "email",
 						Type: types.TextType,
-						Constraints: []parse.Constraint{
+						Constraints: []parse.InlineConstraint{
 							&parse.ConstraintNotNull{},
 							&parse.ConstraintUnique{},
 						},
@@ -85,7 +85,7 @@ func TestGenerateDDLStatement(t *testing.T) {
 					{
 						Name: "group_id",
 						Type: types.IntType,
-						Constraints: []parse.Constraint{
+						Constraints: []parse.InlineConstraint{
 							&parse.ConstraintForeignKey{
 								RefTable:  "groups",
 								RefColumn: "id",
@@ -107,7 +107,7 @@ func TestGenerateDDLStatement(t *testing.T) {
 						Type:    parse.IndexTypeBTree,
 					},
 				},
-				Constraints: []parse.Constraint{
+				Constraints: []parse.InlineConstraint{
 					&parse.ConstraintForeignKey{
 						Name:      "city_fk",
 						RefTable:  "cities",
@@ -168,7 +168,7 @@ func TestGenerateDDLStatement(t *testing.T) {
 					{
 						Name: "id",
 						Type: types.IntType,
-						Constraints: []parse.Constraint{
+						Constraints: []parse.InlineConstraint{
 							&parse.ConstraintPrimaryKey{},
 						},
 					},
@@ -179,7 +179,7 @@ func TestGenerateDDLStatement(t *testing.T) {
 			name: "alter table add column constraint NOT NULL",
 			sql: &parse.AlterTableStatement{
 				Table: "user",
-				Action: &parse.AddColumnConstraint{
+				Action: &parse.SetColumnConstraint{
 					Column: "name",
 					Type:   parse.NOT_NULL,
 				},
@@ -191,7 +191,7 @@ func TestGenerateDDLStatement(t *testing.T) {
 			want: `ALTER TABLE user ALTER COLUMN name SET DEFAULT 10;`,
 			sql: &parse.AlterTableStatement{
 				Table: "user",
-				Action: &parse.AddColumnConstraint{
+				Action: &parse.SetColumnConstraint{
 					Column: "name",
 					Type:   parse.DEFAULT,
 					Value: &parse.ExpressionLiteral{
@@ -283,7 +283,7 @@ func TestGenerateDDLStatement(t *testing.T) {
 			sql: &parse.AlterTableStatement{
 				Table: "user",
 				Action: &parse.AddTableConstraint{
-					Cons: &parse.ConstraintForeignKey{
+					Constraint: &parse.ConstraintForeignKey{
 						Name:      "new_fk",
 						RefTable:  "cities",
 						RefColumn: "id",

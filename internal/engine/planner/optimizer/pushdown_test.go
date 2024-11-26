@@ -5,8 +5,8 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/engine/planner/logical"
 	"github.com/kwilteam/kwil-db/parse"
-	"github.com/kwilteam/kwil-db/parse/planner/logical"
 	"github.com/stretchr/testify/require"
 )
 
@@ -103,7 +103,7 @@ func Test_Pushdown(t *testing.T) {
 			schema, err := parse.Parse([]byte(testSchema))
 			require.NoError(t, err)
 
-			parsedSql, err := parse.ParseSQL(test.sql, schema, true)
+			parsedSql, err := parse.ParseSQL(test.sql)
 			require.NoError(t, err)
 			require.NoError(t, parsedSql.ParseErrs.Err())
 

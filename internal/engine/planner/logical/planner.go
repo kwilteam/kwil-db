@@ -8,14 +8,26 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/engine"
 	"github.com/kwilteam/kwil-db/parse"
 )
+
+// GetVarTypeFunc is a function that gets the type of a variable.
+type GetVarTypeFunc = func(varName string) (dataType *types.DataType, found bool)
+
+// GetObjectFieldTypeFunc is a function that gets the type of a field in an object.
+type GetObjectFunc = func(objName string) (obj map[string]*types.DataType, found bool)
+
+// GetTableFunc is a function that gets a table by name.
+// It can also be given a namespace to search in. If no namespace is given (passed as ""), it will search in the default namespace.
+type GetTableFunc = func(namespace string, tableName string) (table *engine.Table, found bool)
 
 // CreateLogicalPlan creates a logical plan from a SQL statement.
 // If applyDefaultOrdering is true, it will rewrite the query to apply default ordering.
 // Default ordering will modify the passed query.
-func CreateLogicalPlan(statement *parse.SQLStatement, schema *types.Schema, vars map[string]*types.DataType,
-	objects map[string]map[string]*types.DataType, applyDefaultOrdering bool) (analyzed *AnalyzedPlan, err error) {
+func CreateLogicalPlan(statement *parse.SQLStatement, tables GetTableFunc,
+	vars GetVarTypeFunc, objects GetObjectFunc, applyDefaultOrdering bool,
+) (analyzed *AnalyzedPlan, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			err2, ok := r.(error)
@@ -26,16 +38,8 @@ func CreateLogicalPlan(statement *parse.SQLStatement, schema *types.Schema, vars
 		}
 	}()
 
-	if vars == nil {
-		vars = make(map[string]*types.DataType)
-	}
-
-	if objects == nil {
-		objects = make(map[string]map[string]*types.DataType)
-	}
-
 	ctx := &planContext{
-		Schema:               schema,
+		Tables:               tables,
 		CTEs:                 make(map[string]*Relation),
 		Variables:            vars,
 		Objects:              objects,
@@ -94,9 +98,8 @@ func (a *AnalyzedPlan) Format() string {
 
 // planContext holds information that is needed during the planning process.
 type planContext struct {
-	// Schema is the underlying database schema that the query should
-	// be evaluated against.
-	Schema *types.Schema
+	// Tables are the tables that the query can reference.
+	Tables GetTableFunc
 	// CTEs are the common table expressions in the query.
 	// This field should be updated as the query planner
 	// processes the query.
@@ -106,11 +109,11 @@ type planContext struct {
 	// processes the query.
 	CTEPlans []*Subplan
 	// Variables are the variables in the query.
-	Variables map[string]*types.DataType
+	Variables GetVarTypeFunc
 	// Objects are the objects in the query.
 	// Kwil supports one-dimensional objects, so this would be
 	// accessible via objname.fieldname.
-	Objects map[string]map[string]*types.DataType
+	Objects GetObjectFunc
 	// SubqueryCount is the number of subqueries in the query.
 	// This field should be updated as the query planner
 	// processes the query.
@@ -1013,6 +1016,7 @@ func (s *scopeContext) rewriteGroupingTerms(expr Expression, groupingTerms map[s
 
 // expandResultCols expands all wildcards to their respective column references.
 func (s *scopeContext) expandResultCols(rel *Relation, cols []parse.ResultColumn) ([]*parse.ResultColumnExpression, error) {
+	// TODO: we need to rewrite the statement here to explicitly reference the columns so that we can guarantee the order (maybe?)
 	var res []*parse.ResultColumnExpression
 	for _, col := range cols {
 		switch col := col.(type) {
@@ -1197,12 +1201,12 @@ func (s *scopeContext) exprWithAggRewrite(node parse.Expression, currentRel *Rel
 		return cast(wind, field)
 	case *parse.ExpressionVariable:
 		var val any // can be a data type or object
-		dt, ok := s.plan.Variables[node.String()]
+		dt, ok := s.plan.Variables(node.Name)
 		if !ok {
 			// might be an object
-			obj, ok := s.plan.Objects[node.String()]
+			obj, ok := s.plan.Objects(node.Name)
 			if !ok {
-				return nil, nil, false, fmt.Errorf(`unknown variable "%s"`, node.String())
+				return nil, nil, false, fmt.Errorf(`unknown variable "%s"`, node.Name)
 			}
 
 			val = obj
@@ -1211,7 +1215,7 @@ func (s *scopeContext) exprWithAggRewrite(node parse.Expression, currentRel *Rel
 		}
 
 		return cast(&Variable{
-			VarName:  node.String(),
+			VarName:  node.Name,
 			dataType: val,
 		}, &Field{val: val})
 	case *parse.ExpressionArrayAccess:
@@ -1994,7 +1998,7 @@ func (s *scopeContext) table(node parse.Table) (*Scan, *Relation, error) {
 
 		var scanTblType TableSourceType
 		var rel *Relation
-		if physicalTbl, ok := s.plan.Schema.FindTable(node.Table); ok {
+		if physicalTbl, ok := s.plan.Tables("", node.Table); ok {
 			scanTblType = TableSourcePhysical
 			rel = relationFromTable(physicalTbl)
 		} else if cte, ok := s.plan.CTEs[node.Table]; ok {
@@ -2116,7 +2120,7 @@ func (s *scopeContext) insert(node *parse.InsertStatement) (*Insert, error) {
 		ReferencedAs: node.Alias,
 	}
 
-	tbl, found := s.plan.Schema.FindTable(node.Table)
+	tbl, found := s.plan.Tables("", node.Table)
 	if !found {
 		return nil, fmt.Errorf(`%w: "%s"`, ErrUnknownTable, node.Table)
 	}
@@ -2179,7 +2183,7 @@ func (s *scopeContext) insert(node *parse.InsertStatement) (*Insert, error) {
 					Field: &Field{
 						Parent: tbl.Name,
 						Name:   col.Name,
-						val:    col.Type.Copy(),
+						val:    col.DataType.Copy(),
 					},
 				}
 			}
@@ -2189,7 +2193,7 @@ func (s *scopeContext) insert(node *parse.InsertStatement) (*Insert, error) {
 	} else {
 		expectedColLen = len(tbl.Columns)
 		for _, col := range tbl.Columns {
-			expectedColTypes = append(expectedColTypes, col.Type.Copy())
+			expectedColTypes = append(expectedColTypes, col.DataType.Copy())
 		}
 	}
 
@@ -2276,7 +2280,7 @@ func (s *scopeContext) insert(node *parse.InsertStatement) (*Insert, error) {
 
 // buildUpsert builds the conflict resolution for an upsert statement.
 // It takes the upsert clause, the table, and the plan that is being inserted (either VALUES or SELECT).
-func (s *scopeContext) buildUpsert(node *parse.OnConflict, table *types.Table, insertFrom Plan) (ConflictResolution, error) {
+func (s *scopeContext) buildUpsert(node *parse.OnConflict, table *engine.Table, insertFrom Plan) (ConflictResolution, error) {
 	// all DO UPDATE upserts need to have an arbiter index.
 	// DO NOTHING can optionally have one, but it is not required.
 	var arbiterIndex Index
@@ -2286,18 +2290,18 @@ func (s *scopeContext) buildUpsert(node *parse.OnConflict, table *types.Table, i
 		// do nothing
 	case 1:
 		// check the column for a unique or pk contraint, as well as all indexes
-		col, ok := table.FindColumn(node.ConflictColumns[0])
+		col, ok := table.Column(node.ConflictColumns[0])
 		if !ok {
 			return nil, fmt.Errorf(`conflict column "%s" not found in table`, node.ConflictColumns[0])
 		}
 
-		if col.HasAttribute(types.PRIMARY_KEY) {
+		if table.HasPrimaryKey(col.Name) {
 			arbiterIndex = &IndexColumnConstraint{
 				Table:          table.Name,
 				Column:         col.Name,
 				ConstraintType: PrimaryKeyConstraintIndex,
 			}
-		} else if col.HasAttribute(types.UNIQUE) {
+		} else if table.SearchConstraint(col.Name, engine.ConstraintUnique) != nil {
 			arbiterIndex = &IndexColumnConstraint{
 				Table:          table.Name,
 				Column:         col.Name,
@@ -2306,7 +2310,7 @@ func (s *scopeContext) buildUpsert(node *parse.OnConflict, table *types.Table, i
 		} else {
 			// check all indexes for unique indexes that match the column
 			for _, idx := range table.Indexes {
-				if (idx.Type == types.UNIQUE_BTREE || idx.Type == types.PRIMARY) && len(idx.Columns) == 1 && idx.Columns[0] == col.Name {
+				if (idx.Type == engine.UNIQUE_BTREE || idx.Type == engine.PRIMARY) && len(idx.Columns) == 1 && idx.Columns[0] == col.Name {
 					arbiterIndex = &IndexNamed{
 						Name: idx.Name,
 					}
@@ -2320,7 +2324,7 @@ func (s *scopeContext) buildUpsert(node *parse.OnConflict, table *types.Table, i
 	default:
 		// check all indexes for a unique or pk index that matches the columns
 		for _, idx := range table.Indexes {
-			if idx.Type != types.UNIQUE_BTREE && idx.Type != types.PRIMARY {
+			if idx.Type != engine.UNIQUE_BTREE && idx.Type != engine.PRIMARY {
 				continue
 			}
 
@@ -2418,26 +2422,24 @@ func (s *scopeContext) buildUpsert(node *parse.OnConflict, table *types.Table, i
 // if the columns are nullable. If they are not nullable, it returns an error.
 // If they are nullable, it returns their data types in the order that they
 // were passed in.
-func checkNullableColumns(tbl *types.Table, cols []string) ([]*types.DataType, error) {
+func checkNullableColumns(tbl *engine.Table, cols []string) ([]*types.DataType, error) {
 	specifiedColSet := make(map[string]struct{}, len(cols))
 	for _, col := range cols {
 		specifiedColSet[col] = struct{}{}
 	}
 
-	pks, err := tbl.GetPrimaryKey()
-	if err != nil {
-		return nil, err
-	}
-	pkSet := make(map[string]struct{}, len(pks))
-	for _, pk := range pks {
-		pkSet[pk] = struct{}{}
+	pkSet := make(map[string]struct{})
+	for _, col := range tbl.Columns {
+		if col.IsPrimaryKey {
+			pkSet[col.Name] = struct{}{}
+		}
 	}
 
 	// we will build a set of columns to decrease the time complexity
 	// for checking if a column is in the set.
 	tblColSet := make(map[string]*types.DataType, len(tbl.Columns))
 	for _, col := range tbl.Columns {
-		tblColSet[col.Name] = col.Type.Copy()
+		tblColSet[col.Name] = col.DataType.Copy()
 
 		_, ok := specifiedColSet[col.Name]
 		if ok {
@@ -2445,7 +2447,10 @@ func checkNullableColumns(tbl *types.Table, cols []string) ([]*types.DataType, e
 		}
 
 		// the column is not in the set, so we need to check if it is nullable
-		if col.HasAttribute(types.NOT_NULL) || col.HasAttribute(types.PRIMARY_KEY) {
+		// All columns are nullable unless they are specified as not null
+		// or they are part of the primary key.
+		_, isPk := pkSet[col.Name]
+		if !col.Nullable && isPk {
 			return nil, fmt.Errorf(`%w: column "%s" must be specified as an insert column`, ErrNotNullableColumn, col.Name)
 		}
 
@@ -2478,8 +2483,7 @@ func checkNullableColumns(tbl *types.Table, cols []string) ([]*types.DataType, e
 // between the target and the FROM + JOIN tables, and an error if one occurred.
 func (s *scopeContext) cartesian(targetTable, alias string, from parse.Table, joins []*parse.Join,
 	filter parse.Expression) (plan Plan, targetRel *Relation, cartesianRel *Relation, err error) {
-
-	tbl, ok := s.plan.Schema.FindTable(targetTable)
+	tbl, ok := s.plan.Tables("", targetTable)
 	if !ok {
 		return nil, nil, nil, fmt.Errorf(`unknown table "%s"`, targetTable)
 	}

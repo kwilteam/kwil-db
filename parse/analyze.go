@@ -2714,6 +2714,10 @@ func (s *sqlAnalyzer) VisitExpressionWindowFunctionCall(p0 *ExpressionWindowFunc
 	panic("window functions are not allowed in procedures")
 }
 
+func (s *sqlAnalyzer) VisitGrantOrRevokeStatement(p0 *GrantOrRevokeStatement) any {
+	panic("TODO: Implement")
+}
+
 // zeroProcedureReturn creates a new procedure return with all 0 values.
 func zeroProcedureReturn() *procedureStmtResult {
 	return &procedureStmtResult{}

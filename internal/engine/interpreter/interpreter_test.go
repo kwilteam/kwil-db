@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/internal/interpreter"
+	"github.com/kwilteam/kwil-db/internal/engine/interpreter"
 	"github.com/kwilteam/kwil-db/parse"
 	"github.com/stretchr/testify/require"
 )
@@ -112,7 +112,7 @@ func Test_Interpeter(t *testing.T) {
 			for i, row := range res.Values {
 				require.Equal(t, len(test.expected[i]), len(row))
 				for j, val := range row {
-					require.EqualValues(t, test.expected[i][j], val.Value.Value())
+					require.EqualValues(t, test.expected[i][j], val.Value.RawValue())
 				}
 			}
 		})

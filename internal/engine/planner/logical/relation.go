@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/engine"
 )
 
 // Relation is the current relation in the query plan.
@@ -92,13 +93,13 @@ func (r *Relation) FindReference(id string) (*Field, error) {
 	return found[0], nil
 }
 
-func relationFromTable(tbl *types.Table) *Relation {
+func relationFromTable(tbl *engine.Table) *Relation {
 	s := &Relation{}
 	for _, col := range tbl.Columns {
 		s.Fields = append(s.Fields, &Field{
 			Parent: tbl.Name,
 			Name:   col.Name,
-			val:    col.Type.Copy(),
+			val:    col.DataType.Copy(),
 		})
 	}
 	return s

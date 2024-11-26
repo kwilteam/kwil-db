@@ -3,7 +3,9 @@ package types
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types/decimal"
@@ -1121,27 +1123,27 @@ func (c *DataType) String() string {
 	return str.String()
 }
 
-// PGString returns the string representation of the type in Postgres.
-func (c *DataType) PGString() (string, error) {
+// PGScalar returns the scalar representation of the type in Postgres.
+func (c *DataType) PGScalar() (string, error) {
 	var scalar string
 	switch strings.ToLower(c.Name) {
 	case intStr:
-		scalar = "INT8"
+		scalar = "int8"
 	case textStr:
-		scalar = "TEXT"
+		scalar = "text"
 	case boolStr:
-		scalar = "BOOL"
+		scalar = "bool"
 	case blobStr:
-		scalar = "BYTEA"
+		scalar = "bytea"
 	case uuidStr:
-		scalar = "UUID"
+		scalar = "uuid"
 	case uint256Str:
-		scalar = "UINT256"
+		scalar = "uint256"
 	case DecimalStr:
 		if c.Metadata == nil {
-			scalar = "NUMERIC"
+			scalar = "numeric"
 		} else {
-			scalar = fmt.Sprintf("NUMERIC(%d,%d)", c.Metadata[0], c.Metadata[1])
+			scalar = fmt.Sprintf("numeric(%d,%d)", c.Metadata[0], c.Metadata[1])
 		}
 	case nullStr:
 		return "", fmt.Errorf("cannot have null column type")
@@ -1149,6 +1151,16 @@ func (c *DataType) PGString() (string, error) {
 		return "", fmt.Errorf("cannot have unknown column type")
 	default:
 		return "", fmt.Errorf("unknown column type: %s", c.Name)
+	}
+
+	return scalar, nil
+}
+
+// PGString returns the string representation of the type in Postgres.
+func (c *DataType) PGString() (string, error) {
+	scalar, err := c.PGScalar()
+	if err != nil {
+		return "", err
 	}
 
 	if c.IsArray {
@@ -1313,7 +1325,7 @@ func ArrayType(t *DataType) *DataType {
 
 const (
 	textStr    = "text"
-	intStr     = "int"
+	intStr     = "int8"
 	boolStr    = "bool"
 	blobStr    = "blob"
 	uuidStr    = "uuid"
@@ -1323,6 +1335,22 @@ const (
 	nullStr    = "null"
 	unknownStr = "unknown"
 )
+
+// maps type names to their base names
+var typeAlias = map[string]string{
+	"string":  textStr,
+	"text":    textStr,
+	"int":     intStr,
+	"integer": intStr,
+	"int8":    intStr,
+	"bool":    boolStr,
+	"boolean": boolStr,
+	"blob":    blobStr,
+	"bytea":   blobStr,
+	"uuid":    uuidStr,
+	"decimal": DecimalStr,
+	"numeric": DecimalStr,
+}
 
 // NewDecimalType creates a new fixed point decimal type.
 func NewDecimalType(precision, scale uint16) (*DataType, error) {
@@ -1337,4 +1365,63 @@ func NewDecimalType(precision, scale uint16) (*DataType, error) {
 		Name:     DecimalStr,
 		Metadata: &met,
 	}, nil
+}
+
+// ParseDataType parses a string into a data type.
+func ParseDataType(s string) (*DataType, error) {
+	// four cases: TEXT, TEXT[], TEXT(1,2), TEXT(1,2)[]
+	// we will parse the type first, then the array, then the metadata
+	// we will not allow metadata without an array
+
+	s = strings.TrimSpace(strings.ToLower(s))
+	if s == "" {
+		return nil, errors.New("empty data type")
+	}
+
+	// Regular expression to parse the data type
+	re := regexp.MustCompile(`^([a-z0-9]+)(\(([\d, ]+)\))?(\[\])?$`)
+	matches := re.FindStringSubmatch(s)
+
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("invalid data type format: %s", s)
+	}
+
+	baseType := matches[1]
+	rawMetadata := matches[3]
+	isArray := matches[4] == "[]"
+
+	var metadata *[2]uint16
+	if rawMetadata != "" {
+		metadata = &[2]uint16{}
+		// only decimal types can have metadata
+		if baseType != DecimalStr {
+			return nil, fmt.Errorf("metadata is only allowed for decimal type")
+		}
+
+		parts := strings.Split(rawMetadata, ",")
+		// can be either DECIMAL(10,5) or just DECIMAL
+		if len(parts) != 2 && len(parts) != 0 {
+			return nil, fmt.Errorf("invalid metadata format: %s", rawMetadata)
+		}
+		for i, part := range parts {
+			num, err := strconv.Atoi(strings.TrimSpace(part))
+			if err != nil {
+				return nil, fmt.Errorf("invalid metadata value: %s", part)
+			}
+			metadata[i] = uint16(num)
+		}
+	}
+
+	baseName, ok := typeAlias[baseType]
+	if !ok {
+		return nil, fmt.Errorf("unknown data type: %s", baseType)
+	}
+
+	dt := &DataType{
+		Name:     baseName,
+		Metadata: metadata,
+		IsArray:  isArray,
+	}
+
+	return dt, dt.Clean()
 }

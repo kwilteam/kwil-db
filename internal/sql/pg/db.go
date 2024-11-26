@@ -708,3 +708,27 @@ func (db *DB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Resul
 }
 
 // TODO: require rw with target_session_attrs=read-write ?
+
+// Exec executes a Postgres SQL statement against the database. Unlike the Execute method,
+// this function does not use `query` internally, which allows for many statements delimited by
+// semicolons to be executed in one call.
+func Exec(ctx context.Context, tx sql.Executor, stmt string) error {
+	var conn *pgx.Conn
+	switch tx := tx.(type) {
+	case *DB:
+		tx.mtx.Lock()
+		defer tx.mtx.Unlock()
+		if tx.tx == nil {
+			return sql.ErrNoTransaction
+		}
+
+		conn = tx.tx.(conner).Conn()
+	case conner:
+		conn = tx.Conn()
+	default:
+		return fmt.Errorf("unsupported type %T", tx)
+	}
+
+	_, err := conn.Exec(ctx, stmt)
+	return err
+}

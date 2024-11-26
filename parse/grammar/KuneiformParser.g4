@@ -235,16 +235,17 @@ create_table_statement:
 
 table_constraint_def:
     (CONSTRAINT name=identifier)?
-    (PRIMARY KEY LPAREN identifier_list RPAREN
-     | UNIQUE LPAREN identifier_list RPAREN
+    (
+    UNIQUE LPAREN identifier_list RPAREN
      | CHECK LPAREN sql_expr RPAREN
-     | FOREIGN KEY LPAREN column=identifier RPAREN fk_constraint)
+     | FOREIGN KEY LPAREN identifier_list RPAREN fk_constraint
+     | PRIMARY KEY LPAREN identifier_list RPAREN
+     )
 ;
 
 opt_drop_behavior:
     CASCADE
     | RESTRICT
-    |
 ;
 
 drop_table_statement:
@@ -257,14 +258,14 @@ alter_table_statement:
 ;
 
 alter_table_action:
-      ALTER COLUMN column=identifier SET (NOT NULL | DEFAULT literal)                  # add_column_constraint
-    | ALTER COLUMN column=identifier DROP (NOT NULL | DEFAULT | CONSTRAINT identifier) # drop_column_constraint
-    | ADD COLUMN column=identifier type                                                # add_column
-    | DROP COLUMN column=identifier                                                    # drop_column
-    | RENAME COLUMN old_column=identifier TO new_column=identifier                     # rename_column
-    | RENAME TO new_table=identifier                                                   # rename_table
-    | ADD table_constraint_def                                                         # add_table_constraint
-    | DROP CONSTRAINT identifier                                                       # drop_table_constraint
+      ALTER COLUMN column=identifier SET (NOT NULL | DEFAULT literal)   # add_column_constraint
+    | ALTER COLUMN column=identifier DROP (NOT NULL | DEFAULT)          # drop_column_constraint
+    | ADD COLUMN column=identifier type                                 # add_column
+    | DROP COLUMN column=identifier                                     # drop_column
+    | RENAME COLUMN old_column=identifier TO new_column=identifier      # rename_column
+    | RENAME TO new_table=identifier                                    # rename_table
+    | ADD table_constraint_def                                          # add_table_constraint
+    | DROP CONSTRAINT identifier                                        # drop_table_constraint
 ;
 
 create_index_statement:
@@ -274,6 +275,30 @@ create_index_statement:
 
 drop_index_statement:
     DROP INDEX (IF EXISTS)? name=identifier
+;
+
+create_role_statement:
+    CREATE ROLE IDENTIFIER
+;
+
+drop_role_statement:
+    DROP ROLE IDENTIFIER
+;
+
+grant_statement:
+    GRANT (privilege_list|grant_role=identifier) TO (role=identifier|user=STRING_)
+;
+
+revoke_statement:
+    REVOKE (privilege_list|grant_role=identifier) FROM (role=identifier|user=STRING_)
+;
+
+privilege_list:
+    privilege (COMMA privilege)*
+;
+
+privilege:
+    SELECT | INSERT | UPDATE | DELETE | CREATE | DROP | ALTER | ROLES | CALL
 ;
 
 select_statement:

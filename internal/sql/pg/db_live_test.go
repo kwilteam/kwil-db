@@ -1765,3 +1765,31 @@ func Test_CancelListen(t *testing.T) {
 
 	require.Len(t, received, 10)
 }
+
+func Test_DeleteMe(t *testing.T) {
+	ctx := context.Background()
+
+	db, err := NewPool(ctx, &cfg.PoolConfig)
+	require.NoError(t, err)
+	defer db.Close()
+
+	tx, err := db.BeginTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx)
+
+	var i []*[]byte
+
+	err = QueryRowFunc(ctx, tx, "SELECT array['ab'::bytea, 'bc'::bytea]", []any{&i}, func() error {
+		return fmt.Errorf("err")
+		return nil
+	}, QueryModeExec)
+	require.NoError(t, err)
+}
+
+type valuer struct {
+	d *decimal.DecimalArray
+}
+
+func (v *valuer) sqlVal() any {
+	return v.d
+}

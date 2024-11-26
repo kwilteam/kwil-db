@@ -2045,14 +2045,14 @@ INDEX ithome (name, address)
 					{
 						Name: "id",
 						Type: types.IntType,
-						Constraints: []parse.Constraint{
+						Constraints: []parse.InlineConstraint{
 							&parse.ConstraintPrimaryKey{},
 						},
 					},
 					{
 						Name: "name",
 						Type: types.TextType,
-						Constraints: []parse.Constraint{
+						Constraints: []parse.InlineConstraint{
 							&parse.ConstraintCheck{
 								Param: &parse.ExpressionComparison{
 									Left:     exprFunctionCall("length", exprColumn("", "name")),
@@ -2065,7 +2065,7 @@ INDEX ithome (name, address)
 					{
 						Name: "address",
 						Type: types.TextType,
-						Constraints: []parse.Constraint{
+						Constraints: []parse.InlineConstraint{
 							&parse.ConstraintNotNull{},
 							&parse.ConstraintDefault{
 								Value: &parse.ExpressionLiteral{
@@ -2081,7 +2081,7 @@ INDEX ithome (name, address)
 					{
 						Name: "email",
 						Type: types.TextType,
-						Constraints: []parse.Constraint{
+						Constraints: []parse.InlineConstraint{
 							&parse.ConstraintNotNull{},
 							&parse.ConstraintUnique{},
 						},
@@ -2093,7 +2093,7 @@ INDEX ithome (name, address)
 					{
 						Name: "group_id",
 						Type: types.IntType,
-						Constraints: []parse.Constraint{
+						Constraints: []parse.InlineConstraint{
 							&parse.ConstraintForeignKey{
 								RefTable:  "groups",
 								RefColumn: "id",
@@ -2115,7 +2115,7 @@ INDEX ithome (name, address)
 						Type:    parse.IndexTypeBTree,
 					},
 				},
-				Constraints: []parse.Constraint{
+				Constraints: []parse.InlineConstraint{
 					&parse.ConstraintForeignKey{
 						Name:      "city_fk",
 						RefTable:  "cities",
@@ -2150,7 +2150,7 @@ INDEX ithome (name, address)
 					{
 						Name: "id",
 						Type: types.IntType,
-						Constraints: []parse.Constraint{
+						Constraints: []parse.InlineConstraint{
 							&parse.ConstraintPrimaryKey{},
 						},
 					},
@@ -2185,7 +2185,7 @@ primary key (name)
 			sql:  `ALTER TABLE user ALTER COLUMN name SET NOT NULL;`,
 			want: &parse.AlterTableStatement{
 				Table: "user",
-				Action: &parse.AddColumnConstraint{
+				Action: &parse.SetColumnConstraint{
 					Column: "name",
 					Type:   parse.NOT_NULL,
 				},
@@ -2196,7 +2196,7 @@ primary key (name)
 			sql:  `ALTER TABLE user ALTER COLUMN name SET DEFAULT 10;`,
 			want: &parse.AlterTableStatement{
 				Table: "user",
-				Action: &parse.AddColumnConstraint{
+				Action: &parse.SetColumnConstraint{
 					Column: "name",
 					Type:   parse.DEFAULT,
 					Value: &parse.ExpressionLiteral{
@@ -2287,7 +2287,7 @@ primary key (name)
 			want: &parse.AlterTableStatement{
 				Table: "user",
 				Action: &parse.AddTableConstraint{
-					Cons: &parse.ConstraintForeignKey{
+					Constraint: &parse.ConstraintForeignKey{
 						Name:      "new_fk",
 						RefTable:  "cities",
 						RefColumn: "id",
@@ -3163,16 +3163,7 @@ func Test_SQL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res, err := parse.ParseSQL(tt.sql, &types.Schema{
-				Name: "mydb",
-				Tables: []*types.Table{
-					tblUsers,
-					tblPosts,
-				},
-				Procedures: []*types.Procedure{
-					procGetAllUserIds,
-				},
-			}, false)
+			res, err := parse.ParseSQL(tt.sql)
 			require.NoError(t, err)
 
 			if res.ParseErrs.Err() != nil {

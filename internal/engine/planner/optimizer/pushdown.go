@@ -4,7 +4,7 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/parse/planner/logical"
+	"github.com/kwilteam/kwil-db/internal/engine/planner/logical"
 )
 
 // PushdownPredicates pushes down filters to the lowest possible level.

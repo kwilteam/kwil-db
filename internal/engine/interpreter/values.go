@@ -2,24 +2,175 @@ package interpreter
 
 import (
 	"fmt"
-	"math"
 	"math/big"
+	"reflect"
 	"strconv"
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
 )
 
+// ValueMapping maps Go types and Kwil native types.
+type ValueMapping struct {
+	// KwilType is the Kwil type that the value maps to.
+	// It will ignore the metadata of the type.
+	KwilType *types.DataType
+	// ZeroValue creates a zero-value of the type.
+	ZeroValue func() (Value, error)
+}
+
+var (
+	goTypeToValue   = map[reflect.Type]ValueMapping{}
+	kwilTypeToValue = map[struct {
+		name    string
+		isArray bool
+	}]ValueMapping{}
+)
+
+func registerValueMapping(ms ...ValueMapping) {
+	for _, m := range ms {
+		k := struct {
+			name    string
+			isArray bool
+		}{
+			name:    m.KwilType.Name,
+			isArray: m.KwilType.IsArray,
+		}
+
+		_, ok := kwilTypeToValue[k]
+		if ok {
+			panic(fmt.Sprintf("type %s already registered", m.KwilType.Name))
+		}
+
+		kwilTypeToValue[k] = m
+	}
+}
+
+func init() {
+	registerValueMapping(
+		ValueMapping{
+			KwilType: types.IntType,
+			ZeroValue: func() (Value, error) {
+				return &IntValue{
+					Val: 0,
+				}, nil
+			},
+		},
+		ValueMapping{
+			KwilType: types.TextType,
+			ZeroValue: func() (Value, error) {
+				return &TextValue{
+					Val: "",
+				}, nil
+			},
+		},
+		ValueMapping{
+			KwilType: types.BoolType,
+			ZeroValue: func() (Value, error) {
+				return &BoolValue{
+					Val: false,
+				}, nil
+			},
+		},
+		ValueMapping{
+			KwilType: types.BlobType,
+			ZeroValue: func() (Value, error) {
+				return &BlobValue{
+					Val: []byte{},
+				}, nil
+			},
+		},
+		ValueMapping{
+			KwilType: types.UUIDType,
+			ZeroValue: func() (Value, error) {
+				return &UUIDValue{
+					Val: types.UUID{},
+				}, nil
+			},
+		},
+		ValueMapping{
+			KwilType: types.DecimalType,
+			ZeroValue: func() (Value, error) {
+				dec, err := decimal.NewFromString("0")
+				if err != nil {
+					return nil, err
+				}
+				return &DecimalValue{
+					Dec: dec,
+				}, nil
+			},
+		},
+		ValueMapping{
+			KwilType: types.IntArrayType,
+			ZeroValue: func() (Value, error) {
+				return &IntArrayValue{
+					Val: []*int64{},
+				}, nil
+			},
+		},
+		ValueMapping{
+			KwilType: types.TextArrayType,
+			ZeroValue: func() (Value, error) {
+				return &TextArrayValue{
+					Val: []*string{},
+				}, nil
+			},
+		},
+		ValueMapping{
+			KwilType: types.BoolArrayType,
+			ZeroValue: func() (Value, error) {
+				return &BoolArrayValue{
+					Val: []*bool{},
+				}, nil
+			},
+		},
+		ValueMapping{
+			KwilType: types.BlobArrayType,
+			ZeroValue: func() (Value, error) {
+				return &BlobArrayValue{
+					Val: []*[]byte{},
+				}, nil
+			},
+		},
+		ValueMapping{
+			KwilType: types.DecimalArrayType,
+			ZeroValue: func() (Value, error) {
+				return &DecimalArrayValue{
+					Val: []*decimal.Decimal{},
+				}, nil
+			},
+		},
+	)
+}
+
+// NewZeroValue creates a new zero value of the given type.
+func NewZeroValue(t *types.DataType) (Value, error) {
+	m, ok := kwilTypeToValue[struct {
+		name    string
+		isArray bool
+	}{
+		name:    t.Name,
+		isArray: t.IsArray,
+	}]
+	if !ok {
+		return nil, fmt.Errorf("type %s not found", t.Name)
+	}
+
+	return m.ZeroValue()
+}
+
 // Value is a value that can be compared, used in arithmetic operations,
 // and have unary operations applied to it.
 type Value interface {
+	// DBValue returns a value that the database can read from and write to.
+	DBValue() (any, error)
 	// Compare compares the variable with another variable using the given comparison operator.
 	// It will return a boolean value, or null either of the variables is null.
 	Compare(v Value, op ComparisonOp) (Value, error)
 	// Type returns the type of the variable.
 	Type() *types.DataType
-	// Value returns the value of the variable.
-	Value() any
+	// RawValue returns the value of the variable.
+	RawValue() any
 	// Size is the size of the variable in bytes.
 	Size() int
 	// Cast casts the variable to the given type.
@@ -64,8 +215,8 @@ func safePtrArr[T any](a []T) []*T {
 	return res
 }
 
-// NewVariable creates a new variable from the given value.
-func NewVariable(v any) (Value, error) {
+// NewValue creates a new Value from the given any val.
+func NewValue(v any) (Value, error) {
 	switch v := v.(type) {
 	case int64:
 		return &IntValue{Val: v}, nil
@@ -81,8 +232,6 @@ func NewVariable(v any) (Value, error) {
 		return &UUIDValue{Val: *v}, nil
 	case types.UUID:
 		return &UUIDValue{Val: v}, nil
-	case *types.Uint256:
-		return &Uint256Value{Val: v}, nil
 	case *decimal.Decimal:
 		return &DecimalValue{Dec: v}, nil
 	case []int64:
@@ -110,6 +259,16 @@ func NewVariable(v any) (Value, error) {
 			Val: v,
 		}, nil
 	case [][]byte:
+		var res []*[]byte
+		for _, val := range v {
+			val2 := val
+			res = append(res, &val2)
+		}
+
+		return &BlobArrayValue{
+			Val: res,
+		}, nil
+	case []*[]byte:
 		return &BlobArrayValue{
 			Val: v,
 		}, nil
@@ -118,17 +277,12 @@ func NewVariable(v any) (Value, error) {
 			return nil, fmt.Errorf("cannot infer type from decimal empty array")
 		}
 
-		dt2, err := types.NewDecimalType(v[0].Precision(), v[0].Scale())
+		_, err := types.NewDecimalType(v[0].Precision(), v[0].Scale())
 		if err != nil {
 			return nil, err
 		}
 
 		return &DecimalArrayValue{
-			Val:      v,
-			DataType: dt2,
-		}, nil
-	case []*types.Uint256:
-		return &Uint256ArrayValue{
 			Val: v,
 		}, nil
 	case []*types.UUID:
@@ -151,6 +305,10 @@ func makeTypeErr(left, right Value) error {
 
 type IntValue struct {
 	Val int64
+}
+
+func (i *IntValue) DBValue() (any, error) {
+	return &i.Val, nil
 }
 
 func (v *IntValue) Compare(v2 Value, op ComparisonOp) (Value, error) {
@@ -248,7 +406,7 @@ func (i *IntValue) Type() *types.DataType {
 	return types.IntType
 }
 
-func (i *IntValue) Value() any {
+func (i *IntValue) RawValue() any {
 	return i.Val
 }
 
@@ -292,14 +450,6 @@ func (i *IntValue) Cast(t *types.DataType) (Value, error) {
 		return &TextValue{Val: fmt.Sprint(i.Val)}, nil
 	case types.BoolType:
 		return &BoolValue{Val: i.Val != 0}, nil
-	case types.Uint256Type:
-		if i.Val < 0 {
-			return nil, fmt.Errorf("cannot cast negative int to uint256")
-		}
-
-		return &Uint256Value{
-			Val: types.Uint256FromInt(uint64(i.Val)),
-		}, nil
 	default:
 		return nil, fmt.Errorf("cannot cast int to %s", t)
 	}
@@ -311,6 +461,10 @@ func (i *IntValue) Size() int {
 
 type TextValue struct {
 	Val string
+}
+
+func (s *TextValue) DBValue() (any, error) {
+	return &s.Val, nil
 }
 
 func (s *TextValue) Compare(v Value, op ComparisonOp) (Value, error) {
@@ -361,7 +515,7 @@ func (s *TextValue) Type() *types.DataType {
 	return types.TextType
 }
 
-func (s *TextValue) Value() any {
+func (s *TextValue) RawValue() any {
 	return s.Val
 }
 
@@ -413,13 +567,6 @@ func (s *TextValue) Cast(t *types.DataType) (Value, error) {
 		}
 
 		return &BoolValue{Val: b}, nil
-	case types.Uint256Type:
-		u, err := types.Uint256FromString(s.Val)
-		if err != nil {
-			return nil, err
-		}
-
-		return &Uint256Value{Val: u}, nil
 	case types.UUIDType:
 		u, err := types.ParseUUID(s.Val)
 		if err != nil {
@@ -438,6 +585,10 @@ func (s *TextValue) Size() int {
 
 type BoolValue struct {
 	Val bool
+}
+
+func (b *BoolValue) DBValue() (any, error) {
+	return &b.Val, nil
 }
 
 func (b *BoolValue) Compare(v Value, op ComparisonOp) (Value, error) {
@@ -480,7 +631,7 @@ func (b *BoolValue) Type() *types.DataType {
 	return types.BoolType
 }
 
-func (b *BoolValue) Value() any {
+func (b *BoolValue) RawValue() any {
 	return b.Val
 }
 
@@ -528,6 +679,10 @@ type BlobValue struct {
 	Val []byte
 }
 
+func (b *BlobValue) DBValue() (any, error) {
+	return &b.Val, nil
+}
+
 func (b *BlobValue) Compare(v Value, op ComparisonOp) (Value, error) {
 	if res, early := nullCmp(v, op); early {
 		return res, nil
@@ -563,19 +718,19 @@ func (b *BlobValue) Type() *types.DataType {
 	return types.BlobType
 }
 
-func (b *BlobValue) Value() any {
+func (b *BlobValue) RawValue() any {
 	return b.Val
 }
 
 func (b *BlobValue) Array(v ...ScalarValue) (ArrayValue, error) {
-	res := make([][]byte, len(v)+1)
-	res[0] = b.Val
+	res := make([]*[]byte, len(v)+1)
+	res[0] = &b.Val
 	for i, val := range v {
 		switch val := val.(type) {
 		case *NullValue:
 			res[i+1] = nil
 		case *BlobValue:
-			res[i+1] = val.Val
+			res[i+1] = &val.Val
 		default:
 			return nil, makeTypeErr(b, val)
 		}
@@ -608,6 +763,10 @@ func (b *BlobValue) Size() int {
 
 type UUIDValue struct {
 	Val types.UUID
+}
+
+func (u *UUIDValue) DBValue() (any, error) {
+	return &u.Val, nil
 }
 
 func (u *UUIDValue) Compare(v Value, op ComparisonOp) (Value, error) {
@@ -645,7 +804,7 @@ func (u *UUIDValue) Type() *types.DataType {
 	return types.UUIDType
 }
 
-func (u *UUIDValue) Value() any {
+func (u *UUIDValue) RawValue() any {
 	// kwil always handled uuids as pointers
 	return &u.Val
 }
@@ -686,6 +845,10 @@ func (u *UUIDValue) Size() int {
 
 type DecimalValue struct {
 	Dec *decimal.Decimal
+}
+
+func (d *DecimalValue) DBValue() (any, error) {
+	return d.Dec, nil
 }
 
 func (d *DecimalValue) Compare(v Value, op ComparisonOp) (Value, error) {
@@ -767,7 +930,7 @@ func (d *DecimalValue) Type() *types.DataType {
 	return res
 }
 
-func (d *DecimalValue) Value() any {
+func (d *DecimalValue) RawValue() any {
 	return d.Dec
 }
 
@@ -786,176 +949,20 @@ func (d *DecimalValue) Array(v ...ScalarValue) (ArrayValue, error) {
 	}
 
 	return &DecimalArrayValue{
-		Val:      res,
-		DataType: d.Type(),
-	}, nil
-}
-
-type Uint256Value struct {
-	Val *types.Uint256
-}
-
-func (u *Uint256Value) Compare(v Value, op ComparisonOp) (Value, error) {
-	if res, early := nullCmp(v, op); early {
-		return res, nil
-	}
-
-	val2, ok := v.(*Uint256Value)
-	if !ok {
-		return nil, makeTypeErr(u, v)
-	}
-
-	c := u.Val.Cmp(val2.Val)
-
-	return cmpIntegers(c, 0, op)
-}
-
-func (u *Uint256Value) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error) {
-	if _, ok := v.(*NullValue); ok {
-		return &NullValue{DataType: types.Uint256Type}, nil
-	}
-
-	val2, ok := v.(*Uint256Value)
-	if !ok {
-		return nil, makeTypeErr(u, v)
-	}
-
-	switch op {
-	case add:
-		res := u.Val.Add(val2.Val)
-		return &Uint256Value{Val: res}, nil
-	case sub:
-		res, err := u.Val.Sub(val2.Val)
-		return &Uint256Value{Val: res}, err
-	case mul:
-		res, err := u.Val.Mul(val2.Val)
-		return &Uint256Value{Val: res}, err
-	case div:
-		if val2.Val.Cmp(types.Uint256FromInt(0)) == 0 {
-			return nil, fmt.Errorf("cannot divide by zero")
-		}
-		res := u.Val.Div(val2.Val)
-		return &Uint256Value{Val: res}, nil
-	case mod:
-		if val2.Val.Cmp(types.Uint256FromInt(0)) == 0 {
-			return nil, fmt.Errorf("cannot divide by zero")
-		}
-		res := u.Val.Mod(val2.Val)
-		return &Uint256Value{Val: res}, nil
-	default:
-		return nil, fmt.Errorf("cannot perform arithmetic operation id %d on type uint256", op)
-	}
-}
-
-func (u *Uint256Value) Unary(op UnaryOp) (ScalarValue, error) {
-	switch op {
-	case neg:
-		return nil, fmt.Errorf("cannot apply unary negation to a uint256")
-	case not:
-		return nil, fmt.Errorf("cannot apply logical NOT to a uint256")
-	case pos:
-		return u, nil
-	default:
-		return nil, fmt.Errorf("unknown unary operator: %d", op)
-	}
-}
-
-func (u *Uint256Value) Type() *types.DataType {
-	return types.Uint256Type
-}
-
-func (u *Uint256Value) Value() any {
-	return u.Val
-}
-
-func (u *Uint256Value) Array(v ...ScalarValue) (ArrayValue, error) {
-	res := make([]*types.Uint256, len(v)+1)
-	res[0] = u.Val
-	for i, val := range v {
-		switch val := val.(type) {
-		case *NullValue:
-			res[i+1] = nil
-		case *Uint256Value:
-			res[i+1] = val.Val
-		default:
-			return nil, makeTypeErr(u, val)
-		}
-	}
-
-	return &Uint256ArrayValue{
 		Val: res,
 	}, nil
-}
-
-func (u *Uint256Value) Cast(t *types.DataType) (Value, error) {
-	switch t {
-	case types.IntType:
-		b := u.Val.ToBig()
-		if b.Cmp(big.NewInt(math.MaxInt64)) > 0 {
-			return nil, fmt.Errorf("cannot cast uint256 to int: value too large")
-		}
-
-		return &IntValue{Val: b.Int64()}, nil
-	case types.TextType:
-		return &TextValue{Val: u.Val.String()}, nil
-	case types.Uint256Type:
-		return u, nil
-	default:
-		return nil, fmt.Errorf("cannot cast uint256 to %s", t)
-	}
-}
-
-func (u *Uint256Value) Size() int {
-	return 32
 }
 
 type IntArrayValue struct {
 	Val []*int64
 }
 
+func (a *IntArrayValue) DBValue() (any, error) {
+	return &a.Val, nil
+}
+
 func (a *IntArrayValue) Compare(v Value, op ComparisonOp) (Value, error) {
-	if res, early := nullCmp(v, op); early {
-		return res, nil
-	}
-
-	val2, ok := v.(*IntArrayValue)
-	if !ok {
-		return nil, makeTypeErr(a, v)
-	}
-
-	if len(a.Val) != len(val2.Val) {
-		return nil, fmt.Errorf("cannot compare arrays of different lengths")
-	}
-
-	for i, v1 := range a.Val {
-		if v1 == nil {
-			return &NullValue{DataType: types.IntType}, nil
-		}
-		v2 := val2.Val[i]
-		if v2 == nil {
-			return &NullValue{DataType: types.IntType}, nil
-		}
-
-		var b bool
-		switch op {
-		case equal:
-			b = *v1 == *v2
-		case lessThan:
-			b = *v1 < *v2
-		case greaterThan:
-			b = *v1 > *v2
-		case isDistinctFrom:
-			b = *v1 != *v2
-		default:
-			return nil, fmt.Errorf("unknown comparison operator: %d", op)
-		}
-
-		if !b {
-			return &BoolValue{Val: false}, nil
-		}
-	}
-
-	return &BoolValue{Val: true}, nil
+	return cmpArrs(a, v, op)
 }
 
 func (a *IntArrayValue) Len() int {
@@ -1001,7 +1008,7 @@ func (a *IntArrayValue) Type() *types.DataType {
 	return types.IntArrayType
 }
 
-func (a *IntArrayValue) Value() any {
+func (a *IntArrayValue) RawValue() any {
 	return a.Val
 }
 
@@ -1045,19 +1052,6 @@ func (a *IntArrayValue) Cast(t *types.DataType) (Value, error) {
 		return &BoolArrayValue{
 			Val: res,
 		}, nil
-	case types.Uint256ArrayType:
-		res := make([]*types.Uint256, len(a.Val))
-		for i, v := range a.Val {
-			if v == nil {
-				res[i] = nil
-			} else {
-				res[i] = types.Uint256FromInt(uint64(*v))
-			}
-		}
-
-		return &Uint256ArrayValue{
-			Val: res,
-		}, nil
 	case types.DecimalArrayType:
 		res := make([]*decimal.Decimal, len(a.Val))
 		for i, v := range a.Val {
@@ -1073,8 +1067,7 @@ func (a *IntArrayValue) Cast(t *types.DataType) (Value, error) {
 		}
 
 		return &DecimalArrayValue{
-			Val:      res,
-			DataType: types.DecimalType,
+			Val: res,
 		}, nil
 	default:
 		return nil, fmt.Errorf("cannot cast int array to %s", t)
@@ -1085,49 +1078,12 @@ type TextArrayValue struct {
 	Val []*string
 }
 
+func (a *TextArrayValue) DBValue() (any, error) {
+	return &a.Val, nil
+}
+
 func (a *TextArrayValue) Compare(v Value, op ComparisonOp) (Value, error) {
-	if res, early := nullCmp(v, op); early {
-		return res, nil
-	}
-
-	val2, ok := v.(*TextArrayValue)
-	if !ok {
-		return nil, makeTypeErr(a, v)
-	}
-
-	if len(a.Val) != len(val2.Val) {
-		return nil, fmt.Errorf("cannot compare arrays of different lengths")
-	}
-
-	for i, v1 := range a.Val {
-		if v1 == nil {
-			return &NullValue{DataType: types.TextType}, nil
-		}
-		v2 := val2.Val[i]
-		if v2 == nil {
-			return &NullValue{DataType: types.TextType}, nil
-		}
-
-		var b bool
-		switch op {
-		case equal:
-			b = *v1 == *v2
-		case lessThan:
-			b = *v1 < *v2
-		case greaterThan:
-			b = *v1 > *v2
-		case isDistinctFrom:
-			b = *v1 != *v2
-		default:
-			return nil, fmt.Errorf("unknown comparison operator: %d", op)
-		}
-
-		if !b {
-			return &BoolValue{Val: false}, nil
-		}
-	}
-
-	return &BoolValue{Val: true}, nil
+	return cmpArrs(a, v, op)
 }
 
 func (a *TextArrayValue) Len() int {
@@ -1173,7 +1129,7 @@ func (a *TextArrayValue) Type() *types.DataType {
 	return types.TextArrayType
 }
 
-func (a *TextArrayValue) Value() any {
+func (a *TextArrayValue) RawValue() any {
 	return a.Val
 }
 
@@ -1223,23 +1179,6 @@ func (a *TextArrayValue) Cast(t *types.DataType) (Value, error) {
 		return &BoolArrayValue{
 			Val: res,
 		}, nil
-	case types.Uint256ArrayType:
-		res := make([]*types.Uint256, len(a.Val))
-		for i, v := range a.Val {
-			if v == nil {
-				res[i] = nil
-			} else {
-				u, err := types.Uint256FromString(*v)
-				if err != nil {
-					return nil, fmt.Errorf("cannot cast text array to uint256 array: %w", err)
-				}
-				res[i] = u
-			}
-		}
-
-		return &Uint256ArrayValue{
-			Val: res,
-		}, nil
 	case types.DecimalArrayType:
 		res := make([]*decimal.Decimal, len(a.Val))
 		for i, v := range a.Val {
@@ -1255,8 +1194,7 @@ func (a *TextArrayValue) Cast(t *types.DataType) (Value, error) {
 		}
 
 		return &DecimalArrayValue{
-			Val:      res,
-			DataType: types.DecimalType,
+			Val: res,
 		}, nil
 	case types.UUIDArrayType:
 		res := make([]*types.UUID, len(a.Val))
@@ -1284,45 +1222,12 @@ type BoolArrayValue struct {
 	Val []*bool
 }
 
+func (a *BoolArrayValue) DBValue() (any, error) {
+	return &a.Val, nil
+}
+
 func (a *BoolArrayValue) Compare(v Value, op ComparisonOp) (Value, error) {
-	if res, early := nullCmp(v, op); early {
-		return res, nil
-	}
-
-	val2, ok := v.(*BoolArrayValue)
-	if !ok {
-		return nil, makeTypeErr(a, v)
-	}
-
-	if len(a.Val) != len(val2.Val) {
-		return nil, fmt.Errorf("cannot compare arrays of different lengths")
-	}
-
-	for i, v1 := range a.Val {
-		if v1 == nil {
-			return &NullValue{DataType: types.BoolType}, nil
-		}
-		v2 := val2.Val[i]
-		if v2 == nil {
-			return &NullValue{DataType: types.BoolType}, nil
-		}
-
-		var b bool
-		switch op {
-		case equal:
-			b = *v1 == *v2
-		case isDistinctFrom:
-			b = *v1 != *v2
-		default:
-			return nil, fmt.Errorf("unknown comparison operator: %d", op)
-		}
-
-		if !b {
-			return &BoolValue{Val: false}, nil
-		}
-	}
-
-	return &BoolValue{Val: true}, nil
+	return cmpArrs(a, v, op)
 }
 
 func (a *BoolArrayValue) Len() int {
@@ -1368,7 +1273,7 @@ func (a *BoolArrayValue) Type() *types.DataType {
 	return types.BoolArrayType
 }
 
-func (a *BoolArrayValue) Value() any {
+func (a *BoolArrayValue) RawValue() any {
 	return a.Val
 }
 
@@ -1409,49 +1314,121 @@ func (a *BoolArrayValue) Cast(t *types.DataType) (Value, error) {
 }
 
 type DecimalArrayValue struct {
-	Val      []*decimal.Decimal
-	DataType *types.DataType
+	Val []*decimal.Decimal
+}
+
+func (a *DecimalArrayValue) DBValue() (any, error) {
+	return &a.Val, nil
+}
+
+// detectDecArrType detects the type of a decimal array.
+// It returns the type, and a boolean indicating if the array does
+// not have any non-null values.
+func detectDecArrType(arr *DecimalArrayValue) (typ *types.DataType, containsOnlyNulls bool) {
+	var firstFound *types.DataType
+	for _, v := range arr.Val {
+		if v != nil {
+			if firstFound == nil {
+				d, err := types.NewDecimalType(v.Precision(), v.Scale())
+				if err != nil {
+					panic(err)
+				}
+
+				firstFound = d
+			} else {
+				d2, err := types.NewDecimalType(v.Precision(), v.Scale())
+				if err != nil {
+					panic(err)
+				}
+
+				if !firstFound.EqualsStrict(d2) {
+					// should never reach here
+					panic("mixed types in decimal array")
+				}
+			}
+		}
+	}
+
+	if firstFound == nil {
+		return types.DecimalType, true
+	}
+
+	return firstFound, false
 }
 
 func (a *DecimalArrayValue) Compare(v Value, op ComparisonOp) (Value, error) {
-	if res, early := nullCmp(v, op); early {
+	return cmpArrs(a, v, op)
+}
+
+// cmpArrs compares two Kwil array types.
+func cmpArrs[M ArrayValue](a M, b Value, op ComparisonOp) (Value, error) {
+	if res, early := nullCmp(b, op); early {
 		return res, nil
 	}
 
-	val2, ok := v.(*DecimalArrayValue)
+	val2, ok := b.(M)
 	if !ok {
-		return nil, makeTypeErr(a, v)
+		return nil, makeTypeErr(a, b)
 	}
 
-	if len(a.Val) != len(val2.Val) {
-		return nil, fmt.Errorf("cannot compare arrays of different lengths")
+	isEqual := func(a, b ArrayValue) (isEq bool, err error) {
+		if a.Len() != b.Len() {
+			return false, nil
+		}
+
+		for i := 1; i <= a.Len(); i++ {
+			v1, err := a.Index(int64(i))
+			if err != nil {
+				return false, err
+			}
+
+			v2, err := b.Index(int64(i))
+			if err != nil {
+				return false, err
+			}
+
+			_, v1IsNull := v1.(*NullValue)
+			_, v2IsNull := v2.(*NullValue)
+
+			if v1IsNull && v2IsNull {
+				continue
+			}
+
+			if v1IsNull || v2IsNull {
+				return false, nil
+			}
+
+			res, err := v1.Compare(v2, equal)
+			if err != nil {
+				return false, err
+			}
+
+			resBool, ok := res.(*BoolValue)
+			if !ok {
+				return false, fmt.Errorf("unexpected value from comparison")
+			}
+
+			if !resBool.Val {
+				return false, nil
+			}
+		}
+
+		return true, nil
 	}
 
-	for i, v1 := range a.Val {
-		if v1 == nil {
-			return &NullValue{DataType: a.DataType}, nil
-		}
-		v2 := val2.Val[i]
-		if v2 == nil {
-			return &NullValue{DataType: a.DataType}, nil
-		}
-
-		res, err := v1.Cmp(v2)
-		if err != nil {
-			return nil, err
-		}
-
-		b, err := cmpIntegers(res, 0, op)
-		if err != nil {
-			return nil, err
-		}
-
-		if !b.(*BoolValue).Val {
-			return &BoolValue{Val: false}, nil
-		}
+	eq, err := isEqual(a, val2)
+	if err != nil {
+		return nil, err
 	}
 
-	return &BoolValue{Val: true}, nil
+	switch op {
+	case equal:
+		return &BoolValue{Val: eq}, nil
+	case isDistinctFrom:
+		return &BoolValue{Val: !eq}, nil
+	default:
+		return nil, fmt.Errorf("only = and IS DISTINCT FROM are supported for array comparison")
+	}
 }
 
 func (a *DecimalArrayValue) Len() int {
@@ -1465,7 +1442,8 @@ func (a *DecimalArrayValue) Index(i int64) (ScalarValue, error) {
 
 	val := a.Val[i-1]
 	if val == nil {
-		return &NullValue{DataType: a.DataType}, nil
+		typ, _ := detectDecArrType(a)
+		return &NullValue{DataType: typ}, nil
 	}
 
 	return &DecimalValue{Dec: val}, nil
@@ -1482,26 +1460,6 @@ func (d *DecimalValue) Cast(t *types.DataType) (Value, error) {
 		return &IntValue{Val: i}, nil
 	case types.TextType:
 		return &TextValue{Val: d.Dec.String()}, nil
-	case types.Uint256Type:
-		if d.Dec.IsNegative() {
-			return nil, fmt.Errorf("cannot cast negative decimal to uint256")
-		}
-
-		d2 := d.Dec.Copy()
-
-		err := d2.Round(0)
-		if err != nil {
-			return nil, err
-		}
-
-		u, err := types.Uint256FromString(d2.String())
-		if err != nil {
-			return nil, err
-		}
-
-		return &Uint256Value{
-			Val: u,
-		}, nil
 	default:
 		return nil, fmt.Errorf("cannot cast decimal to %s", t)
 	}
@@ -1534,10 +1492,11 @@ func (a *DecimalArrayValue) Set(i int64, v ScalarValue) error {
 }
 
 func (a *DecimalArrayValue) Type() *types.DataType {
-	return a.DataType
+	typ, _ := detectDecArrType(a)
+	return typ
 }
 
-func (a *DecimalArrayValue) Value() any {
+func (a *DecimalArrayValue) RawValue() any {
 	return a.Val
 }
 
@@ -1583,173 +1542,16 @@ func (a *DecimalArrayValue) Cast(t *types.DataType) (Value, error) {
 	}
 }
 
-type Uint256ArrayValue struct {
-	Val []*types.Uint256
-}
-
-func (a *Uint256ArrayValue) Compare(v Value, op ComparisonOp) (Value, error) {
-	if res, early := nullCmp(v, op); early {
-		return res, nil
-	}
-
-	val2, ok := v.(*Uint256ArrayValue)
-	if !ok {
-		return nil, makeTypeErr(a, v)
-	}
-
-	if len(a.Val) != len(val2.Val) {
-		return nil, fmt.Errorf("cannot compare arrays of different lengths")
-	}
-
-	for i, v1 := range a.Val {
-		if v1 == nil {
-			return &NullValue{DataType: types.Uint256Type}, nil
-		}
-		v2 := val2.Val[i]
-		if v2 == nil {
-			return &NullValue{DataType: types.Uint256Type}, nil
-		}
-
-		var b bool
-		switch op {
-		case equal:
-			b = v1.Cmp(v2) == 0
-		case lessThan:
-			b = v1.Cmp(v2) < 0
-		case greaterThan:
-			b = v1.Cmp(v2) > 0
-		case isDistinctFrom:
-			b = v1.Cmp(v2) != 0
-		default:
-			return nil, fmt.Errorf("unknown comparison operator: %d", op)
-		}
-
-		if !b {
-			return &BoolValue{Val: false}, nil
-		}
-	}
-
-	return &BoolValue{Val: true}, nil
-}
-
-func (a *Uint256ArrayValue) Len() int {
-	return len(a.Val)
-}
-
-func (a *Uint256ArrayValue) Index(i int64) (ScalarValue, error) {
-	if i < 1 || i > int64(len(a.Val)) {
-		return nil, fmt.Errorf("index out of bounds")
-	}
-
-	val := a.Val[i-1]
-	if val == nil {
-		return &NullValue{DataType: types.Uint256Type}, nil
-	}
-
-	return &Uint256Value{Val: val}, nil
-}
-
-func (a *Uint256ArrayValue) Set(i int64, v ScalarValue) error {
-	if i < 1 {
-		return fmt.Errorf("index out of bounds")
-	}
-
-	if i > int64(len(a.Val)) {
-		// Allocate enough space to set the value.
-		// This matches the behavior of Postgres.
-		newVal := make([]*types.Uint256, i)
-		copy(newVal, a.Val)
-		a.Val = newVal
-	}
-
-	val, ok := v.(*Uint256Value)
-	if !ok {
-		return fmt.Errorf("cannot set non-uint256 value in uint256 array")
-	}
-
-	a.Val[i-1] = val.Val
-	return nil
-}
-
-func (a *Uint256ArrayValue) Type() *types.DataType {
-	return types.Uint256ArrayType
-}
-
-func (a *Uint256ArrayValue) Value() any {
-	return a.Val
-}
-
-func (a *Uint256ArrayValue) Size() int {
-	size := 0
-	for _, v := range a.Val {
-		if v != nil {
-			size += 32
-		}
-	}
-	return size
-}
-
-func (a *Uint256ArrayValue) Cast(t *types.DataType) (Value, error) {
-	switch t {
-	case types.TextArrayType:
-		res := make([]*string, len(a.Val))
-		for i, v := range a.Val {
-			if v == nil {
-				res[i] = nil
-			} else {
-				s := v.String()
-				res[i] = &s
-			}
-		}
-		return &TextArrayValue{Val: res}, nil
-	default:
-		return nil, fmt.Errorf("cannot cast uint256 array to %s", t)
-	}
-}
-
 type BlobArrayValue struct {
-	Val [][]byte
+	Val []*[]byte
+}
+
+func (a *BlobArrayValue) DBValue() (any, error) {
+	return &a.Val, nil
 }
 
 func (a *BlobArrayValue) Compare(v Value, op ComparisonOp) (Value, error) {
-	if res, early := nullCmp(v, op); early {
-		return res, nil
-	}
-
-	val2, ok := v.(*BlobArrayValue)
-	if !ok {
-		return nil, makeTypeErr(a, v)
-	}
-
-	if len(a.Val) != len(val2.Val) {
-		return nil, fmt.Errorf("cannot compare arrays of different lengths")
-	}
-
-	for i, v1 := range a.Val {
-		if v1 == nil {
-			return &NullValue{DataType: types.BlobType}, nil
-		}
-		v2 := val2.Val[i]
-		if v2 == nil {
-			return &NullValue{DataType: types.BlobType}, nil
-		}
-
-		var b bool
-		switch op {
-		case equal:
-			b = string(v1) == string(v2)
-		case isDistinctFrom:
-			b = string(v1) != string(v2)
-		default:
-			return nil, fmt.Errorf("unknown comparison operator: %d", op)
-		}
-
-		if !b {
-			return &BoolValue{Val: false}, nil
-		}
-	}
-
-	return &BoolValue{Val: true}, nil
+	return cmpArrs(a, v, op)
 }
 
 func (a *BlobArrayValue) Len() int {
@@ -1766,7 +1568,7 @@ func (a *BlobArrayValue) Index(i int64) (ScalarValue, error) {
 		return &NullValue{DataType: types.BlobType}, nil
 	}
 
-	return &BlobValue{Val: val}, nil
+	return &BlobValue{Val: *val}, nil
 }
 
 func (a *BlobArrayValue) Set(i int64, v ScalarValue) error {
@@ -1777,7 +1579,7 @@ func (a *BlobArrayValue) Set(i int64, v ScalarValue) error {
 	if i > int64(len(a.Val)) {
 		// Allocate enough space to set the value.
 		// This matches the behavior of Postgres.
-		newVal := make([][]byte, i)
+		newVal := make([]*[]byte, i)
 		copy(newVal, a.Val)
 		a.Val = newVal
 	}
@@ -1787,7 +1589,12 @@ func (a *BlobArrayValue) Set(i int64, v ScalarValue) error {
 		return fmt.Errorf("cannot set non-blob value in blob array")
 	}
 
-	a.Val[i-1] = val.Val
+	// copy the blob value to avoid mutation
+	valCopy := make([]byte, len(val.Val))
+	copy(valCopy, val.Val)
+
+	// subtract 1 because it is 1-indexed
+	a.Val[i-1] = &valCopy
 	return nil
 }
 
@@ -1795,7 +1602,7 @@ func (a *BlobArrayValue) Type() *types.DataType {
 	return types.BlobArrayType
 }
 
-func (a *BlobArrayValue) Value() any {
+func (a *BlobArrayValue) RawValue() any {
 	return a.Val
 }
 
@@ -1803,7 +1610,7 @@ func (a *BlobArrayValue) Size() int {
 	size := 0
 	for _, v := range a.Val {
 		if v != nil {
-			size += len(v)
+			size += len(*v)
 		}
 	}
 	return size
@@ -1817,7 +1624,7 @@ func (a *BlobArrayValue) Cast(t *types.DataType) (Value, error) {
 			if v == nil {
 				res[i] = nil
 			} else {
-				s := string(v)
+				s := string(*v)
 				res[i] = &s
 			}
 		}
@@ -1831,45 +1638,12 @@ type UuidArrayValue struct {
 	Val []*types.UUID
 }
 
+func (a *UuidArrayValue) DBValue() (any, error) {
+	return &a.Val, nil
+}
+
 func (a *UuidArrayValue) Compare(v Value, op ComparisonOp) (Value, error) {
-	if res, early := nullCmp(v, op); early {
-		return res, nil
-	}
-
-	val2, ok := v.(*UuidArrayValue)
-	if !ok {
-		return nil, makeTypeErr(a, v)
-	}
-
-	if len(a.Val) != len(val2.Val) {
-		return nil, fmt.Errorf("cannot compare arrays of different lengths")
-	}
-
-	for i, v1 := range a.Val {
-		if v1 == nil {
-			return &NullValue{DataType: types.UUIDType}, nil
-		}
-		v2 := val2.Val[i]
-		if v2 == nil {
-			return &NullValue{DataType: types.UUIDType}, nil
-		}
-
-		var b bool
-		switch op {
-		case equal:
-			b = *v1 == *v2
-		case isDistinctFrom:
-			b = *v1 != *v2
-		default:
-			return nil, fmt.Errorf("unknown comparison operator: %d", op)
-		}
-
-		if !b {
-			return &BoolValue{Val: false}, nil
-		}
-	}
-
-	return &BoolValue{Val: true}, nil
+	return cmpArrs(a, v, op)
 }
 
 func (a *UuidArrayValue) Len() int {
@@ -1915,7 +1689,7 @@ func (a *UuidArrayValue) Type() *types.DataType {
 	return types.UUIDArrayType
 }
 
-func (a *UuidArrayValue) Value() any {
+func (a *UuidArrayValue) RawValue() any {
 	return a.Val
 }
 
@@ -1951,6 +1725,10 @@ type NullValue struct {
 	DataType *types.DataType
 }
 
+func (n *NullValue) DBValue() (any, error) {
+	return nil, fmt.Errorf("cannot convert null to db value")
+}
+
 func (n *NullValue) Compare(v Value, op ComparisonOp) (Value, error) {
 	if _, ok := v.(*NullValue); !ok {
 		return &NullValue{DataType: n.DataType}, nil
@@ -1979,7 +1757,7 @@ func (n *NullValue) Type() *types.DataType {
 	return n.DataType
 }
 
-func (n *NullValue) Value() any {
+func (n *NullValue) RawValue() any {
 	return nil
 }
 
@@ -2012,6 +1790,23 @@ type RecordValue struct {
 	Order  []string
 }
 
+func (r *RecordValue) AddValue(k string, v Value) error {
+	_, ok := r.Fields[k]
+	if ok {
+		// protecting against this since it would detect non-determinism,
+		// but our query planner should already protect against this
+		return fmt.Errorf("record already has field %s", k)
+	}
+
+	r.Fields[k] = v
+	r.Order = append(r.Order, k)
+	return nil
+}
+
+func (o *RecordValue) DBValue() (any, error) {
+	return nil, fmt.Errorf("cannot convert record to db value")
+}
+
 func (o *RecordValue) Compare(v Value, op ComparisonOp) (Value, error) {
 	if res, early := nullCmp(v, op); early {
 		return res, nil
@@ -2040,7 +1835,7 @@ func (o *RecordValue) Compare(v Value, op ComparisonOp) (Value, error) {
 				return nil, err
 			}
 
-			if !eq.Value().(bool) {
+			if !eq.RawValue().(bool) {
 				isSame = false
 				break
 			}
@@ -2065,7 +1860,7 @@ func (o *RecordValue) Type() *types.DataType {
 	return types.RecordType
 }
 
-func (o *RecordValue) Value() any {
+func (o *RecordValue) RawValue() any {
 	return o.Fields
 }
 
@@ -2082,7 +1877,7 @@ func (o *RecordValue) Cast(t *types.DataType) (Value, error) {
 	return nil, fmt.Errorf("cannot cast record to %s", t)
 }
 
-func cmpIntegers(a, b int, op ComparisonOp) (Value, error) {
+func cmpIntegers(a, b int, op ComparisonOp) (*BoolValue, error) {
 	switch op {
 	case equal:
 		return &BoolValue{Val: a == b}, nil

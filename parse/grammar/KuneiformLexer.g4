@@ -141,6 +141,16 @@ PARTITION:  'partition';
 WINDOW:     'window';
 FILTER:     'filter';
 RECURSIVE:  'recursive';
+SCHEMA:     'schema';
+GRANT:      'grant';
+REVOKE:     'revoke';
+ROLE:       'role';
+TRANSFER:   'transfer';
+OWNERSHIP:  'ownership';
+
+// role permissions
+ROLES:      'roles';
+CALL:       'call';
 
 
 // Literals

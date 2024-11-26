@@ -313,7 +313,7 @@ func ParseDDL(sql string) (res *DDLParseResult, err error) {
 // If skipValidation is true, the AST will not be validated or analyzed.
 // TODO: once we get farther on the planner, we should remove all validation, in favor
 // of the planner.
-func ParseSQL(sql string, schema *types.Schema, skipValidation bool) (res *SQLParseResult, err error) {
+func ParseSQL(sql string) (res *SQLParseResult, err error) {
 	parser, errLis, visitor, deferFn, err := setupParser2(sql)
 	if err != nil {
 		return nil, err
@@ -389,6 +389,38 @@ type ActionParseResult struct {
 	// Errs are the errors that occurred during parsing and analysis.
 	// These include syntax errors, type errors, etc.
 	ParseErrs ParseErrs
+}
+
+// SimpleActionParseResult is the result of parsing an action without validation.
+// This is the struct that should be used in v0.10.
+type SimpleActionParseResult struct {
+	AST []ProcedureStmt
+	// Errs are the errors that occurred during parsing and analysis.
+	// These include syntax errors, type errors, etc.
+	Errs ParseErrs
+}
+
+// ParseActionBodyWithoutValidation parses an action without performing validations.
+// TODO: with v0.10, this should be the only function that is used to parse actions,
+// since all validations will be done in the planner.
+func ParseActionBodyWithoutValidation(actionBody string) (res *SimpleActionParseResult, err error) {
+	errLis, stream, parser, deferFn := setupParser(actionBody, "action")
+
+	res = &SimpleActionParseResult{
+		Errs: errLis,
+	}
+
+	defer func() {
+		err2 := deferFn(recover())
+		if err2 != nil {
+			err = err2
+		}
+	}()
+
+	schemaVisitor := newSchemaVisitor(stream, errLis)
+	res.AST = parser.Procedure_entry().Accept(schemaVisitor).([]ProcedureStmt)
+
+	return res, nil
 }
 
 // ParseAction parses a Kuneiform action.

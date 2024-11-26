@@ -235,6 +235,30 @@ func (v *BaseKuneiformParserVisitor) VisitDrop_index_statement(ctx *Drop_index_s
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseKuneiformParserVisitor) VisitCreate_role_statement(ctx *Create_role_statementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitDrop_role_statement(ctx *Drop_role_statementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitGrant_statement(ctx *Grant_statementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitRevoke_statement(ctx *Revoke_statementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitPrivilege_list(ctx *Privilege_listContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitPrivilege(ctx *PrivilegeContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseKuneiformParserVisitor) VisitSelect_statement(ctx *Select_statementContext) interface{} {
 	return v.VisitChildren(ctx)
 }
