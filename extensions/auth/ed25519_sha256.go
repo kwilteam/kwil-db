@@ -54,7 +54,7 @@ func (e Ed22519Sha256Authenticator) Verify(publicKey []byte, msg []byte, signatu
 	}
 
 	if !valid {
-		return fmt.Errorf("signature verification failed")
+		return crypto.ErrInvalidSignature
 	}
 
 	return nil

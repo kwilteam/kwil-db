@@ -217,15 +217,15 @@ func GenerateForeignProcedure(proc *types.ForeignProcedure, pgSchema string, dbi
 	// Everything else is a string variable defined in this function
 	if proc.Returns != nil && proc.Returns.IsTable {
 		// if it returns a table, we need to use RETURN QUERY EXECUTE
-		str.WriteString(fmt.Sprintf(`
-	RETURN QUERY EXECUTE format('SELECT * FROM ds_%%I.%%I(`))
+		str.WriteString(`
+	RETURN QUERY EXECUTE format('SELECT * FROM ds_%%I.%%I(`)
 		str.WriteString(dollarsignVars(argList))
 		str.WriteString(`)', _dbid, _procedure)`)
 	} else {
 		// if it returns nothing, we do not need to worry
 		// about selecting INTO
-		str.WriteString(fmt.Sprintf(`
-	EXECUTE format('SELECT * FROM ds_%%I.%%I(`))
+		str.WriteString(`
+	EXECUTE format('SELECT * FROM ds_%%I.%%I(`)
 		str.WriteString(dollarsignVars(argList))
 		str.WriteString(`)', _dbid, _procedure)`)
 

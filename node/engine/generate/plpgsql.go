@@ -1009,14 +1009,14 @@ func formatContextualVariableName(name string) string {
 	case types.BlobType:
 		return fmt.Sprintf("decode(%s, 'base64')", str)
 	case types.IntType:
-		return fmt.Sprintf("%s::int8", str)
+		return str + "::int8"
 	case types.BoolType:
-		return fmt.Sprintf("%s::bool", str)
+		return str + "::bool"
 	case types.UUIDType:
-		return fmt.Sprintf("%s::uuid", str)
+		return str + "::uuid"
 	case types.TextType:
 		return str
 	default:
-		panic("unallowed contextual variable type: " + dataType.String())
+		panic("disallowed contextual variable type: " + dataType.String())
 	}
 }

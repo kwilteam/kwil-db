@@ -5,6 +5,6 @@ import (
 )
 
 var (
-	ErrInvalidSignature       = errors.New("signature verification failed")
+	ErrInvalidSignature       = errors.New("invalid signature")
 	ErrInvalidSignatureLength = errors.New("invalid signature length")
 )

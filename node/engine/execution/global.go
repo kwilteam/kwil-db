@@ -351,7 +351,7 @@ func (g *GlobalContext) Execute(ctx *common.TxContext, tx sql.DB, dbid, query st
 			return nil, errors.New("DB does not provide access mode needed for mutative statement")
 		}
 		if txm.AccessMode() == sql.ReadOnly {
-			return nil, fmt.Errorf("cannot execute a mutative query in a read-only transaction")
+			return nil, errors.New("cannot execute a mutative query in a read-only transaction")
 		}
 	}
 
