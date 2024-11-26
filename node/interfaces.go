@@ -14,6 +14,7 @@ type ConsensusEngine interface {
 	AcceptCommit(height int64, blkID types.Hash, appHash types.Hash, leaderSig []byte) bool
 	NotifyBlockCommit(blk *types.Block, appHash types.Hash)
 
+	AcceptACK() bool
 	NotifyACK(validatorPK []byte, ack types.AckRes)
 	NotifyResetState(height int64)
 

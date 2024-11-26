@@ -66,7 +66,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	ce := buildConsensusEngine(ctx, d, db, accounts, vs, mp, bs, txApp, valSet)
 
 	// Node
-	node := buildNode(d, mp, bs, ce, valSet)
+	node := buildNode(d, mp, bs, ce)
 
 	// RPC Services
 	rpcSvcLogger := d.logger.New("user-json-svc")
@@ -185,23 +185,21 @@ func buildTxApp(ctx context.Context, d *coreDependencies, db *pg.DB, accounts *a
 }
 
 func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB, accounts *accounts.Accounts, vs *voting.VoteStore, mempool *mempool.Mempool, bs *store.BlockStore, txapp *txapp.TxApp, valSet map[string]ktypes.Validator) *consensus.ConsensusEngine {
-	leader := d.genesisCfg.Validators[0].PubKey
-	leaderPubKey, err := crypto.UnmarshalSecp256k1PublicKey(leader)
+	leaderPubKey, err := crypto.UnmarshalSecp256k1PublicKey(d.genesisCfg.Leader)
 	if err != nil {
 		failBuild(err, "failed to parse leader public key")
 	}
 
 	ceCfg := &consensus.Config{
-		PrivateKey: d.privKey,
-		Leader:     leaderPubKey,
-		// Leader:    d.cfg.Consensus.Leader,
+		PrivateKey:     d.privKey,
+		Leader:         leaderPubKey,
 		DB:             db,
 		Accounts:       accounts,
 		BlockStore:     bs,
 		Mempool:        mempool,
 		ValidatorStore: vs,
 		TxApp:          txapp,
-		ValidatorSet:   valSet,
+		ValidatorSet:   valSet, // TODO: Where to set this validator set? in the constructor or after the ce is caughtup?
 		Logger:         d.logger.New("CONS"),
 		ProposeTimeout: d.cfg.Consensus.ProposeTimeout,
 	}
@@ -214,17 +212,15 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB, acc
 	return ce
 }
 
-func buildNode(d *coreDependencies, mp *mempool.Mempool, bs *store.BlockStore, ce *consensus.ConsensusEngine, valSet map[string]ktypes.Validator) *node.Node {
+func buildNode(d *coreDependencies, mp *mempool.Mempool, bs *store.BlockStore, ce *consensus.ConsensusEngine) *node.Node {
 	logger := d.logger.New("NODE")
 	nc := &node.Config{
 		RootDir:    d.rootDir,
 		PrivKey:    d.privKey,
 		P2P:        &d.cfg.P2P,
-		Genesis:    d.genesisCfg,
 		Mempool:    mp,
 		BlockStore: bs,
 		Consensus:  ce,
-		ValSet:     valSet,
 		Logger:     logger,
 	}
 
