@@ -5,6 +5,7 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
@@ -23,10 +24,10 @@ type Service struct {
 	ExtensionConfigs map[string]map[string]string
 
 	// GenesisConfig is the genesis configuration of the network.
-	// GenesisConfig *chain.GenesisConfig
+	GenesisConfig *config.GenesisConfig
 
 	// LocalConfig is the local configuration of the node.
-	//LocalConfig *config.KwildConfig
+	LocalConfig *config.Config
 
 	// Identity is the node/validator identity (pubkey).
 	Identity []byte
