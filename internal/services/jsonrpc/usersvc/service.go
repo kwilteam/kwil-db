@@ -705,7 +705,6 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 	if err != nil {
 		// NOTE: http api needs to be able to get the error message
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "failed to convert action call: "+err.Error(), nil)
-
 	}
 
 	// Authenticate by validating the challenge was server-issued, and verify
@@ -750,6 +749,16 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 		if err != nil {
 			return nil, jsonrpc.NewError(jsonrpc.ErrorIdentInvalid, "failed to get caller: "+err.Error(), nil)
 		}
+	}
+
+	chainStat, err := svc.chainClient.Status(ctx)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to get chain status: "+err.Error(), nil)
+	}
+	height, stamp := chainStat.Sync.BestBlockHeight, chainStat.Sync.BestBlockTime.Unix()
+	if chainStat.Sync.Syncing { // don't use known stale height and time stamp if node is syncing
+		height = -1
+		stamp = -1
 	}
 
 	ctxExec, cancel := context.WithTimeout(ctx, svc.readTxTimeout)
@@ -800,7 +809,8 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 		Signer: signer,
 		Caller: caller,
 		BlockContext: &common.BlockContext{
-			Height: -1, // cannot know the height here.
+			Height:    height,
+			Timestamp: stamp,
 		},
 		Authenticator: msg.AuthType,
 	}, readTx, &common.ExecutionData{

@@ -23,7 +23,7 @@ type BlockContext struct {
 	ChainContext *ChainContext
 	// Height gets the height of the current block.
 	Height int64
-	// Timestamp is a timestamp of the current block.
+	// Timestamp is a timestamp of the current block, in seconds (UNIX epoch).
 	// It is set by the block proposer, and therefore may not be accurate.
 	// It should not be used for time-sensitive operations where incorrect
 	// timestamps could result in security vulnerabilities.
