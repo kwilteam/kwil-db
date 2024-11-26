@@ -20,7 +20,7 @@ func NewCmdUtils() *cobra.Command {
 		chainInfoCmd(),
 		kgwAuthnCmd(),
 		newParseCmd(),
-		// testCmd(),
+		testCmd(),
 		dbidCmd(),
 		generateKeyCmd(),
 	)
