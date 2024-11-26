@@ -14,6 +14,10 @@ import (
 
 var lastReset int64 = 0
 
+func (ce *ConsensusEngine) AcceptACK() bool {
+	return ce.role.Load() == types.RoleLeader // Ack is only accepted by the leader
+}
+
 // Leader is the node that proposes the block and drives the consensus process:
 // 1. Prepare Phase:
 //   - Create a block proposal

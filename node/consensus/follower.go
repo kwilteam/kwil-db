@@ -14,7 +14,7 @@ import (
 // If we receive a new proposal for the same height, abort the execution of the current proposal and
 // start processing the new proposal.
 func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types.Hash, leaderSig []byte, timestamp int64) bool {
-	if ce.role.Load() != types.RoleValidator {
+	if ce.role.Load() != types.RoleValidator { // TODO: Should sentry nodes download the proposal and forward it to the validators?
 		return false
 	}
 	ce.updateNetworkHeight(height - 1)

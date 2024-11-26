@@ -16,7 +16,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -59,9 +58,6 @@ type Node struct {
 	dir    string
 	// pf *prefetch
 
-	role   atomic.Value
-	valSet map[string]ktypes.Validator
-
 	// interfaces
 	bki  types.BlockStore
 	mp   types.MemPool
@@ -90,18 +86,9 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 		logger = log.DiscardLogger
 	}
 
-	leader := cfg.Genesis.Validators[0].PubKey
-
-	leaderPubKey, err := crypto.UnmarshalSecp256k1PublicKey(leader)
-	if err != nil {
-		return nil, err
-	}
 	pubkey := cfg.PrivKey.Public()
-	role := types.RoleValidator
-	if pubkey.Equals(leaderPubKey) {
-		role = types.RoleLeader
-	}
 
+	var err error
 	host := options.host
 	if host == nil {
 		host, err = newHost(cfg.P2P.IP, cfg.P2P.Port, cfg.PrivKey)
@@ -134,10 +121,7 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 		dir:      cfg.RootDir,
 		ackChan:  make(chan AckRes, 1),
 		resetMsg: make(chan ConsensusReset, 1),
-		valSet:   cfg.ValSet,
 	}
-
-	node.role.Store(role)
 
 	host.SetStreamHandler(ProtocolIDTxAnn, node.txAnnStreamHandler)
 	host.SetStreamHandler(ProtocolIDBlkAnn, node.blkAnnStreamHandler)

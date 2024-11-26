@@ -164,6 +164,10 @@ func (ce *dummyCE) NotifyACK(validatorPK []byte, ack types.AckRes) {
 	// ce.gotACKs[string(validatorPK)] = ack
 }
 
+func (ce *dummyCE) AcceptACK() bool {
+	return true
+}
+
 func (ce *dummyCE) NotifyResetState(height int64) {
 	if ce.resetStateHandler != nil {
 		ce.resetStateHandler(height)
@@ -272,7 +276,7 @@ func TestStreamsBlockFetch(t *testing.T) {
 		mn.Close()
 	})
 
-	privKeys, genCfg := newGenesis(t, [][]byte{pk1})
+	privKeys, _ := newGenesis(t, [][]byte{pk1})
 
 	defaultConfigSet := config.DefaultConfig()
 	defaultConfigSet.Consensus.ProposeTimeout = 5 * time.Minute
@@ -283,7 +287,6 @@ func TestStreamsBlockFetch(t *testing.T) {
 		PrivKey:    privKeys[0],
 		Logger:     log.DiscardLogger,
 		P2P:        &defaultConfigSet.P2P,
-		Genesis:    genCfg,
 		Mempool:    mempool.New(),
 		BlockStore: bs,
 		Consensus:  ce,
