@@ -22,8 +22,6 @@ func RootCmd() *cobra.Command {
 		Config:  shared.DefaultConfig(), // not config.DefaultConfig(), so custom command config is used
 	}, "koanf")
 
-	// TODO: update to use app/custom.BinaryConfig
-
 	cmd := &cobra.Command{
 		Use:               custom.BinaryConfig.NodeCmd,
 		Short:             custom.BinaryConfig.ProjectName + " daemon",
