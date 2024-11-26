@@ -30,6 +30,9 @@ const (
 	ProtocolIDBlockPropose protocol.ID = "/kwil/blkprop/1.0.0"
 	// ProtocolIDACKProposal  protocol.ID = "/kwil/blkack/1.0.0"
 
+	ProtocolIDSnapshotCatalog protocol.ID = "/kwil/snapcat/1.0.0"
+	ProtocolIDSnapshotChunk   protocol.ID = "/kwil/snapchunk/1.0.0"
+
 	getMsg = "get" // context dependent, in open stream convo
 
 	discoverPeersMsg = "discover_peers" // ProtocolIDDiscover
