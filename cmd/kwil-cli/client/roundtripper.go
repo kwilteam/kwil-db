@@ -40,7 +40,7 @@ type RoundTripper func(ctx context.Context, client clientType.Client, conf *conf
 // DialClient dials a kwil node and calls the passed function with the client.
 // It includes the command that is being run, so that it can read global flags.
 func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTripper) error {
-	conf, err := config.LoadCliConfig()
+	conf, err := config.ActiveConfig()
 	if err != nil {
 		return err
 	}

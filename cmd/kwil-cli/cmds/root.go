@@ -3,18 +3,17 @@ package cmds
 import (
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config" // migrate !
-
 	"github.com/spf13/cobra"
-	"github.com/spf13/viper" // migrate !
 
 	"github.com/kwilteam/kwil-db/app/custom"
+	"github.com/kwilteam/kwil-db/app/shared"
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/app/shared/version"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/account"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/configure"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/database"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/utils"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/helpers"
 )
 
@@ -26,6 +25,11 @@ var longDesc = `Command line interface client for using %s.
 ` + "`" + `%s` + "`" + ` will look for a configuration file at ` + "`" + `$HOME/.kwil-cli/config.json` + "`" + `.`
 
 func NewRootCmd() *cobra.Command {
+	// The basic for ActiveConfig starts with defaults defined in DefaultKwilCliPersistedConfig.
+	if err := config.BindDefaults(); err != nil {
+		panic(err)
+	}
+
 	rootCmd := &cobra.Command{
 		Use:   custom.BinaryConfig.ClientCmd,
 		Short: fmt.Sprintf("Command line interface client for using %s.", custom.BinaryConfig.ProjectName),
@@ -33,26 +37,28 @@ func NewRootCmd() *cobra.Command {
 			custom.BinaryConfig.ProjectName, custom.BinaryConfig.ClientUsage(), custom.BinaryConfig.ClientUsage(), custom.BinaryConfig.ClientUsage()),
 		SilenceUsage:      true,
 		DisableAutoGenTag: true,
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			// for backwards compatibility, we need to check if the deprecated flag is set.
-			// If the new flag is set and the deprecated flag is not, we can proceed.
-			// If both are set, we should return an error.
-			if cmd.Flags().Changed("kwil-provider") {
-				if cmd.Flags().Changed(config.GlobalProviderFlag) {
-					return fmt.Errorf("cannot use both --provider and --kwil-provider flags")
-				} else {
-					viper.BindPFlag(config.GlobalProviderFlag, cmd.Flags().Lookup("kwil-provider"))
-				}
-			}
-
-			return nil
+		PersistentPreRunE: shared.ChainPreRuns(shared.MaybeEnableCLIDebug,
+			config.PreRunBindFlags, config.PreRunBindConfigFile,
+			config.PreRunPrintEffectiveConfig),
+		CompletionOptions: cobra.CompletionOptions{
+			DisableDefaultCmd: true,
 		},
 	}
 
-	config.BindGlobalFlags(rootCmd.PersistentFlags())
-	display.BindOutputFormatFlag(rootCmd)
-	display.BindSilenceFlag(rootCmd)
-	helpers.BindAssumeYesFlag(rootCmd)
+	// Define the --debug enabled CLI debug mode (shared.Debugf output)
+	shared.BindDebugFlag(rootCmd)
+
+	// Bind the --config flag, which informs PreRunBindConfigFile, as well as
+	// PersistConfig and LoadPersistedConfig.
+	config.BindConfigPath(rootCmd)
+
+	// Automatically define flags for all of the fields of the config struct.
+	config.SetFlags(rootCmd.Flags())
+
+	helpers.BindAssumeYesFlag(rootCmd) // --assume-yes/-Y
+
+	display.BindOutputFormatFlag(rootCmd) // --output
+	display.BindSilenceFlag(rootCmd)      // --silence/-S
 
 	rootCmd.AddCommand(
 		account.NewCmdAccount(),
