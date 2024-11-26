@@ -41,14 +41,12 @@ func ResetCmd() *cobra.Command {
 			}
 
 			// remove the blockstore if all is set
-			if all {
-				chainDir := filepath.Join(rootDir, "blockstore")
-				if _, err := os.Stat(chainDir); err == nil {
-					if err := os.RemoveAll(chainDir); err != nil {
-						return err
-					}
-					fmt.Println("blockstore removed")
+			chainDir := filepath.Join(rootDir, "blockstore")
+			if _, err := os.Stat(chainDir); err == nil {
+				if err := os.RemoveAll(chainDir); err != nil {
+					return err
 				}
+				fmt.Println("blockstore removed")
 			}
 			return nil
 		},

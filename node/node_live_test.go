@@ -70,7 +70,7 @@ func TestDualNodeMocknet(t *testing.T) {
 		fmt.Print("cleanup- done")
 	})
 
-	privKeys, genCfg := newGenesis(t, [][]byte{pk1, pk2})
+	privKeys, _ := newGenesis(t, [][]byte{pk1, pk2})
 
 	valSet := make(map[string]ktypes.Validator)
 	for _, priv := range privKeys {
@@ -106,7 +106,6 @@ func TestDualNodeMocknet(t *testing.T) {
 		PrivKey:    privKeys[0],
 		Logger:     log1,
 		P2P:        &defaultConfigSet.P2P,
-		Genesis:    genCfg,
 		Mempool:    mp1,
 		BlockStore: bs1,
 		Consensus:  ce1,
@@ -146,7 +145,6 @@ func TestDualNodeMocknet(t *testing.T) {
 		PrivKey:    privKeys[1],
 		Logger:     log2,
 		P2P:        &defaultConfigSet.P2P,
-		Genesis:    genCfg,
 		Mempool:    mp2,
 		BlockStore: bs2,
 		Consensus:  ce2,
