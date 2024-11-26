@@ -2,11 +2,13 @@ package logical_test
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/engine"
+	"github.com/kwilteam/kwil-db/internal/engine/planner/logical"
 	"github.com/kwilteam/kwil-db/parse"
-	"github.com/kwilteam/kwil-db/parse/planner/logical"
 	"github.com/stretchr/testify/require"
 )
 
@@ -166,13 +168,14 @@ func Test_Planner(t *testing.T) {
 		},
 		{
 			name: "complex group by and aggregate",
-			sql:  "select sum(u.age)::int/(p.created_at/100) as res from users u inner join posts p on u.id=p.owner_id group by (p.created_at/100)",
+			sql:  "select sum(u.age)::int/(p.created_at/100) as res from users u inner join posts p on u.id=p.owner_id group by (p.created_at/100) having (p.created_at/100)>10",
 			wt: "Return: res [int]\n" +
 				"└─Project: {#ref(B)}::int / {#ref(A)} AS res\n" +
-				"  └─Aggregate [{#ref(A) = p.created_at / 100}]: {#ref(B) = sum(u.age)}\n" +
-				"    └─Join [inner]: u.id = p.owner_id\n" +
-				"      ├─Scan Table [alias=\"u\"]: users [physical]\n" +
-				"      └─Scan Table [alias=\"p\"]: posts [physical]\n",
+				"  └─Filter: {#ref(A)} > 10\n" +
+				"    └─Aggregate [{#ref(A) = p.created_at / 100}]: {#ref(B) = sum(u.age)}\n" +
+				"      └─Join [inner]: u.id = p.owner_id\n" +
+				"        ├─Scan Table [alias=\"u\"]: users [physical]\n" +
+				"        └─Scan Table [alias=\"p\"]: posts [physical]\n",
 		},
 		{
 			name: "invalid group by column",
@@ -187,7 +190,7 @@ func Test_Planner(t *testing.T) {
 		{
 			name: "aggregate in where clause",
 			sql:  "select sum(age) from users where sum(age)::int > 100",
-			err:  logical.ErrAggregateInWhere,
+			err:  logical.ErrIllegalAggregate,
 		},
 		{
 			name: "complex group by",
@@ -216,7 +219,7 @@ func Test_Planner(t *testing.T) {
 			wt: "Return: name [text], ?column? [decimal(1000,0)]\n" +
 				"└─Project: {#ref(A)}; {#ref(C)} + {#ref(D)}\n" +
 				"  └─Filter: {#ref(B)}::int > 100 OR {#ref(C)}::int > 10\n" +
-				"    └─Aggregate [{#ref(A) = users.name}]: {#ref(D) = sum(users.age * 10)}; {#ref(C) = sum(users.age / 2)}; {#ref(B) = sum(users.age)}\n" +
+				"    └─Aggregate [{#ref(A) = users.name}]: {#ref(B) = sum(users.age)}; {#ref(C) = sum(users.age / 2)}; {#ref(D) = sum(users.age * 10)}\n" +
 				"      └─Scan Table: users [physical]\n",
 		},
 		{
@@ -241,27 +244,37 @@ func Test_Planner(t *testing.T) {
 				"$id":   types.IntType,
 				"$name": types.TextType,
 			},
-			sql: `select c.brand, pu.content, u.name, u2.id, count(p.id) from users u
+			sql: `select u.name, u2.id, count(p.id) from users u
 				inner join posts p on u.id = p.owner_id
-				left join owned_cars['dbid', 'proc']($id) c on c.owner_name = u.name
-				right join posts_by_user($name) pu on pu.content = p.content
 				full join (select id from users where age > 18) u2 on u2.id = u.id
-				group by c.brand, pu.content, u.name, u2.id;`,
-			wt: "Return: brand [text], content [text], name [text], id [uuid], count [int]\n" +
-				"└─Project: {#ref(A)}; {#ref(B)}; {#ref(C)}; {#ref(D)}; {#ref(E)}\n" +
-				"  └─Aggregate [{#ref(A) = c.brand}] [{#ref(B) = pu.content}] [{#ref(C) = u.name}] [{#ref(D) = u2.id}]: {#ref(E) = count(p.id)}\n" +
+				group by u.name, u2.id;`,
+			wt: "Return: name [text], id [uuid], count [int]\n" +
+				"└─Project: {#ref(A)}; {#ref(B)}; {#ref(C)}\n" +
+				"  └─Aggregate [{#ref(A) = u.name}] [{#ref(B) = u2.id}]: {#ref(C) = count(p.id)}\n" +
 				"    └─Join [outer]: u2.id = u.id\n" +
-				"      ├─Join [right]: pu.content = p.content\n" +
-				"      │ ├─Join [left]: c.owner_name = u.name\n" +
-				"      │ │ ├─Join [inner]: u.id = p.owner_id\n" +
-				"      │ │ │ ├─Scan Table [alias=\"u\"]: users [physical]\n" +
-				"      │ │ │ └─Scan Table [alias=\"p\"]: posts [physical]\n" +
-				"      │ │ └─Scan Procedure [alias=\"c\"]: [foreign=true] [dbid='dbid'] [proc='proc'] owned_cars($id)\n" +
-				"      │ └─Scan Procedure [alias=\"pu\"]: [foreign=false] posts_by_user($name)\n" +
+				"      ├─Join [inner]: u.id = p.owner_id\n" +
+				"      │ ├─Scan Table [alias=\"u\"]: users [physical]\n" +
+				"      │ └─Scan Table [alias=\"p\"]: posts [physical]\n" +
 				"      └─Scan Subquery [alias=\"u2\"]: [subplan_id=0] (uncorrelated)\n" +
 				"Subplan [subquery] [id=0]\n" +
 				"└─Project: users.id\n" +
 				"  └─Filter: users.age > 18\n" +
+				"    └─Scan Table: users [physical]\n",
+		},
+		{
+			name: "basic inline window",
+			sql:  "select name, sum(age) over (partition by name) from users",
+			wt: "Return: name [text], sum [decimal(1000,0)]\n" +
+				"└─Project: users.name; {#ref(A)}\n" +
+				"  └─Window [partition_by=users.name]: {#ref(A) = sum(users.age)}\n" +
+				"    └─Scan Table: users [physical]\n",
+		},
+		{
+			name: "named window used several times",
+			sql:  "select name, sum(age) over w1, array_agg(name) over w1 from users window w1 as (partition by name order by age)",
+			wt: "Return: name [text], sum [decimal(1000,0)], array_agg [text[]]\n" +
+				"└─Project: users.name; {#ref(A)}; {#ref(B)}\n" +
+				"  └─Window [partition_by=users.name] [order_by=users.age asc nulls last]: {#ref(A) = sum(users.age)}; {#ref(B) = array_agg(users.name)}\n" +
 				"    └─Scan Table: users [physical]\n",
 		},
 		{
@@ -327,7 +340,7 @@ func Test_Planner(t *testing.T) {
 				select id, content from posts
 				order by name desc;`,
 			wt: "Return: id [uuid], name [text]\n" +
-				"└─Sort: [name] desc nulls last\n" +
+				"└─Sort: name desc nulls last\n" +
 				"  └─Set: union\n" +
 				"    ├─Project: users.id; users.name\n" +
 				"    │ └─Scan Table: users [physical]\n" +
@@ -339,8 +352,27 @@ func Test_Planner(t *testing.T) {
 			sql:  "select name, age from users order by name desc nulls last, id asc",
 			wt: "Return: name [text], age [int]\n" +
 				"└─Project: users.name; users.age\n" +
-				"  └─Sort: [users.name] desc nulls last; [users.id] asc nulls last\n" +
+				"  └─Sort: users.name desc nulls last; users.id asc nulls last\n" +
 				"    └─Scan Table: users [physical]\n",
+		},
+		{
+			name: "sort with group by",
+			sql:  "select name, sum(age) from users group by name order by name, sum(age)",
+			wt: "Return: name [text], sum [decimal(1000,0)]\n" +
+				"└─Project: {#ref(A)}; {#ref(B)}\n" +
+				"  └─Sort: {#ref(A)} asc nulls last; {#ref(B)} asc nulls last\n" +
+				"    └─Aggregate [{#ref(A) = users.name}]: {#ref(B) = sum(users.age)}\n" +
+				"      └─Scan Table: users [physical]\n",
+		},
+		{
+			// unlike the above, this tests that we can make new aggregate references from the ORDER BY clause
+			name: "sort with aggregate",
+			sql:  "select name from users group by name order by sum(age)",
+			wt: "Return: name [text]\n" +
+				"└─Project: {#ref(A)}\n" +
+				"  └─Sort: {#ref(B)} asc nulls last\n" +
+				"    └─Aggregate [{#ref(A) = users.name}]: {#ref(B) = sum(users.age)}\n" +
+				"      └─Scan Table: users [physical]\n",
 		},
 		{
 			name: "sort invalid column",
@@ -364,13 +396,6 @@ func Test_Planner(t *testing.T) {
 				"    └─Scan Table: users [physical]\n",
 		},
 		{
-			name: "scalar function, procedure, foreign procedure",
-			sql:  "select car_count['dbid', 'proc'](id), post_count(id), abs(age) from users",
-			wt: "Return: car_count [int], post_count [int], abs [int]\n" +
-				"└─Project: car_count['dbid', 'proc'](users.id); post_count(users.id); abs(users.age)\n" +
-				"  └─Scan Table: users [physical]\n",
-		},
-		{
 			name: "distinct aggregate",
 			sql:  "select count(distinct name), sum(age) from users",
 			wt: "Return: count [int], sum [decimal(1000,0)]\n" +
@@ -390,7 +415,7 @@ func Test_Planner(t *testing.T) {
 			sql:  "select age as pos_age from users order by pos_age",
 			wt: "Return: pos_age [int]\n" +
 				"└─Project: users.age AS pos_age\n" +
-				"  └─Sort: [pos_age] asc nulls last\n" +
+				"  └─Sort: pos_age asc nulls last\n" +
 				"    └─Scan Table: users [physical]\n",
 		},
 		{
@@ -444,7 +469,11 @@ func Test_Planner(t *testing.T) {
 		},
 		{
 			name: "update from with join",
-			sql:  "update users set name = pu.content from posts p inner join posts_by_user('satoshi') pu on p.content = pu.content where p.owner_id = users.id",
+			sql: `update users set name = pu.content from posts p inner join (
+			select p.content from posts p
+		inner join users u on p.owner_id = u.id
+		where u.name = 'satoshi'
+		) pu on p.content = pu.content where p.owner_id = users.id`,
 			// will be unoptimized, so it will use a cartesian product
 			// optimization could re-write the filter to a join, as well as
 			// add projections.
@@ -454,11 +483,17 @@ func Test_Planner(t *testing.T) {
 				"    ├─Scan Table: users [physical]\n" +
 				"    └─Join [inner]: p.content = pu.content\n" +
 				"      ├─Scan Table [alias=\"p\"]: posts [physical]\n" +
-				"      └─Scan Procedure [alias=\"pu\"]: [foreign=false] posts_by_user('satoshi')\n",
+				"      └─Scan Subquery [alias=\"pu\"]: [subplan_id=0] (uncorrelated)\n" +
+				"Subplan [subquery] [id=0]\n" +
+				"└─Project: p.content\n" +
+				"  └─Filter: u.name = 'satoshi'\n" +
+				"    └─Join [inner]: p.owner_id = u.id\n" +
+				"      ├─Scan Table [alias=\"p\"]: posts [physical]\n" +
+				"      └─Scan Table [alias=\"u\"]: users [physical]\n",
 		},
 		{
 			name: "update with from without where",
-			sql:  "update users set name = pu.content from posts_by_user('satoshi') pu",
+			sql:  "update users set name = pu.content from posts pu",
 			err:  logical.ErrUpdateOrDeleteWithoutWhere,
 		},
 		{
@@ -548,18 +583,33 @@ func Test_Planner(t *testing.T) {
 			sql:  "insert into users values ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1) on conflict (name) do update set name = 'satoshi' WHERE age = 1",
 			err:  logical.ErrAmbiguousColumn,
 		},
+		{
+			name: "insert with select",
+			sql:  "insert into users select * from users",
+			wt: "Insert [users]: id [uuid], name [text], age [int]\n" +
+				"└─Project: users.id; users.name; users.age\n" +
+				"  └─Scan Table: users [physical]\n",
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			schema, err := parse.Parse([]byte(testSchema))
-			require.NoError(t, err)
-
-			parsedSql, err := parse.ParseSQL(test.sql, schema, true)
+			parsedSql, err := parse.ParseSQL(test.sql)
 			require.NoError(t, err)
 			require.NoError(t, parsedSql.ParseErrs.Err())
 
-			plan, err := logical.CreateLogicalPlan(parsedSql.AST, schema, test.vars, test.objects)
+			plan, err := logical.CreateLogicalPlan(parsedSql.AST,
+				func(namespace, tableName string) (table *engine.Table, found bool) {
+					m := map[string]*engine.Table{
+						"users": {
+							Name: "users", // TODO: replace this with a parsed table once gavin adds it
+							// I am intentionally leaving this bug here so I do not forget to fix it
+						},
+					}
+
+					table, found = m[tableName]
+					return table, found
+				}, parsedSql, test.vars, test.objects, false)
 			if test.err != nil {
 				require.Error(t, err)
 
@@ -571,6 +621,16 @@ func Test_Planner(t *testing.T) {
 				require.ErrorIs(t, err, test.err)
 			} else {
 				require.NoError(t, err)
+
+				if plan.Format() != test.wt {
+					fmt.Println(test.name)
+					fmt.Println("Expected:")
+					fmt.Println(test.wt)
+					fmt.Println("----")
+					fmt.Println("Received:")
+					fmt.Println(plan.Format())
+				}
+
 				require.Equal(t, test.wt, plan.Format())
 
 				// check that Relation() works
@@ -620,7 +680,4 @@ procedure post_count($id uuid) public view returns (int) {
 		return $row.count;
 	}
 }
-
-foreign procedure owned_cars($id int) returns table(owner_name text, brand text, model text)
-foreign procedure car_count($id uuid) returns (int)
 `

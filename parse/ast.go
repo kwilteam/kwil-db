@@ -14,15 +14,19 @@ import (
 
 // Node is a node in the AST.
 type Node interface {
-	GetPositioner
+	Positionable
 	Accept(Visitor) any
-	Set(r antlr.ParserRuleContext)
-	SetToken(t antlr.Token)
 }
 
 type GetPositioner interface {
 	GetPosition() *Position
 	Clear()
+}
+
+type Positionable interface {
+	GetPositioner
+	Set(r antlr.ParserRuleContext)
+	SetToken(t antlr.Token)
 }
 
 type Typecastable struct {
@@ -40,6 +44,12 @@ func (t *Typecastable) GetTypeCast() *types.DataType {
 // Expression is an interface for all expressions.
 type Expression interface {
 	Node
+}
+
+// Assignable is an interface for all expressions that can be assigned to.
+type Assignable interface {
+	Expression
+	assignable()
 }
 
 // ExpressionLiteral is a literal expression.
@@ -94,13 +104,6 @@ func literalToString(value any) (string, error) {
 	return str.String(), nil
 }
 
-type ExpressionCall interface {
-	Expression
-	Cast(*types.DataType)
-	GetTypeCast() *types.DataType
-	FunctionName() string
-}
-
 // ExpressionFunctionCall is a function call expression.
 type ExpressionFunctionCall struct {
 	Position
@@ -117,39 +120,59 @@ type ExpressionFunctionCall struct {
 	Star bool
 }
 
-var _ ExpressionCall = (*ExpressionFunctionCall)(nil)
-
 func (e *ExpressionFunctionCall) Accept(v Visitor) any {
 	return v.VisitExpressionFunctionCall(e)
 }
 
-func (e *ExpressionFunctionCall) FunctionName() string {
-	return e.Name
-}
-
-// ExpressionForeignCall is a call to an external procedure.
-type ExpressionForeignCall struct {
+// ExpressionWindowFunctionCall is a window function call expression.
+type ExpressionWindowFunctionCall struct {
 	Position
-	Typecastable
-	// Name is the name of the function.
+	FunctionCall *ExpressionFunctionCall
+	// Filter is the filter clause.
+	// If nil, then there is no filter clause.
+	Filter Expression
+	// Window is the window function that is being called.
+	Window Window
+}
+
+func (e *ExpressionWindowFunctionCall) Accept(v Visitor) any {
+	return v.VisitExpressionWindowFunctionCall(e)
+}
+
+// Window is an interface for all window functions.
+// It can either reference an exact window (e.g. OVER (partition by ... order by ...))
+// or it can reference a window function name (e.g. OVER my_window).
+type Window interface {
+	Node
+	window()
+}
+
+type WindowImpl struct {
+	Position
+	// PartitionBy is the partition by clause.
+	PartitionBy []Expression
+	// OrderBy is the order by clause.
+	OrderBy []*OrderingTerm
+	// In the future, when/if we support frame clauses, we can add it here.
+}
+
+func (w *WindowImpl) Accept(v Visitor) any {
+	return v.VisitWindowImpl(w)
+}
+
+func (w *WindowImpl) window() {}
+
+type WindowReference struct {
+	Position
+	// Name is the name of the window.
 	Name string
-	// ContextualArgs are arguments that are contextual to the function call.
-	// They are passed using []
-	ContextualArgs []Expression
-	// Args are the arguments to the function call.
-	// They are passed using ()
-	Args []Expression
 }
 
-func (e *ExpressionForeignCall) Accept(v Visitor) any {
-	return v.VisitExpressionForeignCall(e)
+func (w *WindowReference) Accept(v Visitor) any {
+	return v.VisitWindowReference(w)
 }
 
-func (e *ExpressionForeignCall) FunctionName() string {
-	return e.Name
-}
-
-var _ ExpressionCall = (*ExpressionForeignCall)(nil)
+func (w *WindowReference) window() {}
 
 // ExpressionVariable is a variable.
 // This can either be $ or @ variables.
@@ -170,8 +193,10 @@ func (e *ExpressionVariable) Accept(v Visitor) any {
 // String returns the string representation, as it was passed
 // in Kuneiform.
 func (e *ExpressionVariable) String() string {
-	return string(e.Prefix) + e.Name
+	return e.Name
 }
+
+func (e *ExpressionVariable) assignable() {}
 
 type VariablePrefix string
 
@@ -202,6 +227,8 @@ type ExpressionArrayAccess struct {
 func (e *ExpressionArrayAccess) Accept(v Visitor) any {
 	return v.VisitExpressionArrayAccess(e)
 }
+
+func (e *ExpressionArrayAccess) assignable() {}
 
 // ExpressionMakeArray makes a new array.
 type ExpressionMakeArray struct {
@@ -345,6 +372,13 @@ type ExpressionColumn struct {
 	Column string
 }
 
+func (e *ExpressionColumn) String() string {
+	if e.Table == "" {
+		return e.Column
+	}
+	return e.Table + "." + e.Column
+}
+
 func (e *ExpressionColumn) Accept(v Visitor) any {
 	return v.VisitExpressionColumn(e)
 }
@@ -477,19 +511,41 @@ func (c *CommonTableExpression) Accept(v Visitor) any {
 	return v.VisitCommonTableExpression(c)
 }
 
-// SQLStatement is a SQL statement.
+// SQLStmt is top-level statement, can be any SQL statement.
+type SQLStmt interface {
+	Node
+	StmtType() SQLStatementType
+}
+
+// SQLStatement is a DML statement with common table expression.
 type SQLStatement struct {
 	Position
 	CTEs []*CommonTableExpression
+	// Recursive is true if the RECURSIVE keyword is present.
+	Recursive bool
 	// SQL can be an insert, update, delete, or select statement.
 	SQL SQLCore
+	// raw is the raw SQL string.
+	raw *string
 }
 
 func (s *SQLStatement) Accept(v Visitor) any {
 	return v.VisitSQLStatement(s)
 }
 
-// SQLCore is a top-level statement.
+func (s *SQLStatement) StmtType() SQLStatementType {
+	return s.SQL.StmtType()
+}
+
+func (s *SQLStatement) Raw() (string, error) {
+	if s.raw == nil {
+		return "", fmt.Errorf("raw SQL is not set")
+	}
+
+	return *s.raw, nil
+}
+
+// SQLCore is a DML statement.
 // It can be INSERT, UPDATE, DELETE, SELECT.
 type SQLCore interface {
 	Node
@@ -499,11 +555,566 @@ type SQLCore interface {
 type SQLStatementType string
 
 const (
-	SQLStatementTypeInsert SQLStatementType = "insert"
-	SQLStatementTypeUpdate SQLStatementType = "update"
-	SQLStatementTypeDelete SQLStatementType = "delete"
-	SQLStatementTypeSelect SQLStatementType = "select"
+	SQLStatementTypeInsert      SQLStatementType = "insert"
+	SQLStatementTypeUpdate      SQLStatementType = "update"
+	SQLStatementTypeDelete      SQLStatementType = "delete"
+	SQLStatementTypeSelect      SQLStatementType = "select"
+	SQLStatementTypeCreateTable SQLStatementType = "create_table"
+	SQLStatementTypeAlterTable  SQLStatementType = "alter_table"
+	SQLStatementTypeDropTable   SQLStatementType = "drop_table"
+	SQLStatementTypeCreateIndex SQLStatementType = "create_index"
+	SQLStatementTypeDropIndex   SQLStatementType = "drop_index"
 )
+
+// CreateTableStatement is a CREATE TABLE statement.
+type CreateTableStatement struct {
+	Position
+
+	IfNotExists bool
+	Name        string
+	Columns     []*Column
+	// Indexes contains the non-inline indexes
+	Indexes []*TableIndex
+	// Constraints contains the non-inline constraints
+	Constraints []*OutOfLineConstraint
+}
+
+func (c *CreateTableStatement) Accept(v Visitor) any {
+	return v.VisitCreateTableStatement(c)
+
+}
+
+func (c *CreateTableStatement) StmtType() SQLStatementType {
+	return SQLStatementTypeCreateTable
+}
+
+// Column represents a table column.
+type Column struct {
+	Position
+
+	Name        string
+	Type        *types.DataType
+	Constraints []InlineConstraint2
+}
+
+// OutOfLineConstraint is a constraint that is not inline with the column.
+// e.g. CREATE TABLE t (a INT, CONSTRAINT c CHECK (a > 0))
+type OutOfLineConstraint struct {
+	Position
+	Name       string // can be empty if the name should be auto-generated
+	Constraint OutOfLineConstraintClause
+}
+
+// InlineConstraint is a constraint that is inline with the column.
+type InlineConstraint2 interface {
+	Positionable
+	inlineConstraint()
+}
+
+// OutOfLineConstraintClause is a constraint that is not inline with the column.
+type OutOfLineConstraintClause interface {
+	Positionable
+	outOfLineConstraintClause()
+	// LocalColumns returns the local columns that the constraint is applied to.
+	LocalColumns() []string
+}
+
+type PrimaryKeyInlineConstraint struct {
+	Position
+}
+
+func (c *PrimaryKeyInlineConstraint) inlineConstraint() {}
+
+type PrimaryKeyOutOfLineConstraint struct {
+	Position
+	Columns []string
+}
+
+func (c *PrimaryKeyOutOfLineConstraint) outOfLineConstraintClause() {}
+
+func (c *PrimaryKeyOutOfLineConstraint) LocalColumns() []string { return c.Columns }
+
+type UniqueInlineConstraint struct {
+	Position
+}
+
+func (c *UniqueInlineConstraint) inlineConstraint() {}
+
+type UniqueOutOfLineConstraint struct {
+	Position
+	Columns []string
+}
+
+func (c *UniqueOutOfLineConstraint) outOfLineConstraintClause() {}
+
+func (c *UniqueOutOfLineConstraint) LocalColumns() []string { return c.Columns }
+
+type DefaultConstraint struct {
+	Position
+	Value *ExpressionLiteral
+}
+
+func (c *DefaultConstraint) inlineConstraint() {}
+
+type NotNullConstraint struct {
+	Position
+}
+
+func (c *NotNullConstraint) inlineConstraint() {}
+
+type CheckConstraint struct {
+	Position
+	Expression Expression
+}
+
+func (c *CheckConstraint) inlineConstraint() {}
+
+func (c *CheckConstraint) outOfLineConstraintClause() {}
+
+func (c *CheckConstraint) LocalColumns() []string { return nil }
+
+type ForeignKeyReferences struct {
+	Position
+
+	RefTable   string
+	RefColumns []string
+	Actions    []*ForeignKeyAction
+}
+
+func (c *ForeignKeyReferences) inlineConstraint() {}
+
+type ForeignKeyOutOfLineConstraint struct {
+	Position
+	Columns    []string
+	References *ForeignKeyReferences
+}
+
+func (c *ForeignKeyOutOfLineConstraint) outOfLineConstraintClause() {}
+
+func (c *ForeignKeyOutOfLineConstraint) LocalColumns() []string { return c.Columns }
+
+type IndexType string
+
+const (
+	// IndexTypePrimary is a primary index, created by using `PRIMARY KEY`.
+	// Only one primary index is allowed per table.
+	IndexTypePrimary IndexType = "primary"
+	// IndexTypeBTree is the default index, created by using `INDEX`.
+	IndexTypeBTree IndexType = "btree"
+	// IndexTypeUnique is a unique BTree index, created by using `UNIQUE INDEX`.
+	IndexTypeUnique IndexType = "unique"
+)
+
+// TableIndex represents table index declaration, both inline and non-inline.
+type TableIndex struct {
+	Position
+
+	Name    string
+	Columns []string
+	Type    IndexType
+}
+
+func (i *TableIndex) String() string {
+	if len(i.Columns) == 0 {
+		if i.Type == IndexTypeUnique {
+			return "UNIQUE"
+		}
+		panic("inline index can only be UNIQUE")
+	}
+
+	str := strings.Builder{}
+
+	switch i.Type {
+	case IndexTypeBTree:
+		str.WriteString("INDEX ")
+	case IndexTypeUnique:
+		str.WriteString("UNIQUE INDEX ")
+	default:
+		// should not happen
+		panic("unknown index type")
+	}
+
+	if i.Name != "" {
+		str.WriteString(i.Name + " ")
+	}
+
+	str.WriteString("(" + strings.Join(i.Columns, ", ") + ")")
+
+	return str.String()
+}
+
+// ForeignKey is a foreign key in a table.
+type ForeignKey struct {
+	// ChildKeys are the columns that are referencing another.
+	// For example, in FOREIGN KEY (a) REFERENCES tbl2(b), "a" is the child key
+	ChildKeys []string `json:"child_keys"`
+
+	// ParentKeys are the columns that are being referred to.
+	// For example, in FOREIGN KEY (a) REFERENCES tbl2(b), "b" is the parent key
+	ParentKeys []string `json:"parent_keys"`
+
+	// ParentTable is the table that holds the parent columns.
+	// For example, in FOREIGN KEY (a) REFERENCES tbl2(b), "tbl2" is the parent table
+	ParentTable string `json:"parent_table"`
+
+	// Action refers to what the foreign key should do when the parent is altered.
+	// This is NOT the same as a database action.
+	// For example, ON DELETE CASCADE is a foreign key action
+	Actions []*ForeignKeyAction `json:"actions"`
+}
+
+// ForeignKeyActionOn specifies when a foreign key action should occur.
+// It can be either "UPDATE" or "DELETE".
+type ForeignKeyActionOn string
+
+// ForeignKeyActionOn types
+const (
+	// ON_UPDATE is used to specify an action should occur when a parent key is updated
+	ON_UPDATE ForeignKeyActionOn = "UPDATE"
+	// ON_DELETE is used to specify an action should occur when a parent key is deleted
+	ON_DELETE ForeignKeyActionOn = "DELETE"
+)
+
+// ForeignKeyActionDo specifies what should be done when a foreign key action is triggered.
+type ForeignKeyActionDo string
+
+// ForeignKeyActionDo types
+const (
+	// DO_NO_ACTION does nothing when a parent key is altered
+	DO_NO_ACTION ForeignKeyActionDo = "NO ACTION"
+
+	// DO_RESTRICT prevents the parent key from being altered
+	DO_RESTRICT ForeignKeyActionDo = "RESTRICT"
+
+	// DO_SET_NULL sets the child key(s) to NULL
+	DO_SET_NULL ForeignKeyActionDo = "SET NULL"
+
+	// DO_SET_DEFAULT sets the child key(s) to their default values
+	DO_SET_DEFAULT ForeignKeyActionDo = "SET DEFAULT"
+
+	// DO_CASCADE updates the child key(s) or deletes the records (depending on the action type)
+	DO_CASCADE ForeignKeyActionDo = "CASCADE"
+)
+
+// ForeignKeyAction is used to specify what should occur
+// if a parent key is updated or deleted
+type ForeignKeyAction struct {
+	// On can be either "UPDATE" or "DELETE"
+	On ForeignKeyActionOn `json:"on"`
+
+	// Do specifies what a foreign key action should do
+	Do ForeignKeyActionDo `json:"do"`
+}
+
+type DropBehavior string
+
+const (
+	DropBehaviorCascade  DropBehavior = "CASCADE"
+	DropBehaviorRestrict DropBehavior = "RESTRICT"
+	DropBehaviorNon      DropBehavior = ""
+)
+
+type DropTableStatement struct {
+	Position
+
+	Tables   []string
+	IfExists bool
+	Behavior DropBehavior
+}
+
+func (s *DropTableStatement) Accept(v Visitor) any {
+	return v.VisitDropTableStatement(s)
+}
+
+func (s *DropTableStatement) StmtType() SQLStatementType {
+	return SQLStatementTypeDropTable
+}
+
+type AlterTableAction interface {
+	Node
+
+	alterTableAction()
+	ToSQL() string
+}
+
+// AlterTableStatement is a ALTER TABLE statement.
+type AlterTableStatement struct {
+	Position
+
+	Table  string
+	Action AlterTableAction
+}
+
+func (a *AlterTableStatement) Accept(v Visitor) any {
+	return v.VisitAlterTableStatement(a)
+}
+
+func (a *AlterTableStatement) StmtType() SQLStatementType {
+	return SQLStatementTypeAlterTable
+}
+
+// ConstraintType is a constraint in a table.
+type ConstraintType interface {
+	String() string
+	constraint()
+}
+
+// SingleColumnConstraintType is a constraint type that can only ever
+// be applied to a single column. These are NOT NULL and DEFAULT.
+type SingleColumnConstraintType string
+
+func (t SingleColumnConstraintType) String() string {
+	return string(t)
+}
+
+func (t SingleColumnConstraintType) constraint() {}
+
+const (
+	ConstraintTypeNotNull SingleColumnConstraintType = "NOT NULL"
+	ConstraintTypeDefault SingleColumnConstraintType = "DEFAULT"
+)
+
+// MultiColumnConstraintType is a constraint type that can be applied
+// to multiple columns. These are PRIMARY KEY, FOREIGN KEY, UNIQUE, and CHECK.
+
+type MultiColumnConstraintType string
+
+func (t MultiColumnConstraintType) String() string {
+	return string(t)
+}
+
+func (t MultiColumnConstraintType) constraint() {}
+
+const (
+	ConstraintTypeUnique     MultiColumnConstraintType = "UNIQUE"
+	ConstraintTypeCheck      MultiColumnConstraintType = "CHECK"
+	ConstraintTypeForeignKey MultiColumnConstraintType = "FOREIGN KEY"
+	ConstraintTypePrimaryKey MultiColumnConstraintType = "PRIMARY KEY"
+)
+
+type SetColumnConstraint struct {
+	Position
+	// Column is the column that is being altered.
+	Column string
+	// Type is the type of constraint that is being set.
+	Type SingleColumnConstraintType
+	// Value is the value of the constraint.
+	// It is only set if the type is DEFAULT.
+	Value *ExpressionLiteral
+}
+
+func (a *SetColumnConstraint) Accept(v Visitor) any {
+	panic("implement me")
+}
+
+func (a *SetColumnConstraint) alterTableAction() {}
+
+func (a *SetColumnConstraint) ToSQL() string {
+	str := strings.Builder{}
+	str.WriteString("ALTER COLUMN ")
+	str.WriteString(a.Column)
+	str.WriteString(" SET ")
+	switch a.Type {
+	case ConstraintTypeNotNull:
+		str.WriteString("NOT NULL")
+	case ConstraintTypeDefault:
+		str.WriteString("DEFAULT ")
+		str.WriteString(a.Value.String())
+	default:
+		panic("unknown constraint type")
+	}
+
+	return str.String()
+}
+
+type DropColumnConstraint struct {
+	Position
+
+	Column string
+	Type   SingleColumnConstraintType
+}
+
+func (a *DropColumnConstraint) Accept(v Visitor) any {
+	panic("implement me")
+}
+
+func (a *DropColumnConstraint) alterTableAction() {}
+
+func (a *DropColumnConstraint) ToSQL() string {
+	str := strings.Builder{}
+	str.WriteString("ALTER COLUMN ")
+	str.WriteString(a.Column)
+	str.WriteString(" DROP ")
+
+	if a.Type != "" {
+		switch a.Type {
+		case ConstraintTypeNotNull:
+			str.WriteString("NOT NULL")
+		case ConstraintTypeDefault:
+			str.WriteString("DEFAULT")
+		default:
+			panic("unknown constraint type")
+		}
+	}
+
+	return str.String()
+}
+
+type AddColumn struct {
+	Position
+
+	Name string
+	Type *types.DataType
+}
+
+func (a *AddColumn) Accept(v Visitor) any {
+	panic("implement me")
+}
+
+func (a *AddColumn) alterTableAction() {}
+
+func (a *AddColumn) ToSQL() string {
+	return "ADD COLUMN " + a.Name + " " + a.Type.String()
+}
+
+type DropColumn struct {
+	Position
+
+	Name string
+}
+
+func (a *DropColumn) Accept(v Visitor) any {
+	panic("implement me")
+}
+
+func (a *DropColumn) alterTableAction() {}
+
+func (a *DropColumn) ToSQL() string {
+	return "DROP COLUMN " + a.Name
+}
+
+type RenameColumn struct {
+	Position
+
+	OldName string
+	NewName string
+}
+
+func (a *RenameColumn) Accept(v Visitor) any {
+	panic("implement me")
+}
+
+func (a *RenameColumn) alterTableAction() {}
+
+func (a *RenameColumn) ToSQL() string {
+	return "RENAME COLUMN " + a.OldName + " TO " + a.NewName
+}
+
+type RenameTable struct {
+	Position
+
+	Name string
+}
+
+func (a *RenameTable) Accept(v Visitor) any {
+	panic("implement me")
+}
+
+func (a *RenameTable) alterTableAction() {}
+
+func (a *RenameTable) ToSQL() string {
+	return "RENAME TO " + a.Name
+}
+
+// AddTableConstraint is a constraint that is being added to a table.
+// It is used to specify multi-column constraints.
+type AddTableConstraint struct {
+	Position
+
+	Constraint *OutOfLineConstraint
+}
+
+func (a *AddTableConstraint) Accept(v Visitor) any {
+	panic("implement me")
+}
+
+func (a *AddTableConstraint) alterTableAction() {}
+
+func (a *AddTableConstraint) ToSQL() string {
+	return ""
+}
+
+type DropTableConstraint struct {
+	Position
+
+	Name string
+}
+
+func (a *DropTableConstraint) Accept(v Visitor) any {
+	panic("implement me")
+}
+
+func (a *DropTableConstraint) alterTableAction() {}
+
+func (a *DropTableConstraint) ToSQL() string {
+	return "DROP CONSTRAINT " + a.Name
+}
+
+type CreateIndexStatement struct {
+	Position
+
+	IfNotExists bool
+	Name        string
+	On          string
+	Columns     []string
+	Type        IndexType
+}
+
+func (s *CreateIndexStatement) Accept(v Visitor) any {
+	return v.VisitCreateIndexStatement(s)
+}
+
+func (s *CreateIndexStatement) StmtType() SQLStatementType {
+	return SQLStatementTypeCreateIndex
+}
+
+type DropIndexStatement struct {
+	Position
+
+	Name       string
+	CheckExist bool
+}
+
+func (s *DropIndexStatement) Accept(v Visitor) any {
+	return v.VisitDropIndexStatement(s)
+}
+
+func (s *DropIndexStatement) StmtType() SQLStatementType {
+	return SQLStatementTypeDropIndex
+}
+
+type GrantOrRevokeStatement struct {
+	Position
+	// IsGrant is true if the statement is a GRANT statement.
+	// If it is false, then it is a REVOKE statement.
+	IsGrant bool
+	// Privileges are the privileges that are being granted.
+	// Either Privileges or Role must be set, but not both.
+	Privileges []string
+	// Role is the role being granted
+	// Either Privileges or Role must be set, but not both.
+	GrantRole string
+	// ToRole is the role being granted to.
+	// Either ToUser or ToRole must be set, but not both.
+	ToRole string
+	// ToUser is the user being granted to.
+	// Either ToUser or ToRole must be set, but not both.
+	ToUser string
+}
+
+func (g *GrantOrRevokeStatement) Accept(v Visitor) any {
+	return v.VisitGrantOrRevokeStatement(g)
+}
 
 // SelectStatement is a SELECT statement.
 type SelectStatement struct {
@@ -568,6 +1179,10 @@ type SelectCore struct {
 	Where    Expression   // can be nil
 	GroupBy  []Expression // can be nil
 	Having   Expression   // can be nil
+	Windows  []*struct {
+		Name   string
+		Window *WindowImpl
+	} // can be nil
 }
 
 func (s *SelectCore) Accept(v Visitor) any {
@@ -645,20 +1260,6 @@ func (r *RelationSubquery) Accept(v Visitor) any {
 
 func (RelationSubquery) table() {}
 
-type RelationFunctionCall struct {
-	Position
-	FunctionCall ExpressionCall
-	// The alias cannot be empty, as our syntax forces
-	// it for function calls
-	Alias string
-}
-
-func (r *RelationFunctionCall) Accept(v Visitor) any {
-	return v.VisitRelationFunctionCall(r)
-}
-
-func (RelationFunctionCall) table() {}
-
 // Join is a join in a SELECT statement.
 type Join struct {
 	Position
@@ -731,8 +1332,10 @@ type InsertStatement struct {
 	Table   string
 	Alias   string   // can be empty
 	Columns []string // can be empty
-	Values  [][]Expression
-	Upsert  *UpsertClause // can be nil
+	// Either Values or Select is set, but not both.
+	Values     [][]Expression   // can be empty
+	Select     *SelectStatement // can be nil
+	OnConflict *OnConflict      // can be nil
 }
 
 func (i *InsertStatement) Accept(v Visitor) any {
@@ -743,7 +1346,7 @@ func (i *InsertStatement) StmtType() SQLStatementType {
 	return SQLStatementTypeInsert
 }
 
-type UpsertClause struct {
+type OnConflict struct {
 	Position
 	ConflictColumns []string           // can be empty
 	ConflictWhere   Expression         // can be nil
@@ -751,7 +1354,7 @@ type UpsertClause struct {
 	UpdateWhere     Expression         // can be nil
 }
 
-func (u *UpsertClause) Accept(v Visitor) any {
+func (u *OnConflict) Accept(v Visitor) any {
 	return v.VisitUpsertClause(u)
 }
 
@@ -845,7 +1448,7 @@ func (p *ProcedureStmtDeclaration) Accept(v Visitor) any {
 type ProcedureStmtAssign struct {
 	baseProcedureStmt
 	// Variable is the variable that is being assigned.
-	Variable Expression
+	Variable Assignable
 	// Type is the type of the variable.
 	// It can be nil if the variable is not being assigned,
 	// or if the type should be inferred.
@@ -864,7 +1467,7 @@ type ProcedureStmtCall struct {
 	// Receivers are the variables being assigned. If nil, then the
 	// receiver can be ignored.
 	Receivers []*ExpressionVariable
-	Call      ExpressionCall
+	Call      *ExpressionFunctionCall
 }
 
 func (p *ProcedureStmtCall) Accept(v Visitor) any {
@@ -1008,9 +1611,21 @@ func (p *ProcedureStmtReturnNext) Accept(v Visitor) any {
 // Visitor is an interface for visiting nodes in the parse tree.
 type Visitor interface {
 	ProcedureVisitor
+	DDLVisitor
 	VisitActionStmtSQL(*ActionStmtSQL) any
 	VisitActionStmtExtensionCall(*ActionStmtExtensionCall) any
 	VisitActionStmtActionCall(*ActionStmtActionCall) any
+}
+
+// DDLVisitor includes visit methods only needed to analyze DDL statements.
+type DDLVisitor interface {
+	// DDL
+	VisitCreateTableStatement(*CreateTableStatement) any
+	VisitAlterTableStatement(*AlterTableStatement) any
+	VisitDropTableStatement(*DropTableStatement) any
+	VisitCreateIndexStatement(*CreateIndexStatement) any
+	VisitDropIndexStatement(*DropIndexStatement) any
+	VisitGrantOrRevokeStatement(*GrantOrRevokeStatement) any
 }
 
 // ProcedureVisitor includes visit methods only needed to analyze procedures.
@@ -1036,7 +1651,9 @@ type ProcedureVisitor interface {
 type SQLVisitor interface {
 	VisitExpressionLiteral(*ExpressionLiteral) any
 	VisitExpressionFunctionCall(*ExpressionFunctionCall) any
-	VisitExpressionForeignCall(*ExpressionForeignCall) any
+	VisitExpressionWindowFunctionCall(*ExpressionWindowFunctionCall) any
+	VisitWindowImpl(*WindowImpl) any
+	VisitWindowReference(*WindowReference) any
 	VisitExpressionVariable(*ExpressionVariable) any
 	VisitExpressionArrayAccess(*ExpressionArrayAccess) any
 	VisitExpressionMakeArray(*ExpressionMakeArray) any
@@ -1062,13 +1679,12 @@ type SQLVisitor interface {
 	VisitResultColumnWildcard(*ResultColumnWildcard) any
 	VisitRelationTable(*RelationTable) any
 	VisitRelationSubquery(*RelationSubquery) any
-	VisitRelationFunctionCall(*RelationFunctionCall) any
 	VisitJoin(*Join) any
 	VisitUpdateStatement(*UpdateStatement) any
 	VisitUpdateSetClause(*UpdateSetClause) any
 	VisitDeleteStatement(*DeleteStatement) any
 	VisitInsertStatement(*InsertStatement) any
-	VisitUpsertClause(*UpsertClause) any
+	VisitUpsertClause(*OnConflict) any
 	VisitOrderingTerm(*OrderingTerm) any
 }
 

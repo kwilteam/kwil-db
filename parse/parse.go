@@ -275,54 +275,21 @@ type SQLParseResult struct {
 	Mutative bool
 }
 
-// ParseSQL parses an SQL statement.
-// It requires a schema to be passed in, since SQL statements may reference
-// schema objects.
-// If skipValidation is true, the AST will not be validated or analyzed.
-// TODO: once we get farther on the planner, we should remove all validation, in favor
-// of the planner.
-func ParseSQL(sql string, schema *types.Schema, skipValidation bool) (res *SQLParseResult, err error) {
-	parser, errLis, sqlVis, parseVis, deferFn, err := setupSQLParser(sql, schema)
-
-	res = &SQLParseResult{
-		ParseErrs: errLis,
-	}
-
-	defer func() {
-		err2 := deferFn(recover())
-		if err2 != nil {
-			err = err2
-		}
-	}()
-
-	res.AST = parser.Sql_entry().Accept(parseVis).(*SQLStatement)
-
-	if errLis.Err() != nil {
-		return res, nil
-	}
-
-	if skipValidation {
-		return res, nil
-	}
-
-	res.AST.Accept(sqlVis)
-	res.Mutative = sqlVis.sqlResult.Mutative
-
-	return res, err
+// DDLParseResult is the result of parsing an DDL statement.
+// NOTE: THIS is only temporary.
+type DDLParseResult struct {
+	// AST is the abstract syntax tree of the SQL statement.
+	AST SQLStmt
+	// Errs are the errors that occurred during parsing and analysis.
+	// These include syntax errors, type errors, etc.
+	ParseErrs ParseErrs
 }
 
-// ParseSQLWithoutValidation parses a SQL AST, but does not perform any validation
-// or analysis. ASTs returned from this should not be used in production, as they
-// might contain errors, and are not deterministically ordered.
-func ParseSQLWithoutValidation(sql string, schema *types.Schema) (res *SQLStatement, err error) {
-	defer func() {
-		err2 := recover()
-		if err2 != nil {
-			err = fmt.Errorf("panic: %v", err2)
-		}
-	}()
-
-	parser, errLis, _, parseVis, deferFn, err := setupSQLParser(sql, schema)
+// ParseDDL parses an SQL DDL statement.
+// NOTE: THIS is only temporary so that I can write tests. After we shift from
+// *SQLStatement to SQLStmt we can delete this.
+func ParseDDL(sql string) (res *DDLParseResult, err error) {
+	parser, errLis, visitor, deferFn, err := setupParser2(sql)
 	if err != nil {
 		return nil, err
 	}
@@ -334,17 +301,40 @@ func ParseSQLWithoutValidation(sql string, schema *types.Schema) (res *SQLStatem
 		}
 	}()
 
-	res = parser.Sql_entry().Accept(parseVis).(*SQLStatement)
+	return &DDLParseResult{
+		AST:       parser.Sql_entry().Accept(visitor).(SQLStmt),
+		ParseErrs: errLis,
+	}, nil
+}
 
-	if errLis.Err() != nil {
-		return nil, errLis.Err()
+// ParseSQL parses an SQL statement.
+// It requires a schema to be passed in, since SQL statements may reference
+// schema objects.
+// If skipValidation is true, the AST will not be validated or analyzed.
+// TODO: once we get farther on the planner, we should remove all validation, in favor
+// of the planner.
+func ParseSQL(sql string) (res *SQLParseResult, err error) {
+	parser, errLis, visitor, deferFn, err := setupParser2(sql)
+	if err != nil {
+		return nil, err
 	}
 
-	return res, nil
+	defer func() {
+		err2 := deferFn(recover())
+		if err2 != nil {
+			err = err2
+		}
+	}()
+
+	return &SQLParseResult{
+		AST:       parser.Sql_entry().Accept(visitor).(*SQLStatement),
+		ParseErrs: errLis,
+	}, nil
 }
 
 // setupSQLParser sets up the SQL parser.
-func setupSQLParser(sql string, schema *types.Schema) (parser *gen.KuneiformParser, errLis *errorListener, sqlVisitor *sqlAnalyzer, parserVisitor *schemaVisitor, deferFn func(any) error, err error) {
+func setupSQLParser(sql string, schema *types.Schema) (parser *gen.KuneiformParser, errLis *errorListener, sqlVisitor *sqlAnalyzer,
+	parserVisitor *schemaVisitor, deferFn func(any) error, err error) {
 	if sql == "" {
 		return nil, nil, nil, nil, nil, fmt.Errorf("empty SQL statement")
 	}
@@ -375,6 +365,22 @@ func setupSQLParser(sql string, schema *types.Schema) (parser *gen.KuneiformPars
 	return parser, errLis, sqlVisitor, parserVisitor, deferFn, err
 }
 
+func setupParser2(sql string) (parser *gen.KuneiformParser, errList *errorListener, parserVisitor *schemaVisitor, deferFn func(any) error, err error) {
+	// trim whitespace
+	sql = strings.TrimSpace(sql)
+
+	// add semicolon to the end of the statement, if it is not there
+	if !strings.HasSuffix(sql, ";") {
+		sql += ";"
+	}
+
+	errList, stream, parser, deferFn := setupParser(sql, "sql")
+
+	parserVisitor = newSchemaVisitor(stream, errList)
+
+	return parser, errList, parserVisitor, deferFn, err
+}
+
 // ActionParseResult is the result of parsing an action.
 // It returns the action body AST, as well as any errors that occurred during parsing.
 // Unexpected errors will not be returned here, but instead in the function returning this type.
@@ -383,6 +389,38 @@ type ActionParseResult struct {
 	// Errs are the errors that occurred during parsing and analysis.
 	// These include syntax errors, type errors, etc.
 	ParseErrs ParseErrs
+}
+
+// SimpleActionParseResult is the result of parsing an action without validation.
+// This is the struct that should be used in v0.10.
+type SimpleActionParseResult struct {
+	AST []ProcedureStmt
+	// Errs are the errors that occurred during parsing and analysis.
+	// These include syntax errors, type errors, etc.
+	Errs ParseErrs
+}
+
+// ParseActionBodyWithoutValidation parses an action without performing validations.
+// TODO: with v0.10, this should be the only function that is used to parse actions,
+// since all validations will be done in the planner.
+func ParseActionBodyWithoutValidation(actionBody string) (res *SimpleActionParseResult, err error) {
+	errLis, stream, parser, deferFn := setupParser(actionBody, "action")
+
+	res = &SimpleActionParseResult{
+		Errs: errLis,
+	}
+
+	defer func() {
+		err2 := deferFn(recover())
+		if err2 != nil {
+			err = err2
+		}
+	}()
+
+	schemaVisitor := newSchemaVisitor(stream, errLis)
+	res.AST = parser.Procedure_entry().Accept(schemaVisitor).([]ProcedureStmt)
+
+	return res, nil
 }
 
 // ParseAction parses a Kuneiform action.

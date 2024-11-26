@@ -13,7 +13,6 @@ import (
 
 	// BlockchainTransactor returns have some big structs from cometbft.
 	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types" // :(
-
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/ident"
 	"github.com/kwilteam/kwil-db/common/sql"

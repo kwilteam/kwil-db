@@ -55,6 +55,15 @@ VIEW:       'view';
 OWNER:      'owner';
 
 // keywords
+CREATE:     'create';
+ALTER:      'alter';
+COLUMN:     'column';
+ADD:        'add';
+DROP:       'drop';
+RENAME:     'rename';
+TO:         'to';
+CONSTRAINT: 'constraint';
+CHECK:      'check';
 FOREIGN:    'foreign';
 PRIMARY:    'primary';
 KEY:        'key';
@@ -127,6 +136,21 @@ ELSE:       'else';
 BREAK:      'break';
 RETURN:     'return';
 NEXT:       'next';
+OVER:       'over';
+PARTITION:  'partition';
+WINDOW:     'window';
+FILTER:     'filter';
+RECURSIVE:  'recursive';
+SCHEMA:     'schema';
+GRANT:      'grant';
+REVOKE:     'revoke';
+ROLE:       'role';
+TRANSFER:   'transfer';
+OWNERSHIP:  'ownership';
+
+// role permissions
+ROLES:      'roles';
+CALL:       'call';
 
 
 // Literals

@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/engine"
 )
 
 // Relation is the current relation in the query plan.
@@ -92,16 +93,45 @@ func (r *Relation) FindReference(id string) (*Field, error) {
 	return found[0], nil
 }
 
-func relationFromTable(tbl *types.Table) *Relation {
+func relationFromTable(tbl *engine.Table) *Relation {
 	s := &Relation{}
 	for _, col := range tbl.Columns {
 		s.Fields = append(s.Fields, &Field{
 			Parent: tbl.Name,
 			Name:   col.Name,
-			val:    col.Type.Copy(),
+			val:    col.DataType.Copy(),
 		})
 	}
 	return s
+}
+
+// equalShape checks that two relations have the same shape.
+// This means that they have the same number of fields and that
+// the fields have the same data types. The fields do NOT need
+// to have the same names. If the relations do not have the same
+// shape, an error is returned.
+func equalShape(r1, r2 *Relation) error {
+	if len(r1.Fields) != len(r2.Fields) {
+		return fmt.Errorf("relations do not have the same number of fields")
+	}
+
+	for i, f := range r1.Fields {
+		scalarR, err := f.Scalar()
+		if err != nil {
+			return err
+		}
+
+		scalarL, err := r2.Fields[i].Scalar()
+		if err != nil {
+			return err
+		}
+
+		if !scalarR.Equals(scalarL) {
+			return fmt.Errorf("field %d (named %s and %s) does not have the same data type", i, f.Name, r2.Fields[i].Name)
+		}
+	}
+
+	return nil
 }
 
 // Field is a field in a relation.

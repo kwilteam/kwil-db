@@ -466,139 +466,6 @@ func Test_Kuneiform(t *testing.T) {
 			},
 		},
 		{
-			name: "foreign, no parameters, returns nothing",
-			kf: `
-			database mydb;
-
-			foreign procedure get_users()
-			`,
-			want: &types.Schema{
-				Name: "mydb",
-				ForeignProcedures: []*types.ForeignProcedure{
-					{
-						Name: "get_users",
-					},
-				},
-			},
-		},
-		{
-			name: "foreign, with parameters, returns unnamed types",
-			kf: `
-			database mydb;
-
-			foreign procedure get_users(int, text) RETURNS (int, text)
-			`,
-			want: &types.Schema{
-				Name: "mydb",
-				ForeignProcedures: []*types.ForeignProcedure{
-					{
-						Name: "get_users",
-						Parameters: []*types.DataType{
-							types.IntType,
-							types.TextType,
-						},
-						Returns: &types.ProcedureReturn{
-							Fields: []*types.NamedType{
-								{
-									Name: "col0",
-									Type: types.IntType,
-								},
-								{
-									Name: "col1",
-									Type: types.TextType,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "foreign, with parameters, returns named types",
-			kf: `
-			database mydb;
-
-			foreign procedure get_users() RETURNS (id int, name text)
-			`,
-			want: &types.Schema{
-				Name: "mydb",
-				ForeignProcedures: []*types.ForeignProcedure{
-					{
-						Name: "get_users",
-						Returns: &types.ProcedureReturn{
-							Fields: []*types.NamedType{
-								{
-									Name: "id",
-									Type: types.IntType,
-								},
-								{
-									Name: "name",
-									Type: types.TextType,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "foreign,  returns table",
-			kf: `
-			database mydb;
-
-			foreign   procedure   get_users() RETURNS table(id int)
-			`,
-			want: &types.Schema{
-				Name: "mydb",
-				ForeignProcedures: []*types.ForeignProcedure{
-					{
-						Name: "get_users",
-						Returns: &types.ProcedureReturn{
-							IsTable: true,
-							Fields: []*types.NamedType{
-								{
-									Name: "id",
-									Type: types.IntType,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "named foreign parameters",
-			kf: `
-			database mydb;
-
-			foreign procedure get_users($id int, $name text) returns (id int, name text)
-			`,
-			want: &types.Schema{
-				Name: "mydb",
-				ForeignProcedures: []*types.ForeignProcedure{
-					{
-						Name: "get_users",
-						Parameters: []*types.DataType{
-							types.IntType,
-							types.TextType,
-						},
-						Returns: &types.ProcedureReturn{
-							Fields: []*types.NamedType{
-								{
-									Name: "id",
-									Type: types.IntType,
-								},
-								{
-									Name: "name",
-									Type: types.TextType,
-								},
-							},
-						},
-					},
-				},
-			},
-		},
-		{
 			// this test tries to break case sensitivity in every way possible
 			name: "case insensitive",
 			kf: `
@@ -620,8 +487,6 @@ func Test_Kuneiform(t *testing.T) {
 			pRoceDure get_Users($nAme tExt) Public viEw ReTURNS tablE(iD iNt) {
 				return select id from users; // this wont actually get parsed in this test
 			}
-
-			fOreign proceduRe get_othEr_Users($Id inT, $nAme Text) RETURNS table(iD inT, Name tExt)
 
 			@kGw( autHn='tRue' )
 			AcTion create_User ($Id, $usErname) Public {
@@ -727,28 +592,6 @@ func Test_Kuneiform(t *testing.T) {
 						Body: `return select id from users;`, // comments will not be parsed
 					},
 				},
-				ForeignProcedures: []*types.ForeignProcedure{
-					{
-						Name: "get_other_users",
-						Parameters: []*types.DataType{
-							types.IntType,
-							types.TextType,
-						},
-						Returns: &types.ProcedureReturn{
-							IsTable: true,
-							Fields: []*types.NamedType{
-								{
-									Name: "id",
-									Type: types.IntType,
-								},
-								{
-									Name: "name",
-									Type: types.TextType,
-								},
-							},
-						},
-					},
-				},
 				Actions: []*types.Action{
 					{
 						Annotations: []string{"@kgw(authn='tRue')"},
@@ -774,20 +617,6 @@ func Test_Kuneiform(t *testing.T) {
 			name:          "incomplete database block",
 			kf:            `datab`,
 			want:          &types.Schema{},
-			err:           parse.ErrSyntax,
-			checkAfterErr: true,
-		},
-		{
-			// similar to the above test, the same edge case existed for foreign procedures
-			name: "incomplete foreign procedure",
-			kf: `database a;
-			foreign proce`,
-			want: &types.Schema{
-				Name: "a",
-				ForeignProcedures: []*types.ForeignProcedure{
-					{}, // there will be one empty foreign procedure
-				},
-			},
 			err:           parse.ErrSyntax,
 			checkAfterErr: true,
 		},
@@ -1156,10 +985,13 @@ var (
 		Body: `return select id from users;`,
 	}
 
-	foreignProcGetUser = &types.ForeignProcedure{
+	procGetUserId = &types.Procedure{
 		Name: "get_user_id",
-		Parameters: []*types.DataType{
-			types.TextType,
+		Parameters: []*types.ProcedureParameter{
+			{
+				Name: "$username",
+				Type: types.TextType,
+			},
 		},
 		Returns: &types.ProcedureReturn{
 			Fields: []*types.NamedType{
@@ -1171,12 +1003,20 @@ var (
 		},
 	}
 
-	foreignProcCreateUser = &types.ForeignProcedure{
-		Name: "foreign_create_user",
-		Parameters: []*types.DataType{
-			types.IntType,
-			types.TextType,
+	procCreateUser = &types.Procedure{
+		Name:   "create_user",
+		Public: true,
+		Parameters: []*types.ProcedureParameter{
+			{
+				Name: "$id",
+				Type: types.IntType,
+			},
+			{
+				Name: "$username",
+				Type: types.TextType,
+			},
 		},
+		Body: `insert into users (id, username) values ($id, $username);`,
 	}
 )
 
@@ -1722,7 +1562,7 @@ func Test_Procedure(t *testing.T) {
 				}},
 			},
 			proc: `
-			for $row in select * from get_all_user_ids() {
+			for $row in select * from users {
 				return next $row.id;
 			}
 			`,
@@ -1739,16 +1579,14 @@ func Test_Procedure(t *testing.T) {
 									SelectCores: []*parse.SelectCore{
 										{
 											Columns: []parse.ResultColumn{&parse.ResultColumnWildcard{}},
-											From: &parse.RelationFunctionCall{
-												FunctionCall: &parse.ExpressionFunctionCall{
-													Name: "get_all_user_ids",
-												},
+											From: &parse.RelationTable{
+												Table: "users",
 											},
 										},
 									},
 									Ordering: []*parse.OrderingTerm{
 										{
-											Expression: exprColumn("", "id"),
+											Expression: exprColumn("users", "id"),
 										},
 									},
 								},
@@ -1792,7 +1630,7 @@ func Test_Procedure(t *testing.T) {
 		},
 		{
 			// this tests for regression on a previously known bug
-			name: "foreign procedure returning nothing to a variable",
+			name: "procedure returning nothing to a variable",
 			returns: &types.ProcedureReturn{
 				Fields: []*types.NamedType{
 					{
@@ -1802,7 +1640,7 @@ func Test_Procedure(t *testing.T) {
 				},
 			},
 			proc: `
-			return foreign_create_user['xbd', 'create_user'](1, 'user1');
+			return create_user(1, 'user1');
 			`,
 			err: parse.ErrType,
 		},
@@ -1810,17 +1648,13 @@ func Test_Procedure(t *testing.T) {
 			// regression test for a previously known bug
 			name: "calling a procedure that returns nothing works fine",
 			proc: `
-			foreign_create_user['xbd', 'create_user'](1, 'user1');
+			create_user(1, 'user1');
 			`,
 			want: &parse.ProcedureParseResult{
 				AST: []parse.ProcedureStmt{
 					&parse.ProcedureStmtCall{
-						Call: &parse.ExpressionForeignCall{
-							Name: "foreign_create_user",
-							ContextualArgs: []parse.Expression{
-								exprLit("xbd"),
-								exprLit("create_user"),
-							},
+						Call: &parse.ExpressionFunctionCall{
+							Name: "create_user",
 							Args: []parse.Expression{
 								exprLit(1),
 								exprLit("user1"),
@@ -2049,10 +1883,8 @@ func Test_Procedure(t *testing.T) {
 				Procedures: []*types.Procedure{
 					proc,
 					procGetAllUserIds,
-				},
-				ForeignProcedures: []*types.ForeignProcedure{
-					foreignProcGetUser,
-					foreignProcCreateUser,
+					procCreateUser,
+					procGetUserId,
 				},
 			})
 			require.NoError(t, err)
@@ -2092,11 +1924,10 @@ func exprVar(n string) *parse.ExpressionVariable {
 	if n[0] != '$' && n[0] != '@' {
 		panic("TEST ERROR: variable name must start with $ or @")
 	}
-	pref := parse.VariablePrefix(n[0])
 
 	return &parse.ExpressionVariable{
-		Name:   n[1:],
-		Prefix: pref,
+		Name:   n,
+		Prefix: parse.VariablePrefix(n[0]),
 	}
 }
 
@@ -2181,6 +2012,423 @@ func exprFunctionCall(name string, args ...parse.Expression) *parse.ExpressionFu
 	return &parse.ExpressionFunctionCall{
 		Name: name,
 		Args: args,
+	}
+}
+
+func Test_DDL(t *testing.T) {
+	type testCase struct {
+		name string
+		sql  string
+		want parse.SQLStmt
+		err  error
+	}
+
+	tests := []testCase{
+		{
+			name: "create table",
+			sql: `CREATE TABLE users (
+id int PRIMARY KEY,
+name text CHECK(LENGTH(name) > 10),
+address text NOT NULL DEFAULT 'usa',
+email text NOT NULL UNIQUE ,
+city_id int,
+group_id int REFERENCES groups(id) ON DELETE CASCADE,
+CONSTRAINT city_fk FOREIGN KEY (city_id) REFERENCES cities(id) ON UPDATE NO ACTION ,
+CHECK(LENGTH(email) > 1),
+UNIQUE (city_id, address),
+UNIQUE INDEX group_name_unique (group_id, name),
+INDEX ithome (name, address)
+);`,
+			want: &parse.CreateTableStatement{
+				Name: "users",
+				Columns: []*parse.Column{
+					{
+						Name: "id",
+						Type: types.IntType,
+						Constraints: []parse.InlineConstraint{
+							&parse.ConstraintPrimaryKey{},
+						},
+					},
+					{
+						Name: "name",
+						Type: types.TextType,
+						Constraints: []parse.InlineConstraint{
+							&parse.ConstraintCheck{
+								Param: &parse.ExpressionComparison{
+									Left:     exprFunctionCall("length", exprColumn("", "name")),
+									Right:    exprLit(10),
+									Operator: parse.ComparisonOperatorGreaterThan,
+								},
+							},
+						},
+					},
+					{
+						Name: "address",
+						Type: types.TextType,
+						Constraints: []parse.InlineConstraint{
+							&parse.ConstraintNotNull{},
+							&parse.ConstraintDefault{
+								Value: &parse.ExpressionLiteral{
+									Type:  types.TextType,
+									Value: "usa",
+									Typecastable: parse.Typecastable{
+										TypeCast: types.TextType,
+									},
+								},
+							},
+						},
+					},
+					{
+						Name: "email",
+						Type: types.TextType,
+						Constraints: []parse.InlineConstraint{
+							&parse.ConstraintNotNull{},
+							&parse.ConstraintUnique{},
+						},
+					},
+					{
+						Name: "city_id",
+						Type: types.IntType,
+					},
+					{
+						Name: "group_id",
+						Type: types.IntType,
+						Constraints: []parse.InlineConstraint{
+							&parse.ConstraintForeignKey{
+								RefTable:  "groups",
+								RefColumn: "id",
+								Ons:       []parse.ForeignKeyActionOn{parse.ON_DELETE},
+								Dos:       []parse.ForeignKeyActionDo{parse.DO_CASCADE},
+							},
+						},
+					},
+				},
+				Indexes: []*parse.TableIndex{
+					{
+						Name:    "group_name_unique",
+						Columns: []string{"group_id", "name"},
+						Type:    parse.IndexTypeUnique,
+					},
+					{
+						Name:    "ithome",
+						Columns: []string{"name", "address"},
+						Type:    parse.IndexTypeBTree,
+					},
+				},
+				Constraints: []parse.InlineConstraint{
+					&parse.ConstraintForeignKey{
+						Name:      "city_fk",
+						RefTable:  "cities",
+						RefColumn: "id",
+						Column:    "city_id",
+						Ons:       []parse.ForeignKeyActionOn{parse.ON_UPDATE},
+						Dos:       []parse.ForeignKeyActionDo{parse.DO_NO_ACTION},
+					},
+					&parse.ConstraintCheck{
+						Param: &parse.ExpressionComparison{
+							Left:     exprFunctionCall("length", exprColumn("", "email")),
+							Right:    exprLit(1),
+							Operator: parse.ComparisonOperatorGreaterThan,
+						},
+					},
+					&parse.ConstraintUnique{
+						Columns: []string{
+							"city_id",
+							"address",
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "create table if not exists",
+			sql:  `CREATE TABLE IF NOT EXISTS users (id int primary key)`,
+			want: &parse.CreateTableStatement{
+				Name:        "users",
+				IfNotExists: true,
+				Columns: []*parse.Column{
+					{
+						Name: "id",
+						Type: types.IntType,
+						Constraints: []parse.InlineConstraint{
+							&parse.ConstraintPrimaryKey{},
+						},
+					},
+				},
+			},
+		},
+		{
+			name: "create table with no column",
+			sql:  `CREATE TABLE users ();`,
+			err:  parse.ErrSyntax,
+		},
+		{
+			name: "create table with redeclare primary",
+			sql: `CREATE TABLE users (id int primary key,
+name text check(length(name) > 10),
+primary key (name)
+);`,
+			err: parse.ErrRedeclarePrimaryKey,
+		},
+		{
+			name: "create table with redeclare constraint",
+			sql:  `CREATE TABLE users (id int primary key, name text, address text, constraint aa unique(name), constraint aa unique(address))`,
+			err:  parse.ErrCollation,
+		},
+		{
+			name: "create table with constraint on unknown column",
+			sql:  `CREATE TABLE users (id int primary key, name text, address text, constraint aa unique(not_exist))`,
+			err:  parse.ErrUnknownColumn,
+		},
+		{
+			name: "alter table add column constraint NOT NULL",
+			sql:  `ALTER TABLE user ALTER COLUMN name SET NOT NULL;`,
+			want: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.SetColumnConstraint{
+					Column: "name",
+					Type:   parse.NOT_NULL,
+				},
+			},
+		},
+		{
+			name: "alter table add column constraint DEFAULT",
+			sql:  `ALTER TABLE user ALTER COLUMN name SET DEFAULT 10;`,
+			want: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.SetColumnConstraint{
+					Column: "name",
+					Type:   parse.DEFAULT,
+					Value: &parse.ExpressionLiteral{
+						Type:  types.IntType,
+						Value: int64(10),
+					},
+				},
+			},
+		},
+		{
+			name: "alter table drop column constraint NOT NULL",
+			sql:  `ALTER TABLE user ALTER COLUMN name DROP NOT NULL;`,
+			want: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.DropColumnConstraint{
+					Column: "name",
+					Type:   parse.NOT_NULL,
+				},
+			},
+		},
+		{
+			name: "alter table drop column constraint DEFAULT",
+			sql:  `ALTER TABLE user ALTER COLUMN name DROP DEFAULT;`,
+			want: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.DropColumnConstraint{
+					Column: "name",
+					Type:   parse.DEFAULT,
+				},
+			},
+		},
+		{
+			name: "alter table drop column constraint named",
+			sql:  `ALTER TABLE user ALTER COLUMN name DROP CONSTRAINT abc;`,
+			want: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.DropColumnConstraint{
+					Column: "name",
+					Name:   "abc",
+				},
+			},
+		},
+		{
+			name: "alter table add column",
+			sql:  `ALTER TABLE user ADD COLUMN abc int;`,
+			want: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.AddColumn{
+					Name: "abc",
+					Type: types.IntType,
+				},
+			},
+		},
+		{
+			name: "alter table drop column",
+			sql:  `ALTER TABLE user DROP COLUMN abc;`,
+			want: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.DropColumn{
+					Name: "abc",
+				},
+			},
+		},
+		{
+			name: "alter table rename column",
+			sql:  `ALTER TABLE user RENAME COLUMN abc TO def;`,
+			want: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.RenameColumn{
+					OldName: "abc",
+					NewName: "def",
+				},
+			},
+		},
+		{
+			name: "alter table rename table",
+			sql:  `ALTER TABLE user RENAME TO account;`,
+			want: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.RenameTable{
+					Name: "account",
+				},
+			},
+		},
+		{
+			name: "alter table add constraint fk",
+			sql:  `ALTER TABLE user ADD constraint new_fk FOREIGN KEY (city_id) REFERENCES cities(id) ON DELETE CASCADE;`,
+			want: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.AddTableConstraint{
+					Constraint: &parse.ConstraintForeignKey{
+						Name:      "new_fk",
+						RefTable:  "cities",
+						RefColumn: "id",
+						Column:    "city_id",
+						Ons:       []parse.ForeignKeyActionOn{parse.ON_DELETE},
+						Dos:       []parse.ForeignKeyActionDo{parse.DO_CASCADE},
+					},
+				},
+			},
+		},
+		{
+			name: "alter table drop constraint",
+			sql:  `ALTER TABLE user DROP CONSTRAINT abc;`,
+			want: &parse.AlterTableStatement{
+				Table: "user",
+				Action: &parse.DropTableConstraint{
+					Name: "abc",
+				},
+			},
+		},
+		{
+			name: "drop table",
+			sql:  `DROP TABLE users, posts;`,
+			want: &parse.DropTableStatement{
+				Tables:   []string{"users", "posts"},
+				Behavior: parse.DropBehaviorNon,
+			},
+		},
+		{
+			name: "drop table single table",
+			sql:  `DROP TABLE users;`,
+			want: &parse.DropTableStatement{
+				Tables:   []string{"users"},
+				Behavior: parse.DropBehaviorNon,
+			},
+		},
+		{
+			name: "drop table if exists",
+			sql:  `DROP TABLE IF EXISTS users, posts;`,
+			want: &parse.DropTableStatement{
+				Tables:   []string{"users", "posts"},
+				IfExists: true,
+				Behavior: parse.DropBehaviorNon,
+			},
+		},
+		{
+			name: "drop table CASCADE",
+			sql:  `DROP TABLE IF EXISTS users, posts CASCADE;`,
+			want: &parse.DropTableStatement{
+				Tables:   []string{"users", "posts"},
+				Behavior: parse.DropBehaviorCascade,
+				IfExists: true,
+			},
+		},
+		{
+			name: "drop table RESTRICT ",
+			sql:  `DROP TABLE users, posts RESTRICT;`,
+			want: &parse.DropTableStatement{
+				Tables:   []string{"users", "posts"},
+				Behavior: parse.DropBehaviorRestrict,
+			},
+		},
+		{
+			name: "create index",
+			sql:  `CREATE INDEX abc ON user(name);`,
+			want: &parse.CreateIndexStatement{
+				Name:    "abc",
+				On:      "user",
+				Columns: []string{"name"},
+				Type:    parse.IndexTypeBTree,
+			},
+		},
+		{
+			name: "create unique index",
+			sql:  `CREATE UNIQUE INDEX abc ON user(name);`,
+			want: &parse.CreateIndexStatement{
+				Name:    "abc",
+				On:      "user",
+				Columns: []string{"name"},
+				Type:    parse.IndexTypeUnique,
+			},
+		},
+		{
+			name: "create index with no name",
+			sql:  `CREATE INDEX ON user(name);`,
+			want: &parse.CreateIndexStatement{
+				On:      "user",
+				Columns: []string{"name"},
+				Type:    parse.IndexTypeBTree,
+			},
+		},
+		{
+			name: "create index if not exist",
+			sql:  `CREATE INDEX IF NOT EXISTS abc ON user(name);`,
+			want: &parse.CreateIndexStatement{
+				IfNotExists: true,
+				Name:        "abc",
+				On:          "user",
+				Columns:     []string{"name"},
+				Type:        parse.IndexTypeBTree,
+			},
+		},
+		{
+			name: "drop index",
+			sql:  `DROP INDEX abc;`,
+			want: &parse.DropIndexStatement{
+				Name: "abc",
+			},
+		},
+
+		{
+			name: "drop index check exist",
+			sql:  `DROP INDEX IF EXISTS abc;`,
+			want: &parse.DropIndexStatement{
+				Name:       "abc",
+				CheckExist: true,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			res, err := parse.ParseDDL(tt.sql)
+			require.NoError(t, err)
+
+			if res.ParseErrs.Err() != nil {
+				if tt.err == nil {
+					t.Errorf("unexpected error: %v", res.ParseErrs.Err())
+				} else {
+					require.ErrorIs(t, res.ParseErrs.Err(), tt.err)
+				}
+
+				return
+			}
+
+			assertPositionsAreSet(t, res.AST)
+
+			if !deepCompare(tt.want, res.AST) {
+				t.Errorf("unexpected AST:%s", diff(tt.want, res.AST))
+			}
+		})
 	}
 }
 
@@ -2372,7 +2620,7 @@ func Test_SQL(t *testing.T) {
 							exprLit(1),
 						},
 					},
-					Upsert: &parse.UpsertClause{
+					OnConflict: &parse.OnConflict{
 						ConflictColumns: []string{"id"},
 						DoUpdate: []*parse.UpdateSetClause{
 							{
@@ -2392,32 +2640,6 @@ func Test_SQL(t *testing.T) {
 			name: "upsert with conflict - ambiguous error",
 			sql:  `INSERT INTO users (id) VALUES (1) ON CONFLICT (id) DO UPDATE SET id = id + 1;`,
 			err:  parse.ErrAmbiguousConflictTable,
-		},
-		{
-			name: "select against unnamed procedure",
-			sql:  "select * from get_all_user_ids();",
-			want: &parse.SQLStatement{
-				SQL: &parse.SelectStatement{
-					SelectCores: []*parse.SelectCore{
-						{
-							Columns: []parse.ResultColumn{
-								&parse.ResultColumnWildcard{},
-							},
-							From: &parse.RelationFunctionCall{
-								FunctionCall: &parse.ExpressionFunctionCall{
-									Name: "get_all_user_ids",
-								},
-							},
-						},
-					},
-					// apply default ordering
-					Ordering: []*parse.OrderingTerm{
-						{
-							Expression: exprColumn("", "id"),
-						},
-					},
-				},
-			},
 		},
 		{
 			name: "select join with unnamed subquery",
@@ -2725,36 +2947,6 @@ func Test_SQL(t *testing.T) {
 			sql:  `SELECT u.username, p.id FROM (SELECT * FROM users) inner join posts as p on users.id = p.author_id;`,
 			err:  parse.ErrUnnamedJoin,
 		},
-		{
-			name: "default ordering on procedure call",
-			sql:  `SELECT * FROM get_all_user_ids();`,
-			want: &parse.SQLStatement{
-				SQL: &parse.SelectStatement{
-					SelectCores: []*parse.SelectCore{
-						{
-							Columns: []parse.ResultColumn{
-								&parse.ResultColumnWildcard{},
-							},
-							From: &parse.RelationFunctionCall{
-								FunctionCall: &parse.ExpressionFunctionCall{
-									Name: "get_all_user_ids",
-								},
-							},
-						},
-					},
-					Ordering: []*parse.OrderingTerm{
-						{
-							Expression: exprColumn("", "id"),
-						},
-					},
-				},
-			},
-		},
-		{
-			name: "join against unnamed function call fails",
-			sql:  `SELECT * FROM users inner join get_all_user_ids() on users.id = u.id;`,
-			err:  parse.ErrUnnamedJoin,
-		},
 		{name: "non utf-8", sql: "\xbd\xb2\x3d\xbc\x20\xe2\x8c\x98;", err: parse.ErrSyntax},
 		{
 			// this select doesn't make much sense, however
@@ -2971,16 +3163,7 @@ func Test_SQL(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			res, err := parse.ParseSQL(tt.sql, &types.Schema{
-				Name: "mydb",
-				Tables: []*types.Table{
-					tblUsers,
-					tblPosts,
-				},
-				Procedures: []*types.Procedure{
-					procGetAllUserIds,
-				},
-			}, false)
+			res, err := parse.ParseSQL(tt.sql)
 			require.NoError(t, err)
 
 			if res.ParseErrs.Err() != nil {
@@ -3027,7 +3210,6 @@ func cmpOpts() []cmp.Option {
 		cmp.AllowUnexported(
 			parse.ExpressionLiteral{},
 			parse.ExpressionFunctionCall{},
-			parse.ExpressionForeignCall{},
 			parse.ExpressionVariable{},
 			parse.ExpressionArrayAccess{},
 			parse.ExpressionMakeArray{},

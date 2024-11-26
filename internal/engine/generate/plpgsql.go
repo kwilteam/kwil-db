@@ -74,7 +74,16 @@ func (s *sqlGenerator) VisitExpressionFunctionCall(p0 *parse.ExpressionFunctionC
 		return str.String()
 	}
 
-	pgFmt, err := fn.PGFormat(args, p0.Distinct, p0.Star)
+	var pgFmt string
+	var err error
+	switch fn := fn.(type) {
+	case *parse.ScalarFunctionDefinition:
+		pgFmt, err = fn.PGFormatFunc(args)
+	case *parse.AggregateFunctionDefinition:
+		pgFmt, err = fn.PGFormatFunc(args, p0.Distinct)
+	default:
+		panic("unknown function type " + fmt.Sprintf("%T", fn))
+	}
 	if err != nil {
 		panic(err)
 	}
@@ -98,24 +107,51 @@ func typeCast(t interface{ GetTypeCast() *types.DataType }, s *strings.Builder) 
 	}
 }
 
-func (s *sqlGenerator) VisitExpressionForeignCall(p0 *parse.ExpressionForeignCall) any {
+func (s *sqlGenerator) VisitExpressionWindowFunctionCall(p0 *parse.ExpressionWindowFunctionCall) any {
 	str := strings.Builder{}
-	str.WriteString(s.pgSchema)
-	str.WriteString(".")
-	str.WriteString(formatForeignProcedureName(p0.Name))
-	str.WriteString("(")
-	for i, arg := range append(p0.ContextualArgs, p0.Args...) {
-		if i > 0 {
-			str.WriteString(", ")
-		}
+	str.WriteString(p0.FunctionCall.Accept(s).(string))
 
-		str.WriteString(arg.Accept(s).(string))
+	if p0.Filter != nil {
+		str.WriteString(" FILTER (WHERE ")
+		str.WriteString(p0.Filter.Accept(s).(string))
+		str.WriteString(")")
 	}
-	str.WriteString(")")
 
-	typeCast(p0, &str)
-
+	str.WriteString(" OVER ")
+	str.WriteString(p0.Window.Accept(s).(string))
 	return str.String()
+}
+
+func (s *sqlGenerator) VisitWindowImpl(p0 *parse.WindowImpl) any {
+	str := strings.Builder{}
+	str.WriteString("(")
+
+	if len(p0.PartitionBy) > 0 {
+		str.WriteString("PARTITION BY ")
+		for i, arg := range p0.PartitionBy {
+			if i > 0 {
+				str.WriteString(", ")
+			}
+			str.WriteString(arg.Accept(s).(string))
+		}
+	}
+
+	if p0.OrderBy != nil {
+		str.WriteString(" ORDER BY ")
+		for i, arg := range p0.OrderBy {
+			if i > 0 {
+				str.WriteString(", ")
+			}
+			str.WriteString(arg.Accept(s).(string))
+		}
+	}
+
+	str.WriteString(")")
+	return str.String()
+}
+
+func (s *sqlGenerator) VisitWindowReference(p0 *parse.WindowReference) any {
+	return p0.Name
 }
 
 func (s *sqlGenerator) VisitExpressionVariable(p0 *parse.ExpressionVariable) any {
@@ -399,6 +435,9 @@ func (s *sqlGenerator) VisitSQLStatement(p0 *parse.SQLStatement) any {
 		}
 		if i == 0 {
 			str.WriteString("WITH ")
+			if p0.Recursive {
+				str.WriteString("RECURSIVE ")
+			}
 		}
 		str.WriteString(cte.Accept(s).(string))
 	}
@@ -488,6 +527,18 @@ func (s *sqlGenerator) VisitSelectCore(p0 *parse.SelectCore) any {
 		}
 	}
 
+	if len(p0.Windows) > 0 {
+		str.WriteString("\nWINDOW ")
+		for i, window := range p0.Windows {
+			if i > 0 {
+				str.WriteString(", ")
+			}
+			str.WriteString(window.Name)
+			str.WriteString(" AS ")
+			str.WriteString(window.Window.Accept(s).(string))
+		}
+	}
+
 	return str.String()
 }
 
@@ -530,17 +581,6 @@ func (s *sqlGenerator) VisitRelationSubquery(p0 *parse.RelationSubquery) any {
 	str.WriteString("(")
 	str.WriteString(p0.Subquery.Accept(s).(string))
 	str.WriteString(") ")
-	if p0.Alias != "" {
-		str.WriteString("AS ")
-		str.WriteString(p0.Alias)
-	}
-	return str.String()
-}
-
-func (s *sqlGenerator) VisitRelationFunctionCall(p0 *parse.RelationFunctionCall) any {
-	str := strings.Builder{}
-	str.WriteString(p0.FunctionCall.Accept(s).(string))
-	str.WriteString(" ")
 	if p0.Alias != "" {
 		str.WriteString("AS ")
 		str.WriteString(p0.Alias)
@@ -665,31 +705,36 @@ func (s *sqlGenerator) VisitInsertStatement(p0 *parse.InsertStatement) any {
 
 		str.WriteString(") ")
 	}
-	str.WriteString("\nVALUES ")
 
-	for i, val := range p0.Values {
-		if i > 0 {
-			str.WriteString(",")
-		}
-		str.WriteString("\n(")
-		for j, v := range val {
-			if j > 0 {
-				str.WriteString(", ")
+	str.WriteString("\n")
+	if p0.Select != nil {
+		str.WriteString(p0.Select.Accept(s).(string))
+	} else {
+		str.WriteString("VALUES ")
+		for i, val := range p0.Values {
+			if i > 0 {
+				str.WriteString(",")
 			}
-			str.WriteString(v.Accept(s).(string))
+			str.WriteString("\n(")
+			for j, v := range val {
+				if j > 0 {
+					str.WriteString(", ")
+				}
+				str.WriteString(v.Accept(s).(string))
+			}
+			str.WriteString(")")
 		}
-		str.WriteString(")")
 	}
 
-	if p0.Upsert != nil {
+	if p0.OnConflict != nil {
 		str.WriteString("\n")
-		str.WriteString(p0.Upsert.Accept(s).(string))
+		str.WriteString(p0.OnConflict.Accept(s).(string))
 	}
 
 	return str.String()
 }
 
-func (s *sqlGenerator) VisitUpsertClause(p0 *parse.UpsertClause) any {
+func (s *sqlGenerator) VisitUpsertClause(p0 *parse.OnConflict) any {
 	str := strings.Builder{}
 	str.WriteString("ON CONFLICT ")
 	if len(p0.ConflictColumns) > 0 {
@@ -746,6 +791,196 @@ func (s *sqlGenerator) VisitOrderingTerm(p0 *parse.OrderingTerm) any {
 	}
 
 	return str.String()
+}
+
+func (s *sqlGenerator) VisitCreateTableStatement(p0 *parse.CreateTableStatement) any {
+	str := strings.Builder{}
+	indent := "  "
+	str.WriteString("CREATE TABLE ")
+	if p0.IfNotExists {
+		str.WriteString("IF NOT EXISTS ")
+	}
+	str.WriteString(p0.Name)
+	str.WriteString(" (\n")
+	for i, col := range p0.Columns {
+		str.WriteString(indent)
+		str.WriteString(col.Name)
+		str.WriteString(" ")
+		str.WriteString(col.Type.String())
+		for _, con := range col.Constraints {
+			switch c2 := con.(type) {
+			case *parse.PrimaryKeyInlineConstraint:
+				str.WriteString(" PRIMARY KEY")
+			case *parse.DefaultConstraint:
+				str.WriteString(" DEFAULT ")
+				str.WriteString(c2.Value.String())
+			case *parse.ForeignKeyReferences:
+				str.WriteString(" ")
+				str.WriteString(s.foreignKeyRefToString(c2))
+			case *parse.NotNullConstraint:
+				str.WriteString(" NOT NULL")
+			case *parse.CheckConstraint:
+				str.WriteString(" CHECK(")
+				str.WriteString(c2.Expression.Accept(s).(string))
+				str.WriteString(")")
+			case *parse.UniqueInlineConstraint:
+				str.WriteString(" UNIQUE")
+			default:
+				panic("unknown constraint type")
+			}
+		}
+		if i < len(p0.Columns)-1 {
+			str.WriteString(",\n")
+		}
+	}
+
+	for _, con := range p0.Constraints {
+		str.WriteString(",\n")
+
+		if con.Name != "" {
+			str.WriteString("CONSTRAINT ")
+			str.WriteString(con.Name)
+			str.WriteString(" ")
+		}
+		switch c2 := con.Constraint.(type) {
+		case *parse.PrimaryKeyOutOfLineConstraint:
+			str.WriteString("PRIMARY KEY(")
+			str.WriteString(strings.Join(c2.Columns, ", "))
+			str.WriteString(")")
+		case *parse.UniqueOutOfLineConstraint:
+			str.WriteString("UNIQUE(")
+			str.WriteString(strings.Join(c2.Columns, ", "))
+			str.WriteString(")")
+		case *parse.CheckConstraint:
+			str.WriteString("CHECK(")
+			str.WriteString(c2.Expression.Accept(s).(string))
+			str.WriteString(")")
+		case *parse.ForeignKeyOutOfLineConstraint:
+			str.WriteString("FOREIGN KEY(")
+			str.WriteString(strings.Join(c2.Columns, ", "))
+			str.WriteString(") ")
+			str.WriteString(s.foreignKeyRefToString(c2.References))
+		}
+	}
+
+	if len(p0.Indexes) > 0 {
+		str.WriteString(",\n")
+		for i, index := range p0.Indexes {
+			panic("fix index generation in create table")
+			str.WriteString(indent)
+			str.WriteString(index.String())
+			if i < len(p0.Indexes)-1 {
+				str.WriteString(",\n")
+			}
+		}
+	}
+
+	str.WriteString("\n)")
+	return str.String()
+}
+
+func (s *sqlGenerator) foreignKeyRefToString(fk *parse.ForeignKeyReferences) string {
+	str := strings.Builder{}
+	str.WriteString("REFERENCES ")
+	str.WriteString(fk.RefTable)
+	str.WriteString("(")
+	str.WriteString(strings.Join(fk.RefColumns, ", "))
+	str.WriteString(")")
+
+	for _, action := range fk.Actions {
+		str.WriteString(" ON ")
+		str.WriteString(string(action.On)) // update or delete
+		str.WriteString(" ")
+		str.WriteString(string(action.Do)) // cascade, restrict, etc.
+	}
+	return str.String()
+}
+
+func (s *sqlGenerator) VisitAlterTableStatement(p0 *parse.AlterTableStatement) any {
+	str := strings.Builder{}
+	str.WriteString("ALTER TABLE ")
+	str.WriteString(p0.Table)
+	str.WriteString(" ")
+
+	if action, ok := p0.Action.(*parse.AddTableConstraint); ok {
+		str.WriteString("ADD ")
+		switch cc := action.Constraint.(type) {
+		case *parse.ConstraintCheck:
+			//str.WriteString(cc.Name)
+			str.WriteString("CHECK(")
+			str.WriteString(cc.Param.Accept(s).(string))
+			str.WriteString(")")
+		case *parse.ConstraintForeignKey:
+			//str.WriteString(cc.Name)
+			str.WriteString(cc.ToSQL())
+		default:
+			panic("unknown constraint type")
+		}
+	} else {
+		str.WriteString(p0.Action.ToSQL())
+	}
+
+	return str.String()
+}
+
+func (s *sqlGenerator) VisitDropTableStatement(p0 *parse.DropTableStatement) any {
+	str := strings.Builder{}
+	str.WriteString("DROP TABLE ")
+	if p0.IfExists {
+		str.WriteString("IF EXISTS ")
+	}
+
+	str.WriteString(strings.Join(p0.Tables, ", "))
+	switch p0.Behavior {
+	case parse.DropBehaviorCascade:
+		str.WriteString(" CASCADE")
+	case parse.DropBehaviorRestrict:
+		str.WriteString(" RESTRICT")
+	case parse.DropBehaviorNon:
+	default:
+		panic("unknown drop behavior")
+	}
+	return str.String()
+}
+
+func (s *sqlGenerator) VisitCreateIndexStatement(p0 *parse.CreateIndexStatement) any {
+	str := strings.Builder{}
+	str.WriteString("CREATE ")
+
+	switch p0.Type {
+	case parse.IndexTypeBTree:
+		str.WriteString("INDEX ")
+	case parse.IndexTypeUnique:
+		str.WriteString("UNIQUE INDEX ")
+	default:
+		// should not happen
+		panic("unknown index type")
+	}
+
+	if p0.IfNotExists {
+		str.WriteString("IF NOT EXISTS ")
+	}
+	if p0.Name != "" {
+		str.WriteString(p0.Name + " ")
+	}
+	str.WriteString("ON " + p0.On)
+	str.WriteString("(" + strings.Join(p0.Columns, ", ") + ")")
+
+	return str.String()
+}
+
+func (s *sqlGenerator) VisitDropIndexStatement(p0 *parse.DropIndexStatement) any {
+	str := strings.Builder{}
+	str.WriteString("DROP INDEX ")
+	if p0.CheckExist {
+		str.WriteString("IF EXISTS ")
+	}
+	str.WriteString(p0.Name)
+	return str.String()
+}
+
+func (s *sqlGenerator) VisitGrantOrRevokeStatement(p0 *parse.GrantOrRevokeStatement) any {
+	panic("implement me")
 }
 
 // procedureGenerator is a visitor that generates plpgsql code.
@@ -957,12 +1192,6 @@ func formatPGLiteral(value any) (string, error) {
 	return str.String(), nil
 }
 
-// FormatProcedureName formats a procedure name for usage in postgres. This
-// simply prepends the name with _fp_
-func formatForeignProcedureName(name string) string {
-	return "_fp_" + name
-}
-
 // formatAnonymousReceiver creates a plpgsql variable name for anonymous receivers.
 func formatAnonymousReceiver(index int) string {
 	return fmt.Sprintf("_anon_%d", index)
@@ -977,9 +1206,9 @@ func formatReturnVar(i int) string {
 func formatVariable(e *parse.ExpressionVariable) string {
 	switch e.Prefix {
 	case parse.VariablePrefixDollar:
-		return formatParameterName(e.Name)
+		return formatParameterName(e.Name[1:])
 	case parse.VariablePrefixAt:
-		return formatContextualVariableName(e.Name)
+		return formatContextualVariableName(e.Name[1:])
 	default:
 		// should never happen
 		panic("invalid variable prefix: " + string(e.Prefix))

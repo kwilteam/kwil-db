@@ -30,3 +30,23 @@ func WriteSQL(node *parse.SQLStatement, orderParams bool, pgSchema string) (stmt
 
 	return stmt + ";", sqlGen.orderedParams, nil
 }
+
+// WriteDDL converts a DDL node to a string.
+// NOTE: this is temporary so that I can write tests, after we shift from *parse.SQLStatement
+// to parse.SQLStmt, we can delete this.
+func WriteDDL(node parse.SQLStmt) (stmt string, err error) {
+	if node == nil {
+		return "", fmt.Errorf("SQL parse node is nil")
+	}
+
+	defer func() {
+		if e := recover(); e != nil {
+			err = fmt.Errorf("panic: %v", e)
+		}
+	}()
+
+	sqlGen := &sqlGenerator{}
+
+	stmt = node.Accept(sqlGen).(string)
+	return stmt + ";", nil
+}

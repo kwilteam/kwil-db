@@ -22,7 +22,7 @@ schema_entry:
 ;
 
 sql_entry:
-    sql EOF
+    sql_stmt EOF
 ;
 
 action_entry:
@@ -83,7 +83,6 @@ schema:
     database_declaration
     (use_declaration | table_declaration
      | action_declaration | procedure_declaration
-     | foreign_procedure_declaration
     )*
 ;
 
@@ -113,10 +112,18 @@ column_def:
     name=IDENTIFIER type constraint*
 ;
 
+table_column_def:
+    name=IDENTIFIER type inline_constraint*
+;
+
 index_def:
     HASH_IDENTIFIER
     (UNIQUE | INDEX | PRIMARY)
     LPAREN  columns=identifier_list RPAREN
+;
+
+table_index_def:
+    UNIQUE? INDEX identifier LPAREN columns=identifier_list RPAREN
 ;
 
 foreign_key_def:
@@ -148,6 +155,24 @@ constraint:
     (IDENTIFIER| PRIMARY KEY? | NOT NULL | DEFAULT | UNIQUE) (LPAREN literal RPAREN)?
 ;
 
+inline_constraint:
+    PRIMARY KEY
+    | UNIQUE
+    | NOT NULL
+    | DEFAULT literal
+    | fk_constraint
+    | CHECK (LPAREN sql_expr RPAREN)
+;
+
+fk_action:
+    ON (UPDATE|DELETE)
+    (SET NULL | SET DEFAULT | RESTRICT | NO ACTION | CASCADE)
+;
+
+fk_constraint:
+    REFERENCES table=identifier (LPAREN column=identifier RPAREN) (fk_action (fk_action)?)?
+;
+
 access_modifier:
     PUBLIC | PRIVATE | VIEW | OWNER
 ;
@@ -169,13 +194,6 @@ procedure_declaration:
     LBRACE procedure_block RBRACE
 ;
 
-
-foreign_procedure_declaration:
-    FOREIGN PROCEDURE IDENTIFIER
-    LPAREN (unnamed_params=type_list|named_params=typed_variable_list)? RPAREN
-    (procedure_return)?
-;
-
 procedure_return:
     RETURNS (TABLE? LPAREN return_columns=named_type_list RPAREN
     | LPAREN unnamed_return_types=type_list RPAREN)
@@ -185,18 +203,102 @@ procedure_return:
     The following section includes parser rules for SQL.
 */
 
-// sql is a top-level SQL statement.
-sql:
-    sql_statement SCOL
+// sql_stmt is a top-level SQL statement, it maps to SQLStmt interface in AST.
+sql_stmt:
+    (sql_statement | ddl_stmt) SCOL
 ;
 
-sql_statement:
-    (WITH common_table_expression (COMMA common_table_expression)*)?
+ddl_stmt:
+    create_table_statement
+    | alter_table_statement
+    | drop_table_statement
+    | create_index_statement
+    | drop_index_statement
+;
+
+sql_statement: // NOTE: This is only DDL. We should combine ddl and dml into sql_stmt in the future.
+    (WITH RECURSIVE? common_table_expression (COMMA common_table_expression)*)?
     (select_statement | update_statement | insert_statement | delete_statement)
 ;
 
 common_table_expression:
     identifier (LPAREN (identifier (COMMA identifier)*)? RPAREN)? AS LPAREN select_statement RPAREN
+;
+
+create_table_statement:
+    CREATE TABLE (IF NOT EXISTS)? name=identifier
+    LPAREN
+    (table_column_def | table_constraint_def | table_index_def)
+    (COMMA  (table_column_def | table_constraint_def | table_index_def))*
+    RPAREN
+;
+
+table_constraint_def:
+    (CONSTRAINT name=identifier)?
+    (
+    UNIQUE LPAREN identifier_list RPAREN
+     | CHECK LPAREN sql_expr RPAREN
+     | FOREIGN KEY LPAREN identifier_list RPAREN fk_constraint
+     | PRIMARY KEY LPAREN identifier_list RPAREN
+     )
+;
+
+opt_drop_behavior:
+    CASCADE
+    | RESTRICT
+;
+
+drop_table_statement:
+    DROP TABLE (IF EXISTS)? tables=identifier_list opt_drop_behavior
+;
+
+alter_table_statement:
+    ALTER TABLE table=identifier
+    alter_table_action
+;
+
+alter_table_action:
+      ALTER COLUMN column=identifier SET (NOT NULL | DEFAULT literal)   # add_column_constraint
+    | ALTER COLUMN column=identifier DROP (NOT NULL | DEFAULT)          # drop_column_constraint
+    | ADD COLUMN column=identifier type                                 # add_column
+    | DROP COLUMN column=identifier                                     # drop_column
+    | RENAME COLUMN old_column=identifier TO new_column=identifier      # rename_column
+    | RENAME TO new_table=identifier                                    # rename_table
+    | ADD table_constraint_def                                          # add_table_constraint
+    | DROP CONSTRAINT identifier                                        # drop_table_constraint
+;
+
+create_index_statement:
+    CREATE UNIQUE? INDEX (IF NOT EXISTS)? name=identifier?
+    ON table=identifier LPAREN  columns=identifier_list RPAREN
+;
+
+drop_index_statement:
+    DROP INDEX (IF EXISTS)? name=identifier
+;
+
+create_role_statement:
+    CREATE ROLE IDENTIFIER
+;
+
+drop_role_statement:
+    DROP ROLE IDENTIFIER
+;
+
+grant_statement:
+    GRANT (privilege_list|grant_role=identifier) TO (role=identifier|user=STRING_)
+;
+
+revoke_statement:
+    REVOKE (privilege_list|grant_role=identifier) FROM (role=identifier|user=STRING_)
+;
+
+privilege_list:
+    privilege (COMMA privilege)*
+;
+
+privilege:
+    SELECT | INSERT | UPDATE | DELETE | CREATE | DROP | ALTER | ROLES | CALL
 ;
 
 select_statement:
@@ -224,6 +326,7 @@ select_core:
         GROUP BY group_by=sql_expr_list
         (HAVING having=sql_expr)?
     )?
+    (WINDOW identifier AS window (COMMA identifier AS window)*)?
 ;
 
 relation:
@@ -232,7 +335,6 @@ relation:
     // but we allow it to pass here since it is standard SQL to not require it, and
     // we can throw a better error message after parsing.
     | LPAREN select_statement RPAREN (AS? alias=identifier)?    # subquery_relation
-    | sql_function_call (AS? alias=identifier?)                 # function_relation
 ;
 
 join:
@@ -259,7 +361,10 @@ update_set_clause:
 insert_statement:
     INSERT INTO table_name=identifier (AS? alias=identifier)?
     (LPAREN target_columns=identifier_list RPAREN)?
-    VALUES LPAREN sql_expr_list RPAREN (COMMA LPAREN sql_expr_list RPAREN)*
+    (
+        (VALUES LPAREN sql_expr_list RPAREN (COMMA LPAREN sql_expr_list RPAREN)*)
+        | (select_statement)
+    )
     upsert_clause?
 ;
 
@@ -282,39 +387,48 @@ delete_statement:
 // https://docs.kwil.com/docs/kuneiform/operators
 sql_expr:
     // highest precedence:
-    LPAREN sql_expr RPAREN type_cast?                                               # paren_sql_expr
-    | sql_expr PERIOD identifier type_cast?                                         # field_access_sql_expr
+    LPAREN sql_expr RPAREN type_cast?                                                       # paren_sql_expr
+    | sql_expr PERIOD identifier type_cast?                                                 # field_access_sql_expr
     | array_element=sql_expr LBRACKET (
         // can be arr[1], arr[1:2], arr[1:], arr[:2], arr[:]
             single=sql_expr
             | (left=sql_expr? COL right=sql_expr?)
-        ) RBRACKET type_cast?                                                       # array_access_sql_expr
-    | <assoc=right> (PLUS|MINUS) sql_expr                                           # unary_sql_expr
-    | sql_expr COLLATE identifier                                                   # collate_sql_expr
-    | left=sql_expr (STAR | DIV | MOD) right=sql_expr                               # arithmetic_sql_expr
-    | left=sql_expr (PLUS | MINUS) right=sql_expr                                   # arithmetic_sql_expr
+        ) RBRACKET type_cast?                                                               # array_access_sql_expr
+    | <assoc=right> (PLUS|MINUS) sql_expr                                                   # unary_sql_expr
+    | sql_expr COLLATE identifier                                                           # collate_sql_expr
+    | left=sql_expr (STAR | DIV | MOD) right=sql_expr                                       # arithmetic_sql_expr
+    | left=sql_expr (PLUS | MINUS) right=sql_expr                                           # arithmetic_sql_expr
 
     // any unspecified operator:
-    | literal type_cast?                                                            # literal_sql_expr
-    | sql_function_call type_cast?                                                  # function_call_sql_expr
-    | variable type_cast?                                                           # variable_sql_expr
-    | (table=identifier PERIOD)? column=identifier type_cast?                       # column_sql_expr 
+    | literal type_cast?                                                                    # literal_sql_expr
+    // direct function calls can have a type cast, but window functions cannot
+    | sql_function_call (FILTER LPAREN WHERE sql_expr RPAREN)? OVER (window|IDENTIFIER)     # window_function_call_sql_expr
+    | sql_function_call type_cast?                                                          # function_call_sql_expr
+    | variable type_cast?                                                                   # variable_sql_expr
+    | (table=identifier PERIOD)? column=identifier type_cast?                               # column_sql_expr
     | CASE case_clause=sql_expr?
         (when_then_clause)+
-        (ELSE else_clause=sql_expr)? END                                            # case_expr
-    | (NOT? EXISTS)? LPAREN select_statement RPAREN type_cast?                      # subquery_sql_expr
+        (ELSE else_clause=sql_expr)? END                                                    # case_expr
+    | (NOT? EXISTS)? LPAREN select_statement RPAREN type_cast?                              # subquery_sql_expr
     // setting precedence for arithmetic operations:
-    | left=sql_expr CONCAT right=sql_expr                                           # arithmetic_sql_expr
+    | left=sql_expr CONCAT right=sql_expr                                                   # arithmetic_sql_expr
 
     // the rest:
-    | sql_expr NOT? IN LPAREN (sql_expr_list|select_statement) RPAREN               # in_sql_expr
-    | left=sql_expr NOT? (LIKE|ILIKE) right=sql_expr                                # like_sql_expr
-    | element=sql_expr (NOT)? BETWEEN lower=sql_expr AND upper=sql_expr             # between_sql_expr
-    | left=sql_expr (EQUALS | EQUATE | NEQ | LT | LTE | GT | GTE) right=sql_expr    # comparison_sql_expr
-    | left=sql_expr IS NOT? ((DISTINCT FROM right=sql_expr) | NULL | TRUE | FALSE)  # is_sql_expr
-    | <assoc=right> (NOT) sql_expr                                                  # unary_sql_expr
-    | left=sql_expr AND right=sql_expr                                              # logical_sql_expr
-    | left=sql_expr OR right=sql_expr                                               # logical_sql_expr
+    | sql_expr NOT? IN LPAREN (sql_expr_list|select_statement) RPAREN                       # in_sql_expr
+    | left=sql_expr NOT? (LIKE|ILIKE) right=sql_expr                                        # like_sql_expr
+    | element=sql_expr (NOT)? BETWEEN lower=sql_expr AND upper=sql_expr                     # between_sql_expr
+    | left=sql_expr (EQUALS | EQUATE | NEQ | LT | LTE | GT | GTE) right=sql_expr            # comparison_sql_expr
+    | left=sql_expr IS NOT? ((DISTINCT FROM right=sql_expr) | NULL | TRUE | FALSE)          # is_sql_expr
+    | <assoc=right> (NOT) sql_expr                                                          # unary_sql_expr
+    | left=sql_expr AND right=sql_expr                                                      # logical_sql_expr
+    | left=sql_expr OR right=sql_expr                                                       # logical_sql_expr
+;
+
+window:
+    LPAREN
+        (PARTITION BY partition=sql_expr_list)?
+        (ORDER BY ordering_term (COMMA ordering_term)*)?
+    RPAREN
 ;
 
 
@@ -328,7 +442,6 @@ sql_expr_list:
 
 sql_function_call:
     identifier LPAREN (DISTINCT? sql_expr_list|STAR)? RPAREN                                                #normal_call_sql
-    | identifier LBRACKET dbid=sql_expr COMMA procedure=sql_expr RBRACKET LPAREN (sql_expr_list)? RPAREN    #foreign_call_sql
 ;
 
 /*
@@ -366,7 +479,7 @@ procedure_expr:
     | array_element=procedure_expr LBRACKET (
             // can be arr[1], arr[1:2], arr[1:], arr[:2], arr[:]
             single=procedure_expr
-            | (left=procedure_expr? COL right=procedure_expr?)        
+            | (left=procedure_expr? COL right=procedure_expr?)
         ) RBRACKET type_cast?                                                                   # array_access_procedure_expr
     | <assoc=right> (PLUS|MINUS|EXCL) procedure_expr                                            # unary_procedure_expr
     | procedure_expr (STAR | DIV | MOD) procedure_expr                                          # procedure_expr_arithmetic
@@ -410,7 +523,6 @@ variable_or_underscore:
 
 procedure_function_call:
     IDENTIFIER LPAREN (procedure_expr_list)? RPAREN                                                                         #normal_call_procedure
-    | IDENTIFIER LBRACKET dbid=procedure_expr COMMA procedure=procedure_expr RBRACKET LPAREN (procedure_expr_list)? RPAREN  #foreign_call_procedure
 ;
 
 if_then_block:

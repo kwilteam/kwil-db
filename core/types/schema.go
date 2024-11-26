@@ -3,7 +3,9 @@ package types
 import (
 	"errors"
 	"fmt"
+	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types/decimal"
@@ -1099,7 +1101,7 @@ type DataType struct {
 	// IsArray is true if the type is an array.
 	IsArray bool `json:"is_array"`
 	// Metadata is the metadata of the type.
-	Metadata [2]uint16 `json:"metadata"`
+	Metadata *[2]uint16 `json:"metadata" rlp:"optional"`
 }
 
 // String returns the string representation of the type.
@@ -1121,36 +1123,44 @@ func (c *DataType) String() string {
 	return str.String()
 }
 
-var ZeroMetadata = [2]uint16{}
-
-// PGString returns the string representation of the type in Postgres.
-func (c *DataType) PGString() (string, error) {
+// PGScalar returns the scalar representation of the type in Postgres.
+func (c *DataType) PGScalar() (string, error) {
 	var scalar string
 	switch strings.ToLower(c.Name) {
 	case intStr:
-		scalar = "INT8"
+		scalar = "int8"
 	case textStr:
-		scalar = "TEXT"
+		scalar = "text"
 	case boolStr:
-		scalar = "BOOL"
+		scalar = "bool"
 	case blobStr:
-		scalar = "BYTEA"
+		scalar = "bytea"
 	case uuidStr:
-		scalar = "UUID"
+		scalar = "uuid"
 	case uint256Str:
-		scalar = "UINT256"
+		scalar = "uint256"
 	case DecimalStr:
-		if c.Metadata == ZeroMetadata {
-			return "", fmt.Errorf("decimal type must have metadata")
+		if c.Metadata == nil {
+			scalar = "numeric"
+		} else {
+			scalar = fmt.Sprintf("numeric(%d,%d)", c.Metadata[0], c.Metadata[1])
 		}
-
-		scalar = fmt.Sprintf("NUMERIC(%d,%d)", c.Metadata[0], c.Metadata[1])
 	case nullStr:
 		return "", fmt.Errorf("cannot have null column type")
 	case unknownStr:
 		return "", fmt.Errorf("cannot have unknown column type")
 	default:
 		return "", fmt.Errorf("unknown column type: %s", c.Name)
+	}
+
+	return scalar, nil
+}
+
+// PGString returns the string representation of the type in Postgres.
+func (c *DataType) PGString() (string, error) {
+	scalar, err := c.PGScalar()
+	if err != nil {
+		return "", err
 	}
 
 	if c.IsArray {
@@ -1164,14 +1174,15 @@ func (c *DataType) Clean() error {
 	c.Name = strings.ToLower(c.Name)
 	switch c.Name {
 	case intStr, textStr, boolStr, blobStr, uuidStr, uint256Str: // ok
-		if c.Metadata != ZeroMetadata {
+		if c.Metadata != nil {
 			return fmt.Errorf("type %s cannot have metadata", c.Name)
 		}
 
 		return nil
 	case DecimalStr:
-		if c.Metadata == ZeroMetadata {
-			return fmt.Errorf("decimal type must have metadata")
+		if c.Metadata == nil {
+			// numeric can have unspecified precision and scale
+			return nil
 		}
 
 		err := decimal.CheckPrecisionAndScale(c.Metadata[0], c.Metadata[1])
@@ -1185,7 +1196,7 @@ func (c *DataType) Clean() error {
 			return fmt.Errorf("type %s cannot be an array", c.Name)
 		}
 
-		if c.Metadata != ZeroMetadata {
+		if c.Metadata != nil {
 			return fmt.Errorf("type %s cannot have metadata", c.Name)
 		}
 
@@ -1219,10 +1230,10 @@ func (c *DataType) EqualsStrict(other *DataType) bool {
 		return false
 	}
 
-	if (c.Metadata == ZeroMetadata) != (other.Metadata == ZeroMetadata) {
+	if (c.Metadata == nil) != (other.Metadata == nil) {
 		return false
 	}
-	if c.Metadata != ZeroMetadata {
+	if c.Metadata != nil {
 		if c.Metadata[0] != other.Metadata[0] || c.Metadata[1] != other.Metadata[1] {
 			return false
 		}
@@ -1275,8 +1286,8 @@ var (
 	// For type detection, users should prefer compare a datatype
 	// name with the DecimalStr constant.
 	DecimalType = &DataType{
-		Name:     DecimalStr,
-		Metadata: [2]uint16{1, 0}, // the minimum precision and scale
+		Name: DecimalStr,
+		// unspecified precision and scale
 	}
 	DecimalArrayType = ArrayType(DecimalType)
 	Uint256Type      = &DataType{
@@ -1291,6 +1302,11 @@ var (
 	// when a type is unknown until runtime.
 	UnknownType = &DataType{
 		Name: unknownStr,
+	}
+	// RecordType is a special type used internally to represent
+	// an record with referenceable fields.
+	RecordType = &DataType{
+		Name: "record",
 	}
 )
 
@@ -1309,7 +1325,7 @@ func ArrayType(t *DataType) *DataType {
 
 const (
 	textStr    = "text"
-	intStr     = "int"
+	intStr     = "int8"
 	boolStr    = "bool"
 	blobStr    = "blob"
 	uuidStr    = "uuid"
@@ -1320,6 +1336,22 @@ const (
 	unknownStr = "unknown"
 )
 
+// maps type names to their base names
+var typeAlias = map[string]string{
+	"string":  textStr,
+	"text":    textStr,
+	"int":     intStr,
+	"integer": intStr,
+	"int8":    intStr,
+	"bool":    boolStr,
+	"boolean": boolStr,
+	"blob":    blobStr,
+	"bytea":   blobStr,
+	"uuid":    uuidStr,
+	"decimal": DecimalStr,
+	"numeric": DecimalStr,
+}
+
 // NewDecimalType creates a new fixed point decimal type.
 func NewDecimalType(precision, scale uint16) (*DataType, error) {
 	err := decimal.CheckPrecisionAndScale(precision, scale)
@@ -1327,8 +1359,69 @@ func NewDecimalType(precision, scale uint16) (*DataType, error) {
 		return nil, err
 	}
 
+	met := [2]uint16{precision, scale}
+
 	return &DataType{
 		Name:     DecimalStr,
-		Metadata: [2]uint16{precision, scale},
+		Metadata: &met,
 	}, nil
+}
+
+// ParseDataType parses a string into a data type.
+func ParseDataType(s string) (*DataType, error) {
+	// four cases: TEXT, TEXT[], TEXT(1,2), TEXT(1,2)[]
+	// we will parse the type first, then the array, then the metadata
+	// we will not allow metadata without an array
+
+	s = strings.TrimSpace(strings.ToLower(s))
+	if s == "" {
+		return nil, errors.New("empty data type")
+	}
+
+	// Regular expression to parse the data type
+	re := regexp.MustCompile(`^([a-z0-9]+)(\(([\d, ]+)\))?(\[\])?$`)
+	matches := re.FindStringSubmatch(s)
+
+	if len(matches) == 0 {
+		return nil, fmt.Errorf("invalid data type format: %s", s)
+	}
+
+	baseType := matches[1]
+	rawMetadata := matches[3]
+	isArray := matches[4] == "[]"
+
+	var metadata *[2]uint16
+	if rawMetadata != "" {
+		metadata = &[2]uint16{}
+		// only decimal types can have metadata
+		if baseType != DecimalStr {
+			return nil, fmt.Errorf("metadata is only allowed for decimal type")
+		}
+
+		parts := strings.Split(rawMetadata, ",")
+		// can be either DECIMAL(10,5) or just DECIMAL
+		if len(parts) != 2 && len(parts) != 0 {
+			return nil, fmt.Errorf("invalid metadata format: %s", rawMetadata)
+		}
+		for i, part := range parts {
+			num, err := strconv.Atoi(strings.TrimSpace(part))
+			if err != nil {
+				return nil, fmt.Errorf("invalid metadata value: %s", part)
+			}
+			metadata[i] = uint16(num)
+		}
+	}
+
+	baseName, ok := typeAlias[baseType]
+	if !ok {
+		return nil, fmt.Errorf("unknown data type: %s", baseType)
+	}
+
+	dt := &DataType{
+		Name:     baseName,
+		Metadata: metadata,
+		IsArray:  isArray,
+	}
+
+	return dt, dt.Clean()
 }

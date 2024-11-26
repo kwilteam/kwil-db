@@ -6,9 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/kwilteam/kwil-db/common/sql"
-
 	"github.com/jackc/pgx/v5"
+	"github.com/kwilteam/kwil-db/common/sql"
 )
 
 func queryImpliedArgTypes(ctx context.Context, conn *pgx.Conn, stmt string, args ...any) (pgx.Rows, error) {
@@ -314,7 +313,7 @@ func queryRowFuncAny(ctx context.Context, conn *pgx.Conn, stmt string,
 					return err
 				}
 
-				switch pgVal.(type) { // let native (sql/driver.Value) types pass
+				switch pgVal.(type) { // let native (sql/driver.Param) types pass
 				case int64, float64, bool, []byte, string, time.Time, nil:
 				default: // reject anything else unrecognized
 					return err
