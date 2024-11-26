@@ -46,11 +46,10 @@ func defaultGatewayAuthSignFunc(message string, signer auth.Signer) (*auth.Signa
 func composeGatewayAuthMessage(param *gateway.AuthnParameterResponse, domain string, uri string,
 	version string, chainID string) string {
 	var msg bytes.Buffer
-	msg.WriteString(
-		fmt.Sprintf("%s wants you to sign in with your account:\n", domain)) // apparently this HAS to use https, according to the standard
+	msg.WriteString(domain + " wants you to sign in with your account:\n") // apparently this HAS to use https, according to the standard
 	msg.WriteString("\n")
 	if param.Statement != "" {
-		msg.WriteString(fmt.Sprintf("%s\n", param.Statement))
+		msg.WriteString(param.Statement + "\n")
 	}
 	msg.WriteString("\n")
 	msg.WriteString(fmt.Sprintf("URI: %s\n", uri))

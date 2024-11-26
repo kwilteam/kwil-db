@@ -17,6 +17,11 @@ import (
 	"runtime/debug"
 )
 
+var (
+	ErrInvalidSignature = errors.New("invalid signature")
+	// ErrInvalidSignatureLength = errors.New("invalid signature length")
+)
+
 // Key represents a public or private key that can be serialized and compared to
 // another key. The Type method will indicate the type of key used.  See
 // [KeyType] for the supported key types.

@@ -199,7 +199,7 @@ func convertHeadersToColumnMappings(headers []string) map[string]string {
 
 // convertColumnMappings converts a list of mappings in the form of "id:$id" to a map
 func convertColumnMappings(mappings []string) (map[string]string, error) {
-	res := make(map[string]string)
+	res := make(map[string]string, len(mappings))
 
 	for _, mapping := range mappings {
 		parts := strings.Split(mapping, ":")
@@ -216,7 +216,7 @@ func convertColumnMappings(mappings []string) (map[string]string, error) {
 
 func ensureInputFormat(in *string) {
 	if !strings.HasPrefix(*in, "$") {
-		*in = fmt.Sprintf("$%s", *in)
+		*in = "$" + *in
 	}
 }
 

@@ -3,6 +3,7 @@ package client
 import (
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -83,11 +84,11 @@ func convertToHttpCookie(c cookie) *http.Cookie {
 // getDomain returns the domain of the URL.
 func getDomain(target string) (string, error) {
 	if target == "" {
-		return "", fmt.Errorf("target is empty")
+		return "", errors.New("target is empty")
 	}
 
 	if !(strings.HasPrefix(target, "http://") || strings.HasPrefix(target, "https://")) {
-		return "", fmt.Errorf("target missing scheme")
+		return "", errors.New("target missing scheme")
 	}
 
 	parsedTarget, err := url.Parse(target)

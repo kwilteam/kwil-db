@@ -2,6 +2,7 @@ package database
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -62,7 +63,7 @@ func getSelectedDbid(cmd *cobra.Command, conf *config.KwilCliConfig) (string, er
 	}
 
 	if !cmd.Flags().Changed(nameFlag) {
-		return "", fmt.Errorf("neither dbid nor name was provided")
+		return "", errors.New("neither dbid nor name was provided")
 	}
 
 	name, err := cmd.Flags().GetString(nameFlag)
@@ -104,7 +105,7 @@ func getSelectedActionOrProcedure(cmd *cobra.Command, args []string) (actionOrPr
 		}
 	} else {
 		if len(args) < 1 {
-			return "", nil, fmt.Errorf("missing action or procedure name")
+			return "", nil, errors.New("missing action or procedure name")
 		}
 
 		actionOrProcedure = args[0]

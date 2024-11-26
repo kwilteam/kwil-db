@@ -39,7 +39,6 @@ linters:
     - misspell
     - musttag
     - nosprintfhostport
-    - perfsprint
     - reassign
     - rowserrcheck
     - sloglint

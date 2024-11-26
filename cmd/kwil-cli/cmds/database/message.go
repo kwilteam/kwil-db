@@ -129,7 +129,7 @@ func (s *respSchema) MarshalText() ([]byte, error) {
 			for _, a := range c.Attributes {
 				msg.WriteString(fmt.Sprintf("      %s\n", a.Type))
 				if a.Value != "" {
-					msg.WriteString(fmt.Sprintf("        %s\n", fmt.Sprint(a.Value)))
+					msg.WriteString(fmt.Sprintf("        %s\n", a.Value))
 				}
 			}
 		}
