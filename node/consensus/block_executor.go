@@ -108,7 +108,7 @@ func (ce *ConsensusEngine) executeBlock() (err error) {
 		default:
 			res := ce.txapp.Execute(txCtx, ce.state.consensusTx, decodedTx)
 			txResult := ktypes.TxResult{
-				Code: uint16(res.ResponseCode),
+				Code: uint32(res.ResponseCode),
 				Gas:  res.Spend,
 			}
 			if res.Error != nil {

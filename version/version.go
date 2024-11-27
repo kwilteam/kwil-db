@@ -19,7 +19,7 @@ const kwilVersion = "0.10.0-pre" // remove "-pre" for the tagged commit
 
 // KwildVersion may be set at compile time by:
 //
-//	go build -ldflags "-s -w -X github.com/kwilteam/kwil-db/internal/version.KwilVersion=0.10.0+release"
+//	go build -ldflags "-s -w -X github.com/kwilteam/kwil-db/version.KwilVersion=0.10.0+release"
 var (
 	KwilVersion string
 	Build       = vcsInfo()

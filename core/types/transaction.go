@@ -13,24 +13,18 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 )
 
-// TransactionResult is the result of a transaction execution on chain
-type TransactionResult struct {
-	Code      uint32   `json:"code"`
-	Log       string   `json:"log"`
-	GasUsed   int64    `json:"gas_used"`
-	GasWanted int64    `json:"gas_wanted"`
-	Data      []byte   `json:"data,omitempty"`
-	Events    [][]byte `json:"events,omitempty"`
+type ResultBroadcastTx struct {
+	Code uint32
+	Hash Hash
+	Log  string
 }
 
-// TcTxQueryResponse is the response of a transaction query
-// NOTE: not `txpb.TxQueryResponse` so TransportClient only use our brewed type
-// same as `TransactionResult`
-type TcTxQueryResponse struct {
-	Hash     Hash              `json:"hash,omitempty"`
-	Height   int64             `json:"height,omitempty"`
-	Tx       *Transaction      `json:"tx"`
-	TxResult TransactionResult `json:"tx_result"`
+// TxQueryResponse is the response of a transaction query.
+type TxQueryResponse struct {
+	Hash   Hash         `json:"hash,omitempty"`
+	Height int64        `json:"height,omitempty"`
+	Tx     *Transaction `json:"tx"`
+	Result *TxResult    `json:"tx_result"`
 }
 
 // MsgDescriptionMaxLength is the max length of Description filed in

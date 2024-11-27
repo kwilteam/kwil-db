@@ -3,6 +3,7 @@
 package memstore
 
 import (
+	"fmt"
 	"sync"
 
 	ktypes "github.com/kwilteam/kwil-db/core/types"
@@ -97,6 +98,30 @@ func (bs *MemBS) StoreResults(hash types.Hash, results []ktypes.TxResult) error 
 	return nil
 }
 
+func (bs *MemBS) Results(hash types.Hash) ([]ktypes.TxResult, error) {
+	bs.mtx.RLock()
+	defer bs.mtx.RUnlock()
+	res, have := bs.txResults[hash]
+	if !have {
+		return nil, types.ErrNotFound
+	}
+	return res, nil
+}
+
+func (bs *MemBS) Result(hash types.Hash, idx uint32) (*ktypes.TxResult, error) {
+	bs.mtx.RLock()
+	defer bs.mtx.RUnlock()
+	res, have := bs.txResults[hash]
+	if !have {
+		return nil, types.ErrNotFound
+	}
+	if int(idx) >= len(res) {
+		return nil, fmt.Errorf("%w: invalid block index", types.ErrNotFound)
+	}
+	r := res[idx]
+	return &r, nil
+}
+
 func (bs *MemBS) Best() (int64, types.Hash, types.Hash) {
 	bs.mtx.RLock()
 	defer bs.mtx.RUnlock()
@@ -133,24 +158,24 @@ func (bs *MemBS) PreFetch(blkid types.Hash) (bool, func()) {
 
 func (bs *MemBS) Close() error { return nil }
 
-func (bs *MemBS) GetTx(txHash types.Hash) (int64, []byte, error) {
+func (bs *MemBS) GetTx(txHash types.Hash) (raw []byte, height int64, hash types.Hash, idx uint32, err error) {
 	bs.mtx.RLock()
 	defer bs.mtx.RUnlock()
 	// check the tx index, pull the block and then search for the tx with the expected hash
 	blkHash, have := bs.txIds[txHash]
 	if !have {
-		return 0, nil, types.ErrNotFound
+		return nil, 0, types.Hash{}, 0, types.ErrNotFound
 	}
 	blk, have := bs.blocks[blkHash]
 	if !have {
-		return 0, nil, types.ErrNotFound
+		return nil, 0, types.Hash{}, 0, types.ErrNotFound
 	}
-	for _, tx := range blk.Txns {
+	for idx, tx := range blk.Txns {
 		if types.HashBytes(tx) == txHash {
-			return blk.Header.Height, tx, nil
+			return tx, blk.Header.Height, blk.Hash(), uint32(idx), nil
 		}
 	}
-	return 0, nil, types.ErrNotFound
+	return nil, 0, types.Hash{}, 0, types.ErrNotFound
 }
 
 func (bs *MemBS) HaveTx(txHash types.Hash) bool {

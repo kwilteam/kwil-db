@@ -35,7 +35,7 @@ func verifySig(identity, msg []byte, sig *auth.Signature) error {
 	if err != nil {
 		return fmt.Errorf("%w: %s", ErrAuthenticatorNotFound, sig.Type)
 	}
-	return authn.Verify(identity, msg, sig.Signature)
+	return authn.Verify(identity, msg, sig.Data)
 }
 
 // Identifier returns a string identifier from a sender and authenticator type. The

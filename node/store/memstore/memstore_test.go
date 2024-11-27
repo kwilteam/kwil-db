@@ -132,7 +132,7 @@ func TestMemBS_StoreAndGetTx(t *testing.T) {
 	}
 
 	txHash := types.HashBytes(tx1)
-	height, gotTx, err := bs.GetTx(txHash)
+	gotTx, height, hash, idx, err := bs.GetTx(txHash)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -143,6 +143,14 @@ func TestMemBS_StoreAndGetTx(t *testing.T) {
 
 	if string(gotTx) != string(tx1) {
 		t.Errorf("got tx %s, want %s", string(gotTx), string(tx1))
+	}
+
+	if blkHash := block.Hash(); hash != blkHash {
+		t.Errorf("incorrect block hash, got %v, expected %v", hash, blkHash)
+	}
+
+	if idx != 0 {
+		t.Errorf("got index %d, want 0", idx)
 	}
 }
 

@@ -5,7 +5,7 @@ package usersvc
 import (
 	"reflect"
 
-	"github.com/kwilteam/kwil-db/internal/services/jsonrpc/openrpc"
+	"github.com/kwilteam/kwil-db/node/services/jsonrpc/openrpc"
 )
 
 var (

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"slices"
 	"strings"
 	"testing"
@@ -59,7 +60,7 @@ func Test_timeout(t *testing.T) {
 	})
 
 	// Wrap that handler with a 500ms timeout.
-	h = jsonRPCTimeoutHandler(h, 500*time.Millisecond, log.NewStdOut(log.DebugLevel))
+	h = jsonRPCTimeoutHandler(h, 500*time.Millisecond, log.New(log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug)))
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest(http.MethodGet, "/", nil)
 	h.ServeHTTP(w, r)
@@ -75,7 +76,7 @@ func Test_timeout(t *testing.T) {
 }
 
 func Test_options(t *testing.T) {
-	logger := log.NewStdOut(log.WarnLevel)
+	logger := log.NewStdoutLogger()
 
 	const testOrigin = "whoever"
 
@@ -195,7 +196,7 @@ func Test_options(t *testing.T) {
 			)
 
 			r := httptest.NewRequest(tt.reqMeth, tt.path, tt.reqBody)
-			r.Header.Set("origin", testOrigin)
+			r.Header.Set("Origin", testOrigin)
 			w := httptest.NewRecorder()
 			srv.srv.Handler.ServeHTTP(w, r)
 

@@ -71,8 +71,8 @@ func TestTxResultMarshalUnmarshal(t *testing.T) {
 	})
 
 	t.Run("invalid log length", func(t *testing.T) {
-		data := make([]byte, 6)
-		binary.BigEndian.PutUint16(data, uint16(1))
+		data := make([]byte, 8)
+		binary.BigEndian.PutUint32(data, uint32(1))
 		binary.BigEndian.PutUint32(data[2:], uint32(1000000))
 
 		var tr TxResult

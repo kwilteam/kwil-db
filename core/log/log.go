@@ -423,10 +423,6 @@ func (l *logger) WithGroup(group string) Logger {
 	}
 }
 
-func NewStdoutLogger() Logger {
-	return New(WithWriter(os.Stdout))
-}
-
 var DiscardLogger Logger = &discardLogger{} // New(WithWriter(io.Discard))
 
 type discardLogger struct{}
@@ -457,6 +453,10 @@ func (l *discardLogger) Infoln(a ...any)             {}
 func (l *discardLogger) Warnln(a ...any)             {}
 func (l *discardLogger) Errorln(a ...any)            {}
 func (l *discardLogger) Logln(level Level, a ...any) {}
+
+func NewStdoutLogger() Logger {
+	return New(WithWriter(os.Stdout))
+}
 
 func New(opts ...Option) Logger {
 	options := &options{

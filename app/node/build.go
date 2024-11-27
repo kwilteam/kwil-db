@@ -11,15 +11,21 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/node"
 	"github.com/kwilteam/kwil-db/node/accounts"
 	"github.com/kwilteam/kwil-db/node/consensus"
+	"github.com/kwilteam/kwil-db/node/engine/execution"
 	"github.com/kwilteam/kwil-db/node/mempool"
 	"github.com/kwilteam/kwil-db/node/meta"
 	"github.com/kwilteam/kwil-db/node/pg"
 	"github.com/kwilteam/kwil-db/node/store"
 	"github.com/kwilteam/kwil-db/node/txapp"
 	"github.com/kwilteam/kwil-db/node/voting"
+
+	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
+	"github.com/kwilteam/kwil-db/node/services/jsonrpc/funcsvc"
+	usersvc "github.com/kwilteam/kwil-db/node/services/jsonrpc/usersvc"
 )
 
 func buildServer(ctx context.Context, d *coreDependencies) *server {
@@ -39,6 +45,8 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	// metastore
 	buildMetaStore(ctx, db)
 
+	e := buildEngine(d, db)
+
 	// BlockStore
 	bs := buildBlockStore(d, closers)
 
@@ -52,15 +60,44 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	_, vs := buildVoteStore(ctx, d, closers) // ev, vs
 
 	// TxAPP
-	txapp := buildTxApp(ctx, d, db, accounts, vs)
+	txApp := buildTxApp(ctx, d, db, accounts, vs, e)
 
 	// Consensus
-	ce := buildConsensusEngine(ctx, d, db, accounts, vs, mp, bs, txapp, valSet)
+	ce := buildConsensusEngine(ctx, d, db, accounts, vs, mp, bs, txApp, valSet)
 
 	// Node
 	node := buildNode(d, mp, bs, ce, valSet)
 
 	// RPC Services
+	rpcSvcLogger := d.logger.New("user-json-svc")
+	jsonRPCTxSvc := usersvc.NewService(db, e, node, txApp, vs, rpcSvcLogger,
+		// usersvc.WithReadTxTimeout(time.Duration(d.cfg.AppConfig.ReadTxTimeout)),
+		usersvc.WithPrivateMode(d.cfg.RPC.Private),
+	// usersvc.WithChallengeExpiry(time.Duration(d.cfg.AppConfig.ChallengeExpiry)),
+	// usersvc.WithChallengeRateLimit(d.cfg.AppConfig.ChallengeRateLimit),
+	// usersvc.WithBlockAgeHealth(6*totalConsensusTimeouts.Dur()),
+	)
+
+	rpcServerLogger := d.logger.New("user-jsonrprc-server")
+	jsonRPCServer, err := rpcserver.NewServer(d.cfg.RPC.ListenAddress,
+		rpcServerLogger, rpcserver.WithTimeout(d.cfg.RPC.Timeout),
+		rpcserver.WithReqSizeLimit(d.cfg.RPC.MaxReqSize),
+		rpcserver.WithCORS(), rpcserver.WithServerInfo(&usersvc.SpecInfo),
+		rpcserver.WithMetricsNamespace("kwil_json_rpc_user_server"))
+	if err != nil {
+		failBuild(err, "unable to create json-rpc server")
+	}
+	jsonRPCServer.RegisterSvc(jsonRPCTxSvc)
+	jsonRPCServer.RegisterSvc(&funcsvc.Service{})
+
+	// admin service and server
+	// signer := buildSigner(d)
+	// jsonAdminSvc := adminsvc.NewService(db, wrappedCmtClient, txApp, abciApp, p2p, nil, d.cfg,
+	// 	d.genesisCfg.ChainID, *d.log.Named("admin-json-svc"))
+	// jsonRPCAdminServer := buildJRPCAdminServer(d)
+	// jsonRPCAdminServer.RegisterSvc(jsonAdminSvc)
+	// jsonRPCAdminServer.RegisterSvc(jsonRPCTxSvc)
+	// jsonRPCAdminServer.RegisterSvc(&funcsvc.Service{})
 
 	s := &server{
 		cfg:     d.cfg,
@@ -129,7 +166,8 @@ func buildMetaStore(ctx context.Context, db *pg.DB) {
 	}
 }
 
-func buildTxApp(ctx context.Context, d *coreDependencies, db *pg.DB, accounts *accounts.Accounts, votestore *voting.VoteStore) *txapp.TxApp {
+func buildTxApp(ctx context.Context, d *coreDependencies, db *pg.DB, accounts *accounts.Accounts,
+	votestore *voting.VoteStore, engine *execution.GlobalContext) *txapp.TxApp {
 	signer := auth.GetSigner(d.privKey)
 	service := &common.Service{
 		Logger:   d.logger.New("TXAPP"),
@@ -138,7 +176,7 @@ func buildTxApp(ctx context.Context, d *coreDependencies, db *pg.DB, accounts *a
 		// ExtensionConfigs: make(map[string]map[string]string),
 	}
 
-	txapp, err := txapp.NewTxApp(ctx, db, nil, signer, nil, service, accounts, votestore)
+	txapp, err := txapp.NewTxApp(ctx, db, engine, signer, nil, service, accounts, votestore)
 	if err != nil {
 		failBuild(err, "failed to create txapp")
 	}
@@ -211,4 +249,35 @@ func failBuild(err error, msg string) {
 		err: err,
 		msg: fmt.Sprintf("%s: %s", msg, err),
 	})
+}
+
+func buildEngine(d *coreDependencies, db *pg.DB) *execution.GlobalContext {
+	extensions := precompiles.RegisteredPrecompiles()
+	for name := range extensions {
+		d.logger.Info("registered extension", "name", name)
+	}
+
+	tx, err := db.BeginTx(d.ctx)
+	if err != nil {
+		failBuild(err, "failed to start transaction")
+	}
+	defer tx.Rollback(d.ctx)
+
+	err = execution.InitializeEngine(d.ctx, tx)
+	if err != nil {
+		failBuild(err, "failed to initialize engine")
+	}
+
+	eng, err := execution.NewGlobalContext(d.ctx, tx,
+		extensions, d.newService("engine"))
+	if err != nil {
+		failBuild(err, "failed to build engine")
+	}
+
+	err = tx.Commit(d.ctx)
+	if err != nil {
+		failBuild(err, "failed to commit engine init db txn")
+	}
+
+	return eng
 }

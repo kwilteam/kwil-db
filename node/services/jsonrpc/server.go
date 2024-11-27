@@ -28,7 +28,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/log"
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
-	"github.com/kwilteam/kwil-db/internal/services/jsonrpc/openrpc"
+	"github.com/kwilteam/kwil-db/node/services/jsonrpc/openrpc"
 )
 
 // The endpoint path is constant for now.
@@ -306,7 +306,7 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 			http.Error(w, http.StatusText(http.StatusMethodNotAllowed), http.StatusMethodNotAllowed)
 			return
 		}
-		w.Header().Set("content-type", "application/json; charset=utf-8")
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
 		http.ServeContent(w, r, "openrpc.json", time.Time{}, bytes.NewReader(s.spec))
 	})
 	specHandler = compMW(specHandler)
@@ -390,7 +390,7 @@ func jsonRPCTimeoutHandler(h http.Handler, timeout time.Duration, logger log.Log
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		t0 := time.Now().UTC()
 		defer func() {
-			logger.Debug("request handling complete", log.Duration("total_elapsed", time.Since(t0)))
+			logger.Debug("request handling complete", "total_elapsed", time.Since(t0).String())
 		}()
 		// NOTE, to give downstream handlers access to t0 instead of a defer here:
 		// ctx := context.WithValue(r.Context(), CtxStartTime, t0); r = r.WithContext(ctx)
@@ -527,7 +527,7 @@ func (s *Server) Serve(ctx context.Context) error {
 			return err
 		}
 	}
-	s.log.Info("JSON-RPC server listening", log.String("address", ln.Addr().String()))
+	s.log.Info("JSON-RPC server listening", "address", ln.Addr().String())
 	return s.ServeOn(ctx, ln)
 }
 
@@ -736,25 +736,24 @@ func (s *Server) handleJSONRPCRequest(ctx context.Context, req *jsonrpc.Request)
 		return jsonrpc.NewErrorResponse(req.ID, rpcErr)
 	}
 
-	s.log.Debug("handling request", log.String("method", req.Method))
+	s.log.Debug("handling request", "method", req.Method)
 	t0 := time.Now().UTC() // time only the handling (pertains to server utilization)
 
 	// call the method with the params
 	result, rpcErr := s.handleMethod(ctx, jsonrpc.Method(req.Method), req.Params)
 	if rpcErr != nil {
-		s.log.Info("request failure", log.String("method", req.Method),
-			log.Duration("elapsed", time.Since(t0)), log.Int("code", rpcErr.Code),
-			log.String("message", rpcErr.Message))
+		s.log.Info("request failure", "method", req.Method,
+			"elapsed", time.Since(t0), "code", rpcErr.Code,
+			"message", rpcErr.Message)
 
 		return jsonrpc.NewErrorResponse(req.ID, rpcErr)
 	}
 
-	s.log.Info("request success", log.String("method", req.Method),
-		log.Duration("elapsed", time.Since(t0)))
+	s.log.Info("request success", "method", req.Method, "elapsed", time.Since(t0))
 
 	resp, err := jsonrpc.NewResponse(req.ID, result)
 	if err != nil { // failed to marshal result
-		s.log.Error("failed to marshal result", log.String("method", req.Method), log.Error(err))
+		s.log.Error("failed to marshal result", "method", req.Method, "error", err)
 		rpcErr := jsonrpc.NewError(jsonrpc.ErrorResultEncoding, "failed to encode result", nil)
 		return jsonrpc.NewErrorResponse(req.ID, rpcErr)
 	}

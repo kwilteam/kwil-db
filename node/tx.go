@@ -112,7 +112,7 @@ func (n *Node) txGetStreamHandler(s network.Stream) {
 	// this is racy, and should be different in product
 
 	// then confirmed tx index
-	_, rawTx, err := n.bki.GetTx(req.Hash)
+	rawTx, _, _, _, err := n.bki.GetTx(req.Hash)
 	if err != nil {
 		if !errors.Is(err, types.ErrNotFound) {
 			n.log.Errorf("unexpected GetTx error: %v", err)

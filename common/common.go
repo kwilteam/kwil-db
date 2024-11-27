@@ -16,12 +16,6 @@ import (
 type Service struct {
 	// Logger is a logger for the application
 	Logger log.Logger
-	// ExtensionConfigs is a map of the nodes extensions and local
-	// configurations.
-	// It maps: extension_name -> config_key -> config_value
-	//
-	// DEPRECATED: Use LocalConfig.AppCfg.Extensions instead.
-	ExtensionConfigs map[string]map[string]string
 
 	// GenesisConfig is the genesis configuration of the network.
 	GenesisConfig *config.GenesisConfig
@@ -37,8 +31,7 @@ type Service struct {
 // Every other field is the same pointer as the original.
 func (s *Service) NamedLogger(name string) *Service {
 	return &Service{
-		Logger:           s.Logger.New(name),
-		ExtensionConfigs: s.ExtensionConfigs,
+		Logger: s.Logger.New(name),
 		// GenesisConfig:    s.GenesisConfig,
 		// LocalConfig:      s.LocalConfig,
 		Identity: s.Identity,

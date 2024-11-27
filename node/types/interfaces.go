@@ -39,10 +39,12 @@ type BlockStorer interface {
 
 type BlockResultsStorer interface {
 	StoreResults(hash Hash, results []types.TxResult) error
+	Results(hash Hash) ([]types.TxResult, error)
+	Result(hash Hash, idx uint32) (*types.TxResult, error)
 }
 
 type TxGetter interface {
-	GetTx(Hash) (int64, []byte, error)
+	GetTx(txHash types.Hash) (raw []byte, height int64, blkHash types.Hash, blkIdx uint32, err error)
 	HaveTx(Hash) bool
 }
 
