@@ -5,8 +5,10 @@
 set -e
 
 echo "Tidying go.mod and go.work..."
+(cd core; go mod tidy)
+(cd parse; go mod tidy)
 go mod tidy
-# ./scripts/tidy.sh
+# ./contrib/scripts/tidy.sh
 
 echo "Formating source..."
 # go install golang.org/x/tools/cmd/goimports@v0.26.0

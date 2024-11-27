@@ -51,7 +51,7 @@ func txQueryCmd() *cobra.Command {
 }
 
 type displayFullTxQuery struct {
-	Msg *types.TcTxQueryResponse
+	Msg *types.TxQueryResponse
 }
 
 func (d *displayFullTxQuery) MarshalJSON() ([]byte, error) {
@@ -71,7 +71,7 @@ func (d *displayFullTxQuery) MarshalText() (text []byte, err error) {
 
 	str.WriteString(fmt.Sprintf("TxInfo: %s\n", string(txInfoBts)))
 
-	txResultBts, err := json.MarshalIndent(d.Msg.TxResult, "", "  ")
+	txResultBts, err := json.MarshalIndent(d.Msg.Result, "", "  ")
 	if err != nil {
 		return nil, err
 	}

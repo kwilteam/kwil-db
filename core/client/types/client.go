@@ -31,8 +31,8 @@ type Client interface {
 	ListDatabases(ctx context.Context, owner []byte) ([]*types.DatasetIdentifier, error)
 	Ping(ctx context.Context) (string, error)
 	Query(ctx context.Context, dbid string, query string) (*Records, error)
-	TxQuery(ctx context.Context, txHash types.Hash) (*types.TcTxQueryResponse, error)
-	WaitTx(ctx context.Context, txHash types.Hash, interval time.Duration) (*types.TcTxQueryResponse, error)
+	TxQuery(ctx context.Context, txHash types.Hash) (*types.TxQueryResponse, error)
+	WaitTx(ctx context.Context, txHash types.Hash, interval time.Duration) (*types.TxQueryResponse, error)
 	Transfer(ctx context.Context, to []byte, amount *big.Int, opts ...TxOpt) (types.Hash, error)
 }
 

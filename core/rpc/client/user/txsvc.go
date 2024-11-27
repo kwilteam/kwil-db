@@ -22,7 +22,7 @@ type TxSvcClient interface {
 	ListDatabases(ctx context.Context, ownerPubKey []byte) ([]*types.DatasetIdentifier, error)
 	Ping(ctx context.Context) (string, error)
 	Query(ctx context.Context, dbid string, query string) ([]map[string]any, error)
-	TxQuery(ctx context.Context, txHash types.Hash) (*types.TcTxQueryResponse, error)
+	TxQuery(ctx context.Context, txHash types.Hash) (*types.TxQueryResponse, error)
 
 	// Migration methods
 	ListMigrations(ctx context.Context) ([]*types.Migration, error)

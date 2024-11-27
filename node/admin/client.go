@@ -48,7 +48,7 @@ type adminSvcClient interface {
 	// Ping pings the connected node.
 	Ping(ctx context.Context) (string, error)
 	// TxQuery queries a transaction by hash.
-	TxQuery(ctx context.Context, txHash types.Hash) (*types.TcTxQueryResponse, error)
+	TxQuery(ctx context.Context, txHash types.Hash) (*types.TxQueryResponse, error)
 
 	// migration methods
 	ListMigrations(ctx context.Context) ([]*types.Migration, error)

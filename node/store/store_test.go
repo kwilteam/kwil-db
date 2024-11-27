@@ -172,7 +172,7 @@ func TestBlockStore_GetTx(t *testing.T) {
 
 	for i := range block.Txns {
 		txHash := types.HashBytes(block.Txns[i])
-		height, txData, err := bs.GetTx(txHash)
+		txData, height, _, _, err := bs.GetTx(txHash)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -361,7 +361,7 @@ func TestBlockStore_StoreWithLargeTransactions(t *testing.T) {
 
 	for _, tx := range [][]byte{largeTx, otherTx} {
 		txHash := types.HashBytes(tx)
-		_, txData, err := bs.GetTx(txHash)
+		txData, _, _, _, err := bs.GetTx(txHash)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -449,7 +449,7 @@ func TestLargeBlockStore(t *testing.T) {
 
 			txIdx := rng.IntN(len(txs))
 			txHash := types.HashBytes(txs[txIdx])
-			gotHeight, gotTx, err := bs.GetTx(txHash)
+			gotTx, gotHeight, _, _, err := bs.GetTx(txHash)
 			if err != nil {
 				t.Errorf("Failed to get tx at height %d, idx %d: %v", height, txIdx, err)
 			}
@@ -627,4 +627,93 @@ func TestBlockStore_StoreResultsMismatchedCount(t *testing.T) {
 		t.Error("expected error when getting results for mismatched count")
 	}
 
+}
+
+func TestBlockStore_Result(t *testing.T) {
+	bs, _ := setupTestBlockStore(t)
+
+	block, appHash := createTestBlock(1, 3)
+	err := bs.Store(block, appHash)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	results := []ktypes.TxResult{
+		{Code: 0, Log: "success", Events: []ktypes.Event{}},
+		{Code: 1, Log: "failure", Events: []ktypes.Event{}},
+		{Code: 2, Log: "pending", Events: []ktypes.Event{}},
+	}
+
+	err = bs.StoreResults(block.Hash(), results)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	tests := []struct {
+		name    string
+		idx     uint32
+		want    *ktypes.TxResult
+		wantErr bool
+	}{
+		{
+			name: "valid first result",
+			idx:  0,
+			want: &results[0],
+		},
+		{
+			name: "valid middle result",
+			idx:  1,
+			want: &results[1],
+		},
+		{
+			name: "valid last result",
+			idx:  2,
+			want: &results[2],
+		},
+		{
+			name:    "invalid index",
+			idx:     3,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := bs.Result(block.Hash(), tt.idx)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+				return
+			}
+			if err != nil {
+				t.Errorf("unexpected error: %v", err)
+				return
+			}
+
+			if got.Code != tt.want.Code {
+				t.Errorf("Code = %v, want %v", got.Code, tt.want.Code)
+			}
+			if got.Log != tt.want.Log {
+				t.Errorf("Log = %v, want %v", got.Log, tt.want.Log)
+			}
+			if len(got.Events) != len(tt.want.Events) {
+				t.Errorf("Events length = %v, want %v", len(got.Events), len(tt.want.Events))
+			}
+		})
+	}
+
+	// Test with non-existent block hash
+	nonExistentHash := types.Hash{0xFF, 0xFF, 0xFF}
+	_, err = bs.Result(nonExistentHash, 0)
+	if err == nil {
+		t.Error("expected error for non-existent block hash, got nil")
+	}
+
+	// Test after closing store
+	bs.Close()
+	_, err = bs.Result(block.Hash(), 0)
+	if err == nil {
+		t.Error("expected error after store closure, got nil")
+	}
 }
