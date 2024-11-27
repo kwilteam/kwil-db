@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/internal/services/jsonrpc/usersvc"
+	"github.com/kwilteam/kwil-db/node/services/jsonrpc/usersvc"
 )
 
 func TestSpec(t *testing.T) {

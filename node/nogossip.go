@@ -160,7 +160,7 @@ func randomTx(size int, signer auth.Signer) ([]byte, error) {
 }
 
 // startTxAnns creates pretend transactions, adds them to the tx index, and
-// announces them to peers.
+// announces them to peers. This also does periodic reannouncement.
 func (n *Node) startTxAnns(ctx context.Context, newPeriod, reannouncePeriod time.Duration, sz int) {
 	signer := secp256k1Signer()
 	if signer == nil {

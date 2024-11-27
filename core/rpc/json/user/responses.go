@@ -73,12 +73,7 @@ type EstimatePriceResponse struct {
 }
 
 // TxQueryResponse contains the response object for MethodTxQuery.
-type TxQueryResponse struct { // types.TcTxQueryResponse but pointers
-	Hash     types.Hash               `json:"hash,omitempty"`
-	Height   int64                    `json:"height,omitempty"`
-	Tx       *types.Transaction       `json:"tx,omitempty"`
-	TxResult *types.TransactionResult `json:"tx_result,omitempty"`
-}
+type TxQueryResponse = types.TxQueryResponse
 
 type ChangesetsResponse struct {
 	Changesets []byte `json:"changesets"`

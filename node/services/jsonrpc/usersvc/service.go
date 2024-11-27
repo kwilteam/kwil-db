@@ -3,7 +3,6 @@ package usersvc
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,27 +10,57 @@ import (
 	"sync"
 	"time"
 
-	// BlockchainTransactor returns have some big structs from cometbft.
-	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types" // :(
-
 	"github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/common/ident"
-	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/log"
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	userjson "github.com/kwilteam/kwil-db/core/rpc/json/user"
 	"github.com/kwilteam/kwil-db/core/types"
 	adminTypes "github.com/kwilteam/kwil-db/core/types/admin"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
-	"github.com/kwilteam/kwil-db/internal/abci"             // errors from chainClient
-	"github.com/kwilteam/kwil-db/internal/engine/execution" // errors from engine
-	"github.com/kwilteam/kwil-db/internal/migrations"
-	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
-	"github.com/kwilteam/kwil-db/internal/services/jsonrpc/ratelimit"
-	"github.com/kwilteam/kwil-db/internal/version"
-	"github.com/kwilteam/kwil-db/internal/voting"
+	"github.com/kwilteam/kwil-db/node/ident"
+	"github.com/kwilteam/kwil-db/node/types/sql"
+
+	"github.com/kwilteam/kwil-db/node/engine/execution" // errors from engine
+	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
+	"github.com/kwilteam/kwil-db/node/services/jsonrpc/ratelimit"
 	"github.com/kwilteam/kwil-db/parse"
+	"github.com/kwilteam/kwil-db/version"
 )
+
+type EngineReader interface {
+	Procedure(ctx *common.TxContext, tx sql.DB, options *common.ExecutionData) (*sql.ResultSet, error)
+	GetSchema(dbid string) (*types.Schema, error)
+	ListDatasets(owner []byte) ([]*types.DatasetIdentifier, error)
+	Execute(ctx *common.TxContext, tx sql.DB, dbid string, query string, values map[string]any) (*sql.ResultSet, error)
+}
+
+type BlockchainTransactor interface {
+	Status(ctx context.Context) (*adminTypes.Status, error)
+	Peers(context.Context) ([]*adminTypes.PeerInfo, error)
+	BroadcastTx(ctx context.Context, tx *types.Transaction, sync uint8) (*types.ResultBroadcastTx, error)
+	TxQuery(ctx context.Context, hash types.Hash, prove bool) (*types.TxQueryResponse, error)
+}
+
+type NodeApp interface {
+	AccountInfo(ctx context.Context, db sql.DB, identifier []byte, pending bool) (balance *big.Int, nonce int64, err error)
+	Price(ctx context.Context, dbTx sql.DB, tx *types.Transaction, chainContext *common.ChainContext) (*big.Int, error)
+	// GetMigrationMetadata(ctx context.Context) (*types.MigrationMetadata, error)
+}
+
+// type Accounts interface {
+// 	GetAccount(ctx context.Context, tx sql.Executor, acctID []byte) (*types.Account, error)
+// }
+
+type Validators interface {
+	SetValidatorPower(ctx context.Context, tx sql.Executor, pubKey []byte, power int64) error
+	GetValidatorPower(ctx context.Context, tx sql.Executor, pubKey []byte) (int64, error)
+	GetValidators() []*types.Validator
+}
+
+// type Migrator interface {
+// 	GetChangesetMetadata(height int64) (*migrations.ChangesetMetadata, error)
+// 	GetChangeset(height int64, index int64) ([]byte, error)
+// 	GetGenesisSnapshotChunk(chunkIdx uint32) ([]byte, error)
+// }
 
 // Service is the "user" RPC service, also known as txsvc in other contexts.
 type Service struct {
@@ -42,11 +71,11 @@ type Service struct {
 	challengeExpiry time.Duration
 
 	engine      EngineReader
-	db          DB              // this should only ever make a read-only tx
-	nodeApp     NodeApplication // so we don't have to do ABCIQuery (indirect)
+	db          DB // this should only ever make a read-only tx
+	nodeApp     NodeApp
 	chainClient BlockchainTransactor
-	abci        ABCI // handles pricing, migration status etc.
-	migrator    Migrator
+	validators  Validators
+	// migrator    Migrator
 
 	// challenges issued to the clients
 	challengeMtx     sync.Mutex
@@ -111,7 +140,7 @@ const (
 
 // NewService creates a new instance of the user RPC service.
 func NewService(db DB, engine EngineReader, chainClient BlockchainTransactor,
-	nodeApp NodeApplication, abci ABCI, migrator Migrator, logger log.Logger, opts ...Opt) *Service {
+	nodeApp NodeApp, vals Validators, logger log.Logger, opts ...Opt) *Service {
 	cfg := &serviceCfg{
 		readTxTimeout:      defaultReadTxTimeout,
 		challengeExpiry:    defaultChallengeExpiry,
@@ -122,14 +151,14 @@ func NewService(db DB, engine EngineReader, chainClient BlockchainTransactor,
 	}
 
 	svc := &Service{
-		log:              logger,
-		readTxTimeout:    cfg.readTxTimeout,
-		engine:           engine,
-		nodeApp:          nodeApp,
-		abci:             abci,
-		chainClient:      chainClient,
-		db:               db,
-		migrator:         migrator,
+		log:           logger,
+		readTxTimeout: cfg.readTxTimeout,
+		engine:        engine,
+		nodeApp:       nodeApp,
+		chainClient:   chainClient,
+		validators:    vals,
+		db:            db,
+		// migrator:         migrator,
 		privateMode:      cfg.privateMode,
 		challengeExpiry:  cfg.challengeExpiry,
 		challenges:       make(map[[32]byte]time.Time),
@@ -187,7 +216,7 @@ func (svc *Service) Health(ctx context.Context) (json.RawMessage, bool) {
 	healthResp, jsonErr := svc.HealthMethod(ctx, &userjson.HealthRequest{})
 	if jsonErr != nil { // unable to even perform the health check
 		// This is not for a JSON-RPC client.
-		svc.log.Error("health check failure", log.Error(jsonErr))
+		svc.log.Error("health check failure", "error", jsonErr)
 		resp, _ := json.Marshal(struct {
 			Healthy bool `json:"healthy"`
 		}{}) // omit everything else since
@@ -203,14 +232,14 @@ func (svc *Service) Health(ctx context.Context) (json.RawMessage, bool) {
 func (svc *Service) HealthMethod(ctx context.Context, _ *userjson.HealthRequest) (*userjson.HealthResponse, *jsonrpc.Error) {
 	status, err := svc.chainClient.Status(ctx)
 	if err != nil {
-		svc.log.Error("chain status error", log.Error(err))
+		svc.log.Error("chain status error", "error", err)
 		jsonErr := jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "status failure", nil)
 		return nil, jsonErr
 	}
 
 	peers, err := svc.chainClient.Peers(ctx)
 	if err != nil {
-		svc.log.Error("chain peers error", log.Error(err))
+		svc.log.Error("chain peers error", "error", err)
 		jsonErr := jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "peers list failure", nil)
 		return nil, jsonErr
 	}
@@ -365,43 +394,10 @@ func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
 	return handlers
 }
 
-type EngineReader interface {
-	Procedure(ctx *common.TxContext, tx sql.DB, options *common.ExecutionData) (*sql.ResultSet, error)
-	GetSchema(dbid string) (*types.Schema, error)
-	ListDatasets(owner []byte) ([]*types.DatasetIdentifier, error)
-	Execute(ctx *common.TxContext, tx sql.DB, dbid string, query string, values map[string]any) (*sql.ResultSet, error)
-}
-
-// NOTE:
-// with ResultBroadcastTx, we only need Code/Hash/Log
-// with ResultTx we need: Tx (a []byte), Hash, Height, and some fields of TxResult
-
-type BlockchainTransactor interface {
-	Status(ctx context.Context) (*adminTypes.Status, error)
-	Peers(context.Context) ([]*adminTypes.PeerInfo, error)
-	BroadcastTx(ctx context.Context, tx []byte, sync uint8) (*cmtCoreTypes.ResultBroadcastTx, error)
-	TxQuery(ctx context.Context, hash []byte, prove bool) (*cmtCoreTypes.ResultTx, error)
-}
-
-type NodeApplication interface {
-	AccountInfo(ctx context.Context, db sql.DB, identifier []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error)
-}
-
-type ABCI interface {
-	Price(ctx context.Context, db sql.DB, tx *transactions.Transaction) (*big.Int, error)
-	GetMigrationMetadata(ctx context.Context) (*types.MigrationMetadata, error)
-}
-
-type Migrator interface {
-	GetChangesetMetadata(height int64) (*migrations.ChangesetMetadata, error)
-	GetChangeset(height int64, index int64) ([]byte, error)
-	GetGenesisSnapshotChunk(chunkIdx uint32) ([]byte, error)
-}
-
 func (svc *Service) ChainInfo(ctx context.Context, req *userjson.ChainInfoRequest) (*userjson.ChainInfoResponse, *jsonrpc.Error) {
 	status, err := svc.chainClient.Status(ctx)
 	if err != nil {
-		svc.log.Error("chain status error", log.Error(err))
+		svc.log.Error("chain status error", "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "status failure", nil)
 	}
 	return &userjson.ChainInfoResponse{
@@ -412,45 +408,41 @@ func (svc *Service) ChainInfo(ctx context.Context, req *userjson.ChainInfoReques
 }
 
 func (svc *Service) Broadcast(ctx context.Context, req *userjson.BroadcastRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
-	logger := svc.log.With(log.String("rpc", "Broadcast"), // new logger each time, ick
-		log.String("PayloadType", req.Tx.Body.PayloadType))
+	// logger := svc.log.With(log.String("rpc", "Broadcast"), // new logger each time, ick
+	// 	log.String("PayloadType", req.Tx.Body.PayloadType))
 	svc.log.Debug("incoming transaction")
+	logger := svc.log
 
-	logger = logger.With(log.String("from", hex.EncodeToString(req.Tx.Sender)))
+	// logger = logger.With(log.String("from", hex.EncodeToString(req.Tx.Sender)))
 
 	// NOTE: it's mostly pointless to have the structured transaction in the
 	// request rather than the serialized transaction, except that a client only
 	// has to serialize the *body* to sign.
-	encodedTx, err := req.Tx.MarshalBinary()
-	if err != nil {
-		logger.Error("failed to serialize transaction data", log.Error(err))
-		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "failed to serialize transaction data", nil)
-	}
 
 	var sync = userjson.BroadcastSyncSync // default to sync, not async or commit
 	if req.Sync != nil {
 		sync = *req.Sync
 	}
-	res, err := svc.chainClient.BroadcastTx(ctx, encodedTx, uint8(sync))
+	res, err := svc.chainClient.BroadcastTx(ctx, req.Tx, uint8(sync))
 	if err != nil {
-		logger.Error("failed to broadcast tx", log.Error(err))
+		logger.Error("failed to broadcast tx", "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, "failed to broadcast transaction", nil)
 	}
 
-	code, txHash := res.Code, res.Hash.Bytes()
+	code, txHash := res.Code, res.Hash
 
-	if txCode := transactions.TxCode(code); txCode != transactions.CodeOk {
+	if txCode := types.TxCode(code); txCode != types.CodeOk {
 		errData := &userjson.BroadcastError{
-			TxCode:  txCode.Uint32(), // e.g. invalid nonce, wrong chain, etc.
-			Hash:    hex.EncodeToString(txHash),
+			TxCode:  uint32(txCode), // e.g. invalid nonce, wrong chain, etc.
+			Hash:    txHash.String(),
 			Message: res.Log,
 		}
 		data, _ := json.Marshal(errData)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorTxExecFailure, "broadcast error", data)
 	}
 
-	logger.Info("broadcast transaction", log.String("TxHash", hex.EncodeToString(txHash)),
-		log.Uint("sync", sync), log.Uint("nonce", req.Tx.Body.Nonce))
+	logger.Info("broadcast transaction", "TxHash", txHash.String(),
+		"sync", sync, "nonce", req.Tx.Body.Nonce)
 	return &userjson.BroadcastResponse{
 		TxHash: txHash,
 	}, nil
@@ -473,7 +465,7 @@ func (svc *Service) BroadcastRaw(ctx context.Context, req *BroadcastRawRequest) 
 	}
 	res, err := svc.chainClient.BroadcastTx(ctx, req.Raw, uint8(sync))
 	if err != nil {
-		svc.log.Error("failed to broadcast tx", log.Error(err))
+		svc.log.Error("failed to broadcast tx", "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, "failed to broadcast transaction", nil)
 	}
 
@@ -501,13 +493,13 @@ func (svc *Service) BroadcastRaw(ctx context.Context, req *BroadcastRawRequest) 
 */
 
 func (svc *Service) EstimatePrice(ctx context.Context, req *userjson.EstimatePriceRequest) (*userjson.EstimatePriceResponse, *jsonrpc.Error) {
-	svc.log.Debug("Estimating price", log.String("payload_type", req.Tx.Body.PayloadType))
+	svc.log.Debug("Estimating price", "payload_type", req.Tx.Body.PayloadType)
 	readTx := svc.db.BeginDelayedReadTx()
 	defer readTx.Rollback(ctx)
 
-	price, err := svc.abci.Price(ctx, readTx, req.Tx)
+	price, err := svc.nodeApp.Price(ctx, readTx, req.Tx, nil)
 	if err != nil {
-		svc.log.Error("failed to estimate price", log.Error(err)) // why not tell the client though?
+		svc.log.Error("failed to estimate price", "error", err) // why not tell the client though?
 		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, "failed to estimate price", nil)
 	}
 
@@ -588,7 +580,7 @@ func (svc *Service) Ping(ctx context.Context, req *userjson.PingRequest) (*userj
 func (svc *Service) ListDatabases(ctx context.Context, req *userjson.ListDatabasesRequest) (*userjson.ListDatabasesResponse, *jsonrpc.Error) {
 	dbs, err := svc.engine.ListDatasets(req.Owner)
 	if err != nil {
-		svc.log.Error("ListDatasets failed", log.Error(err))
+		svc.log.Error("ListDatasets failed", "error", err)
 		return nil, engineError(err)
 	}
 
@@ -638,10 +630,11 @@ func engineError(err error) *jsonrpc.Error {
 }
 
 func (svc *Service) Schema(ctx context.Context, req *userjson.SchemaRequest) (*userjson.SchemaResponse, *jsonrpc.Error) {
-	logger := svc.log.With(log.String("rpc", "GetSchema"), log.String("dbid", req.DBID))
+	// logger := svc.log.With(log.String("rpc", "GetSchema"), log.String("dbid", req.DBID))
+	logger := svc.log
 	schema, err := svc.engine.GetSchema(req.DBID)
 	if err != nil {
-		logger.Debug("failed to get schema", log.Error(err))
+		logger.Debug("failed to get schema", "error", err)
 		return nil, engineError(err)
 	}
 
@@ -650,9 +643,8 @@ func (svc *Service) Schema(ctx context.Context, req *userjson.SchemaRequest) (*u
 	}, nil
 }
 
-func unmarshalActionCall(req *userjson.CallRequest) (*transactions.ActionCall, *transactions.CallMessage, error) {
-	var actionPayload transactions.ActionCall
-
+func unmarshalActionCall(req *userjson.CallRequest) (*types.ActionCall, *types.CallMessage, error) {
+	var actionPayload types.ActionCall
 	err := actionPayload.UnmarshalBinary(req.Body.Payload)
 	if err != nil {
 		return nil, nil, err
@@ -726,7 +718,7 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 		if err := svc.verifyCallChallenge([32]byte(msg.Body.Challenge)); err != nil {
 			return nil, err
 		}
-		sigtxt := transactions.CallSigText(body.DBID, body.Action,
+		sigtxt := types.CallSigText(body.DBID, body.Action,
 			msg.Body.Payload, msg.Body.Challenge)
 		err = ident.VerifySignature(msg.Sender, []byte(sigtxt), msg.Signature)
 		if err != nil {
@@ -795,7 +787,7 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 
 				_, notc, err := parse.ParseNotice(logMsg)
 				if err != nil {
-					svc.log.Error("failed to parse notice", log.Error(err))
+					svc.log.Error("failed to parse notice", "error", err)
 					continue
 				}
 
@@ -842,61 +834,38 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 }
 
 func (svc *Service) TxQuery(ctx context.Context, req *userjson.TxQueryRequest) (*userjson.TxQueryResponse, *jsonrpc.Error) {
-	logger := svc.log.With(log.String("rpc", "TxQuery"),
-		log.String("TxHash", hex.EncodeToString(req.TxHash)))
+	// logger := svc.log.With(log.String("rpc", "TxQuery"),
+	// 	log.String("TxHash", hex.EncodeToString(req.TxHash)))
+	logger := svc.log
 
-	cmtResult, err := svc.chainClient.TxQuery(ctx, req.TxHash, false)
+	txResult, err := svc.chainClient.TxQuery(ctx, req.TxHash, false)
 	if err != nil {
-		if errors.Is(err, abci.ErrTxNotFound) {
+		if errors.Is(err, types.ErrTxNotFound) {
 			return nil, jsonrpc.NewError(jsonrpc.ErrorTxNotFound, "transaction not found", nil)
 		}
-		logger.Warn("failed to query tx", log.Error(err))
+		logger.Warn("failed to query tx", "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to query transaction", nil)
 	}
 
-	// Decode the tex bytes if cmtResult.Tx is not nil, which it can be, and we
-	// are not in private mode where we do not return it to the client.
-	var tx *transactions.Transaction
-	if cmtResult.Tx != nil && !svc.privateMode {
-		tx = &transactions.Transaction{}
-		if err := tx.UnmarshalBinary(cmtResult.Tx); err != nil {
-			logger.Error("failed to deserialize transaction", log.Error(err))
-			return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to deserialize transaction", nil)
-		}
-	}
+	logger.Debug("tx query result", "result", txResult)
 
-	txResult := &transactions.TransactionResult{
-		Code:      cmtResult.TxResult.Code,
-		Log:       cmtResult.TxResult.Log,
-		GasUsed:   cmtResult.TxResult.GasUsed,
-		GasWanted: cmtResult.TxResult.GasWanted,
-		//Data: cmtResult.TxResult.Data,
-		//Events: cmtResult.TxResult.Events,
-	}
-
-	logger.Debug("tx query result", log.Any("result", txResult))
-
-	return &userjson.TxQueryResponse{
-		Hash:     cmtResult.Hash.Bytes(),
-		Height:   cmtResult.Height,
-		Tx:       tx,
-		TxResult: txResult,
-	}, nil
+	return txResult, nil
 }
 
 func (svc *Service) LoadChangeset(ctx context.Context, req *userjson.ChangesetRequest) (*userjson.ChangesetsResponse, *jsonrpc.Error) {
-	bts, err := svc.migrator.GetChangeset(req.Height, req.Index)
+	/*bts, err := svc.migrator.GetChangeset(req.Height, req.Index)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to load changesets", nil)
 	}
 
 	return &userjson.ChangesetsResponse{
 		Changesets: bts,
-	}, nil
+	}, nil*/
+	return nil, nil
 }
 
 func (svc *Service) LoadChangesetMetadata(ctx context.Context, req *userjson.ChangesetMetadataRequest) (*userjson.ChangesetMetadataResponse, *jsonrpc.Error) {
-	metadata, err := svc.migrator.GetChangesetMetadata(req.Height)
+	/*metadata, err := svc.migrator.GetChangesetMetadata(req.Height)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to load changeset metadata", nil)
 	}
@@ -905,33 +874,36 @@ func (svc *Service) LoadChangesetMetadata(ctx context.Context, req *userjson.Cha
 		Height:     metadata.Height,
 		Changesets: metadata.Chunks,
 		ChunkSizes: metadata.ChunkSizes,
-	}, nil
+	}, nil*/
+	return nil, nil
 }
 
 func (svc *Service) MigrationMetadata(ctx context.Context, req *userjson.MigrationMetadataRequest) (*userjson.MigrationMetadataResponse, *jsonrpc.Error) {
-	metadata, err := svc.abci.GetMigrationMetadata(ctx)
+	/*metadata, err := svc.abci.GetMigrationMetadata(ctx)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, err.Error(), nil)
 	}
 
 	return &userjson.MigrationMetadataResponse{
 		Metadata: metadata,
-	}, nil
+	}, nil*/
+	return nil, nil
 }
 
 func (svc *Service) MigrationGenesisChunk(ctx context.Context, req *userjson.MigrationSnapshotChunkRequest) (*userjson.MigrationSnapshotChunkResponse, *jsonrpc.Error) {
-	bts, err := svc.migrator.GetGenesisSnapshotChunk(req.ChunkIndex)
+	/*bts, err := svc.migrator.GetGenesisSnapshotChunk(req.ChunkIndex)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to load genesis chunk", nil)
 	}
 
 	return &userjson.MigrationSnapshotChunkResponse{
 		Chunk: bts,
-	}, nil
+	}, nil*/
+	return nil, nil
 }
 
 func (svc *Service) ListPendingMigrations(ctx context.Context, req *userjson.ListMigrationsRequest) (*userjson.ListMigrationsResponse, *jsonrpc.Error) {
-	readTx := svc.db.BeginDelayedReadTx()
+	/*readTx := svc.db.BeginDelayedReadTx()
 	defer readTx.Rollback(ctx)
 
 	resolutions, err := voting.GetResolutionsByType(ctx, readTx, voting.StartMigrationEventType)
@@ -956,11 +928,12 @@ func (svc *Service) ListPendingMigrations(ctx context.Context, req *userjson.Lis
 
 	return &userjson.ListMigrationsResponse{
 		Migrations: pendingMigrations,
-	}, nil
+	}, nil*/
+	return nil, nil
 }
 
 func (svc *Service) MigrationStatus(ctx context.Context, req *userjson.MigrationStatusRequest) (*userjson.MigrationStatusResponse, *jsonrpc.Error) {
-	metadata, err := svc.abci.GetMigrationMetadata(ctx)
+	/*metadata, err := svc.abci.GetMigrationMetadata(ctx)
 	if err != nil || metadata == nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "migration state unavailable", nil)
 	}
@@ -977,7 +950,8 @@ func (svc *Service) MigrationStatus(ctx context.Context, req *userjson.Migration
 			EndHeight:     metadata.MigrationState.EndHeight,
 			CurrentHeight: chainStatus.Sync.BestBlockHeight,
 		},
-	}, nil
+	}, nil*/
+	return nil, nil
 }
 
 func (svc *Service) expireChallenges() {

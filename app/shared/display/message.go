@@ -17,7 +17,7 @@ type TxHashAndExecResponse struct {
 }
 
 // NewTxHashAndExecResponse makes a TxHashAndExecResponse from a TcTxQueryResponse.
-func NewTxHashAndExecResponse(resp *types.TcTxQueryResponse) *TxHashAndExecResponse {
+func NewTxHashAndExecResponse(resp *types.TxQueryResponse) *TxHashAndExecResponse {
 	return &TxHashAndExecResponse{
 		Hash:      RespTxHash(resp.Hash),
 		QueryResp: &RespTxQuery{Msg: resp},
@@ -44,7 +44,7 @@ Height: %d
 Log: %s`, h.Hash.Hex(),
 		heightStatus(h.QueryResp.Msg),
 		h.QueryResp.Msg.Height,
-		h.QueryResp.Msg.TxResult.Log,
+		h.QueryResp.Msg.Result.Log,
 	),
 	), nil
 }
@@ -87,23 +87,23 @@ func (s RespString) MarshalText() ([]byte, error) {
 
 // RespTxQuery is used to represent a transaction response in cli
 type RespTxQuery struct {
-	Msg     *types.TcTxQueryResponse
+	Msg     *types.TxQueryResponse
 	WithRaw bool
 }
 
 func (r *RespTxQuery) MarshalJSON() ([]byte, error) {
 	out := &struct {
-		Hash     string                  `json:"hash"` // HEX
-		Height   int64                   `json:"height"`
-		Tx       *types.Transaction      `json:"tx"`
-		TxResult types.TransactionResult `json:"tx_result"`
-		Raw      string                  `json:"raw,omitempty"`
-		Warn     string                  `json:"warning,omitempty"`
+		Hash   string             `json:"hash"` // HEX
+		Height int64              `json:"height"`
+		Tx     *types.Transaction `json:"tx"`
+		Result types.TxResult     `json:"result"`
+		Raw    string             `json:"raw,omitempty"`
+		Warn   string             `json:"warning,omitempty"`
 	}{
-		Hash:     r.Msg.Hash.String(),
-		Height:   r.Msg.Height,
-		Tx:       r.Msg.Tx,
-		TxResult: r.Msg.TxResult,
+		Hash:   r.Msg.Hash.String(),
+		Height: r.Msg.Height,
+		Tx:     r.Msg.Tx,
+		Result: *r.Msg.Result,
 	}
 	// Always try to serialize to verify hash, but only show raw if requested.
 	if r.Msg.Tx != nil {
@@ -122,11 +122,11 @@ func (r *RespTxQuery) MarshalJSON() ([]byte, error) {
 	return json.Marshal(out)
 }
 
-func heightStatus(res *types.TcTxQueryResponse) string {
+func heightStatus(res *types.TxQueryResponse) string {
 	status := "failed"
 	if res.Height == -1 {
 		status = "pending"
-	} else if res.TxResult.Code == uint32(types.CodeOk) {
+	} else if res.Result.Code == uint32(types.CodeOk) {
 		status = "success"
 	}
 	return status
@@ -140,7 +140,7 @@ Log: %s`,
 		r.Msg.Hash.String(),
 		heightStatus(r.Msg),
 		r.Msg.Height,
-		r.Msg.TxResult.Log,
+		r.Msg.Result.Log,
 	)
 
 	// Always try to serialize to verify hash, but only show raw if requested.
