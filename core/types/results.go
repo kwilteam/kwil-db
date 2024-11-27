@@ -41,21 +41,22 @@ var (
 	ErrInsufficientBalance = errors.New("insufficient balance")
 )
 
+// TxResult is the result of a transaction execution on chain.
 type TxResult struct {
-	Code   uint16
-	Gas    int64
-	Log    string
-	Events []Event
+	Code   uint32  `json:"code"`
+	Gas    int64   `json:"gas"`
+	Log    string  `json:"log"`
+	Events []Event `json:"events"`
 }
 
 func (tr TxResult) MarshalBinary() ([]byte, error) {
-	data := make([]byte, 2+4, 2+4+4) // put 6 bytes, append the rest
+	data := make([]byte, 4+4, 4+4+2+2) // put 8 bytes, append the rest
 
-	// Encode code as 2 bytes
-	binary.BigEndian.PutUint16(data, tr.Code)
+	// Encode code as 4 bytes
+	binary.BigEndian.PutUint32(data, tr.Code)
 
 	// Encode log length as 4 bytes for length followed by log string
-	binary.BigEndian.PutUint32(data[2:], uint32(len(tr.Log)))
+	binary.BigEndian.PutUint32(data[4:], uint32(len(tr.Log)))
 	data = append(data, []byte(tr.Log)...)
 
 	// Events
@@ -77,45 +78,48 @@ func (tr TxResult) MarshalBinary() ([]byte, error) {
 }
 
 func (tr *TxResult) UnmarshalBinary(data []byte) error {
-	if len(data) < 6 { // Minimum length: 2 bytes code + 4 bytes log length
+	if len(data) < 8 { // Minimum length: 4 bytes code + 4 bytes log length
 		return errors.New("insufficient data")
 	}
 
-	// Decode code from first 2 bytes
-	tr.Code = binary.BigEndian.Uint16(data[:2])
+	var offset int
+
+	// Decode code from first 4 bytes
+	tr.Code = binary.BigEndian.Uint32(data)
+	offset += 4
 
 	// Decode log length and string
-	logLen := int(binary.BigEndian.Uint32(data[2:]))
-	if len(data) < 6+logLen {
+	logLen := int(binary.BigEndian.Uint32(data[offset:]))
+	offset += 4
+
+	if len(data) < offset+logLen {
 		return errors.New("insufficient data for log")
 	}
-	tr.Log = string(data[6 : 6+logLen])
-
-	// Move cursor past the log
-	cursor := 6 + logLen
+	tr.Log = string(data[offset : offset+logLen])
+	offset += logLen
 
 	// Decode events
-	if len(data) < cursor+2 {
+	if len(data) < offset+2 {
 		return errors.New("insufficient data for events length")
 	}
-	numEvents := binary.BigEndian.Uint16(data[cursor : cursor+2])
-	cursor += 2
+	numEvents := binary.BigEndian.Uint16(data[offset : offset+2])
+	offset += 2
 
 	tr.Events = make([]Event, numEvents)
 	for i := range numEvents {
-		if len(data) < cursor+2 {
+		if len(data) < offset+2 {
 			return errors.New("insufficient data for event length")
 		}
-		eventLen := binary.BigEndian.Uint16(data[cursor : cursor+2])
-		cursor += 2
+		eventLen := binary.BigEndian.Uint16(data[offset : offset+2])
+		offset += 2
 
-		if len(data) < cursor+int(eventLen) {
+		if len(data) < offset+int(eventLen) {
 			return errors.New("insufficient data for event")
 		}
-		if err := tr.Events[i].UnmarshalBinary(data[cursor : cursor+int(eventLen)]); err != nil {
+		if err := tr.Events[i].UnmarshalBinary(data[offset : offset+int(eventLen)]); err != nil {
 			return err
 		}
-		cursor += int(eventLen)
+		offset += int(eventLen)
 	}
 
 	return nil

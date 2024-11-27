@@ -124,7 +124,7 @@ type Config struct {
 
 	Consensus ConsensusConfig `koanf:"consensus" toml:"consensus"`
 	DB        DBConfig        `koanf:"db" toml:"db"`
-	// RPC RPCConfig `koanf:"rpc" toml:"rpc"`
+	RPC       RPCConfig       `koanf:"rpc" toml:"rpc"`
 }
 
 // PeerConfig corresponds to the [peer] section of the config.
@@ -167,16 +167,20 @@ type ConsensusConfig struct {
 }
 
 type RPCConfig struct {
-	ListenAddress string        `koanf:"listen" toml:"listen"`
-	Timeout       time.Duration `koanf:"timeout" toml:"timeout"`
-	MaxReqSize    int           `koanf:"max_req_size" toml:"max_req_size"`
-	// Private         bool          `koanf:"private" toml:"private"`
-	// ChallengeExpiry    time.Duration `koanf:"challenge_expiry" toml:"challenge_expiry"`
-	// ChallengeRateLimit float64       `koanf:"challenge_rate_limit" toml:"challenge_rate_limit"`
+	ListenAddress      string        `koanf:"listen" toml:"listen"`
+	Timeout            time.Duration `koanf:"timeout" toml:"timeout"`
+	MaxReqSize         int           `koanf:"max_req_size" toml:"max_req_size"`
+	Private            bool          `koanf:"private" toml:"private"`
+	ChallengeExpiry    time.Duration `koanf:"challenge_expiry" toml:"challenge_expiry"`
+	ChallengeRateLimit float64       `koanf:"challenge_rate_limit" toml:"challenge_rate_limit"`
+}
+
+func (nc Config) ToTOML() ([]byte, error) {
+	return toml.Marshal(nc)
 }
 
 func (nc *Config) SaveAs(filename string) error {
-	bts, err := toml.Marshal(nc)
+	bts, err := nc.ToTOML()
 	if err != nil {
 		return err
 	}

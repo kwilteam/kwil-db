@@ -409,18 +409,13 @@ func encodeTuple(tup []any) ([]*types.EncodedValue, error) {
 }
 
 // TxQuery get transaction by hash.
-func (c *Client) TxQuery(ctx context.Context, txHash types.Hash) (*types.TcTxQueryResponse, error) {
-	res, err := c.txClient.TxQuery(ctx, txHash)
-	if err != nil {
-		return nil, err
-	}
-
-	return res, nil
+func (c *Client) TxQuery(ctx context.Context, txHash types.Hash) (*types.TxQueryResponse, error) {
+	return c.txClient.TxQuery(ctx, txHash)
 }
 
 // WaitTx repeatedly queries at a given interval for the status of a transaction
 // until it is confirmed (is included in a block).
-func (c *Client) WaitTx(ctx context.Context, txHash types.Hash, interval time.Duration) (*types.TcTxQueryResponse, error) {
+func (c *Client) WaitTx(ctx context.Context, txHash types.Hash, interval time.Duration) (*types.TxQueryResponse, error) {
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
 	for {

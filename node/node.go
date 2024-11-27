@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"io"
 	mrand2 "math/rand/v2"
@@ -21,6 +22,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
+	adminTypes "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/kwilteam/kwil-db/node/peers"
 	"github.com/kwilteam/kwil-db/node/types"
 
@@ -299,6 +301,65 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 	n.log.Info("Node stopped.")
 	return nil
 	// return n.closers.closeAll()
+}
+
+func (n *Node) Peers(context.Context) ([]*adminTypes.PeerInfo, error) {
+	return []*adminTypes.PeerInfo{ // TODO
+		{
+			NodeInfo:   &adminTypes.NodeInfo{},
+			Inbound:    false,
+			RemoteAddr: "",
+		},
+	}, nil
+}
+
+func (n *Node) Status(ctx context.Context) (*adminTypes.Status, error) {
+	return &adminTypes.Status{ // TODO
+		Node:      &adminTypes.NodeInfo{},
+		Sync:      &adminTypes.SyncInfo{},
+		Validator: &adminTypes.ValidatorInfo{},
+		App:       &adminTypes.AppInfo{},
+	}, nil
+}
+
+func (n *Node) TxQuery(ctx context.Context, hash types.Hash, prove bool) (*ktypes.TxQueryResponse, error) {
+	raw, height, blkHash, blkIdx, err := n.bki.GetTx(hash)
+	if err != nil {
+		return nil, err
+	}
+	var tx ktypes.Transaction
+	if err = tx.UnmarshalBinary(raw); err != nil {
+		return nil, err
+	}
+	blkResults, err := n.bki.Results(blkHash)
+	if err != nil {
+		return nil, err
+	}
+	if int(blkIdx) >= len(blkResults) {
+		return nil, errors.New("invalid block index")
+	}
+	res := blkResults[blkIdx]
+	return &ktypes.TxQueryResponse{
+		Tx:     &tx,
+		Hash:   hash,
+		Height: height,
+		Result: &res,
+	}, nil
+}
+
+func (n *Node) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, _ /*sync TODO*/ uint8) (*ktypes.ResultBroadcastTx, error) {
+	rawTx, _ := tx.MarshalBinary()
+	txHash := types.HashBytes(rawTx)
+
+	n.mp.Store(txHash, rawTx)
+
+	n.log.Infof("broadcasting new tx %v", txHash)
+	n.announceTx(ctx, txHash, rawTx, n.host.ID())
+
+	return &ktypes.ResultBroadcastTx{
+		Hash: txHash,
+		// Log and Code just for sync?
+	}, nil
 }
 
 var RequiredStreamProtocols = []protocol.ID{

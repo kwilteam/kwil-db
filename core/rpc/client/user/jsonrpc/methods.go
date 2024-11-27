@@ -195,7 +195,7 @@ func (cl *Client) Query(ctx context.Context, dbid, query string) ([]map[string]a
 	return jsonUtil.UnmarshalMapWithoutFloat[[]map[string]any](res.Result)
 }
 
-func (cl *Client) TxQuery(ctx context.Context, txHash types.Hash) (*types.TcTxQueryResponse, error) {
+func (cl *Client) TxQuery(ctx context.Context, txHash types.Hash) (*types.TxQueryResponse, error) {
 	cmd := &userjson.TxQueryRequest{
 		TxHash: txHash,
 	}
@@ -205,12 +205,7 @@ func (cl *Client) TxQuery(ctx context.Context, txHash types.Hash) (*types.TcTxQu
 		return nil, err
 	}
 
-	return &types.TcTxQueryResponse{
-		Hash:     res.Hash,
-		Height:   res.Height,
-		Tx:       res.Tx,
-		TxResult: *res.TxResult,
-	}, nil
+	return res, nil
 }
 
 // ListMigrations lists all migrations that have been proposed that are still in the pending state.

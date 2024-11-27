@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/common/ident"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	"github.com/kwilteam/kwil-db/core/rpc/json/function"
 	userjson "github.com/kwilteam/kwil-db/core/rpc/json/user"
-	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
-	"github.com/kwilteam/kwil-db/internal/version"
+	"github.com/kwilteam/kwil-db/node/ident"
+	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
+	"github.com/kwilteam/kwil-db/version"
 )
 
 type Service struct{}
@@ -81,8 +81,8 @@ func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
 // is determined by the signature's type.
 func (Service) VerifySignature(_ context.Context, req *function.VerifySignatureRequest) (*function.VerifySignatureResponse, *jsonrpc.Error) {
 	convSignature := auth.Signature{
-		Signature: req.Signature.SignatureBytes,
-		Type:      req.Signature.SignatureType,
+		Data: req.Signature.SignatureBytes,
+		Type: req.Signature.SignatureType,
 	}
 
 	err := ident.VerifySignature(req.Sender, req.Msg, &convSignature)

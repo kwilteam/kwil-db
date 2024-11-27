@@ -2,28 +2,23 @@ package adminsvc
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math/big"
 
-	cmtCoreTypes "github.com/cometbft/cometbft/rpc/core/types"
-	"github.com/kwilteam/kwil-db/common/config"
-	"github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	adminjson "github.com/kwilteam/kwil-db/core/rpc/json/admin"
 	userjson "github.com/kwilteam/kwil-db/core/rpc/json/user"
-	"github.com/kwilteam/kwil-db/core/types"
 	coretypes "github.com/kwilteam/kwil-db/core/types"
 	types "github.com/kwilteam/kwil-db/core/types/admin"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
-	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
-	"github.com/kwilteam/kwil-db/internal/version"
-	"github.com/kwilteam/kwil-db/internal/voting"
-	"go.uber.org/zap"
+	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
+	"github.com/kwilteam/kwil-db/node/types/sql"
+	"github.com/kwilteam/kwil-db/node/voting"
+	"github.com/kwilteam/kwil-db/version"
 )
 
 // BlockchainTransactor specifies the methods required for the admin service to
@@ -31,7 +26,7 @@ import (
 type BlockchainTransactor interface {
 	Status(context.Context) (*types.Status, error)
 	Peers(context.Context) ([]*types.PeerInfo, error)
-	BroadcastTx(ctx context.Context, tx []byte, sync uint8) (*cmtCoreTypes.ResultBroadcastTx, error)
+	BroadcastTx(ctx context.Context, tx []byte, sync uint8) (*coretypes.ResultBroadcastTx, error)
 }
 
 type TxApp interface {
@@ -42,7 +37,13 @@ type TxApp interface {
 }
 
 type Pricer interface {
-	Price(ctx context.Context, db sql.DB, tx *transactions.Transaction) (*big.Int, error)
+	Price(ctx context.Context, db sql.DB, tx *coretypes.Transaction) (*big.Int, error)
+}
+
+type Validators interface {
+	SetValidatorPower(ctx context.Context, tx sql.Executor, pubKey []byte, power int64) error
+	GetValidatorPower(ctx context.Context, tx sql.Executor, pubKey []byte) (int64, error)
+	GetValidators() []*coretypes.Validator
 }
 
 type P2P interface {
@@ -59,11 +60,12 @@ type Service struct {
 
 	blockchain BlockchainTransactor // node is the local node that can accept transactions.
 	TxApp      TxApp
+	voting     Validators
 	db         sql.DelayedReadTxMaker
 	pricer     Pricer
 	p2p        P2P
 
-	cfg     *config.KwildConfig
+	cfg     *config.Config
 	chainID string
 	signer  auth.Signer // ed25519 signer derived from the node's private key
 }
@@ -107,7 +109,7 @@ func (svc *Service) Health(ctx context.Context) (json.RawMessage, bool) {
 	healthResp, jsonErr := svc.HealthMethod(ctx, &userjson.HealthRequest{})
 	if jsonErr != nil { // unable to even perform the health check
 		// This is not for a JSON-RPC client.
-		svc.log.Error("health check failure", log.Error(jsonErr))
+		svc.log.Error("health check failure", "error", jsonErr)
 		resp, _ := json.Marshal(struct {
 			Healthy bool `json:"healthy"`
 		}{}) // omit everything else since
@@ -128,7 +130,7 @@ func (svc *Service) HealthMethod(ctx context.Context, _ *userjson.HealthRequest)
 
 	status, err := svc.blockchain.Status(ctx)
 	if err != nil {
-		svc.log.Error("chain status error", log.Error(err))
+		svc.log.Error("chain status error", "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "status failure", nil)
 	}
 
@@ -221,7 +223,7 @@ func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
 
 // NewService constructs a new Service.
 func NewService(db sql.DelayedReadTxMaker, blockchain BlockchainTransactor, txApp TxApp,
-	pricer Pricer, p2p P2P, signer auth.Signer, cfg *config.KwildConfig,
+	pricer Pricer, p2p P2P, signer auth.Signer, cfg *config.Config,
 	chainID string, logger log.Logger) *Service {
 	return &Service{
 		blockchain: blockchain,
@@ -281,7 +283,7 @@ func (svc *Service) Peers(ctx context.Context, _ *adminjson.PeersRequest) (*admi
 }
 
 // sendTx makes a transaction and sends it to the local node.
-func (svc *Service) sendTx(ctx context.Context, payload transactions.Payload) (*userjson.BroadcastResponse, *jsonrpc.Error) {
+func (svc *Service) sendTx(ctx context.Context, payload coretypes.Payload) (*userjson.BroadcastResponse, *jsonrpc.Error) {
 	readTx := svc.db.BeginDelayedReadTx()
 	defer readTx.Rollback(ctx)
 
@@ -291,7 +293,7 @@ func (svc *Service) sendTx(ctx context.Context, payload transactions.Payload) (*
 		return nil, jsonrpc.NewError(jsonrpc.ErrorAccountInternal, "account info error", nil)
 	}
 
-	tx, err := transactions.CreateTransaction(payload, svc.chainID, uint64(nonce+1))
+	tx, err := coretypes.CreateTransaction(payload, svc.chainID, uint64(nonce+1))
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "unable to create transaction", nil)
 	}
@@ -310,29 +312,29 @@ func (svc *Service) sendTx(ctx context.Context, payload transactions.Payload) (*
 	}
 	encodedTx, err := tx.MarshalBinary()
 	if err != nil {
-		svc.log.Error("failed to serialize transaction data", log.Error(err))
+		svc.log.Error("failed to serialize transaction data", "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "failed to serialize transaction data", nil)
 	}
 
 	res, err := svc.blockchain.BroadcastTx(ctx, encodedTx, uint8(userjson.BroadcastSyncSync))
 	if err != nil {
-		svc.log.Error("failed to broadcast tx", log.Error(err))
+		svc.log.Error("failed to broadcast tx", "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, "failed to broadcast transaction", nil)
 	}
 
-	code, txHash := res.Code, res.Hash.Bytes()
+	code, txHash := res.Code, res.Hash
 
-	if txCode := transactions.TxCode(code); txCode != transactions.CodeOk {
+	if txCode := coretypes.TxCode(code); txCode != coretypes.CodeOk {
 		errData := &userjson.BroadcastError{
-			TxCode:  txCode.Uint32(), // e.g. invalid nonce, wrong chain, etc.
-			Hash:    hex.EncodeToString(txHash),
+			TxCode:  uint32(txCode), // e.g. invalid nonce, wrong chain, etc.
+			Hash:    txHash.String(),
 			Message: res.Log,
 		}
 		data, _ := json.Marshal(errData)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorTxExecFailure, "broadcast error", data)
 	}
 
-	svc.log.Info("broadcast transaction", log.String("TxHash", hex.EncodeToString(txHash)), log.Uint("nonce", tx.Body.Nonce))
+	svc.log.Info("broadcast transaction", "hash", txHash.String(), "nonce", tx.Body.Nonce)
 	return &userjson.BroadcastResponse{
 		TxHash: txHash,
 	}, nil
@@ -340,19 +342,19 @@ func (svc *Service) sendTx(ctx context.Context, payload transactions.Payload) (*
 }
 
 func (svc *Service) Approve(ctx context.Context, req *adminjson.ApproveRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
-	return svc.sendTx(ctx, &transactions.ValidatorApprove{
+	return svc.sendTx(ctx, &coretypes.ValidatorApprove{
 		Candidate: req.PubKey,
 	})
 }
 
 func (svc *Service) Join(ctx context.Context, req *adminjson.JoinRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
-	return svc.sendTx(ctx, &transactions.ValidatorJoin{
+	return svc.sendTx(ctx, &coretypes.ValidatorJoin{
 		Power: 1,
 	})
 }
 
 func (svc *Service) Remove(ctx context.Context, req *adminjson.RemoveRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
-	return svc.sendTx(ctx, &transactions.ValidatorRemove{
+	return svc.sendTx(ctx, &coretypes.ValidatorRemove{
 		Validator: req.PubKey,
 	})
 }
@@ -362,7 +364,7 @@ func (svc *Service) JoinStatus(ctx context.Context, req *adminjson.JoinStatusReq
 	defer readTx.Rollback(ctx)
 	ids, err := voting.GetResolutionIDsByTypeAndProposer(ctx, readTx, voting.ValidatorJoinEventType, req.PubKey)
 	if err != nil {
-		svc.log.Error("failed to retrieve join request", zap.Error(err))
+		svc.log.Error("failed to retrieve join request", "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to retrieve join request", nil)
 	}
 	if len(ids) == 0 {
@@ -371,13 +373,13 @@ func (svc *Service) JoinStatus(ctx context.Context, req *adminjson.JoinStatusReq
 
 	resolution, err := voting.GetResolutionInfo(ctx, readTx, ids[0])
 	if err != nil {
-		svc.log.Error("failed to retrieve join request", zap.Error(err))
+		svc.log.Error("failed to retrieve join request", "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to retrieve join request details", nil)
 	}
 
 	pendingJoin, err := toPendingInfo(ctx, readTx, resolution)
 	if err != nil {
-		svc.log.Error("failed to convert join request", zap.Error(err))
+		svc.log.Error("failed to convert join request", "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorResultEncoding, "failed to convert join request", nil)
 	}
 
@@ -387,17 +389,11 @@ func (svc *Service) JoinStatus(ctx context.Context, req *adminjson.JoinStatusReq
 }
 
 func (svc *Service) Leave(ctx context.Context, req *adminjson.LeaveRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
-	return svc.sendTx(ctx, &transactions.ValidatorLeave{})
+	return svc.sendTx(ctx, &coretypes.ValidatorLeave{})
 }
 
 func (svc *Service) ListValidators(ctx context.Context, req *adminjson.ListValidatorsRequest) (*adminjson.ListValidatorsResponse, *jsonrpc.Error) {
-	readTx := svc.db.BeginDelayedReadTx()
-	defer readTx.Rollback(ctx)
-	vals, err := voting.GetValidators(ctx, readTx)
-	if err != nil {
-		svc.log.Error("failed to retrieve voters", zap.Error(err))
-		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to retrieve voters", nil)
-	}
+	vals := svc.voting.GetValidators()
 
 	pbValidators := make([]*adminjson.Validator, len(vals))
 	for i, vi := range vals {
@@ -418,7 +414,7 @@ func (svc *Service) ListPendingJoins(ctx context.Context, req *adminjson.ListJoi
 
 	activeJoins, err := voting.GetResolutionsByType(ctx, readTx, voting.ValidatorJoinEventType)
 	if err != nil {
-		svc.log.Error("failed to retrieve active join requests", zap.Error(err))
+		svc.log.Error("failed to retrieve active join requests", "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to retrieve active join requests", nil)
 	}
 
@@ -426,7 +422,7 @@ func (svc *Service) ListPendingJoins(ctx context.Context, req *adminjson.ListJoi
 	for i, ji := range activeJoins {
 		pbJoins[i], err = toPendingInfo(ctx, readTx, ji)
 		if err != nil {
-			svc.log.Error("failed to convert join request", zap.Error(err))
+			svc.log.Error("failed to convert join request", "error", err)
 			return nil, jsonrpc.NewError(jsonrpc.ErrorResultEncoding, "failed to convert join request", nil)
 		}
 	}
@@ -443,22 +439,23 @@ func toPendingInfo(ctx context.Context, db sql.DB, resolution *resolutions.Resol
 		return nil, fmt.Errorf("failed to unmarshal join request")
 	}
 
-	expiresAt, board, approvals, err := voting.ResolutionStatus(ctx, db, resolution)
-	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve join request status")
-	}
+	// !!!
+	// expiresAt, board, approvals, err := voting.ResolutionStatus(ctx, db, resolution)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("failed to retrieve join request status")
+	// }
 
 	return &adminjson.PendingJoin{
-		Candidate: resolution.Proposer,
+		Candidate: resolutionBody.PubKey,
 		Power:     resolutionBody.Power,
-		ExpiresAt: expiresAt,
-		Board:     board,
-		Approved:  approvals,
+		ExpiresAt: resolution.ExpirationHeight,
+		Board:     nil, // resolution.Voters ???
+		Approved:  nil,
 	}, nil
 }
 
 func (svc *Service) GetConfig(ctx context.Context, req *adminjson.GetConfigRequest) (*adminjson.GetConfigResponse, *jsonrpc.Error) {
-	bts, err := svc.cfg.MarshalBinary()
+	bts, err := svc.cfg.ToTOML()
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorResultEncoding, "failed to encode node config", nil)
 	}
@@ -480,7 +477,7 @@ func (svc *Service) RemovePeer(ctx context.Context, req *adminjson.PeerRequest) 
 	fmt.Println("RemovePeer : ", req.PeerID)
 	err := svc.p2p.RemovePersistedPeer(ctx, req.PeerID)
 	if err != nil {
-		svc.log.Error("failed to remove peer", zap.Error(err))
+		svc.log.Error("failed to remove peer", "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to remove peer : "+err.Error(), nil)
 	}
 	return &adminjson.PeerResponse{}, nil
@@ -493,8 +490,8 @@ func (svc *Service) ListPeers(ctx context.Context, req *adminjson.PeersRequest) 
 }
 
 func (svc *Service) CreateResolution(ctx context.Context, req *adminjson.CreateResolutionRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
-	res := &transactions.CreateResolution{
-		Resolution: &transactions.VotableEvent{
+	res := &coretypes.CreateResolution{
+		Resolution: &coretypes.VotableEvent{
 			Type: req.ResolutionType,
 			Body: req.Resolution,
 		},
@@ -504,7 +501,7 @@ func (svc *Service) CreateResolution(ctx context.Context, req *adminjson.CreateR
 }
 
 func (svc *Service) ApproveResolution(ctx context.Context, req *adminjson.ApproveResolutionRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
-	res := &transactions.ApproveResolution{
+	res := &coretypes.ApproveResolution{
 		ResolutionID: req.ResolutionID,
 	}
 
@@ -513,7 +510,7 @@ func (svc *Service) ApproveResolution(ctx context.Context, req *adminjson.Approv
 
 /* disabled until the tx route is tested
 func (svc *Service) DeleteResolution(ctx context.Context, req *adminjson.DeleteResolutionRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
-	res := &transactions.DeleteResolution{
+	res := &coretypes.DeleteResolution{
 		ResolutionID: req.ResolutionID,
 	}
 
@@ -525,6 +522,7 @@ func (svc *Service) ResolutionStatus(ctx context.Context, req *adminjson.Resolut
 	readTx := svc.db.BeginDelayedReadTx()
 	defer readTx.Rollback(ctx)
 
+	svc.voting.GetValidators()
 	uuid := req.ResolutionID
 	resolution, err := voting.GetResolutionInfo(ctx, readTx, uuid)
 	if err != nil {
@@ -532,17 +530,17 @@ func (svc *Service) ResolutionStatus(ctx context.Context, req *adminjson.Resolut
 	}
 
 	// get the status of the resolution
-	expiresAt, board, approvals, err := voting.ResolutionStatus(ctx, readTx, resolution)
-	if err != nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to retrieve resolution status", nil)
-	}
+	// expiresAt, board, approvals, err := voting.ResolutionStatus(ctx, readTx, resolution)
+	// if err != nil {
+	// 	return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to retrieve resolution status", nil)
+	// }
 
 	return &adminjson.ResolutionStatusResponse{
 		Status: &coretypes.PendingResolution{
 			ResolutionID: req.ResolutionID,
-			ExpiresAt:    expiresAt,
-			Board:        board,
-			Approved:     approvals,
+			ExpiresAt:    resolution.ExpirationHeight,
+			Board:        nil, // resolution.Voters ???
+			Approved:     nil, // ???
 		},
 	}, nil
 }

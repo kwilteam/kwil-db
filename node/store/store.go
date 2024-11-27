@@ -45,6 +45,8 @@ var (
 	nsResults = []byte("r:") // block execution results by block hash
 )
 
+var _ types.BlockStore = &BlockStore{}
+
 func NewBlockStore(dir string, opts ...Option) (*BlockStore, error) {
 	options := &options{
 		logger: log.DiscardLogger,
@@ -266,6 +268,21 @@ func (bki *BlockStore) Results(hash types.Hash) ([]ktypes.TxResult, error) {
 	return results, err
 }
 
+func (bki *BlockStore) Result(hash types.Hash, idx uint32) (*ktypes.TxResult, error) {
+	var res ktypes.TxResult
+	err := bki.db.View(func(txn *badger.Txn) error {
+		key := slices.Concat(nsResults, hash[:], binary.LittleEndian.AppendUint32(nil, idx))
+		item, err := txn.Get(key)
+		if err != nil {
+			return err
+		}
+		return item.Value(func(val []byte) error {
+			return res.UnmarshalBinary(val)
+		})
+	})
+	return &res, err
+}
+
 func (bki *BlockStore) Store(blk *types.Block, appHash types.Hash) error {
 	blkHash := blk.Hash()
 	height := blk.Header.Height
@@ -447,12 +464,10 @@ func (bki *BlockStore) HaveTx(txHash types.Hash) bool {
 	return have
 }
 
-func (bki *BlockStore) GetTx(txHash types.Hash) (int64, []byte, error) {
-	var raw []byte
-	var height int64
-	var blkHash types.Hash
-	var blkIdx uint32
-	err := bki.db.View(func(txn *badger.Txn) error {
+// GetTx returns the raw bytes of the transaction, and information on the block
+// containing the transaction.
+func (bki *BlockStore) GetTx(txHash types.Hash) (raw []byte, height int64, blkHash types.Hash, blkIdx uint32, err error) {
+	err = bki.db.View(func(txn *badger.Txn) error {
 		// Get block info from the tx index
 		key := slices.Concat(nsTxn, txHash[:]) // tdb["t:txHash"] => blk info
 		item, err := txn.Get(key)
@@ -493,12 +508,9 @@ func (bki *BlockStore) GetTx(txHash types.Hash) (int64, []byte, error) {
 			// return nil
 		})
 	})
-	if err != nil {
-		if errors.Is(err, badger.ErrKeyNotFound) {
-			return 0, nil, types.ErrNotFound
-		}
-		return 0, nil, err
-	}
 
-	return height, raw, nil
+	if errors.Is(err, badger.ErrKeyNotFound) {
+		err = types.ErrNotFound
+	}
+	return
 }
