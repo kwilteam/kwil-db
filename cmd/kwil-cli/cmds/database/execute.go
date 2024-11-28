@@ -49,6 +49,11 @@ func executeCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("target database not properly specified: %w", err))
 				}
 
+				allScalar, err := getAllScalarsFlag(cmd)
+				if err != nil {
+					return display.PrintErr(cmd, fmt.Errorf("error getting all scalar flag: %w", err))
+				}
+
 				lowerName := strings.ToLower(actionName)
 
 				parsedArgs, err := parseInputs(args)
@@ -56,7 +61,7 @@ func executeCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("error parsing inputs: %w", err))
 				}
 
-				inputs, err := buildExecutionInputs(ctx, cl, dbId, lowerName, parsedArgs)
+				inputs, err := buildExecutionInputs(ctx, cl, dbId, lowerName, parsedArgs, allScalar)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error getting inputs: %w", err))
 				}
@@ -85,6 +90,7 @@ func executeCmd() *cobra.Command {
 	cmd.Flags().StringP(nameFlag, "n", "", "the target database name")
 	cmd.Flags().StringP(ownerFlag, "o", "", "the target database owner")
 	cmd.Flags().StringP(dbidFlag, "i", "", "the target database id")
+	bindAllScalarsFlag(cmd)
 
 	cmd.Flags().StringVarP(&actionName, actionNameFlag, "a", "", "the target action name (required)")
 
