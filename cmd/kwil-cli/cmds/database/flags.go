@@ -75,3 +75,11 @@ func getSelectedDbid(cmd *cobra.Command, conf *config.KwilCliConfig) (string, er
 
 	return utils.GenerateDBID(name, owner), nil
 }
+
+func bindAllScalarsFlag(cmd *cobra.Command) {
+	cmd.Flags().Bool("all-scalars", false, "informs the client that all values should be scalar and never be treated as arrays")
+}
+
+func getAllScalarsFlag(cmd *cobra.Command) (bool, error) {
+	return cmd.Flags().GetBool("all-scalars")
+}
