@@ -68,6 +68,11 @@ func batchCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("error getting selected action or procedure: %w", err))
 				}
 
+				allScalar, err := getAllScalarsFlag(cmd)
+				if err != nil {
+					return display.PrintErr(cmd, fmt.Errorf("error getting all scalar flag: %w", err))
+				}
+
 				fileType, err := getFileType(filePath)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error getting file type: %w", err))
@@ -87,7 +92,7 @@ func batchCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("error building inputs: %w", err))
 				}
 
-				tuples, err := buildExecutionInputs(ctx, cl, dbid, action, inputs)
+				tuples, err := buildExecutionInputs(ctx, cl, dbid, action, inputs, allScalar)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error creating action inputs: %w", err))
 				}
