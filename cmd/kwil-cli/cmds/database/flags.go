@@ -81,6 +81,7 @@ func getSelectedDbid(cmd *cobra.Command, conf *config.KwilCliConfig) (string, er
 // This includes the `execute`, `call`, and `batch` commands.
 func bindFlagsTargetingProcedureOrAction(cmd *cobra.Command) {
 	bindFlagsTargetingDatabase(cmd)
+	bindAllScalarsFlag(cmd)
 	cmd.Flags().StringP(actionNameFlag, "a", "", "the target action name")
 	err := cmd.Flags().MarkDeprecated(actionNameFlag, "pass the action name as the first argument")
 	if err != nil {
@@ -119,4 +120,12 @@ func bindFlagsTargetingDatabase(cmd *cobra.Command) {
 	cmd.Flags().StringP(nameFlag, "n", "", "the target database name")
 	cmd.Flags().StringP(ownerFlag, "o", "", "the target database owner")
 	cmd.Flags().StringP(dbidFlag, "i", "", "the target database id")
+}
+
+func bindAllScalarsFlag(cmd *cobra.Command) {
+	cmd.Flags().Bool("all-scalars", false, "informs the client that all values should be scalar and never be treated as arrays")
+}
+
+func getAllScalarsFlag(cmd *cobra.Command) (bool, error) {
+	return cmd.Flags().GetBool("all-scalars")
 }

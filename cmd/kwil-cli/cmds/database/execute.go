@@ -52,12 +52,19 @@ func executeCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("error getting selected action or procedure: %w", err))
 				}
 
+				allScalar, err := getAllScalarsFlag(cmd)
+				if err != nil {
+					return display.PrintErr(cmd, fmt.Errorf("error getting all scalar flag: %w", err))
+				}
+
+				action = strings.ToLower(action)
+
 				parsedArgs, err := parseInputs(args)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error parsing inputs: %w", err))
 				}
 
-				inputs, err := buildExecutionInputs(ctx, cl, dbid, action, parsedArgs)
+				inputs, err := buildExecutionInputs(ctx, cl, dbid, action, parsedArgs, allScalar)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error getting inputs: %w", err))
 				}

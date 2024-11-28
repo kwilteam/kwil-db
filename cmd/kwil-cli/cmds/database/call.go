@@ -70,12 +70,17 @@ func callCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("error getting selected action or procedure: %w", err))
 				}
 
+				allScalar, err := getAllScalarsFlag(cmd)
+				if err != nil {
+					return display.PrintErr(cmd, fmt.Errorf("error getting all scalar flag: %w", err))
+				}
+
 				inputs, err := parseInputs(args)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error getting inputs: %w", err))
 				}
 
-				tuples, err := buildExecutionInputs(ctx, clnt, dbid, action, inputs)
+				tuples, err := buildExecutionInputs(ctx, clnt, dbid, action, inputs, allScalar)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error creating action/procedure inputs: %w", err))
 				}
@@ -144,7 +149,9 @@ func (r *respCall) MarshalText() (text []byte, err error) {
 
 // buildProcedureInputs will build the inputs for either
 // an action or procedure executon/call.
-func buildExecutionInputs(ctx context.Context, client clientType.Client, dbid string, proc string, inputs []map[string]string) ([][]any, error) {
+// If skipArr is true, it will treat all values as a scalar value if it can't detect
+// what the expected type is (which is the case for an action).
+func buildExecutionInputs(ctx context.Context, client clientType.Client, dbid string, proc string, inputs []map[string]string, skipArr bool) ([][]any, error) {
 	schema, err := client.GetSchema(ctx, dbid)
 	if err != nil {
 		return nil, fmt.Errorf("error getting schema: %w", err)
@@ -152,7 +159,7 @@ func buildExecutionInputs(ctx context.Context, client clientType.Client, dbid st
 
 	for _, a := range schema.Actions {
 		if strings.EqualFold(a.Name, proc) {
-			return buildActionInputs(a, inputs)
+			return buildActionInputs(a, inputs, skipArr)
 		}
 	}
 
@@ -189,7 +196,10 @@ func decodeMany(inputs []string) ([][]byte, bool) {
 	return b64Arr, b64Ok
 }
 
-func buildActionInputs(a *types.Action, inputs []map[string]string) ([][]any, error) {
+// buildActionInputs will build the inputs for an action execution/call.
+// if skipArr is true, it will treat all values as a scalar value.
+// This is useful within CSV, where we do not expected arrays
+func buildActionInputs(a *types.Action, inputs []map[string]string, skipArr bool) ([][]any, error) {
 	tuples := [][]any{}
 	for _, input := range inputs {
 		newTuple := []any{}
@@ -199,15 +209,20 @@ func buildActionInputs(a *types.Action, inputs []map[string]string) ([][]any, er
 
 			val, ok := input[inputField]
 			if !ok {
-				fmt.Println(len(newTuple))
 				// if not found, we should just add nil
 				newTuple = append(newTuple, nil)
 				continue
 			}
 
-			split, err := splitIgnoringQuotedCommas(val)
-			if err != nil {
-				return nil, err
+			var split []string
+			if !skipArr {
+				var err error
+				split, err = splitIgnoringQuotedCommas(val)
+				if err != nil {
+					return nil, err
+				}
+			} else {
+				split = []string{val}
 			}
 
 			// attempt to decode base64 encoded values
