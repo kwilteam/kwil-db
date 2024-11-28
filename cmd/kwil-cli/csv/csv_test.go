@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/csv"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_CSV(t *testing.T) {
@@ -109,4 +110,23 @@ func Test_ReadDoubleQuotes(t *testing.T) {
 	if len(res[0]) != 2 {
 		t.Fatal(`expected 2 columns, got: `, len(res[0]))
 	}
+}
+
+func Test_JSON(t *testing.T) {
+	jsonCsv, err := os.Open("./json.csv")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	c, err := csv.Read(jsonCsv, csv.ContainsHeader)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	require.Equal(t, c.Header, []string{"col1", "col2"})
+
+	require.Equal(t, 1, len(c.Records))
+	require.Equal(t, 2, len(c.Records[0]))
+	require.Equal(t, "test", c.Records[0][0])
+	require.Equal(t, `{"id":"6814e549-34f2-42db-9db3-61659b12708d","type":"human","level":"human","status":"approved"}`, c.Records[0][1])
 }
