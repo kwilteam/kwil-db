@@ -73,6 +73,9 @@ func cleanHeader(header string) string {
 	// remove leading and trailing quotes
 	str = strings.Trim(str, "\"")
 
+	// remove leading and trailing spaces
+	str = strings.TrimSpace(str)
+
 	return str
 }
 
@@ -82,6 +85,7 @@ func cleanHeader(header string) string {
 // action input name.
 func (c *CSV) BuildInputs(inputNames map[string]string) ([]map[string]string, error) {
 	resultMap := make([]map[string]string, 0)
+
 	err := c.ForEachRecord(func(record []CSVCell) error {
 		input := make(map[string]string)
 
@@ -140,7 +144,6 @@ type CSVCell struct {
 func (c *CSV) buildCSVCells(record []string) []CSVCell {
 	csvVals := make([]CSVCell, len(record))
 	for i, column := range record {
-
 		csvVals[i] = CSVCell{
 			Column: &c.Header[i],
 			Value:  column,
