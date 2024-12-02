@@ -2,6 +2,7 @@ package accounts
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/big"
 
@@ -22,7 +23,7 @@ const (
 
 	sqlCreateAccount = `INSERT INTO ` + schemaName + `.accounts (identifier, balance, nonce) VALUES ($1, $2, $3)`
 
-	sqlCreateAccountIfNotExists = `INSERT INTO ` + schemaName + `.accounts (identifier, balance, nonce) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`
+	// sqlCreateAccountIfNotExists = `INSERT INTO ` + schemaName + `.accounts (identifier, balance, nonce) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`
 
 	sqlUpdateAccount = `UPDATE ` + schemaName + `.accounts SET balance = $1, nonce = $2
 		WHERE identifier = $3`
@@ -69,7 +70,7 @@ func getAccount(ctx context.Context, db sql.Executor, ident []byte) (*types.Acco
 
 	stringBal, ok := results.Rows[0][0].(string)
 	if !ok {
-		return nil, fmt.Errorf("failed to convert stored string balance to big int")
+		return nil, errors.New("failed to convert stored string balance to big int")
 	}
 
 	balance, ok := new(big.Int).SetString(stringBal, 10)
@@ -79,7 +80,7 @@ func getAccount(ctx context.Context, db sql.Executor, ident []byte) (*types.Acco
 
 	nonce, ok := results.Rows[0][1].(int64)
 	if !ok {
-		return nil, fmt.Errorf("failed to convert stored nonce to int64")
+		return nil, errors.New("failed to convert stored nonce to int64")
 	}
 
 	return &types.Account{

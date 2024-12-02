@@ -536,7 +536,7 @@ func TestValidatorStateMachine(t *testing.T) {
 			assert.NoError(t, err)
 
 			ctx := context.Background()
-			go val.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster)
+			go val.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster)
 
 			for _, act := range tc.actions {
 				act.trigger(t, leader, val)
@@ -561,7 +561,7 @@ func TestCELeaderSingleNode(t *testing.T) {
 	leader := New(ceConfigs[0])
 
 	ctx := context.Background()
-	go leader.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster)
+	go leader.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster)
 
 	require.Eventually(t, func() bool {
 		return leader.lastCommitHeight() >= 1 // Ensure that the leader mines a block
@@ -578,7 +578,7 @@ func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
 	n1 := New(ceConfigs[0])
 	// start node 1 (Leader)
 	ctx := context.Background()
-	go n1.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster)
+	go n1.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster)
 
 	time.Sleep(500 * time.Millisecond)
 	_, _, blProp := n1.info()
@@ -618,7 +618,7 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 	n1 := New(ceConfigs[0])
 	// start node 1 (Leader)
 	ctx := context.Background()
-	go n1.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster)
+	go n1.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster)
 
 	require.Eventually(t, func() bool {
 		blockRes := n1.blockResult()
@@ -675,6 +675,8 @@ func mockResetStateBroadcaster(_ int64) error {
 	return nil
 }
 
+func mockDiscoveryBroadcaster() {}
+
 func nextAppHash(prevHash types.Hash) types.Hash {
 	hasher := sha256.New()
 	txHash := types.Hash(hasher.Sum(nil))
@@ -728,4 +730,25 @@ type mockAccounts struct{}
 
 func (m *mockAccounts) Updates() []*ktypes.Account {
 	return nil
+}
+
+func (ce *ConsensusEngine) lastCommitHeight() int64 {
+	ce.stateInfo.mtx.RLock()
+	defer ce.stateInfo.mtx.RUnlock()
+
+	return ce.stateInfo.height
+}
+
+func (ce *ConsensusEngine) info() (int64, Status, *blockProposal) {
+	ce.stateInfo.mtx.RLock()
+	defer ce.stateInfo.mtx.RUnlock()
+
+	return ce.stateInfo.height, ce.stateInfo.status, ce.stateInfo.blkProp
+}
+
+func (ce *ConsensusEngine) blockResult() *blockResult {
+	ce.state.mtx.RLock()
+	defer ce.state.mtx.RUnlock()
+
+	return ce.state.blockRes
 }

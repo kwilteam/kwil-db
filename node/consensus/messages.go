@@ -162,3 +162,21 @@ func (ce *ConsensusEngine) NotifyResetState(height int64) {
 
 	go ce.sendResetMsg(height)
 }
+
+type discoveryMsg struct {
+	BestHeight int64
+	Sender     []byte
+}
+
+func (ce *ConsensusEngine) NotifyDiscoveryMessage(sender []byte, height int64) {
+	if ce.role.Load() != types.RoleLeader {
+		return
+	}
+
+	dm := &discoveryMsg{
+		BestHeight: height,
+		Sender:     sender,
+	}
+
+	ce.bestHeightCh <- dm
+}
