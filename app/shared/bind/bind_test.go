@@ -1,19 +1,17 @@
-package shared
+package bind
 
 import (
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/knadh/koanf/v2"
-	"github.com/kwilteam/kwil-db/config"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 )
 
 func TestBindDefaults(t *testing.T) {
-	k = koanf.New(".")
+	k := koanf.New(".")
 
 	type PeerConf struct {
 		IP       string `custom_tag:"ip" toml:"ip"`
@@ -40,7 +38,7 @@ func TestBindDefaults(t *testing.T) {
 			BootNode: "/ip4/127.0.0.1/tcp/6600/p2p/16Uiu2HAkx2kfP117VnYnaQGprgXBoMpjfxGXCpizju3cX7ZUzRhv",
 		},
 	}
-	if err := BindDefaults(cfg, "custom_tag"); err != nil {
+	if err := BindDefaultsTo(cfg, "custom_tag", k); err != nil {
 		t.Fatal(err)
 	}
 
@@ -52,27 +50,9 @@ func TestBindDefaults(t *testing.T) {
 
 }
 
-func TestPreRunBindFlags(t *testing.T) {
-	k = koanf.New(".")
+func TestPreRunBindEnvMatchingTo(t *testing.T) {
+	k := koanf.New(".")
 
-	cmd := &cobra.Command{Use: "test"}
-	cmd.Flags().String("test-flag", "", "test flag")
-	cmd.Flags().Int("number-value", 0, "number value")
-
-	// Set some flag values
-	cmd.Flags().Set("test-flag", "test-value")
-	cmd.Flags().Set("number-value", "42")
-
-	err := PreRunBindFlags(cmd, []string{})
-	assert.NoError(t, err)
-
-	// Verify the values were properly bound (to the underscore converted versions)
-	assert.Equal(t, "test-value", k.String("test_flag"))
-	assert.Equal(t, 42, k.Int("number_value"))
-}
-
-func TestPreRunBindEnvMatching(t *testing.T) {
-	k = koanf.New(".")
 	// k.Set("top", "default-top")
 	k.Set("test.value", "default-value")
 	k.Set("nested.section.value", "default-nested-value")
@@ -87,7 +67,7 @@ func TestPreRunBindEnvMatching(t *testing.T) {
 	defer os.Unsetenv("KWIL_NESTED_SECTION_LONG_VALUE")
 
 	cmd := &cobra.Command{Use: "test"}
-	err := PreRunBindEnvMatching(cmd, []string{})
+	err := PreRunBindEnvMatchingTo(cmd, []string{}, "KWIL_", k)
 	assert.NoError(t, err)
 
 	// k.Print()
@@ -98,55 +78,6 @@ func TestPreRunBindEnvMatching(t *testing.T) {
 	// Verify environment variables were properly bound
 	assert.Equal(t, "env-test", k.String("test.value"))
 	assert.Equal(t, "nested-value", k.String("nested.section.value"))
-}
-
-func TestPreRunBindConfigFile(t *testing.T) {
-	k = koanf.New(".")
-
-	tmpDir := t.TempDir()
-
-	configContent := `
-top_val = "a"
-
-[section]
-key = "value"
-number = 42
-
-[nested]
-string_value = "nested-string"
-`
-	configPath := filepath.Join(tmpDir, config.ConfigFileName)
-	err := os.WriteFile(configPath, []byte(configContent), 0644)
-	assert.NoError(t, err)
-
-	// Create test command with root flag
-	cmd := &cobra.Command{Use: "test"}
-	cmd.Flags().String("root", tmpDir, "root directory")
-
-	err = PreRunBindConfigFile(cmd, []string{})
-	assert.NoError(t, err)
-
-	// Verify config values were properly loaded
-	assert.Equal(t, "a", k.String("top_val"))
-	assert.Equal(t, "value", k.String("section.key"))
-	assert.Equal(t, 42, k.Int("section.number"))
-	assert.Equal(t, "nested-string", k.String("nested.string_value"))
-}
-
-func TestPreRunBindConfigFileNonExistent(t *testing.T) {
-	k = koanf.New(".")
-
-	// Create temporary directory without config file
-	tmpDir, err := os.MkdirTemp("", "kwil-test-*")
-	assert.NoError(t, err)
-	defer os.RemoveAll(tmpDir)
-
-	cmd := &cobra.Command{Use: "test"}
-	cmd.Flags().String("root", tmpDir, "root directory")
-
-	// Should not error when config file doesn't exist
-	err = PreRunBindConfigFile(cmd, []string{})
-	assert.NoError(t, err)
 }
 
 func TestMergeFunc(t *testing.T) {

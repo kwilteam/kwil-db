@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/kwilteam/kwil-db/app/shared"
+	"github.com/kwilteam/kwil-db/app/shared/bind"
 	"github.com/kwilteam/kwil-db/node"
 
 	"github.com/spf13/cobra"
@@ -19,7 +19,7 @@ func ResetCmd() *cobra.Command {
 		Short: "Reset the blockchain and the application state",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			rootDir, err := shared.RootDir(cmd)
+			rootDir, err := bind.RootDir(cmd)
 			if err != nil {
 				return err // the parent command needs to set a persistent flag named "root"
 			}

@@ -8,7 +8,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/kwilteam/kwil-db/app/shared"
+	"github.com/kwilteam/kwil-db/app/custom"
+	"github.com/kwilteam/kwil-db/app/shared/bind"
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
@@ -28,7 +29,7 @@ func TestnetCmd() *cobra.Command {
 		Use:   "testnet",
 		Short: "Generate configuration for multiple nodes",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			rootDir, err := shared.RootDir(cmd)
+			rootDir, err := bind.RootDir(cmd)
 			if err != nil {
 				return err // the parent command needs to set a persistent flag named "root"
 			}
@@ -94,7 +95,7 @@ func generateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, start
 
 		privKey := keys[i].Bytes()
 
-		cfg := shared.DefaultConfig() // not config.DefaultConfig(), so custom command config is used
+		cfg := custom.DefaultConfig() // not config.DefaultConfig(), so custom command config is used
 		cfg.PrivateKey = privKey
 		cfg.P2P.Port = startingPort + uint64(i)
 		cfg.P2P.IP = "127.0.0.1"

@@ -175,6 +175,7 @@ type RPCConfig struct {
 	ChallengeRateLimit float64       `koanf:"challenge_rate_limit" toml:"challenge_rate_limit"`
 }
 
+// ConfigToTOML marshals the config to TOML.
 func (nc Config) ToTOML() ([]byte, error) {
 	return toml.Marshal(nc)
 }

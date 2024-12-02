@@ -1,6 +1,8 @@
 module github.com/kwilteam/kwil-db
 
-go 1.22
+go 1.22.0
+
+toolchain go1.23.3
 
 // These replaces can be removed after this is merged to main.
 replace (
