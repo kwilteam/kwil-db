@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kwilteam/kwil-db/app/custom"
-	"github.com/kwilteam/kwil-db/app/shared"
+	cliCmds "github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds"
 	"github.com/kwilteam/kwil-db/config"
 )
 
@@ -61,14 +61,15 @@ func NewCustomCmd(cmdConfig CmdConfig) *cobra.Command {
 		cmdConfig.RootCmd = cmdConfig.ProjectName
 	}
 
-	shared.DefaultConfig = func() *config.Config {
-		initDefaultCfg := shared.DefaultConfig()
+	custom.DefaultConfig = func() *config.Config {
+		initDefaultCfg := config.DefaultConfig()
 		cmdConfig.DefaultConfig(initDefaultCfg)
 		return initDefaultCfg
 	}
 
-	root.AddCommand(RootCmd())
-	// root.AddCommand(kwilCLIRoot.NewRootCmd()) // TODO
+	nodeRoot := RootCmd()
+	root.AddCommand(nodeRoot)
+	root.AddCommand(cliCmds.NewRootCmd())
 
 	return root
 }
