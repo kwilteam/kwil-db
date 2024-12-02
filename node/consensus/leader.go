@@ -14,10 +14,6 @@ import (
 
 var lastReset int64 = 0
 
-func (ce *ConsensusEngine) AcceptACK() bool {
-	return ce.role.Load() == types.RoleLeader // Ack is only accepted by the leader
-}
-
 // Leader is the node that proposes the block and drives the consensus process:
 // 1. Prepare Phase:
 //   - Create a block proposal
@@ -171,7 +167,7 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 		}
 	}
 
-	if ce.hasMajorityVotes(acks) {
+	if ce.hasMajority(acks) {
 		ce.log.Info("Majority of the validators have accepted the block, proceeding to commit the block",
 			"height", ce.state.blkProp.blk.Header.Height, "hash", ce.state.blkProp.blkHash, "acks", acks, "nacks", nacks)
 		// Commit the block and broadcast the blockAnn message
@@ -196,7 +192,7 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 			}
 			ce.startNewRound(ctx)
 		}()
-	} else if ce.hasMajorityVotes(nacks) {
+	} else if ce.hasMajority(nacks) {
 		ce.log.Warnln("Majority of the validators have rejected the block, halting the network",
 			ce.state.blkProp.blk.Header.Height, acks, nacks)
 		close(ce.haltChan)

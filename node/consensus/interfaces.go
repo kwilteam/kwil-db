@@ -28,6 +28,7 @@ type Mempool interface {
 // BlockStore includes both txns and blocks
 type BlockStore interface {
 	// GetBlockByHeight(height int64) (types.Block, error)
+	Best() (int64, types.Hash, types.Hash)
 	Store(block *types.Block, appHash types.Hash) error
 	// Have(blkid types.Hash) bool
 	Get(blkid types.Hash) (*types.Block, types.Hash, error)

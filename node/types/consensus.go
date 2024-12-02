@@ -89,3 +89,33 @@ func (ar *AckRes) UnmarshalBinary(data []byte) error {
 	copy(ar.AppHash[:], data[8+HashLen:])
 	return nil
 }
+
+type DiscoveryRequest struct{}
+
+func (dr DiscoveryRequest) String() string {
+	return "DiscoveryRequest"
+}
+
+type DiscoveryResponse struct {
+	BestHeight int64
+}
+
+func (dr DiscoveryResponse) String() string {
+	return fmt.Sprintf("DiscoveryMsg{BestHeight: %d}", dr.BestHeight)
+}
+
+func (dr DiscoveryResponse) Bytes() []byte {
+	return binary.LittleEndian.AppendUint64(nil, uint64(dr.BestHeight))
+}
+
+func (dr DiscoveryResponse) MarshalBinary() ([]byte, error) {
+	return dr.Bytes(), nil
+}
+
+func (dr *DiscoveryResponse) UnmarshalBinary(data []byte) error {
+	if len(data) != 8 {
+		return errors.New("invalid DiscoveryMsg data")
+	}
+	dr.BestHeight = int64(binary.LittleEndian.Uint64(data))
+	return nil
+}

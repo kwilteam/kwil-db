@@ -8,28 +8,21 @@ import (
 )
 
 type ConsensusEngine interface {
+	Role() types.Role
+
 	AcceptProposal(height int64, blkID, prevBlkID types.Hash, leaderSig []byte, timestamp int64) bool
 	NotifyBlockProposal(blk *types.Block)
 
 	AcceptCommit(height int64, blkID types.Hash, appHash types.Hash, leaderSig []byte) bool
 	NotifyBlockCommit(blk *types.Block, appHash types.Hash)
 
-	AcceptACK() bool
 	NotifyACK(validatorPK []byte, ack types.AckRes)
+
 	NotifyResetState(height int64)
 
-	// Gonna remove this once we have the commit results such as app hash and the tx results stored in the block store.
+	NotifyDiscoveryMessage(validatorPK []byte, height int64)
 
 	Start(ctx context.Context, proposerBroadcaster consensus.ProposalBroadcaster,
 		blkAnnouncer consensus.BlkAnnouncer, ackBroadcaster consensus.AckBroadcaster,
-		blkRequester consensus.BlkRequester, stateResetter consensus.ResetStateBroadcaster) error
-
-	// Note: Not sure if these are needed here, just for separate of concerns:
-	// p2p stream handlers role is to download the messages and pass it to the
-	// respective modules to process it and we probably should not be triggering any consensus
-	// affecting methods.
-
-	// ProcessProposal(blk *types.Block, cb func(ack bool, appHash types.Hash) error)
-	// ProcessACK(validatorPK []byte, ack types.AckRes)
-	// CommitBlock(blk *types.Block, appHash types.Hash) error
+		blkRequester consensus.BlkRequester, stateResetter consensus.ResetStateBroadcaster, discoveryBroadcaster consensus.DiscoveryReqBroadcaster) error
 }
