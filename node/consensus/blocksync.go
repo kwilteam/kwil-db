@@ -41,12 +41,15 @@ func (ce *ConsensusEngine) doBlockSync(ctx context.Context) error {
 }
 
 func (ce *ConsensusEngine) discoverBestHeight(ctx context.Context) (int64, error) {
+	cancelCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
 	// Broadcast a status message to the network, to which validators would respond with their status.
 	go func() {
 		ce.discoveryReqBroadcaster()
 		for {
 			select {
-			case <-ctx.Done():
+			case <-cancelCtx.Done():
 				return
 			case <-time.After(5 * time.Second):
 				if ce.inSync.Load() {
@@ -65,24 +68,24 @@ func (ce *ConsensusEngine) discoverBestHeight(ctx context.Context) (int64, error
 
 	for {
 		select {
-		case <-ctx.Done():
-			return -1, ctx.Err()
+		case <-cancelCtx.Done():
+			return -1, cancelCtx.Err()
 		case msg := <-ce.bestHeightCh:
 			// check if the msg is from a validator
-			ce.log.Info("Received best height message", "msg", msg, "sender", hex.EncodeToString(msg.Sender))
-
 			if _, ok := ce.validatorSet[hex.EncodeToString(msg.Sender)]; !ok {
 				continue
 			}
 
-			heights[hex.EncodeToString(msg.Sender)] = msg.BestHeight
+			sender := hex.EncodeToString(msg.Sender)
+			heights[sender] = msg.BestHeight
 			if msg.BestHeight > bestHeight {
 				bestHeight = msg.BestHeight
 			}
 
-			if ce.hasMajority(len(heights)) {
+			if ce.hasMajorityFloor(len(heights)) {
 				// found the best height
-				ce.log.Info("Found the best height", "height", bestHeight)
+				// TODO: uniform logging of PubKey or IDs (hex.EncodeToString(msg.Sender) not same as peer.ID)
+				ce.log.Info("Found the best height", "height", bestHeight, "fromPeer", sender)
 				return bestHeight, nil
 			}
 		}

@@ -129,6 +129,7 @@ func (s *server) Start(ctx context.Context) error {
 	group.Go(func() error {
 		if err := s.node.Start(groupCtx, s.cfg.P2P.BootNodes...); err != nil {
 			s.log.Error("failed to start node", "error", err)
+			s.cancelCtxFunc() // Ensure all services are stopped
 			return err
 		}
 		return nil

@@ -6,7 +6,6 @@ import (
 	"context"
 	"encoding"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -362,12 +361,12 @@ func (n *Node) startAckGossip(ctx context.Context, ps *pubsub.PubSub) error {
 }
 
 func (n *Node) sendDiscoveryRequest() {
-	n.log.Info("sending Discovery request")
+	n.log.Debug("sending Discovery request")
 	n.discReq <- types.DiscoveryRequest{}
 }
 
 func (n *Node) sendDiscoveryResponse(bestHeight int64) {
-	n.log.Info("sending Discovery response", "height", bestHeight)
+	n.log.Debug("sending Discovery response", "height", bestHeight)
 	n.discResp <- types.DiscoveryResponse{BestHeight: bestHeight}
 }
 
@@ -416,17 +415,16 @@ func (n *Node) startDiscoveryRequestGossip(ctx context.Context, ps *pubsub.PubSu
 				return
 			}
 
-			n.log.Infof("received Discovery request from %s (rcvd from %s)", hex.EncodeToString(discMsg.From), discMsg.ReceivedFrom.String())
-
 			// We're only interested if we are the validator.
 			if n.ce.Role() != types.RoleValidator {
 				continue // discard, we are just relaying to leader
 			}
 
 			if peer.ID(discMsg.From) == me {
-				// n.log.Infof("ACK message from me ignored")
 				continue
 			}
+
+			n.log.Infof("received Discovery request from %s", discMsg.ReceivedFrom.String())
 
 			// Check the block store for the best height and respond
 			bestHeight, _, _ := n.bki.Best()
@@ -493,7 +491,6 @@ func (n *Node) startDiscoveryResponseGossip(ctx context.Context, ps *pubsub.PubS
 			}
 
 			if peer.ID(discMsg.From) == me {
-				// n.log.Infof("ACK message from me ignored")
 				continue
 			}
 
