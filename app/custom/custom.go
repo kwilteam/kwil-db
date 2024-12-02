@@ -2,6 +2,13 @@
 // together the kwil-cli, kwil-admin, and kwild CLIs.
 package custom
 
+import "github.com/kwilteam/kwil-db/config"
+
+// DefaultConfig is the function to return the default to all commands in this
+// app package. This is a var so that a custom binary may override the defaults,
+// which many commands obtain with this function.
+var DefaultConfig = config.DefaultConfig
+
 // binaryConfig configures the generated binary. It is able to control the binary names.
 // It is primarily used for generating useful help commands that have proper names.
 type binaryConfig struct {

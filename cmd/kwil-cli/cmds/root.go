@@ -6,7 +6,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kwilteam/kwil-db/app/custom"
-	"github.com/kwilteam/kwil-db/app/shared"
+	"github.com/kwilteam/kwil-db/app/shared/bind"
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/app/shared/version"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/account"
@@ -25,7 +25,7 @@ var longDesc = `Command line interface client for using %s.
 ` + "`" + `%s` + "`" + ` will look for a configuration file at ` + "`" + `$HOME/.kwil-cli/config.json` + "`" + `.`
 
 func NewRootCmd() *cobra.Command {
-	// The basic for ActiveConfig starts with defaults defined in DefaultKwilCliPersistedConfig.
+	// The basis for ActiveConfig starts with defaults defined in DefaultKwilCliPersistedConfig.
 	if err := config.BindDefaults(); err != nil {
 		panic(err)
 	}
@@ -37,7 +37,7 @@ func NewRootCmd() *cobra.Command {
 			custom.BinaryConfig.ProjectName, custom.BinaryConfig.ClientUsage(), custom.BinaryConfig.ClientUsage(), custom.BinaryConfig.ClientUsage()),
 		SilenceUsage:      true,
 		DisableAutoGenTag: true,
-		PersistentPreRunE: shared.ChainPreRuns(shared.MaybeEnableCLIDebug,
+		PersistentPreRunE: bind.ChainPreRuns(bind.MaybeEnableCLIDebug,
 			config.PreRunBindFlags, config.PreRunBindConfigFile,
 			config.PreRunPrintEffectiveConfig),
 		CompletionOptions: cobra.CompletionOptions{
@@ -46,7 +46,7 @@ func NewRootCmd() *cobra.Command {
 	}
 
 	// Define the --debug enabled CLI debug mode (shared.Debugf output)
-	shared.BindDebugFlag(rootCmd)
+	bind.BindDebugFlag(rootCmd)
 
 	// Bind the --config flag, which informs PreRunBindConfigFile, as well as
 	// PersistConfig and LoadPersistedConfig.

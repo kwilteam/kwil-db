@@ -1,27 +1,26 @@
 package app
 
 import (
+	"os"
+	"path/filepath"
+
 	"github.com/kwilteam/kwil-db/app/custom"
 	"github.com/kwilteam/kwil-db/app/key"
 	"github.com/kwilteam/kwil-db/app/node"
+	"github.com/kwilteam/kwil-db/app/node/conf"
 	"github.com/kwilteam/kwil-db/app/setup"
-	"github.com/kwilteam/kwil-db/app/shared"
-	"github.com/kwilteam/kwil-db/config"
+	"github.com/kwilteam/kwil-db/app/shared/bind"
 	"github.com/kwilteam/kwil-db/version"
 
 	"github.com/spf13/cobra"
 )
 
-func RootCmd() *cobra.Command {
-	var rootDir string
-	shared.BindDefaults(struct {
-		RootDir        string `koanf:"root" toml:"root"`
-		*config.Config `koanf:",flatten"`
-	}{
-		RootDir: ".testnet",
-		Config:  shared.DefaultConfig(), // not config.DefaultConfig(), so custom command config is used
-	}, "koanf")
+var defaultRoot = func() string {
+	home, _ := os.UserHomeDir()
+	return filepath.Join(home, ".kwil2")
+}()
 
+func RootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               custom.BinaryConfig.NodeCmd,
 		Short:             custom.BinaryConfig.ProjectName + " daemon",
@@ -32,20 +31,31 @@ func RootCmd() *cobra.Command {
 			DisableDefaultCmd: true,
 		},
 		Version: version.KwilVersion,
-		Example: "kwild -r .testnet",
+		Example: custom.BinaryConfig.NodeCmd + " -r ~/.kwil2",
 		// PersistentPreRunE so k has all the settings in all (sub)command's RunE funcs
-		PersistentPreRunE: shared.ChainPreRuns(shared.MaybeEnableCLIDebug, shared.PreRunBindConfigFile,
-			shared.PreRunBindFlags, shared.PreRunBindEnvMatching, shared.PreRunPrintEffectiveConfig),
+		PersistentPreRunE: bind.ChainPreRuns(bind.MaybeEnableCLIDebug, conf.PreRunBindConfigFile,
+			conf.PreRunBindFlags, conf.PreRunBindEnvMatching, conf.PreRunPrintEffectiveConfig),
 	}
 
-	shared.BindDebugFlag(cmd) // --debug enabled CLI debug mode (shared.Debugf output)
+	bind.BindDebugFlag(cmd) // --debug enabled CLI debug mode (shared.Debugf output)
 
-	shared.BindRootDirVar(cmd, &rootDir, ".testnet", "root directory") // --root/-r accessible with shared.RootDir from any subcommand
+	// conf.BindDefaults(struct {
+	// 	RootDir        string `koanf:"root" toml:"root"`
+	// 	*config.Config `koanf:",flatten"`
+	// }{
+	// 	RootDir: defaultRoot,
+	// 	Config:  custom.DefaultConfig(), // not config.DefaultConfig(), so custom command config is used
+	// })
+	conf.BindDefaultsWithRootDir(custom.DefaultConfig(), defaultRoot)
 
+	bind.BindRootDir(cmd, defaultRoot, "root directory") // --root/-r accessible with bind.RootDir from *any* subcommand
+
+	// There is a virtual "node" command grouping, but no actual "node" command yet.
 	cmd.AddCommand(node.StartCmd())
+	cmd.AddCommand(node.PrintConfigCmd())
+
 	cmd.AddCommand(setup.SetupCmd())
 	cmd.AddCommand(key.KeyCmd())
-	cmd.AddCommand(PrintConfigCmd())
 
 	return cmd
 }

@@ -1,11 +1,12 @@
-package app
+package node
 
 import (
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/app/shared"
+	"github.com/kwilteam/kwil-db/app/custom"
+	"github.com/kwilteam/kwil-db/app/node/conf"
+	"github.com/kwilteam/kwil-db/app/shared/bind"
 
-	gotoml "github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
 )
 
@@ -14,14 +15,14 @@ func PrintConfigCmd() *cobra.Command {
 		Use:   "print-config",
 		Short: "Print the node configuration",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, err := shared.RootDir(cmd)
+			_, err := bind.RootDir(cmd)
 			if err != nil {
 				return err // the parent command needs to set a persistent flag named "root"
 			}
 
-			cfg := shared.ActiveConfig()
+			cfg := conf.ActiveConfig()
 
-			rawToml, err := gotoml.Marshal(cfg)
+			rawToml, err := cfg.ToTOML()
 			if err != nil {
 				return fmt.Errorf("failed to marshal config to toml: %w", err)
 			}
@@ -32,9 +33,8 @@ func PrintConfigCmd() *cobra.Command {
 		},
 	}
 
-	// SetNodeFlags(cmd)
-	defaultCfg := shared.DefaultConfig() // not config.DefaultConfig(), so custom command config is used
-	shared.SetFlagsFromStruct(cmd.Flags(), defaultCfg)
+	defaultCfg := custom.DefaultConfig() // not config.DefaultConfig(), so custom command config is used
+	bind.SetFlagsFromStruct(cmd.Flags(), defaultCfg)
 
 	return cmd
 }

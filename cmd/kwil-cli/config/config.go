@@ -16,7 +16,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag" // with providers/posflag
 
-	"github.com/kwilteam/kwil-db/app/shared"
+	"github.com/kwilteam/kwil-db/app/shared/bind"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/helpers"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
@@ -61,13 +61,13 @@ func ActiveConfig() (*KwilCliConfig, error) {
 // BindDefaults initializes the active configuration with the defaults set by
 // DefaultKwilCliPersistedConfig.
 func BindDefaults() error {
-	return shared.BindDefaultsTo(cliCfg, "json", k)
+	return bind.BindDefaultsTo(cliCfg, "json", k)
 }
 
 // SetFlags defines flags for all fields of the default config set by
 // DefaultKwilCliPersistedConfig.
 func SetFlags(fs *pflag.FlagSet) {
-	shared.SetFlagsFromStructTags(fs, cliCfg, "json", "comment")
+	bind.SetFlagsFromStructTags(fs, cliCfg, "json", "comment")
 }
 
 // BindConfigPath defines the `--config` flag. Use [ConfigFilePath] to retrieve
@@ -106,7 +106,7 @@ func PreRunBindConfigFile(cmd *cobra.Command, args []string) error {
 			return fmt.Errorf("error loading config from %v: %w", confPath, err)
 		}
 		// Not an error, just no config file present.
-		shared.Debugf("No config file present at %v", confPath)
+		bind.Debugf("No config file present at %v", confPath)
 	}
 	return nil
 }
@@ -142,14 +142,14 @@ func PreRunBindFlags(cmd *cobra.Command, args []string) error {
 }
 
 func PreRunPrintEffectiveConfig(cmd *cobra.Command, args []string) error {
-	shared.Debugf("merged config map:\n%s\n", shared.LazyPrinter(func() string {
+	bind.Debugf("merged config map:\n%s\n", bind.LazyPrinter(func() string {
 		return k.Sprint()
 	}))
 	return nil
 }
 
 func PreRunBindEnv(cmd *cobra.Command, args []string) error {
-	return shared.PreRunBindEnvMatchingTo(cmd, args, "KWILCLI_", k)
+	return bind.PreRunBindEnvMatchingTo(cmd, args, "KWILCLI_", k)
 }
 
 type KwilCliConfig struct {

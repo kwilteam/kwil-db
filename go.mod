@@ -1,6 +1,8 @@
 module github.com/kwilteam/kwil-db
 
-go 1.22
+go 1.22.0
+
+toolchain go1.23.3
 
 // These replaces can be removed after this is merged to main.
 replace (
@@ -10,6 +12,7 @@ replace (
 
 require (
 	github.com/dgraph-io/badger/v4 v4.3.1
+	github.com/go-chi/chi/v5 v5.1.0
 	github.com/jackc/pglogrepl v0.0.0-20240307033717-828fbfe908e9
 	github.com/jackc/pgx/v5 v5.7.1
 	github.com/knadh/koanf/parsers/json v0.1.0
