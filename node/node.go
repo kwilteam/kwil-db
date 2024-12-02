@@ -66,8 +66,10 @@ type Node struct {
 	host host.Host
 
 	// broadcast channels
-	ackChan  chan AckRes         // from consensus engine, to gossip to leader
-	resetMsg chan ConsensusReset // gossiped in from peers, to consensus engine
+	ackChan  chan AckRes                  // from consensus engine, to gossip to leader
+	resetMsg chan ConsensusReset          // gossiped in from peers, to consensus engine
+	discReq  chan types.DiscoveryRequest  // from consensus engine, to gossip to leader for calculating best height of the validators during blocksync.
+	discResp chan types.DiscoveryResponse // from gossip, to consensus engine for calculating best height of the validators during blocksync.
 
 	wg  sync.WaitGroup
 	log log.Logger
@@ -121,6 +123,8 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 		dir:      cfg.RootDir,
 		ackChan:  make(chan AckRes, 1),
 		resetMsg: make(chan ConsensusReset, 1),
+		discReq:  make(chan types.DiscoveryRequest, 1),
+		discResp: make(chan types.DiscoveryResponse, 1),
 	}
 
 	host.SetStreamHandler(ProtocolIDTxAnn, node.txAnnStreamHandler)
@@ -252,7 +256,18 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 		cancel()
 		return err
 	}
+
 	if err := n.startConsensusResetGossip(ctx, ps); err != nil {
+		cancel()
+		return err
+	}
+
+	if err := n.startDiscoveryRequestGossip(ctx, ps); err != nil {
+		cancel()
+		return err
+	}
+
+	if err := n.startDiscoveryResponseGossip(ctx, ps); err != nil {
 		cancel()
 		return err
 	}
@@ -268,7 +283,7 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 		defer n.wg.Done()
 		defer cancel()
 		// TODO: umm, should node bringup the consensus engine? or server?
-		n.ce.Start(ctx, n.announceBlkProp, n.announceBlk, n.sendACK, n.getBlkHeight, n.sendReset)
+		n.ce.Start(ctx, n.announceBlkProp, n.announceBlk, n.sendACK, n.getBlkHeight, n.sendReset, n.sendDiscoveryRequest)
 	}()
 
 	n.wg.Add(1)

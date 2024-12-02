@@ -7,8 +7,10 @@ import (
 )
 
 const (
-	TopicACKs  = "acks"
-	TopicReset = "reset"
+	TopicACKs     = "acks"
+	TopicReset    = "reset"
+	TopicDiscReq  = "discovery_request"
+	TopicDiscResp = "discovery_response"
 )
 
 func subTopic(_ context.Context, ps *pubsub.PubSub, topic string) (*pubsub.Topic, *pubsub.Subscription, error) {
