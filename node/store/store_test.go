@@ -399,7 +399,7 @@ func TestLargeBlockStore(t *testing.T) {
 	var prevHash types.Hash
 	var prevAppHash types.Hash
 
-	rngSrc := rand.NewChaCha8(prevHash)
+	rngSrc := &deterministicPRNG{ChaCha8: rand.NewChaCha8(prevHash)}
 	rng := rand.New(rngSrc)
 
 	// Patterned tx body to make it compressible
@@ -716,4 +716,31 @@ func TestBlockStore_Result(t *testing.T) {
 	if err == nil {
 		t.Error("expected error after store closure, got nil")
 	}
+}
+
+type deterministicPRNG struct {
+	readBuf [8]byte
+	readLen int // 0 <= readLen <= 8
+	*rand.ChaCha8
+}
+
+// Read is a bad replacement for the actual Read method added in Go 1.23
+func (dr *deterministicPRNG) Read(p []byte) (n int, err error) {
+	// fill p by calling Uint64 in a loop until we have enough bytes
+	if dr.readLen > 0 {
+		n = copy(p, dr.readBuf[len(dr.readBuf)-dr.readLen:])
+		dr.readLen -= n
+		p = p[n:]
+	}
+	for len(p) >= 8 {
+		binary.LittleEndian.PutUint64(p, dr.ChaCha8.Uint64())
+		p = p[8:]
+		n += 8
+	}
+	if len(p) > 0 {
+		binary.LittleEndian.PutUint64(dr.readBuf[:], dr.Uint64())
+		n += copy(p, dr.readBuf[:])
+		dr.readLen = 8 - len(p)
+	}
+	return n, nil
 }

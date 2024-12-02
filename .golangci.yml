@@ -16,6 +16,9 @@ output:
 linters-settings:
   sloglint:
     forbidden-keys: ["time","level","msg","source"]
+  govet:
+    enable:
+      - stdversion
 
 linters:
   disable-all: true

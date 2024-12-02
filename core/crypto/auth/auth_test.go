@@ -1,6 +1,7 @@
 package auth_test
 
 import (
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"math/rand/v2"
@@ -102,9 +103,36 @@ func TestEd25519Identifier(t *testing.T) {
 	assert.Equal(t, ed25519Addr, address)
 }
 
+type deterministicPRNG struct {
+	readBuf [8]byte
+	readLen int // 0 <= readLen <= 8
+	*rand.ChaCha8
+}
+
+// Read is a really bad replacement for the actual Read method added in Go 1.23
+func (dr *deterministicPRNG) Read(p []byte) (n int, err error) {
+	// fill p by calling Uint64 in a loop until we have enough bytes
+	if dr.readLen > 0 {
+		n = copy(p, dr.readBuf[len(dr.readBuf)-dr.readLen:])
+		dr.readLen -= n
+		p = p[n:]
+	}
+	for len(p) >= 8 {
+		binary.LittleEndian.PutUint64(p, dr.ChaCha8.Uint64())
+		p = p[8:]
+		n += 8
+	}
+	if len(p) > 0 {
+		binary.LittleEndian.PutUint64(dr.readBuf[:], dr.Uint64())
+		n += copy(p, dr.readBuf[:])
+		dr.readLen = 8 - len(p)
+	}
+	return n, nil
+}
+
 func secp256k1Signer(t *testing.T, seed [32]byte) *auth.EthPersonalSigner {
 	rngSrc := rand.NewChaCha8(seed)
-	privKey, _, err := crypto.GenerateSecp256k1Key(rngSrc)
+	privKey, _, err := crypto.GenerateSecp256k1Key(&deterministicPRNG{ChaCha8: rngSrc})
 	require.NoError(t, err)
 
 	fmt.Println("Private Key:", privKey)
@@ -117,7 +145,7 @@ func secp256k1Signer(t *testing.T, seed [32]byte) *auth.EthPersonalSigner {
 
 func ed25519Signer(t *testing.T, seed [32]byte) *auth.Ed25519Signer {
 	rngSrc := rand.NewChaCha8(seed)
-	privKey, _, err := crypto.GenerateEd25519Key(rngSrc)
+	privKey, _, err := crypto.GenerateEd25519Key(&deterministicPRNG{ChaCha8: rngSrc})
 	require.NoError(t, err)
 
 	pBytes := privKey.Bytes()

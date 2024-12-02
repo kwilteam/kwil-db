@@ -15,7 +15,7 @@ echo "Formating source..."
 goimports -format-only -w .
 
 echo "Running unit tests..."
-go test -short ./...
+go test -short -count 1 ./...
 
 echo "Compiling kwil node application..."
 go build -o /dev/null ./cmd/kwild
