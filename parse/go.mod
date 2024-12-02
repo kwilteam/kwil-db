@@ -1,6 +1,6 @@
 module github.com/kwilteam/kwil-db/parse
 
-go 1.22
+go 1.22.0
 
 require (
 	github.com/antlr4-go/antlr/v4 v4.13.0
