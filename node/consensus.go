@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -20,6 +21,8 @@ import (
 type (
 	ConsensusReset = types.ConsensusReset
 	AckRes         = types.AckRes
+	DiscReq        = types.DiscoveryRequest
+	DiscRes        = types.DiscoveryResponse
 )
 
 type blockProp struct {
@@ -324,7 +327,7 @@ func (n *Node) startAckGossip(ctx context.Context, ps *pubsub.PubSub) error {
 			}
 
 			// We're only interested if we are the leader.
-			if !n.ce.AcceptACK() {
+			if n.ce.Role() != types.RoleLeader {
 				// n.log.Debugln("discarding ack meant for leader")
 				continue // discard, we are just relaying to leader
 			}
@@ -358,56 +361,165 @@ func (n *Node) startAckGossip(ctx context.Context, ps *pubsub.PubSub) error {
 	return nil
 }
 
-/* commented because we're probably going with gossipsub
-func (n *Node) blkAckStreamHandler(s network.Stream) {
-	defer s.Close()
-
-	if !n.leader.Load() {
-		return
-	}
-
-	// "ack:blkid:appHash" // empty appHash means NACK
-	ackMsg := make([]byte, 128)
-	nr, err := s.Read(ackMsg)
-	if err != nil {
-		n.log.Infof("failed to read block proposal ID:", err)
-		return
-	}
-	blkAck, ok := bytes.CutPrefix(ackMsg[:nr], []byte(ackMsg))
-	if !ok {
-		n.log.Infof("bad block proposal ID:", ackMsg)
-		return
-	}
-	blkID, appHashStr, ok := strings.Cut(string(blkAck), ":")
-	if !ok {
-		n.log.Infof("bad block proposal ID:", blkAck)
-		return
-	}
-
-	blkHash, err := types.NewHashFromString(blkID)
-	if err != nil {
-		n.log.Infof("bad block ID in ack msg:", err)
-		return
-	}
-	isNACK := len(appHashStr) == 0
-	if isNACK {
-		// do something
-		n.log.Infof("got nACK for block %v", blkHash)
-		return
-	}
-
-	appHash, err := types.NewHashFromString(appHashStr)
-	if err != nil {
-		n.log.Infof("bad block ID in ack msg:", err)
-		return
-	}
-
-	// as leader, we tally the responses
-	n.log.Infof("got ACK for block %v, app hash %v", blkHash, appHash)
-
-	return
+func (n *Node) sendDiscoveryRequest() {
+	n.log.Info("sending Discovery request")
+	n.discReq <- types.DiscoveryRequest{}
 }
-*/
+
+func (n *Node) sendDiscoveryResponse(bestHeight int64) {
+	n.log.Info("sending Discovery response", "height", bestHeight)
+	n.discResp <- types.DiscoveryResponse{BestHeight: bestHeight}
+}
+
+func (n *Node) startDiscoveryRequestGossip(ctx context.Context, ps *pubsub.PubSub) error {
+	topicDisc, subDisc, err := subTopic(ctx, ps, TopicDiscReq)
+	if err != nil {
+		return err
+	}
+
+	subCanceled := make(chan struct{})
+	n.log.Info("starting Discovery request gossip")
+
+	n.wg.Add(1)
+	go func() {
+		defer func() {
+			<-subCanceled
+			topicDisc.Close()
+			n.wg.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-n.discReq:
+				n.log.Debugln("publishing Discovery request")
+				err := topicDisc.Publish(ctx, nil)
+				if err != nil {
+					n.log.Warnf("Publish Discovery request failure: %v", err)
+					return
+				}
+			}
+		}
+	}()
+
+	me := n.host.ID()
+
+	go func() {
+		defer close(subCanceled)
+		defer subDisc.Cancel()
+		for {
+			discMsg, err := subDisc.Next(ctx)
+			if err != nil {
+				if !errors.Is(err, context.Canceled) {
+					n.log.Infof("subTx.Next:", err)
+				}
+				return
+			}
+
+			n.log.Infof("received Discovery request from %s (rcvd from %s)", hex.EncodeToString(discMsg.From), discMsg.ReceivedFrom.String())
+
+			// We're only interested if we are the validator.
+			if n.ce.Role() != types.RoleValidator {
+				continue // discard, we are just relaying to leader
+			}
+
+			if peer.ID(discMsg.From) == me {
+				// n.log.Infof("ACK message from me ignored")
+				continue
+			}
+
+			// Check the block store for the best height and respond
+			bestHeight, _, _ := n.bki.Best()
+			n.sendDiscoveryResponse(bestHeight)
+
+			n.log.Info("responded to Discovery request", "height", bestHeight)
+		}
+	}()
+
+	return nil
+}
+
+func (n *Node) startDiscoveryResponseGossip(ctx context.Context, ps *pubsub.PubSub) error {
+	topicDisc, subDisc, err := subTopic(ctx, ps, TopicDiscResp)
+	if err != nil {
+		return err
+	}
+
+	subCanceled := make(chan struct{})
+
+	n.log.Info("starting Discovery response gossip")
+
+	n.wg.Add(1)
+	go func() {
+		defer func() {
+			<-subCanceled
+			topicDisc.Close()
+			n.wg.Done()
+		}()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case msg := <-n.discResp:
+				n.log.Debugln("publishing Discovery Response message", msg.BestHeight)
+				discMsg, _ := msg.MarshalBinary()
+				err := topicDisc.Publish(ctx, discMsg)
+				if err != nil {
+					n.log.Warnf("Publish Discovery resp failure (%v): %v", msg.BestHeight, err)
+					return
+				}
+			}
+
+		}
+	}()
+
+	me := n.host.ID()
+
+	go func() {
+		defer close(subCanceled)
+		defer subDisc.Cancel()
+		for {
+			discMsg, err := subDisc.Next(ctx)
+			if err != nil {
+				if !errors.Is(err, context.Canceled) {
+					n.log.Infof("subTx.Next:", err)
+				}
+				return
+			}
+
+			// We're only interested if we are the leader.
+			if n.ce.Role() != types.RoleLeader {
+				continue // discard, we are just relaying to leader
+			}
+
+			if peer.ID(discMsg.From) == me {
+				// n.log.Infof("ACK message from me ignored")
+				continue
+			}
+
+			var dm DiscRes
+			err = dm.UnmarshalBinary(discMsg.Data)
+			if err != nil {
+				n.log.Infof("failed to decode Discovery msg: %v", err)
+				continue
+			}
+			fromPeerID := discMsg.GetFrom()
+
+			n.log.Infof("received Discovery response msg from %s (rcvd from %s), data = %d",
+				fromPeerID.String(), discMsg.ReceivedFrom.String(), dm.BestHeight)
+
+			peerPubKey, err := fromPeerID.ExtractPublicKey()
+			if err != nil {
+				n.log.Infof("failed to extract pubkey from peer ID %v: %v", fromPeerID, err)
+				continue
+			}
+			pubkeyBytes, _ := peerPubKey.Raw() // does not error for secp256k1 or ed25519
+			go n.ce.NotifyDiscoveryMessage(pubkeyBytes, dm.BestHeight)
+		}
+	}()
+
+	return nil
+}
 
 func (n *Node) sendReset(height int64) error {
 	n.resetMsg <- types.ConsensusReset{

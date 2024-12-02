@@ -182,9 +182,15 @@ func (ce *dummyCE) NotifyBlockProposal(blk *types.Block) {
 	}
 }
 
+func (ce *dummyCE) NotifyDiscoveryMessage(validatorPK []byte, height int64) {}
+
+func (ce *dummyCE) Role() types.Role {
+	return types.RoleLeader
+}
+
 func (ce *dummyCE) Start(ctx context.Context, proposerBroadcaster consensus.ProposalBroadcaster,
 	blkAnnouncer consensus.BlkAnnouncer, ackBroadcaster consensus.AckBroadcaster,
-	blkRequester consensus.BlkRequester, stateResetter consensus.ResetStateBroadcaster) error {
+	blkRequester consensus.BlkRequester, stateResetter consensus.ResetStateBroadcaster, discReqBroadcaster consensus.DiscoveryReqBroadcaster) error {
 	ce.proposerBroadcaster = proposerBroadcaster
 	ce.blkAnnouncer = blkAnnouncer
 	ce.ackBroadcaster = ackBroadcaster

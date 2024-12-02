@@ -2,17 +2,18 @@ package accounts
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 )
 
 var (
-	ErrInsufficientFunds = fmt.Errorf("insufficient funds")
-	ErrConvertToBigInt   = fmt.Errorf("could not convert to big int")
-	ErrInvalidNonce      = fmt.Errorf("invalid nonce")
-	ErrAccountNotFound   = fmt.Errorf("account not found")
-	ErrNegativeBalance   = fmt.Errorf("negative balance not permitted")
-	ErrNegativeTransfer  = fmt.Errorf("negative transfer not permitted")
+	ErrInsufficientFunds = errors.New("insufficient funds")
+	ErrConvertToBigInt   = errors.New("could not convert to big int")
+	ErrInvalidNonce      = errors.New("invalid nonce")
+	ErrAccountNotFound   = errors.New("account not found")
+	ErrNegativeBalance   = errors.New("negative balance not permitted")
+	ErrNegativeTransfer  = errors.New("negative transfer not permitted")
 )
 
 // errInsufficientFunds formats an error message for insufficient funds

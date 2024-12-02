@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"bytes"
 	"context"
 	"encoding/hex"
 	"errors"
@@ -52,15 +53,17 @@ type ConsensusEngine struct {
 	validatorSet  map[string]ktypes.Validator
 
 	// stores state machine state for the consensus engine
-	state state
+	state  state
+	inSync atomic.Bool // set when the node is still catching up with the network during bootstrapping
 
 	// copy of the state info for the p2p layer usage.
 	stateInfo StateInfo
 
 	// Channels
-	msgChan   chan consensusMessage
-	haltChan  chan struct{} // can take a msg or reason for halting the network
-	resetChan chan int64    // to reset the state of the consensus engine
+	msgChan      chan consensusMessage
+	haltChan     chan struct{}      // can take a msg or reason for halting the network
+	resetChan    chan int64         // to reset the state of the consensus engine
+	bestHeightCh chan *discoveryMsg // to sync the leader with the network
 
 	// interfaces
 	db         DB
@@ -71,11 +74,12 @@ type ConsensusEngine struct {
 	validators Validators
 
 	// Broadcasters
-	proposalBroadcaster ProposalBroadcaster
-	blkAnnouncer        BlkAnnouncer
-	ackBroadcaster      AckBroadcaster
-	blkRequester        BlkRequester
-	rstStateBroadcaster ResetStateBroadcaster
+	proposalBroadcaster     ProposalBroadcaster
+	blkAnnouncer            BlkAnnouncer
+	ackBroadcaster          AckBroadcaster
+	blkRequester            BlkRequester
+	rstStateBroadcaster     ResetStateBroadcaster
+	discoveryReqBroadcaster DiscoveryReqBroadcaster
 }
 
 // ProposalBroadcaster broadcasts the new block proposal message to the network
@@ -91,6 +95,8 @@ type AckBroadcaster func(ack bool, height int64, blkID types.Hash, appHash *type
 type BlkRequester func(ctx context.Context, height int64) (types.Hash, types.Hash, []byte, error)
 
 type ResetStateBroadcaster func(height int64) error
+
+type DiscoveryReqBroadcaster func()
 
 type Status string
 
@@ -130,8 +136,6 @@ type state struct {
 	// Votes: Applicable only to the leader
 	// These are the Acks received from the validators.
 	votes map[string]*vote
-
-	// chainContext *common.ChainContext
 }
 
 type blockResult struct {
@@ -235,6 +239,7 @@ func New(cfg *Config) *ConsensusEngine {
 		msgChan:      make(chan consensusMessage, 1), // buffer size??
 		haltChan:     make(chan struct{}, 1),
 		resetChan:    make(chan int64, 1),
+		bestHeightCh: make(chan *discoveryMsg, 1),
 		// interfaces
 		mempool:    cfg.Mempool,
 		blockStore: cfg.BlockStore,
@@ -251,12 +256,14 @@ func New(cfg *Config) *ConsensusEngine {
 }
 
 func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster ProposalBroadcaster,
-	blkAnnouncer BlkAnnouncer, ackBroadcaster AckBroadcaster, blkRequester BlkRequester, stateResetter ResetStateBroadcaster) error {
+	blkAnnouncer BlkAnnouncer, ackBroadcaster AckBroadcaster, blkRequester BlkRequester, stateResetter ResetStateBroadcaster,
+	discoveryReqBroadcaster DiscoveryReqBroadcaster) error {
 	ce.proposalBroadcaster = proposerBroadcaster
 	ce.blkAnnouncer = blkAnnouncer
 	ce.ackBroadcaster = ackBroadcaster
 	ce.blkRequester = blkRequester
 	ce.rstStateBroadcaster = stateResetter
+	ce.discoveryReqBroadcaster = discoveryReqBroadcaster
 
 	ce.log.Info("Starting the consensus engine")
 
@@ -269,7 +276,7 @@ func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster Propos
 	ce.startMining(ctx)
 
 	// start the event loop
-	return ce.runEventLoop(ctx)
+	return ce.runConsensusEventLoop(ctx)
 }
 
 // runEventLoop starts the event loop for the consensus engine.
@@ -286,7 +293,7 @@ func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster Propos
 //
 // Apart from the above events, the node also periodically checks if it needs to
 // catchup with the network and reannounce the messages.
-func (ce *ConsensusEngine) runEventLoop(ctx context.Context) error {
+func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 	// TODO: make these configurable?
 	catchUpTicker := time.NewTicker(5 * time.Second)
 	reannounceTicker := time.NewTicker(3 * time.Second)
@@ -394,35 +401,8 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
-	// initialize the consensus engine state
-	if err := ce.init(); err != nil {
-		return err
-	}
-
-	ce.log.Info("Initial APP State", "height", ce.state.lc.height, "appHash", ce.state.lc.appHash)
-	// Replay blocks from the blockstore.
-	startHeight := ce.state.lc.height + 1
-	t0 := time.Now()
-
-	if err := ce.replayLocalBlocks(); err != nil {
-		return err
-	}
-	ce.log.Info("Replayed blocks from the blockstore", "from", startHeight, "to (excluding)", ce.state.lc.height+1, "elapsed", time.Since(t0), "appHash", ce.state.lc.appHash)
-
-	startHeight = ce.state.lc.height + 1
-	t0 = time.Now()
-	// Replay blocks from the network
-	if err := ce.replayBlockFromNetwork(ctx); err != nil {
-		return err
-	}
-	ce.log.Info("Replayed blocks from the network", "from", startHeight, "to (excluding)", ce.state.lc.height+1, "elapsed", time.Since(t0), "appHash", ce.state.lc.appHash)
-
-	return nil
-}
-
-// init initializes the node state based on the appState info.
-func (ce *ConsensusEngine) init() error {
-	ctx := context.Background()
+	// set the node to catchup mode
+	ce.inSync.Store(true)
 
 	readTx, err := ce.db.BeginReadTx(ctx)
 	if err != nil {
@@ -430,45 +410,72 @@ func (ce *ConsensusEngine) init() error {
 	}
 	defer readTx.Rollback(ctx)
 
-	height, appHash, dirty, err := meta.GetChainState(ctx, readTx)
+	// retrieve the last committed block info from the blockstore
+	storeHeight, blkHash, storeAppHash := ce.blockStore.Best()
+
+	// retrieve the app state from the meta table
+	appHeight, appHash, dirty, err := meta.GetChainState(ctx, readTx)
 	if err != nil {
 		return err
 	}
 
-	// Retrieve the last commit info from the blockstore based on the appState info.
-	if height > 0 {
+	if dirty {
+		ce.log.Info("App state is dirty, partially committed??") // TODO: what to be done here??
+	}
 
-		// TODO: check for any uncommitted transaction in PG and rollback
-		// retrieve the block from the blockstore
-		hash, blk, _, err := ce.blockStore.GetByHeight(height)
-		if err != nil {
-			// This is not possible. The state.json will have the height, only when the block is committed.
+	ce.log.Info("Initial Node state: ", "appHeight", appHeight, "storeHeight", storeHeight, "appHash", appHash, "storeAppHash", storeAppHash)
+
+	if appHeight > storeHeight {
+		// This is not possible, App can't be ahead of the store
+		return fmt.Errorf("app height %d is greater than the store height %d", appHeight, storeHeight)
+	}
+
+	if appHeight == storeHeight && !bytes.Equal(appHash, storeAppHash[:]) {
+		// This is not possible, PG mismatches with the Blockstore return error
+		return fmt.Errorf("AppHash mismatch, appHash: %x, storeAppHash: %x", appHash, storeAppHash)
+	}
+
+	if appHeight > 0 {
+		ce.setLastCommitInfo(appHeight, blkHash, types.Hash(appHash))
+	}
+
+	if appHeight < storeHeight {
+		// Replay the blocks from the blockstore
+		if err := ce.replayFromBlockStore(appHeight+1, storeHeight); err != nil {
 			return err
 		}
-		ce.log.Info("Last committed block", "height", blk.Header.Height, "hash", hash)
+	}
 
-		if dirty {
-			ce.log.Warnf("Fixing dirty apphash!")
-			// This implies that the commit was successful, but the final appHash is not yet updated.
-		}
-
-		ce.state.lc.height = height
-		ce.state.lc.appHash = ktypes.Hash(appHash)
-		ce.state.lc.blkHash = hash
-		ce.state.lc.blk = blk
-
-		ce.stateInfo.height = height
-		ce.stateInfo.status = Committed
-		ce.stateInfo.blkProp = nil
+	if err := ce.doBlockSync(ctx); err != nil {
+		return err
 	}
 
 	return nil
 }
 
+func (ce *ConsensusEngine) setLastCommitInfo(height int64, blkHash types.Hash, appHash types.Hash) {
+	ce.state.lc.height = height
+	ce.state.lc.appHash = appHash
+	ce.state.lc.blkHash = blkHash
+	// TODO: do we need to set the block ???
+	// ce.state.lc.blk = nil
+
+	ce.stateInfo.height = height
+	ce.stateInfo.status = Committed
+	ce.stateInfo.blkProp = nil
+}
+
 // replayBlocks replays all the blocks from the blockstore if the app hasn't played all the blocks yet.
-func (ce *ConsensusEngine) replayLocalBlocks() error {
-	for {
-		_, blk, appHash, err := ce.blockStore.GetByHeight(ce.state.lc.height + 1)
+func (ce *ConsensusEngine) replayFromBlockStore(startHeight, bestHeight int64) error {
+	height := startHeight
+	t0 := time.Now()
+
+	if startHeight <= bestHeight {
+		return nil // already caught up with the blockstore
+	}
+
+	for height <= bestHeight {
+		_, blk, appHash, err := ce.blockStore.GetByHeight(height)
 		if err != nil {
 			if !errors.Is(err, types.ErrNotFound) {
 				return fmt.Errorf("unexpected blockstore error: %w", err)
@@ -480,32 +487,12 @@ func (ce *ConsensusEngine) replayLocalBlocks() error {
 		if err != nil {
 			return fmt.Errorf("failed replaying block: %w", err)
 		}
+
+		height++
 	}
-}
 
-// replayBlockFromNetwork requests the next blocks from the network and processes it
-// until it catches up with its peers.
-func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context) error {
-	for {
-		_, appHash, rawblk, err := ce.blkRequester(ctx, ce.state.lc.height+1)
-		if err != nil { // all kinds of errors?
-			ce.log.Info("Error requesting block from network", "height", ce.state.lc.height+1, "error", err)
-			return nil // no more blocks to sync from network.
-		}
-
-		if ce.state.lc.height != 0 && appHash.IsZero() {
-			return nil
-		}
-
-		blk, err := types.DecodeBlock(rawblk)
-		if err != nil {
-			return fmt.Errorf("failed to decode block: %w", err)
-		}
-
-		if err := ce.processAndCommit(blk, appHash); err != nil {
-			return err
-		}
-	}
+	ce.log.Info("Replayed blocks from the blockstore", "from", startHeight, "to", height, "elapsed", time.Since(t0), "appHash", ce.state.lc.appHash)
+	return nil
 }
 
 // Blocksync need to be way quicker, whereas the others need not be that frequent.
@@ -605,34 +592,17 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 	return nil
 }
 
+func (ce *ConsensusEngine) Role() types.Role {
+	return ce.role.Load().(types.Role)
+}
+
 func (ce *ConsensusEngine) updateNetworkHeight(height int64) {
 	if height > ce.networkHeight.Load() {
 		ce.networkHeight.Store(height)
 	}
 }
 
-func (ce *ConsensusEngine) hasMajorityVotes(cnt int) bool {
+func (ce *ConsensusEngine) hasMajority(cnt int) bool {
 	threshold := len(ce.validatorSet)/2 + 1 // majority votes required
 	return cnt >= threshold
-}
-
-func (ce *ConsensusEngine) lastCommitHeight() int64 {
-	ce.stateInfo.mtx.RLock()
-	defer ce.stateInfo.mtx.RUnlock()
-
-	return ce.stateInfo.height
-}
-
-func (ce *ConsensusEngine) info() (int64, Status, *blockProposal) {
-	ce.stateInfo.mtx.RLock()
-	defer ce.stateInfo.mtx.RUnlock()
-
-	return ce.stateInfo.height, ce.stateInfo.status, ce.stateInfo.blkProp
-}
-
-func (ce *ConsensusEngine) blockResult() *blockResult {
-	ce.state.mtx.RLock()
-	defer ce.state.mtx.RUnlock()
-
-	return ce.state.blockRes
 }
