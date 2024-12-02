@@ -167,7 +167,7 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 		}
 	}
 
-	if ce.hasMajority(acks) {
+	if ce.hasMajorityCeil(acks) {
 		ce.log.Info("Majority of the validators have accepted the block, proceeding to commit the block",
 			"height", ce.state.blkProp.blk.Header.Height, "hash", ce.state.blkProp.blkHash, "acks", acks, "nacks", nacks)
 		// Commit the block and broadcast the blockAnn message
@@ -192,7 +192,7 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 			}
 			ce.startNewRound(ctx)
 		}()
-	} else if ce.hasMajority(nacks) {
+	} else if ce.hasMajorityCeil(nacks) {
 		ce.log.Warnln("Majority of the validators have rejected the block, halting the network",
 			ce.state.blkProp.blk.Header.Height, acks, nacks)
 		close(ce.haltChan)

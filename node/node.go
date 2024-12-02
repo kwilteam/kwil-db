@@ -279,11 +279,17 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 
 	// mine is our block anns goroutine, which must be only for leader
 	n.wg.Add(1)
+	var nodeErr error
+
 	go func() {
 		defer n.wg.Done()
 		defer cancel()
 		// TODO: umm, should node bringup the consensus engine? or server?
-		n.ce.Start(ctx, n.announceBlkProp, n.announceBlk, n.sendACK, n.getBlkHeight, n.sendReset, n.sendDiscoveryRequest)
+		nodeErr = n.ce.Start(ctx, n.announceBlkProp, n.announceBlk, n.sendACK, n.getBlkHeight, n.sendReset, n.sendDiscoveryRequest)
+		if err != nil {
+			n.log.Errorf("Consensus engine failed: %v", nodeErr)
+			return // cancel context
+		}
 	}()
 
 	n.wg.Add(1)
@@ -298,8 +304,7 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 	n.wg.Wait()
 
 	n.log.Info("Node stopped.")
-	return nil
-	// return n.closers.closeAll()
+	return nodeErr
 }
 
 func (n *Node) Peers(context.Context) ([]*adminTypes.PeerInfo, error) {

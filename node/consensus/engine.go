@@ -602,7 +602,12 @@ func (ce *ConsensusEngine) updateNetworkHeight(height int64) {
 	}
 }
 
-func (ce *ConsensusEngine) hasMajority(cnt int) bool {
+func (ce *ConsensusEngine) hasMajorityCeil(cnt int) bool {
 	threshold := len(ce.validatorSet)/2 + 1 // majority votes required
+	return cnt >= threshold
+}
+
+func (ce *ConsensusEngine) hasMajorityFloor(cnt int) bool {
+	threshold := len(ce.validatorSet) / 2
 	return cnt >= threshold
 }
