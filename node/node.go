@@ -481,6 +481,8 @@ func connectPeer(ctx context.Context, addr string, host host.Host) (*peer.AddrIn
 	return info, host.Connect(ctx, *info)
 }
 
+// TODO: this is WRONG considering paths like ~user. We should rewrite this
+// correctly, for both ~/ and ~user/ and without assuming a platform separator.
 func ExpandPath(path string) (string, error) {
 	if strings.HasPrefix(path, "~") {
 		home, err := os.UserHomeDir()

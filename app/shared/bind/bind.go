@@ -1,68 +1,29 @@
-package shared
+package bind
 
 import (
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
 	"reflect"
 	"strings"
 	"time"
 
+	"github.com/knadh/koanf/providers/env"
+	"github.com/knadh/koanf/providers/structs"
+	"github.com/knadh/koanf/v2"
+	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
+
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/node/types"
-
-	"github.com/knadh/koanf/parsers/toml/v2"
-	"github.com/knadh/koanf/providers/env"
-	"github.com/knadh/koanf/providers/file"
-	"github.com/knadh/koanf/providers/posflag"
-	"github.com/knadh/koanf/providers/structs"
-	"github.com/knadh/koanf/v2"
-	gotoml "github.com/pelletier/go-toml/v2"
-	"github.com/spf13/cobra"
-	"github.com/spf13/pflag"
 )
-
-// The functions in this file are centered around this global koanf instance
-// that combines multiple config sources according to the enabled preruns.
-var k = koanf.New(".")
-
-// DefaultConfig is the function to return the default to all commands in this
-// app package. This is a var so that a custom binary may override the defaults,
-// which many commands obtain with this function.
-var DefaultConfig = config.DefaultConfig
-
-// ActiveConfig retrieves the current merged config. This is influenced by the
-// other functions in this package, including: BindDefaults,
-// SetFlagsFromStruct, PreRunBindFlags, PreRunBindEnvMatching,
-// PreRunBindEnvAllSections, and PreRunBindConfigFile. The merge result is
-// determined by the order in which they source are bound (see PreRunBindConfigFile).
-func ActiveConfig() *config.Config {
-	// k => config.Config
-	var cfg config.Config
-	err := k.UnmarshalWithConf("", &cfg, koanf.UnmarshalConf{Tag: "koanf"})
-	if err != nil {
-		panic(fmt.Sprintf("failed to unmarshal config: %v", err))
-	}
-	return &cfg
-}
-
-// ConfigToTOML marshals the config to TOML.
-func ConfigToTOML(cfg *config.Config) (string, error) {
-	rawToml, err := gotoml.Marshal(&cfg)
-	if err != nil {
-		return "", fmt.Errorf("failed to marshal config to toml: %w", err)
-	}
-	return string(rawToml), nil
-}
 
 const (
 	RootFlagName  = "root"
 	rootShortName = "r"
 )
 
-// BindRootDirVar is used to bind the RootFlagName with a local command
+// BindRootDirVar is used to bind the [RootFlagName] with a local command
 // variable. The flag "root" does not have config file analog, so binds with
 // local var, which is then available to all subcommands via RootDir(cmd).
 func BindRootDirVar(cmd *cobra.Command, rootDir *string, defaultVal, desc string) {
@@ -70,18 +31,17 @@ func BindRootDirVar(cmd *cobra.Command, rootDir *string, defaultVal, desc string
 		defaultVal, desc)
 }
 
-// RootDir complements BindRootDirVar by returning the value of the root
-// directory flag bound by BindRootDirVar. This is available for commands that
+// BindRootDir is like [BindRootDirVar] but the bound variable is internal and
+// returned as a *string, which may be ignored when using [RootDir].
+func BindRootDir(cmd *cobra.Command, defaultVal, desc string) *string {
+	return cmd.PersistentFlags().StringP(RootFlagName, rootShortName, defaultVal, desc)
+}
+
+// RootDir complements [BindRootDirVar] by returning the value of the root
+// directory flag bound by [BindRootDirVar]. This is available for commands that
 // do not have direct access to the local string pointer bound to the flag, such
 // as subcommands.
 func RootDir(cmd *cobra.Command) (string, error) {
-	// We have to get this from the flagset directly since PreRunBindConfigFile,
-	// which is executed *before* PreRunBindFlags, needs to get the root
-	// directory, and it is not yet loaded into k (our koanf instance).
-
-	// if r := k.String(RootFlagName); r != "" {
-	// 	return r, nil
-	// }
 	return cmd.Flags().GetString(RootFlagName)
 }
 
@@ -257,13 +217,6 @@ func ChainPreRuns(preRuns ...PreRunCmd) PreRunCmd {
 	}
 }
 
-// BindDefaults binds a struct to the koanf instance. The tags specified which
-// tag should be used to determine the names of the keys to bind for each field
-// of the struct.
-func BindDefaults(cfg interface{}, tag string) error {
-	return BindDefaultsTo(cfg, tag, k)
-}
-
 // BindDefaultsTo loads the defaults from the provided config struct into a
 // Koanf instance, using field names according to the given struct tag.
 func BindDefaultsTo(cfg interface{}, tag string, k *koanf.Koanf) error {
@@ -279,42 +232,7 @@ func BindDefaultsTo(cfg interface{}, tag string, k *koanf.Koanf) error {
 // is ambiguity as to whether to merge "KWIL_SECT_SOME_VALUE" with
 // "sect.some.value" or "sect.some_value".
 
-// PreRunBindFlags loads flags and standardizes the keys to "_" instead of "-".
-// This is done to unify the config file and flags.
-func PreRunBindFlags(cmd *cobra.Command, args []string) error {
-	// Load flags
-	flagSet := cmd.Flags()
-	err := k.Load(posflag.ProviderWithFlag(flagSet, ".", nil, /* <- k if we want defaults from the flags*/
-		func(f *pflag.Flag) (string, interface{}) {
-			// if !f.Changed { Debugf("not changed %v", f.Name) }
-			key := strings.ToLower(f.Name)
-			val := posflag.FlagVal(flagSet, f)
-
-			if f.Changed {
-				// special case translations
-				switch key {
-				case "p2p.no-pex":
-					newKey := "p2p.pex"
-					if valB, ok := val.(bool); ok {
-						Debugf("translating flag %s = %v => %s = %v", key, valB, newKey, !valB)
-						val = !valB // negate
-						key = newKey
-					}
-				}
-			}
-
-			return strings.ReplaceAll(key, "-", "_"), val
-		}), nil /*no parser for flags*/ /*, mergeFn*/)
-	if err != nil {
-		return fmt.Errorf("error loading config: %v", err)
-	}
-	if k.Bool("debug") {
-		k.Set("log_level", "debug")
-	}
-	return nil
-}
-
-// PreRunBindEnvMatching is to accomplish all of the following:
+// PreRunBindEnvMatchingTo is to accomplish all of the following:
 //
 //	KWIL_SECTION_SUBSECTION_SOME_KEY => section.subsection.some-key
 //	KWIL_SECTION_SUBSECTION_KEYNAME => section.subsection.keyname
@@ -325,10 +243,6 @@ func PreRunBindFlags(cmd *cobra.Command, args []string) error {
 // (PreRunBindConfigFile) or pflags (PreRunBindFlags). If neither sources
 // preceded env, they are loaded assuming every "_" is a section delimiter,
 // which may be incorrect for multi-word keys like KWIL_SECTION_SOME_KEY.
-func PreRunBindEnvMatching(cmd *cobra.Command, args []string) error {
-	return PreRunBindEnvMatchingTo(cmd, args, "KWIL_", k)
-}
-
 func PreRunBindEnvMatchingTo(cmd *cobra.Command, args []string, prefix string, k *koanf.Koanf) error {
 	kEnv := koanf.New(".")
 	kEnv.Load(env.Provider(prefix, ".", func(s string) string {
@@ -356,68 +270,6 @@ func PreRunBindEnvMatchingTo(cmd *cobra.Command, args []string, prefix string, k
 		Debugf("Unmatched env var: %s", key)
 		k.Set(strings.ReplaceAll(key, "_", "."), val)
 	}
-	return nil
-}
-
-// PreRunBindEnvAllSections treats all underscores as section delimiters. With
-// this approach, the config merge process can work with the following
-// conventions:
-//
-//	toml:      section.sub.two_words  (replacing "_" with "")
-//	flag:    --section.sub.two-words  (replacing "-" with "")
-//	env:  KWIL_SECTION_SUB_TWOWORDS   (no underscores allowed in key name!)
-//
-// To merge all, k.Load from each source should merge by standardizing the key
-// names into "twowords", AND the `koanf` tag should match.
-func PreRunBindEnvAllSections(cmd *cobra.Command, args []string) error {
-	k.Load(env.Provider("KWIL_", ".", func(s string) string {
-		// The following , not the above goal.
-		// KWIL_SECTION_SUBSECTION_SOMEVALUE => section.subsection.somevalue
-		// Values cannot have underscores in this convention!
-		s, _ = strings.CutPrefix(s, "KWIL_")
-		return strings.ReplaceAll(strings.ToLower(s), "_", ".")
-	}), nil)
-	return nil
-}
-
-// PreRunBindConfigFile loads and merges settings from the config file.
-func PreRunBindConfigFile(cmd *cobra.Command, args []string) error {
-	// Grab the root directory like other commands that will access it via
-	// persistent flags from the root command.
-	rootDir, err := RootDir(cmd)
-	if err != nil {
-		return err // a parent command needs to have a persistent flag named "root"
-	}
-
-	// If we want to instead have space placeholders removed (to match
-	// PreRunBindEnvAllSections) rather than having them be standardized to
-	// underscores to match toml, use this:
-	//
-	// mergeFn := koanf.WithMergeFunc(mergeWithKeyTransform(func(key string) string {
-	// 	return strings.ReplaceAll(strings.ToLower(key), "_", "")
-	// }))
-	//
-	// The above can be modified to standardize to "-".
-
-	// Load config from file
-	confPath, _ := filepath.Abs(filepath.Join(rootDir, config.ConfigFileName))
-	if err := k.Load(file.Provider(confPath), toml.Parser() /*, mergeFn*/); err != nil {
-		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("error loading config: %v", err)
-		}
-		// Not an error, just no config file present.
-		Debugf("No config file present at %v", confPath)
-	}
-	return nil
-}
-
-// PreRunPrintEffectiveConfig prints the effective config map if CLI debugging
-// is enabled (the `--debug` flag is set), otherwise this does nothing. It may
-// be specified multiple times in a PreRun chain.
-func PreRunPrintEffectiveConfig(cmd *cobra.Command, args []string) error {
-	Debugf("merged config map:\n%s\n", LazyPrinter(func() string {
-		return k.Sprint()
-	}))
 	return nil
 }
 
