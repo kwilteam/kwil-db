@@ -8,6 +8,7 @@ import (
 	"io"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
+	"golang.org/x/crypto/sha3"
 )
 
 // Signature is a signature with a designated AuthType, which should
@@ -145,6 +146,13 @@ type EthPersonalSigner struct {
 
 var _ Signer = (*EthPersonalSigner)(nil)
 
+func textHash(data []byte) []byte {
+	msg := fmt.Sprintf("\x19Ethereum Signed Message:\n%d%s", len(data), data)
+	hasher := sha3.NewLegacyKeccak256()
+	hasher.Write([]byte(msg))
+	return hasher.Sum(nil)
+}
+
 // Sign sign given message according to EIP-191 personal_sign.
 // EIP-191 personal_sign prefix the message with "\x19Ethereum Signed Message:\n"
 // and the message length, then hash the message with 'legacy' keccak256.
@@ -153,7 +161,8 @@ var _ Signer = (*EthPersonalSigner)(nil)
 // a wallet like MetaMask would sign a text message. The message is defined by
 // the object that is being serialized e.g. a Kwil Transaction.
 func (e *EthPersonalSigner) Sign(msg []byte) (*Signature, error) {
-	sigBts, err := e.Key.Sign(msg)
+	hash := textHash(msg)
+	sigBts, err := e.Key.SignRaw(hash)
 	if err != nil {
 		return nil, err
 	}

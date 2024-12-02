@@ -31,7 +31,8 @@ func (EthSecp256k1Authenticator) Identifier(ident []byte) (string, error) {
 
 // Verify verifies applies the Ethereum TextHash digest and verifies the signature
 func (EthSecp256k1Authenticator) Verify(identity []byte, msg []byte, signature []byte) error {
-	pubkey, err := crypto.RecoverSecp256k1Key(msg, signature)
+	hash := textHash(msg)
+	pubkey, err := crypto.RecoverSecp256k1KeyFromSigHash(hash, signature)
 	if err != nil {
 		return err
 	}

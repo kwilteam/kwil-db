@@ -84,11 +84,16 @@ func (k *Secp256k1PrivateKey) Equals(o Key) bool {
 // the sha256 hash of the data, not data itself. This is to  match the other key
 // types that internally use a hash function, unlike secp256k1, which does not.
 func (k *Secp256k1PrivateKey) Sign(data []byte) (rawSig []byte, err error) {
+	hash := sha256.Sum256(data)
+	return k.SignRaw(hash[:])
+}
+
+// SignRaw is like Sign, but it does not internally hash the data. This is to
+// support the Ethereum "personal sign" method.
+func (k *Secp256k1PrivateKey) SignRaw(data []byte) (rawSig []byte, err error) {
 	defer func() { handlePanic(recover(), &err, "secp256k1 signing") }()
 	key := (*secp256k1.PrivateKey)(k)
-	hash := sha256.Sum256(data)
-	// sig := ecdsa.Sign(key, hash[:])
-	sig := ecdsa.SignCompact(key, hash[:], false)
+	sig := ecdsa.SignCompact(key, data[:], false)
 
 	v := sig[0] - 27
 	copy(sig, sig[1:])
@@ -99,7 +104,7 @@ func (k *Secp256k1PrivateKey) Sign(data []byte) (rawSig []byte, err error) {
 
 // Public returns a public key. This is a Secp256k1PublicKey as a PublicKey to
 // satisfy the PrivateKey interface.
-func (k *Secp256k1PrivateKey) Public() PublicKey {
+func (k *Secp256k1PrivateKey) Public() PublicKey { // this should probably just return a *Secp256k1PublicKey
 	return (*Secp256k1PublicKey)((*secp256k1.PrivateKey)(k).PubKey())
 }
 
@@ -137,6 +142,12 @@ func (k *Secp256k1PublicKey) Equals(o Key) bool {
 // Verify compares a signature against the input data. The data is hashed with
 // sha256 internally.
 func (k *Secp256k1PublicKey) Verify(data, rawSig []byte) (success bool, err error) {
+	hash := sha256.Sum256(data)
+	return k.VerifyRaw(hash[:], rawSig)
+}
+
+// VerifyRaw is like Verify, but does not hash the data.
+func (k *Secp256k1PublicKey) VerifyRaw(data, rawSig []byte) (success bool, err error) {
 	defer func() {
 		handlePanic(recover(), &err, "secp256k1 signature verification")
 
@@ -160,19 +171,18 @@ func (k *Secp256k1PublicKey) Verify(data, rawSig []byte) (success bool, err erro
 		return false, errors.New("s value overflow")
 	}
 	sig := ecdsa.NewSignature(&r, &s)
-	hash := sha256.Sum256(data)
-	return sig.Verify(hash[:], (*secp256k1.PublicKey)(k)), nil
+	return sig.Verify(data, (*secp256k1.PublicKey)(k)), nil
 }
 
 // SignatureLength indicates the byte length required to carry a signature with recovery id.
-const SignatureLength = 64 + 1 // 64 bytes ECDSA signature + 1 byte recovery id
+const Secp256k1SignatureLength = 64 + 1 // 64 bytes ECDSA signature + 1 byte recovery id
 // RecoveryIDOffset points to the byte offset within the signature that contains the recovery id.
 const RecoveryIDOffset = 64
 
 // RecoverSecp256k1Key recovers a secp256k1 public key from a signature and
 // signed message, which is hashed with sha256 internally.
 func RecoverSecp256k1Key(msg, sig []byte) (*Secp256k1PublicKey, error) {
-	if len(sig) != SignatureLength {
+	if len(sig) != Secp256k1SignatureLength {
 		return nil, errors.New("invalid signature")
 	}
 
@@ -185,12 +195,12 @@ func RecoverSecp256k1Key(msg, sig []byte) (*Secp256k1PublicKey, error) {
 // implementation of secp256k1 pubkey recovery since a specific hash function is
 // not associated with secp256k1 or ecdsa.
 func RecoverSecp256k1KeyFromSigHash(hash, sig []byte) (*Secp256k1PublicKey, error) {
-	if len(sig) != SignatureLength {
+	if len(sig) != Secp256k1SignatureLength {
 		return nil, errors.New("invalid signature")
 	}
 
 	// Convert to secp256k1 input format with 'recovery id' v at the beginning.
-	btcsig := make([]byte, SignatureLength)
+	btcsig := make([]byte, Secp256k1SignatureLength)
 	btcsig[0] = sig[RecoveryIDOffset] + 27
 	copy(btcsig[1:], sig)
 	pub, _, err := ecdsa.RecoverCompact(btcsig, hash)
