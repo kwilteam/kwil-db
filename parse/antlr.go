@@ -910,6 +910,16 @@ func (s *schemaVisitor) VisitDdl_stmt(ctx *gen.Ddl_stmtContext) any {
 		return ctx.Create_index_statement().Accept(s).(*CreateIndexStatement)
 	case ctx.Drop_index_statement() != nil:
 		return ctx.Drop_index_statement().Accept(s).(*DropIndexStatement)
+	case ctx.Create_role_statement() != nil:
+		return ctx.Create_role_statement().Accept(s).(*CreateRoleStatement)
+	case ctx.Drop_role_statement() != nil:
+		return ctx.Drop_role_statement().Accept(s).(*DropRoleStatement)
+	case ctx.Grant_statement() != nil:
+		return ctx.Grant_statement().Accept(s).(*GrantOrRevokeStatement)
+	case ctx.Revoke_statement() != nil:
+		return ctx.Revoke_statement().Accept(s).(*GrantOrRevokeStatement)
+	case ctx.Transfer_ownership_statement() != nil:
+		return ctx.Transfer_ownership_statement().Accept(s).(*TransferOwnershipStatement)
 	default:
 		panic("unknown DDL statement")
 	}
@@ -974,7 +984,6 @@ func (s *schemaVisitor) VisitCreate_table_statement(ctx *gen.Create_table_statem
 		IfNotExists: ctx.EXISTS() != nil,
 		Columns:     arr[*Column](len(ctx.AllTable_column_def())),
 		Constraints: arr[*OutOfLineConstraint](len(ctx.AllTable_constraint_def())),
-		Indexes:     arr[*TableIndex](len(ctx.AllTable_index_def())),
 	}
 
 	// for basic validation
@@ -1002,7 +1011,7 @@ func (s *schemaVisitor) VisitCreate_table_statement(ctx *gen.Create_table_statem
 			case *PrimaryKeyInlineConstraint:
 				// ensure that the primary key is not redeclared
 				if len(primaryKey) != 0 {
-					s.errs.AddErr(column, ErrRedeclarePrimaryKey, "primary key redeclared")
+					s.errs.AddErr(column, ErrRedeclaredPrimaryKey, "primary key redeclared")
 					continue
 				}
 				primaryKey = []string{column.Name}
@@ -1010,16 +1019,29 @@ func (s *schemaVisitor) VisitCreate_table_statement(ctx *gen.Create_table_statem
 		}
 	}
 
+	constraintSet := make(map[string]struct{})
 	// we will validate that columns referenced in constraints exist.
 	// We will also check that the primary key is not redeclared.
 	for i, c := range ctx.AllTable_constraint_def() {
 		constraint := c.Accept(s).(*OutOfLineConstraint)
+
+		// if the constraint was named, we will check that it is not redeclared.
+		// If not named, it will be auto-named.
+		if constraint.Name != "" {
+			_, ok := constraintSet[constraint.Name]
+			if ok {
+				s.errs.RuleErr(c, ErrRedeclaredConstraint, "constraint name exists")
+			} else {
+				constraintSet[constraint.Name] = struct{}{}
+			}
+		}
+
 		stmt.Constraints[i] = constraint
 
 		// if it is a primary key, we need to check that it is not redeclared
 		if pk, ok := constraint.Constraint.(*PrimaryKeyOutOfLineConstraint); ok {
 			if len(primaryKey) != 0 {
-				s.errs.AddErr(constraint, ErrRedeclarePrimaryKey, "primary key redeclared")
+				s.errs.AddErr(constraint, ErrRedeclaredPrimaryKey, "primary key redeclared")
 				continue
 			}
 			primaryKey = pk.Columns
@@ -1028,17 +1050,6 @@ func (s *schemaVisitor) VisitCreate_table_statement(ctx *gen.Create_table_statem
 		for _, col := range constraint.Constraint.LocalColumns() {
 			if !allColumns[col] {
 				s.errs.RuleErr(c, ErrUnknownColumn, "constraint on unknown column")
-			}
-		}
-	}
-
-	for i, c := range ctx.AllTable_index_def() {
-		idx := c.Accept(s).(*TableIndex)
-		stmt.Indexes[i] = idx
-
-		for _, col := range idx.Columns {
-			if !allColumns[col] {
-				s.errs.RuleErr(c, ErrUnknownColumn, "index on unknown column")
 			}
 		}
 	}
@@ -1055,11 +1066,11 @@ func (s *schemaVisitor) VisitTable_column_def(ctx *gen.Table_column_defContext) 
 	column := &Column{
 		Name:        s.getIdent(ctx.IDENTIFIER()),
 		Type:        ctx.Type_().Accept(s).(*types.DataType),
-		Constraints: arr[InlineConstraint2](len(ctx.AllInline_constraint())),
+		Constraints: arr[InlineConstraint](len(ctx.AllInline_constraint())),
 	}
 
 	for i, c := range ctx.AllInline_constraint() {
-		column.Constraints[i] = c.Accept(s).(InlineConstraint2)
+		column.Constraints[i] = c.Accept(s).(InlineConstraint)
 	}
 
 	column.Set(ctx)
@@ -1067,7 +1078,7 @@ func (s *schemaVisitor) VisitTable_column_def(ctx *gen.Table_column_defContext) 
 }
 
 func (s *schemaVisitor) VisitInline_constraint(ctx *gen.Inline_constraintContext) any {
-	var c InlineConstraint2
+	var c InlineConstraint
 	switch {
 	case ctx.PRIMARY() != nil:
 		c = &PrimaryKeyInlineConstraint{}
@@ -1094,37 +1105,14 @@ func (s *schemaVisitor) VisitInline_constraint(ctx *gen.Inline_constraintContext
 }
 
 func (s *schemaVisitor) VisitFk_constraint(ctx *gen.Fk_constraintContext) any {
-	c := &ConstraintForeignKey{
-		RefTable:  ctx.GetTable().Accept(s).(string),
-		RefColumn: ctx.GetColumn().Accept(s).(string),
-		Ons:       arr[ForeignKeyActionOn](len(ctx.AllFk_action())),
-		Dos:       arr[ForeignKeyActionDo](len(ctx.AllFk_action())),
+	c := &ForeignKeyReferences{
+		RefTable:   s.getIdent(ctx.GetTable().IDENTIFIER()),
+		RefColumns: ctx.Identifier_list().Accept(s).([]string),
+		Actions:    arr[*ForeignKeyAction](len(ctx.AllFk_action())),
 	}
 
 	for i, a := range ctx.AllFk_action() {
-		switch {
-		case a.UPDATE() != nil:
-			c.Ons[i] = ON_UPDATE
-		case a.DELETE() != nil:
-			c.Ons[i] = ON_DELETE
-		default:
-			panic("unknown foreign key on condition")
-		}
-
-		switch {
-		case a.NULL() != nil:
-			c.Dos[i] = DO_SET_NULL
-		case a.DEFAULT() != nil:
-			c.Dos[i] = DO_SET_DEFAULT
-		case a.RESTRICT() != nil:
-			c.Dos[i] = DO_RESTRICT
-		case a.ACTION() != nil:
-			c.Dos[i] = DO_NO_ACTION
-		case a.CASCADE() != nil:
-			c.Dos[i] = DO_CASCADE
-		default:
-			panic("unknown foreign key action")
-		}
+		c.Actions[i] = a.Accept(s).(*ForeignKeyAction)
 	}
 
 	c.Set(ctx)
@@ -1132,7 +1120,34 @@ func (s *schemaVisitor) VisitFk_constraint(ctx *gen.Fk_constraintContext) any {
 }
 
 func (s *schemaVisitor) VisitFk_action(ctx *gen.Fk_actionContext) interface{} {
-	panic("implement me")
+	act := &ForeignKeyAction{}
+	switch {
+	case ctx.UPDATE() != nil:
+		act.On = ON_UPDATE
+	case ctx.DELETE() != nil:
+		act.On = ON_DELETE
+	default:
+		panic("unknown foreign key action")
+	}
+
+	switch {
+	case ctx.CASCADE() != nil:
+		act.Do = DO_CASCADE
+	case ctx.RESTRICT() != nil:
+		act.Do = DO_RESTRICT
+	case ctx.SET() != nil:
+		if ctx.NULL() != nil {
+			act.Do = DO_SET_NULL
+		} else {
+			act.Do = DO_SET_DEFAULT
+		}
+	case ctx.NO() != nil:
+		act.Do = DO_NO_ACTION
+	default:
+		panic("unknown foreign key action")
+	}
+
+	return act
 }
 
 func (s *schemaVisitor) VisitTable_constraint_def(ctx *gen.Table_constraint_defContext) any {
@@ -1165,10 +1180,14 @@ func (s *schemaVisitor) VisitTable_constraint_def(ctx *gen.Table_constraint_defC
 	}
 
 	c.Set(ctx)
-	return &OutOfLineConstraint{
+	oolc := &OutOfLineConstraint{
 		Name:       name,
 		Constraint: c,
 	}
+
+	oolc.Set(ctx)
+
+	return oolc
 }
 
 func (s *schemaVisitor) VisitTable_index_def(ctx *gen.Table_index_defContext) any {
@@ -1189,8 +1208,11 @@ func (s *schemaVisitor) VisitTable_index_def(ctx *gen.Table_index_defContext) an
 
 func (s *schemaVisitor) VisitDrop_table_statement(ctx *gen.Drop_table_statementContext) any {
 	stmt := &DropTableStatement{
-		Tables:   ctx.GetTables().Accept(s).([]string),
-		Behavior: ctx.Opt_drop_behavior().Accept(s).(DropBehavior),
+		Tables: ctx.GetTables().Accept(s).([]string),
+	}
+
+	if ctx.Opt_drop_behavior() != nil {
+		stmt.Behavior = ctx.Opt_drop_behavior().Accept(s).(DropBehavior)
 	}
 
 	if ctx.EXISTS() != nil {
@@ -1208,7 +1230,7 @@ func (s *schemaVisitor) VisitOpt_drop_behavior(ctx *gen.Opt_drop_behaviorContext
 	case ctx.RESTRICT() != nil:
 		return DropBehaviorRestrict
 	default:
-		return DropBehaviorNon
+		return DropBehaviorDefault // restrict is the default
 	}
 }
 
@@ -1296,7 +1318,7 @@ func (s *schemaVisitor) VisitRename_table(ctx *gen.Rename_tableContext) any {
 
 func (s *schemaVisitor) VisitAdd_table_constraint(ctx *gen.Add_table_constraintContext) any {
 	a := &AddTableConstraint{
-		Constraint: ctx.Table_constraint_def().Accept(s).(InlineConstraint),
+		Constraint: ctx.Table_constraint_def().Accept(s).(*OutOfLineConstraint),
 	}
 
 	a.Set(ctx)
@@ -1349,11 +1371,27 @@ func (s *schemaVisitor) VisitDrop_index_statement(ctx *gen.Drop_index_statementC
 }
 
 func (s *schemaVisitor) VisitCreate_role_statement(ctx *gen.Create_role_statementContext) any {
-	panic("implement me")
+	stmt := &CreateRoleStatement{
+		Role: s.getIdent(ctx.IDENTIFIER()),
+	}
+	if ctx.EXISTS() != nil {
+		stmt.IfNotExists = true
+	}
+
+	stmt.Set(ctx)
+	return stmt
 }
 
 func (s *schemaVisitor) VisitDrop_role_statement(ctx *gen.Drop_role_statementContext) any {
-	panic("implement me")
+	stmt := &DropRoleStatement{
+		Role: s.getIdent(ctx.IDENTIFIER()),
+	}
+	if ctx.EXISTS() != nil {
+		stmt.IfExists = true
+	}
+
+	stmt.Set(ctx)
+	return stmt
 }
 
 func (s *schemaVisitor) VisitGrant_statement(ctx *gen.Grant_statementContext) any {
@@ -1376,6 +1414,7 @@ func (s *schemaVisitor) parseGrantOrRevoke(ctx interface {
 	GetGrant_role() gen.IIdentifierContext
 	GetRole() gen.IIdentifierContext
 	GetUser() antlr.Token
+	GetNamespace() gen.IIdentifierContext
 }) *GrantOrRevokeStatement {
 	// can be:
 	// GRANT/REVOKE privilege_list/role TO/FROM role/user
@@ -1401,6 +1440,32 @@ func (s *schemaVisitor) parseGrantOrRevoke(ctx interface {
 		panic("invalid grant/revoke statement")
 	}
 	c.Set(ctx)
+
+	if ctx.GetNamespace() != nil {
+		ns := s.getIdent(ctx.GetNamespace().IDENTIFIER())
+		c.Namespace = &ns
+	}
+
+	// either privileges can be granted to roles, or roles can be granted to users.
+	// Other permutations are invalid.
+
+	// if granting roles, then recipient must be a user
+	if len(c.Privileges) == 0 {
+		// no privileges, so we are granting a role
+		if c.ToRole != "" {
+			s.errs.RuleErr(ctx, ErrGrantOrRevoke, "cannot grant or revoke a role to another role")
+		}
+
+		if c.Namespace != nil {
+			s.errs.RuleErr(ctx, ErrGrantOrRevoke, "cannot grant or revoke a role on a namespace")
+		}
+	} else {
+		// if granting privileges, then recipient must be a role
+		if c.ToUser != "" {
+			s.errs.RuleErr(ctx, ErrGrantOrRevoke, "cannot grant or revoke privileges to a user")
+		}
+	}
+
 	return c
 }
 
@@ -1416,6 +1481,15 @@ func (s *schemaVisitor) VisitPrivilege_list(ctx *gen.Privilege_listContext) any 
 func (s *schemaVisitor) VisitPrivilege(ctx *gen.PrivilegeContext) any {
 	// since there is only one token, we can just get all text
 	return ctx.GetText()
+}
+
+func (s *schemaVisitor) VisitTransfer_ownership_statement(ctx *gen.Transfer_ownership_statementContext) any {
+	stmt := &TransferOwnershipStatement{
+		To: s.getIdent(ctx.Identifier().IDENTIFIER()),
+	}
+
+	stmt.Set(ctx)
+	return stmt
 }
 
 func (s *schemaVisitor) VisitSelect_statement(ctx *gen.Select_statementContext) any {

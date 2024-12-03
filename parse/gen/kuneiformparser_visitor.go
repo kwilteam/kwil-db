@@ -196,6 +196,9 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#privilege.
 	VisitPrivilege(ctx *PrivilegeContext) interface{}
 
+	// Visit a parse tree produced by KuneiformParser#transfer_ownership_statement.
+	VisitTransfer_ownership_statement(ctx *Transfer_ownership_statementContext) interface{}
+
 	// Visit a parse tree produced by KuneiformParser#select_statement.
 	VisitSelect_statement(ctx *Select_statementContext) interface{}
 

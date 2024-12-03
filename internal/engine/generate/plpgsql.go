@@ -933,7 +933,6 @@ func (s *sqlGenerator) VisitDropTableStatement(p0 *parse.DropTableStatement) any
 		str.WriteString(" CASCADE")
 	case parse.DropBehaviorRestrict:
 		str.WriteString(" RESTRICT")
-	case parse.DropBehaviorNon:
 	default:
 		panic("unknown drop behavior")
 	}

@@ -1172,7 +1172,13 @@ func (c *DataType) PGString() (string, error) {
 
 func (c *DataType) Clean() error {
 	c.Name = strings.ToLower(c.Name)
-	switch c.Name {
+
+	refName, ok := typeAlias[c.Name]
+	if !ok {
+		return fmt.Errorf("unknown type: %s", c.Name)
+	}
+
+	switch refName {
 	case intStr, textStr, boolStr, blobStr, uuidStr, uint256Str: // ok
 		if c.Metadata != nil {
 			return fmt.Errorf("type %s cannot have metadata", c.Name)
@@ -1202,7 +1208,9 @@ func (c *DataType) Clean() error {
 
 		return nil
 	default:
-		return fmt.Errorf("unknown type: %s", c.Name)
+		// should never happen because of the alias map,
+		// but just in case
+		return fmt.Errorf("UNEXPECTED CONDITION: unknown type: %s", c.Name)
 	}
 }
 
@@ -1325,7 +1333,7 @@ func ArrayType(t *DataType) *DataType {
 
 const (
 	textStr    = "text"
-	intStr     = "int8"
+	intStr     = "int"
 	boolStr    = "bool"
 	blobStr    = "blob"
 	uuidStr    = "uuid"

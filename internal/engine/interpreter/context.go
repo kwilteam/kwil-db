@@ -30,10 +30,17 @@ type executionContext struct {
 	// mutatingState is true if the execution is capable of mutating state.
 	// If true, it must also be deterministic.
 	mutatingState bool
-	// interpreter is the interpreter that is executing the code.
-	interpreter *Interpreter
+	// namespaces is a map of all namespaces.
+	namespaces map[string]*namespace
 	// db is the database to execute against.
 	db sql.DB
+	// accessController holds information about roles and privileges
+	accessController *accessController
+}
+
+// hasPrivilege checks if the current user has a privilege.
+func (e *executionContext) hasPrivilege(priv privilege) bool {
+	return e.accessController.HasPrivilege(e.txCtx.Caller, &e.scope.namespace, priv)
 }
 
 // getTable gets a table from the interpreter.
@@ -44,7 +51,7 @@ func (e *executionContext) getTable(namespace, tableName string) (*engine.Table,
 		namespace = e.scope.namespace
 	}
 
-	ns, ok := e.interpreter.namespaces[namespace]
+	ns, ok := e.namespaces[namespace]
 	if !ok {
 		return nil, false
 	}

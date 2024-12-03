@@ -573,15 +573,12 @@ type CreateTableStatement struct {
 	IfNotExists bool
 	Name        string
 	Columns     []*Column
-	// Indexes contains the non-inline indexes
-	Indexes []*TableIndex
 	// Constraints contains the non-inline constraints
 	Constraints []*OutOfLineConstraint
 }
 
 func (c *CreateTableStatement) Accept(v Visitor) any {
 	return v.VisitCreateTableStatement(c)
-
 }
 
 func (c *CreateTableStatement) StmtType() SQLStatementType {
@@ -594,7 +591,11 @@ type Column struct {
 
 	Name        string
 	Type        *types.DataType
-	Constraints []InlineConstraint2
+	Constraints []InlineConstraint
+}
+
+func (c *Column) Accept(v Visitor) any {
+	return v.VisitColumn(c)
 }
 
 // OutOfLineConstraint is a constraint that is not inline with the column.
@@ -606,7 +607,7 @@ type OutOfLineConstraint struct {
 }
 
 // InlineConstraint is a constraint that is inline with the column.
-type InlineConstraint2 interface {
+type InlineConstraint interface {
 	Positionable
 	inlineConstraint()
 }
@@ -696,9 +697,6 @@ func (c *ForeignKeyOutOfLineConstraint) LocalColumns() []string { return c.Colum
 type IndexType string
 
 const (
-	// IndexTypePrimary is a primary index, created by using `PRIMARY KEY`.
-	// Only one primary index is allowed per table.
-	IndexTypePrimary IndexType = "primary"
 	// IndexTypeBTree is the default index, created by using `INDEX`.
 	IndexTypeBTree IndexType = "btree"
 	// IndexTypeUnique is a unique BTree index, created by using `UNIQUE INDEX`.
@@ -741,6 +739,10 @@ func (i *TableIndex) String() string {
 	str.WriteString("(" + strings.Join(i.Columns, ", ") + ")")
 
 	return str.String()
+}
+
+func (i *TableIndex) Accept(v Visitor) any {
+	return v.VisitTableIndex(i)
 }
 
 // ForeignKey is a foreign key in a table.
@@ -809,9 +811,9 @@ type ForeignKeyAction struct {
 type DropBehavior string
 
 const (
+	DropBehaviorDefault  DropBehavior = ""
 	DropBehaviorCascade  DropBehavior = "CASCADE"
 	DropBehaviorRestrict DropBehavior = "RESTRICT"
-	DropBehaviorNon      DropBehavior = ""
 )
 
 type DropTableStatement struct {
@@ -904,7 +906,7 @@ type SetColumnConstraint struct {
 }
 
 func (a *SetColumnConstraint) Accept(v Visitor) any {
-	panic("implement me")
+	return v.VisitSetColumnConstraint(a)
 }
 
 func (a *SetColumnConstraint) alterTableAction() {}
@@ -935,7 +937,7 @@ type DropColumnConstraint struct {
 }
 
 func (a *DropColumnConstraint) Accept(v Visitor) any {
-	panic("implement me")
+	return v.VisitDropColumnConstraint(a)
 }
 
 func (a *DropColumnConstraint) alterTableAction() {}
@@ -968,7 +970,7 @@ type AddColumn struct {
 }
 
 func (a *AddColumn) Accept(v Visitor) any {
-	panic("implement me")
+	return v.VisitAddColumn(a)
 }
 
 func (a *AddColumn) alterTableAction() {}
@@ -984,7 +986,7 @@ type DropColumn struct {
 }
 
 func (a *DropColumn) Accept(v Visitor) any {
-	panic("implement me")
+	return v.VisitDropColumn(a)
 }
 
 func (a *DropColumn) alterTableAction() {}
@@ -1001,7 +1003,7 @@ type RenameColumn struct {
 }
 
 func (a *RenameColumn) Accept(v Visitor) any {
-	panic("implement me")
+	return v.VisitRenameColumn(a)
 }
 
 func (a *RenameColumn) alterTableAction() {}
@@ -1017,7 +1019,7 @@ type RenameTable struct {
 }
 
 func (a *RenameTable) Accept(v Visitor) any {
-	panic("implement me")
+	return v.VisitRenameTable(a)
 }
 
 func (a *RenameTable) alterTableAction() {}
@@ -1035,7 +1037,7 @@ type AddTableConstraint struct {
 }
 
 func (a *AddTableConstraint) Accept(v Visitor) any {
-	panic("implement me")
+	return v.VisitAddTableConstraint(a)
 }
 
 func (a *AddTableConstraint) alterTableAction() {}
@@ -1051,7 +1053,7 @@ type DropTableConstraint struct {
 }
 
 func (a *DropTableConstraint) Accept(v Visitor) any {
-	panic("implement me")
+	return v.VisitDropTableConstraint(a)
 }
 
 func (a *DropTableConstraint) alterTableAction() {}
@@ -1101,6 +1103,10 @@ type GrantOrRevokeStatement struct {
 	// Privileges are the privileges that are being granted.
 	// Either Privileges or Role must be set, but not both.
 	Privileges []string
+	// Namespace is the namespace that the privileges are being granted on.
+	// It can be nil if they are global.
+	Namespace *string
+	// OnNam
 	// Role is the role being granted
 	// Either Privileges or Role must be set, but not both.
 	GrantRole string
@@ -1114,6 +1120,40 @@ type GrantOrRevokeStatement struct {
 
 func (g *GrantOrRevokeStatement) Accept(v Visitor) any {
 	return v.VisitGrantOrRevokeStatement(g)
+}
+
+type CreateRoleStatement struct {
+	Position
+	// IfNotExists is true if the IF NOT EXISTS clause is present.
+	IfNotExists bool
+	// Role is the role that is being created or dropped.
+	Role string
+}
+
+func (c *CreateRoleStatement) Accept(v Visitor) any {
+	return v.VisitCreateRoleStatement(c)
+}
+
+type DropRoleStatement struct {
+	Position
+	// IfExists is true if the IF EXISTS clause is present.
+	IfExists bool
+	// Role is the role that is being created or dropped.
+	Role string
+}
+
+func (d *DropRoleStatement) Accept(v Visitor) any {
+	return v.VisitDropRoleStatement(d)
+}
+
+type TransferOwnershipStatement struct {
+	Position
+	// To is the user that the ownership is being transferred to.
+	To string
+}
+
+func (t *TransferOwnershipStatement) Accept(v Visitor) any {
+	return v.VisitTransferOwnershipStatement(t)
 }
 
 // SelectStatement is a SELECT statement.
@@ -1626,6 +1666,19 @@ type DDLVisitor interface {
 	VisitCreateIndexStatement(*CreateIndexStatement) any
 	VisitDropIndexStatement(*DropIndexStatement) any
 	VisitGrantOrRevokeStatement(*GrantOrRevokeStatement) any
+	VisitSetColumnConstraint(*SetColumnConstraint) any
+	VisitDropColumnConstraint(*DropColumnConstraint) any
+	VisitAddColumn(*AddColumn) any
+	VisitDropColumn(*DropColumn) any
+	VisitRenameColumn(*RenameColumn) any
+	VisitRenameTable(*RenameTable) any
+	VisitAddTableConstraint(*AddTableConstraint) any
+	VisitDropTableConstraint(*DropTableConstraint) any
+	VisitTableIndex(*TableIndex) any
+	VisitColumn(*Column) any
+	VisitCreateRoleStatement(*CreateRoleStatement) any
+	VisitDropRoleStatement(*DropRoleStatement) any
+	VisitTransferOwnershipStatement(*TransferOwnershipStatement) any
 }
 
 // ProcedureVisitor includes visit methods only needed to analyze procedures.
@@ -1764,4 +1817,82 @@ func (s *UnimplementedProcedureVisitor) VisitProcedureStmtReturn(p0 *ProcedureSt
 
 func (s *UnimplementedProcedureVisitor) VisitProcedureStmtReturnNext(p0 *ProcedureStmtReturnNext) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
+}
+
+type UnimplementedDDLVisitor struct{}
+
+func (u *UnimplementedDDLVisitor) VisitCreateTableStatement(p0 *CreateTableStatement) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitAlterTableStatement(p0 *AlterTableStatement) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitDropTableStatement(p0 *DropTableStatement) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitCreateIndexStatement(p0 *CreateIndexStatement) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitDropIndexStatement(p0 *DropIndexStatement) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitGrantOrRevokeStatement(p0 *GrantOrRevokeStatement) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitSetColumnConstraint(p0 *SetColumnConstraint) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitDropColumnConstraint(p0 *DropColumnConstraint) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitAddColumn(p0 *AddColumn) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitDropColumn(p0 *DropColumn) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitRenameColumn(p0 *RenameColumn) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitRenameTable(p0 *RenameTable) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitAddTableConstraint(p0 *AddTableConstraint) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitDropTableConstraint(p0 *DropTableConstraint) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitTableIndex(p0 *TableIndex) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitColumn(p0 *Column) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitCreateRoleStatement(p0 *CreateRoleStatement) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitDropRoleStatement(p0 *DropRoleStatement) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitTransferOwnershipStatement(p0 *TransferOwnershipStatement) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
 }

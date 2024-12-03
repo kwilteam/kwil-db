@@ -309,7 +309,7 @@ func TestGenerateDDLStatement(t *testing.T) {
 			want: `DROP TABLE users, posts;`,
 			sql: &parse.DropTableStatement{
 				Tables:   []string{"users", "posts"},
-				Behavior: parse.DropBehaviorNon,
+				Behavior: parse.DropBehaviorRestrict,
 			},
 		},
 		{
@@ -317,7 +317,7 @@ func TestGenerateDDLStatement(t *testing.T) {
 			want: `DROP TABLE users;`,
 			sql: &parse.DropTableStatement{
 				Tables:   []string{"users"},
-				Behavior: parse.DropBehaviorNon,
+				Behavior: parse.DropBehaviorRestrict,
 			},
 		},
 		{
@@ -326,7 +326,7 @@ func TestGenerateDDLStatement(t *testing.T) {
 			sql: &parse.DropTableStatement{
 				Tables:   []string{"users", "posts"},
 				IfExists: true,
-				Behavior: parse.DropBehaviorNon,
+				Behavior: parse.DropBehaviorRestrict,
 			},
 		},
 		{

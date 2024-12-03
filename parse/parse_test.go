@@ -1939,9 +1939,11 @@ func mustNewDecimal(precision, scale uint16) *types.DataType {
 	return dt
 }
 
-// exprLit makes an ExpressionLiteral.
-// it can only make strings and ints
-func exprLit(v any) parse.Expression {
+// exprLitCast makes an expression based on the type of v.
+// If cast is true, it will add a typecast to the expression.
+// Legacy Kwil (<=v0.9) auto-cast certain values. v0.10 leaves this
+// to another layer.
+func exprLitCast(v any, cast bool) parse.Expression {
 	switch t := v.(type) {
 	case int:
 		isNeg := t < 0
@@ -1952,9 +1954,11 @@ func exprLit(v any) parse.Expression {
 		liter := &parse.ExpressionLiteral{
 			Type:  types.IntType,
 			Value: int64(t),
-			Typecastable: parse.Typecastable{
+		}
+		if cast {
+			liter.Typecastable = parse.Typecastable{
 				TypeCast: types.IntType,
-			},
+			}
 		}
 
 		if isNeg {
@@ -1974,9 +1978,11 @@ func exprLit(v any) parse.Expression {
 		liter := &parse.ExpressionLiteral{
 			Type:  types.IntType,
 			Value: t,
-			Typecastable: parse.Typecastable{
+		}
+		if cast {
+			liter.Typecastable = parse.Typecastable{
 				TypeCast: types.IntType,
-			},
+			}
 		}
 
 		if isNeg {
@@ -1988,24 +1994,38 @@ func exprLit(v any) parse.Expression {
 
 		return liter
 	case string:
-		return &parse.ExpressionLiteral{
+		ee := &parse.ExpressionLiteral{
 			Type:  types.TextType,
 			Value: t,
-			Typecastable: parse.Typecastable{
-				TypeCast: types.TextType,
-			},
 		}
+		if cast {
+			ee.Typecastable = parse.Typecastable{
+				TypeCast: types.TextType,
+			}
+		}
+		return ee
 	case bool:
-		return &parse.ExpressionLiteral{
+		ee := &parse.ExpressionLiteral{
 			Type:  types.BoolType,
 			Value: t,
-			Typecastable: parse.Typecastable{
-				TypeCast: types.BoolType,
-			},
 		}
+		if cast {
+			ee.Typecastable = parse.Typecastable{
+				TypeCast: types.BoolType,
+			}
+		}
+		return ee
 	default:
 		panic("TEST ERROR: invalid type for literal")
 	}
+}
+
+// exprLit makes an ExpressionLiteral.
+// it can only make strings and ints.
+// It will automatically add a typecast to the expression.
+// This is legacy behavior from Kwil <=v0.9
+func exprLit(v any) parse.Expression {
+	return exprLitCast(v, true)
 }
 
 func exprFunctionCall(name string, args ...parse.Expression) *parse.ExpressionFunctionCall {
@@ -2024,21 +2044,20 @@ func Test_DDL(t *testing.T) {
 	}
 
 	tests := []testCase{
+		// non-sensical foreign key but its just to test
 		{
 			name: "create table",
 			sql: `CREATE TABLE users (
-id int PRIMARY KEY,
-name text CHECK(LENGTH(name) > 10),
-address text NOT NULL DEFAULT 'usa',
-email text NOT NULL UNIQUE ,
-city_id int,
-group_id int REFERENCES groups(id) ON DELETE CASCADE,
-CONSTRAINT city_fk FOREIGN KEY (city_id) REFERENCES cities(id) ON UPDATE NO ACTION ,
-CHECK(LENGTH(email) > 1),
-UNIQUE (city_id, address),
-UNIQUE INDEX group_name_unique (group_id, name),
-INDEX ithome (name, address)
-);`,
+		id int PRIMARY KEY,
+		name text CHECK(LENGTH(name) > 10),
+		address text NOT NULL DEFAULT 'usa',
+		email text NOT NULL UNIQUE ,
+		city_id int,
+		group_id int REFERENCES groups(id) ON UPDATE RESTRICT ON DELETE CASCADE,
+		CONSTRAINT city_fk FOREIGN KEY (city_id, address) REFERENCES cities(id, address) ON UPDATE NO ACTION ON DELETE SET NULL,
+		CHECK(LENGTH(email) > 1),
+		UNIQUE (city_id, address)
+		);`,
 			want: &parse.CreateTableStatement{
 				Name: "users",
 				Columns: []*parse.Column{
@@ -2046,17 +2065,17 @@ INDEX ithome (name, address)
 						Name: "id",
 						Type: types.IntType,
 						Constraints: []parse.InlineConstraint{
-							&parse.ConstraintPrimaryKey{},
+							&parse.PrimaryKeyInlineConstraint{},
 						},
 					},
 					{
 						Name: "name",
 						Type: types.TextType,
 						Constraints: []parse.InlineConstraint{
-							&parse.ConstraintCheck{
-								Param: &parse.ExpressionComparison{
+							&parse.CheckConstraint{
+								Expression: &parse.ExpressionComparison{
 									Left:     exprFunctionCall("length", exprColumn("", "name")),
-									Right:    exprLit(10),
+									Right:    exprLitCast(10, false),
 									Operator: parse.ComparisonOperatorGreaterThan,
 								},
 							},
@@ -2066,14 +2085,11 @@ INDEX ithome (name, address)
 						Name: "address",
 						Type: types.TextType,
 						Constraints: []parse.InlineConstraint{
-							&parse.ConstraintNotNull{},
-							&parse.ConstraintDefault{
+							&parse.NotNullConstraint{},
+							&parse.DefaultConstraint{
 								Value: &parse.ExpressionLiteral{
 									Type:  types.TextType,
 									Value: "usa",
-									Typecastable: parse.Typecastable{
-										TypeCast: types.TextType,
-									},
 								},
 							},
 						},
@@ -2082,8 +2098,8 @@ INDEX ithome (name, address)
 						Name: "email",
 						Type: types.TextType,
 						Constraints: []parse.InlineConstraint{
-							&parse.ConstraintNotNull{},
-							&parse.ConstraintUnique{},
+							&parse.NotNullConstraint{},
+							&parse.UniqueInlineConstraint{},
 						},
 					},
 					{
@@ -2094,47 +2110,59 @@ INDEX ithome (name, address)
 						Name: "group_id",
 						Type: types.IntType,
 						Constraints: []parse.InlineConstraint{
-							&parse.ConstraintForeignKey{
-								RefTable:  "groups",
-								RefColumn: "id",
-								Ons:       []parse.ForeignKeyActionOn{parse.ON_DELETE},
-								Dos:       []parse.ForeignKeyActionDo{parse.DO_CASCADE},
+							&parse.ForeignKeyReferences{
+								RefTable:   "groups",
+								RefColumns: []string{"id"},
+								Actions: []*parse.ForeignKeyAction{
+									{
+										On: parse.ON_UPDATE,
+										Do: parse.DO_RESTRICT,
+									},
+									{
+										On: parse.ON_DELETE,
+										Do: parse.DO_CASCADE,
+									},
+								},
 							},
 						},
 					},
 				},
-				Indexes: []*parse.TableIndex{
+				Constraints: []*parse.OutOfLineConstraint{
 					{
-						Name:    "group_name_unique",
-						Columns: []string{"group_id", "name"},
-						Type:    parse.IndexTypeUnique,
-					},
-					{
-						Name:    "ithome",
-						Columns: []string{"name", "address"},
-						Type:    parse.IndexTypeBTree,
-					},
-				},
-				Constraints: []parse.InlineConstraint{
-					&parse.ConstraintForeignKey{
-						Name:      "city_fk",
-						RefTable:  "cities",
-						RefColumn: "id",
-						Column:    "city_id",
-						Ons:       []parse.ForeignKeyActionOn{parse.ON_UPDATE},
-						Dos:       []parse.ForeignKeyActionDo{parse.DO_NO_ACTION},
-					},
-					&parse.ConstraintCheck{
-						Param: &parse.ExpressionComparison{
-							Left:     exprFunctionCall("length", exprColumn("", "email")),
-							Right:    exprLit(1),
-							Operator: parse.ComparisonOperatorGreaterThan,
+						Name: "city_fk",
+						Constraint: &parse.ForeignKeyOutOfLineConstraint{
+							Columns: []string{"city_id", "address"},
+							References: &parse.ForeignKeyReferences{
+								RefTable:   "cities",
+								RefColumns: []string{"id", "address"},
+								Actions: []*parse.ForeignKeyAction{
+									{
+										On: parse.ON_UPDATE,
+										Do: parse.DO_NO_ACTION,
+									},
+									{
+										On: parse.ON_DELETE,
+										Do: parse.DO_SET_NULL,
+									},
+								},
+							},
 						},
 					},
-					&parse.ConstraintUnique{
-						Columns: []string{
-							"city_id",
-							"address",
+					{
+						Constraint: &parse.CheckConstraint{
+							Expression: &parse.ExpressionComparison{
+								Left:     exprFunctionCall("length", exprColumn("", "email")),
+								Right:    exprLitCast(1, false),
+								Operator: parse.ComparisonOperatorGreaterThan,
+							},
+						},
+					},
+					{
+						Constraint: &parse.UniqueOutOfLineConstraint{
+							Columns: []string{
+								"city_id",
+								"address",
+							},
 						},
 					},
 				},
@@ -2151,7 +2179,7 @@ INDEX ithome (name, address)
 						Name: "id",
 						Type: types.IntType,
 						Constraints: []parse.InlineConstraint{
-							&parse.ConstraintPrimaryKey{},
+							&parse.PrimaryKeyInlineConstraint{},
 						},
 					},
 				},
@@ -2165,15 +2193,15 @@ INDEX ithome (name, address)
 		{
 			name: "create table with redeclare primary",
 			sql: `CREATE TABLE users (id int primary key,
-name text check(length(name) > 10),
-primary key (name)
-);`,
-			err: parse.ErrRedeclarePrimaryKey,
+		name text check(length(name) > 10),
+		primary key (name)
+		);`,
+			err: parse.ErrRedeclaredPrimaryKey,
 		},
 		{
 			name: "create table with redeclare constraint",
 			sql:  `CREATE TABLE users (id int primary key, name text, address text, constraint aa unique(name), constraint aa unique(address))`,
-			err:  parse.ErrCollation,
+			err:  parse.ErrRedeclaredConstraint,
 		},
 		{
 			name: "create table with constraint on unknown column",
@@ -2187,7 +2215,7 @@ primary key (name)
 				Table: "user",
 				Action: &parse.SetColumnConstraint{
 					Column: "name",
-					Type:   parse.NOT_NULL,
+					Type:   parse.ConstraintTypeNotNull,
 				},
 			},
 		},
@@ -2198,7 +2226,7 @@ primary key (name)
 				Table: "user",
 				Action: &parse.SetColumnConstraint{
 					Column: "name",
-					Type:   parse.DEFAULT,
+					Type:   parse.ConstraintTypeDefault,
 					Value: &parse.ExpressionLiteral{
 						Type:  types.IntType,
 						Value: int64(10),
@@ -2213,7 +2241,7 @@ primary key (name)
 				Table: "user",
 				Action: &parse.DropColumnConstraint{
 					Column: "name",
-					Type:   parse.NOT_NULL,
+					Type:   parse.ConstraintTypeNotNull,
 				},
 			},
 		},
@@ -2224,18 +2252,7 @@ primary key (name)
 				Table: "user",
 				Action: &parse.DropColumnConstraint{
 					Column: "name",
-					Type:   parse.DEFAULT,
-				},
-			},
-		},
-		{
-			name: "alter table drop column constraint named",
-			sql:  `ALTER TABLE user ALTER COLUMN name DROP CONSTRAINT abc;`,
-			want: &parse.AlterTableStatement{
-				Table: "user",
-				Action: &parse.DropColumnConstraint{
-					Column: "name",
-					Name:   "abc",
+					Type:   parse.ConstraintTypeDefault,
 				},
 			},
 		},
@@ -2287,13 +2304,21 @@ primary key (name)
 			want: &parse.AlterTableStatement{
 				Table: "user",
 				Action: &parse.AddTableConstraint{
-					Constraint: &parse.ConstraintForeignKey{
-						Name:      "new_fk",
-						RefTable:  "cities",
-						RefColumn: "id",
-						Column:    "city_id",
-						Ons:       []parse.ForeignKeyActionOn{parse.ON_DELETE},
-						Dos:       []parse.ForeignKeyActionDo{parse.DO_CASCADE},
+					Constraint: &parse.OutOfLineConstraint{
+						Name: "new_fk",
+						Constraint: &parse.ForeignKeyOutOfLineConstraint{
+							Columns: []string{"city_id"},
+							References: &parse.ForeignKeyReferences{
+								RefTable:   "cities",
+								RefColumns: []string{"id"},
+								Actions: []*parse.ForeignKeyAction{
+									{
+										On: parse.ON_DELETE,
+										Do: parse.DO_CASCADE,
+									},
+								},
+							},
+						},
 					},
 				},
 			},
@@ -2313,7 +2338,7 @@ primary key (name)
 			sql:  `DROP TABLE users, posts;`,
 			want: &parse.DropTableStatement{
 				Tables:   []string{"users", "posts"},
-				Behavior: parse.DropBehaviorNon,
+				Behavior: parse.DropBehaviorDefault,
 			},
 		},
 		{
@@ -2321,7 +2346,7 @@ primary key (name)
 			sql:  `DROP TABLE users;`,
 			want: &parse.DropTableStatement{
 				Tables:   []string{"users"},
-				Behavior: parse.DropBehaviorNon,
+				Behavior: parse.DropBehaviorDefault,
 			},
 		},
 		{
@@ -2330,7 +2355,6 @@ primary key (name)
 			want: &parse.DropTableStatement{
 				Tables:   []string{"users", "posts"},
 				IfExists: true,
-				Behavior: parse.DropBehaviorNon,
 			},
 		},
 		{
@@ -2420,6 +2444,10 @@ primary key (name)
 					require.ErrorIs(t, res.ParseErrs.Err(), tt.err)
 				}
 
+				return
+			}
+			if tt.err != nil {
+				t.Errorf("expected error but got none")
 				return
 			}
 
@@ -3175,6 +3203,10 @@ func Test_SQL(t *testing.T) {
 
 				return
 			}
+			if tt.err != nil {
+				t.Errorf("expected error but got none")
+				return
+			}
 
 			assertPositionsAreSet(t, res.AST)
 
@@ -3229,6 +3261,8 @@ func cmpOpts() []cmp.Option {
 			parse.LoopTermRange{},
 			parse.LoopTermSQL{},
 			parse.LoopTermVariable{},
+			parse.ProcedureStmtSQL{},
+			parse.SQLStatement{},
 		),
 		cmp.Comparer(func(x, y parse.Position) bool {
 			return true

@@ -51,7 +51,7 @@ func createUserNamespace(ctx context.Context, db sql.DB, name string, owner []by
 		return err
 	}
 
-	_, err = db.Execute(ctx, `INSERT INTO kwild_engine.user_namespaces (name, owner) VALUES ($1, $2)`, name, owner)
+	_, err = db.Execute(ctx, `INSERT INTO kwild_engine.namespaces (name, owner) VALUES ($1, $2)`, name, owner)
 	return err
 }
 
@@ -450,7 +450,7 @@ func getNamespaceOwners(ctx context.Context, db sql.DB) (map[string][]byte, erro
 		&owner,
 	}
 
-	err := pg.QueryRowFunc(ctx, db, `SELECT name, owner FROM kwild_engine.user_namespaces`, scans, func() error {
+	err := pg.QueryRowFunc(ctx, db, `SELECT name, owner FROM kwild_engine.namespaces`, scans, func() error {
 		owners[name] = owner
 		return nil
 	})

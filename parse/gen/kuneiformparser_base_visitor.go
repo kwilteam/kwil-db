@@ -259,6 +259,10 @@ func (v *BaseKuneiformParserVisitor) VisitPrivilege(ctx *PrivilegeContext) inter
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseKuneiformParserVisitor) VisitTransfer_ownership_statement(ctx *Transfer_ownership_statementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseKuneiformParserVisitor) VisitSelect_statement(ctx *Select_statementContext) interface{} {
 	return v.VisitChildren(ctx)
 }

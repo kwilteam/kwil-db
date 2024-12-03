@@ -170,7 +170,7 @@ fk_action:
 ;
 
 fk_constraint:
-    REFERENCES table=identifier (LPAREN column=identifier RPAREN) (fk_action (fk_action)?)?
+    REFERENCES table=identifier LPAREN identifier_list RPAREN (fk_action (fk_action)?)?
 ;
 
 access_modifier:
@@ -214,6 +214,11 @@ ddl_stmt:
     | drop_table_statement
     | create_index_statement
     | drop_index_statement
+    | create_role_statement
+    | drop_role_statement
+    | grant_statement
+    | revoke_statement
+    | transfer_ownership_statement
 ;
 
 sql_statement: // NOTE: This is only DDL. We should combine ddl and dml into sql_stmt in the future.
@@ -228,8 +233,8 @@ common_table_expression:
 create_table_statement:
     CREATE TABLE (IF NOT EXISTS)? name=identifier
     LPAREN
-    (table_column_def | table_constraint_def | table_index_def)
-    (COMMA  (table_column_def | table_constraint_def | table_index_def))*
+    (table_column_def | table_constraint_def)
+    (COMMA  (table_column_def | table_constraint_def))*
     RPAREN
 ;
 
@@ -249,7 +254,7 @@ opt_drop_behavior:
 ;
 
 drop_table_statement:
-    DROP TABLE (IF EXISTS)? tables=identifier_list opt_drop_behavior
+    DROP TABLE (IF EXISTS)? tables=identifier_list opt_drop_behavior?
 ;
 
 alter_table_statement:
@@ -278,19 +283,19 @@ drop_index_statement:
 ;
 
 create_role_statement:
-    CREATE ROLE IDENTIFIER
+    CREATE ROLE (IF NOT EXISTS)? IDENTIFIER
 ;
 
 drop_role_statement:
-    DROP ROLE IDENTIFIER
+    DROP ROLE (IF EXISTS)? IDENTIFIER
 ;
 
 grant_statement:
-    GRANT (privilege_list|grant_role=identifier) TO (role=identifier|user=STRING_)
+    GRANT (privilege_list|grant_role=identifier) (ON namespace=identifier) TO (role=identifier|user=STRING_)
 ;
 
 revoke_statement:
-    REVOKE (privilege_list|grant_role=identifier) FROM (role=identifier|user=STRING_)
+    REVOKE (privilege_list|grant_role=identifier) (ON namespace=identifier) FROM (role=identifier|user=STRING_)
 ;
 
 privilege_list:
@@ -299,6 +304,10 @@ privilege_list:
 
 privilege:
     SELECT | INSERT | UPDATE | DELETE | CREATE | DROP | ALTER | ROLES | CALL
+;
+
+transfer_ownership_statement:
+    TRANSFER OWNERSHIP TO identifier
 ;
 
 select_statement:

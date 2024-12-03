@@ -392,6 +392,7 @@ func (c *sqlContext) popScope() {
 // sqlAnalyzer visits SQL nodes and analyzes them.
 type sqlAnalyzer struct {
 	UnimplementedSqlVisitor
+	UnimplementedDDLVisitor
 	blockContext
 	sqlCtx    sqlContext
 	sqlResult sqlAnalyzeResult
@@ -2715,6 +2716,14 @@ func (s *sqlAnalyzer) VisitExpressionWindowFunctionCall(p0 *ExpressionWindowFunc
 }
 
 func (s *sqlAnalyzer) VisitGrantOrRevokeStatement(p0 *GrantOrRevokeStatement) any {
+	panic("TODO: Implement")
+}
+
+func (s *sqlAnalyzer) VisitCreateRoleStatement(p0 *CreateRoleStatement) any {
+	panic("TODO: Implement")
+}
+
+func (s *sqlAnalyzer) VisitDropRoleStatement(p0 *DropRoleStatement) any {
 	panic("TODO: Implement")
 }
 

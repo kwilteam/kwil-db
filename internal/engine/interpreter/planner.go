@@ -4,7 +4,6 @@
 package interpreter
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -183,7 +182,7 @@ type ProcedureRunResult struct {
 type functionCall func(exec *executionContext, args []Value) (Cursor, error)
 
 // makeActionToExecutable creates an executable from an action
-func makeActionToExecutable(namespaceOwner []byte, act *Action) *executable {
+func makeActionToExecutable(act *Action) *executable {
 	planner := &interpreterPlanner{}
 	stmtFns := make([]stmtFunc, len(act.Body))
 	for j, stmt := range act.Body {
@@ -221,7 +220,7 @@ func makeActionToExecutable(namespaceOwner []byte, act *Action) *executable {
 			}
 
 			// if the action is owner only, then check if the user is the owner
-			if act.OwnerOnly() && !bytes.Equal(exec.txCtx.Signer, namespaceOwner) {
+			if act.OwnerOnly() && !exec.accessController.IsOwner(exec.txCtx.Caller) {
 				return fmt.Errorf("%w: action %s can only be executed by the owner", ErrActionOwnerOnly, act.Name)
 			}
 
@@ -1108,6 +1107,123 @@ func (i *interpreterPlanner) VisitExpressionIs(p0 *parse.ExpressionIs) any {
 	return retFn
 }
 
+/*
+Role management
+*/
+func (i *interpreterPlanner) VisitGrantOrRevokeStatement(p0 *parse.GrantOrRevokeStatement) any {
+	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
+		if !exec.accessController.HasPrivilege(exec.txCtx.Caller, nil, RolesPrivilege) {
+			return fmt.Errorf("%w: %s", ErrDoesNotHavePriv, RolesPrivilege)
+		}
+
+		switch {
+		case len(p0.Privileges) > 0 && p0.ToRole != "":
+			fn := exec.accessController.GrantPrivileges
+			if !p0.IsGrant {
+				fn = exec.accessController.RevokePrivileges
+			}
+			return fn(exec.txCtx.Ctx, exec.db, p0.ToRole, p0.Privileges, p0.Namespace)
+		case p0.GrantRole != "" && p0.ToUser != "":
+			fn := exec.accessController.AssignRole
+			if !p0.IsGrant {
+				fn = exec.accessController.UnassignRole
+			}
+			return fn(exec.txCtx.Ctx, exec.db, p0.ToUser, p0.GrantRole)
+		default:
+			// failure to hit these cases should have been caught by the parser, where better error
+			// messages can be generated. This is a catch-all for any other invalid cases.
+			return fmt.Errorf("invalid grant/revoke statement")
+		}
+	})
+}
+
+func (i *interpreterPlanner) VisitCreateRoleStatement(p0 *parse.CreateRoleStatement) any {
+	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
+		if !exec.accessController.HasPrivilege(exec.txCtx.Caller, nil, RolesPrivilege) {
+			return fmt.Errorf("%w: %s", ErrDoesNotHavePriv, RolesPrivilege)
+		}
+
+		if p0.IfNotExists {
+			if exec.accessController.RoleExists(p0.Role) {
+				return nil
+			}
+		}
+
+		return exec.accessController.CreateRole(exec.txCtx.Ctx, exec.db, p0.Role)
+	})
+}
+
+func (i *interpreterPlanner) VisitDropRoleStatement(p0 *parse.DropRoleStatement) any {
+	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
+		if !exec.accessController.HasPrivilege(exec.txCtx.Caller, nil, RolesPrivilege) {
+			return fmt.Errorf("%w: %s", ErrDoesNotHavePriv, RolesPrivilege)
+		}
+
+		if p0.IfExists {
+			if !exec.accessController.RoleExists(p0.Role) {
+				return nil
+			}
+		}
+
+		return exec.accessController.DeleteRole(exec.txCtx.Ctx, exec.db, p0.Role)
+	})
+}
+
+func (i *interpreterPlanner) VisitTransferOwnershipStatement(p0 *parse.TransferOwnershipStatement) any {
+	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
+		if !exec.accessController.IsOwner(exec.txCtx.Caller) {
+			return fmt.Errorf("%w: %s", ErrDoesNotHavePriv, "caller must be owner")
+		}
+
+		return exec.accessController.TransferOwnership(exec.txCtx.Ctx, exec.db, p0.To)
+	})
+}
+
+/*
+	top-level adhoc
+*/
+
+func (i *interpreterPlanner) VisitSQLStatement(p0 *parse.SQLStatement) any {
+	mutatesState := true
+	var privilege privilege
+	switch p0.SQL.(type) {
+	case *parse.InsertStatement:
+		privilege = InsertPrivilege
+	case *parse.UpdateStatement:
+		privilege = UpdatePrivilege
+	case *parse.DeleteStatement:
+		privilege = DeletePrivilege
+	case *parse.SelectStatement:
+		privilege = SelectPrivilege
+		mutatesState = false
+	default:
+		panic(fmt.Errorf("unexpected SQL statement type: %T", p0.SQL))
+	}
+	raw, err := p0.Raw()
+	if err != nil {
+		panic(err)
+	}
+	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
+		if !exec.hasPrivilege(privilege) {
+			return fmt.Errorf("%w: %s", ErrDoesNotHavePriv, privilege)
+		}
+
+		// if the query is trying to mutate state but the exec ctx cant then we should error
+		if mutatesState && !exec.mutatingState {
+			return fmt.Errorf("%w: SQL statement mutates state, but the execution context is read-only: %s", ErrStatementMutatesState, raw)
+		}
+
+		return exec.query(raw, func(rv *RecordValue) error {
+			vals := make([]Value, len(rv.Order))
+			for i, field := range rv.Order {
+				vals[i] = rv.Fields[field]
+			}
+
+			return fn(vals)
+		})
+	})
+}
+
 // below this, I have all visitors that are SQL specific. We don't need to implement them,
 // since we will have separate handling for SQL statements at a later stage.
 
@@ -1140,10 +1256,6 @@ func (i *interpreterPlanner) VisitExpressionCase(p0 *parse.ExpressionCase) any {
 }
 
 func (i *interpreterPlanner) VisitCommonTableExpression(p0 *parse.CommonTableExpression) any {
-	panic("intepreter planner should not be called for SQL expressions")
-}
-
-func (i *interpreterPlanner) VisitSQLStatement(p0 *parse.SQLStatement) any {
 	panic("intepreter planner should not be called for SQL expressions")
 }
 
@@ -1245,5 +1357,49 @@ func (i *interpreterPlanner) VisitCreateIndexStatement(p0 *parse.CreateIndexStat
 }
 
 func (i *interpreterPlanner) VisitDropIndexStatement(p0 *parse.DropIndexStatement) any {
+	panic("TODO: Implement")
+}
+
+func (i *interpreterPlanner) VisitAddColumnStatement(p0 *parse.AddColumn) any {
+	panic("TODO: Implement")
+}
+
+func (i *interpreterPlanner) VisitSetColumnConstraint(p0 *parse.SetColumnConstraint) any {
+	panic("TODO: Implement")
+}
+
+func (i *interpreterPlanner) VisitDropColumnConstraint(p0 *parse.DropColumnConstraint) any {
+	panic("TODO: Implement")
+}
+
+func (i *interpreterPlanner) VisitAddColumn(p0 *parse.AddColumn) any {
+	panic("TODO: Implement")
+}
+
+func (i *interpreterPlanner) VisitDropColumn(p0 *parse.DropColumn) any {
+	panic("TODO: Implement")
+}
+
+func (i *interpreterPlanner) VisitRenameColumn(p0 *parse.RenameColumn) any {
+	panic("TODO: Implement")
+}
+
+func (i *interpreterPlanner) VisitRenameTable(p0 *parse.RenameTable) any {
+	panic("TODO: Implement")
+}
+
+func (i *interpreterPlanner) VisitAddTableConstraint(p0 *parse.AddTableConstraint) any {
+	panic("TODO: Implement")
+}
+
+func (i *interpreterPlanner) VisitDropTableConstraint(p0 *parse.DropTableConstraint) any {
+	panic("TODO: Implement")
+}
+
+func (i *interpreterPlanner) VisitTableIndex(p0 *parse.TableIndex) any {
+	panic("TODO: Implement")
+}
+
+func (i *interpreterPlanner) VisitColumn(p0 *parse.Column) any {
 	panic("TODO: Implement")
 }

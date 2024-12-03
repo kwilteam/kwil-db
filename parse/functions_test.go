@@ -9,25 +9,33 @@ import (
 // tests that we have implemented all functions
 func Test_AllFunctionsImplemented(t *testing.T) {
 	for name, fn := range parse.Functions {
-		scalar, ok := fn.(*parse.ScalarFunctionDefinition)
-		if ok {
-			if scalar.PGFormatFunc == nil {
+		switch fnt := fn.(type) {
+		case *parse.ScalarFunctionDefinition:
+			if fnt.PGFormatFunc == nil {
 				t.Errorf("function %s has no PGFormatFunc", name)
 			}
-			if scalar.ValidateArgsFunc == nil {
+
+			if fnt.ValidateArgsFunc == nil {
 				t.Errorf("function %s has no ValidateArgsFunc", name)
 			}
-		} else {
-			agg, ok := fn.(*parse.AggregateFunctionDefinition)
-			if !ok {
-				t.Errorf("function %s is not a scalar or aggregate function", name)
-			}
-			if agg.PGFormatFunc == nil {
+		case *parse.AggregateFunctionDefinition:
+			if fnt.PGFormatFunc == nil {
 				t.Errorf("function %s has no PGFormatFunc", name)
 			}
-			if agg.ValidateArgsFunc == nil {
+
+			if fnt.ValidateArgsFunc == nil {
 				t.Errorf("function %s has no ValidateArgsFunc", name)
 			}
+		case *parse.WindowFunctionDefinition:
+			if fnt.PGFormatFunc == nil {
+				t.Errorf("function %s has no PGFormatFunc", name)
+			}
+
+			if fnt.ValidateArgsFunc == nil {
+				t.Errorf("function %s has no ValidateArgsFunc", name)
+			}
+		default:
+			t.Errorf("function %s is not a scalar, aggregate, or window function", name)
 		}
 	}
 }

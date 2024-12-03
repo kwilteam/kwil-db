@@ -47,14 +47,14 @@ type Interpreter struct {
 	// actions.
 	availableFunctions map[string]*executable
 	namespaces         map[string]*namespace
+	// accessController is used to check if a user has access to a namespace
+	accessController *accessController
 }
 
 // a namespace is a collection of tables and actions.
 // It is conceptually equivalent to Postgres's schema, but is given a
 // different name to avoid confusion.
 type namespace struct {
-	// owner is the public key of the owner of the namespace
-	owner              []byte
 	availableFunctions map[string]*executable
 	tables             map[string]*engine.Table
 	actions            map[string]*Action
@@ -142,10 +142,6 @@ func NewInterpreter(ctx context.Context, db sql.DB, log log.Logger) (*Interprete
 	if err != nil {
 		return nil, err
 	}
-	namespaceOwners, err := getNamespaceOwners(ctx, db)
-	if err != nil {
-		return nil, err
-	}
 
 	interpreter := &Interpreter{
 		availableFunctions: availableFuncs,
@@ -158,25 +154,25 @@ func NewInterpreter(ctx context.Context, db sql.DB, log log.Logger) (*Interprete
 			actions = make(map[string]*Action)
 		}
 
-		owner, ok := namespaceOwners[name]
-		if !ok {
-			owner = []byte{}
-		}
-
 		// now, we override the built-in functions with the actions
 		namespaceFunctions := maps.Clone(availableFuncs)
 		for _, action := range actions {
-			exec := makeActionToExecutable(owner, action)
+			exec := makeActionToExecutable(action)
 			namespaceFunctions[exec.Name] = exec
 		}
 
 		interpreter.namespaces[name] = &namespace{
-			owner:              owner,
 			tables:             tables,
 			availableFunctions: namespaceFunctions,
 			actions:            actions,
 		}
 	}
+
+	accessController, err := newAccessController(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	interpreter.accessController = accessController
 
 	return interpreter, nil
 }
@@ -231,9 +227,10 @@ func (i *Interpreter) Call(ctx *common.TxContext, db sql.DB, namespace, action s
 		scope:              newScope(namespace),
 		availableFunctions: ns.availableFunctions,
 		// if we can write, then we are in execution, and should be deterministic
-		mutatingState: accessModer.AccessMode() == sql.ReadWrite,
-		db:            db,
-		interpreter:   i,
+		mutatingState:    accessModer.AccessMode() == sql.ReadWrite,
+		db:               db,
+		namespaces:       i.namespaces,
+		accessController: i.accessController,
 	}, argVals, resultFn)
 }
 
@@ -278,7 +275,6 @@ func (i *Interpreter) CreateNamespace(ctx context.Context, db sql.DB, name strin
 
 	// create the namespace
 	i.namespaces[name] = &namespace{
-		owner:              owner,
 		availableFunctions: maps.Clone(i.availableFunctions),
 		tables:             make(map[string]*engine.Table),
 		actions:            make(map[string]*Action),

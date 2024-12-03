@@ -23,19 +23,34 @@ BEGIN
     EXCEPTION
         WHEN duplicate_object THEN NULL;
     END;
+
+    -- privilege_type is an enumeration of all privilege types that can be applied to a role
+    BEGIN
+        CREATE TYPE kwild_engine.privilege_type AS ENUM (
+            'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'CALL', 'ROLES'
+        );
+    EXCEPTION
+        WHEN duplicate_object THEN NULL;
+    END;
 END $$;
 
--- user_namespaces is a table that stores all user schemas in the engine
-CREATE TABLE IF NOT EXISTS kwild_engine.user_namespaces (
+-- metadata stores all metadata for the engine
+CREATE TABLE IF NOT EXISTS kwild_engine.metadata (
     id BIGSERIAL PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE,
-    owner BYTEA NOT NULL
+    key TEXT NOT NULL UNIQUE,
+    value TEXT NOT NULL
+);
+
+-- namespaces is a table that stores all user schemas in the engine
+CREATE TABLE IF NOT EXISTS kwild_engine.namespaces (
+    id BIGSERIAL PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE
 );
 
 -- actions is a table that stores all actions in the engine
 CREATE TABLE IF NOT EXISTS kwild_engine.actions (
     id BIGSERIAL PRIMARY KEY,
-    schema_name TEXT NOT NULL REFERENCES kwild_engine.user_namespaces(name) ON UPDATE CASCADE ON DELETE CASCADE,
+    schema_name TEXT NOT NULL REFERENCES kwild_engine.namespaces(name) ON UPDATE CASCADE ON DELETE CASCADE,
     name TEXT NOT NULL UNIQUE,
     public BOOLEAN NOT NULL DEFAULT FALSE,
     raw_body TEXT NOT NULL,
@@ -62,6 +77,43 @@ CREATE TABLE IF NOT EXISTS kwild_engine.return_fields (
     is_array BOOLEAN NOT NULL,
     metadata BYTEA DEFAULT NULL
 );
+
+-- roles_table is a table that stores all role information.
+-- since Kwil uses it's own roles system that is in no way related to the Postgres roles system, we need to store this information
+CREATE TABLE IF NOT EXISTS kwild_engine.roles (
+    id BIGSERIAL PRIMARY KEY,
+    name TEXT NOT NULL UNIQUE
+);
+
+CREATE TABLE IF NOT EXISTS kwild_engine.role_privileges (
+    id BIGSERIAL PRIMARY KEY,
+    privilege_type kwild_engine.privilege_type NOT NULL,
+    namespace_id INT8 REFERENCES kwild_engine.namespaces(id) ON UPDATE CASCADE ON DELETE CASCADE, -- the namespace it is targeting. Can be null if it is a global privilege
+    role_id INT8 NOT NULL REFERENCES kwild_engine.roles(id) ON UPDATE CASCADE ON DELETE CASCADE
+);
+
+-- user_roles is a table that stores all users who have been assigned roles
+CREATE TABLE IF NOT EXISTS kwild_engine.user_roles (
+    id BIGSERIAL PRIMARY KEY,
+    user_identifier TEXT NOT NULL,
+    role_id INT8 NOT NULL
+);
+
+-- an index here helps with performance when querying for a user's roles
+CREATE INDEX IF NOT EXISTS user_roles_user_identifier_idx ON kwild_engine.user_roles(user_identifier);
+
+-- create a single default role that will be used for all users
+INSERT INTO kwild_engine.roles (name) VALUES ('default') ON CONFLICT DO NOTHING;
+-- default role can select and call by default
+INSERT INTO kwild_engine.role_privileges (privilege_type, role_id) VALUES ('SELECT', (
+    SELECT id
+    FROM kwild_engine.roles
+    WHERE name = 'default'
+)), ('CALL', (
+    SELECT id
+    FROM kwild_engine.roles
+    WHERE name = 'default'
+)) ON CONFLICT DO NOTHING;
 
 -- format_type is a function that formats a data type for display
 CREATE OR REPLACE FUNCTION kwild_engine.format_type(scal kwild_engine.scalar_data_type, is_arr BOOLEAN, meta BYTEA)
@@ -119,7 +171,7 @@ SET search_path TO kwild;
 CREATE VIEW kwil_tables AS
 SELECT tablename::TEXT AS name, schemaname::TEXT AS schema
 FROM pg_tables
-JOIN kwild_engine.user_namespaces us
+JOIN kwild_engine.namespaces us
     ON schemaname = us.name
 ORDER BY 1, 2;
 
@@ -162,7 +214,7 @@ LEFT JOIN information_schema.table_constraints tc
         AND tc.constraint_type = 'PRIMARY KEY'
         AND tc.table_schema = c.table_schema
 JOIN 
-    kwild_engine.user_namespaces us ON n.nspname::TEXT = us.name
+    kwild_engine.namespaces us ON n.nspname::TEXT = us.name
 WHERE cl.relkind = 'r'  -- Only include regular tables
 ORDER BY 
     c.table_name, 
@@ -186,7 +238,7 @@ JOIN pg_am am ON ic.relam = am.oid
 JOIN pg_attribute a ON a.attnum = ANY(i.indkey) AND a.attrelid = c.oid
 JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS x(colnum, ordinality) ON x.colnum = a.attnum
 JOIN 
-    kwild_engine.user_namespaces us ON n.nspname::TEXT = us.name
+    kwild_engine.namespaces us ON n.nspname::TEXT = us.name
 GROUP BY n.nspname, c.relname, ic.relname, i.indisprimary, i.indisunique
 ORDER BY 1,2,3,4,5,6;
 
@@ -213,7 +265,7 @@ LEFT JOIN
 LEFT JOIN 
     pg_attribute ON pg_attribute.attnum = cols.colnum AND pg_attribute.attrelid = pg_class.oid
 JOIN 
-    kwild_engine.user_namespaces us ON pg_namespace.nspname::TEXT = us.name
+    kwild_engine.namespaces us ON pg_namespace.nspname::TEXT = us.name
 WHERE 
     contype = 'c'  -- Only check constraints
     OR contype = 'u'  -- Only unique constraints 
@@ -254,7 +306,7 @@ LEFT JOIN
 LEFT JOIN 
     pg_attribute ON pg_attribute.attnum = cols.colnum AND pg_attribute.attrelid = pg_class.oid
 JOIN 
-    kwild_engine.user_namespaces us ON pg_namespace.nspname::TEXT = us.name
+    kwild_engine.namespaces us ON pg_namespace.nspname::TEXT = us.name
 WHERE 
     contype = 'f'  -- Only foreign key constraints
 GROUP BY 
@@ -295,3 +347,41 @@ LEFT JOIN kwild_engine.return_fields r
 GROUP BY a.schema_name, a.id, a.name, a.public, a.raw_body, a.returns_table
 ORDER BY a.name,
     1, 2, 3, 4, 5, 6; --TODO: do we need to order 7, 8?
+
+-- roles is a public view that provides a list of all roles in the database
+CREATE VIEW roles AS
+SELECT 
+    name
+FROM
+    kwild_engine.roles
+ORDER BY
+    name;
+
+CREATE VIEW user_roles AS
+SELECT 
+    user_identifier,
+    r.name AS role
+FROM
+    kwild_engine.user_roles ur
+JOIN
+    kwild_engine.roles r
+    ON ur.role_id = r.id
+ORDER BY
+    1, 2;
+
+-- role_privileges is a public view that provides a list of all role privileges in the database
+CREATE VIEW role_privileges AS
+SELECT 
+    r.name AS role,
+    p.privilege_type AS privilege,
+    n.name AS namespace
+FROM
+    kwild_engine.role_privileges p
+JOIN
+    kwild_engine.roles r
+    ON p.role_id = r.id
+LEFT JOIN
+    kwild_engine.namespaces n
+    ON p.namespace_id = n.id
+ORDER BY
+    1, 2, 3;
