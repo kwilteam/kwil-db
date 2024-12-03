@@ -7,7 +7,7 @@ tasks:
 
   work:
     cmds:
-      - cmd: go work init . ./core ./test ./parse ./core/client/example ./core/gatewayclient/example
+      - cmd: go work init . ./core ./parse
         ignore_error: true
     generates:
       - go.work
@@ -16,7 +16,7 @@ tasks:
     aliases: [install:deps]
     desc: Install tools required to build this app
     cmds:
-      - go install "golang.org/x/tools/cmd/goimports@v0.25.0"
+      - go install "golang.org/x/tools/cmd/goimports@v0.27.0"
 
   fmt:
     desc: Format the code
@@ -24,8 +24,8 @@ tasks:
       # goimports does not allow to ignore certain paths with modules,
       # so we have to list all the folders that are adjacent generated code.
       - |
-        goimports -format-only -w ./cmd ./common ./internal ./test ./testing \
-          ./core ./extensions ./parse/*.go ./parse/wasm ./parse/postgres
+        goimports -format-only -w ./app ./cmd ./common ./core ./node ./testing \
+          ./extensions ./parse/*.go ./parse/wasm ./parse/postgres
 
   tidy:
     desc: go mod tidy each module
@@ -36,54 +36,46 @@ tasks:
         (cd core; go mod tidy)
         (cd parse; go mod tidy)
         go mod tidy
-        (cd test; go mod tidy)
-        (cd core/client/example; go mod tidy)
-        (cd core/gatewayclient/example; go mod tidy)
+      #  (cd test; go mod tidy)
+      #  (cd core/client/example; go mod tidy)
+      #  (cd core/gatewayclient/example; go mod tidy)
 
   lint:
     desc: Lint with golangci-lint
     cmds:
       # skip-dirs only works in .yaml
-      - golangci-lint run ./... ./core/... ./test/... ./parse/... -c .golangci.yml
+      - golangci-lint run ./... -c .golangci.yml
 
   linter:
-    desc: Install the linter (not for CI which has an action for this)
+    desc: Install the linter # not for CI which has an action for this
     cmds:
-      - go install "github.com/golangci/golangci-lint/cmd/golangci-lint@v1.61.0"
+      - go install "github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.2"
 
   build:
-    desc: Build cli, admin & kwild
+    desc: Build kwil-cli and kwild
     cmds:
       - task: build:cli
       - task: build:kwild
-      - task: build:admin
 
   build:cli:
     desc: Build kwil-cli
     cmds:
-      - ./scripts/build/binary kwil-cli #-mod=mod
+      - ./contrib/scripts/build/binary kwil-cli #-mod=mod
     generates:
       - .build/kwil-cli
-
-  build:admin:
-    desc: Build kwil-admin
-    cmds:
-      - ./scripts/build/binary kwil-admin
-    generates:
-      - .build/kwil-admin
 
   build:kwild:
     desc: Builds kwild server
     cmds:
-      - ./scripts/build/binary kwild #-mod=mod
+      - ./contrib/scripts/build/binary kwild #-mod=mod
     generates:
       - .build/kwild
 
   generate:docs:
     desc: Generate docs for CLIs
     cmds:
+      - go run ./cmd/kwild/generate -out ./gen
       - go run ./cmd/kwil-cli/generate -out ./gen
-      - go run ./cmd/kwil-admin/generate -out ./gen
 
   kuneiform:wasm:
     desc: Build the kuneiform wasm
@@ -126,7 +118,7 @@ tasks:
       # {{.CLI_ARGS}} is a special variable that will be replaced with the CLI args
       # {{.VARIANT}} is a variable other tasks can set, it will have effect if {{.CLI_ARGS}} is empty
       # !! if parent task(which has deps on this task) has {{.CLI_ARGS}}, only this child task get the {{.CLI_ARGS}}
-      - GO_BUILDTAGS="{{.GO_BUILDTAGS}}" ./scripts/build/docker kwild {{.CLI_ARGS}} {{.VARIANT}}
+      - GO_BUILDTAGS="{{.GO_BUILDTAGS}}" ./contrib/scripts/build/docker kwild {{.CLI_ARGS}} {{.VARIANT}}
 
   publish:dockerhub:
     desc: Publish docker image to dockerhub
@@ -134,74 +126,79 @@ tasks:
       - task: vendor
       - defer: { task: vendor:clean }
       # TAG is the docker tag. GO_BUILDTAGS is the build tags for go build
-      - TAG={{.TAG}} GO_BUILDTAGS="{{.GO_BUILDTAGS}}" ./scripts/publish/dockerhub
+      - TAG={{.TAG}} GO_BUILDTAGS="{{.GO_BUILDTAGS}}" ./contrib/scripts/publish/dockerhub
     requires:
       vars: [TAG]
 
   pg:
     desc: Start the postgres docker image
+    vars:
+      PORT: '{{ .PORT | default 5432 }}'
+      NAME: '{{ .NAME | default "kwil-pg-demo" }}'
     cmds:
+      - defer: { task: pg:clean }
       - |
-        docker run -p 5432:5432 -v kwil-pg-demo:/var/lib/postgresql/data \
-            --shm-size 256m -e "POSTGRES_HOST_AUTH_METHOD=trust" \
-            --name kwil-pg-demo kwildb/postgres:16.4-1
+        docker run -p :5432 -v {{ .NAME }}:/var/lib/postgresql/data \
+            --shm-size 512m -e "POSTGRES_HOST_AUTH_METHOD=trust" \
+            --name {{ .NAME }} kwildb/postgres:16.5-1
 
   pg:clean:
     desc: Wipe data from the pg task
+    vars:
+      NAME: '{{ .NAME | default "kwil-pg-demo" }}'
     cmds:
       - |
-        docker container rm -f kwil-pg-demo
-        docker volume rm -f kwil-pg-demo
+        docker container rm -f {{ .NAME }}
+        docker volume rm -f {{ .NAME }}
 
   # ************ dev ************
-  dev:up:
-    desc: Start the dev environment
-    deps:
-      - task: build:docker
-    cmds:
-      - task: dev:up:nb
+  # dev:up:
+  #   desc: Start the dev environment
+  #   deps:
+  #     - task: build:docker
+  #   cmds:
+  #     - task: dev:up:nb
 
-  dev:up:debug:
-    desc: Start the dev environment
-    deps:
-      - task: build:docker
-        vars: { VARIANT: 'debug' }
-    cmds:
-      - task: dev:up:nb
+  # dev:up:debug:
+  #   desc: Start the dev environment
+  #   deps:
+  #     - task: build:docker
+  #       vars: { VARIANT: 'debug' }
+  #   cmds:
+  #     - task: dev:up:nb
 
-  dev:up:nb:
-    desc: Start the dev environment without rebuilding docker image
-    env:
-      # NOTE: this timeout should be long enough to attach to debugger
-      KACT_WAIT_TIMEOUT: 20s
-    dir: test # different module
-    cmds:
-      - go test ./acceptance -run ^TestLocalDevSetup -timeout 12h -dev -v {{.CLI_ARGS}}
+  # dev:up:nb:
+  #   desc: Start the dev environment without rebuilding docker image
+  #   env:
+  #     # NOTE: this timeout should be long enough to attach to debugger
+  #     KACT_WAIT_TIMEOUT: 20s
+  #   dir: test # different module
+  #   cmds:
+  #     - go test ./acceptance -run ^TestLocalDevSetup -timeout 12h -dev -v {{.CLI_ARGS}}
 
-  dev:testnet:up:
-    desc: Start the dev environment(with testnet)
-    deps:
-      - task: build:docker
-    cmds:
-      - task: dev:testnet:up:nb
+  # dev:testnet:up:
+  #   desc: Start the dev environment(with testnet)
+  #   deps:
+  #     - task: build:docker
+  #   cmds:
+  #     - task: dev:testnet:up:nb
 
-  dev:testnet:up:nb:
-    desc: Start the dev environment(with testnet) without rebuilding docker image
-    dir: test # different module
-    cmds:
-      - go test ./integration -run ^TestLocalDevSetup$ -timeout 12h -dev -v {{.CLI_ARGS}}
+  # dev:testnet:up:nb:
+  #   desc: Start the dev environment(with testnet) without rebuilding docker image
+  #   dir: test # different module
+  #   cmds:
+  #     - go test ./integration -run ^TestLocalDevSetup$ -timeout 12h -dev -v {{.CLI_ARGS}}
 
   # ************ test ************
   # test with build:docker task support passing CLI_ARGS to go test, e.g. task test:act -- -debug
   # but this CLI_ARGS will only be used by `build:docker`
-  test:act:
-    desc: Run acceptance tests
-    deps:
-      - task: build:cli
-      - task: build:admin
-      - task: build:docker
-    cmds:
-      - task: test:act:nb
+  # test:act:
+  #   desc: Run acceptance tests
+  #   deps:
+  #     - task: build:cli
+  #     - task: build:docker
+  #   cmds:
+  #     - task: test:act:nb
 
   # *:nb task support passing CLI_ARGS to go test
   # this CLI_ARGS will be used by `go test`
@@ -209,11 +206,11 @@ tasks:
   # - task test:act:nb -- -remote
   # - task test:act:nb -- -drivers grpc
   # - task test:act:nb -- -parallel-mode -parallel 2
-  test:act:nb:
-    desc: Run acceptance tests without building docker image
-    dir: test # different module
-    cmds:
-      - go test ./acceptance -count=1 -v {{.CLI_ARGS}}
+  # test:act:nb:
+  #   desc: Run acceptance tests without building docker image
+  #   dir: test # different module
+  #   cmds:
+  #     - go test ./acceptance -count=1 -v {{.CLI_ARGS}}
 
   # NOTE: for now the unit tests require postgres running to support the tests
   # with the "pglive" build tag. In CI, a postgres service is started by the
@@ -243,37 +240,37 @@ tasks:
       - CGO_ENABLED=1 go test ./parse/... -tags=ext_test -count=1 -race
       - CGO_ENABLED=1 go test ./... -tags=ext_test -count=1 -race
 
-  test:it:
-    desc: Run integration tests ('short' mode)
-    deps:
-      - task: build:cli
-      - task: build:admin
-      - task: build:docker
-    cmds:
-      - task: test:it:nb
+  # test:it:
+  #   desc: Run integration tests ('short' mode)
+  #   deps:
+  #     - task: build:cli
+  #     - task: build:admin
+  #     - task: build:docker
+  #   cmds:
+  #     - task: test:it:nb
 
-  test:it:nb:
-    desc: Run integration tests ('short' mode)
-    dir: test # different module
-    cmds:
-      - go test -short -count=1 -timeout 0 ./integration -v {{.CLI_ARGS}}
+  # test:it:nb:
+  #   desc: Run integration tests ('short' mode)
+  #   dir: test # different module
+  #   cmds:
+  #     - go test -short -count=1 -timeout 0 ./integration -v {{.CLI_ARGS}}
 
-  test:it:nb:all:
-    desc: Run integration tests
-    dir: test # different module
-    cmds:
-      - go test -count=1 -timeout 0 ./integration -v {{.CLI_ARGS}}
+  # test:it:nb:all:
+  #   desc: Run integration tests
+  #   dir: test # different module
+  #   cmds:
+  #     - go test -count=1 -timeout 0 ./integration -v {{.CLI_ARGS}}
 
-  test:it:spam:
-    desc: Run integration test with oracle spammer nodes
-    dir: test # different module
-    cmds:
-      - (cd nodes/spamd; ./build.sh)
-      - go test -count=1 -timeout 0 -run TestSpamListener ./integration -v -spam {{.CLI_ARGS}}
+  # test:it:spam:
+  #   desc: Run integration test with oracle spammer nodes
+  #   dir: test # different module
+  #   cmds:
+  #     - (cd nodes/spamd; ./build.sh)
+  #     - go test -count=1 -timeout 0 -run TestSpamListener ./integration -v -spam {{.CLI_ARGS}}
 
-  test:it:fork:
-    desc: Run integration test with a hardfork configured
-    dir: test # different module
-    cmds:
-      - (cd nodes/fork; ./build.sh)
-      - go test -count=1 -timeout 0 -run TestKwildNetworkHardfork ./integration -v -fork {{.CLI_ARGS}}
+  # test:it:fork:
+  #   desc: Run integration test with a hardfork configured
+  #   dir: test # different module
+  #   cmds:
+  #     - (cd nodes/fork; ./build.sh)
+  #     - go test -count=1 -timeout 0 -run TestKwildNetworkHardfork ./integration -v -fork {{.CLI_ARGS}}

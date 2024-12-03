@@ -146,7 +146,8 @@ func (rm *replMon) recvID(seq int64, changes chan<- any) (chan []byte, bool) {
 	}
 	rm.promises[seq] = c
 
-	fmt.Println("setting changeset writer from recvID")
+	// TODO: fix rollback so changesetWriter.fail() is not in a race with this.
+	// This means having the rollback method wait on the fail call (the rollback repl mesg)
 	rm.changesetWriter.setChangesetWriter(changes) // set the changeset writer to the changes channel
 
 	return c, true

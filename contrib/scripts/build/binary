@@ -5,8 +5,8 @@
 
 set -eu
 
-. ./scripts/build/.git_variables
-. ./scripts/build/.go_variables
+. ./contrib/scripts/build/.git_variables
+. ./contrib/scripts/build/.go_variables
 
 echo "Building $GO_LINKMODE $(basename "${TARGET}")"
 

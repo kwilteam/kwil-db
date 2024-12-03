@@ -42,7 +42,16 @@ func TestDualNodeMocknet(t *testing.T) {
 	bs1 := memstore.NewMemBS()
 	mp1 := mempool.New()
 
+	pg.UseLogger(log.New(log.WithName("DBS")))
+
 	db1 := initDB(t, "5432", "kwil_test_db")
+	func() {
+		ctx := context.Background()
+		_, err = db1.Pool().Execute(ctx, `DROP DATABASE IF EXISTS kwil_test_db2;`)
+		require.NoError(t, err)
+		_, err = db1.Pool().Execute(ctx, `CREATE DATABASE kwil_test_db2 OWNER kwild;`)
+		require.NoError(t, err)
+	}()
 
 	pk2, h2, err := newTestHost(t, mn)
 	if err != nil {
@@ -50,7 +59,7 @@ func TestDualNodeMocknet(t *testing.T) {
 	}
 	bs2 := memstore.NewMemBS()
 	mp2 := mempool.New()
-	db2 := initDB(t, "5432", "kwil_test_db2")
+	db2 := initDB(t, "5432", "kwil_test_db2") // NOTE: using the same postgres host is a little wild
 
 	root1 := t.TempDir()
 	root2 := t.TempDir()
@@ -175,21 +184,24 @@ func TestDualNodeMocknet(t *testing.T) {
 	// peers := net.Peers()
 	// t.Log(peers)
 
-	// run for a bit, checks stuff, do tests, like ensure blocks mine (TODO)...
-	time.Sleep(4 * time.Second)
+	// time.Sleep(4 * time.Second)
 
-	tx, err := db1.BeginReadTx(ctx)
-	require.NoError(t, err)
-	defer tx.Rollback(ctx)
-
-	h, _, _, err := meta.GetChainState(ctx, tx)
-	require.NoError(t, err)
-
-	require.GreaterOrEqual(t, h, int64(1))
+	// h, _, _, err := meta.GetChainState(ctx, tx)
+	// require.NoError(t, err)
+	// require.GreaterOrEqual(t, h, int64(1))
+	reachHeight := int64(2)
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		// TODO: use a Node method instead of direct DB (or in addition to).
+		tx, err := db1.BeginReadTx(ctx)
+		require.NoError(t, err)
+		defer tx.Rollback(ctx)
+		h, _, _, err := meta.GetChainState(ctx, tx)
+		require.NoError(t, err)
+		assert.GreaterOrEqual(c, h, reachHeight)
+	}, 6*time.Second, 250*time.Millisecond)
 
 	cancel()
 	wg.Wait()
-
 }
 
 func initDB(t *testing.T, port, dbName string) *pg.DB {
@@ -204,13 +216,14 @@ func initDB(t *testing.T, port, dbName string) *pg.DB {
 	require.NoError(t, err)
 	ctx := context.Background()
 
-	prepTx, err := db.BeginPreparedTx(ctx)
+	tx, err := db.BeginTx(ctx)
 	require.NoError(t, err)
+	defer tx.Rollback(ctx)
 
-	err = meta.InitializeMetaStore(ctx, prepTx)
+	err = meta.InitializeMetaStore(ctx, tx)
 	assert.NoError(t, err)
 
-	assert.NoError(t, prepTx.Commit(ctx))
+	assert.NoError(t, tx.Commit(ctx))
 	return db
 }
 

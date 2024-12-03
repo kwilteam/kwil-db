@@ -1,20 +1,13 @@
 #!/usr/bin/env sh
 set -eu
 
-. ./scripts/build/.git_variables
+. ./contrib/scripts/build/.git_variables
 
 : "${CGO_ENABLED=}"
 : "${GO_LINKMODE=static}"
 : "${GO_RACEFLAG=}"
 : "${GO_BUILDTAGS=}"
-: "${GO_STRIP=}"
 : "${GO_GCFLAGS=}"
-
-GOOS="$(go env GOOS)"
-GOARCH="$(go env GOARCH)"
-if [ "${GOARCH}" = "arm" ]; then
-    GOARM="$(go env GOARM)"
-fi
 
 BINARY=${1:-}
 
@@ -27,42 +20,20 @@ if [ -n "$GO_RACEFLAG" ]; then
     CGO_ENABLED=1
 fi
 
-if [ -z "$CGO_ENABLED" ]; then
-    case "$(go env GOOS)" in
-        linux)
-            case "$(go env GOARCH)" in
-                amd64|arm64|arm|s390x)
-                    CGO_ENABLED=1
-                ;;
-                *)
-                    CGO_ENABLED=0
-                ;;
-            esac
-        ;;
-        darwin|windows)
-            CGO_ENABLED=1
-        ;;
-        *)
-            CGO_ENABLED=0
-        ;;
-    esac
-fi
-export CGO_ENABLED
-
 GO_LDFLAGS="${GO_LDFLAGS:-}"
-if [ "$CGO_ENABLED" = "1" ] && [ "$GO_LINKMODE" = "static" ] && [ "$(go env GOOS)" = "linux" ]; then
+
+if [ "$GO_LINKMODE" = "static" ]; then
     GO_LDFLAGS="$GO_LDFLAGS -extldflags=-static"
-fi
-if [ "$CGO_ENABLED" = "1" ] && [ "$GO_LINKMODE" = "static" ]; then
     # compiling statically with CGO enabled requires osusergo to be set.
     # netgo is also required to avoid: "warning: Using 'getaddrinfo' in
     # statically linked applications requires at runtime the shared libraries
     # from the glibc version used for linking"
-    GO_BUILDTAGS="$GO_BUILDTAGS osusergo netgo auth_nep413 auth_ed25519_sha256"
+    GO_BUILDTAGS="$GO_BUILDTAGS osusergo netgo"
 fi
-if [ -n "$GO_STRIP" ]; then
-    GO_LDFLAGS="$GO_LDFLAGS -s -w"
-fi
+
+GO_BUILDTAGS="$GO_BUILDTAGS auth_nep413 auth_ed25519_sha256"
+
+GO_LDFLAGS="$GO_LDFLAGS -s -w"
 
 export GO_LDFLAGS="$GO_LDFLAGS" # https://github.com/koalaman/shellcheck/issues/2064
 

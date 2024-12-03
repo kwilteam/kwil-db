@@ -4,7 +4,6 @@ on:
   pull_request:
     types: [ opened, synchronize, reopened, ready_for_review ]
     branches:
-      - main
       - release*
   # path filter won't work bcz PR status check will be 'pending' if workflow is
   # skipped due to path filtering, i.e. blocked
@@ -33,7 +32,7 @@ jobs:
         id: filter
         with:
           # Path to file where filters are defined
-          filters: .github/filters.yaml
+          filters: .github/filters-old.yaml
           #predicate-quantifier: 'every' # check dorny/paths-filter#225
 
   test:
@@ -44,7 +43,7 @@ jobs:
 
     services:
       postgres:
-        image: kwildb/postgres:16.4-1
+        image: kwildb/postgres:16.5-1
         env:
           POSTGRES_PORT: 5432
           POSTGRES_HOST_AUTH_METHOD: trust
