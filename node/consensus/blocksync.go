@@ -16,6 +16,9 @@ import (
 
 func (ce *ConsensusEngine) doBlockSync(ctx context.Context) error {
 	if ce.role.Load() == types.RoleLeader {
+		if len(ce.validators.GetValidators()) == 1 {
+			return nil // we are the network
+		}
 		// figure out the best height to sync with the network
 		// before starting to request blocks from the network.
 		bestHeight, err := ce.discoverBestHeight(ctx)
@@ -47,20 +50,23 @@ func (ce *ConsensusEngine) discoverBestHeight(ctx context.Context) (int64, error
 	// Broadcast a status message to the network, to which validators would respond with their status.
 	go func() {
 		ce.discoveryReqBroadcaster()
+
+		delay := 500 * time.Millisecond
 		for {
 			select {
 			case <-cancelCtx.Done():
 				return
-			case <-time.After(5 * time.Second):
+			case <-time.After(delay):
 				if ce.inSync.Load() {
 					ce.discoveryReqBroadcaster()
+					delay = min(2*delay, 16*time.Second)
 				}
 			}
 		}
 
 	}()
 
-	// Wait for the validators to respind with their best heights.
+	// Wait for the validators to respond with their best heights.
 	// The leader would then sync up to the best height.
 
 	heights := make(map[string]int64)

@@ -3,11 +3,10 @@
 # Build docker image
 #
 # This must be run from the repository root.
-#
 
 set -eu
 
-. ./scripts/build/.git_variables
+. ./contrib/scripts/build/.git_variables
 
 IMAGE=${1:-"kwild"}
 EXTRA=${2:-}
@@ -32,5 +31,5 @@ BUILD_ARGS="${BUILD_ARGS} --build-arg go_race=${GO_RACEFLAG:-}"
 
 export DOCKER_BUILDKIT=1
 
-docker build .  -t "${IMAGE}:${GIT_VERSION}" -t "${IMAGE}:latest" ${BUILD_ARGS} \
-    -f "./build/package/docker/${DOCKER_FILE}" --progress=auto
+docker build . -t "${IMAGE}:${GIT_VERSION}" -t "${IMAGE}:latest" ${BUILD_ARGS} \
+    -f "./contrib/docker/${DOCKER_FILE}" --progress=auto

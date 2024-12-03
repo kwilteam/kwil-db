@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -65,13 +66,17 @@ func generateTestCEConfig(t *testing.T, nodes int) []*Config {
 
 	ctx := context.Background()
 
-	prepTx, err := db.BeginPreparedTx(ctx)
-	require.NoError(t, err)
+	func() {
+		tx, err := db.BeginTx(ctx)
+		require.NoError(t, err)
+		defer tx.Rollback(ctx)
 
-	err = meta.InitializeMetaStore(ctx, prepTx)
-	assert.NoError(t, err)
+		err = meta.InitializeMetaStore(ctx, tx)
+		require.NoError(t, err)
 
-	assert.NoError(t, prepTx.Commit(ctx))
+		require.NoError(t, tx.Commit(ctx))
+	}()
+
 	// Account Store
 	// accounts, err := accounts.InitializeAccountStore(ctx, db)
 	// assert.NoError(t, err)
@@ -535,8 +540,16 @@ func TestValidatorStateMachine(t *testing.T) {
 			blkProp2, err = leader.createBlockProposal()
 			assert.NoError(t, err)
 
-			ctx := context.Background()
-			go val.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster)
+			ctx, cancel := context.WithCancel(context.Background())
+			var wg sync.WaitGroup
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				val.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster)
+			}()
+
+			defer wg.Wait() // before cleanup
+			defer cancel()
 
 			for _, act := range tc.actions {
 				act.trigger(t, leader, val)
@@ -560,14 +573,22 @@ func TestCELeaderSingleNode(t *testing.T) {
 	// bring up the node
 	leader := New(ceConfigs[0])
 
-	ctx := context.Background()
-	go leader.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster)
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		leader.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster)
+	}()
+
+	t.Cleanup(func() {
+		cancel()
+		wg.Wait()
+	})
 
 	require.Eventually(t, func() bool {
 		return leader.lastCommitHeight() >= 1 // Ensure that the leader mines a block
-	}, 2*time.Second, 100*time.Millisecond)
-
-	ctx.Done()
+	}, 6*time.Second, 100*time.Millisecond)
 }
 
 func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
@@ -577,12 +598,24 @@ func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
 	// bring up the nodes
 	n1 := New(ceConfigs[0])
 	// start node 1 (Leader)
-	ctx := context.Background()
-	go n1.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster)
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		n1.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster)
+	}()
+
+	t.Cleanup(func() {
+		cancel()
+		wg.Wait()
+	})
 
 	time.Sleep(500 * time.Millisecond)
 	_, _, blProp := n1.info()
 	// appHash := nextAppHash()
+
+	require.NotNil(t, blProp)
 
 	// node2 should send a vote to node1
 	vote := &vote{
@@ -606,8 +639,6 @@ func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
 		fmt.Printf("Height: %d\n", height)
 		return height == 1
 	}, 2*time.Second, 100*time.Millisecond)
-
-	ctx.Done()
 }
 
 func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
@@ -617,8 +648,18 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 	// bring up the nodes
 	n1 := New(ceConfigs[0])
 	// start node 1 (Leader)
-	ctx := context.Background()
-	go n1.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster)
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		n1.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster)
+	}()
+
+	t.Cleanup(func() {
+		cancel()
+		wg.Wait()
+	})
 
 	require.Eventually(t, func() bool {
 		blockRes := n1.blockResult()
