@@ -310,9 +310,7 @@ func Test_Voting(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 
-			db, err := dbtest.NewTestDB(t)
-			require.NoError(t, err)
-			defer db.Close()
+			db := dbtest.NewTestDB(t, nil)
 
 			dbTx, err := db.BeginTx(ctx)
 			require.NoError(t, err)

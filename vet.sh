@@ -1,27 +1,24 @@
 #!/usr/bin/env bash
 
-# be sure to "go work init ." first
+task work
 
 set -e
 
 echo "Tidying go.mod and go.work..."
-(cd core; go mod tidy)
-(cd parse; go mod tidy)
-go mod tidy
-# ./contrib/scripts/tidy.sh
+task tidy
 
 echo "Formating source..."
-# go install golang.org/x/tools/cmd/goimports@v0.26.0
-goimports -format-only -w .
+# goimports: task tools
+task fmt
 
 echo "Running unit tests..."
-go test -short -count 1 ./...
+task test:unit
 
 echo "Compiling kwil node application..."
 go build -o /dev/null ./cmd/kwild
 
 echo "Linting all source..."
-# go install -v github.com/golangci/golangci-lint/cmd/golangci-lint@latest
-golangci-lint run ./... -c .golangci.yml
+# install: task linter
+task lint
 
 echo "done"

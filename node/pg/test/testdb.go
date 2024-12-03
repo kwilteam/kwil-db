@@ -2,6 +2,7 @@ package pgtest
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -75,19 +76,30 @@ func NewTestPool(ctx context.Context, dropSchemas []string, dropTables ...string
 	return pool, cleanUp, nil
 }
 
-// NewTestDB creates a new test database.
-// The caller is responsible for cleaning up.
-// The suggested method for cleanup is simply to have
-// an outermost Tx that is rolled back at the end of the test.
-func NewTestDB(t *testing.T) (db *pg.DB, err error) {
+// NewTestDB creates a new test database. Provide a cleanup function for actions
+// to perform before the DB is closed. On test completion, the cleanup function
+// is run followed by closing the DB. The suggested method for cleanup is simply
+// to have an outermost Tx that is rolled back at the end of the test. By
+// default, this will attempt to connect to the "kwil_test_db" database on TCP
+// port 5432. To change the DB name or port, use NewTestDBNamed.
+func NewTestDB(t *testing.T, cleanUp func(*pg.DB)) *pg.DB {
+	if cleanUp == nil {
+		cleanUp = func(*pg.DB) {}
+	}
+	return NewTestDBNamed(t, "kwil_test_db", 5432, cleanUp)
+}
+
+// NewTestDBNamed is like NewTestDBNamed but allows specifying the DB name and
+// TCP port to use.
+func NewTestDBNamed(t *testing.T, dbName string, port int, cleanUp func(*pg.DB)) *pg.DB {
 	cfg := &pg.DBConfig{
 		PoolConfig: pg.PoolConfig{
 			ConnConfig: pg.ConnConfig{
 				Host:   "127.0.0.1",
-				Port:   "5432",
+				Port:   strconv.Itoa(port),
 				User:   "kwild",
 				Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
-				DBName: "kwil_test_db",
+				DBName: dbName,
 			},
 			MaxConns: 11,
 		},
@@ -95,7 +107,15 @@ func NewTestDB(t *testing.T) (db *pg.DB, err error) {
 			return strings.Contains(s, pg.DefaultSchemaFilterPrefix)
 		},
 	}
-	return pg.NewDB(context.Background(), cfg)
+	db, err := pg.NewDB(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		defer db.Close()
+		cleanUp(db)
+	})
+	return db
 }
 
 func NewTestDBWithCfg(t *testing.T, dbCfg *config.DBConfig) (db *pg.DB, err error) {

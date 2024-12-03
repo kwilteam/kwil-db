@@ -23,11 +23,11 @@ import (
 // next-best shapshots in the event that restore of the current best fails.
 
 const (
-	snapshotCatalogNS     = "snapshot-catalog"
-	snapshotChunkNSPrefix = "snapshot-chunk/" // e.g. "snapshot-chunk/{blockHash}/{chunkIdx}"
+	snapshotCatalogNS     = "snapshot-catalog" //nolint
+	snapshotChunkNSPrefix = "snapshot-chunk/"  //nolint e.g. "snapshot-chunk/{blockHash}/{chunkIdx}"
 )
 
-func makeDHT(ctx context.Context, h host.Host) (*dht.IpfsDHT, error) {
+func makeDHT(ctx context.Context, h host.Host) (*dht.IpfsDHT, error) { //nolint
 	// Create a DHT
 	kadDHT, err := dht.New(ctx, h /*, dht.BootstrapPeers()*/)
 	if err != nil {
@@ -44,18 +44,18 @@ func makeDHT(ctx context.Context, h host.Host) (*dht.IpfsDHT, error) {
 	return kadDHT, nil
 }
 
-func makeDiscovery(kad *dht.IpfsDHT) discovery.Discovery {
+func makeDiscovery(kad *dht.IpfsDHT) discovery.Discovery { //nolint
 	return drouting.NewRoutingDiscovery(kad)
 }
 
-func provide(ctx context.Context, namespace string, a discovery.Advertiser) error {
+func provide(ctx context.Context, namespace string, a discovery.Advertiser) error { //nolint
 	_ /*ttl*/, err := a.Advertise(ctx, namespace /*, discovery.TTL(25*time.Hour)*/)
 	// now caller should handle requests from peers that discover this content:
 	//  h.SetStreamHandler(SomeProtocolID, func(s network.Stream) {
 	return err
 }
 
-func discoverProviders(ctx context.Context, namespace string, limit int, d discovery.Discoverer) ([]peer.AddrInfo, error) {
+func discoverProviders(ctx context.Context, namespace string, limit int, d discovery.Discoverer) ([]peer.AddrInfo, error) { //nolint
 	peerChan, err := d.FindPeers(ctx, namespace, discovery.Limit(limit))
 	if err != nil {
 		return nil, err

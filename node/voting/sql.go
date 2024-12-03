@@ -126,7 +126,7 @@ const (
 	removeVoter = `DELETE FROM ` + votingSchemaName + `.voters WHERE id = $1;`
 
 	// getVoterPower is the sql statement used to get the power and name of a voter
-	getVoterPower = `SELECT power FROM ` + votingSchemaName + `.voters WHERE id = $1;`
+	getVoterPower = `SELECT power FROM ` + votingSchemaName + `.voters WHERE id = $1;` //nolint
 
 	// addVote adds a vote for a resolution
 	addVote = `INSERT INTO ` + votingSchemaName + `.votes (resolution_id, voter_id) VALUES ($1, $2)
