@@ -619,6 +619,11 @@ func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
 		wg.Wait()
 	})
 
+	n1.bestHeightCh <- &discoveryMsg{
+		BestHeight: 1,
+		Sender:     ceConfigs[1].PrivateKey.Public().Bytes(),
+	}
+
 	time.Sleep(500 * time.Millisecond)
 	_, _, blProp := n1.info()
 	// appHash := nextAppHash()
@@ -668,6 +673,11 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 		cancel()
 		wg.Wait()
 	})
+
+	n1.bestHeightCh <- &discoveryMsg{
+		BestHeight: 1,
+		Sender:     ceConfigs[1].PrivateKey.Public().Bytes(),
+	}
 
 	require.Eventually(t, func() bool {
 		blockRes := n1.blockResult()

@@ -6,9 +6,10 @@ import (
 	"context"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/node/pg"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 
-	test "github.com/kwilteam/kwil-db/node/pg/test"
+	dbtest "github.com/kwilteam/kwil-db/node/pg/test"
 	"github.com/kwilteam/kwil-db/node/versioning"
 
 	"github.com/stretchr/testify/require"
@@ -24,7 +25,7 @@ func Test_Versioning(t *testing.T) {
 		1: upgradeSchemaV0ToV1,
 		2: upgradeSchemaV1ToV2,
 	}
-	db := test.NewTestDB(t, nil)
+	db := dbtest.NewTestDB(t, func(db *pg.DB) {})
 
 	tx, err := db.BeginTx(ctx)
 	require.NoError(t, err)

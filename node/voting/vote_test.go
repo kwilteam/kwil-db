@@ -10,6 +10,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
+	"github.com/kwilteam/kwil-db/node/pg"
 	dbtest "github.com/kwilteam/kwil-db/node/pg/test"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 
@@ -310,7 +311,7 @@ func Test_Voting(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			ctx := context.Background()
 
-			db := dbtest.NewTestDB(t, nil)
+			db := dbtest.NewTestDB(t, func(db *pg.DB) {})
 
 			dbTx, err := db.BeginTx(ctx)
 			require.NoError(t, err)
