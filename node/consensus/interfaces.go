@@ -5,6 +5,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/node/snapshotter"
 	"github.com/kwilteam/kwil-db/node/txapp"
 	"github.com/kwilteam/kwil-db/node/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
@@ -64,3 +65,18 @@ type TxApp interface {
 // Blockstore: Blocks, Txs, Results, AppHash (for each block)
 // What is replaying a block from the blockstore? -> do we still have the results and apphash?
 // Do we overwrite the results? or skip adding it to the blockstore?
+
+// SnapshotModule is an interface for a struct that implements snapshotting
+type SnapshotModule interface {
+	// Lists all the available snapshots in the snapshotstore and returns the snapshot metadata
+	ListSnapshots() []*snapshotter.Snapshot
+
+	// Returns the snapshot chunk of index chunkId at a given height
+	LoadSnapshotChunk(height uint64, format uint32, chunkID uint32) ([]byte, error)
+
+	// CreateSnapshot creates a snapshot of the current state.
+	CreateSnapshot(ctx context.Context, height uint64, snapshotID string, schemas, excludedTables []string, excludeTableData []string) error
+
+	// IsSnapshotDue returns true if a snapshot is due at the given height.
+	IsSnapshotDue(height uint64) bool
+}

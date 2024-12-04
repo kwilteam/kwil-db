@@ -104,7 +104,7 @@ func newGenesis(t *testing.T, nodekeys [][]byte) ([]crypto.PrivateKey, *config.G
 	return privKeys, &genCfg
 }
 
-func setHupStreamHandlers(t *testing.T, h host.Host) {
+func setupStreamHandlers(t *testing.T, h host.Host) {
 	for _, proto := range RequiredStreamProtocols {
 		h.SetStreamHandler(proto, func(s network.Stream) {
 			t.Log("handling incoming stream for", proto)
@@ -307,7 +307,7 @@ func TestStreamsBlockFetch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to add peer to mocknet: %v", err)
 	}
-	setHupStreamHandlers(t, h2)
+	setupStreamHandlers(t, h2)
 	// t.Logf("test host is %v", h2.ID())
 
 	wg.Add(1)

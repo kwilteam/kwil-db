@@ -2,12 +2,14 @@ package node
 
 import (
 	"context"
+	"fmt"
 
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/discovery"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
 	drouting "github.com/libp2p/go-libp2p/p2p/discovery/routing"
+	"github.com/libp2p/go-libp2p/p2p/discovery/util"
 )
 
 // This file has some building blocks for DHT that can be used for both content
@@ -22,14 +24,9 @@ import (
 // Higher level logic will be needed for the aggregation, and fallback to
 // next-best shapshots in the event that restore of the current best fails.
 
-const (
-	snapshotCatalogNS     = "snapshot-catalog" //nolint
-	snapshotChunkNSPrefix = "snapshot-chunk/"  //nolint e.g. "snapshot-chunk/{blockHash}/{chunkIdx}"
-)
-
-func makeDHT(ctx context.Context, h host.Host) (*dht.IpfsDHT, error) { //nolint
+func makeDHT(ctx context.Context, h host.Host, peers []peer.AddrInfo, mode dht.ModeOpt) (*dht.IpfsDHT, error) {
 	// Create a DHT
-	kadDHT, err := dht.New(ctx, h /*, dht.BootstrapPeers()*/)
+	kadDHT, err := dht.New(ctx, h, dht.BootstrapPeers(peers...), dht.Mode(mode))
 	if err != nil {
 		return nil, err
 	}
@@ -38,6 +35,7 @@ func makeDHT(ctx context.Context, h host.Host) (*dht.IpfsDHT, error) { //nolint
 	err = kadDHT.Bootstrap(ctx)
 	if err != nil {
 		kadDHT.Close()
+		fmt.Println("Bootstrap failed")
 		return nil, err
 	}
 
@@ -48,15 +46,12 @@ func makeDiscovery(kad *dht.IpfsDHT) discovery.Discovery { //nolint
 	return drouting.NewRoutingDiscovery(kad)
 }
 
-func provide(ctx context.Context, namespace string, a discovery.Advertiser) error { //nolint
-	_ /*ttl*/, err := a.Advertise(ctx, namespace /*, discovery.TTL(25*time.Hour)*/)
-	// now caller should handle requests from peers that discover this content:
-	//  h.SetStreamHandler(SomeProtocolID, func(s network.Stream) {
-	return err
+func advertise(ctx context.Context, namespace string, a discovery.Advertiser) {
+	util.Advertise(ctx, a, namespace)
 }
 
-func discoverProviders(ctx context.Context, namespace string, limit int, d discovery.Discoverer) ([]peer.AddrInfo, error) { //nolint
-	peerChan, err := d.FindPeers(ctx, namespace, discovery.Limit(limit))
+func discoverProviders(ctx context.Context, namespace string, d discovery.Discoverer) ([]peer.AddrInfo, error) {
+	peerChan, err := d.FindPeers(ctx, namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -65,7 +60,4 @@ func discoverProviders(ctx context.Context, namespace string, limit int, d disco
 		peers = append(peers, p)
 	}
 	return peers, nil
-	// now caller may open a stream to the providing peer(s) with the appropriate protocol:
-	// h.Peerstore().AddAddrs(peer.ID, peer.Addrs, peerstore.TempAddrTTL)
-	// stream, err := h.NewStream(ctx, peer.ID, SomeProtocolID)
 }

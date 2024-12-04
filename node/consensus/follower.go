@@ -177,10 +177,12 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 	ce.state.blkProp = blkPropMsg
 
 	// Update the stateInfo
+	ce.log.Info("Block proposal accepted", "height", blkPropMsg.height, "hash", blkPropMsg.blkHash, "updateStatus", Proposed)
 	ce.stateInfo.mtx.Lock()
 	ce.stateInfo.status = Proposed
 	ce.stateInfo.blkProp = blkPropMsg
 	ce.stateInfo.mtx.Unlock()
+	ce.log.Info("Node status updated", "status", ce.stateInfo.status)
 
 	if err := ce.executeBlock(); err != nil {
 		ce.log.Error("Error executing block, sending NACK", "error", err)
