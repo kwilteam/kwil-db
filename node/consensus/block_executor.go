@@ -321,7 +321,7 @@ var (
 )
 
 func (ce *ConsensusEngine) snapshotDB(ctx context.Context, height int64) error {
-	snapshotsDue := ce.snapshotter != nil &&
+	snapshotsDue := ce.snapshotter.Enabled() &&
 		(ce.snapshotter.IsSnapshotDue(uint64(height)) || len(ce.snapshotter.ListSnapshots()) == 0)
 	// snapshotsDue = snapshotsDue && height > max(1, a.cfg.InitialHeight)
 

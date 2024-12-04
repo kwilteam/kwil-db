@@ -146,7 +146,6 @@ func (rm *replMon) recvID(seq int64, changes chan<- any) (chan []byte, bool) {
 	}
 	rm.promises[seq] = c
 
-	fmt.Println("setting changeset writer from recvID")
 	rm.changesetWriter.setChangesetWriter(changes) // set the changeset writer to the changes channel
 
 	return c, true

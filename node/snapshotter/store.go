@@ -97,6 +97,10 @@ func NewSnapshotStore(cfg *SnapshotConfig, dbCfg *DBConfig, logger log.Logger) (
 	return ss, nil
 }
 
+func (s *SnapshotStore) Enabled() bool {
+	return s.cfg.Enable
+}
+
 // IsSnapshotDue checks if a snapshot is due at the given height.
 func (s *SnapshotStore) IsSnapshotDue(height uint64) bool {
 	if s.cfg.RecurringHeight == 0 || !s.cfg.Enable {

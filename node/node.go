@@ -114,11 +114,11 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 		return nil, fmt.Errorf("failed to create peer manager: %w", err)
 	}
 
-	mode := dht.ModeClient
-	if cfg.Snapshots.Enable {
-		mode = dht.ModeServer
-	}
-
+	// mode := dht.ModeClient
+	// if cfg.Snapshots.Enable {
+	// 	mode = dht.ModeServer
+	// }
+	mode := dht.ModeServer
 	ctx := context.Background()
 	dht, err := makeDHT(ctx, host, nil, mode)
 	if err != nil {
@@ -129,7 +129,7 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 
 	// statesyncer
 	rcvdSnapsDir := filepath.Join(cfg.RootDir, "rcvd_snaps")
-	ss, err := NewStateSyncService(ctx, host, discoverer, cfg.Snapshotter, logger, cfg.Statesync.TrustedProviders, rcvdSnapsDir, cfg.Statesync.Enable, cfg.DB)
+	ss, err := NewStateSyncService(ctx, host, discoverer, cfg.Snapshotter, cfg.BlockStore, logger, cfg.Statesync.TrustedProviders, rcvdSnapsDir, cfg.Statesync.Enable, cfg.DB, cfg.DBConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create state sync service: %w", err)
 	}
@@ -284,9 +284,21 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 		n.log.Infof("Connected to address book peer %v", peerID)
 	}
 
-	// Advertise the snapshotcatalog service
-	// TODO: if the dht is client, should we advertise?
-	advertise(ctx, snapshotCatalogNS, n.statesyncer.discoverer)
+	// Advertise the snapshotcatalog service if snapshots are enabled
+	// umm, but gotcha, if a node has previous snapshots but snapshots are disabled, these snapshots will be unusable.
+	if n.ss.Enabled() {
+		advertise(ctx, snapshotCatalogNS, n.statesyncer.discoverer)
+	}
+
+	if err := n.statesyncer.Bootstrap(ctx); err != nil {
+		return fmt.Errorf("failed to bootstrap DHT service with the trusted snapshot providers: %w", err)
+	}
+
+	// Attempt statesync if enabled
+	if err := n.doStatesync(ctx); err != nil {
+		cancel()
+		return err
+	}
 
 	if err := n.startAckGossip(ctx, ps); err != nil {
 		cancel()
@@ -312,12 +324,6 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 	// This dummy method will make create+announce new pretend transactions.
 	// It also periodically rebroadcasts txns.
 	n.startTxAnns(ctx, dummyTxInterval, 30*time.Second, dummyTxSize) // nogossip.go
-
-	// Attempt statesync if enabled
-	if err := n.doStatesync(ctx); err != nil {
-		cancel()
-		return err
-	}
 
 	// mine is our block anns goroutine, which must be only for leader
 	n.wg.Add(1)
@@ -362,10 +368,25 @@ func (n *Node) doStatesync(ctx context.Context) error {
 	}
 
 	// check if the db is uninitialized
-	_, err := n.statesyncer.DiscoverSnapshots(ctx)
+	height, err := n.statesyncer.DiscoverSnapshots(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to attempt statesync: %w", err)
 	}
+
+	// request and commit the block to the blockstore
+	_, appHash, rawBlk, err := n.getBlkHeight(ctx, height)
+	if err != nil {
+		return fmt.Errorf("failed to get statesync block %d: %w", height, err)
+	}
+	blk, err := types.DecodeBlock(rawBlk)
+	if err != nil {
+		return fmt.Errorf("failed to decode statesync block %d: %w", height, err)
+	}
+	// store block
+	if err := n.bki.Store(blk, appHash); err != nil {
+		return fmt.Errorf("failed to store statesync block to the blockstore %d: %w", height, err)
+	}
+
 	return nil
 }
 

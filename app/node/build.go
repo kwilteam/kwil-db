@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/kwilteam/kwil-db/common"
@@ -231,6 +232,7 @@ func buildNode(d *coreDependencies, mp *mempool.Mempool, bs *store.BlockStore, c
 		Snapshotter: ss,
 		Snapshots:   &d.cfg.Snapshots,
 		Logger:      logger,
+		DBConfig:    &d.cfg.DB,
 	}
 
 	node, err := node.NewNode(nc)
@@ -302,6 +304,10 @@ func buildSnapshotStore(d *coreDependencies) *snapshotter.SnapshotStore {
 		DBUser: d.cfg.DB.User,
 		DBPass: d.cfg.DB.Pass,
 		DBName: d.cfg.DB.DBName,
+	}
+
+	if err := os.MkdirAll(snapshotDir, 0755); err != nil {
+		failBuild(err, "failed to create snapshot directory")
 	}
 
 	ss, err := snapshotter.NewSnapshotStore(cfg, dbCfg, d.logger.New("SNAP"))

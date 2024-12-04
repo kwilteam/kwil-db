@@ -149,7 +149,7 @@ func (ce *ConsensusEngine) addVote(ctx context.Context, vote *vote, sender strin
 // 2. Re-announce the block proposal
 // 3. Halt the network (should there be a message to halt the network?)
 func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
-	ce.log.Info("Processing votes", "height", ce.state.lc.height+1)
+	ce.log.Debug("Processing votes", "height", ce.state.lc.height+1)
 
 	if ce.state.blkProp == nil || ce.state.blockRes == nil {
 		// Moved onto the next round or leader still processing the current block

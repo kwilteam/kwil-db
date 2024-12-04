@@ -162,7 +162,7 @@ func (n *Node) announceBlkProp(ctx context.Context, blk *types.Block) {
 	blkHash := blk.Hash()
 	height := blk.Header.Height
 
-	n.log.Info("announcing proposed block", "hash", blkHash, "height", height,
+	n.log.Debug("announcing proposed block", "hash", blkHash, "height", height,
 		"txs", len(blk.Txns), "size", len(rawBlk))
 
 	peers := n.peers()
@@ -178,7 +178,7 @@ func (n *Node) announceBlkProp(ctx context.Context, blk *types.Block) {
 		}
 		prop := blockProp{Height: height, Hash: blkHash, PrevHash: blk.Header.PrevHash,
 			Stamp: blk.Header.Timestamp.UnixMilli(), LeaderSig: blk.Signature}
-		n.log.Infof("advertising block proposal %s (height %d / txs %d) to peer %v", blkHash, height, len(blk.Txns), peerID)
+		n.log.Debugf("advertising block proposal %s (height %d / txs %d) to peer %v", blkHash, height, len(blk.Txns), peerID)
 		// resID := annPropMsgPrefix + strconv.Itoa(int(height)) + ":" + prevHash + ":" + blkid
 		propID, _ := prop.MarshalBinary()
 		err := n.advertiseToPeer(ctx, peerID, ProtocolIDBlockPropose, contentAnn{prop.String(), propID, rawBlk},
@@ -222,7 +222,7 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 
 	if !n.ce.AcceptProposal(height, prop.Hash, prop.PrevHash, prop.LeaderSig, prop.Stamp) {
 		// NOTE: if this is ahead of our last commit height, we have to try to catch up
-		n.log.Warn("do not want proposal content", "height", height, "hash", prop.Hash,
+		n.log.Debug("do not want proposal content", "height", height, "hash", prop.Hash,
 			"prevHash", prop.PrevHash)
 		return
 	}
@@ -344,7 +344,7 @@ func (n *Node) startAckGossip(ctx context.Context, ps *pubsub.PubSub) error {
 			}
 			fromPeerID := ackMsg.GetFrom()
 
-			n.log.Infof("received ACK msg from %s (rcvd from %s), data = %x",
+			n.log.Debugf("received ACK msg from %s (rcvd from %s), data = %x",
 				fromPeerID.String(), ackMsg.ReceivedFrom.String(), ackMsg.Message.Data)
 
 			peerPubKey, err := fromPeerID.ExtractPublicKey()

@@ -455,6 +455,9 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 		return err
 	}
 
+	// Done with the catchup
+	ce.inSync.Store(false)
+
 	return nil
 }
 
@@ -509,7 +512,9 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 
 	if ce.role.Load() == types.RoleLeader && ce.state.lc.height > 0 {
 		// Announce block commit message for the last committed block
-		go ce.blkAnnouncer(ctx, ce.state.lc.blk, ce.state.lc.appHash) // TODO: can be made infrequent
+		if ce.state.lc.blk != nil {
+			go ce.blkAnnouncer(ctx, ce.state.lc.blk, ce.state.lc.appHash) // TODO: can be made infrequent
+		}
 		return
 	}
 
