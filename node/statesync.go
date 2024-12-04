@@ -4,13 +4,17 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/node/peers"
+	"github.com/kwilteam/kwil-db/node/types"
 	"github.com/libp2p/go-libp2p/core/discovery"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -28,9 +32,13 @@ const (
 	discoverSnapshotsMsg = "discover_snapshots"
 )
 
+type BlockStore interface {
+	GetByHeight(height int64) (types.Hash, *types.Block, types.Hash, error)
+}
+
 type StateSyncService struct {
 	db       DB
-	dbConfig config.DBConfig
+	dbConfig *config.DBConfig
 
 	host       host.Host
 	discoverer discovery.Discovery
@@ -38,8 +46,8 @@ type StateSyncService struct {
 	discoveryTimeout time.Duration
 
 	snapshotStore SnapshotStore
-
-	snapshotPool *snapshotPool // resets with every discovery
+	blockStore    BlockStore
+	snapshotPool  *snapshotPool // resets with every discovery
 
 	trustedProviderAddrs []string
 	trustedProviders     []*peer.AddrInfo
@@ -53,7 +61,7 @@ type StateSyncService struct {
 // snapshotKey is a snapshot key used for lookups.
 type snapshotKey [sha256.Size]byte
 
-type snapshot struct {
+type snapshotMetadata struct {
 	Height      uint64     `json:"height"`
 	Format      uint32     `json:"format"`
 	Chunks      uint32     `json:"chunks"`
@@ -65,9 +73,13 @@ type snapshot struct {
 	AppHash []byte `json:"app_hash"`
 }
 
+func (sm *snapshotMetadata) String() string {
+	return fmt.Sprintf("SnapshotMetadata{Height: %d, Format: %d, Chunks: %d, Hash: %x, Size: %d, AppHash: %x}", sm.Height, sm.Format, sm.Chunks, sm.Hash, sm.Size, sm.AppHash)
+}
+
 type snapshotPool struct {
 	mtx       sync.Mutex // RWMutex?? no
-	snapshots map[snapshotKey]*snapshot
+	snapshots map[snapshotKey]*snapshotMetadata
 	providers map[snapshotKey][]peer.AddrInfo // TODO: do we need this? should we request from all the providers instead?
 
 	// Snapshot keys that have been blacklisted due to failed attempts to retrieve them or invalid data.
@@ -79,7 +91,7 @@ type snapshotPool struct {
 // Key generates a snapshot key, used for lookups. It takes into account not only the height and
 // format, but also the chunks, hash, and chunkHashes in case peers have generated snapshots in a
 // non-deterministic manner. All fields must be equal for the snapshot to be considered the same.
-func (s *snapshot) Key() snapshotKey {
+func (s *snapshotMetadata) Key() snapshotKey {
 	// Hash.Write() never returns an error.
 	hasher := sha256.New()
 	hasher.Write([]byte(fmt.Sprintf("%v:%v:%v", s.Height, s.Format, s.Chunks)))
@@ -94,7 +106,7 @@ func (s *snapshot) Key() snapshotKey {
 	return key
 }
 
-func NewStateSyncService(ctx context.Context, h host.Host, discoverer discovery.Discovery, store SnapshotStore, log log.Logger, addrs []string, dir string, enable bool, db DB) (*StateSyncService, error) {
+func NewStateSyncService(ctx context.Context, h host.Host, discoverer discovery.Discovery, store SnapshotStore, bs BlockStore, log log.Logger, addrs []string, dir string, enable bool, db DB, dbConf *config.DBConfig) (*StateSyncService, error) {
 	ss := &StateSyncService{
 		host:                 h,
 		discoverer:           discoverer,
@@ -103,9 +115,11 @@ func NewStateSyncService(ctx context.Context, h host.Host, discoverer discovery.
 		log:                  log,
 		trustedProviderAddrs: addrs,
 		trustedProviders:     make([]*peer.AddrInfo, 0, len(addrs)),
+		blockStore:           bs,
 		snapshotDir:          dir,
+		dbConfig:             dbConf,
 		snapshotPool: &snapshotPool{
-			snapshots: make(map[snapshotKey]*snapshot),
+			snapshots: make(map[snapshotKey]*snapshotMetadata),
 			providers: make(map[snapshotKey][]peer.AddrInfo),
 			blacklist: make(map[snapshotKey]struct{}),
 		},
@@ -113,17 +127,12 @@ func NewStateSyncService(ctx context.Context, h host.Host, discoverer discovery.
 		db:     db,
 	}
 
+	if err := os.MkdirAll(ss.snapshotDir, 0755); err != nil {
+		return nil, err
+	}
+
 	// connect to trusted providers
 	// TODO: can parallelize this
-	for _, provider := range addrs {
-		// connect to the provider
-		i, err := connectPeer(ctx, provider, h)
-		if err != nil {
-			log.Warn("failed to connect to trusted provider", "provider", provider, "error", err)
-		}
-
-		ss.trustedProviders = append(ss.trustedProviders, i)
-	}
 
 	// provide stream handler for snapshot catalogs requests and chunk requests
 	h.SetStreamHandler(ProtocolIDSnapshotCatalog, ss.snapshotCatalogRequestHandler)
@@ -131,6 +140,24 @@ func NewStateSyncService(ctx context.Context, h host.Host, discoverer discovery.
 	h.SetStreamHandler(ProtocolIDSnapshotMeta, ss.snapshotMetadataRequestHandler)
 
 	return ss, nil
+}
+
+func (s *StateSyncService) Bootstrap(ctx context.Context) error {
+	providers, err := peers.ConvertPeersToMultiAddr(s.trustedProviderAddrs)
+	if err != nil {
+		return err
+	}
+
+	for _, provider := range providers {
+		// connect to the provider
+		i, err := connectPeer(ctx, provider, s.host)
+		if err != nil {
+			s.log.Warn("failed to connect to trusted provider", "provider", provider, "error", err)
+		}
+
+		s.trustedProviders = append(s.trustedProviders, i)
+	}
+	return nil
 }
 
 /*
@@ -174,9 +201,9 @@ func (s *StateSyncService) snapshotCatalogRequestHandler(stream network.Stream) 
 	}
 
 	// send the snapshot catalogs
-	catalogs := make([]*snapshot, 0, len(snapshots))
+	catalogs := make([]*snapshotMetadata, len(snapshots))
 	for i, snap := range snapshots {
-		catalogs[i] = &snapshot{
+		catalogs[i] = &snapshotMetadata{
 			Height:      snap.Height,
 			Format:      snap.Format,
 			Chunks:      snap.ChunkCount,
@@ -246,7 +273,7 @@ func (s *StateSyncService) snapshotMetadataRequestHandler(stream network.Stream)
 		return
 	}
 
-	meta := &snapshot{
+	meta := &snapshotMetadata{
 		Height:      snap.Height,
 		Format:      snap.Format,
 		Chunks:      snap.ChunkCount,
@@ -258,6 +285,16 @@ func (s *StateSyncService) snapshotMetadataRequestHandler(stream network.Stream)
 		copy(meta.ChunkHashes[i][:], chunk[:])
 	}
 
+	// get the app hash from the db
+	_, _, appHash, err := s.blockStore.GetByHeight(int64(snap.Height))
+	if err != nil {
+		s.log.Warn("failed to get app hash", "height", snap.Height, "error", err)
+		stream.SetWriteDeadline(time.Now().Add(reqRWTimeout))
+		stream.Write(noData)
+		return
+	}
+	meta.AppHash = appHash[:]
+
 	// send the snapshot data
 	encoder := json.NewEncoder(stream)
 
@@ -267,11 +304,11 @@ func (s *StateSyncService) snapshotMetadataRequestHandler(stream network.Stream)
 		return
 	}
 
-	s.log.Info("sent snapshot chunk to remote peer", "peer", stream.Conn().RemotePeer(), "height", req.Height, "format", req.Format)
+	s.log.Info("sent snapshot metadata to remote peer", "peer", stream.Conn().RemotePeer(), "height", req.Height, "format", req.Format, "appHash", appHash.String())
 }
 
 // verifySnapshot verifies the snapshot with the trusted provider
-func (ss *StateSyncService) VerifySnapshot(ctx context.Context, snap *snapshot) bool {
+func (ss *StateSyncService) VerifySnapshot(ctx context.Context, snap *snapshotMetadata) (bool, []byte) {
 	// verify the snapshot
 	for _, provider := range ss.trustedProviders {
 		// request the snapshot from the provider and verify the contents of the snapshot
@@ -296,7 +333,7 @@ func (ss *StateSyncService) VerifySnapshot(ctx context.Context, snap *snapshot) 
 		}
 
 		stream.SetReadDeadline(time.Now().Add(snapshotGetTimeout))
-		var meta snapshot
+		var meta snapshotMetadata
 		if err := json.NewDecoder(stream).Decode(&meta); err != nil {
 			ss.log.Warn("failed to decode snapshot metadata", "provider", provider.ID.String(), "error", err)
 			stream.Close()
@@ -324,13 +361,14 @@ func (ss *StateSyncService) VerifySnapshot(ctx context.Context, snap *snapshot) 
 			}
 		}
 
-		ss.log.Info("verified snapshot with trusted provider", "provider", provider.ID.String())
-		return true
+		ss.log.Info("verified snapshot with trusted provider", "provider", provider.ID.String(), "snapshot", snap,
+			"appHash", hex.EncodeToString(meta.AppHash))
+		return true, meta.AppHash
 	}
-	return false
+	return false, nil
 }
 
-func (s *StateSyncService) blacklistSnapshot(snap *snapshot) {
+func (s *StateSyncService) blacklistSnapshot(snap *snapshotMetadata) {
 	s.snapshotPool.mtx.Lock()
 	defer s.snapshotPool.mtx.Unlock()
 
@@ -355,11 +393,11 @@ func (s *StateSyncService) getPeers() []peer.AddrInfo {
 	return s.snapshotPool.peers
 }
 
-func (s *StateSyncService) listSnapshots() []*snapshot {
+func (s *StateSyncService) listSnapshots() []*snapshotMetadata {
 	s.snapshotPool.mtx.Lock()
 	defer s.snapshotPool.mtx.Unlock()
 
-	snapshots := make([]*snapshot, 0, len(s.snapshotPool.snapshots))
+	snapshots := make([]*snapshotMetadata, 0, len(s.snapshotPool.snapshots))
 	for _, snap := range s.snapshotPool.snapshots {
 		snapshots = append(snapshots, snap)
 	}

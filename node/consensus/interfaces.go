@@ -79,4 +79,6 @@ type SnapshotModule interface {
 
 	// IsSnapshotDue returns true if a snapshot is due at the given height.
 	IsSnapshotDue(height uint64) bool
+
+	Enabled() bool
 }

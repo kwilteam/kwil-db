@@ -9,9 +9,11 @@ import (
 
 // Config is the configuration for a [Node] instance.
 type Config struct {
-	RootDir   string
-	PrivKey   crypto.PrivateKey
-	DB        DB
+	RootDir string
+	PrivKey crypto.PrivateKey
+	DB      DB
+
+	DBConfig  *config.DBConfig
 	P2P       *config.PeerConfig
 	Statesync *config.StateSyncConfig
 	Snapshots *config.SnapshotConfig

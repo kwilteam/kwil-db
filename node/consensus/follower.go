@@ -22,10 +22,10 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 	ce.stateInfo.mtx.RLock()
 	defer ce.stateInfo.mtx.RUnlock()
 
-	ce.log.Info("Accept proposal?", "height", height, "blkID", blkID, "prevHash", prevBlockID)
+	ce.log.Debug("Accept proposal?", "height", height, "blkID", blkID, "prevHash", prevBlockID)
 
 	if height != ce.stateInfo.height+1 {
-		ce.log.Info("Block proposal is not for the next height", "blkPropHeight", height, "expected", ce.stateInfo.height+1)
+		ce.log.Debug("Block proposal is not for the next height", "blkPropHeight", height, "expected", ce.stateInfo.height+1)
 		return false
 	}
 
@@ -49,7 +49,7 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 			go ce.sendResetMsg(ce.stateInfo.height)
 			return true
 		}
-		ce.log.Info("Already processing the block proposal", "height", height, "blkID", blkID)
+		ce.log.Debug("Already processing the block proposal", "height", height, "blkID", blkID)
 		return false
 	}
 
@@ -71,7 +71,7 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash 
 	ce.stateInfo.mtx.RLock()
 	defer ce.stateInfo.mtx.RUnlock()
 
-	ce.log.Infof("Accept commit? height: %d,  blockID: %s, appHash: %s, lastCommitHeight: %d", height, blkID, appHash, ce.stateInfo.height)
+	ce.log.Debugf("Accept commit? height: %d,  blockID: %s, appHash: %s, lastCommitHeight: %d", height, blkID, appHash, ce.stateInfo.height)
 
 	if ce.stateInfo.height+1 != height {
 		return false
@@ -177,12 +177,10 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 	ce.state.blkProp = blkPropMsg
 
 	// Update the stateInfo
-	ce.log.Info("Block proposal accepted", "height", blkPropMsg.height, "hash", blkPropMsg.blkHash, "updateStatus", Proposed)
 	ce.stateInfo.mtx.Lock()
 	ce.stateInfo.status = Proposed
 	ce.stateInfo.blkProp = blkPropMsg
 	ce.stateInfo.mtx.Unlock()
-	ce.log.Info("Node status updated", "status", ce.stateInfo.status)
 
 	if err := ce.executeBlock(); err != nil {
 		ce.log.Error("Error executing block, sending NACK", "error", err)

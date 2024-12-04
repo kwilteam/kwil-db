@@ -30,7 +30,7 @@ type ConsensusEngine interface {
 }
 
 type SnapshotStore interface {
-	// ListSnapshots
+	Enabled() bool
 	GetSnapshot(height uint64, format uint32) *snapshotter.Snapshot
 	ListSnapshots() []*snapshotter.Snapshot
 	LoadSnapshotChunk(height uint64, format uint32, chunk uint32) ([]byte, error)

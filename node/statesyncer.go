@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,19 +36,20 @@ var (
 // it reenters the discovery phase after a delay, retrying up to max_retries times. If discovery fails
 // after max_retries, it switches to block sync.
 
-
-
-func (s *StateSyncService) DiscoverSnapshots(ctx context.Context) (bool, error) { // TODO: distinguish from blocksync to failures in DB restore
+func (s *StateSyncService) DiscoverSnapshots(ctx context.Context) (int64, error) { // TODO: distinguish from blocksync to failures in DB restore
 	retry := 0
 	for {
 		if retry > maxRetries {
-			return true, errors.New("failed to discover snapshots after max retries, switching to block sync")
+			s.log.Warn("Failed to discover snapshots", "retries", maxRetries)
+			return -1, nil
 		}
 
+		s.log.Info("Discovering snapshots...")
 		peers, err := discoverProviders(ctx, snapshotCatalogNS, s.discoverer) // TODO: set appropriate limit
 		if err != nil {
-			return true, err
+			return -1, err
 		}
+		peers = filterLocalPeer(peers, s.host.ID())
 		s.updatePeers(peers)
 
 		// discover snapshot catalogs from the discovered peers
@@ -61,38 +63,39 @@ func (s *StateSyncService) DiscoverSnapshots(ctx context.Context) (bool, error) 
 				}
 			}(p)
 		}
+		wg.Wait()
 
 		select {
 		case <-ctx.Done():
-			return false, ctx.Err()
+			return -1, ctx.Err()
 		case <-time.After(s.discoveryTimeout):
 			synced, snap, err := s.Sync(ctx) // TODO: rename appropriately
 			if err != nil {
-				return true, err
+				return -1, err
 			}
 
 			if synced {
 				// RestoreDB from the snapshot
 				if err := s.restoreDB(ctx, snap); err != nil {
 					s.log.Warn("failed to restore DB from snapshot", "error", err)
-					return false, err
+					return -1, err
 				}
 
 				// ensure that the apphash matches
 				err := s.verifyState(ctx, snap)
 				if err != nil {
 					s.log.Warn("failed to verify state after DB restore", "error", err)
-					return false, err
+					return -1, err
 				}
 
-				return false, nil
+				return int64(snap.Height), nil
 			}
 			retry++
 		}
 	}
 }
 
-func (s *StateSyncService) Sync(ctx context.Context) (synced bool, snap *snapshot, err error) {
+func (s *StateSyncService) Sync(ctx context.Context) (synced bool, snap *snapshotMetadata, err error) {
 	for {
 		// select the best snapshot and request chunks
 		bestSnapshot, err := s.bestSnapshot()
@@ -102,13 +105,14 @@ func (s *StateSyncService) Sync(ctx context.Context) (synced bool, snap *snapsho
 			}
 			return false, nil, err
 		}
-
+		s.log.Info("Requesting contents of snapshot", "height", bestSnapshot.Height, "hash", hex.EncodeToString(bestSnapshot.Hash))
 		// Validate the snapshot
-		valid := s.VerifySnapshot(ctx, bestSnapshot)
+		valid, appHash := s.VerifySnapshot(ctx, bestSnapshot)
 		if !valid {
 			s.blacklistSnapshot(bestSnapshot)
 			continue
 		}
+		bestSnapshot.AppHash = appHash
 
 		// fetch snapshot chunks
 		if err := s.chunkFetcher(ctx, bestSnapshot); err != nil {
@@ -120,7 +124,7 @@ func (s *StateSyncService) Sync(ctx context.Context) (synced bool, snap *snapsho
 }
 
 // TODO: return propoer errors
-func (s *StateSyncService) chunkFetcher(ctx context.Context, snapshot *snapshot) error {
+func (s *StateSyncService) chunkFetcher(ctx context.Context, snapshot *snapshotMetadata) error {
 	// fetch snapshot chunks and write them to the snapshot directory
 	var wg sync.WaitGroup
 	// errCh := make(chan error, snapshot.Chunks)
@@ -150,7 +154,7 @@ func (s *StateSyncService) chunkFetcher(ctx context.Context, snapshot *snapshot)
 	return nil
 }
 
-func (s *StateSyncService) requestSnapshotChunk(ctx context.Context, snap *snapshot, provider peer.AddrInfo, index uint32) error {
+func (s *StateSyncService) requestSnapshotChunk(ctx context.Context, snap *snapshotMetadata, provider peer.AddrInfo, index uint32) error {
 	stream, err := s.host.NewStream(ctx, provider.ID, ProtocolIDSnapshotChunk)
 	if err != nil {
 		s.log.Warn("failed to create stream to provider", "provider", provider.ID.String(), "error", err)
@@ -203,6 +207,7 @@ func (s *StateSyncService) requestSnapshotChunk(ctx context.Context, snap *snaps
 		return errors.New("chunk hash mismatch")
 	}
 
+	s.log.Info("Received snapshot chunk", "height", snap.Height, "index", index, "hash", hex.EncodeToString(hash), "provider", provider.ID)
 	return nil
 }
 
@@ -221,7 +226,7 @@ func (s *StateSyncService) requestSnapshotCatalogs(ctx context.Context, peer pee
 	}
 
 	// read catalogs from the stream
-	snapshots := make([]*snapshot, 0)
+	snapshots := make([]*snapshotMetadata, 0)
 	stream.SetReadDeadline(time.Now().Add(1 * time.Minute)) // TODO: set appropriate timeout
 	if err := json.NewDecoder(stream).Decode(&snapshots); err != nil {
 		return fmt.Errorf("failed to read snapshot catalogs: %w", err)
@@ -234,17 +239,18 @@ func (s *StateSyncService) requestSnapshotCatalogs(ctx context.Context, peer pee
 		key := snap.Key()
 		s.snapshotPool.snapshots[key] = snap
 		s.snapshotPool.providers[key] = append(s.snapshotPool.providers[key], peer)
+		s.log.Info("Discovered snapshot", "height", snap.Height, "snapshotHash", snap.Hash, "provider", peer.ID)
 	}
 
 	return nil
 }
 
-func (s *StateSyncService) bestSnapshot() (*snapshot, error) {
+func (s *StateSyncService) bestSnapshot() (*snapshotMetadata, error) {
 	s.snapshotPool.mtx.Lock()
 	defer s.snapshotPool.mtx.Unlock()
 
 	// select the best snapshot
-	var best *snapshot
+	var best *snapshotMetadata
 	for _, snap := range s.snapshotPool.snapshots {
 		if best == nil || snap.Height > best.Height {
 			best = snap
@@ -258,7 +264,7 @@ func (s *StateSyncService) bestSnapshot() (*snapshot, error) {
 	return best, nil
 }
 
-func (s *StateSyncService) verifyState(ctx context.Context, snapshot *snapshot) error {
+func (s *StateSyncService) verifyState(ctx context.Context, snapshot *snapshotMetadata) error {
 	tx, err := s.db.BeginReadTx(ctx)
 	if err != nil {
 		return err
@@ -269,14 +275,14 @@ func (s *StateSyncService) verifyState(ctx context.Context, snapshot *snapshot) 
 	if uint64(height) != snapshot.Height {
 		return fmt.Errorf("height mismatch after DB restore: expected %d, actual %d", snapshot.Height, height)
 	}
-	if !bytes.Equal(appHash[:], snapshot.Hash[:]) {
-		return fmt.Errorf("apphash mismatch after DB restore: expected %x, actual %x", snapshot.Hash, appHash)
+	if !bytes.Equal(appHash[:], snapshot.AppHash[:]) {
+		return fmt.Errorf("apphash mismatch after DB restore: expected %x, actual %x", snapshot.AppHash, appHash)
 	}
 
 	return nil
 }
 
-func (s *StateSyncService) restoreDB(ctx context.Context, snapshot *snapshot) error {
+func (s *StateSyncService) restoreDB(ctx context.Context, snapshot *snapshotMetadata) error {
 	streamer := NewStreamer(snapshot.Chunks, s.snapshotDir, s.log)
 	defer streamer.Close()
 
@@ -412,4 +418,14 @@ func (s *Streamer) Read(p []byte) (n int, err error) {
 		}
 	}
 	return n, err
+}
+
+func filterLocalPeer(peers []peer.AddrInfo, localID peer.ID) []peer.AddrInfo {
+	var filteredPeers []peer.AddrInfo
+	for _, p := range peers {
+		if p.ID != localID {
+			filteredPeers = append(filteredPeers, p)
+		}
+	}
+	return filteredPeers
 }
