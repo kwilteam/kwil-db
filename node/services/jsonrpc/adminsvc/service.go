@@ -13,6 +13,7 @@ import (
 	adminjson "github.com/kwilteam/kwil-db/core/rpc/json/admin"
 	userjson "github.com/kwilteam/kwil-db/core/rpc/json/user"
 	coretypes "github.com/kwilteam/kwil-db/core/types"
+	ktypes "github.com/kwilteam/kwil-db/core/types"
 	types "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
@@ -377,7 +378,9 @@ func (svc *Service) JoinStatus(ctx context.Context, req *adminjson.JoinStatusReq
 		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to retrieve join request details", nil)
 	}
 
-	pendingJoin, err := toPendingInfo(ctx, readTx, resolution)
+	voters := svc.voting.GetValidators()
+
+	pendingJoin, err := toPendingInfo(resolution, voters)
 	if err != nil {
 		svc.log.Error("failed to convert join request", "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorResultEncoding, "failed to convert join request", nil)
@@ -418,9 +421,11 @@ func (svc *Service) ListPendingJoins(ctx context.Context, req *adminjson.ListJoi
 		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to retrieve active join requests", nil)
 	}
 
+	voters := svc.voting.GetValidators()
+
 	pbJoins := make([]*adminjson.PendingJoin, len(activeJoins))
 	for i, ji := range activeJoins {
-		pbJoins[i], err = toPendingInfo(ctx, readTx, ji)
+		pbJoins[i], err = toPendingInfo(ji, voters)
 		if err != nil {
 			svc.log.Error("failed to convert join request", "error", err)
 			return nil, jsonrpc.NewError(jsonrpc.ErrorResultEncoding, "failed to convert join request", nil)
@@ -433,24 +438,43 @@ func (svc *Service) ListPendingJoins(ctx context.Context, req *adminjson.ListJoi
 }
 
 // toPendingInfo gets the pending information for an active join from a resolution
-func toPendingInfo(ctx context.Context, db sql.DB, resolution *resolutions.Resolution) (*adminjson.PendingJoin, error) {
+func toPendingInfo(resolution *resolutions.Resolution, allVoters []*ktypes.Validator) (*adminjson.PendingJoin, error) {
 	resolutionBody := &voting.UpdatePowerRequest{}
 	if err := resolutionBody.UnmarshalBinary(resolution.Body); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal join request")
 	}
 
-	// !!!
-	// expiresAt, board, approvals, err := voting.ResolutionStatus(ctx, db, resolution)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("failed to retrieve join request status")
-	// }
+	// to create the board, we will take a list of all approvers and append the voters.
+	// we will then remove any duplicates the second time we see them.
+	// this will result with all approvers at the start of the list, and all voters at the end.
+	// finally, the approvals will be true for the length of the approvers, and false for found.length - voters.length
+	board := make([][]byte, 0, len(allVoters))
+	approvals := make([]bool, len(allVoters))
+	for i, v := range resolution.Voters {
+		board = append(board, v.PubKey)
+		approvals[i] = true
+	}
+	for _, v := range allVoters {
+		board = append(board, v.PubKey)
+	}
+
+	// we will now remove duplicates from the board.
+	found := make(map[string]struct{})
+	for i := 0; i < len(board); i++ {
+		if _, ok := found[string(board[i])]; ok {
+			board = append(board[:i], board[i+1:]...)
+			i--
+			continue
+		}
+		found[string(board[i])] = struct{}{}
+	}
 
 	return &adminjson.PendingJoin{
 		Candidate: resolutionBody.PubKey,
 		Power:     resolutionBody.Power,
 		ExpiresAt: resolution.ExpirationHeight,
-		Board:     nil, // resolution.Voters ???
-		Approved:  nil,
+		Board:     board,
+		Approved:  approvals,
 	}, nil
 }
 
