@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -34,7 +33,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func generateTestCEConfig(t *testing.T, nodes int, noDBs ...int) []*Config {
+// leaderDB is set assigns DB to the leader, else DB is assigned to the follower
+// Most of these tests expect only one working node instance either a leader or the
+// first validator and all other nodes interactions are mocked out.
+func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) []*Config {
 	ceConfigs := make([]*Config, nodes)
 	tempDir := t.TempDir()
 
@@ -75,28 +77,25 @@ func generateTestCEConfig(t *testing.T, nodes int, noDBs ...int) []*Config {
 	// assert.NoError(t, err)
 	txapp := newDummyTxApp(valSet)
 
+	db := dbtest.NewTestDB(t, func(db *pg.DB) {
+		db.AutoCommit(true)
+		ctx := context.Background()
+		db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_chain CASCADE;`)
+		db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_internal CASCADE;`)
+	})
+
+	func() {
+		tx, err := db.BeginTx(ctx)
+		require.NoError(t, err)
+		defer tx.Rollback(ctx)
+
+		err = meta.InitializeMetaStore(ctx, tx)
+		require.NoError(t, err)
+
+		require.NoError(t, tx.Commit(ctx))
+	}()
+
 	for i := range nodes {
-		var db *pg.DB
-		if !slices.Contains(noDBs, i) {
-			db = dbtest.NewTestDBNamed(t, "kwil_test_db", 5432+i, func(db *pg.DB) {
-				db.AutoCommit(true)
-				ctx := context.Background()
-				db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_chain CASCADE;`)
-				db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_internal CASCADE;`)
-			})
-
-			func() {
-				tx, err := db.BeginTx(ctx)
-				require.NoError(t, err)
-				defer tx.Rollback(ctx)
-
-				err = meta.InitializeMetaStore(ctx, tx)
-				require.NoError(t, err)
-
-				require.NoError(t, tx.Commit(ctx))
-			}()
-		}
-
 		nodeStr := fmt.Sprintf("NODE%d", i)
 		nodeDir := filepath.Join(tempDir, nodeStr)
 
@@ -107,7 +106,6 @@ func generateTestCEConfig(t *testing.T, nodes int, noDBs ...int) []*Config {
 		assert.NoError(t, err)
 
 		ceConfigs[i] = &Config{
-			DB:             db,
 			PrivateKey:     privKeys[i],
 			Leader:         pubKeys[0],
 			Mempool:        mempool.New(),
@@ -119,13 +117,16 @@ func generateTestCEConfig(t *testing.T, nodes int, noDBs ...int) []*Config {
 			Logger:         logger,
 			ProposeTimeout: 1 * time.Second,
 		}
-		// if i == 0 {
-		// 	ceConfigs[i].DB = db
-		// } // only ce 0 (leader) has a valid DB, others are for identity of simulated peer
 
 		closers = append(closers, func() {
 			bs.Close()
 		})
+	}
+
+	if leaderDB {
+		ceConfigs[0].DB = db
+	} else {
+		ceConfigs[1].DB = db
 	}
 
 	t.Cleanup(func() {
@@ -187,7 +188,7 @@ func TestValidatorStateMachine(t *testing.T) {
 		{
 			name: "BlkPropAndCommit",
 			setup: func(t *testing.T) []*Config {
-				return generateTestCEConfig(t, 2)
+				return generateTestCEConfig(t, 2, false)
 			},
 			actions: []action{
 				{
@@ -215,7 +216,7 @@ func TestValidatorStateMachine(t *testing.T) {
 		{
 			name: "InvalidAppHash",
 			setup: func(t *testing.T) []*Config {
-				return generateTestCEConfig(t, 2)
+				return generateTestCEConfig(t, 2, false)
 			},
 			actions: []action{
 				{
@@ -249,7 +250,7 @@ func TestValidatorStateMachine(t *testing.T) {
 		{
 			name: "MultipleBlockProposals",
 			setup: func(t *testing.T) []*Config {
-				return generateTestCEConfig(t, 2)
+				return generateTestCEConfig(t, 2, false)
 			},
 			actions: []action{
 				{
@@ -285,7 +286,7 @@ func TestValidatorStateMachine(t *testing.T) {
 		{
 			name: "StaleBlockProposals",
 			setup: func(t *testing.T) []*Config {
-				return generateTestCEConfig(t, 2)
+				return generateTestCEConfig(t, 2, false)
 			},
 			actions: []action{
 				{
@@ -322,7 +323,7 @@ func TestValidatorStateMachine(t *testing.T) {
 		{
 			name: "BlkAnnounceBeforeBlockProp",
 			setup: func(t *testing.T) []*Config {
-				return generateTestCEConfig(t, 2)
+				return generateTestCEConfig(t, 2, false)
 			},
 			actions: []action{
 				{
@@ -359,7 +360,7 @@ func TestValidatorStateMachine(t *testing.T) {
 		{
 			name: "ValidResetFlow",
 			setup: func(t *testing.T) []*Config {
-				return generateTestCEConfig(t, 2)
+				return generateTestCEConfig(t, 2, false)
 			},
 			actions: []action{
 				{
@@ -405,7 +406,7 @@ func TestValidatorStateMachine(t *testing.T) {
 		{
 			name: "ResetAfterCommit(Ignored)",
 			setup: func(t *testing.T) []*Config {
-				return generateTestCEConfig(t, 2)
+				return generateTestCEConfig(t, 2, false)
 			},
 			actions: []action{
 				{
@@ -442,7 +443,7 @@ func TestValidatorStateMachine(t *testing.T) {
 		{
 			name: "DuplicateReset",
 			setup: func(t *testing.T) []*Config {
-				return generateTestCEConfig(t, 2)
+				return generateTestCEConfig(t, 2, false)
 			},
 			actions: []action{
 				{
@@ -488,7 +489,7 @@ func TestValidatorStateMachine(t *testing.T) {
 		{
 			name: "InvalidFutureResetHeight",
 			setup: func(t *testing.T) []*Config {
-				return generateTestCEConfig(t, 2)
+				return generateTestCEConfig(t, 2, false)
 			},
 			actions: []action{
 				{
@@ -575,7 +576,7 @@ func TestValidatorStateMachine(t *testing.T) {
 
 func TestCELeaderSingleNode(t *testing.T) {
 	// t.Parallel()
-	ceConfigs := generateTestCEConfig(t, 1)
+	ceConfigs := generateTestCEConfig(t, 1, true)
 
 	// bring up the node
 	leader := New(ceConfigs[0])
@@ -600,7 +601,7 @@ func TestCELeaderSingleNode(t *testing.T) {
 
 func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
 	// Majority > n/2 -> 2
-	ceConfigs := generateTestCEConfig(t, 2)
+	ceConfigs := generateTestCEConfig(t, 2, true)
 
 	// bring up the nodes
 	n1 := New(ceConfigs[0])
@@ -618,6 +619,11 @@ func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
 		cancel()
 		wg.Wait()
 	})
+
+	n1.bestHeightCh <- &discoveryMsg{
+		BestHeight: 1,
+		Sender:     ceConfigs[1].PrivateKey.Public().Bytes(),
+	}
 
 	time.Sleep(500 * time.Millisecond)
 	_, _, blProp := n1.info()
@@ -651,7 +657,7 @@ func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
 
 func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 	// Majority > n/2 -> 2
-	ceConfigs := generateTestCEConfig(t, 3)
+	ceConfigs := generateTestCEConfig(t, 3, true)
 
 	// bring up the nodes
 	n1 := New(ceConfigs[0])
@@ -668,6 +674,11 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 		cancel()
 		wg.Wait()
 	})
+
+	n1.bestHeightCh <- &discoveryMsg{
+		BestHeight: 1,
+		Sender:     ceConfigs[1].PrivateKey.Public().Bytes(),
+	}
 
 	require.Eventually(t, func() bool {
 		blockRes := n1.blockResult()
