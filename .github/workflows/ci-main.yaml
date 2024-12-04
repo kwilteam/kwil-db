@@ -45,7 +45,6 @@ jobs:
       postgres:
         image: kwildb/postgres:16.5-1
         env:
-          POSTGRES_PORT: 5432
           POSTGRES_HOST_AUTH_METHOD: trust
         options: >-
           --health-cmd pg_isready
@@ -54,6 +53,42 @@ jobs:
           --health-retries 5
         ports:
           - 5432:5432
+
+      postgres1:
+        image: kwildb/postgres:16.5-1
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5433:5432
+
+      postgres2:
+        image: kwildb/postgres:16.5-1
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5434:5432
+
+      postgres3:
+        image: kwildb/postgres:16.5-1
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5435:5432
 
     steps:
       # shared setup for all tests

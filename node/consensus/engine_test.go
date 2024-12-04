@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -20,6 +21,7 @@ import (
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/mempool"
 	"github.com/kwilteam/kwil-db/node/meta"
+	"github.com/kwilteam/kwil-db/node/pg"
 	dbtest "github.com/kwilteam/kwil-db/node/pg/test"
 	"github.com/kwilteam/kwil-db/node/store"
 	"github.com/kwilteam/kwil-db/node/txapp"
@@ -32,7 +34,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func generateTestCEConfig(t *testing.T, nodes int) []*Config {
+func generateTestCEConfig(t *testing.T, nodes int, noDBs ...int) []*Config {
 	ceConfigs := make([]*Config, nodes)
 	tempDir := t.TempDir()
 
@@ -61,21 +63,7 @@ func generateTestCEConfig(t *testing.T, nodes int) []*Config {
 		valSet = append(valSet, val)
 	}
 
-	db, err := dbtest.NewTestDB(t)
-	require.NoError(t, err)
-
 	ctx := context.Background()
-
-	func() {
-		tx, err := db.BeginTx(ctx)
-		require.NoError(t, err)
-		defer tx.Rollback(ctx)
-
-		err = meta.InitializeMetaStore(ctx, tx)
-		require.NoError(t, err)
-
-		require.NoError(t, tx.Commit(ctx))
-	}()
 
 	// Account Store
 	// accounts, err := accounts.InitializeAccountStore(ctx, db)
@@ -88,6 +76,27 @@ func generateTestCEConfig(t *testing.T, nodes int) []*Config {
 	txapp := newDummyTxApp(valSet)
 
 	for i := range nodes {
+		var db *pg.DB
+		if !slices.Contains(noDBs, i) {
+			db = dbtest.NewTestDBNamed(t, "kwil_test_db", 5432+i, func(db *pg.DB) {
+				db.AutoCommit(true)
+				ctx := context.Background()
+				db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_chain CASCADE;`)
+				db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_internal CASCADE;`)
+			})
+
+			func() {
+				tx, err := db.BeginTx(ctx)
+				require.NoError(t, err)
+				defer tx.Rollback(ctx)
+
+				err = meta.InitializeMetaStore(ctx, tx)
+				require.NoError(t, err)
+
+				require.NoError(t, tx.Commit(ctx))
+			}()
+		}
+
 		nodeStr := fmt.Sprintf("NODE%d", i)
 		nodeDir := filepath.Join(tempDir, nodeStr)
 
@@ -110,6 +119,9 @@ func generateTestCEConfig(t *testing.T, nodes int) []*Config {
 			Logger:         logger,
 			ProposeTimeout: 1 * time.Second,
 		}
+		// if i == 0 {
+		// 	ceConfigs[i].DB = db
+		// } // only ce 0 (leader) has a valid DB, others are for identity of simulated peer
 
 		closers = append(closers, func() {
 			bs.Close()
@@ -117,13 +129,6 @@ func generateTestCEConfig(t *testing.T, nodes int) []*Config {
 	}
 
 	t.Cleanup(func() {
-		db.AutoCommit(true)
-		defer db.AutoCommit(false)
-		defer db.Close()
-		ctx := context.Background()
-		db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_chain CASCADE;`)
-		db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_internal CASCADE;`)
-
 		for _, closerFn := range closers {
 			closerFn()
 		}
@@ -548,8 +553,10 @@ func TestValidatorStateMachine(t *testing.T) {
 				val.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster)
 			}()
 
-			defer wg.Wait() // before cleanup
-			defer cancel()
+			t.Cleanup(func() {
+				cancel()
+				wg.Wait()
+			})
 
 			for _, act := range tc.actions {
 				act.trigger(t, leader, val)

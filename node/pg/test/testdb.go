@@ -2,6 +2,7 @@ package pgtest
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -79,15 +80,19 @@ func NewTestPool(ctx context.Context, dropSchemas []string, dropTables ...string
 // The caller is responsible for cleaning up.
 // The suggested method for cleanup is simply to have
 // an outermost Tx that is rolled back at the end of the test.
-func NewTestDB(t *testing.T) (db *pg.DB, err error) {
+func NewTestDB(t *testing.T, cleanUp func(*pg.DB)) *pg.DB {
+	return NewTestDBNamed(t, "kwil_test_db", 5432, cleanUp)
+}
+
+func NewTestDBNamed(t *testing.T, dbName string, port int, cleanUp func(*pg.DB)) *pg.DB {
 	cfg := &pg.DBConfig{
 		PoolConfig: pg.PoolConfig{
 			ConnConfig: pg.ConnConfig{
 				Host:   "127.0.0.1",
-				Port:   "5432",
+				Port:   strconv.Itoa(port),
 				User:   "kwild",
 				Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
-				DBName: "kwil_test_db",
+				DBName: dbName,
 			},
 			MaxConns: 11,
 		},
@@ -95,7 +100,15 @@ func NewTestDB(t *testing.T) (db *pg.DB, err error) {
 			return strings.Contains(s, pg.DefaultSchemaFilterPrefix)
 		},
 	}
-	return pg.NewDB(context.Background(), cfg)
+	db, err := pg.NewDB(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		defer db.Close()
+		cleanUp(db)
+	})
+	return db
 }
 
 func NewTestDBWithCfg(t *testing.T, dbCfg *config.DBConfig) (db *pg.DB, err error) {
