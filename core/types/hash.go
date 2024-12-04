@@ -22,7 +22,7 @@ func HashBytes(b []byte) Hash {
 }
 
 // Hasher is like the standard library's hash.Hash, but with fewer methods and
-// returning a Hash instead of a byte slice. Use [NewHasher] to get a Hasher.
+// returning a [Hash] instead of a byte slice. Use [NewHasher] to get a Hasher.
 type Hasher interface {
 	// Write more data to the running hash. It never returns an error.
 	io.Writer

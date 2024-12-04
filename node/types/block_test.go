@@ -2,12 +2,12 @@ package types
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/binary"
 	"testing"
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/types"
 
 	"github.com/stretchr/testify/require"
 )
@@ -120,7 +120,7 @@ func TestCalcMerkleRoot(t *testing.T) {
 		var buf [HashLen * 2]byte
 		copy(buf[:HashLen], leaf1[:])
 		copy(buf[HashLen:], leaf2[:])
-		expected := sha256.Sum256(buf[:])
+		expected := types.HashBytes(buf[:])
 
 		if root != expected {
 			t.Errorf("got root %x, want %x", root, expected)

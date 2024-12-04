@@ -1,7 +1,6 @@
 package display
 
 import (
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -112,9 +111,9 @@ func (r *RespTxQuery) MarshalJSON() ([]byte, error) {
 			out.Warn = "ERROR encoding transaction: " + err.Error()
 		} else if r.WithRaw {
 			out.Raw = hex.EncodeToString(raw)
-			hash := sha256.Sum256(raw)
+			hash := types.HashBytes(raw)
 			if hash != r.Msg.Hash {
-				out.Warn = fmt.Sprintf("HASH MISMATCH: requested %s; received %x",
+				out.Warn = fmt.Sprintf("HASH MISMATCH: requested %s; received %s",
 					r.Msg.Hash, hash)
 			}
 		}
@@ -155,9 +154,9 @@ Log: %s`,
 		if r.WithRaw {
 			msg += "\nRaw: " + hex.EncodeToString(raw)
 		}
-		hash := sha256.Sum256(raw)
+		hash := types.HashBytes(raw)
 		if hash != r.Msg.Hash {
-			msg += fmt.Sprintf("\nWARNING! HASH MISMATCH:\n\tRequested %s\n\tReceived  %x",
+			msg += fmt.Sprintf("\nWARNING! HASH MISMATCH:\n\tRequested %s\n\tReceived  %s",
 				r.Msg.Hash, hash)
 		}
 	}

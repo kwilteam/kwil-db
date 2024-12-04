@@ -2,9 +2,7 @@ package utils
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -57,8 +55,8 @@ func (t *transaction) MarshalJSON() ([]byte, error) {
 }
 
 func (t *transaction) MarshalText() ([]byte, error) {
-	txHash := sha256.Sum256(t.Raw) // tmhash is sha256
-	msg := fmt.Sprintf(`Transaction ID: %x
+	txHash := types.HashBytes(t.Raw)
+	msg := fmt.Sprintf(`Transaction ID: %s
 Sender: %s
 Description: %s
 Payload type: %s
@@ -69,7 +67,7 @@ Signature type: %s
 Signature: %s
 `,
 		txHash,
-		hex.EncodeToString(t.Tx.Sender), // hex because it's an address or pubkey, probably address
+		t.Tx.Sender.String(),
 		t.Tx.Body.Description,
 		t.Tx.Body.PayloadType,
 		t.Tx.Body.ChainID,
