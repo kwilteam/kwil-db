@@ -51,7 +51,7 @@ func (ce *ConsensusEngine) discoverBestHeight(ctx context.Context) (int64, error
 			select {
 			case <-cancelCtx.Done():
 				return
-			case <-time.After(5 * time.Second):
+			case <-time.After(500 * time.Millisecond):
 				if ce.inSync.Load() {
 					ce.discoveryReqBroadcaster()
 				}
