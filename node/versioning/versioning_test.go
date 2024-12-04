@@ -24,8 +24,7 @@ func Test_Versioning(t *testing.T) {
 		1: upgradeSchemaV0ToV1,
 		2: upgradeSchemaV1ToV2,
 	}
-	db, err := test.NewTestDB(t)
-	require.NoError(t, err)
+	db := test.NewTestDB(t, nil)
 
 	tx, err := db.BeginTx(ctx)
 	require.NoError(t, err)
@@ -43,7 +42,6 @@ func Test_Versioning(t *testing.T) {
 
 	_, err = db.Execute(ctx, `INSERT INTO `+testSchema+`.test (id, name, age) VALUES (3, 'test', 30);`)
 	require.NoError(t, err)
-
 }
 
 func initTableV0(ctx context.Context, db sql.DB) error {

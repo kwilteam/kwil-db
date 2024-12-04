@@ -610,7 +610,8 @@ func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		n1.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster)
+		n1.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster,
+			mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster)
 	}()
 
 	t.Cleanup(func() {

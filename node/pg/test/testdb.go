@@ -76,14 +76,21 @@ func NewTestPool(ctx context.Context, dropSchemas []string, dropTables ...string
 	return pool, cleanUp, nil
 }
 
-// NewTestDB creates a new test database.
-// The caller is responsible for cleaning up.
-// The suggested method for cleanup is simply to have
-// an outermost Tx that is rolled back at the end of the test.
+// NewTestDB creates a new test database. Provide a cleanup function for actions
+// to perform before the DB is closed. On test completion, the cleanup function
+// is run followed by closing the DB. The suggested method for cleanup is simply
+// to have an outermost Tx that is rolled back at the end of the test. By
+// default, this will attempt to connect to the "kwil_test_db" database on TCP
+// port 5432. To change the DB name or port, use NewTestDBNamed.
 func NewTestDB(t *testing.T, cleanUp func(*pg.DB)) *pg.DB {
+	if cleanUp == nil {
+		cleanUp = func(*pg.DB) {}
+	}
 	return NewTestDBNamed(t, "kwil_test_db", 5432, cleanUp)
 }
 
+// NewTestDBNamed is like NewTestDBNamed but allows specifying the DB name and
+// TCP port to use.
 func NewTestDBNamed(t *testing.T, dbName string, port int, cleanUp func(*pg.DB)) *pg.DB {
 	cfg := &pg.DBConfig{
 		PoolConfig: pg.PoolConfig{
