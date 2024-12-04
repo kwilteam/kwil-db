@@ -2,6 +2,7 @@ package types
 
 import (
 	"bytes"
+	"encoding"
 	"encoding/binary"
 	"encoding/json"
 	"errors"
@@ -43,7 +44,7 @@ type Transaction struct {
 	Serialization SignedMsgSerializationType `json:"serialization"`
 
 	// Sender is the user identifier, which is generally an address but may be
-	// a public key of the sender.
+	// a public key of the sender, hence bytes that encode as hexadecimal.
 	Sender HexBytes `json:"sender"`
 
 	strictUnmarshal bool
@@ -258,6 +259,8 @@ func (t *TransactionBody) SerializeMsg(mst SignedMsgSerializationType) ([]byte, 
 	return nil, errors.New("invalid serialization type")
 }
 
+var _ encoding.BinaryMarshaler = (*Transaction)(nil)
+
 // MarshalBinary produces the full binary serialization of the transaction,
 // which is the form used in p2p messaging and blockchain storage.
 func (t *Transaction) MarshalBinary() ([]byte, error) {
@@ -278,6 +281,8 @@ func (t *Transaction) ReadFrom(r io.Reader) (int64, error) {
 	return int64(n), nil
 }
 
+var _ encoding.BinaryUnmarshaler = (*Transaction)(nil)
+
 func (t *Transaction) UnmarshalBinary(data []byte) error {
 	r := bytes.NewReader(data)
 	n, err := t.deserialize(r)
@@ -295,6 +300,8 @@ func (t *Transaction) UnmarshalBinary(data []byte) error {
 	}
 	return nil
 }
+
+var _ encoding.BinaryMarshaler = (*TransactionBody)(nil)
 
 func (tb *TransactionBody) MarshalBinary() ([]byte, error) {
 	buf := new(bytes.Buffer)
@@ -385,6 +392,8 @@ func (tb *TransactionBody) ReadFrom(r io.Reader) (int64, error) {
 
 	return int64(n), nil
 }
+
+var _ encoding.BinaryUnmarshaler = (*TransactionBody)(nil)
 
 func (tb *TransactionBody) UnmarshalBinary(data []byte) error {
 	buf := bytes.NewReader(data)

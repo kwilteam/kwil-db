@@ -1,11 +1,12 @@
 package consensus
 
 import (
+	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"slices"
 	"sort"
 
 	"github.com/kwilteam/kwil-db/common"
@@ -74,15 +75,15 @@ func (ce *ConsensusEngine) executeBlock() (err error) {
 
 	// TODO: log tracker
 
-	var txResults []ktypes.TxResult
+	txResults := make([]ktypes.TxResult, len(ce.state.blkProp.blk.Txns))
 
-	for _, tx := range ce.state.blkProp.blk.Txns {
+	for i, tx := range ce.state.blkProp.blk.Txns {
 		decodedTx := &ktypes.Transaction{}
 		if err := decodedTx.UnmarshalBinary(tx); err != nil {
 			ce.log.Error("Failed to unmarshal the block tx", "err", err)
 			return err
 		}
-		txHash := sha256.Sum256(tx)
+		txHash := types.HashBytes(tx)
 
 		auth := auth.GetAuthenticator(decodedTx.Signature.Type)
 
@@ -118,7 +119,7 @@ func (ce *ConsensusEngine) executeBlock() (err error) {
 				txResult.Log = "success"
 			}
 
-			txResults = append(txResults, txResult)
+			txResults[i] = txResult
 		}
 	}
 
@@ -195,7 +196,7 @@ func (ce *ConsensusEngine) executeBlock() (err error) {
 // nextAppHash calculates the appHash that encapsulates the state changes occurred during the block execution.
 // sha256(prevAppHash || changesetHash || valUpdatesHash || accountsHash || txResultsHash)
 func (ce *ConsensusEngine) nextAppHash(prevAppHash, changesetHash, valUpdatesHash, accountsHash, txResultsHash types.Hash) types.Hash {
-	hasher := sha256.New()
+	hasher := ktypes.NewHasher()
 
 	hasher.Write(prevAppHash[:])
 	hasher.Write(changesetHash[:])
@@ -204,29 +205,32 @@ func (ce *ConsensusEngine) nextAppHash(prevAppHash, changesetHash, valUpdatesHas
 	hasher.Write(txResultsHash[:])
 
 	ce.log.Info("AppState updates: ", "prevAppHash", prevAppHash, "changesetsHash", changesetHash, "valUpdatesHash", valUpdatesHash, "accountsHash", accountsHash, "txResultsHash", txResultsHash)
-	return types.Hash(hasher.Sum(nil))
+	return hasher.Sum(nil)
 }
 
 func txResultsHash(results []ktypes.TxResult) types.Hash {
-	hasher := sha256.New()
+	hasher := ktypes.NewHasher()
 	for _, res := range results {
 		binary.Write(hasher, binary.BigEndian, res.Code)
 		binary.Write(hasher, binary.BigEndian, res.Gas)
 	}
 
-	return types.Hash(hasher.Sum(nil))
+	return hasher.Sum(nil)
 }
 
 func (ce *ConsensusEngine) accountsHash() types.Hash {
 	accounts := ce.accounts.Updates()
-	hasher := sha256.New()
+	slices.SortFunc(accounts, func(a, b *ktypes.Account) int {
+		return bytes.Compare(a.Identifier, b.Identifier)
+	})
+	hasher := ktypes.NewHasher()
 	for _, acc := range accounts {
 		hasher.Write(acc.Identifier)
 		binary.Write(hasher, binary.BigEndian, acc.Balance.Bytes())
 		binary.Write(hasher, binary.BigEndian, acc.Nonce)
 	}
 
-	return types.Hash(hasher.Sum(nil))
+	return hasher.Sum(nil)
 }
 
 func validatorUpdatesHash(updates map[string]*ktypes.Validator) types.Hash {
@@ -239,7 +243,7 @@ func validatorUpdatesHash(updates map[string]*ktypes.Validator) types.Hash {
 	}
 	sort.Strings(keys)
 
-	hash := sha256.New()
+	hash := ktypes.NewHasher()
 	for _, k := range keys {
 		// hash the validator address
 		hash.Write(updates[k].PubKey)
@@ -247,7 +251,7 @@ func validatorUpdatesHash(updates map[string]*ktypes.Validator) types.Hash {
 		binary.Write(hash, binary.BigEndian, updates[k].Power)
 	}
 
-	return types.Hash(hash.Sum(nil))
+	return hash.Sum(nil)
 }
 
 // Commit method commits the block to the blockstore and postgres database.

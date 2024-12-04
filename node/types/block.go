@@ -2,7 +2,6 @@ package types
 
 import (
 	"bytes"
-	"crypto/sha256"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -208,9 +207,9 @@ func EncodeBlockHeader(hdr *BlockHeader) []byte {
 }
 
 func (bh *BlockHeader) Hash() Hash {
-	hasher := sha256.New()
+	hasher := types.NewHasher()
 	bh.writeBlockHeader(hasher)
-	return Hash(hasher.Sum(nil))
+	return hasher.Sum(nil)
 }
 
 /*func encodeBlockHeaderOneAlloc(hdr *BlockHeader) []byte {
@@ -296,7 +295,7 @@ func CalcMerkleRoot(leaves []Hash) Hash {
 		for i := range len(leaves) / 2 {
 			copy(left, leaves[i*2][:])
 			copy(right, leaves[i*2+1][:])
-			leaves[i] = sha256.Sum256(both)
+			leaves[i] = types.HashBytes(both)
 		}
 		leaves = leaves[:len(leaves)/2]
 	}
