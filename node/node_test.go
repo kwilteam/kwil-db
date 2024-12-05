@@ -287,7 +287,7 @@ func TestStreamsBlockFetch(t *testing.T) {
 	defaultConfigSet := config.DefaultConfig()
 	defaultConfigSet.Consensus.ProposeTimeout = 5 * time.Minute
 
-	ss := NewSnapshotStore()
+	ss := newSnapshotStore()
 
 	// log1 := log.New(log.WithName("NODE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
 	cfg1 := &Config{

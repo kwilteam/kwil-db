@@ -73,7 +73,7 @@ type StateSyncService struct {
 }
 
 func NewStateSyncService(ctx context.Context, cfg *statesyncConfig) (*StateSyncService, error) {
-	if cfg.StateSyncCfg.Enable && (cfg.StateSyncCfg.TrustedProviders == nil || len(cfg.StateSyncCfg.TrustedProviders) == 0) {
+	if cfg.StateSyncCfg.Enable && cfg.StateSyncCfg.TrustedProviders == nil {
 		return nil, fmt.Errorf("at least one trusted provider is required for state sync")
 	}
 

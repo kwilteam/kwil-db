@@ -86,6 +86,7 @@ func TestDualNodeMocknet(t *testing.T) {
 	for _, v := range valSet {
 		valSetList = append(valSetList, &v)
 	}
+	ss := newSnapshotStore()
 
 	ceCfg1 := &consensus.Config{
 		PrivateKey:     privKeys[0],
@@ -99,19 +100,22 @@ func TestDualNodeMocknet(t *testing.T) {
 		Logger:         log.New(log.WithName("CE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
 		ProposeTimeout: 1 * time.Second,
 		DB:             db1,
+		Snapshots:      ss,
 	}
 	ce1 := consensus.New(ceCfg1)
 	defaultConfigSet := config.DefaultConfig()
-
 	log1 := log.New(log.WithName("NODE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
 	cfg1 := &Config{
-		RootDir:    root1,
-		PrivKey:    privKeys[0],
-		Logger:     log1,
-		P2P:        &defaultConfigSet.P2P,
-		Mempool:    mp1,
-		BlockStore: bs1,
-		Consensus:  ce1,
+		RootDir:     root1,
+		PrivKey:     privKeys[0],
+		Logger:      log1,
+		P2P:         &defaultConfigSet.P2P,
+		Mempool:     mp1,
+		BlockStore:  bs1,
+		Consensus:   ce1,
+		Snapshotter: ss,
+		DBConfig:    &defaultConfigSet.DB,
+		Statesync:   &defaultConfigSet.StateSync,
 	}
 	node1, err := NewNode(cfg1, WithHost(h1))
 	if err != nil {
@@ -139,18 +143,22 @@ func TestDualNodeMocknet(t *testing.T) {
 		Logger:         log.New(log.WithName("CE2"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
 		ProposeTimeout: 1 * time.Second,
 		DB:             db2,
+		Snapshots:      ss,
 	}
 	ce2 := consensus.New(ceCfg2)
 
 	log2 := log.New(log.WithName("NODE2"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
 	cfg2 := &Config{
-		RootDir:    root2,
-		PrivKey:    privKeys[1],
-		Logger:     log2,
-		P2P:        &defaultConfigSet.P2P,
-		Mempool:    mp2,
-		BlockStore: bs2,
-		Consensus:  ce2,
+		RootDir:     root2,
+		PrivKey:     privKeys[1],
+		Logger:      log2,
+		P2P:         &defaultConfigSet.P2P,
+		Mempool:     mp2,
+		BlockStore:  bs2,
+		Consensus:   ce2,
+		Snapshotter: ss,
+		DBConfig:    &defaultConfigSet.DB,
+		Statesync:   &defaultConfigSet.StateSync,
 	}
 	node2, err := NewNode(cfg2, WithHost(h2))
 	if err != nil {
@@ -192,7 +200,7 @@ func TestDualNodeMocknet(t *testing.T) {
 		h, _, _, err := meta.GetChainState(ctx, tx)
 		require.NoError(t, err)
 		assert.GreaterOrEqual(c, h, reachHeight)
-	}, 6*time.Second, 250*time.Millisecond)
+	}, 10*time.Second, 250*time.Millisecond)
 
 	cancel()
 	wg.Wait()

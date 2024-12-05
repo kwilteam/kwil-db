@@ -41,22 +41,20 @@ var (
 		Size:        100,
 		ChunkHashes: [][32]byte{data},
 	}
-
-	invalidSnap1 = &snapshotMetadata{
-		Height:      1,
-		Format:      1,
-		Chunks:      1,
-		Hash:        []byte("snap1-invalid"),
-		Size:        100,
-		ChunkHashes: [][32]byte{data},
-	}
 )
+
+type mockBS struct {
+}
+
+func (m *mockBS) GetByHeight(height int64) (types.Hash, *types.Block, types.Hash, error) {
+	return types.Hash{}, nil, types.Hash{}, nil
+}
 
 type snapshotStore struct {
 	snapshots map[uint64]*snapshotMetadata
 }
 
-func NewSnapshotStore() *snapshotStore {
+func newSnapshotStore() *snapshotStore {
 	return &snapshotStore{
 		snapshots: make(map[uint64]*snapshotMetadata),
 	}
@@ -64,13 +62,6 @@ func NewSnapshotStore() *snapshotStore {
 
 func (s *snapshotStore) addSnapshot(snapshot *snapshotMetadata) {
 	s.snapshots[snapshot.Height] = snapshot
-}
-
-type mockBS struct {
-}
-
-func (m *mockBS) GetByHeight(height int64) (types.Hash, *types.Block, types.Hash, error) {
-	return types.Hash{}, nil, types.Hash{}, nil
 }
 
 func (s *snapshotStore) ListSnapshots() []*snapshotter.Snapshot {
@@ -127,6 +118,14 @@ func (s *snapshotStore) Enabled() bool {
 	return true
 }
 
+func (s *snapshotStore) IsSnapshotDue(height uint64) bool {
+	return false
+}
+
+func (s *snapshotStore) CreateSnapshot(ctx context.Context, height uint64, snapshotID string, schemas, excludedTables []string, excludeTableData []string) error {
+	return nil
+}
+
 func newTestStatesyncer(ctx context.Context, t *testing.T, mn mock.Mocknet, rootDir string, sCfg *config.StateSyncConfig) (host.Host, discovery.Discovery, *snapshotStore, *StateSyncService, error) {
 	_, h, err := newTestHost(t, mn)
 	if err != nil {
@@ -143,7 +142,7 @@ func newTestStatesyncer(ctx context.Context, t *testing.T, mn mock.Mocknet, root
 	os.MkdirAll(rootDir, os.ModePerm)
 
 	bs := &mockBS{}
-	st := NewSnapshotStore()
+	st := newSnapshotStore()
 	cfg := &statesyncConfig{
 		StateSyncCfg: sCfg,
 		RcvdSnapsDir: rootDir,
