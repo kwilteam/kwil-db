@@ -24,20 +24,28 @@ import (
 
 // BlockchainTransactor specifies the methods required for the admin service to
 // interact with the blockchain.
-type BlockchainTransactor interface {
+type Node interface {
 	Status(context.Context) (*types.Status, error)
 	Peers(context.Context) ([]*types.PeerInfo, error)
-	BroadcastTx(ctx context.Context, tx []byte, sync uint8) (*coretypes.ResultBroadcastTx, error)
+	BroadcastTx(ctx context.Context, tx *coretypes.Transaction, sync uint8) (*coretypes.ResultBroadcastTx, error)
 }
 
-type TxApp interface {
+type P2P interface {
+	// AddPeer adds a peer to the node's peer list and persists it.
+	AddPeer(ctx context.Context, nodeID string) error
+
+	// RemovePeer removes a peer from the node's peer list permanently.
+	RemovePeer(ctx context.Context, nodeID string) error
+
+	// ListPeers returns the list of peers in the node's whitelist.
+	ListPeers(ctx context.Context) []string
+}
+
+type App interface {
 	// AccountInfo returns the unconfirmed account info for the given identifier.
 	// If unconfirmed is true, the account found in the mempool is returned.
 	// Otherwise, the account found in the blockchain is returned.
 	AccountInfo(ctx context.Context, db sql.DB, identifier []byte, unconfirmed bool) (balance *big.Int, nonce int64, err error)
-}
-
-type Pricer interface {
 	Price(ctx context.Context, db sql.DB, tx *coretypes.Transaction) (*big.Int, error)
 }
 
@@ -47,23 +55,13 @@ type Validators interface {
 	GetValidators() []*coretypes.Validator
 }
 
-type P2P interface {
-	// AddPeer adds a peer to the node's peer list and persists it.
-	AddAndPersistPeer(ctx context.Context, nodeID string) error
-	// RemovePeer removes a peer from the node's peer list permanently.
-	RemovePersistedPeer(ctx context.Context, nodeID string) error
-	// ListPeers returns the list of peers in the node's whitelist.
-	ListPeers(ctx context.Context) []string
-}
-
 type Service struct {
 	log log.Logger
 
-	blockchain BlockchainTransactor // node is the local node that can accept transactions.
-	TxApp      TxApp
+	blockchain Node // node is the local node that can accept transactions.
+	app        App
 	voting     Validators
 	db         sql.DelayedReadTxMaker
-	pricer     Pricer
 	p2p        P2P
 
 	cfg     *config.Config
@@ -223,16 +221,15 @@ func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
 }
 
 // NewService constructs a new Service.
-func NewService(db sql.DelayedReadTxMaker, blockchain BlockchainTransactor, txApp TxApp,
-	pricer Pricer, p2p P2P, signer auth.Signer, cfg *config.Config,
+func NewService(db sql.DelayedReadTxMaker, blockchain Node, app App,
+	p2p P2P, txSigner auth.Signer, cfg *config.Config,
 	chainID string, logger log.Logger) *Service {
 	return &Service{
 		blockchain: blockchain,
-		TxApp:      txApp,
-		signer:     signer,
-		chainID:    chainID,
-		pricer:     pricer,
 		p2p:        p2p,
+		app:        app,
+		signer:     txSigner,
+		chainID:    chainID,
 		cfg:        cfg,
 		log:        logger,
 		db:         db,
@@ -289,7 +286,7 @@ func (svc *Service) sendTx(ctx context.Context, payload coretypes.Payload) (*use
 	defer readTx.Rollback(ctx)
 
 	// Get the latest nonce for the account, if it exists.
-	_, nonce, err := svc.TxApp.AccountInfo(ctx, readTx, svc.signer.Identity(), true)
+	_, nonce, err := svc.app.AccountInfo(ctx, readTx, svc.signer.Identity(), true)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorAccountInternal, "account info error", nil)
 	}
@@ -299,7 +296,7 @@ func (svc *Service) sendTx(ctx context.Context, payload coretypes.Payload) (*use
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "unable to create transaction", nil)
 	}
 
-	fee, err := svc.pricer.Price(ctx, readTx, tx)
+	fee, err := svc.app.Price(ctx, readTx, tx)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, "unable to price transaction", nil)
 	}
@@ -311,13 +308,8 @@ func (svc *Service) sendTx(ctx context.Context, payload coretypes.Payload) (*use
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "signing transaction failed", nil)
 	}
-	encodedTx, err := tx.MarshalBinary()
-	if err != nil {
-		svc.log.Error("failed to serialize transaction data", "error", err)
-		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "failed to serialize transaction data", nil)
-	}
 
-	res, err := svc.blockchain.BroadcastTx(ctx, encodedTx, uint8(userjson.BroadcastSyncSync))
+	res, err := svc.blockchain.BroadcastTx(ctx, tx, uint8(userjson.BroadcastSyncSync))
 	if err != nil {
 		svc.log.Error("failed to broadcast tx", "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, "failed to broadcast transaction", nil)
@@ -490,7 +482,7 @@ func (svc *Service) GetConfig(ctx context.Context, req *adminjson.GetConfigReque
 }
 
 func (svc *Service) AddPeer(ctx context.Context, req *adminjson.PeerRequest) (*adminjson.PeerResponse, *jsonrpc.Error) {
-	err := svc.p2p.AddAndPersistPeer(ctx, req.PeerID)
+	err := svc.p2p.AddPeer(ctx, req.PeerID)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to add a peer. Reason: "+err.Error(), nil)
 	}
@@ -498,8 +490,7 @@ func (svc *Service) AddPeer(ctx context.Context, req *adminjson.PeerRequest) (*a
 }
 
 func (svc *Service) RemovePeer(ctx context.Context, req *adminjson.PeerRequest) (*adminjson.PeerResponse, *jsonrpc.Error) {
-	fmt.Println("RemovePeer : ", req.PeerID)
-	err := svc.p2p.RemovePersistedPeer(ctx, req.PeerID)
+	err := svc.p2p.RemovePeer(ctx, req.PeerID)
 	if err != nil {
 		svc.log.Error("failed to remove peer", "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to remove peer : "+err.Error(), nil)

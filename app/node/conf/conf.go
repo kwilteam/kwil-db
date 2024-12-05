@@ -110,9 +110,6 @@ func PreRunBindFlags(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("error loading config: %v", err)
 	}
-	if k.Bool("debug") {
-		k.Set("log_level", "debug")
-	}
 	return nil
 }
 

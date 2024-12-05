@@ -2,15 +2,23 @@ package node
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
+	"time"
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/types"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/node"
@@ -23,11 +31,13 @@ import (
 	"github.com/kwilteam/kwil-db/node/snapshotter"
 	"github.com/kwilteam/kwil-db/node/store"
 	"github.com/kwilteam/kwil-db/node/txapp"
+	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
 
 	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
+	"github.com/kwilteam/kwil-db/node/services/jsonrpc/adminsvc"
 	"github.com/kwilteam/kwil-db/node/services/jsonrpc/funcsvc"
-	usersvc "github.com/kwilteam/kwil-db/node/services/jsonrpc/usersvc"
+	"github.com/kwilteam/kwil-db/node/services/jsonrpc/usersvc"
 )
 
 func buildServer(ctx context.Context, d *coreDependencies) *server {
@@ -74,16 +84,16 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	node := buildNode(d, mp, bs, ce, ss, db)
 
 	// RPC Services
-	rpcSvcLogger := d.logger.New("user-json-svc")
+	rpcSvcLogger := d.logger.New("USER")
 	jsonRPCTxSvc := usersvc.NewService(db, e, node, txApp, vs, rpcSvcLogger,
-		// usersvc.WithReadTxTimeout(time.Duration(d.cfg.AppConfig.ReadTxTimeout)),
+		usersvc.WithReadTxTimeout(time.Duration(d.cfg.DB.ReadTxTimeout)),
 		usersvc.WithPrivateMode(d.cfg.RPC.Private),
-	// usersvc.WithChallengeExpiry(time.Duration(d.cfg.AppConfig.ChallengeExpiry)),
-	// usersvc.WithChallengeRateLimit(d.cfg.AppConfig.ChallengeRateLimit),
+		usersvc.WithChallengeExpiry(d.cfg.RPC.ChallengeExpiry),
+		usersvc.WithChallengeRateLimit(d.cfg.RPC.ChallengeRateLimit),
 	// usersvc.WithBlockAgeHealth(6*totalConsensusTimeouts.Dur()),
 	)
 
-	rpcServerLogger := d.logger.New("user-jsonrprc-server")
+	rpcServerLogger := d.logger.New("RPC")
 	jsonRPCServer, err := rpcserver.NewServer(d.cfg.RPC.ListenAddress,
 		rpcServerLogger, rpcserver.WithTimeout(d.cfg.RPC.Timeout),
 		rpcserver.WithReqSizeLimit(d.cfg.RPC.MaxReqSize),
@@ -95,25 +105,50 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	jsonRPCServer.RegisterSvc(jsonRPCTxSvc)
 	jsonRPCServer.RegisterSvc(&funcsvc.Service{})
 
-	// admin service and server
-	// signer := buildSigner(d)
-	// jsonAdminSvc := adminsvc.NewService(db, wrappedCmtClient, txApp, abciApp, p2p, nil, d.cfg,
-	// 	d.genesisCfg.ChainID, *d.log.Named("admin-json-svc"))
-	// jsonRPCAdminServer := buildJRPCAdminServer(d)
-	// jsonRPCAdminServer.RegisterSvc(jsonAdminSvc)
-	// jsonRPCAdminServer.RegisterSvc(jsonRPCTxSvc)
-	// jsonRPCAdminServer.RegisterSvc(&funcsvc.Service{})
+	var jsonRPCAdminServer *rpcserver.Server
+	if d.cfg.Admin.Enable {
+		// admin service and server
+		adminServerLogger := d.logger.New("ADMIN")
+		// The admin service uses a client-style signer rather than just a private
+		// key because it is used to sign transactions and provide an Identity for
+		// account information (nonce and balance).
+		appIface := &mysteryThing{txApp, ce}
+		txSigner := &auth.EthPersonalSigner{Key: *d.privKey.(*crypto.Secp256k1PrivateKey)}
+		jsonAdminSvc := adminsvc.NewService(db, node, appIface, nil, txSigner, d.cfg,
+			d.genesisCfg.ChainID, adminServerLogger)
+		jsonRPCAdminServer = buildJRPCAdminServer(d)
+		jsonRPCAdminServer.RegisterSvc(jsonAdminSvc)
+		jsonRPCAdminServer.RegisterSvc(jsonRPCTxSvc)
+		jsonRPCAdminServer.RegisterSvc(&funcsvc.Service{})
+	}
 
 	s := &server{
-		cfg:     d.cfg,
-		closers: closers,
-		node:    node,
-		ce:      ce,
-		dbCtx:   db,
-		log:     d.logger,
+		cfg:                d.cfg,
+		closers:            closers,
+		node:               node,
+		ce:                 ce,
+		jsonRPCServer:      jsonRPCServer,
+		jsonRPCAdminServer: jsonRPCAdminServer,
+		dbCtx:              db,
+		log:                d.logger,
 	}
 
 	return s
+}
+
+var _ adminsvc.App = (*mysteryThing)(nil)
+
+type mysteryThing struct {
+	txApp *txapp.TxApp
+	ce    *consensus.ConsensusEngine
+}
+
+func (mt *mysteryThing) AccountInfo(ctx context.Context, db sql.DB, identifier []byte, pending bool) (balance *big.Int, nonce int64, err error) {
+	return mt.txApp.AccountInfo(ctx, db, identifier, pending)
+}
+
+func (mt *mysteryThing) Price(ctx context.Context, db sql.DB, tx *types.Transaction) (*big.Int, error) {
+	return mt.ce.Price(ctx, db, tx)
 }
 
 func buildDB(ctx context.Context, d *coreDependencies, closers *closeFuncs) *pg.DB {
@@ -198,8 +233,18 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB, acc
 	}
 
 	ceCfg := &consensus.Config{
-		PrivateKey:     d.privKey,
-		Leader:         leaderPubKey,
+		PrivateKey: d.privKey,
+		Leader:     leaderPubKey,
+		GenesisParams: &consensus.GenesisParams{
+			ChainID: d.genesisCfg.ChainID,
+			Params: &consensus.NetworkParams{
+				MaxBlockSize:     d.genesisCfg.MaxBlockSize,
+				JoinExpiry:       d.genesisCfg.JoinExpiry,
+				VoteExpiry:       d.genesisCfg.VoteExpiry,
+				DisabledGasCosts: d.genesisCfg.DisabledGasCosts,
+				MaxVotesPerTx:    d.genesisCfg.MaxVotesPerTx,
+			},
+		},
 		DB:             db,
 		Accounts:       accounts,
 		BlockStore:     bs,
@@ -310,4 +355,162 @@ func buildSnapshotStore(d *coreDependencies) *snapshotter.SnapshotStore {
 	}
 
 	return ss
+}
+
+func buildJRPCAdminServer(d *coreDependencies) *rpcserver.Server {
+	var wantTLS bool
+	addr := d.cfg.Admin.ListenAddress
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		if strings.Contains(err.Error(), "missing port in address") {
+			host = addr
+			port = "8484"
+		} else if strings.Contains(err.Error(), "too many colons in address") {
+			u, err := url.Parse(addr)
+			if err != nil {
+				failBuild(err, "unknown admin service address "+addr)
+			}
+			host, port = u.Hostname(), u.Port()
+			wantTLS = u.Scheme == "https"
+		} else {
+			failBuild(err, "unknown admin service address "+addr)
+		}
+	}
+
+	opts := []rpcserver.Opt{rpcserver.WithTimeout(10 * time.Minute)} // this is an administrator
+
+	adminPass := d.cfg.Admin.Pass
+	if adminPass != "" {
+		opts = append(opts, rpcserver.WithPass(adminPass))
+	}
+
+	// Require TLS only if not UNIX or not loopback TCP interface.
+	if isUNIX := strings.HasPrefix(host, "/"); isUNIX {
+		addr = host
+		// no port and no TLS
+		if wantTLS {
+			failBuild(errors.New("unix socket with TLS is not supported"), "")
+		}
+	} else { // TCP
+		addr = net.JoinHostPort(host, port)
+
+		var loopback bool
+		if netAddr, err := net.ResolveIPAddr("ip", host); err != nil {
+			d.logger.Warn("unresolvable host, assuming not loopback, but will likely fail to listen",
+				"host", host, "error", err)
+		} else { // e.g. "localhost" usually resolves to a loopback IP address
+			loopback = netAddr.IP.IsLoopback()
+		}
+		if !loopback || wantTLS { // use TLS for encryption, maybe also client auth
+			if d.cfg.Admin.NoTLS {
+				d.logger.Warn("disabling TLS on non-loopback admin service listen address",
+					"addr", addr, "with_password", adminPass != "")
+			} else {
+				withClientAuth := adminPass == "" // no basic http auth => use transport layer auth
+				opts = append(opts, rpcserver.WithTLS(tlsConfig(d, withClientAuth)))
+			}
+		}
+	}
+
+	// Note that rpcserver.WithPass is not mutually exclusive with TLS in
+	// general, only mutual TLS. It could be a simpler alternative to mutual
+	// TLS, or just coupled with TLS termination on a local reverse proxy.
+	opts = append(opts, rpcserver.WithServerInfo(&adminsvc.SpecInfo))
+	svcLogger := d.logger.New("ADMINRPC")
+	jsonRPCAdminServer, err := rpcserver.NewServer(addr, svcLogger, opts...)
+	if err != nil {
+		failBuild(err, "unable to create json-rpc server")
+	}
+
+	return jsonRPCAdminServer
+}
+
+func loadTLSCertificate(keyFile, certFile, hostname string) (*tls.Certificate, error) {
+	keyExists, certExists := fileExists(keyFile), fileExists(certFile)
+	if certExists != keyExists { // one but not both
+		return nil, fmt.Errorf("missing a key/cert pair file")
+
+	}
+	if !keyExists {
+		// Auto-generate a new key/cert pair using any provided host name in the
+		// "Subject Alternate Name" section of the certificate (either IP or a
+		// hostname like kwild23.applicationX.org).
+		var extraHosts []string
+		if hostname != "" {
+			extraHosts = []string{hostname}
+		}
+		if err := genCertPair(certFile, keyFile, extraHosts); err != nil {
+			return nil, fmt.Errorf("failed to generate TLS key pair: %v", err)
+		}
+		// TODO: generate a separate CA certificate. Browsers don't like that
+		// the site certificate is also a CA, but Go clients are fine with it.
+	}
+	keyPair, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load TLS key pair: %v", err)
+	}
+	return &keyPair, nil
+}
+
+// tlsConfig returns a tls.Config to be used with the admin RPC service. If
+// withClientAuth is true, the config will require client authentication (mutual
+// TLS), otherwise it is standard TLS for encryption and server authentication.
+func tlsConfig(d *coreDependencies, withClientAuth bool) *tls.Config {
+	if d.adminKey == nil {
+		return nil
+	}
+	if !withClientAuth {
+		// TLS only for encryption and authentication of server to client.
+		return &tls.Config{
+			Certificates: []tls.Certificate{*d.adminKey},
+		}
+	} // else try to load authorized client certs/pubkeys
+
+	var err error
+	// client certs
+	caCertPool := x509.NewCertPool()
+	var clientsCerts []byte
+	if clientsFile := filepath.Join(d.rootDir, defaultAdminClients); fileExists(clientsFile) {
+		clientsCerts, err = os.ReadFile(clientsFile)
+		if err != nil {
+			failBuild(err, "failed to load client CAs file")
+		}
+	} else /*else if d.autogen {
+		clientCredsFileBase := filepath.Join(d.rootDir, "auth")
+		clientCertFile, clientKeyFile := clientCredsFileBase+".cert", clientCredsFileBase+".key"
+		err = transport.GenTLSKeyPair(clientCertFile, clientKeyFile, "local kwild CA", nil)
+		if err != nil {
+			failBuild(err, "failed to generate admin client credentials")
+		}
+		d.logger.Info("generated admin service client key pair", log.String("cert", clientCertFile), log.String("key", clientKeyFile))
+		if clientsCerts, err = os.ReadFile(clientCertFile); err != nil {
+			failBuild(err, "failed to read auto-generate client certificate")
+		}
+		if err = os.WriteFile(clientsFile, clientsCerts, 0644); err != nil {
+			failBuild(err, "failed to write client CAs file")
+		}
+		d.logger.Info("generated admin service client CAs file", log.String("file", clientsFile))
+	} */
+	{
+		d.logger.Info("No admin client CAs file. Use kwil-admin's node gen-auth-key command to generate")
+	}
+
+	if len(clientsCerts) > 0 && !caCertPool.AppendCertsFromPEM(clientsCerts) {
+		failBuild(err, "invalid client CAs file")
+	}
+
+	// TLS configuration for mTLS (mutual TLS) protocol-level authentication
+	return &tls.Config{
+		Certificates: []tls.Certificate{*d.adminKey},
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+		ClientCAs:    caCertPool,
+	}
+}
+
+func fileExists(file string) bool {
+	fi, err := os.Stat(file)
+	if err != nil {
+		return false
+	}
+	return !fi.IsDir()
 }

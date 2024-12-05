@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"crypto/tls"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -14,6 +15,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/node"
 	"github.com/kwilteam/kwil-db/node/consensus"
+	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/version"
 
 	"golang.org/x/sync/errgroup"
@@ -30,9 +32,11 @@ type server struct {
 		Err() error
 	}
 
-	// Modules
-	node *node.Node
-	ce   *consensus.ConsensusEngine
+	// subsystems
+	node               *node.Node
+	ce                 *consensus.ConsensusEngine
+	jsonRPCServer      *rpcserver.Server
+	jsonRPCAdminServer *rpcserver.Server
 }
 
 func runNode(ctx context.Context, rootDir string, cfg *config.Config) error {
@@ -55,7 +59,7 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config) error {
 
 	logger.Infof("Starting kwild version %v", version.KwilVersion)
 
-	genFile := filepath.Join(rootDir, config.GenesisFileName)
+	genFile := rootedPath(config.GenesisFileName, rootDir)
 
 	logger.Infof("Loading the genesis configuration from %s", genFile)
 
@@ -72,11 +76,25 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config) error {
 
 	logger.Info("Parsing the pubkey", "key", hex.EncodeToString(pubKey))
 
+	var tlsKeyPair *tls.Certificate
+	logger.Info("loading TLS key pair for the admin server", "key_file", cfg.Admin.TLSKeyFile,
+		"cert_file", cfg.Admin.TLSKeyFile)
+	if cfg.Admin.TLSKeyFile != "" || cfg.Admin.TLSCertFile != "" {
+		customHostname := "" // cfg TODO
+		keyFile := rootedPath(cfg.Admin.TLSKeyFile, rootDir)
+		certFile := rootedPath(cfg.Admin.TLSCertFile, rootDir)
+		tlsKeyPair, err = loadTLSCertificate(keyFile, certFile, customHostname)
+		if err != nil {
+			return err
+		}
+	}
+
 	host, port, user, pass := cfg.DB.Host, cfg.DB.Port, cfg.DB.User, cfg.DB.Pass
 
 	d := &coreDependencies{
 		ctx:        ctx,
 		rootDir:    rootDir,
+		adminKey:   tlsKeyPair,
 		cfg:        cfg,
 		genesisCfg: genConfig,
 		privKey:    privKey,
@@ -124,6 +142,17 @@ func (s *server) Start(ctx context.Context) error {
 	})
 
 	// start rpc services
+	group.Go(func() error {
+		s.log.Info("starting user json-rpc server", "listen", s.cfg.RPC.ListenAddress)
+		return s.jsonRPCServer.Serve(groupCtx)
+	})
+
+	if s.cfg.Admin.Enable {
+		group.Go(func() error {
+			s.log.Info("starting admin json-rpc server", "listen", s.cfg.Admin.ListenAddress)
+			return s.jsonRPCAdminServer.Serve(groupCtx)
+		})
+	}
 
 	// start node (p2p)
 	group.Go(func() error {
@@ -152,4 +181,13 @@ func (s *server) Start(ctx context.Context) error {
 	}
 
 	return nil
+}
+
+// rootedPath returns an absolute path for the given path, relative to the root
+// directory if it was a relative path.
+func rootedPath(path, rootDir string) string {
+	if filepath.IsAbs(path) {
+		return path
+	}
+	return filepath.Join(rootDir, path)
 }

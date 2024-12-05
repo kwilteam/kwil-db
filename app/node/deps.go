@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"crypto/tls"
 	"errors"
 	"slices"
 
@@ -60,6 +61,9 @@ type coreDependencies struct {
 	cfg        *config.Config
 	genesisCfg *config.GenesisConfig
 	privKey    crypto.PrivateKey
+
+	adminKey *tls.Certificate
+	// autogen  bool
 
 	logger     log.Logger
 	dbOpener   dbOpener

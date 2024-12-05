@@ -5,8 +5,10 @@ import (
 	"encoding/binary"
 	"fmt"
 	"math/rand/v2"
+	"net"
 	"os"
 	"path/filepath"
+	"strconv"
 
 	"github.com/kwilteam/kwil-db/app/custom"
 	"github.com/kwilteam/kwil-db/app/shared/bind"
@@ -24,23 +26,29 @@ func TestnetCmd() *cobra.Command {
 	var numVals, numNVals int
 	var noPex bool
 	var startingPort uint64
+	var outDir string
 
 	cmd := &cobra.Command{
 		Use:   "testnet",
 		Short: "Generate configuration for multiple nodes",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			rootDir, err := bind.RootDir(cmd)
-			if err != nil {
-				return err // the parent command needs to set a persistent flag named "root"
-			}
-			return generateNodeConfig(rootDir, numVals, numNVals, noPex, startingPort)
+			return generateNodeConfig(outDir, numVals, numNVals, noPex, startingPort)
 		},
 	}
 
+	// root dir does not apply to this command. NOTE: probably this means we
+	// need a top level "node" command with root and all the other config binds.
+	// On the other hand, `setup reset` applies to a specific node instance...
+	cmd.SetHelpFunc(func(c *cobra.Command, s []string) {
+		cmd.InheritedFlags().MarkHidden(bind.RootFlagName)
+		cmd.Parent().HelpFunc()(c, s)
+	})
+
 	cmd.Flags().IntVarP(&numVals, "vals", "v", 3, "number of validators (includes the one leader)")
-	cmd.Flags().IntVarP(&numNVals, "non-vals", "n", 0, "number of non-validators")
+	cmd.Flags().IntVarP(&numNVals, "non-vals", "n", 0, "number of non-validators (default 0)")
 	cmd.Flags().BoolVar(&noPex, "no-pex", false, "disable peer exchange")
-	cmd.Flags().Uint64VarP(&startingPort, "port", "p", 6600, "starting port for the nodes")
+	cmd.Flags().Uint64VarP(&startingPort, "port", "p", 6600, "starting P2P port for the nodes")
+	cmd.Flags().StringVarP(&outDir, "out-dir", "o", ".testnet", "output directory for generated node root directories")
 
 	return cmd
 }
@@ -75,8 +83,14 @@ func generateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, start
 	leaderPubType := leaderPub.Type()
 
 	genConfig := &config.GenesisConfig{
-		Leader:     leaderPub.Bytes(), // rethink this so it can be different key types?
-		Validators: make([]ktypes.Validator, numVals),
+		ChainID:          "kwil-testnet",
+		Leader:           leaderPub.Bytes(), // rethink this so it can be different key types?
+		Validators:       make([]ktypes.Validator, numVals),
+		DisabledGasCosts: true,
+		JoinExpiry:       14400,
+		VoteExpiry:       108000,
+		MaxBlockSize:     6 * 1024 * 1024,
+		MaxVotesPerTx:    200,
 	}
 
 	for i := range numVals {
@@ -93,10 +107,11 @@ func generateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, start
 			return err
 		}
 
-		privKey := keys[i].Bytes()
-
 		cfg := custom.DefaultConfig() // not config.DefaultConfig(), so custom command config is used
-		cfg.PrivateKey = privKey
+
+		cfg.PrivateKey = keys[i].Bytes()
+
+		// P2P
 		cfg.P2P.Port = startingPort + uint64(i)
 		cfg.P2P.IP = "127.0.0.1"
 		cfg.P2P.Pex = !noPex
@@ -105,6 +120,15 @@ func generateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, start
 			cfg.P2P.BootNodes = []string{node.FormatPeerString(
 				leaderPub.Bytes(), leaderPubType, cfg.P2P.IP, int(startingPort))}
 		}
+
+		// DB
+		cfg.DB.Port = strconv.Itoa(5432 + i)
+
+		// RPC
+		cfg.RPC.ListenAddress = net.JoinHostPort("0.0.0.0", strconv.FormatUint(uint64(8484+i), 10))
+
+		// Admin RPC
+		cfg.Admin.ListenAddress = net.JoinHostPort("127.0.0.1", strconv.FormatUint(uint64(8584+i), 10))
 
 		if err := cfg.SaveAs(filepath.Join(nodeDir, config.ConfigFileName)); err != nil {
 			return err

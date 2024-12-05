@@ -56,3 +56,6 @@ vendor/
 
 go.work
 go.work.sum
+
+# mergetool artifacts
+*.orig

@@ -31,23 +31,19 @@ func ResetCmd() *cobra.Command {
 				return fmt.Errorf("root directory %s does not exist", rootDir)
 			}
 
-			// remove state.json file if it exists
-			stateFile := filepath.Join(rootDir, "state.json")
-			if _, err := os.Stat(stateFile); err == nil {
-				if err := os.Remove(stateFile); err != nil {
-					return err
-				}
-				fmt.Println("state.json removed")
+			// TODO: reset app DB
+
+			if !all {
+				return nil
 			}
 
 			// remove the blockstore if all is set
 			chainDir := filepath.Join(rootDir, "blockstore")
-			if _, err := os.Stat(chainDir); err == nil {
-				if err := os.RemoveAll(chainDir); err != nil {
-					return err
-				}
-				fmt.Println("blockstore removed")
+			if err := os.RemoveAll(chainDir); err != nil {
+				return err
 			}
+			fmt.Println("blockstore removed")
+
 			return nil
 		},
 	}

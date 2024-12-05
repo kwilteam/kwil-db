@@ -5,6 +5,7 @@ package node
 import (
 	"context"
 	"encoding/hex"
+	"math/big"
 	"os"
 	"sync"
 	"testing"
@@ -257,6 +258,10 @@ func (d *dummyTxApp) Execute(ctx *common.TxContext, db sql.DB, tx *ktypes.Transa
 
 func (d *dummyTxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) ([]*ktypes.Validator, error) {
 	return d.vals, nil
+}
+
+func (d *dummyTxApp) Price(ctx context.Context, dbTx sql.DB, tx *ktypes.Transaction, chainContext *common.ChainContext) (*big.Int, error) {
+	return big.NewInt(0), nil
 }
 
 func (d *dummyTxApp) Commit() error {

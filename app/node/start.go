@@ -30,8 +30,7 @@ func StartCmd() *cobra.Command {
 			}
 
 			cfg := conf.ActiveConfig()
-			root2 := conf.RootDir()
-			fmt.Println(rootDir, "vs", root2)
+			// root2 := conf.RootDir(); fmt.Println(rootDir, "vs", root2)
 
 			bind.Debugf("effective node config (toml):\n%s", bind.LazyPrinter(func() string {
 				rawToml, err := cfg.ToTOML()
