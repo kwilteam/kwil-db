@@ -58,6 +58,7 @@ type Node struct {
 	pubkey crypto.PublicKey
 	dir    string
 	// pf *prefetch
+	chainID string
 
 	// interfaces
 	bki         types.BlockStore
@@ -155,6 +156,7 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 		bki:         cfg.BlockStore,
 		ce:          cfg.Consensus,
 		dir:         cfg.RootDir,
+		chainID:     cfg.ChainID,
 		ss:          cfg.Snapshotter,
 		statesyncer: ss,
 		ackChan:     make(chan AckRes, 1),
@@ -419,11 +421,30 @@ func (n *Node) Peers(context.Context) ([]*adminTypes.PeerInfo, error) {
 }
 
 func (n *Node) Status(ctx context.Context) (*adminTypes.Status, error) {
+	height, blkHash, appHash := n.bki.Best()
+	var addr string
+	if addrs := n.Addrs(); len(addrs) > 0 {
+		addr = addrs[0]
+	}
+	pkHex := hex.EncodeToString(n.pubkey.Bytes())
 	return &adminTypes.Status{ // TODO
-		Node:      &adminTypes.NodeInfo{},
-		Sync:      &adminTypes.SyncInfo{},
-		Validator: &adminTypes.ValidatorInfo{},
-		App:       &adminTypes.AppInfo{},
+		Node: &adminTypes.NodeInfo{
+			ChainID:    n.chainID,
+			NodeID:     pkHex,
+			ListenAddr: addr,
+		},
+		Sync: &adminTypes.SyncInfo{
+			AppHash:         appHash[:],
+			BestBlockHash:   blkHash[:],
+			BestBlockHeight: height,
+			// BestBlockTime: ,
+			Syncing: false, // n.ce.Status().Syncing ??? need a node/exec pkg for block_executor stuff?
+		},
+		Validator: &adminTypes.ValidatorInfo{
+			Role:   n.ce.Role().String(),
+			PubKey: ktypes.HexBytes(pkHex),
+			// Power: 1,
+		},
 	}, nil
 }
 

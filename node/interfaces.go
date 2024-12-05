@@ -10,7 +10,7 @@ import (
 )
 
 type ConsensusEngine interface {
-	Role() types.Role
+	Role() types.Role // maybe: Role() (rol types.Role, power int64)
 
 	AcceptProposal(height int64, blkID, prevBlkID types.Hash, leaderSig []byte, timestamp int64) bool
 	NotifyBlockProposal(blk *types.Block)

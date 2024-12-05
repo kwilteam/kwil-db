@@ -23,23 +23,19 @@ type NodeInfo struct {
 
 // SyncInfo describes the sync state of a node.
 type SyncInfo struct {
-	AppHash         string    `json:"app_hash"`
-	BestBlockHash   string    `json:"best_block_hash"`
-	BestBlockHeight int64     `json:"best_block_height"`
-	BestBlockTime   time.Time `json:"best_block_time"`
+	AppHash         types.HexBytes `json:"app_hash"`
+	BestBlockHash   types.HexBytes `json:"best_block_hash"`
+	BestBlockHeight int64          `json:"best_block_height"`
+	BestBlockTime   time.Time      `json:"best_block_time"`
 
 	Syncing bool `json:"syncing"`
 }
 
-type AppInfo struct {
-	Height  int64          `json:"height"`
-	AppHash types.HexBytes `json:"app_hash"`
-}
-
 // ValidatorInfo describes a validator node.
 type ValidatorInfo struct {
+	Role   string         `json:"role"`
 	PubKey types.HexBytes `json:"pubkey"`
-	Power  int64          `json:"power"`
+	// Power  int64          `json:"power"`
 }
 
 // type ValidatorInfo = types.Validator
@@ -52,7 +48,6 @@ type Status struct {
 	Node      *NodeInfo      `json:"node"`
 	Sync      *SyncInfo      `json:"sync"`
 	Validator *ValidatorInfo `json:"validator"`
-	App       *AppInfo       `json:"app"`
 }
 
 // PeerInfo describes a connected peer node.

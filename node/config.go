@@ -10,6 +10,7 @@ import (
 // Config is the configuration for a [Node] instance.
 type Config struct {
 	RootDir string
+	ChainID string
 	PrivKey crypto.PrivateKey
 	DB      DB
 

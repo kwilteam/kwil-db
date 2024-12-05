@@ -361,6 +361,9 @@ func (bki *BlockStore) PreFetch(blkid types.Hash) (bool, func()) { // TODO: remo
 	} // go get it
 }
 
+// Best returns the best block's height, hash, and appHash. The appHash is a
+// result of executing the block, not the appHash stored in the header, which is
+// from the execution of the previous block.
 func (bki *BlockStore) Best() (int64, types.Hash, types.Hash) {
 	bki.mtx.RLock()
 	defer bki.mtx.RUnlock()

@@ -268,8 +268,8 @@ func (svc *Service) HealthMethod(ctx context.Context, _ *userjson.HealthRequest)
 		BlockTimestamp: status.Sync.BestBlockTime.UnixMilli(),
 		BlockAge:       blockAge.Milliseconds(),
 		Syncing:        status.Sync.Syncing,
-		AppHeight:      status.App.Height,
-		AppHash:        status.App.AppHash,
+		Height:         status.Sync.BestBlockHeight,
+		AppHash:        status.Sync.AppHash,
 		PeerCount:      len(peers),
 
 		Mode: svcMode,

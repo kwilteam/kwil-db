@@ -34,18 +34,18 @@ type Validator = types.Validator
 // SyncInfo is modified from adminTypes to have BestBlockTime be a unix epoch in
 // milliseconds.
 type SyncInfo struct {
-	AppHash         string `json:"app_hash,omitempty"`
-	BestBlockHash   string `json:"best_block_hash,omitempty"`
-	BestBlockHeight int64  `json:"best_block_height,omitempty"`
-	BestBlockTime   int64  `json:"best_block_time,omitempty"` // epoch *milliseconds*
-	Syncing         bool   `json:"syncing,omitempty"`
+	AppHash         types.HexBytes `json:"app_hash,omitempty"`
+	BestBlockHash   types.HexBytes `json:"best_block_hash,omitempty"`
+	BestBlockHeight int64          `json:"best_block_height,omitempty"`
+	BestBlockTime   int64          `json:"best_block_time,omitempty"` // epoch *milliseconds*
+	Syncing         bool           `json:"syncing,omitempty"`
 }
 
 // HealthResponse is the health check response.
 type HealthResponse struct {
 	Version       string         `json:"version"`
 	Healthy       bool           `json:"healthy"`
-	Validator     bool           `json:"is_validator"`
+	Role          string         `json:"role"`
 	PubKey        types.HexBytes `json:"pubkey"`
 	NumValidators int            `json:"num_validators"`
 }

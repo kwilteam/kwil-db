@@ -141,7 +141,7 @@ func (svc *Service) HealthMethod(ctx context.Context, _ *userjson.HealthRequest)
 		Healthy:       happy,
 		Version:       apiSemver,
 		PubKey:        status.Validator.PubKey,
-		Validator:     status.Validator.Power > 0,
+		Role:          status.Validator.Role,
 		NumValidators: len(vals.Validators),
 	}, nil
 	// slices.ContainsFunc(vals.Validators, func(v *coretypes.Validator) bool { return bytes.Equal(v.PubKey, status.Validator.PubKey) })
@@ -256,8 +256,9 @@ func (svc *Service) Status(ctx context.Context, req *adminjson.StatusRequest) (*
 		Node: status.Node,
 		Sync: convertSyncInfo(status.Sync),
 		Validator: &adminjson.Validator{ // TODO: weed out the type dups
+			Role:   status.Validator.Role,
 			PubKey: status.Validator.PubKey,
-			Power:  status.Validator.Power,
+			// Power:  status.Validator.Power,
 		},
 	}, nil
 }
@@ -393,8 +394,9 @@ func (svc *Service) ListValidators(ctx context.Context, req *adminjson.ListValid
 	pbValidators := make([]*adminjson.Validator, len(vals))
 	for i, vi := range vals {
 		pbValidators[i] = &adminjson.Validator{
+			Role:   vi.Role,
 			PubKey: vi.PubKey,
-			Power:  vi.Power,
+			// Power:  vi.Power,
 		}
 	}
 

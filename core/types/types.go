@@ -22,9 +22,9 @@ const (
 
 // ChainInfo describes the current status of a Kwil blockchain.
 type ChainInfo struct {
-	ChainID     string `json:"chain_id"`
-	BlockHeight uint64 `json:"block_height"`
-	BlockHash   string `json:"block_hash"`
+	ChainID     string   `json:"chain_id"`
+	BlockHeight uint64   `json:"block_height"`
+	BlockHash   HexBytes `json:"block_hash"`
 }
 
 // The validator related types that identify validators by pubkey are still
@@ -40,8 +40,9 @@ type JoinRequest struct {
 }
 
 type Validator struct {
+	Role   string   `json:"role"`
 	PubKey HexBytes `json:"pubkey"`
-	Power  int64    `json:"power"`
+	Power  int64    `json:"power,omitempty"`
 }
 
 // ValidatorRemoveProposal is a proposal from an existing validator (remover) to
@@ -175,7 +176,7 @@ type Health struct {
 	BlockTimestamp int64    `json:"block_time"` // epoch millis
 	BlockAge       int64    `json:"block_age"`  // milliseconds
 	Syncing        bool     `json:"syncing"`
-	AppHeight      int64    `json:"app_height"` // may be less than block store best block
+	Height         int64    `json:"height"`
 	AppHash        HexBytes `json:"app_hash"`
 	PeerCount      int      `json:"peer_count"`
 
