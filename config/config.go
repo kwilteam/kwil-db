@@ -99,9 +99,9 @@ func DefaultConfig() *Config {
 			MaxSnapshots:    3,
 		},
 		StateSync: StateSyncConfig{
-			Enable:        false,
-			DiscoveryTime: 30 * time.Second,
-			MaxRetries:    3,
+			Enable:           false,
+			DiscoveryTimeout: 30 * time.Second,
+			MaxRetries:       3,
 		},
 	}
 }
@@ -197,8 +197,8 @@ type StateSyncConfig struct {
 	Enable           bool     `koanf:"enable" toml:"enable"`
 	TrustedProviders []string `koanf:"trusted_providers" toml:"trusted_providers"`
 
-	DiscoveryTime time.Duration `koanf:"discovery_time" toml:"discovery_time"`
-	MaxRetries    uint64        `koanf:"max_retries" toml:"max_retries"`
+	DiscoveryTimeout time.Duration `koanf:"discovery_timeout" toml:"discovery_time"`
+	MaxRetries       uint64        `koanf:"max_retries" toml:"max_retries"`
 }
 
 // ConfigToTOML marshals the config to TOML.

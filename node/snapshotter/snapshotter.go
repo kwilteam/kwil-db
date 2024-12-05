@@ -14,6 +14,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
 )
 
@@ -44,12 +45,12 @@ const (
 // but it might not work if the first column is not unique.
 
 type Snapshotter struct {
-	dbConfig    *DBConfig
+	dbConfig    *config.DBConfig
 	snapshotDir string
 	log         log.Logger
 }
 
-func NewSnapshotter(cfg *DBConfig, dir string, logger log.Logger) *Snapshotter {
+func NewSnapshotter(cfg *config.DBConfig, dir string, logger log.Logger) *Snapshotter {
 	return &Snapshotter{
 		dbConfig:    cfg,
 		snapshotDir: dir,
@@ -117,9 +118,9 @@ func (s *Snapshotter) dbSnapshot(ctx context.Context, height uint64, format uint
 		// Snapshot ID ensures a consistent snapshot taken at the given block boundary across all nodes
 		"--dbname", s.dbConfig.DBName,
 		// Connection options
-		"-U", s.dbConfig.DBUser,
-		"-h", s.dbConfig.DBHost,
-		"-p", s.dbConfig.DBPort,
+		"-U", s.dbConfig.User,
+		"-h", s.dbConfig.Host,
+		"-p", s.dbConfig.Port,
 		"--no-password",
 		// Snapshot options
 		"--snapshot", snapshotID,
@@ -154,8 +155,8 @@ func (s *Snapshotter) dbSnapshot(ctx context.Context, height uint64, format uint
 
 	pgDumpCmd := exec.CommandContext(ctx, "pg_dump", args...)
 
-	if s.dbConfig.DBPass != "" {
-		pgDumpCmd.Env = append(pgDumpCmd.Env, "PGPASSWORD="+s.dbConfig.DBPass)
+	if s.dbConfig.Pass != "" {
+		pgDumpCmd.Env = append(pgDumpCmd.Env, "PGPASSWORD="+s.dbConfig.Pass)
 	}
 
 	s.log.Info("Executing pg_dump", "cmd", pgDumpCmd.String())

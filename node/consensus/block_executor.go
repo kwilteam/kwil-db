@@ -13,7 +13,6 @@ import (
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/meta"
 	"github.com/kwilteam/kwil-db/node/types"
-	"go.uber.org/zap"
 )
 
 // Block processing methods
@@ -339,7 +338,7 @@ func (ce *ConsensusEngine) snapshotDB(ctx context.Context, height int64) error {
 		if err != nil {
 			return err
 		} else {
-			ce.log.Info("created snapshot", zap.Int64("height", height), zap.String("snapshot_id", snapshotId))
+			ce.log.Info("created snapshot", "height", height, "snapshot_id", snapshotId)
 			return nil
 		}
 	}
