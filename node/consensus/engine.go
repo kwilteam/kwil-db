@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
@@ -58,6 +59,8 @@ type ConsensusEngine struct {
 
 	// copy of the state info for the p2p layer usage.
 	stateInfo StateInfo
+
+	chainCtx *common.ChainContext
 
 	// Channels
 	msgChan      chan consensusMessage
@@ -153,12 +156,47 @@ type lastCommit struct {
 	blk     *types.Block // why is this needed? can be fetched from the blockstore too.
 }
 
+type NetworkParams struct {
+	// MaxBlockSize is the maximum size of a block in bytes.
+	MaxBlockSize int64
+	// JoinExpiry is the number of blocks after which the validators
+	// join request expires if not approved.
+	JoinExpiry int64
+	// VoteExpiry is the default number of blocks after which the validators
+	// vote expires if not approved.
+	VoteExpiry int64
+	// DisabledGasCosts dictates whether gas costs are disabled.
+	DisabledGasCosts bool
+	// MaxVotesPerTx is the maximum number of votes that can be included in a
+	// single transaction.
+	MaxVotesPerTx int64
+}
+
+type GenesisParams struct {
+	ChainID string
+	Params  *NetworkParams
+}
+
+// TODO: remove this
+var defaultGenesisParams = &GenesisParams{
+	ChainID: "test-chain",
+	Params: &NetworkParams{
+		DisabledGasCosts: true,
+		JoinExpiry:       14400,
+		VoteExpiry:       108000,
+		MaxBlockSize:     6 * 1024 * 1024,
+		MaxVotesPerTx:    200,
+	},
+}
+
 // Config is the struct given to the constructor, [New].
 type Config struct {
 	// Signer is the private key of the node.
 	PrivateKey crypto.PrivateKey
 	// Leader is the public key of the leader.
 	Leader crypto.PublicKey
+
+	GenesisParams *GenesisParams // *config.GenesisConfig
 
 	DB *pg.DB
 	// Mempool is the mempool of the node.
@@ -216,6 +254,10 @@ func New(cfg *Config) *ConsensusEngine {
 
 	signer := auth.GetSigner(cfg.PrivateKey)
 
+	if cfg.GenesisParams == nil {
+		cfg.GenesisParams = defaultGenesisParams // TODO: remove
+	}
+
 	// rethink how this state is initialized
 	ce := &ConsensusEngine{
 		signer:         signer,
@@ -238,6 +280,17 @@ func New(cfg *Config) *ConsensusEngine {
 			height:  0,
 			status:  Committed,
 			blkProp: nil,
+		},
+		chainCtx: &common.ChainContext{
+			ChainID: cfg.GenesisParams.ChainID,
+			NetworkParameters: &common.NetworkParameters{
+				MaxBlockSize:     cfg.GenesisParams.Params.MaxBlockSize,
+				JoinExpiry:       cfg.GenesisParams.Params.JoinExpiry,
+				VoteExpiry:       cfg.GenesisParams.Params.VoteExpiry,
+				DisabledGasCosts: cfg.GenesisParams.Params.DisabledGasCosts,
+				MaxVotesPerTx:    cfg.GenesisParams.Params.MaxVotesPerTx,
+			},
+			// MigrationParams:
 		},
 		validatorSet: maps.Clone(cfg.ValidatorSet),
 		msgChan:      make(chan consensusMessage, 1), // buffer size??

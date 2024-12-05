@@ -125,14 +125,14 @@ func prepareHTTPDialerURL(target string) (*neturl.URL, dialerFunc, error) {
 	} else if parsedURL.Port() == "" {
 		// Taking this liberty for admin tool, which is unlikely to be exposed
 		// with DNS and implied port 80/443.
-		parsedURL.Host += ":8485"
+		parsedURL.Host += ":8584"
 	}
 
 	return parsedURL, dialer, nil
 }
 
 // NewClient creates a new admin client . The target arg is usually either
-// "127.0.0.1:8485" or "/path/to/socket.socket". The scheme http:// or https://
+// "127.0.0.1:8585" or "/path/to/socket.socket". The scheme http:// or https://
 // may be included, to dictate if TLS is required or not. If no scheme is given,
 // http:// is assumed. UNIX socket transport may not use TLS. The endpoint path
 // is a separate argument to distinguish it from the UNIX socket file path.

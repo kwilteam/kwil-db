@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"context"
+	"math/big"
 
 	"github.com/kwilteam/kwil-db/common"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
@@ -59,6 +60,8 @@ type TxApp interface {
 	Execute(ctx *common.TxContext, db sql.DB, tx *ktypes.Transaction) *txapp.TxResponse
 	Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) (finalValidators []*ktypes.Validator, err error)
 	Commit() error
+
+	Price(ctx context.Context, dbTx sql.DB, tx *ktypes.Transaction, chainContext *common.ChainContext) (*big.Int, error)
 }
 
 // Question:

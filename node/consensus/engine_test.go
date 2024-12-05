@@ -9,6 +9,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"math/big"
 	"os"
 	"path/filepath"
 	"sync"
@@ -109,6 +110,7 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) []*Config {
 		assert.NoError(t, err)
 
 		ceConfigs[i] = &Config{
+			GenesisParams:  defaultGenesisParams,
 			PrivateKey:     privKeys[i],
 			Leader:         pubKeys[0],
 			Mempool:        mempool.New(),
@@ -766,6 +768,10 @@ func (d *dummyTxApp) Execute(ctx *common.TxContext, db sql.DB, tx *ktypes.Transa
 
 func (d *dummyTxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) ([]*ktypes.Validator, error) {
 	return d.vals, nil
+}
+
+func (d *dummyTxApp) Price(ctx context.Context, dbTx sql.DB, tx *ktypes.Transaction, chainContext *common.ChainContext) (*big.Int, error) {
+	return big.NewInt(0), nil
 }
 
 func (d *dummyTxApp) Commit() error {

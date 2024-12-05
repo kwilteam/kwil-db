@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math/big"
 	"slices"
 	"sort"
 
@@ -14,6 +15,7 @@ import (
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/meta"
 	"github.com/kwilteam/kwil-db/node/types"
+	"github.com/kwilteam/kwil-db/node/types/sql"
 )
 
 // Block processing methods
@@ -130,15 +132,10 @@ func (ce *ConsensusEngine) executeBlock() (err error) {
 	// TODO: Notify the changesets to the migrator
 
 	blockCtx := &common.BlockContext{ // TODO: fill in the network params once we have them
-		Height: ce.state.blkProp.height,
-		ChainContext: &common.ChainContext{
-			NetworkParameters: &common.NetworkParameters{
-				DisabledGasCosts: true,
-				JoinExpiry:       14400,
-				MaxBlockSize:     6 * 1024 * 1024,
-			},
-		},
-		Proposer: ce.leader.Bytes(),
+		Height:       ce.state.blkProp.height,
+		Timestamp:    blkProp.blk.Header.Timestamp.Unix(),
+		ChainContext: ce.chainCtx,
+		Proposer:     ce.leader.Bytes(),
 	}
 	_, err = ce.txapp.Finalize(ctx, ce.state.consensusTx, blockCtx)
 	if err != nil {
@@ -191,6 +188,11 @@ func (ce *ConsensusEngine) executeBlock() (err error) {
 
 	ce.log.Info("Executed Block", "height", ce.state.blkProp.blk.Header.Height, "blkHash", ce.state.blkProp.blkHash, "appHash", ce.state.blockRes.appHash)
 	return nil
+}
+
+// We probably don't want to do this long term
+func (ce *ConsensusEngine) Price(ctx context.Context, dbTx sql.DB, tx *ktypes.Transaction) (*big.Int, error) {
+	return ce.txapp.Price(ctx, dbTx, tx, ce.chainCtx)
 }
 
 // nextAppHash calculates the appHash that encapsulates the state changes occurred during the block execution.

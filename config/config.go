@@ -36,12 +36,25 @@ func (d *Duration) UnmarshalText(text []byte) error {
 }
 
 type GenesisConfig struct {
+	ChainID string `json:"chain_id"`
 	// Leader is the leader's public key.
 	Leader types.HexBytes `json:"leader"`
 	// Validators is the list of genesis validators (including the leader).
 	Validators []ktypes.Validator `json:"validators"`
 
-	// TODO: more params like max block size, etc.
+	// MaxBlockSize is the maximum size of a block in bytes.
+	MaxBlockSize int64 `json:"max_block_size"`
+	// JoinExpiry is the number of blocks after which the validators
+	// join request expires if not approved.
+	JoinExpiry int64 `json:"join_expiry"`
+	// VoteExpiry is the default number of blocks after which the validators
+	// vote expires if not approved.
+	VoteExpiry int64 `json:"vote_expiry"`
+	// DisabledGasCosts dictates whether gas costs are disabled.
+	DisabledGasCosts bool `json:"disabled_gas_costs"`
+	// MaxVotesPerTx is the maximum number of votes that can be included in a
+	// single transaction.
+	MaxVotesPerTx int64 `json:"max_votes_per_tx"`
 }
 
 func (nc *GenesisConfig) SaveAs(filename string) error {
@@ -66,6 +79,12 @@ func LoadGenesisConfig(filename string) (*GenesisConfig, error) {
 
 	return &nc, nil
 }
+
+// const (
+// 	defaultUserRPCPort  = 8484
+// 	defaultAdminRPCPort = 8584
+// 	defaultP2PRPCPort   = 6600
+// )
 
 // DefaultConfig generates an instance of the default config.
 func DefaultConfig() *Config {
@@ -92,6 +111,22 @@ func DefaultConfig() *Config {
 			DBName:        "kwild",
 			ReadTxTimeout: Duration(45 * time.Second),
 			MaxConns:      60,
+		},
+		RPC: RPCConfig{
+			ListenAddress:      "0.0.0.0:8484",
+			Timeout:            20 * time.Second,
+			MaxReqSize:         6_000_000,
+			Private:            false,
+			ChallengeExpiry:    30 * time.Second,
+			ChallengeRateLimit: 10,
+		},
+		Admin: AdminConfig{
+			Enable:        true,
+			ListenAddress: "/tmp/kwil2-admin.socket",
+			Pass:          "",
+			NoTLS:         false,
+			TLSCertFile:   "admin.cert",
+			TLSKeyFile:    "admin.key",
 		},
 		Snapshots: SnapshotConfig{
 			Enable:          false,
@@ -135,6 +170,7 @@ type Config struct {
 	Consensus ConsensusConfig `koanf:"consensus" toml:"consensus"`
 	DB        DBConfig        `koanf:"db" toml:"db"`
 	RPC       RPCConfig       `koanf:"rpc" toml:"rpc"`
+	Admin     AdminConfig     `koanf:"admin" toml:"admin"`
 	Snapshots SnapshotConfig  `koanf:"snapshots" toml:"snapshots"`
 	StateSync StateSyncConfig `koanf:"state_sync" toml:"state_sync"`
 }
@@ -185,6 +221,15 @@ type RPCConfig struct {
 	Private            bool          `koanf:"private" toml:"private"`
 	ChallengeExpiry    time.Duration `koanf:"challenge_expiry" toml:"challenge_expiry"`
 	ChallengeRateLimit float64       `koanf:"challenge_rate_limit" toml:"challenge_rate_limit"`
+}
+
+type AdminConfig struct {
+	Enable        bool   `koanf:"enable" toml:"enable"`
+	ListenAddress string `koanf:"listen" toml:"listen"`
+	Pass          string `koanf:"pass" toml:"pass"`
+	NoTLS         bool   `koanf:"notls" toml:"notls"`
+	TLSCertFile   string `koanf:"cert" toml:"cert"`
+	TLSKeyFile    string `koanf:"key" toml:"key"`
 }
 
 type SnapshotConfig struct {

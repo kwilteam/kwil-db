@@ -152,7 +152,7 @@ func checkAddr(addr string) (string, bool, error) {
 	if err != nil {
 		if strings.Contains(err.Error(), "missing port in address") {
 			host = addr
-			port = "8485"
+			port = "8484"
 		} else if strings.Contains(err.Error(), "too many colons in address") {
 			u, err := url.Parse(addr)
 			if err != nil {
