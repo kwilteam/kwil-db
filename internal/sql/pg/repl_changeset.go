@@ -427,30 +427,11 @@ func (c *changesetIoWriter) decodeDelete(delete *pglogrepl.DeleteMessageV2, rela
 	return nil
 }
 
-// commit is called when the changeset is complete.
+// finalize is called when the changeset is complete.
 // It exports the metadata to the writer.
 // It zeroes the metadata, so that the changeset can be reused,
 // and send a finish signal to the writer.
-func (c *changesetIoWriter) commit() error {
-	if c == nil || c.csChan == nil {
-		return nil
-	}
-
-	// clear the relation index list for the next block
-	c.metadata = &changesetMetadata{
-		relationIdx: map[[2]string]int{},
-	}
-
-	// close the changes chan to signal the end of the changeset
-	close(c.csChan)
-	c.csChan = nil
-
-	return nil
-}
-
-// fail is called when the changeset is incomplete.
-// It zeroes the metadata and writer, so that another changeset may be collected.
-func (c *changesetIoWriter) fail() {
+func (c *changesetIoWriter) finalize() {
 	if c == nil || c.csChan == nil {
 		return
 	}
@@ -460,6 +441,7 @@ func (c *changesetIoWriter) fail() {
 		relationIdx: map[[2]string]int{},
 	}
 
+	// close the changes chan to signal the end of the changeset
 	close(c.csChan)
 	c.csChan = nil
 }
