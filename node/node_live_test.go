@@ -27,7 +27,120 @@ import (
 	"github.com/kwilteam/kwil-db/node/store/memstore"
 	"github.com/kwilteam/kwil-db/node/txapp"
 	"github.com/kwilteam/kwil-db/node/types/sql"
+	"github.com/kwilteam/kwil-db/node/voting"
 )
+
+var defaultGenesisParams = &consensus.GenesisParams{
+	ChainID: "test-chain",
+	Params: &consensus.NetworkParams{
+		DisabledGasCosts: true,
+		JoinExpiry:       14400,
+		VoteExpiry:       108000,
+		MaxBlockSize:     6 * 1024 * 1024,
+		MaxVotesPerTx:    200,
+	},
+}
+
+func TestSingleNodeMocknet(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
+	mn := mock.New()
+
+	pk1, h1, err := newTestHost(t, mn)
+	if err != nil {
+		t.Fatalf("Failed to add peer to mocknet: %v", err)
+	}
+	bs1 := memstore.NewMemBS()
+	mp1 := mempool.New()
+
+	pg.UseLogger(log.New(log.WithName("DBS")))
+
+	db1 := initDB(t, "5432", "kwil_test_db")
+
+	root1 := t.TempDir()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+
+	t.Cleanup(func() {
+		cancel()
+		wg.Wait()
+		cleanupDB(db1)
+	})
+
+	privKeys, _ := newGenesis(t, [][]byte{pk1})
+
+	valSet := make(map[string]ktypes.Validator)
+	for _, priv := range privKeys {
+		valSet[hex.EncodeToString(priv.Public().Bytes())] = ktypes.Validator{
+			PubKey: priv.Public().Bytes(),
+			Power:  1,
+		}
+	}
+	valSetList := make([]*ktypes.Validator, 0, len(valSet))
+	for _, v := range valSet {
+		valSetList = append(valSetList, &v)
+	}
+	ss := newSnapshotStore()
+
+	// _, vsReal, err := voting.NewResolutionStore(ctx, db1)
+	// require.NoError(t, err)
+
+	ceCfg1 := &consensus.Config{
+		GenesisParams:  defaultGenesisParams,
+		PrivateKey:     privKeys[0],
+		ValidatorSet:   valSet,
+		Leader:         privKeys[0].Public(),
+		Mempool:        mp1,
+		BlockStore:     bs1,
+		Accounts:       &mockAccounts{},
+		ValidatorStore: newValidatorStore(valSetList), // vsReal
+		TxApp:          newDummyTxApp(valSetList),
+		Logger:         log.New(log.WithName("CE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
+		ProposeTimeout: 1 * time.Second,
+		DB:             db1,
+		Snapshots:      ss,
+	}
+	ce1 := consensus.New(ceCfg1)
+	defaultConfigSet := config.DefaultConfig()
+	log1 := log.New(log.WithName("NODE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
+	cfg1 := &Config{
+		ChainID:     defaultGenesisParams.ChainID,
+		RootDir:     root1,
+		PrivKey:     privKeys[0],
+		Logger:      log1,
+		P2P:         &defaultConfigSet.P2P,
+		Mempool:     mp1,
+		BlockStore:  bs1,
+		Consensus:   ce1,
+		Snapshotter: ss,
+		DBConfig:    &defaultConfigSet.DB,
+		Statesync:   &defaultConfigSet.StateSync,
+	}
+	node1, err := NewNode(cfg1, WithHost(h1))
+	if err != nil {
+		t.Fatalf("Failed to create Node 1: %v", err)
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer os.RemoveAll(node1.Dir())
+		node1.Start(ctx)
+	}()
+
+	time.Sleep(20 * time.Millisecond)
+
+	reachHeight := int64(2)
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		stat, err := node1.Status(ctx)
+		require.NoError(t, err)
+		assert.GreaterOrEqual(c, stat.Sync.BestBlockHeight, reachHeight)
+	}, 10*time.Second, 250*time.Millisecond)
+
+	cancel()
+	wg.Wait()
+}
 
 func TestDualNodeMocknet(t *testing.T) {
 	if testing.Short() {
@@ -89,14 +202,17 @@ func TestDualNodeMocknet(t *testing.T) {
 	}
 	ss := newSnapshotStore()
 
+	_, vsReal, err := voting.NewResolutionStore(ctx, db1)
+
 	ceCfg1 := &consensus.Config{
+		GenesisParams:  defaultGenesisParams,
 		PrivateKey:     privKeys[0],
 		ValidatorSet:   valSet,
 		Leader:         privKeys[0].Public(),
 		Mempool:        mp1,
 		BlockStore:     bs1,
 		Accounts:       &mockAccounts{},
-		ValidatorStore: newValidatorStore(valSetList),
+		ValidatorStore: vsReal,
 		TxApp:          newDummyTxApp(valSetList),
 		Logger:         log.New(log.WithName("CE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
 		ProposeTimeout: 1 * time.Second,
@@ -107,6 +223,7 @@ func TestDualNodeMocknet(t *testing.T) {
 	defaultConfigSet := config.DefaultConfig()
 	log1 := log.New(log.WithName("NODE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
 	cfg1 := &Config{
+		ChainID:     defaultGenesisParams.ChainID,
 		RootDir:     root1,
 		PrivKey:     privKeys[0],
 		Logger:      log1,
@@ -129,10 +246,10 @@ func TestDualNodeMocknet(t *testing.T) {
 		node1.Start(ctx)
 	}()
 
-	// time.Sleep(200 * time.Millisecond) // !!!! apparently, needs this if block store does not have latency, so there is a race condition somewhere in CE
 	time.Sleep(20 * time.Millisecond)
 
 	ceCfg2 := &consensus.Config{
+		GenesisParams:  defaultGenesisParams,
 		PrivateKey:     privKeys[1],
 		ValidatorSet:   valSet,
 		Leader:         privKeys[0].Public(),
@@ -180,27 +297,11 @@ func TestDualNodeMocknet(t *testing.T) {
 		t.Fatalf("Failed to connect hosts: %v", err)
 	}
 
-	// n1 := mn.Net(h1.ID())
-	// links := mn.LinksBetweenPeers(h1.ID(), h2.ID())
-	// ln := links[0]
-	// net := ln.Networks()[0]
-	// peers := net.Peers()
-	// t.Log(peers)
-
-	// time.Sleep(4 * time.Second)
-
-	// h, _, _, err := meta.GetChainState(ctx, tx)
-	// require.NoError(t, err)
-	// require.GreaterOrEqual(t, h, int64(1))
 	reachHeight := int64(2)
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
-		// TODO: use a Node method instead of direct DB (or in addition to).
-		tx, err := db1.BeginReadTx(ctx)
+		stat, err := node1.Status(ctx)
 		require.NoError(t, err)
-		defer tx.Rollback(ctx)
-		h, _, _, err := meta.GetChainState(ctx, tx)
-		require.NoError(t, err)
-		assert.GreaterOrEqual(c, h, reachHeight)
+		assert.GreaterOrEqual(c, stat.Sync.BestBlockHeight, reachHeight)
 	}, 10*time.Second, 250*time.Millisecond)
 
 	cancel()

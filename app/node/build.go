@@ -268,6 +268,7 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB, acc
 func buildNode(d *coreDependencies, mp *mempool.Mempool, bs *store.BlockStore, ce *consensus.ConsensusEngine, ss *snapshotter.SnapshotStore, db *pg.DB) *node.Node {
 	logger := d.logger.New("NODE")
 	nc := &node.Config{
+		ChainID:     d.genesisCfg.ChainID,
 		RootDir:     d.rootDir,
 		PrivKey:     d.privKey,
 		DB:          db,
