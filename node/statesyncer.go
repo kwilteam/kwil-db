@@ -1,4 +1,4 @@
-// StateSyncService is responsible for discovering and syncing state snapshots from peers in the network.
+// StateSyncService is responsible for discovering and syncing snapshots from peers in the network.
 // It utilizes libp2p for peer discovery and communication.
 
 package node
@@ -27,20 +27,20 @@ import (
 
 var (
 	ErrNoSnapshotsDiscovered = errors.New("no snapshots discovered")
-	maxRetries               = 5
 )
 
-// DiscoverSnapshots discovers snapshot providers and their catalogs. It waits for responses
-// from snapshotCatalog providers for the duration of the discoveryTimeout. If the timeout is reached,
-// the best snapshot is selected and snapshotChunks are requested. If no snapshots are discovered,
-// it reenters the discovery phase after a delay, retrying up to max_retries times. If discovery fails
-// after max_retries, it switches to block sync.
-
-func (s *StateSyncService) DiscoverSnapshots(ctx context.Context) (int64, error) { // TODO: distinguish from blocksync to failures in DB restore
-	retry := 0
+// DiscoverSnapshots discovers snapshot providers and their catalogs. It waits for responsesp
+// from snapshot catalog providers for the duration of the discoveryTimeout. If the timeout is reached,
+// the best snapshot is selected and snapshot chunks are requested. If no snapshots are discovered,
+// it reenters the discovery phase after a delay, retrying up to maxRetries times. If discovery fails
+// after maxRetries, the node will switch to block sync.
+// If snapshots and their chunks are successfully fetched, the DB is restored from the snapshot and the
+// application state is verified.
+func (s *StateSyncService) DiscoverSnapshots(ctx context.Context) (int64, error) {
+	retry := uint64(0)
 	for {
-		if retry > maxRetries {
-			s.log.Warn("Failed to discover snapshots", "retries", maxRetries)
+		if retry > s.cfg.MaxRetries {
+			s.log.Warn("Failed to discover snapshots", "retries", retry)
 			return -1, nil
 		}
 
@@ -50,52 +50,53 @@ func (s *StateSyncService) DiscoverSnapshots(ctx context.Context) (int64, error)
 			return -1, err
 		}
 		peers = filterLocalPeer(peers, s.host.ID())
-		s.updatePeers(peers)
+		s.snapshotPool.updatePeers(peers)
 
-		// discover snapshot catalogs from the discovered peers
-		var wg sync.WaitGroup
+		// discover snapshot catalogs from the discovered peers for the duration of the discoveryTimeout
 		for _, p := range peers {
-			wg.Add(1)
 			go func(peer peer.AddrInfo) {
-				defer wg.Done()
 				if err := s.requestSnapshotCatalogs(ctx, peer); err != nil {
 					s.log.Warn("failed to request snapshot catalogs from peer %s: %v", peer.ID, err)
 				}
 			}(p)
 		}
-		wg.Wait()
 
 		select {
 		case <-ctx.Done():
 			return -1, ctx.Err()
-		case <-time.After(s.discoveryTimeout):
-			synced, snap, err := s.Sync(ctx) // TODO: rename appropriately
-			if err != nil {
+		case <-time.After(s.cfg.DiscoveryTimeout):
+			s.log.Info("Selecting the best snapshot...")
+		}
+
+		synced, snap, err := s.downloadSnapshot(ctx)
+		if err != nil {
+			return -1, err
+		}
+
+		if synced {
+			// RestoreDB from the snapshot
+			if err := s.restoreDB(ctx, snap); err != nil {
+				s.log.Warn("failed to restore DB from snapshot", "error", err)
 				return -1, err
 			}
 
-			if synced {
-				// RestoreDB from the snapshot
-				if err := s.restoreDB(ctx, snap); err != nil {
-					s.log.Warn("failed to restore DB from snapshot", "error", err)
-					return -1, err
-				}
-
-				// ensure that the apphash matches
-				err := s.verifyState(ctx, snap)
-				if err != nil {
-					s.log.Warn("failed to verify state after DB restore", "error", err)
-					return -1, err
-				}
-
-				return int64(snap.Height), nil
+			// ensure that the apphash matches
+			err := s.verifyState(ctx, snap)
+			if err != nil {
+				s.log.Warn("failed to verify state after DB restore", "error", err)
+				return -1, err
 			}
-			retry++
+
+			return int64(snap.Height), nil
 		}
+		retry++
 	}
 }
 
-func (s *StateSyncService) Sync(ctx context.Context) (synced bool, snap *snapshotMetadata, err error) {
+// downloadSnapshot selects the best snapshot and verifies the snapshot contents with the trusted providers.
+// If the snapshot is valid, it fetches the snapshot chunks from the providers.
+// If a snapshot is deemed invalid by any of the trusted providers, it is blacklisted and the next best snapshot is selected.
+func (s *StateSyncService) downloadSnapshot(ctx context.Context) (synced bool, snap *snapshotMetadata, err error) {
 	for {
 		// select the best snapshot and request chunks
 		bestSnapshot, err := s.bestSnapshot()
@@ -105,55 +106,88 @@ func (s *StateSyncService) Sync(ctx context.Context) (synced bool, snap *snapsho
 			}
 			return false, nil, err
 		}
-		s.log.Info("Requesting contents of snapshot", "height", bestSnapshot.Height, "hash", hex.EncodeToString(bestSnapshot.Hash))
-		// Validate the snapshot
+
+		s.log.Info("Requesting contents of the snapshot", "height", bestSnapshot.Height, "hash", hex.EncodeToString(bestSnapshot.Hash))
+
+		// Verify the correctness of the snapshot with the trusted providers
+		// and request the providers for the appHash at the snapshot height
 		valid, appHash := s.VerifySnapshot(ctx, bestSnapshot)
 		if !valid {
-			s.blacklistSnapshot(bestSnapshot)
+			// invalid snapshots are blacklisted
+			s.snapshotPool.blacklistSnapshot(bestSnapshot)
 			continue
 		}
 		bestSnapshot.AppHash = appHash
 
 		// fetch snapshot chunks
 		if err := s.chunkFetcher(ctx, bestSnapshot); err != nil {
-			return false, nil, err
+			// remove the chunks and retry
+			os.RemoveAll(s.snapshotDir)
+			os.MkdirAll(s.snapshotDir, 0755)
+			continue
 		}
 
+		// retrieved all chunks successfully
 		return true, bestSnapshot, nil
 	}
 }
 
-// TODO: return propoer errors
+// chunkFetcher fetches snapshot chunks from the snapshot providers
+// It returns if any of the chunk fetches fail
 func (s *StateSyncService) chunkFetcher(ctx context.Context, snapshot *snapshotMetadata) error {
 	// fetch snapshot chunks and write them to the snapshot directory
 	var wg sync.WaitGroup
 	// errCh := make(chan error, snapshot.Chunks)
 
 	key := snapshot.Key()
-	providers := s.snapshotPool.providers[key]
+	providers := s.snapshotPool.keyProviders(key)
 	if len(providers) == 0 {
-		providers = append(providers, s.getPeers()...)
+		providers = append(providers, s.snapshotPool.getPeers()...)
 	}
+
+	errChan := make(chan error, snapshot.Chunks)
+	chunkCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	for i := range snapshot.Chunks {
 		wg.Add(1)
 		go func(idx uint32) {
 			defer wg.Done()
 			for _, provider := range providers {
-				if err := s.requestSnapshotChunk(ctx, snapshot, provider, idx); err != nil {
+				select {
+				case <-chunkCtx.Done():
+					// Exit early if the context is cancelled
+					return
+				default:
+				}
+				if err := s.requestSnapshotChunk(chunkCtx, snapshot, provider, idx); err != nil {
 					s.log.Warn("failed to request snapshot chunk %d from peer %s: %v", idx, provider.ID, err)
 					continue
 				}
+				// successfully fetched the chunk
+				s.log.Info("Received snapshot chunk", "height", snapshot.Height, "index", idx, "provider", provider.ID)
+				return
 			}
-
+			// failed to fetch the chunk from all providers
+			errChan <- fmt.Errorf("failed to fetch snapshot chunk index %d", idx)
+			cancel()
 		}(i)
 	}
 
 	wg.Wait()
 
-	return nil
+	// check if any of the chunk fetches failed
+	select {
+	case err := <-errChan:
+		return err
+	default:
+		return nil
+	}
 }
 
+// requestSnapshotChunk requests a snapshot chunk from a specified provider.
+// The chunk is written to <chunk-idx.sql.gz> file in the snapshot directory.
+// This also ensures that the hash of the received chunk matches the expected hash
 func (s *StateSyncService) requestSnapshotChunk(ctx context.Context, snap *snapshotMetadata, provider peer.AddrInfo, index uint32) error {
 	stream, err := s.host.NewStream(ctx, provider.ID, ProtocolIDSnapshotChunk)
 	if err != nil {
@@ -200,17 +234,16 @@ func (s *StateSyncService) requestSnapshotChunk(ctx context.Context, snap *snaps
 	hash := hasher.Sum(nil)
 	if !bytes.Equal(hash, snap.ChunkHashes[index][:]) {
 		// delete the file
-		// TODO: handle this case
 		if err := os.Remove(chunkFile); err != nil {
 			s.log.Warn("failed to delete chunk file", "file", chunkFile, "error", err)
 		}
 		return errors.New("chunk hash mismatch")
 	}
 
-	s.log.Info("Received snapshot chunk", "height", snap.Height, "index", index, "hash", hex.EncodeToString(hash), "provider", provider.ID)
 	return nil
 }
 
+// requestSnapshotCatalogs requests the available snapshots from a peer.
 func (s *StateSyncService) requestSnapshotCatalogs(ctx context.Context, peer peer.AddrInfo) error {
 	// request snapshot catalogs from the discovered peer
 	s.host.Peerstore().AddAddrs(peer.ID, peer.Addrs, peerstore.PermanentAddrTTL)
@@ -245,6 +278,7 @@ func (s *StateSyncService) requestSnapshotCatalogs(ctx context.Context, peer pee
 	return nil
 }
 
+// bestSnapshot returns the latest snapshot from the discovered snapshots.
 func (s *StateSyncService) bestSnapshot() (*snapshotMetadata, error) {
 	s.snapshotPool.mtx.Lock()
 	defer s.snapshotPool.mtx.Unlock()
@@ -264,6 +298,7 @@ func (s *StateSyncService) bestSnapshot() (*snapshotMetadata, error) {
 	return best, nil
 }
 
+// VerifySnapshot verifies the final state of the application after the DB is restored from the snapshot.
 func (s *StateSyncService) verifyState(ctx context.Context, snapshot *snapshotMetadata) error {
 	tx, err := s.db.BeginReadTx(ctx)
 	if err != nil {
@@ -282,6 +317,8 @@ func (s *StateSyncService) verifyState(ctx context.Context, snapshot *snapshotMe
 	return nil
 }
 
+// RestoreDB restores the database from the logical sql dump using psql command
+// It also validates the snapshot hash, before restoring the database
 func (s *StateSyncService) restoreDB(ctx context.Context, snapshot *snapshotMetadata) error {
 	streamer := NewStreamer(snapshot.Chunks, s.snapshotDir, s.log)
 	defer streamer.Close()
@@ -420,6 +457,7 @@ func (s *Streamer) Read(p []byte) (n int, err error) {
 	return n, err
 }
 
+// filterLocalPeer filters the local peer from the list of peers
 func filterLocalPeer(peers []peer.AddrInfo, localID peer.ID) []peer.AddrInfo {
 	var filteredPeers []peer.AddrInfo
 	for _, p := range peers {

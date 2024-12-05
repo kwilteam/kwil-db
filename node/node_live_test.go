@@ -5,7 +5,6 @@ package node
 import (
 	"context"
 	"encoding/hex"
-	"fmt"
 	"os"
 	"sync"
 	"testing"
@@ -68,15 +67,10 @@ func TestDualNodeMocknet(t *testing.T) {
 	var wg sync.WaitGroup
 
 	t.Cleanup(func() {
-		fmt.Println("cleanup- cancel")
 		cancel()
-		fmt.Println("cleanup- wait")
 		wg.Wait()
-
-		fmt.Println("cleanup- db")
 		cleanupDB(db1)
 		cleanupDB(db2)
-		fmt.Print("cleanup- done")
 	})
 
 	privKeys, _ := newGenesis(t, [][]byte{pk1, pk2})

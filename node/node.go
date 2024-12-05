@@ -129,7 +129,18 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 
 	// statesyncer
 	rcvdSnapsDir := filepath.Join(cfg.RootDir, "rcvd_snaps")
-	ss, err := NewStateSyncService(ctx, host, discoverer, cfg.Snapshotter, cfg.BlockStore, logger, cfg.Statesync.TrustedProviders, rcvdSnapsDir, cfg.Statesync.Enable, cfg.DB, cfg.DBConfig)
+	ssCfg := &statesyncConfig{
+		RcvdSnapsDir:  rcvdSnapsDir,
+		StateSyncCfg:  cfg.Statesync,
+		DBConfig:      cfg.DBConfig,
+		Logger:        logger.New("STATESYNC"),
+		DB:            cfg.DB,
+		Host:          host,
+		Discoverer:    discoverer,
+		SnapshotStore: cfg.Snapshotter,
+		BlockStore:    cfg.BlockStore,
+	}
+	ss, err := NewStateSyncService(ctx, ssCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create state sync service: %w", err)
 	}
@@ -355,9 +366,12 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 	return nodeErr
 }
 
+// doStatesync attempts to perform statesync if the db is uninitialized.
+// It also initializes the blockstore with the initial block data at the
+// height of the discovered snapshot.
 func (n *Node) doStatesync(ctx context.Context) error {
 	// If statesync is enabled and the db is uninitialized, discover snapshots
-	if !n.statesyncer.enable {
+	if !n.statesyncer.cfg.Enable {
 		return nil
 	}
 
@@ -371,6 +385,10 @@ func (n *Node) doStatesync(ctx context.Context) error {
 	height, err := n.statesyncer.DiscoverSnapshots(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to attempt statesync: %w", err)
+	}
+
+	if height <= 0 { // no snapshots found, or statesync failed
+		return nil
 	}
 
 	// request and commit the block to the blockstore

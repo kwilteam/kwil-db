@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
 )
 
@@ -44,20 +45,13 @@ import (
 	This can be extended to support other formats in the future.
 */
 
-type DBConfig struct {
-	DBUser string
-	DBPass string
-	DBHost string
-	DBPort string
-	DBName string
-}
-
 type SnapshotConfig struct {
 	// Snapshot store configuration
 	Enable          bool
 	SnapshotDir     string
 	MaxSnapshots    int
 	RecurringHeight uint64
+	DBConfig        *config.DBConfig
 }
 
 type SnapshotStore struct {
@@ -80,8 +74,8 @@ type DBSnapshotter interface {
 	CreateSnapshot(ctx context.Context, height uint64, snapshotID string, schemas, excludeTables []string, excludeTableData []string) (*Snapshot, error)
 }
 
-func NewSnapshotStore(cfg *SnapshotConfig, dbCfg *DBConfig, logger log.Logger) (*SnapshotStore, error) {
-	snapshotter := NewSnapshotter(dbCfg, cfg.SnapshotDir, logger)
+func NewSnapshotStore(cfg *SnapshotConfig, logger log.Logger) (*SnapshotStore, error) {
+	snapshotter := NewSnapshotter(cfg.DBConfig, cfg.SnapshotDir, logger)
 	ss := &SnapshotStore{
 		cfg:         cfg,
 		snapshots:   make(map[uint64]*Snapshot),

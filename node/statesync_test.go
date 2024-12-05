@@ -4,19 +4,21 @@ import (
 	"context"
 	"crypto/sha256"
 	"errors"
-	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
+	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/node/snapshotter"
+	"github.com/kwilteam/kwil-db/node/types"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
+	"github.com/libp2p/go-libp2p/core/discovery"
 	"github.com/libp2p/go-libp2p/core/host"
-	"github.com/libp2p/go-libp2p/core/peer"
 	mock "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var (
@@ -62,6 +64,13 @@ func NewSnapshotStore() *snapshotStore {
 
 func (s *snapshotStore) addSnapshot(snapshot *snapshotMetadata) {
 	s.snapshots[snapshot.Height] = snapshot
+}
+
+type mockBS struct {
+}
+
+func (m *mockBS) GetByHeight(height int64) (types.Hash, *types.Block, types.Hash, error) {
+	return types.Hash{}, nil, types.Hash{}, nil
 }
 
 func (s *snapshotStore) ListSnapshots() []*snapshotter.Snapshot {
@@ -118,203 +127,143 @@ func (s *snapshotStore) Enabled() bool {
 	return true
 }
 
-func TestValidateSnapshot(t *testing.T) {
-	ctx := context.Background()
-	mn := mock.New()
-	// trusted snapshot provider and exposing the snapshot catalog service
-	_, h1, err := newTestHost(t, mn)
+func newTestStatesyncer(ctx context.Context, t *testing.T, mn mock.Mocknet, rootDir string, sCfg *config.StateSyncConfig) (host.Host, discovery.Discovery, *snapshotStore, *StateSyncService, error) {
+	_, h, err := newTestHost(t, mn)
 	if err != nil {
-		t.Fatalf("Failed to add peer to mocknet: %v", err)
+		return nil, nil, nil, nil, err
 	}
-	_, h2, err := newTestHost(t, mn)
+
+	dht, err := makeDHT(ctx, h, nil, dht.ModeServer)
 	if err != nil {
-		t.Fatalf("Failed to add peer to mocknet: %v", err)
+		return nil, nil, nil, nil, err
 	}
-	_, h3, err := newTestHost(t, mn)
+	t.Cleanup(func() { dht.Close() })
+	discover := makeDiscovery(dht)
+
+	os.MkdirAll(rootDir, os.ModePerm)
+
+	bs := &mockBS{}
+	st := NewSnapshotStore()
+	cfg := &statesyncConfig{
+		StateSyncCfg: sCfg,
+		RcvdSnapsDir: rootDir,
+
+		// DB, DBConfig unused
+		Host:          h,
+		Discoverer:    discover,
+		SnapshotStore: st,
+		BlockStore:    bs,
+		Logger:        log.DiscardLogger,
+	}
+
+	ss, err := NewStateSyncService(ctx, cfg)
 	if err != nil {
-		t.Fatalf("Failed to add peer to mocknet: %v", err)
+		return nil, nil, nil, nil, err
 	}
 
-	// Link and connect the hosts
-	if err := mn.LinkAll(); err != nil {
-		t.Fatalf("Failed to link hosts: %v", err)
-	}
-	if err := mn.ConnectAllButSelf(); err != nil {
-		t.Fatalf("Failed to connect hosts: %v", err)
-	}
+	return h, discover, st, ss, nil
+}
 
-	time.Sleep(time.Second)
-
-	tempDir := t.TempDir()
-	root1 := filepath.Join(tempDir, "snap1")
-	root2 := filepath.Join(tempDir, "snap2")
-	root3 := filepath.Join(tempDir, "snap3")
-
-	os.MkdirAll(root1, os.ModePerm)
-	os.MkdirAll(root2, os.ModePerm)
-	os.MkdirAll(root3, os.ModePerm)
-
-	dht1, err := makeDHT(ctx, h1, nil, dht.ModeServer)
-	assert.NoError(t, err, "Failed to create DHT1")
-	t.Cleanup(func() { dht1.Close() })
-	discover1 := makeDiscovery(dht1)
-	addrs := maddrs(h1)
-
-	st1 := NewSnapshotStore()
-	st1.addSnapshot(snap1)
-	st1.addSnapshot(snap2)
-	ss1 := &StateSyncService{
-		host:             h1,
-		discoverer:       discover1,
-		discoveryTimeout: 15 * time.Second,
-		snapshotStore:    st1,
-		log:              log.DiscardLogger,
-		snapshotPool: &snapshotPool{
-			snapshots: make(map[snapshotKey]*snapshotMetadata),
-			providers: make(map[snapshotKey][]peer.AddrInfo),
-			blacklist: make(map[snapshotKey]struct{}),
-		},
-		snapshotDir: root1,
-	}
-	addStreamHandlers(h1, ss1)
-
-	// new node trying to bootup using the snapshot
-
-	st3 := NewSnapshotStore()
-	dht3, err := makeDHT(ctx, h3, nil, dht.ModeServer)
-	assert.NoError(t, err, "Failed to create DHT3")
-	t.Cleanup(func() { dht3.Close() })
-	discover3 := makeDiscovery(dht3)
-	ss3 := &StateSyncService{
-		host:             h3,
-		discoverer:       discover3,
-		discoveryTimeout: 15 * time.Second,
-		snapshotStore:    st3,
-		log:              log.DiscardLogger,
-		snapshotPool: &snapshotPool{
-			snapshots: make(map[snapshotKey]*snapshotMetadata),
-			providers: make(map[snapshotKey][]peer.AddrInfo),
-			blacklist: make(map[snapshotKey]struct{}),
-		},
-		snapshotDir: root2,
-	}
-	addStreamHandlers(h3, ss3)
-
-	// Not a trusted provider but has the snapshotcatalog service
-	st2 := NewSnapshotStore()
-	st2.addSnapshot(snap2)
-	dht2, err := makeDHT(ctx, h2, nil, dht.ModeServer)
-	assert.NoError(t, err, "Failed to create DHT2")
-	t.Cleanup(func() { dht2.Close() })
-	discover2 := makeDiscovery(dht2)
-	ss2 := &StateSyncService{
-		host:             h2,
-		discoverer:       discover2,
-		discoveryTimeout: 15 * time.Second,
-		snapshotStore:    st2,
-		log:              log.DiscardLogger,
-		snapshotPool: &snapshotPool{
-			snapshots: make(map[snapshotKey]*snapshotMetadata),
-			providers: make(map[snapshotKey][]peer.AddrInfo),
-			blacklist: make(map[snapshotKey]struct{}),
-		},
-		snapshotDir: root3,
-	}
-	addStreamHandlers(h2, ss2)
-
-	// advertise the snapshot catalog service
-	advertise(ctx, snapshotCatalogNS, discover1)
-	advertise(ctx, snapshotCatalogNS, discover2)
-	advertise(ctx, snapshotCatalogNS, discover3)
-
-	time.Sleep(5 * time.Second)
-
-	// Validate the snapshot (no trusted providers to validate against)
-	valid, _ := ss3.VerifySnapshot(ctx, snap1)
-	assert.False(t, valid)
-
-	for _, addr := range addrs {
-		i, err := connectPeer(ctx, addr, h3)
-		assert.NoError(t, err)
-		if i.ID == h2.ID() { // h2 is not a trusted provider
-			continue
-		}
-		ss3.trustedProviders = append(ss3.trustedProviders, i)
-	}
-
-	// Validate the snapshot (trusted provider has the snapshot)
-	valid, _ = ss3.VerifySnapshot(ctx, snap1)
-	assert.True(t, valid)
-
-	valid, _ = ss3.VerifySnapshot(ctx, invalidSnap1)
-	assert.False(t, valid)
-
-	// Discovery test
-	peers3, err := discoverProviders(ctx, snapshotCatalogNS, discover3)
-	assert.NoError(t, err)
-	peers3 = filterLocalPeer(peers3, h3.ID())
-	assert.Len(t, peers3, 2)
-
-	peers1, err := discoverProviders(ctx, snapshotCatalogNS, discover1)
-	assert.NoError(t, err)
-	peers1 = filterLocalPeer(peers1, h1.ID())
-	assert.Len(t, peers1, 2)
-
-	err = ss3.requestSnapshotCatalogs(ctx, peers3[0])
-	assert.NoError(t, err)
-	// should receive the snapshot catalog: snap1, snap2
-	snaps := ss3.listSnapshots()
-	assert.Len(t, snaps, 2)
-
-	bestSnap, err := ss3.bestSnapshot()
-	assert.NoError(t, err)
-	assert.Equal(t, snap2.Height, bestSnap.Height)
-
-	valid, _ = ss3.VerifySnapshot(ctx, bestSnap)
-	assert.True(t, valid)
-
-	// request the snapshot chunks
-	err = ss3.chunkFetcher(ctx, bestSnap)
-	assert.NoError(t, err)
-
-	// ensure that chunks are downloaded
-	for i := range bestSnap.Chunks {
-		cfile := filepath.Join(root2, fmt.Sprintf("chunk-%d.sql.gz", i))
-		f, err := os.Open(cfile)
-		assert.NoError(t, err)
-		assert.NotNil(t, f)
-		f.Close()
-	}
-
-	err = ss3.requestSnapshotCatalogs(ctx, peers3[1])
-	assert.NoError(t, err)
-	// should receive the snapshot catalog: snap1, snap2
-	snaps = ss3.listSnapshots()
-	assert.Len(t, snaps, 2)
-
-	bestSnap, err = ss3.bestSnapshot()
-	assert.NoError(t, err)
-	assert.Equal(t, snap2.Height, bestSnap.Height)
-
-	valid, _ = ss3.VerifySnapshot(ctx, bestSnap)
-	assert.True(t, valid)
-
-	// request the snapshot chunks
-	err = ss3.chunkFetcher(ctx, bestSnap)
-	assert.NoError(t, err)
-
-	// ensure that chunks are downloaded
-	for i := range bestSnap.Chunks {
-		cfile := filepath.Join(root2, fmt.Sprintf("chunk-%d.sql.gz", i))
-		f, err := os.Open(cfile)
-		assert.NoError(t, err)
-		assert.NotNil(t, f)
-		f.Close()
+func testSSConfig(enable bool, providers []string) *config.StateSyncConfig {
+	return &config.StateSyncConfig{
+		Enable:           enable,
+		TrustedProviders: providers,
+		DiscoveryTimeout: 5 * time.Second,
+		MaxRetries:       3,
 	}
 }
 
-func addStreamHandlers(h host.Host, ss *StateSyncService) {
-	h.SetStreamHandler(ProtocolIDSnapshotCatalog, ss.snapshotCatalogRequestHandler)
-	h.SetStreamHandler(ProtocolIDSnapshotChunk, ss.snapshotChunkRequestHandler)
-	h.SetStreamHandler(ProtocolIDSnapshotMeta, ss.snapshotMetadataRequestHandler)
+func TestStateSyncService(t *testing.T) {
+	ctx := context.Background()
+	mn := mock.New()
+	tempDir := t.TempDir()
+
+	// trusted snapshot provider and statesync catalog service provider
+	h1, d1, st1, _, err := newTestStatesyncer(ctx, t, mn, filepath.Join(tempDir, "n1"), testSSConfig(false, nil))
+	require.NoError(t, err, "Failed to create statesyncer 1")
+
+	// statesync catalog service provider
+	_, d2, st2, _, err := newTestStatesyncer(ctx, t, mn, filepath.Join(tempDir, "n2"), testSSConfig(false, nil))
+	require.NoError(t, err, "Failed to create statesyncer 2")
+
+	// node attempting statesync
+	addrs := maddrs(h1)
+	h3, d3, _, ss3, err := newTestStatesyncer(ctx, t, mn, filepath.Join(tempDir, "n3"), testSSConfig(true, addrs))
+	require.NoError(t, err, "Failed to create statesyncer 3")
+
+	// Link and connect the hosts
+	err = mn.LinkAll()
+	require.NoError(t, err, "Failed to link hosts")
+
+	err = mn.ConnectAllButSelf()
+	require.NoError(t, err, "Failed to connect hosts")
+
+	// d1 and d2 advertise the snapshot catalog service
+	advertise(ctx, snapshotCatalogNS, d1)
+	advertise(ctx, snapshotCatalogNS, d2)
+
+	time.Sleep(2 * time.Second)
+
+	// bootstrap the ss3 with the trusted providers
+	for _, addr := range addrs {
+		i, err := connectPeer(ctx, addr, h3)
+		assert.NoError(t, err)
+		ss3.trustedProviders = append(ss3.trustedProviders, i)
+	}
+
+	// h2 has a snapshot
+	st2.addSnapshot(snap1)
+
+	// Discover the snapshot catalog services
+	peers, err := discoverProviders(ctx, snapshotCatalogNS, d1)
+	require.NoError(t, err)
+	peers = filterLocalPeer(peers, h1.ID())
+	require.Len(t, peers, 1)
+
+	peers, err = discoverProviders(ctx, snapshotCatalogNS, d3)
+	require.NoError(t, err)
+	peers = filterLocalPeer(peers, h3.ID())
+	require.Len(t, peers, 2)
+
+	// Request the snapshot catalogs
+	for _, p := range peers {
+		err = ss3.requestSnapshotCatalogs(ctx, p)
+		require.NoError(t, err)
+	}
+
+	// should receive the snapshot catalog: snap1 from h2
+	snaps := ss3.snapshotPool.listSnapshots()
+	require.Len(t, snaps, 1)
+
+	// best snapshot should be snap1
+	bestSnap, err := ss3.bestSnapshot()
+	require.NoError(t, err)
+	assert.Equal(t, snap1.Height, bestSnap.Height)
+	assert.Equal(t, snap1.Hash, bestSnap.Hash)
+
+	// Validate the snapshot should fail as the trusted provider does not have the snapshot
+	valid, _ := ss3.VerifySnapshot(ctx, snap1)
+	assert.False(t, valid)
+
+	// add snap1 to the trusted provider
+	st1.addSnapshot(snap1)
+
+	valid, _ = ss3.VerifySnapshot(ctx, snap1)
+	assert.True(t, valid)
+
+	// add snap2 to the trusted provider
+	st1.addSnapshot(snap2)
+
+	// best snapshot should be snap2
+	for _, p := range peers {
+		err = ss3.requestSnapshotCatalogs(ctx, p)
+		require.NoError(t, err)
+	}
+
+	bestSnap, err = ss3.bestSnapshot()
+	require.NoError(t, err)
+	assert.Equal(t, snap2.Height, bestSnap.Height)
+
+	valid, _ = ss3.VerifySnapshot(ctx, bestSnap)
+	assert.True(t, valid)
 }

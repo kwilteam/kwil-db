@@ -13,10 +13,9 @@ type Config struct {
 	PrivKey crypto.PrivateKey
 	DB      DB
 
-	DBConfig  *config.DBConfig
 	P2P       *config.PeerConfig
+	DBConfig  *config.DBConfig
 	Statesync *config.StateSyncConfig
-	Snapshots *config.SnapshotConfig
 
 	Mempool     types.MemPool
 	BlockStore  types.BlockStore

@@ -37,8 +37,5 @@ type SnapshotStore interface {
 }
 
 type DB interface {
-	sql.TxMaker // for out-of-consensus writes e.g. setup and meta table writes
-	sql.PreparedTxMaker
 	sql.ReadTxMaker
-	sql.SnapshotTxMaker
 }

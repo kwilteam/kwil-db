@@ -32,118 +32,86 @@ const (
 	discoverSnapshotsMsg = "discover_snapshots"
 )
 
-type BlockStore interface {
+type blockStore interface {
 	GetByHeight(height int64) (types.Hash, *types.Block, types.Hash, error)
 }
 
-type StateSyncService struct {
-	db       DB
-	dbConfig *config.DBConfig
+type statesyncConfig struct {
+	StateSyncCfg *config.StateSyncConfig
+	DBConfig     *config.DBConfig
+	RcvdSnapsDir string
 
+	DB            DB
+	Host          host.Host
+	Discoverer    discovery.Discovery
+	SnapshotStore SnapshotStore
+	BlockStore    blockStore
+	Logger        log.Logger
+}
+
+type StateSyncService struct {
+	// Config
+	cfg              *config.StateSyncConfig
+	dbConfig         *config.DBConfig
+	snapshotDir      string
+	trustedProviders []*peer.AddrInfo // trusted providers
+
+	// DHT
 	host       host.Host
 	discoverer discovery.Discovery
 
-	discoveryTimeout time.Duration
-
+	// Interfaces
+	db            DB
 	snapshotStore SnapshotStore
-	blockStore    BlockStore
-	snapshotPool  *snapshotPool // resets with every discovery
+	blockStore    blockStore
 
-	trustedProviderAddrs []string
-	trustedProviders     []*peer.AddrInfo
+	// statesync operation specific fields
+	snapshotPool *snapshotPool // resets with every discovery
 
-	snapshotDir string
-	enable      bool // attempts to bootstrap the node with a snapshot
-
+	// Logger
 	log log.Logger
 }
 
-// snapshotKey is a snapshot key used for lookups.
-type snapshotKey [sha256.Size]byte
-
-type snapshotMetadata struct {
-	Height      uint64     `json:"height"`
-	Format      uint32     `json:"format"`
-	Chunks      uint32     `json:"chunks"`
-	Hash        []byte     `json:"hash"`
-	Size        uint64     `json:"size"`
-	ChunkHashes [][32]byte `json:"chunk_hashes"`
-	// Metadata    []byte // TODO: do we need this?
-
-	AppHash []byte `json:"app_hash"`
-}
-
-func (sm *snapshotMetadata) String() string {
-	return fmt.Sprintf("SnapshotMetadata{Height: %d, Format: %d, Chunks: %d, Hash: %x, Size: %d, AppHash: %x}", sm.Height, sm.Format, sm.Chunks, sm.Hash, sm.Size, sm.AppHash)
-}
-
-type snapshotPool struct {
-	mtx       sync.Mutex // RWMutex?? no
-	snapshots map[snapshotKey]*snapshotMetadata
-	providers map[snapshotKey][]peer.AddrInfo // TODO: do we need this? should we request from all the providers instead?
-
-	// Snapshot keys that have been blacklisted due to failed attempts to retrieve them or invalid data.
-	blacklist map[snapshotKey]struct{}
-
-	peers []peer.AddrInfo // do we need this?
-}
-
-// Key generates a snapshot key, used for lookups. It takes into account not only the height and
-// format, but also the chunks, hash, and chunkHashes in case peers have generated snapshots in a
-// non-deterministic manner. All fields must be equal for the snapshot to be considered the same.
-func (s *snapshotMetadata) Key() snapshotKey {
-	// Hash.Write() never returns an error.
-	hasher := sha256.New()
-	hasher.Write([]byte(fmt.Sprintf("%v:%v:%v", s.Height, s.Format, s.Chunks)))
-	hasher.Write(s.Hash)
-
-	for _, chunkHash := range s.ChunkHashes {
-		hasher.Write(chunkHash[:])
+func NewStateSyncService(ctx context.Context, cfg *statesyncConfig) (*StateSyncService, error) {
+	if cfg.StateSyncCfg.Enable && (cfg.StateSyncCfg.TrustedProviders == nil || len(cfg.StateSyncCfg.TrustedProviders) == 0) {
+		return nil, fmt.Errorf("at least one trusted provider is required for state sync")
 	}
 
-	var key snapshotKey
-	copy(key[:], hasher.Sum(nil))
-	return key
-}
-
-func NewStateSyncService(ctx context.Context, h host.Host, discoverer discovery.Discovery, store SnapshotStore, bs BlockStore, log log.Logger, addrs []string, dir string, enable bool, db DB, dbConf *config.DBConfig) (*StateSyncService, error) {
 	ss := &StateSyncService{
-		host:                 h,
-		discoverer:           discoverer,
-		discoveryTimeout:     15 * time.Second,
-		snapshotStore:        store,
-		log:                  log,
-		trustedProviderAddrs: addrs,
-		trustedProviders:     make([]*peer.AddrInfo, 0, len(addrs)),
-		blockStore:           bs,
-		snapshotDir:          dir,
-		dbConfig:             dbConf,
+		cfg:           cfg.StateSyncCfg,
+		dbConfig:      cfg.DBConfig,
+		snapshotDir:   cfg.RcvdSnapsDir,
+		db:            cfg.DB,
+		host:          cfg.Host,
+		discoverer:    cfg.Discoverer,
+		snapshotStore: cfg.SnapshotStore,
+		log:           cfg.Logger,
+		blockStore:    cfg.BlockStore,
 		snapshotPool: &snapshotPool{
 			snapshots: make(map[snapshotKey]*snapshotMetadata),
 			providers: make(map[snapshotKey][]peer.AddrInfo),
 			blacklist: make(map[snapshotKey]struct{}),
 		},
-		enable: enable,
-		db:     db,
 	}
 
+	// remove the existing snapshot directory
+	if err := os.RemoveAll(ss.snapshotDir); err != nil {
+		return nil, err
+	}
 	if err := os.MkdirAll(ss.snapshotDir, 0755); err != nil {
 		return nil, err
 	}
 
-	// connect to trusted providers
-	// TODO: can parallelize this
-
 	// provide stream handler for snapshot catalogs requests and chunk requests
-	h.SetStreamHandler(ProtocolIDSnapshotCatalog, ss.snapshotCatalogRequestHandler)
-	h.SetStreamHandler(ProtocolIDSnapshotChunk, ss.snapshotChunkRequestHandler)
-	h.SetStreamHandler(ProtocolIDSnapshotMeta, ss.snapshotMetadataRequestHandler)
+	ss.host.SetStreamHandler(ProtocolIDSnapshotCatalog, ss.snapshotCatalogRequestHandler)
+	ss.host.SetStreamHandler(ProtocolIDSnapshotChunk, ss.snapshotChunkRequestHandler)
+	ss.host.SetStreamHandler(ProtocolIDSnapshotMeta, ss.snapshotMetadataRequestHandler)
 
 	return ss, nil
 }
 
 func (s *StateSyncService) Bootstrap(ctx context.Context) error {
-	providers, err := peers.ConvertPeersToMultiAddr(s.trustedProviderAddrs)
+	providers, err := peers.ConvertPeersToMultiAddr(s.cfg.TrustedProviders)
 	if err != nil {
 		return err
 	}
@@ -160,14 +128,8 @@ func (s *StateSyncService) Bootstrap(ctx context.Context) error {
 	return nil
 }
 
-/*
-Statesync service is responsible for all the below tasks:
-1. Discover snapshot providers (peer discover)
-2. Advertise snapshot catalogs
-3. Retrieve snapshot catalogs and pick the best snapshot within a discovery timeperiod
-4. Retrieve snapshot chunks and restore the snapshot
-*/
-
+// snapshotCatalogRequestHandler handles the incoming snapshot catalog requests.
+// It sends the list of metadata of all the snapshots that are available with the node.
 func (s *StateSyncService) snapshotCatalogRequestHandler(stream network.Stream) {
 	// read request
 	// send snapshot catalogs
@@ -226,6 +188,7 @@ func (s *StateSyncService) snapshotCatalogRequestHandler(stream network.Stream) 
 	s.log.Info("sent snapshot catalogs to remote peer", "peer", stream.Conn().RemotePeer(), "num_snapshots", len(catalogs))
 }
 
+// snapshotChunkRequestHandler handles the incoming snapshot chunk requests.
 func (s *StateSyncService) snapshotChunkRequestHandler(stream network.Stream) {
 	// read request
 	// send snapshot chunk
@@ -253,6 +216,8 @@ func (s *StateSyncService) snapshotChunkRequestHandler(stream network.Stream) {
 	s.log.Info("sent snapshot chunk to remote peer", "peer", stream.Conn().RemotePeer(), "height", req.Height, "index", req.Index)
 }
 
+// snapshotMetadataRequestHandler handles the incoming snapshot metadata request and
+// sends the snapshot metadata at the requested height.
 func (s *StateSyncService) snapshotMetadataRequestHandler(stream network.Stream) {
 	// read request
 	// send snapshot chunk
@@ -307,7 +272,7 @@ func (s *StateSyncService) snapshotMetadataRequestHandler(stream network.Stream)
 	s.log.Info("sent snapshot metadata to remote peer", "peer", stream.Conn().RemotePeer(), "height", req.Height, "format", req.Format, "appHash", appHash.String())
 }
 
-// verifySnapshot verifies the snapshot with the trusted provider
+// verifySnapshot verifies the snapshot with the trusted provider and returns the app hash if the snapshot is valid.
 func (ss *StateSyncService) VerifySnapshot(ctx context.Context, snap *snapshotMetadata) (bool, []byte) {
 	// verify the snapshot
 	for _, provider := range ss.trustedProviders {
@@ -368,37 +333,94 @@ func (ss *StateSyncService) VerifySnapshot(ctx context.Context, snap *snapshotMe
 	return false, nil
 }
 
-func (s *StateSyncService) blacklistSnapshot(snap *snapshotMetadata) {
-	s.snapshotPool.mtx.Lock()
-	defer s.snapshotPool.mtx.Unlock()
+type snapshotMetadata struct {
+	Height      uint64     `json:"height"`
+	Format      uint32     `json:"format"`
+	Chunks      uint32     `json:"chunks"`
+	Hash        []byte     `json:"hash"`
+	Size        uint64     `json:"size"`
+	ChunkHashes [][32]byte `json:"chunk_hashes"`
+
+	AppHash []byte `json:"app_hash"`
+}
+
+func (sm *snapshotMetadata) String() string {
+	return fmt.Sprintf("SnapshotMetadata{Height: %d, Format: %d, Chunks: %d, Hash: %x, Size: %d, AppHash: %x}", sm.Height, sm.Format, sm.Chunks, sm.Hash, sm.Size, sm.AppHash)
+}
+
+// snapshotKey is a snapshot key used for lookups.
+type snapshotKey [sha256.Size]byte
+
+// Key generates a snapshot key, used for lookups. It takes into account not only the height and
+// format, but also the chunks, snapshot hash and chunk hashes in case peers have generated snapshots in a
+// non-deterministic manner. All fields must be equal for the snapshot to be considered the same.
+func (s *snapshotMetadata) Key() snapshotKey {
+	// Hash.Write() never returns an error.
+	hasher := sha256.New()
+	hasher.Write([]byte(fmt.Sprintf("%v:%v:%v", s.Height, s.Format, s.Chunks)))
+	hasher.Write(s.Hash)
+
+	for _, chunkHash := range s.ChunkHashes {
+		hasher.Write(chunkHash[:])
+	}
+
+	var key snapshotKey
+	copy(key[:], hasher.Sum(nil))
+	return key
+}
+
+// snapshotPool keeps track of snapshots that have been discovered from the snapshot providers.
+// It also keeps track of the providers that have advertised the snapshots and the blacklisted snapshots.
+// Each snapshot is identified by a snapshot key which is generated from the snapshot metadata.
+type snapshotPool struct {
+	mtx       sync.Mutex // RWMutex?? no
+	snapshots map[snapshotKey]*snapshotMetadata
+	providers map[snapshotKey][]peer.AddrInfo // TODO: do we need this? should we request from all the providers instead?
+
+	// Snapshot keys that have been blacklisted due to failed attempts to retrieve them or invalid data.
+	blacklist map[snapshotKey]struct{}
+
+	peers []peer.AddrInfo // do we need this?
+}
+
+func (sp *snapshotPool) blacklistSnapshot(snap *snapshotMetadata) {
+	sp.mtx.Lock()
+	defer sp.mtx.Unlock()
 
 	key := snap.Key()
-	s.snapshotPool.blacklist[key] = struct{}{}
+	sp.blacklist[key] = struct{}{}
 	// delete the snapshot from the pool
-	delete(s.snapshotPool.snapshots, key)
-	delete(s.snapshotPool.providers, key)
+	delete(sp.snapshots, key)
+	delete(sp.providers, key)
 }
 
-func (s *StateSyncService) updatePeers(peers []peer.AddrInfo) {
-	s.snapshotPool.mtx.Lock()
-	defer s.snapshotPool.mtx.Unlock()
+func (sp *snapshotPool) updatePeers(peers []peer.AddrInfo) {
+	sp.mtx.Lock()
+	defer sp.mtx.Unlock()
 
-	s.snapshotPool.peers = peers
+	sp.peers = peers
 }
 
-func (s *StateSyncService) getPeers() []peer.AddrInfo {
-	s.snapshotPool.mtx.Lock()
-	defer s.snapshotPool.mtx.Unlock()
+func (sp *snapshotPool) keyProviders(key snapshotKey) []peer.AddrInfo {
+	sp.mtx.Lock()
+	defer sp.mtx.Unlock()
 
-	return s.snapshotPool.peers
+	return sp.providers[key]
 }
 
-func (s *StateSyncService) listSnapshots() []*snapshotMetadata {
-	s.snapshotPool.mtx.Lock()
-	defer s.snapshotPool.mtx.Unlock()
+func (sp *snapshotPool) getPeers() []peer.AddrInfo {
+	sp.mtx.Lock()
+	defer sp.mtx.Unlock()
 
-	snapshots := make([]*snapshotMetadata, 0, len(s.snapshotPool.snapshots))
-	for _, snap := range s.snapshotPool.snapshots {
+	return sp.peers
+}
+
+func (sp *snapshotPool) listSnapshots() []*snapshotMetadata {
+	sp.mtx.Lock()
+	defer sp.mtx.Unlock()
+
+	snapshots := make([]*snapshotMetadata, 0, len(sp.snapshots))
+	for _, snap := range sp.snapshots {
 		snapshots = append(snapshots, snap)
 	}
 	return snapshots

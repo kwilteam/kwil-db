@@ -76,6 +76,7 @@ func TestCreateSnapshots(t *testing.T) {
 	logger := log.DiscardLogger
 
 	cfg := &SnapshotConfig{
+		Enable:          true,
 		RecurringHeight: 1,
 		SnapshotDir:     dir,
 		MaxSnapshots:    2,
@@ -127,6 +128,7 @@ func TestRegisterSnapshot(t *testing.T) {
 	logger := log.DiscardLogger
 
 	cfg := &SnapshotConfig{
+		Enable:          true,
 		RecurringHeight: 1,
 		SnapshotDir:     dir,
 		MaxSnapshots:    2,
