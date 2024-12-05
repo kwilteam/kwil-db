@@ -31,7 +31,7 @@ func (l *FileDatabaseSchemaLoader) Load(t *testing.T, targetSchema *testSchema) 
 		t.Fatal("cannot open database schema file", err)
 	}
 
-	parseResult, err := parse.Parse(d)
+	parseResult, err := parse.ParseSchema(d)
 	if err != nil {
 		t.Fatal("cannot parse database schema", err)
 	}

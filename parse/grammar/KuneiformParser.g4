@@ -17,20 +17,26 @@ options {
 // can be ambiguous between the different types of entries. Callers will know
 // which entry to use based on when they are parsing.
 
-schema_entry:
-    schema EOF
+entry:
+    statement* EOF  // entry point for the parser
 ;
 
-sql_entry:
-    sql_stmt EOF
-;
-
-action_entry:
-    action_block EOF
-;
-
-procedure_entry:
-    procedure_block EOF
+statement:
+    (
+        sql_statement
+        | create_table_statement
+        | alter_table_statement
+        | drop_table_statement
+        | create_index_statement
+        | drop_index_statement
+        | create_role_statement
+        | drop_role_statement
+        | grant_statement
+        | revoke_statement
+        | transfer_ownership_statement
+        | create_action_statement
+        | drop_action_statement
+    ) SCOL
 ;
 
 /*
@@ -57,7 +63,7 @@ identifier_list:
 ;
 
 type:
-    IDENTIFIER (LPAREN DIGITS_ COMMA DIGITS_ RPAREN)? (LBRACKET RBRACKET)? // Handles arrays of any type, including nested arrays
+    identifier (LPAREN DIGITS_ COMMA DIGITS_ RPAREN)? (LBRACKET RBRACKET)? // Handles arrays of any type, including nested arrays
 ;
 
 type_cast:
@@ -77,65 +83,12 @@ variable_list:
     These are the rules that parse the schema / DDL, and are used pre-consensus.
 */
 
-// schema is the parser entrypoint for an entire
-// Kuneiform schema.
-schema:
-    database_declaration
-    (use_declaration | table_declaration
-     | action_declaration | procedure_declaration
-    )*
-;
-
-annotation:
-    // sort've a hack; annotations don't technically use contextual variables, but they have
-    // the same syntax of @identifier
-    CONTEXTUAL_VARIABLE LPAREN (IDENTIFIER EQUALS literal (COMMA IDENTIFIER EQUALS literal)*)? RPAREN
-;
-
-database_declaration:
-    DATABASE IDENTIFIER SCOL
-;
-
-use_declaration:
-    USE IDENTIFIER
-    (LBRACE IDENTIFIER COL literal (COMMA IDENTIFIER COL literal)* RBRACE)?
-    AS IDENTIFIER SCOL
-;
-
-table_declaration:
-     TABLE IDENTIFIER LBRACE
-     column_def (COMMA (column_def | index_def | foreign_key_def))*
-     RBRACE
- ;
-
 column_def:
-    name=IDENTIFIER type constraint*
+    name=identifier type constraint*
 ;
 
 table_column_def:
-    name=IDENTIFIER type inline_constraint*
-;
-
-index_def:
-    HASH_IDENTIFIER
-    (UNIQUE | INDEX | PRIMARY)
-    LPAREN  columns=identifier_list RPAREN
-;
-
-table_index_def:
-    UNIQUE? INDEX identifier LPAREN columns=identifier_list RPAREN
-;
-
-foreign_key_def:
-    (FOREIGN KEY|LEGACY_FOREIGN_KEY) // for backwards compatibility
-    LPAREN child_keys=identifier_list RPAREN
-    (REFERENCES|REF) parent_table=IDENTIFIER LPAREN parent_keys=identifier_list RPAREN
-    foreign_key_action*
-;
-
-// variability here is to support legacy syntax
-foreign_key_action:
-    ((ON UPDATE|LEGACY_ON_UPDATE)|(ON DELETE|LEGACY_ON_DELETE)) DO? ((NO ACTION|LEGACY_NO_ACTION)|CASCADE|(SET NULL|LEGACY_SET_NULL)|(SET DEFAULT|LEGACY_SET_DEFAULT)|RESTRICT)
+    name=identifier type inline_constraint*
 ;
 
 type_list:
@@ -143,7 +96,7 @@ type_list:
 ;
 
 named_type_list:
-    IDENTIFIER type (COMMA IDENTIFIER type)*
+    identifier type (COMMA identifier type)*
 ;
 
 typed_variable_list:
@@ -152,7 +105,7 @@ typed_variable_list:
 
 constraint:
     // conditionally allow some tokens, since they are used elsewhere
-    (IDENTIFIER| PRIMARY KEY? | NOT NULL | DEFAULT | UNIQUE) (LPAREN literal RPAREN)?
+    (identifier| PRIMARY KEY? | NOT NULL | DEFAULT | UNIQUE) (LPAREN literal RPAREN)?
 ;
 
 inline_constraint:
@@ -170,28 +123,7 @@ fk_action:
 ;
 
 fk_constraint:
-    REFERENCES table=identifier LPAREN identifier_list RPAREN (fk_action (fk_action)?)?
-;
-
-access_modifier:
-    PUBLIC | PRIVATE | VIEW | OWNER
-;
-
-action_declaration:
-    annotation*
-    ACTION IDENTIFIER
-    LPAREN variable_list? RPAREN
-    (access_modifier)+
-    LBRACE action_block RBRACE
-;
-
-procedure_declaration:
-    annotation*
-    PROCEDURE IDENTIFIER
-    LPAREN (typed_variable_list)? RPAREN
-    (access_modifier)+
-    (procedure_return)?
-    LBRACE procedure_block RBRACE
+    REFERENCES table=identifier LPAREN identifier_list RPAREN (fk_action (fk_action)?)? // can be up to 0-2 actions
 ;
 
 procedure_return:
@@ -219,6 +151,8 @@ ddl_stmt:
     | grant_statement
     | revoke_statement
     | transfer_ownership_statement
+    | create_action_statement
+    | drop_action_statement
 ;
 
 sql_statement: // NOTE: This is only DDL. We should combine ddl and dml into sql_stmt in the future.
@@ -283,11 +217,11 @@ drop_index_statement:
 ;
 
 create_role_statement:
-    CREATE ROLE (IF NOT EXISTS)? IDENTIFIER
+    CREATE ROLE (IF NOT EXISTS)? identifier
 ;
 
 drop_role_statement:
-    DROP ROLE (IF EXISTS)? IDENTIFIER
+    DROP ROLE (IF EXISTS)? identifier
 ;
 
 grant_statement:
@@ -308,6 +242,28 @@ privilege:
 
 transfer_ownership_statement:
     TRANSFER OWNERSHIP TO identifier
+;
+
+create_action_statement:
+    CREATE ACTION ((IF NOT EXISTS)|(OR REPLACE))? identifier
+    LPAREN (VARIABLE type (COMMA VARIABLE type)*)? RPAREN
+    (PUBLIC | PRIVATE) (OWNER | VIEW)*
+    procedure_return?
+    LBRACE proc_statement* RBRACE
+;
+
+drop_action_statement:
+    DROP ACTION (IF EXISTS)? identifier
+;
+
+use_extension_statement:
+    USE extension_name=identifier (IF NOT EXISTS)?
+    (LBRACE (identifier COL literal (COMMA identifier COL literal)*)? RBRACE)?
+    AS alias=identifier
+;
+
+unuse_extension_statement:
+    UNUSE alias=identifier (IF EXISTS)?
 ;
 
 select_statement:
@@ -411,7 +367,7 @@ sql_expr:
     // any unspecified operator:
     | literal type_cast?                                                                    # literal_sql_expr
     // direct function calls can have a type cast, but window functions cannot
-    | sql_function_call (FILTER LPAREN WHERE sql_expr RPAREN)? OVER (window|IDENTIFIER)     # window_function_call_sql_expr
+    | sql_function_call (FILTER LPAREN WHERE sql_expr RPAREN)? OVER (window|identifier)     # window_function_call_sql_expr
     | sql_function_call type_cast?                                                          # function_call_sql_expr
     | variable type_cast?                                                                   # variable_sql_expr
     | (table=identifier PERIOD)? column=identifier type_cast?                               # column_sql_expr
@@ -456,20 +412,6 @@ sql_function_call:
 /*
     The following section includes parser rules for action blocks.
 */
-// action_block is the top-level rule for an action block.
-action_block:
-    (action_statement SCOL)*
-;
-
-// action statements can only be 3 things:
-// 1. a sql statement
-// 2. a local action/procedure call.
-// 3. an extension call
-action_statement:
-    sql_statement                                                                               # sql_action
-    | IDENTIFIER LPAREN (procedure_expr_list)? RPAREN                                           # local_action
-    | (variable_list EQUALS)? IDENTIFIER PERIOD IDENTIFIER LPAREN (procedure_expr_list)? RPAREN # extension_action
-;
 
 /*
     This section includes parser rules for procedures
@@ -484,7 +426,7 @@ procedure_block:
 procedure_expr:
     // highest precedence:
     LPAREN procedure_expr RPAREN type_cast?                                                     # paren_procedure_expr
-    | procedure_expr PERIOD IDENTIFIER type_cast?                                               # field_access_procedure_expr
+    | procedure_expr PERIOD identifier type_cast?                                               # field_access_procedure_expr
     | array_element=procedure_expr LBRACKET (
             // can be arr[1], arr[1:2], arr[1:], arr[:2], arr[:]
             single=procedure_expr
@@ -531,7 +473,7 @@ variable_or_underscore:
 ;
 
 procedure_function_call:
-    IDENTIFIER LPAREN (procedure_expr_list)? RPAREN                                                                         #normal_call_procedure
+    (identifier PERIOD)? identifier LPAREN (procedure_expr_list)? RPAREN                                #normal_call_procedure
 ;
 
 if_then_block:

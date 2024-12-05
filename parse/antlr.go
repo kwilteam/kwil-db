@@ -20,23 +20,10 @@ import (
 // syntax validation on actions and procedures.
 type schemaVisitor struct {
 	antlr.BaseParseTreeVisitor
-	// schema is the schema that was parsed.
-	// If no schema was parsed, it will be nil.
-	schema *types.Schema
-	// schemaInfo holds information on the position
-	// of certain blocks in the schema.
-	schemaInfo *SchemaInfo
 	// errs is used for passing errors back to the caller.
 	errs *errorListener
 	// stream is the input stream
 	stream *antlr.InputStream
-	// both procedures and actions are only needed if parsing
-	// an entire top-level schema, and will not be called if
-	// parsing only an action or procedure body, or SQL.
-	// procedures maps the asts of all parsed procedures
-	procedures map[string][]ProcedureStmt
-	// actions maps the asts of all parsed actions
-	actions map[string][]ActionStmt
 	// includeRawSQL is true if raw SQL should be included in the output.
 	includeRawSQL bool
 }
@@ -57,31 +44,112 @@ func (s *schemaVisitor) getTextFromStream(start, stop int) (str string) {
 // newSchemaVisitor creates a new schema visitor.
 func newSchemaVisitor(stream *antlr.InputStream, errLis *errorListener) *schemaVisitor {
 	return &schemaVisitor{
-		schemaInfo: &SchemaInfo{
-			Blocks: make(map[string]*Block),
-		},
-		errs:   errLis,
-		stream: stream,
+		errs:          errLis,
+		stream:        stream,
+		includeRawSQL: true,
 	}
 }
 
 var _ gen.KuneiformParserVisitor = (*schemaVisitor)(nil)
 
-// below are the 4 top-level entry points for the visitor.
-func (s *schemaVisitor) VisitSchema_entry(ctx *gen.Schema_entryContext) any {
-	return ctx.Schema().Accept(s)
+func (s *schemaVisitor) VisitEntry(ctx *gen.EntryContext) any {
+	var stmts []TopLevelStatement
+	for _, stmt := range ctx.AllStatement() {
+		stmts = append(stmts, stmt.Accept(s).(TopLevelStatement))
+	}
+
+	return stmts
 }
 
-func (s *schemaVisitor) VisitAction_entry(ctx *gen.Action_entryContext) any {
-	return ctx.Action_block().Accept(s)
+func (s *schemaVisitor) VisitStatement(ctx *gen.StatementContext) any {
+	switch {
+	case ctx.Sql_statement() != nil:
+		return ctx.Sql_statement().Accept(s)
+	case ctx.Create_table_statement() != nil:
+		return ctx.Create_table_statement().Accept(s)
+	case ctx.Alter_table_statement() != nil:
+		return ctx.Alter_table_statement().Accept(s)
+	case ctx.Drop_table_statement() != nil:
+		return ctx.Drop_table_statement().Accept(s)
+	case ctx.Create_index_statement() != nil:
+		return ctx.Create_index_statement().Accept(s)
+	case ctx.Drop_index_statement() != nil:
+		return ctx.Drop_index_statement().Accept(s)
+	case ctx.Create_role_statement() != nil:
+		return ctx.Create_role_statement().Accept(s)
+	case ctx.Drop_role_statement() != nil:
+		return ctx.Drop_role_statement().Accept(s)
+	case ctx.Grant_statement() != nil:
+		return ctx.Grant_statement().Accept(s)
+	case ctx.Revoke_statement() != nil:
+		return ctx.Revoke_statement().Accept(s)
+	case ctx.Transfer_ownership_statement() != nil:
+		return ctx.Transfer_ownership_statement().Accept(s)
+	case ctx.Create_action_statement() != nil:
+		return ctx.Create_action_statement().Accept(s)
+	case ctx.Drop_action_statement() != nil:
+		return ctx.Drop_action_statement().Accept(s)
+	default:
+		panic(fmt.Sprintf("unknown parser entry: %s", ctx.GetText()))
+	}
 }
 
-func (s *schemaVisitor) VisitProcedure_entry(ctx *gen.Procedure_entryContext) any {
-	return ctx.Procedure_block().Accept(s)
+func (s *schemaVisitor) VisitCreate_action_statement(ctx *gen.Create_action_statementContext) any {
+	cas := &CreateActionStatement{
+		IfNotExists: ctx.EXISTS() != nil,
+		OrReplace:   ctx.REPLACE() != nil,
+		Name:        s.getIdent(ctx.Identifier()),
+		Public:      ctx.PUBLIC() != nil,
+		Parameters:  arr[*NamedType](len(ctx.AllType_())),
+		Statements:  arr[ProcedureStmt](len(ctx.AllProc_statement())),
+	}
+
+	if cas.IfNotExists && cas.OrReplace {
+		s.errs.RuleErr(ctx, ErrSyntax, "cannot have both IF NOT EXISTS and OR REPLACE")
+		return cas
+	}
+
+	if len(ctx.AllVIEW()) > 0 {
+		cas.Modifiers = append(cas.Modifiers, "VIEW")
+	}
+	if len(ctx.AllOWNER()) > 0 {
+		cas.Modifiers = append(cas.Modifiers, "OWNER")
+	}
+
+	for i, t := range ctx.AllType_() {
+		name := s.cleanStringIdent(ctx.VARIABLE(i))
+
+		// parameters must start with $
+		if !strings.HasPrefix(name, "$") {
+			s.errs.RuleErr(ctx, ErrSyntax, "parameter name must start with $")
+		}
+
+		typ := t.Accept(s).(*types.DataType)
+		cas.Parameters[i] = &NamedType{
+			Name: name,
+			Type: typ,
+		}
+	}
+
+	if ctx.Procedure_return() != nil {
+		cas.Returns = ctx.Procedure_return().Accept(s).(*ActionReturn)
+	}
+
+	for i, stmt := range ctx.AllProc_statement() {
+		cas.Statements[i] = stmt.Accept(s).(ProcedureStmt)
+	}
+
+	cas.Set(ctx)
+	return cas
 }
 
-func (s *schemaVisitor) VisitSql_entry(ctx *gen.Sql_entryContext) any {
-	return ctx.Sql_stmt().Accept(s)
+func (s *schemaVisitor) VisitDrop_action_statement(ctx *gen.Drop_action_statementContext) any {
+	das := &DropActionStatement{
+		IfExists: ctx.EXISTS() != nil,
+		Name:     s.getIdent(ctx.Identifier()),
+	}
+	das.Set(ctx)
+	return das
 }
 
 // unknownExpression creates a new literal with an unknown type and null value.
@@ -251,12 +319,12 @@ func (s *schemaVisitor) VisitIdentifier_list(ctx *gen.Identifier_listContext) an
 }
 
 func (s *schemaVisitor) VisitIdentifier(ctx *gen.IdentifierContext) any {
-	return s.getIdent(ctx.IDENTIFIER())
+	return s.getIdent(ctx)
 }
 
 func (s *schemaVisitor) VisitType(ctx *gen.TypeContext) any {
 	dt := &types.DataType{
-		Name: s.getIdent(ctx.IDENTIFIER()),
+		Name: s.getIdent(ctx.Identifier()),
 	}
 
 	if ctx.LPAREN() != nil {
@@ -335,99 +403,6 @@ func (s *schemaVisitor) VisitVariable_list(ctx *gen.Variable_listContext) any {
 	return vars
 }
 
-func (s *schemaVisitor) VisitSchema(ctx *gen.SchemaContext) any {
-	s.schema = &types.Schema{
-		Name:       ctx.Database_declaration().Accept(s).(string),
-		Tables:     arr[*types.Table](len(ctx.AllTable_declaration())),
-		Extensions: arr[*types.Extension](len(ctx.AllUse_declaration())),
-		Actions:    arr[*types.Action](len(ctx.AllAction_declaration())),
-		Procedures: arr[*types.Procedure](len(ctx.AllProcedure_declaration())),
-	}
-
-	for i, t := range ctx.AllTable_declaration() {
-		s.schema.Tables[i] = t.Accept(s).(*types.Table)
-		s.registerBlock(t, s.schema.Tables[i].Name)
-	}
-
-	// only now that we have visited all tables can we validate
-	// foreign keys
-	for _, t := range s.schema.Tables {
-		for _, fk := range t.ForeignKeys {
-			// the best we can do is get the position of the full
-			// table.
-			pos, ok := s.schemaInfo.Blocks[strings.ToLower(fk.ParentTable)]
-			if !ok {
-				pos2, ok2 := s.schemaInfo.Blocks[t.Name]
-				if ok2 {
-					s.errs.AddErr(pos2, ErrUnknownTable, fk.ParentTable)
-				} else {
-					s.errs.RuleErr(ctx, ErrUnknownTable, fk.ParentTable)
-				}
-				continue
-			}
-
-			// check that all ParentKeys exist
-			parentTable, ok := s.schema.FindTable(fk.ParentTable)
-			if !ok {
-				s.errs.AddErr(pos, ErrUnknownTable, fk.ParentTable)
-				continue
-			}
-
-			for _, col := range fk.ParentKeys {
-				if _, ok := parentTable.FindColumn(col); !ok {
-					s.errs.AddErr(pos, ErrUnknownColumn, col)
-				}
-			}
-		}
-	}
-
-	for i, e := range ctx.AllUse_declaration() {
-		s.schema.Extensions[i] = e.Accept(s).(*types.Extension)
-		s.registerBlock(e, s.schema.Extensions[i].Alias)
-	}
-
-	for i, a := range ctx.AllAction_declaration() {
-		s.schema.Actions[i] = a.Accept(s).(*types.Action)
-		s.registerBlock(a, s.schema.Actions[i].Name)
-	}
-
-	for i, p := range ctx.AllProcedure_declaration() {
-		s.schema.Procedures[i] = p.Accept(s).(*types.Procedure)
-		s.registerBlock(p, s.schema.Procedures[i].Name)
-	}
-
-	return s.schema
-}
-
-// registerBlock registers a top-level block (table, action, procedure, etc.),
-// ensuring uniqueness
-func (s *schemaVisitor) registerBlock(ctx antlr.ParserRuleContext, name string) {
-	lower := strings.ToLower(name)
-	if _, ok := s.schemaInfo.Blocks[lower]; ok {
-		s.errs.RuleErr(ctx, ErrDuplicateBlock, lower)
-		return
-	}
-
-	if _, ok := Functions[lower]; ok {
-		s.errs.RuleErr(ctx, ErrReservedKeyword, lower)
-		return
-	}
-
-	if validation.IsKeyword(lower) {
-		s.errs.RuleErr(ctx, ErrReservedKeyword, lower)
-		return
-	}
-
-	node := &Position{}
-	node.Set(ctx)
-
-	s.schemaInfo.Blocks[lower] = &Block{
-		Position: *node,
-		AbsStart: ctx.GetStart().GetStart(),
-		AbsEnd:   ctx.GetStop().GetStop(),
-	}
-}
-
 // arr will make an array of type A if the input is greater than 0
 func arr[A any](b int) []A {
 	if b > 0 {
@@ -436,110 +411,40 @@ func arr[A any](b int) []A {
 	return nil
 }
 
-func (s *schemaVisitor) VisitAnnotation(ctx *gen.AnnotationContext) any {
-	// we will parse but reconstruct annotations, so they can later be consumed by the gateway
-	str := strings.Builder{}
-
-	str.WriteString(s.getIdent(ctx.CONTEXTUAL_VARIABLE()))
-	str.WriteString("(")
-	for i, l := range ctx.AllLiteral() {
-		if i > 0 {
-			str.WriteString(", ")
-		}
-
-		str.WriteString(s.getIdent(ctx.IDENTIFIER(i)))
-		str.WriteString("=")
-		// we do not touch the literal, since case should be preserved
-		str.WriteString(l.GetText())
-	}
-	str.WriteString(")")
-
-	return str.String()
-}
-
-// isErrNode is true if an antlr terminal node is an error node.
-func isErrNode(node antlr.TerminalNode) bool {
-	_, ok := node.(antlr.ErrorNode)
-	return ok
-}
-
-func (s *schemaVisitor) VisitDatabase_declaration(ctx *gen.Database_declarationContext) any {
-	// needed to avoid https://github.com/kwilteam/kwil-db/issues/752
-	if isErrNode(ctx.DATABASE()) {
-		return ""
+func (s *schemaVisitor) VisitUse_extension_statement(ctx *gen.Use_extension_statementContext) any {
+	e := &UseExtensionStatement{
+		IfNotExists: ctx.EXISTS() != nil,
+		ExtName:     s.getIdent(ctx.GetExtension_name()),
+		Alias:       s.getIdent(ctx.GetAlias()),
 	}
 
-	return s.getIdent(ctx.IDENTIFIER())
-}
-
-func (s *schemaVisitor) VisitUse_declaration(ctx *gen.Use_declarationContext) any {
-	// the first identifier is the extension name, the last is the alias,
-	// and all in between are keys in the initialization.
-	e := &types.Extension{
-		Name:           s.getIdent(ctx.IDENTIFIER(0)),
-		Initialization: arr[*types.ExtensionConfig](len(ctx.AllIDENTIFIER()) - 2),
-		Alias:          s.getIdent(ctx.IDENTIFIER(len(ctx.AllIDENTIFIER()) - 1)),
-	}
-
-	for i, id := range ctx.AllIDENTIFIER()[1 : len(ctx.AllIDENTIFIER())-1] {
-		val := ctx.Literal(i).Accept(s).(*ExpressionLiteral)
-
-		e.Initialization[i] = &types.ExtensionConfig{
+	allIdent := ctx.AllIdentifier()
+	for i, id := range allIdent[1 : len(allIdent)-1] {
+		e.Config = append(e.Config, &struct {
+			Key   string
+			Value *ExpressionLiteral
+		}{
 			Key:   s.getIdent(id),
-			Value: val.String(),
-		}
+			Value: ctx.Literal(i).Accept(s).(*ExpressionLiteral),
+		})
 	}
-
+	e.Set(ctx)
 	return e
 }
 
-func (s *schemaVisitor) VisitTable_declaration(ctx *gen.Table_declarationContext) any {
-	t := &types.Table{
-		Name:        s.getIdent(ctx.IDENTIFIER()),
-		Columns:     arr[*types.Column](len(ctx.AllColumn_def())),
-		Indexes:     arr[*types.Index](len(ctx.AllIndex_def())),
-		ForeignKeys: arr[*types.ForeignKey](len(ctx.AllForeign_key_def())),
+func (s *schemaVisitor) VisitUnuse_extension_statement(ctx *gen.Unuse_extension_statementContext) any {
+	e := &UnuseExtensionStatement{
+		IfExists: ctx.EXISTS() != nil,
+		Alias:    s.getIdent(ctx.GetAlias()),
 	}
 
-	for i, c := range ctx.AllColumn_def() {
-		t.Columns[i] = c.Accept(s).(*types.Column)
-	}
-
-	for i, idx := range ctx.AllIndex_def() {
-		t.Indexes[i] = idx.Accept(s).(*types.Index)
-
-		// check that all columns in indexes and foreign key children exist
-		for _, col := range t.Indexes[i].Columns {
-			if _, ok := t.FindColumn(col); !ok {
-				s.errs.RuleErr(idx, ErrUnknownColumn, col)
-			}
-		}
-	}
-
-	for i, fk := range ctx.AllForeign_key_def() {
-		t.ForeignKeys[i] = fk.Accept(s).(*types.ForeignKey)
-
-		// check that all ChildKeys exist.
-		// we will have to check for parent keys in a later stage,
-		// since not all tables are parsed yet.
-		for _, col := range t.ForeignKeys[i].ChildKeys {
-			if _, ok := t.FindColumn(col); !ok {
-				s.errs.RuleErr(fk, ErrUnknownColumn, col)
-			}
-		}
-	}
-
-	_, err := t.GetPrimaryKey()
-	if err != nil {
-		s.errs.RuleErr(ctx, ErrNoPrimaryKey, err.Error())
-	}
-
-	return t
+	e.Set(ctx)
+	return e
 }
 
 func (s *schemaVisitor) VisitColumn_def(ctx *gen.Column_defContext) any {
 	col := &types.Column{
-		Name: s.getIdent(ctx.IDENTIFIER()),
+		Name: s.getIdent(ctx.Identifier()),
 		Type: ctx.Type_().Accept(s).(*types.DataType),
 	}
 
@@ -558,8 +463,8 @@ func (s *schemaVisitor) VisitColumn_def(ctx *gen.Column_defContext) any {
 	for i, c := range ctx.AllConstraint() {
 		con := constraint{}
 		switch {
-		case c.IDENTIFIER() != nil:
-			con.ident = c.IDENTIFIER().GetText()
+		case c.Identifier() != nil:
+			con.ident = s.getIdent(c.Identifier())
 		case c.PRIMARY() != nil:
 			con.ident = "primary_key"
 		case c.NOT() != nil:
@@ -671,75 +576,6 @@ func (s *schemaVisitor) VisitConstraint(ctx *gen.ConstraintContext) any {
 	panic("VisitConstraint should not be called, as the logic should be implemented in VisitColumn_def")
 }
 
-func (s *schemaVisitor) VisitIndex_def(ctx *gen.Index_defContext) any {
-	name := ctx.HASH_IDENTIFIER().GetText()
-	name = strings.TrimLeft(name, "#")
-	idx := &types.Index{
-		Name:    strings.ToLower(name),
-		Columns: ctx.Identifier_list().Accept(s).([]string),
-	}
-
-	s.validateVariableIdentifier(ctx.HASH_IDENTIFIER().GetSymbol(), idx.Name)
-
-	switch {
-	case ctx.INDEX() != nil:
-		idx.Type = types.BTREE
-	case ctx.UNIQUE() != nil:
-		idx.Type = types.UNIQUE_BTREE
-	case ctx.PRIMARY() != nil:
-		idx.Type = types.PRIMARY
-	default:
-		panic("unknown index type")
-	}
-
-	return idx
-}
-
-func (s *schemaVisitor) VisitForeign_key_def(ctx *gen.Foreign_key_defContext) any {
-	fk := &types.ForeignKey{
-		ChildKeys:   ctx.GetChild_keys().Accept(s).([]string),
-		ParentKeys:  ctx.GetParent_keys().Accept(s).([]string),
-		ParentTable: strings.ToLower(ctx.GetParent_table().GetText()),
-		Actions:     arr[*types.ForeignKeyAction](len(ctx.AllForeign_key_action())),
-	}
-
-	for i, a := range ctx.AllForeign_key_action() {
-		fk.Actions[i] = a.Accept(s).(*types.ForeignKeyAction)
-	}
-
-	return fk
-}
-
-func (s *schemaVisitor) VisitForeign_key_action(ctx *gen.Foreign_key_actionContext) any {
-	ac := &types.ForeignKeyAction{}
-	switch {
-	case ctx.UPDATE() != nil, ctx.LEGACY_ON_UPDATE() != nil:
-		ac.On = types.ON_UPDATE
-	case ctx.DELETE() != nil, ctx.LEGACY_ON_DELETE() != nil:
-		ac.On = types.ON_DELETE
-	default:
-		panic("unknown foreign key action")
-	}
-
-	switch {
-	case ctx.ACTION() != nil, ctx.LEGACY_NO_ACTION() != nil:
-		ac.Do = types.DO_NO_ACTION
-	case ctx.NULL() != nil, ctx.LEGACY_SET_NULL() != nil:
-		ac.Do = types.DO_SET_NULL
-	case ctx.DEFAULT() != nil, ctx.LEGACY_SET_DEFAULT() != nil:
-		ac.Do = types.DO_SET_DEFAULT
-		// cascade and restrict do not have legacys
-	case ctx.CASCADE() != nil:
-		ac.Do = types.DO_CASCADE
-	case ctx.RESTRICT() != nil:
-		ac.Do = types.DO_RESTRICT
-	default:
-		panic("unknown foreign key action")
-	}
-
-	return ac
-}
-
 func (s *schemaVisitor) VisitType_list(ctx *gen.Type_listContext) any {
 	var ts []*types.DataType
 	for _, t := range ctx.AllType_() {
@@ -751,7 +587,7 @@ func (s *schemaVisitor) VisitType_list(ctx *gen.Type_listContext) any {
 
 func (s *schemaVisitor) VisitNamed_type_list(ctx *gen.Named_type_listContext) any {
 	var ts []*types.NamedType
-	for i, t := range ctx.AllIDENTIFIER() {
+	for i, t := range ctx.AllIdentifier() {
 		ts = append(ts, &types.NamedType{
 			Name: s.getIdent(t),
 			Type: ctx.Type_(i).Accept(s).(*types.DataType),
@@ -773,101 +609,14 @@ func (s *schemaVisitor) VisitTyped_variable_list(ctx *gen.Typed_variable_listCon
 	return vars
 }
 
-func (s *schemaVisitor) VisitAccess_modifier(ctx *gen.Access_modifierContext) any {
-	// we will have to parse this at a later stage, since this is either public/private,
-	// or a types.Modifier
-	panic("VisitAccess_modifier should not be called")
-}
-
-// getModifiersAndPublicity parses access modifiers and returns. it should be used when
-// parsing procedures and actions
-func getModifiersAndPublicity(ctxs []gen.IAccess_modifierContext) (public bool, mods []types.Modifier) {
-	for _, ctx := range ctxs {
-		switch {
-		case ctx.PUBLIC() != nil:
-			public = true
-		case ctx.PRIVATE() != nil:
-			public = false
-		case ctx.VIEW() != nil:
-			mods = append(mods, types.ModifierView)
-		case ctx.OWNER() != nil:
-			mods = append(mods, types.ModifierOwner)
-		default:
-			// should not happen, as this would suggest a bug in the parser
-			panic("unknown access modifier")
-		}
-	}
-
-	return
-}
-
-func (s *schemaVisitor) VisitAction_declaration(ctx *gen.Action_declarationContext) any {
-	act := &types.Action{
-		Name:        s.getIdent(ctx.IDENTIFIER()),
-		Annotations: arr[string](len(ctx.AllAnnotation())),
-	}
-
-	for i, a := range ctx.AllAnnotation() {
-		act.Annotations[i] = a.Accept(s).(string)
-	}
-
-	public, mods := getModifiersAndPublicity(ctx.AllAccess_modifier())
-	act.Public = public
-	act.Modifiers = mods
-
-	if ctx.Variable_list() != nil {
-		params := ctx.Variable_list().Accept(s).([]*ExpressionVariable)
-		paramStrs := make([]string, len(params))
-		for i, p := range params {
-			paramStrs[i] = p.String()
-		}
-		act.Parameters = paramStrs
-	}
-
-	act.Body = s.getTextFromStream(ctx.Action_block().GetStart().GetStart(), ctx.Action_block().GetStop().GetStop())
-
-	ast := ctx.Action_block().Accept(s).([]ActionStmt)
-	s.actions[act.Name] = ast
-
-	return act
-}
-
-func (s *schemaVisitor) VisitProcedure_declaration(ctx *gen.Procedure_declarationContext) any {
-	proc := &types.Procedure{
-		Name:        s.getIdent(ctx.IDENTIFIER()),
-		Annotations: arr[string](len(ctx.AllAnnotation())),
-	}
-
-	if ctx.Typed_variable_list() != nil {
-		proc.Parameters = ctx.Typed_variable_list().Accept(s).([]*types.ProcedureParameter)
-	}
-
-	if ctx.Procedure_return() != nil {
-		proc.Returns = ctx.Procedure_return().Accept(s).(*types.ProcedureReturn)
-	}
-
-	for i, a := range ctx.AllAnnotation() {
-		proc.Annotations[i] = a.Accept(s).(string)
-	}
-
-	public, mods := getModifiersAndPublicity(ctx.AllAccess_modifier())
-	proc.Public = public
-	proc.Modifiers = mods
-
-	ast := ctx.Procedure_block().Accept(s).([]ProcedureStmt)
-	s.procedures[proc.Name] = ast
-
-	proc.Body = s.getTextFromStream(ctx.Procedure_block().GetStart().GetStart(), ctx.Procedure_block().GetStop().GetStop())
-
-	return proc
-}
-
 func (s *schemaVisitor) VisitProcedure_return(ctx *gen.Procedure_returnContext) any {
 	ret := &types.ProcedureReturn{}
 
+	usesNamedFields := false
 	switch {
 	case ctx.GetReturn_columns() != nil:
 		ret.Fields = ctx.GetReturn_columns().Accept(s).([]*types.NamedType)
+		usesNamedFields = true
 	case ctx.GetUnnamed_return_types() != nil:
 		ret.Fields = make([]*types.NamedType, len(ctx.GetUnnamed_return_types().AllType_()))
 		for i, t := range ctx.GetUnnamed_return_types().AllType_() {
@@ -882,6 +631,11 @@ func (s *schemaVisitor) VisitProcedure_return(ctx *gen.Procedure_returnContext) 
 
 	if ctx.TABLE() != nil {
 		ret.IsTable = true
+
+		// if it returns a table, it _must_ use named fields
+		if !usesNamedFields {
+			s.errs.RuleErr(ctx, ErrSyntax, "actions returning tables must use named fields in the return clause")
+		}
 	}
 
 	return ret
@@ -980,7 +734,7 @@ func (s *schemaVisitor) VisitCommon_table_expression(ctx *gen.Common_table_expre
 
 func (s *schemaVisitor) VisitCreate_table_statement(ctx *gen.Create_table_statementContext) any {
 	stmt := &CreateTableStatement{
-		Name:        s.getIdent(ctx.GetName().IDENTIFIER()),
+		Name:        s.getIdent(ctx.GetName()),
 		IfNotExists: ctx.EXISTS() != nil,
 		Columns:     arr[*Column](len(ctx.AllTable_column_def())),
 		Constraints: arr[*OutOfLineConstraint](len(ctx.AllTable_constraint_def())),
@@ -1064,7 +818,7 @@ func (s *schemaVisitor) VisitCreate_table_statement(ctx *gen.Create_table_statem
 
 func (s *schemaVisitor) VisitTable_column_def(ctx *gen.Table_column_defContext) interface{} {
 	column := &Column{
-		Name:        s.getIdent(ctx.IDENTIFIER()),
+		Name:        s.getIdent(ctx.Identifier()),
 		Type:        ctx.Type_().Accept(s).(*types.DataType),
 		Constraints: arr[InlineConstraint](len(ctx.AllInline_constraint())),
 	}
@@ -1106,7 +860,7 @@ func (s *schemaVisitor) VisitInline_constraint(ctx *gen.Inline_constraintContext
 
 func (s *schemaVisitor) VisitFk_constraint(ctx *gen.Fk_constraintContext) any {
 	c := &ForeignKeyReferences{
-		RefTable:   s.getIdent(ctx.GetTable().IDENTIFIER()),
+		RefTable:   s.getIdent(ctx.GetTable()),
 		RefColumns: ctx.Identifier_list().Accept(s).([]string),
 		Actions:    arr[*ForeignKeyAction](len(ctx.AllFk_action())),
 	}
@@ -1153,7 +907,7 @@ func (s *schemaVisitor) VisitFk_action(ctx *gen.Fk_actionContext) interface{} {
 func (s *schemaVisitor) VisitTable_constraint_def(ctx *gen.Table_constraint_defContext) any {
 	name := ""
 	if ctx.GetName() != nil {
-		name = s.getIdent(ctx.GetName().IDENTIFIER())
+		name = s.getIdent(ctx.GetName())
 	}
 
 	var c OutOfLineConstraintClause
@@ -1188,22 +942,6 @@ func (s *schemaVisitor) VisitTable_constraint_def(ctx *gen.Table_constraint_defC
 	oolc.Set(ctx)
 
 	return oolc
-}
-
-func (s *schemaVisitor) VisitTable_index_def(ctx *gen.Table_index_defContext) any {
-	index := &TableIndex{
-		Name:    ctx.Identifier().Accept(s).(string),
-		Columns: ctx.Identifier_list().Accept(s).([]string),
-		Type:    IndexTypeBTree,
-	}
-
-	if ctx.UNIQUE() != nil {
-		index.Type = IndexTypeUnique
-	}
-
-	index.Set(ctx)
-	index.Set(ctx)
-	return index
 }
 
 func (s *schemaVisitor) VisitDrop_table_statement(ctx *gen.Drop_table_statementContext) any {
@@ -1245,7 +983,7 @@ func (s *schemaVisitor) VisitAlter_table_statement(ctx *gen.Alter_table_statemen
 }
 
 func (s *schemaVisitor) VisitAdd_column_constraint(ctx *gen.Add_column_constraintContext) any {
-	a := &SetColumnConstraint{
+	a := &AlterColumnSet{
 		Column: ctx.Identifier().Accept(s).(string),
 	}
 
@@ -1253,6 +991,12 @@ func (s *schemaVisitor) VisitAdd_column_constraint(ctx *gen.Add_column_constrain
 		a.Type = ConstraintTypeNotNull
 	} else {
 		a.Type = ConstraintTypeDefault
+
+		if ctx.Literal() == nil {
+			s.errs.RuleErr(ctx, ErrSyntax, "missing literal for default constraint")
+			return a
+		}
+
 		a.Value = ctx.Literal().Accept(s).(*ExpressionLiteral)
 	}
 
@@ -1261,7 +1005,7 @@ func (s *schemaVisitor) VisitAdd_column_constraint(ctx *gen.Add_column_constrain
 }
 
 func (s *schemaVisitor) VisitDrop_column_constraint(ctx *gen.Drop_column_constraintContext) any {
-	a := &DropColumnConstraint{
+	a := &AlterColumnDrop{
 		Column: ctx.Identifier().Accept(s).(string),
 	}
 
@@ -1372,7 +1116,7 @@ func (s *schemaVisitor) VisitDrop_index_statement(ctx *gen.Drop_index_statementC
 
 func (s *schemaVisitor) VisitCreate_role_statement(ctx *gen.Create_role_statementContext) any {
 	stmt := &CreateRoleStatement{
-		Role: s.getIdent(ctx.IDENTIFIER()),
+		Role: s.getIdent(ctx.Identifier()),
 	}
 	if ctx.EXISTS() != nil {
 		stmt.IfNotExists = true
@@ -1384,7 +1128,7 @@ func (s *schemaVisitor) VisitCreate_role_statement(ctx *gen.Create_role_statemen
 
 func (s *schemaVisitor) VisitDrop_role_statement(ctx *gen.Drop_role_statementContext) any {
 	stmt := &DropRoleStatement{
-		Role: s.getIdent(ctx.IDENTIFIER()),
+		Role: s.getIdent(ctx.Identifier()),
 	}
 	if ctx.EXISTS() != nil {
 		stmt.IfExists = true
@@ -1442,7 +1186,7 @@ func (s *schemaVisitor) parseGrantOrRevoke(ctx interface {
 	c.Set(ctx)
 
 	if ctx.GetNamespace() != nil {
-		ns := s.getIdent(ctx.GetNamespace().IDENTIFIER())
+		ns := s.getIdent(ctx.GetNamespace())
 		c.Namespace = &ns
 	}
 
@@ -1485,7 +1229,7 @@ func (s *schemaVisitor) VisitPrivilege(ctx *gen.PrivilegeContext) any {
 
 func (s *schemaVisitor) VisitTransfer_ownership_statement(ctx *gen.Transfer_ownership_statementContext) any {
 	stmt := &TransferOwnershipStatement{
-		To: s.getIdent(ctx.Identifier().IDENTIFIER()),
+		To: s.getIdent(ctx.Identifier()),
 	}
 
 	stmt.Set(ctx)
@@ -1597,7 +1341,7 @@ func (s *schemaVisitor) VisitSelect_core(ctx *gen.Select_coreContext) any {
 		// the only Identifier used in the SELECT CORE grammar is for naming windows,
 		// so we can safely get identifiers by index here.
 		for i, window := range ctx.AllWindow() {
-			name := s.getIdent(ctx.Identifier(i).IDENTIFIER())
+			name := s.getIdent(ctx.Identifier(i))
 
 			win := window.Accept(s).(*WindowImpl)
 
@@ -1958,12 +1702,12 @@ func (s *schemaVisitor) VisitWindow_function_call_sql_expr(ctx *gen.Window_funct
 		FunctionCall: ctx.Sql_function_call().Accept(s).(*ExpressionFunctionCall),
 	}
 
-	if ctx.IDENTIFIER() != nil {
-		name := s.getIdent(ctx.IDENTIFIER())
+	if ctx.Identifier() != nil {
+		name := s.getIdent(ctx.Identifier())
 		wr := &WindowReference{
 			Name: name,
 		}
-		wr.SetToken(ctx.IDENTIFIER().GetSymbol())
+		wr.SetToken(ctx.Identifier().IDENTIFIER().GetSymbol())
 		e.Window = wr
 	} else {
 		e.Window = ctx.Window().Accept(s).(*WindowImpl)
@@ -2219,59 +1963,6 @@ func (s *schemaVisitor) VisitNormal_call_sql(ctx *gen.Normal_call_sqlContext) an
 	return call
 }
 
-func (s *schemaVisitor) VisitAction_block(ctx *gen.Action_blockContext) any {
-	var stmts []ActionStmt
-
-	for _, stmt := range ctx.AllAction_statement() {
-		stmts = append(stmts, stmt.Accept(s).(ActionStmt))
-	}
-
-	return stmts
-}
-
-func (s *schemaVisitor) VisitSql_action(ctx *gen.Sql_actionContext) any {
-	stmt := &ActionStmtSQL{
-		SQL: ctx.Sql_statement().Accept(s).(*SQLStatement),
-	}
-
-	stmt.Set(ctx)
-	return stmt
-}
-
-func (s *schemaVisitor) VisitLocal_action(ctx *gen.Local_actionContext) any {
-	stmt := &ActionStmtActionCall{
-		Action: s.getIdent(ctx.IDENTIFIER()),
-	}
-
-	if ctx.Procedure_expr_list() != nil {
-		stmt.Args = ctx.Procedure_expr_list().Accept(s).([]Expression)
-	}
-
-	stmt.Set(ctx)
-	return stmt
-}
-
-func (s *schemaVisitor) VisitExtension_action(ctx *gen.Extension_actionContext) any {
-	stmt := &ActionStmtExtensionCall{
-		Extension: s.getIdent(ctx.IDENTIFIER(0)),
-		Method:    s.getIdent(ctx.IDENTIFIER(1)),
-	}
-
-	if ctx.Procedure_expr_list() != nil {
-		stmt.Args = ctx.Procedure_expr_list().Accept(s).([]Expression)
-	}
-
-	if ctx.Variable_list() != nil {
-		varList := ctx.Variable_list().Accept(s).([]*ExpressionVariable)
-		for _, v := range varList {
-			stmt.Receivers = append(stmt.Receivers, v.String())
-		}
-	}
-
-	stmt.Set(ctx)
-	return stmt
-}
-
 func (s *schemaVisitor) VisitProcedure_block(ctx *gen.Procedure_blockContext) any {
 	var stmts []ProcedureStmt
 
@@ -2285,7 +1976,7 @@ func (s *schemaVisitor) VisitProcedure_block(ctx *gen.Procedure_blockContext) an
 func (s *schemaVisitor) VisitField_access_procedure_expr(ctx *gen.Field_access_procedure_exprContext) any {
 	e := &ExpressionFieldAccess{
 		Record: ctx.Procedure_expr().Accept(s).(Expression),
-		Field:  s.getIdent(ctx.IDENTIFIER()),
+		Field:  s.getIdent(ctx.Identifier()),
 	}
 
 	if ctx.Type_cast() != nil {
@@ -2600,7 +2291,7 @@ func (s *schemaVisitor) VisitVariable_or_underscore(ctx *gen.Variable_or_undersc
 		return nil
 	}
 
-	str := s.getIdent(ctx.VARIABLE())
+	str := s.cleanStringIdent(ctx.VARIABLE())
 	return &str
 }
 
@@ -2738,8 +2429,19 @@ func (s *schemaVisitor) VisitStmt_return_next(ctx *gen.Stmt_return_nextContext) 
 }
 
 func (s *schemaVisitor) VisitNormal_call_procedure(ctx *gen.Normal_call_procedureContext) any {
-	call := &ExpressionFunctionCall{
-		Name: s.getIdent(ctx.IDENTIFIER()),
+	call := &ExpressionFunctionCall{}
+
+	allIdent := ctx.AllIdentifier()
+	switch len(allIdent) {
+	case 1:
+		// unqualified
+		call.Name = s.getIdent(allIdent[0])
+	case 2:
+		// qualified
+		call.Qualifier = s.getIdent(allIdent[0])
+		call.Name = s.getIdent(allIdent[1])
+	default:
+		panic("invalid function call") // should never happen
 	}
 
 	// distinct and * cannot be used in procedure function calls
@@ -2788,7 +2490,11 @@ func (s *schemaVisitor) Visit(tree antlr.ParseTree) interface {
 // getIdent returns the text of an identifier.
 // It checks that the identifier is not too long.
 // It also converts the identifier to lowercase.
-func (s *schemaVisitor) getIdent(i antlr.TerminalNode) string {
+func (s *schemaVisitor) getIdent(i gen.IIdentifierContext) string {
+	return strings.ToLower(s.cleanStringIdent(i.IDENTIFIER()))
+}
+
+func (s *schemaVisitor) cleanStringIdent(i antlr.TerminalNode) string {
 	ident := i.GetText()
 	s.validateVariableIdentifier(i.GetSymbol(), ident)
 	return strings.ToLower(ident)

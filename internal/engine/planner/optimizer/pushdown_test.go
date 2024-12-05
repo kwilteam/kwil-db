@@ -100,7 +100,7 @@ func Test_Pushdown(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			schema, err := parse.Parse([]byte(testSchema))
+			schema, err := parse.ParseSchema([]byte(testSchema))
 			require.NoError(t, err)
 
 			parsedSql, err := parse.ParseSQL(test.sql)

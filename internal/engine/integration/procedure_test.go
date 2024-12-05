@@ -851,7 +851,7 @@ var satoshisUUID = &types.UUID{0x38, 0xeb, 0x77, 0xcb, 0x1e, 0x5a, 0x56, 0xc0, 0
 // deploy deploys a schema.
 // if deployer is not "", it will set the deployer as the owner.
 func deploy(t *testing.T, global *execution.GlobalContext, db sql.DB, schema string) (dbid string) {
-	parsed, err := parse.Parse([]byte(schema))
+	parsed, err := parse.ParseSchema([]byte(schema))
 	require.NoError(t, err)
 
 	d := txData()

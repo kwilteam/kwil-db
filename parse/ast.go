@@ -52,6 +52,13 @@ type Assignable interface {
 	assignable()
 }
 
+// TopLevelStatement is a top-level statement.
+// By itself, it is a valid statement.
+type TopLevelStatement interface {
+	Node
+	topLevelStatement()
+}
+
 // ExpressionLiteral is a literal expression.
 type ExpressionLiteral struct {
 	Position
@@ -108,6 +115,9 @@ func literalToString(value any) (string, error) {
 type ExpressionFunctionCall struct {
 	Position
 	Typecastable
+	// Qualifier is the qualified name of the function.
+	// It can be nil if the function is not qualified.
+	Qualifier string
 	// Name is the name of the function.
 	Name string
 	// Args are the arguments to the function call.
@@ -511,12 +521,6 @@ func (c *CommonTableExpression) Accept(v Visitor) any {
 	return v.VisitCommonTableExpression(c)
 }
 
-// SQLStmt is top-level statement, can be any SQL statement.
-type SQLStmt interface {
-	Node
-	StmtType() SQLStatementType
-}
-
 // SQLStatement is a DML statement with common table expression.
 type SQLStatement struct {
 	Position
@@ -533,10 +537,7 @@ func (s *SQLStatement) Accept(v Visitor) any {
 	return v.VisitSQLStatement(s)
 }
 
-func (s *SQLStatement) StmtType() SQLStatementType {
-	return s.SQL.StmtType()
-}
-
+func (s *SQLStatement) topLevelStatement() {}
 func (s *SQLStatement) Raw() (string, error) {
 	if s.raw == nil {
 		return "", fmt.Errorf("raw SQL is not set")
@@ -549,22 +550,68 @@ func (s *SQLStatement) Raw() (string, error) {
 // It can be INSERT, UPDATE, DELETE, SELECT.
 type SQLCore interface {
 	Node
-	StmtType() SQLStatementType
+	sqlCore()
 }
 
-type SQLStatementType string
+// CreateActionStatement is a CREATE ACTION statement.
+type CreateActionStatement struct {
+	Position
+	// Either IfNotExists or OrReplace can be true, but not both.
+	// Both can be false.
+	IfNotExists bool
+	OrReplace   bool
 
-const (
-	SQLStatementTypeInsert      SQLStatementType = "insert"
-	SQLStatementTypeUpdate      SQLStatementType = "update"
-	SQLStatementTypeDelete      SQLStatementType = "delete"
-	SQLStatementTypeSelect      SQLStatementType = "select"
-	SQLStatementTypeCreateTable SQLStatementType = "create_table"
-	SQLStatementTypeAlterTable  SQLStatementType = "alter_table"
-	SQLStatementTypeDropTable   SQLStatementType = "drop_table"
-	SQLStatementTypeCreateIndex SQLStatementType = "create_index"
-	SQLStatementTypeDropIndex   SQLStatementType = "drop_index"
-)
+	// Name is the name of the action.
+	Name string
+
+	// Parameters are the parameters of the action.
+	Parameters []*NamedType
+	// Public is true if the action is public.
+	Public bool
+
+	// Modifiers are things like VIEW, OWNER, etc.
+	Modifiers []string
+	// Returns specifies the return type of the action.
+	// It can be nil if the action does not return anything.
+	Returns *ActionReturn
+	// Statements are the statements in the action.
+	Statements []ProcedureStmt
+}
+
+func (c *CreateActionStatement) topLevelStatement() {}
+
+func (c *CreateActionStatement) Accept(v Visitor) any {
+	return v.VisitCreateActionStatement(c)
+}
+
+// NamedType is a type with a name.
+type NamedType struct {
+	Name string
+	Type *types.DataType
+}
+
+type DropActionStatement struct {
+	Position
+	// IfExists is true if the IF EXISTS clause is present.
+	IfExists bool
+	// Name is the name of the action.
+	Name string
+}
+
+func (d *DropActionStatement) topLevelStatement() {}
+
+func (d *DropActionStatement) Accept(v Visitor) any {
+	return v.VisitDropActionStatement(d)
+}
+
+// ActionReturn is the return struct of the action.
+type ActionReturn struct {
+	Position
+	// IsTable is true if the return type is a table.
+	IsTable bool
+	// Fields are the fields of the return type.
+	Fields []*NamedType
+}
 
 // CreateTableStatement is a CREATE TABLE statement.
 type CreateTableStatement struct {
@@ -577,12 +624,10 @@ type CreateTableStatement struct {
 	Constraints []*OutOfLineConstraint
 }
 
+func (c *CreateTableStatement) topLevelStatement() {}
+
 func (c *CreateTableStatement) Accept(v Visitor) any {
 	return v.VisitCreateTableStatement(c)
-}
-
-func (c *CreateTableStatement) StmtType() SQLStatementType {
-	return SQLStatementTypeCreateTable
 }
 
 // Column represents a table column.
@@ -608,13 +653,13 @@ type OutOfLineConstraint struct {
 
 // InlineConstraint is a constraint that is inline with the column.
 type InlineConstraint interface {
-	Positionable
+	Node
 	inlineConstraint()
 }
 
 // OutOfLineConstraintClause is a constraint that is not inline with the column.
 type OutOfLineConstraintClause interface {
-	Positionable
+	Node
 	outOfLineConstraintClause()
 	// LocalColumns returns the local columns that the constraint is applied to.
 	LocalColumns() []string
@@ -626,9 +671,17 @@ type PrimaryKeyInlineConstraint struct {
 
 func (c *PrimaryKeyInlineConstraint) inlineConstraint() {}
 
+func (c *PrimaryKeyInlineConstraint) Accept(v Visitor) any {
+	return v.VisitPrimaryKeyInlineConstraint(c)
+}
+
 type PrimaryKeyOutOfLineConstraint struct {
 	Position
 	Columns []string
+}
+
+func (c *PrimaryKeyOutOfLineConstraint) Accept(v Visitor) any {
+	return v.VisitPrimaryKeyOutOfLineConstraint(c)
 }
 
 func (c *PrimaryKeyOutOfLineConstraint) outOfLineConstraintClause() {}
@@ -639,11 +692,19 @@ type UniqueInlineConstraint struct {
 	Position
 }
 
+func (c *UniqueInlineConstraint) Accept(v Visitor) any {
+	return v.VisitUniqueInlineConstraint(c)
+}
+
 func (c *UniqueInlineConstraint) inlineConstraint() {}
 
 type UniqueOutOfLineConstraint struct {
 	Position
 	Columns []string
+}
+
+func (c *UniqueOutOfLineConstraint) Accept(v Visitor) any {
+	return v.VisitUniqueOutOfLineConstraint(c)
 }
 
 func (c *UniqueOutOfLineConstraint) outOfLineConstraintClause() {}
@@ -655,10 +716,18 @@ type DefaultConstraint struct {
 	Value *ExpressionLiteral
 }
 
+func (c *DefaultConstraint) Accept(v Visitor) any {
+	return v.VisitDefaultConstraint(c)
+}
+
 func (c *DefaultConstraint) inlineConstraint() {}
 
 type NotNullConstraint struct {
 	Position
+}
+
+func (c *NotNullConstraint) Accept(v Visitor) any {
+	return v.VisitNotNullConstraint(c)
 }
 
 func (c *NotNullConstraint) inlineConstraint() {}
@@ -666,6 +735,10 @@ func (c *NotNullConstraint) inlineConstraint() {}
 type CheckConstraint struct {
 	Position
 	Expression Expression
+}
+
+func (c *CheckConstraint) Accept(v Visitor) any {
+	return v.VisitCheckConstraint(c)
 }
 
 func (c *CheckConstraint) inlineConstraint() {}
@@ -682,12 +755,20 @@ type ForeignKeyReferences struct {
 	Actions    []*ForeignKeyAction
 }
 
+func (c *ForeignKeyReferences) Accept(v Visitor) any {
+	return v.VisitForeignKeyReferences(c)
+}
+
 func (c *ForeignKeyReferences) inlineConstraint() {}
 
 type ForeignKeyOutOfLineConstraint struct {
 	Position
 	Columns    []string
 	References *ForeignKeyReferences
+}
+
+func (c *ForeignKeyOutOfLineConstraint) Accept(v Visitor) any {
+	return v.VisitForeignKeyOutOfLineConstraint(c)
 }
 
 func (c *ForeignKeyOutOfLineConstraint) outOfLineConstraintClause() {}
@@ -702,48 +783,6 @@ const (
 	// IndexTypeUnique is a unique BTree index, created by using `UNIQUE INDEX`.
 	IndexTypeUnique IndexType = "unique"
 )
-
-// TableIndex represents table index declaration, both inline and non-inline.
-type TableIndex struct {
-	Position
-
-	Name    string
-	Columns []string
-	Type    IndexType
-}
-
-func (i *TableIndex) String() string {
-	if len(i.Columns) == 0 {
-		if i.Type == IndexTypeUnique {
-			return "UNIQUE"
-		}
-		panic("inline index can only be UNIQUE")
-	}
-
-	str := strings.Builder{}
-
-	switch i.Type {
-	case IndexTypeBTree:
-		str.WriteString("INDEX ")
-	case IndexTypeUnique:
-		str.WriteString("UNIQUE INDEX ")
-	default:
-		// should not happen
-		panic("unknown index type")
-	}
-
-	if i.Name != "" {
-		str.WriteString(i.Name + " ")
-	}
-
-	str.WriteString("(" + strings.Join(i.Columns, ", ") + ")")
-
-	return str.String()
-}
-
-func (i *TableIndex) Accept(v Visitor) any {
-	return v.VisitTableIndex(i)
-}
 
 // ForeignKey is a foreign key in a table.
 type ForeignKey struct {
@@ -828,15 +867,12 @@ func (s *DropTableStatement) Accept(v Visitor) any {
 	return v.VisitDropTableStatement(s)
 }
 
-func (s *DropTableStatement) StmtType() SQLStatementType {
-	return SQLStatementTypeDropTable
-}
+func (s *DropTableStatement) topLevelStatement() {}
 
 type AlterTableAction interface {
 	Node
 
 	alterTableAction()
-	ToSQL() string
 }
 
 // AlterTableStatement is a ALTER TABLE statement.
@@ -847,12 +883,10 @@ type AlterTableStatement struct {
 	Action AlterTableAction
 }
 
+func (a *AlterTableStatement) topLevelStatement() {}
+
 func (a *AlterTableStatement) Accept(v Visitor) any {
 	return v.VisitAlterTableStatement(a)
-}
-
-func (a *AlterTableStatement) StmtType() SQLStatementType {
-	return SQLStatementTypeAlterTable
 }
 
 // ConstraintType is a constraint in a table.
@@ -894,7 +928,8 @@ const (
 	ConstraintTypePrimaryKey MultiColumnConstraintType = "PRIMARY KEY"
 )
 
-type SetColumnConstraint struct {
+// AlterColumnSet is "ALTER COLUMN ... SET ..." statement.
+type AlterColumnSet struct {
 	Position
 	// Column is the column that is being altered.
 	Column string
@@ -905,62 +940,25 @@ type SetColumnConstraint struct {
 	Value *ExpressionLiteral
 }
 
-func (a *SetColumnConstraint) Accept(v Visitor) any {
-	return v.VisitSetColumnConstraint(a)
+func (a *AlterColumnSet) Accept(v Visitor) any {
+	return v.VisitAlterColumnSet(a)
 }
 
-func (a *SetColumnConstraint) alterTableAction() {}
+func (a *AlterColumnSet) alterTableAction() {}
 
-func (a *SetColumnConstraint) ToSQL() string {
-	str := strings.Builder{}
-	str.WriteString("ALTER COLUMN ")
-	str.WriteString(a.Column)
-	str.WriteString(" SET ")
-	switch a.Type {
-	case ConstraintTypeNotNull:
-		str.WriteString("NOT NULL")
-	case ConstraintTypeDefault:
-		str.WriteString("DEFAULT ")
-		str.WriteString(a.Value.String())
-	default:
-		panic("unknown constraint type")
-	}
-
-	return str.String()
-}
-
-type DropColumnConstraint struct {
+// AlterColumnDrop is "ALTER COLUMN ... DROP ..." statement.
+type AlterColumnDrop struct {
 	Position
 
 	Column string
 	Type   SingleColumnConstraintType
 }
 
-func (a *DropColumnConstraint) Accept(v Visitor) any {
-	return v.VisitDropColumnConstraint(a)
+func (a *AlterColumnDrop) Accept(v Visitor) any {
+	return v.VisitAlterColumnDrop(a)
 }
 
-func (a *DropColumnConstraint) alterTableAction() {}
-
-func (a *DropColumnConstraint) ToSQL() string {
-	str := strings.Builder{}
-	str.WriteString("ALTER COLUMN ")
-	str.WriteString(a.Column)
-	str.WriteString(" DROP ")
-
-	if a.Type != "" {
-		switch a.Type {
-		case ConstraintTypeNotNull:
-			str.WriteString("NOT NULL")
-		case ConstraintTypeDefault:
-			str.WriteString("DEFAULT")
-		default:
-			panic("unknown constraint type")
-		}
-	}
-
-	return str.String()
-}
+func (a *AlterColumnDrop) alterTableAction() {}
 
 type AddColumn struct {
 	Position
@@ -975,10 +973,6 @@ func (a *AddColumn) Accept(v Visitor) any {
 
 func (a *AddColumn) alterTableAction() {}
 
-func (a *AddColumn) ToSQL() string {
-	return "ADD COLUMN " + a.Name + " " + a.Type.String()
-}
-
 type DropColumn struct {
 	Position
 
@@ -990,10 +984,6 @@ func (a *DropColumn) Accept(v Visitor) any {
 }
 
 func (a *DropColumn) alterTableAction() {}
-
-func (a *DropColumn) ToSQL() string {
-	return "DROP COLUMN " + a.Name
-}
 
 type RenameColumn struct {
 	Position
@@ -1008,10 +998,6 @@ func (a *RenameColumn) Accept(v Visitor) any {
 
 func (a *RenameColumn) alterTableAction() {}
 
-func (a *RenameColumn) ToSQL() string {
-	return "RENAME COLUMN " + a.OldName + " TO " + a.NewName
-}
-
 type RenameTable struct {
 	Position
 
@@ -1023,10 +1009,6 @@ func (a *RenameTable) Accept(v Visitor) any {
 }
 
 func (a *RenameTable) alterTableAction() {}
-
-func (a *RenameTable) ToSQL() string {
-	return "RENAME TO " + a.Name
-}
 
 // AddTableConstraint is a constraint that is being added to a table.
 // It is used to specify multi-column constraints.
@@ -1042,10 +1024,6 @@ func (a *AddTableConstraint) Accept(v Visitor) any {
 
 func (a *AddTableConstraint) alterTableAction() {}
 
-func (a *AddTableConstraint) ToSQL() string {
-	return ""
-}
-
 type DropTableConstraint struct {
 	Position
 
@@ -1057,10 +1035,6 @@ func (a *DropTableConstraint) Accept(v Visitor) any {
 }
 
 func (a *DropTableConstraint) alterTableAction() {}
-
-func (a *DropTableConstraint) ToSQL() string {
-	return "DROP CONSTRAINT " + a.Name
-}
 
 type CreateIndexStatement struct {
 	Position
@@ -1076,9 +1050,7 @@ func (s *CreateIndexStatement) Accept(v Visitor) any {
 	return v.VisitCreateIndexStatement(s)
 }
 
-func (s *CreateIndexStatement) StmtType() SQLStatementType {
-	return SQLStatementTypeCreateIndex
-}
+func (s *CreateIndexStatement) topLevelStatement() {}
 
 type DropIndexStatement struct {
 	Position
@@ -1087,12 +1059,10 @@ type DropIndexStatement struct {
 	CheckExist bool
 }
 
+func (s *DropIndexStatement) topLevelStatement() {}
+
 func (s *DropIndexStatement) Accept(v Visitor) any {
 	return v.VisitDropIndexStatement(s)
-}
-
-func (s *DropIndexStatement) StmtType() SQLStatementType {
-	return SQLStatementTypeDropIndex
 }
 
 type GrantOrRevokeStatement struct {
@@ -1122,6 +1092,8 @@ func (g *GrantOrRevokeStatement) Accept(v Visitor) any {
 	return v.VisitGrantOrRevokeStatement(g)
 }
 
+func (g *GrantOrRevokeStatement) topLevelStatement() {}
+
 type CreateRoleStatement struct {
 	Position
 	// IfNotExists is true if the IF NOT EXISTS clause is present.
@@ -1133,6 +1105,8 @@ type CreateRoleStatement struct {
 func (c *CreateRoleStatement) Accept(v Visitor) any {
 	return v.VisitCreateRoleStatement(c)
 }
+
+func (c *CreateRoleStatement) topLevelStatement() {}
 
 type DropRoleStatement struct {
 	Position
@@ -1146,6 +1120,8 @@ func (d *DropRoleStatement) Accept(v Visitor) any {
 	return v.VisitDropRoleStatement(d)
 }
 
+func (d *DropRoleStatement) topLevelStatement() {}
+
 type TransferOwnershipStatement struct {
 	Position
 	// To is the user that the ownership is being transferred to.
@@ -1155,6 +1131,37 @@ type TransferOwnershipStatement struct {
 func (t *TransferOwnershipStatement) Accept(v Visitor) any {
 	return v.VisitTransferOwnershipStatement(t)
 }
+
+func (t *TransferOwnershipStatement) topLevelStatement() {}
+
+type UseExtensionStatement struct {
+	Position
+	IfNotExists bool
+	ExtName     string
+	Config      []*struct {
+		Key   string
+		Value *ExpressionLiteral
+	}
+	Alias string
+}
+
+func (u *UseExtensionStatement) Accept(v Visitor) any {
+	return v.VisitUseExtensionStatement(u)
+}
+
+func (u *UseExtensionStatement) topLevelStatement() {}
+
+type UnuseExtensionStatement struct {
+	Position
+	IfExists bool
+	Alias    string
+}
+
+func (u *UnuseExtensionStatement) Accept(v Visitor) any {
+	return v.VisitUnuseExtensionStatement(u)
+}
+
+func (u *UnuseExtensionStatement) topLevelStatement() {}
 
 // SelectStatement is a SELECT statement.
 type SelectStatement struct {
@@ -1170,9 +1177,7 @@ func (s *SelectStatement) Accept(v Visitor) any {
 	return v.VisitSelectStatement(s)
 }
 
-func (SelectStatement) StmtType() SQLStatementType {
-	return SQLStatementTypeSelect
-}
+func (SelectStatement) sqlCore() {}
 
 type CompoundOperator string
 
@@ -1335,9 +1340,7 @@ func (u *UpdateStatement) Accept(v Visitor) any {
 	return v.VisitUpdateStatement(u)
 }
 
-func (u *UpdateStatement) StmtType() SQLStatementType {
-	return SQLStatementTypeUpdate
-}
+func (u *UpdateStatement) sqlCore() {}
 
 type UpdateSetClause struct {
 	Position
@@ -1359,13 +1362,11 @@ type DeleteStatement struct {
 	Where Expression // can be nil
 }
 
-func (d *DeleteStatement) StmtType() SQLStatementType {
-	return SQLStatementTypeDelete
-}
-
 func (d *DeleteStatement) Accept(v Visitor) any {
 	return v.VisitDeleteStatement(d)
 }
+
+func (d *DeleteStatement) sqlCore() {}
 
 type InsertStatement struct {
 	Position
@@ -1382,9 +1383,7 @@ func (i *InsertStatement) Accept(v Visitor) any {
 	return v.VisitInsertStatement(i)
 }
 
-func (i *InsertStatement) StmtType() SQLStatementType {
-	return SQLStatementTypeInsert
-}
+func (i InsertStatement) sqlCore() {}
 
 type OnConflict struct {
 	Position
@@ -1396,64 +1395,6 @@ type OnConflict struct {
 
 func (u *OnConflict) Accept(v Visitor) any {
 	return v.VisitUpsertClause(u)
-}
-
-// action ast:
-
-type ActionStmt interface {
-	Node
-	ActionStmt() ActionStatementTypes
-}
-
-type ActionStatementTypes string
-
-const (
-	ActionStatementTypeExtensionCall ActionStatementTypes = "extension_call"
-	ActionStatementTypeActionCall    ActionStatementTypes = "action_call"
-	ActionStatementTypeSQL           ActionStatementTypes = "sql"
-)
-
-type ActionStmtSQL struct {
-	Position
-	SQL *SQLStatement
-}
-
-func (a *ActionStmtSQL) Accept(v Visitor) any {
-	return v.VisitActionStmtSQL(a)
-}
-
-func (a *ActionStmtSQL) ActionStmt() ActionStatementTypes {
-	return ActionStatementTypeSQL
-}
-
-type ActionStmtExtensionCall struct {
-	Position
-	Receivers []string
-	Extension string
-	Method    string
-	Args      []Expression
-}
-
-func (a *ActionStmtExtensionCall) Accept(v Visitor) any {
-	return v.VisitActionStmtExtensionCall(a)
-}
-
-func (a *ActionStmtExtensionCall) ActionStmt() ActionStatementTypes {
-	return ActionStatementTypeExtensionCall
-}
-
-type ActionStmtActionCall struct {
-	Position
-	Action string
-	Args   []Expression
-}
-
-func (a *ActionStmtActionCall) Accept(v Visitor) any {
-	return v.VisitActionStmtActionCall(a)
-}
-
-func (a *ActionStmtActionCall) ActionStmt() ActionStatementTypes {
-	return ActionStatementTypeActionCall
 }
 
 // procedure ast:
@@ -1652,9 +1593,6 @@ func (p *ProcedureStmtReturnNext) Accept(v Visitor) any {
 type Visitor interface {
 	ProcedureVisitor
 	DDLVisitor
-	VisitActionStmtSQL(*ActionStmtSQL) any
-	VisitActionStmtExtensionCall(*ActionStmtExtensionCall) any
-	VisitActionStmtActionCall(*ActionStmtActionCall) any
 }
 
 // DDLVisitor includes visit methods only needed to analyze DDL statements.
@@ -1666,19 +1604,32 @@ type DDLVisitor interface {
 	VisitCreateIndexStatement(*CreateIndexStatement) any
 	VisitDropIndexStatement(*DropIndexStatement) any
 	VisitGrantOrRevokeStatement(*GrantOrRevokeStatement) any
-	VisitSetColumnConstraint(*SetColumnConstraint) any
-	VisitDropColumnConstraint(*DropColumnConstraint) any
+	VisitAlterColumnSet(*AlterColumnSet) any
+	VisitAlterColumnDrop(*AlterColumnDrop) any
 	VisitAddColumn(*AddColumn) any
 	VisitDropColumn(*DropColumn) any
 	VisitRenameColumn(*RenameColumn) any
 	VisitRenameTable(*RenameTable) any
 	VisitAddTableConstraint(*AddTableConstraint) any
 	VisitDropTableConstraint(*DropTableConstraint) any
-	VisitTableIndex(*TableIndex) any
 	VisitColumn(*Column) any
 	VisitCreateRoleStatement(*CreateRoleStatement) any
 	VisitDropRoleStatement(*DropRoleStatement) any
 	VisitTransferOwnershipStatement(*TransferOwnershipStatement) any
+	VisitUseExtensionStatement(*UseExtensionStatement) any
+	VisitUnuseExtensionStatement(*UnuseExtensionStatement) any
+	VisitCreateActionStatement(*CreateActionStatement) any
+	VisitDropActionStatement(*DropActionStatement) any
+	// Constraints
+	VisitPrimaryKeyInlineConstraint(*PrimaryKeyInlineConstraint) any
+	VisitPrimaryKeyOutOfLineConstraint(*PrimaryKeyOutOfLineConstraint) any
+	VisitUniqueInlineConstraint(*UniqueInlineConstraint) any
+	VisitUniqueOutOfLineConstraint(*UniqueOutOfLineConstraint) any
+	VisitDefaultConstraint(*DefaultConstraint) any
+	VisitNotNullConstraint(*NotNullConstraint) any
+	VisitCheckConstraint(*CheckConstraint) any
+	VisitForeignKeyReferences(*ForeignKeyReferences) any
+	VisitForeignKeyOutOfLineConstraint(*ForeignKeyOutOfLineConstraint) any
 }
 
 // ProcedureVisitor includes visit methods only needed to analyze procedures.
@@ -1739,26 +1690,6 @@ type SQLVisitor interface {
 	VisitInsertStatement(*InsertStatement) any
 	VisitUpsertClause(*OnConflict) any
 	VisitOrderingTerm(*OrderingTerm) any
-}
-
-// UnimplementedSqlVisitor is meant to be used when an implementing visitor only intends
-// to implement the SQLVisitor interface. It will implement the full visitor interface,
-// but will panic if any of the methods are called. It does not implement the SQLVisitor
-// interface, so it alone cannot be used as a visitor.
-type UnimplementedSqlVisitor struct {
-	UnimplementedProcedureVisitor
-}
-
-func (s *UnimplementedSqlVisitor) VisitActionStmtSQL(p0 *ActionStmtSQL) any {
-	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
-}
-
-func (s *UnimplementedSqlVisitor) VisitActionStmtExtensionCall(p0 *ActionStmtExtensionCall) any {
-	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
-}
-
-func (s *UnimplementedSqlVisitor) VisitActionStmtActionCall(p0 *ActionStmtActionCall) any {
-	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
 }
 
 // UnimplementedProcedureVisitor is meant to be used when an implementing visitor only intends
@@ -1845,11 +1776,11 @@ func (u *UnimplementedDDLVisitor) VisitGrantOrRevokeStatement(p0 *GrantOrRevokeS
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
 }
 
-func (u *UnimplementedDDLVisitor) VisitSetColumnConstraint(p0 *SetColumnConstraint) any {
+func (u *UnimplementedDDLVisitor) VisitAlterColumnSet(p0 *AlterColumnSet) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
 }
 
-func (u *UnimplementedDDLVisitor) VisitDropColumnConstraint(p0 *DropColumnConstraint) any {
+func (u *UnimplementedDDLVisitor) VisitAlterColumnDrop(p0 *AlterColumnDrop) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
 }
 
@@ -1877,10 +1808,6 @@ func (u *UnimplementedDDLVisitor) VisitDropTableConstraint(p0 *DropTableConstrai
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
 }
 
-func (u *UnimplementedDDLVisitor) VisitTableIndex(p0 *TableIndex) any {
-	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
-}
-
 func (u *UnimplementedDDLVisitor) VisitColumn(p0 *Column) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
 }
@@ -1894,5 +1821,57 @@ func (u *UnimplementedDDLVisitor) VisitDropRoleStatement(p0 *DropRoleStatement) 
 }
 
 func (u *UnimplementedDDLVisitor) VisitTransferOwnershipStatement(p0 *TransferOwnershipStatement) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitPrimaryKeyInlineConstraint(p0 *PrimaryKeyInlineConstraint) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitPrimaryKeyOutOfLineConstraint(p0 *PrimaryKeyOutOfLineConstraint) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitUniqueInlineConstraint(p0 *UniqueInlineConstraint) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitUniqueOutOfLineConstraint(p0 *UniqueOutOfLineConstraint) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitDefaultConstraint(p0 *DefaultConstraint) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitNotNullConstraint(p0 *NotNullConstraint) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitCheckConstraint(p0 *CheckConstraint) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitForeignKeyReferences(p0 *ForeignKeyReferences) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitForeignKeyOutOfLineConstraint(p0 *ForeignKeyOutOfLineConstraint) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitCreateActionStatement(p0 *CreateActionStatement) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitDropActionStatement(p0 *DropActionStatement) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitUseExtensionStatement(p0 *UseExtensionStatement) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitUnuseExtensionStatement(p0 *UnuseExtensionStatement) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
 }

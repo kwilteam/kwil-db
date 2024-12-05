@@ -9,14 +9,29 @@ import (
 	"strings"
 
 	"github.com/antlr4-go/antlr/v4"
-	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/parse/gen"
 )
 
-// Parse parses a Kuneiform schema. It will perform syntax, semantic, and type
-// analysis, and return any errors.
-func Parse(kf []byte) (*types.Schema, error) {
-	res, err := ParseAndValidate(kf)
+// ParseResult is the result of parsing a SQL statement.
+// It can be any statement, including:
+// - CREATE TABLE
+// - SELECT/INSERT/UPDATE/DELETE
+// - CREATE ACTION
+// - etc.
+type ParseResult struct {
+	// Statements are the individual statements, in the order they were encountered.
+	Statements []TopLevelStatement
+	// ParseErrs is the error listener that contains all the errors that occurred during parsing.
+	ParseErrs ParseErrs `json:"parse_errs,omitempty"`
+}
+
+func (r *ParseResult) Err() error {
+	return r.ParseErrs.Err()
+}
+
+// Parse parses a statement or set of statements separated by semicolons.
+func Parse(sql string) ([]TopLevelStatement, error) {
+	res, err := ParseWithErrListener(sql)
 	if err != nil {
 		return nil, err
 	}
@@ -25,271 +40,14 @@ func Parse(kf []byte) (*types.Schema, error) {
 		return nil, res.Err()
 	}
 
-	return res.Schema, nil
+	return res.Statements, nil
 }
 
-// SchemaParseResult is the result of parsing a schema.
-// It returns the resulting schema, as well as any expected errors that occurred during parsing.
-// Unexpected errors will not be returned here, but instead in the function returning this type.
-type SchemaParseResult struct {
-	// Schema is the parsed schema.
-	// The schema can be nil if there are errors.
-	Schema *types.Schema `json:"schema"`
-	// ParseErrs is the error listener that contains all the errors that occurred during parsing.
-	ParseErrs ParseErrs `json:"parse_errs,omitempty"`
-	// SchemaInfo is the information about the schema.
-	SchemaInfo *SchemaInfo `json:"schema_info,omitempty"`
-	// ParsedActions is the ASTs of the parsed actions.
-	ParsedActions map[string][]ActionStmt `json:"parsed_actions,omitempty"`
-	// ParsedProcedures is the ASTs of the parsed procedures.
-	ParsedProcedures map[string][]ProcedureStmt `json:"parsed_procedures,omitempty"`
-}
-
-func (r *SchemaParseResult) Err() error {
-	return r.ParseErrs.Err()
-}
-
-// ParseAndValidate parses and validates an entire schema.
-// It returns the parsed schema, as well as any errors that occurred during parsing and validation.
-// It is meant to be used by parsing tools and the CLI. Most external users should use Parse instead.
-func ParseAndValidate(kf []byte) (*SchemaParseResult, error) {
-	res, err := ParseSchemaWithoutValidation(kf)
-	if err != nil {
-		return nil, err
-	}
-
-	// if there is a syntax error, we shouldn't continue with validation.
-	// We should still return a nil error, as the caller should read the error
-	// from the ParseErrs field.
-	if res.ParseErrs.Err() != nil {
-		return res, nil
-	}
-
-	// we clean the schema only after checking for parser errors, since parser errors
-	// might be the reason the schema is invalid in the first place.
-	err = res.Schema.Clean()
-	if err != nil {
-		// all clean validations should get caught before this point, however if they don't
-		// this will throw an error during parsing, instead of during transaction execution.
-		return nil, err
-	}
-
-	for _, proc := range res.Schema.Procedures {
-		ast := res.ParsedProcedures[proc.Name]
-		block := res.SchemaInfo.Blocks[proc.Name]
-
-		procRes, err := analyzeProcedureAST(proc, res.Schema, ast, &block.Position)
-		if err != nil {
-			return nil, err
-		}
-
-		res.ParseErrs.Add(procRes.ParseErrs.Errors()...)
-	}
-
-	for _, act := range res.Schema.Actions {
-		ast := res.ParsedActions[act.Name]
-		actRes, err := analyzeActionAST(act, res.Schema, ast)
-		if err != nil {
-			return nil, err
-		}
-
-		res.ParseErrs.Add(actRes.ParseErrs.Errors()...)
-	}
-
-	return res, nil
-}
-
-// ParseSchemaWithoutValidation parses a Kuneiform schema.
-// It will not perform validations on the actions and procedures.
-// Most users should use ParseAndValidate instead.
-func ParseSchemaWithoutValidation(kf []byte) (res *SchemaParseResult, err error) {
-	errLis, stream, parser, deferFn := setupParser(string(kf), "schema")
-	res = &SchemaParseResult{
-		ParseErrs:        errLis,
-		ParsedActions:    make(map[string][]ActionStmt),
-		ParsedProcedures: make(map[string][]ProcedureStmt),
-	}
-
-	visitor := newSchemaVisitor(stream, errLis)
-	visitor.actions = res.ParsedActions
-	visitor.procedures = res.ParsedProcedures
-
-	defer func() {
-		err2 := deferFn(recover())
-		if err2 != nil {
-			err = err2
-		}
-	}()
-
-	schema, ok := parser.Schema_entry().Accept(visitor).(*types.Schema)
-	if !ok {
-		err = fmt.Errorf("error parsing schema: could not detect return schema. this is likely a bug in the parser")
-	}
-
-	res.Schema = schema
-	res.SchemaInfo = visitor.schemaInfo
-
-	if errLis.Err() != nil {
-		return res, nil
-	}
-
-	return res, err
-}
-
-// ProcedureParseResult is the result of parsing a procedure.
-// It returns the procedure body AST, as well as any errors that occurred during parsing.
-// Unexpected errors will not be returned here, but instead in the function returning this type.
-type ProcedureParseResult struct {
-	// AST is the abstract syntax tree of the procedure.
-	AST []ProcedureStmt
-	// Errs are the errors that occurred during parsing and analysis.
-	// These include syntax errors, type errors, etc.
-	ParseErrs ParseErrs
-	// Variables are all variables that are used in the procedure.
-	Variables map[string]*types.DataType
-	// CompoundVariables are variables that are created in the procedure.
-	CompoundVariables map[string]struct{}
-	// AnonymousReceivers are the anonymous receivers that are used in the procedure,
-	// in the order they appear
-	AnonymousReceivers []*types.DataType
-}
-
-// ParseProcedure parses a procedure.
-// It takes the procedure definition, as well as the schema.
-// It performs type and semantic checks on the procedure.
-func ParseProcedure(proc *types.Procedure, schema *types.Schema) (res *ProcedureParseResult, err error) {
-	return analyzeProcedureAST(proc, schema, nil, &Position{}) // zero position is fine here
-}
-
-// analyzeProcedureAST analyzes the AST of a procedure.
-// If AST is nil, it will parse it from the provided body. This is useful because ASTs
-// with custom error positions can be passed in.
-func analyzeProcedureAST(proc *types.Procedure, schema *types.Schema, ast []ProcedureStmt, procPos *Position) (res *ProcedureParseResult, err error) {
-	errLis, stream, parser, deferFn := setupParser(proc.Body, "procedure")
-	defer func() {
-		err2 := deferFn(recover())
-		if err2 != nil {
-			err = err2
-		}
-	}()
-
-	res = &ProcedureParseResult{
-		ParseErrs:         errLis,
-		Variables:         make(map[string]*types.DataType),
-		CompoundVariables: make(map[string]struct{}),
-	}
-
-	if ast == nil {
-		schemaVisitor := newSchemaVisitor(stream, errLis)
-		// first parse the body, then visit it.
-		res.AST = parser.Procedure_entry().Accept(schemaVisitor).([]ProcedureStmt)
-	} else {
-		res.AST = ast
-	}
-
-	// if there are expected errors, return the parse errors.
-	if errLis.Err() != nil {
-		return res, nil
-	}
-
-	// set the parameters as the initial vars
-	vars := makeSessionVars()
-	for _, v := range proc.Parameters {
-		vars[v.Name] = v.Type
-	}
-
-	visitor := &procedureAnalyzer{
-		sqlAnalyzer: sqlAnalyzer{
-			blockContext: blockContext{
-				schema:             schema,
-				variables:          vars,
-				anonymousVariables: make(map[string]map[string]*types.DataType),
-				errs:               errLis,
-			},
-			sqlCtx: newSQLContext(),
-		},
-		procCtx: newProcedureContext(proc),
-		procResult: struct {
-			allLoopReceivers   []*loopTargetTracker
-			anonymousReceivers []*types.DataType
-			allVariables       map[string]*types.DataType
-		}{
-			allVariables: make(map[string]*types.DataType),
-		},
-	}
-
-	// visit the AST
-	returns := false
-	for _, stmt := range res.AST {
-		res := stmt.Accept(visitor).(*procedureStmtResult)
-		if res.willReturn {
-			returns = true
-		}
-	}
-
-	// if the procedure is expecting a return that is not a table, and it does not guarantee
-	// returning a value, we should add an error.
-	if proc.Returns != nil && !returns && !proc.Returns.IsTable {
-		if len(res.AST) == 0 {
-			errLis.AddErr(procPos, ErrReturn, "procedure does not return a value")
-		} else {
-			errLis.AddErr(res.AST[len(res.AST)-1], ErrReturn, "procedure does not return a value")
-		}
-	}
-
-	for k, v := range visitor.procResult.allVariables {
-		res.Variables[k] = v
-	}
-
-	for _, v := range visitor.procResult.allLoopReceivers {
-		// if type is nil, it is a compound variable, and we add it to the loop variables
-		// if not nil, it is a value, and we add it to the other variables
-		if v.dataType == nil {
-			res.CompoundVariables[v.name.String()] = struct{}{}
-		} else {
-			res.Variables[v.name.String()] = v.dataType
-		}
-	}
-
-	// we also need to add all input variables to the variables list
-	for _, v := range proc.Parameters {
-		res.Variables[v.Name] = v.Type
-	}
-
-	res.AnonymousReceivers = visitor.procResult.anonymousReceivers
-
-	return res, err
-}
-
-// SQLParseResult is the result of parsing an SQL statement.
-// It returns the SQL AST, as well as any errors that occurred during parsing.
-// Unexpected errors will not be returned here, but instead in the function returning this type.
-type SQLParseResult struct {
-	// AST is the abstract syntax tree of the SQL statement.
-	AST *SQLStatement
-	// Errs are the errors that occurred during parsing and analysis.
-	// These include syntax errors, type errors, etc.
-	ParseErrs ParseErrs
-
-	// Mutative is true if the statement mutates state.
-	Mutative bool
-}
-
-// DDLParseResult is the result of parsing an DDL statement.
-// NOTE: THIS is only temporary.
-type DDLParseResult struct {
-	// AST is the abstract syntax tree of the SQL statement.
-	AST SQLStmt
-	// Errs are the errors that occurred during parsing and analysis.
-	// These include syntax errors, type errors, etc.
-	ParseErrs ParseErrs
-}
-
-// ParseDDL parses an SQL DDL statement.
-// NOTE: THIS is only temporary so that I can write tests. After we shift from
-// *SQLStatement to SQLStmt we can delete this.
-func ParseDDL(sql string) (res *DDLParseResult, err error) {
-	parser, errLis, visitor, deferFn, err := setupParser2(sql)
+// ParseWithErrListener parses a statement or set of statements separated by semicolons.
+// It returns the parsed statements, as well as an error listener with position information.
+// Public consumers should opt for Parse instead, unless there is a specific need for the error listener.
+func ParseWithErrListener(sql string) (*ParseResult, error) {
+	parser, errLis, parseVisitor, deferFn, err := setupParser(sql)
 	if err != nil {
 		return nil, err
 	}
@@ -301,44 +59,15 @@ func ParseDDL(sql string) (res *DDLParseResult, err error) {
 		}
 	}()
 
-	return &DDLParseResult{
-		AST:       parser.Sql_entry().Accept(visitor).(SQLStmt),
-		ParseErrs: errLis,
+	stmts := parser.Entry().Accept(parseVisitor).([]TopLevelStatement)
+
+	return &ParseResult{
+		Statements: stmts,
+		ParseErrs:  errLis,
 	}, nil
 }
 
-// ParseSQL parses an SQL statement.
-// It requires a schema to be passed in, since SQL statements may reference
-// schema objects.
-// If skipValidation is true, the AST will not be validated or analyzed.
-// TODO: once we get farther on the planner, we should remove all validation, in favor
-// of the planner.
-func ParseSQL(sql string) (res *SQLParseResult, err error) {
-	parser, errLis, visitor, deferFn, err := setupParser2(sql)
-	if err != nil {
-		return nil, err
-	}
-
-	defer func() {
-		err2 := deferFn(recover())
-		if err2 != nil {
-			err = err2
-		}
-	}()
-
-	return &SQLParseResult{
-		AST:       parser.Sql_entry().Accept(visitor).(*SQLStatement),
-		ParseErrs: errLis,
-	}, nil
-}
-
-// setupSQLParser sets up the SQL parser.
-func setupSQLParser(sql string, schema *types.Schema) (parser *gen.KuneiformParser, errLis *errorListener, sqlVisitor *sqlAnalyzer,
-	parserVisitor *schemaVisitor, deferFn func(any) error, err error) {
-	if sql == "" {
-		return nil, nil, nil, nil, nil, fmt.Errorf("empty SQL statement")
-	}
-
+func setupParser(sql string) (parser *gen.KuneiformParser, errList *errorListener, parserVisitor *schemaVisitor, deferFn func(any) error, err error) {
 	// trim whitespace
 	sql = strings.TrimSpace(sql)
 
@@ -347,151 +76,8 @@ func setupSQLParser(sql string, schema *types.Schema) (parser *gen.KuneiformPars
 		sql += ";"
 	}
 
-	errLis, stream, parser, deferFn := setupParser(sql, "sql")
-
-	sqlVisitor = &sqlAnalyzer{
-		blockContext: blockContext{
-			schema:             schema,
-			variables:          make(map[string]*types.DataType), // no variables exist for pure SQL calls
-			anonymousVariables: make(map[string]map[string]*types.DataType),
-			errs:               errLis,
-		},
-		sqlCtx: newSQLContext(),
-	}
-	sqlVisitor.sqlCtx.inLoneSQL = true
-
-	parserVisitor = newSchemaVisitor(stream, errLis)
-
-	return parser, errLis, sqlVisitor, parserVisitor, deferFn, err
-}
-
-func setupParser2(sql string) (parser *gen.KuneiformParser, errList *errorListener, parserVisitor *schemaVisitor, deferFn func(any) error, err error) {
-	// trim whitespace
-	sql = strings.TrimSpace(sql)
-
-	// add semicolon to the end of the statement, if it is not there
-	if !strings.HasSuffix(sql, ";") {
-		sql += ";"
-	}
-
-	errList, stream, parser, deferFn := setupParser(sql, "sql")
-
-	parserVisitor = newSchemaVisitor(stream, errList)
-
-	return parser, errList, parserVisitor, deferFn, err
-}
-
-// ActionParseResult is the result of parsing an action.
-// It returns the action body AST, as well as any errors that occurred during parsing.
-// Unexpected errors will not be returned here, but instead in the function returning this type.
-type ActionParseResult struct {
-	AST []ActionStmt
-	// Errs are the errors that occurred during parsing and analysis.
-	// These include syntax errors, type errors, etc.
-	ParseErrs ParseErrs
-}
-
-// SimpleActionParseResult is the result of parsing an action without validation.
-// This is the struct that should be used in v0.10.
-type SimpleActionParseResult struct {
-	AST []ProcedureStmt
-	// Errs are the errors that occurred during parsing and analysis.
-	// These include syntax errors, type errors, etc.
-	Errs ParseErrs
-}
-
-// ParseActionBodyWithoutValidation parses an action without performing validations.
-// TODO: with v0.10, this should be the only function that is used to parse actions,
-// since all validations will be done in the planner.
-func ParseActionBodyWithoutValidation(actionBody string) (res *SimpleActionParseResult, err error) {
-	errLis, stream, parser, deferFn := setupParser(actionBody, "action")
-
-	res = &SimpleActionParseResult{
-		Errs: errLis,
-	}
-
-	defer func() {
-		err2 := deferFn(recover())
-		if err2 != nil {
-			err = err2
-		}
-	}()
-
-	schemaVisitor := newSchemaVisitor(stream, errLis)
-	res.AST = parser.Procedure_entry().Accept(schemaVisitor).([]ProcedureStmt)
-
-	return res, nil
-}
-
-// ParseAction parses a Kuneiform action.
-// It requires a schema to be passed in, since actions may reference
-// schema objects.
-func ParseAction(action *types.Action, schema *types.Schema) (res *ActionParseResult, err error) {
-	return analyzeActionAST(action, schema, nil)
-}
-
-// analyzeActionAST analyzes the AST of an action.
-// If AST is nil, it will parse it from the provided body. This is useful because ASTs
-// with custom error positions can be passed in.
-func analyzeActionAST(action *types.Action, schema *types.Schema, ast []ActionStmt) (res *ActionParseResult, err error) {
-	errLis, stream, parser, deferFn := setupParser(action.Body, "action")
-
-	res = &ActionParseResult{
-		ParseErrs: errLis,
-	}
-
-	defer func() {
-		err2 := deferFn(recover())
-		if err2 != nil {
-			err = err2
-		}
-	}()
-
-	if ast == nil {
-		schemaVisitor := newSchemaVisitor(stream, errLis)
-		res.AST = parser.Action_entry().Accept(schemaVisitor).([]ActionStmt)
-	} else {
-		res.AST = ast
-	}
-
-	if errLis.Err() != nil {
-		return res, nil
-	}
-
-	vars := makeSessionVars()
-	for _, v := range action.Parameters {
-		vars[v] = types.UnknownType
-	}
-
-	visitor := &actionAnalyzer{
-		sqlAnalyzer: sqlAnalyzer{
-			blockContext: blockContext{
-				schema:             schema,
-				variables:          vars,
-				anonymousVariables: make(map[string]map[string]*types.DataType),
-				errs:               errLis,
-			},
-			sqlCtx: newSQLContext(),
-		},
-		schema: schema,
-	}
-
-	for _, stmt := range res.AST {
-		stmt.Accept(visitor)
-		visitor.sqlAnalyzer.reset()
-	}
-
-	return res, err
-}
-
-// setupParser sets up the necessary antlr objects for parsing.
-// It returns an error listener, an input stream, a parser, and a function that
-// handles returned errors. The function should be called within deferred panic catch.
-// The deferFn will decide whether errors should be swallowed based on the error listener.
-func setupParser(inputStream string, errLisName string) (errLis *errorListener,
-	stream *antlr.InputStream, parser *gen.KuneiformParser, deferFn func(any) error) {
-	errLis = newErrorListener(errLisName)
-	stream = antlr.NewInputStream(inputStream)
+	errLis := newErrorListener("sql")
+	stream := antlr.NewInputStream(sql)
 
 	lexer := gen.NewKuneiformLexer(stream)
 	tokens := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
@@ -523,7 +109,7 @@ func setupParser(inputStream string, errLisName string) (errLis *errorListener,
 		if errLis.Err() != nil {
 			return nil
 		} else if err != nil {
-			// stack trace since this
+			// stack trace since this is a core bug or unexpected error
 			buf := make([]byte, 1<<16)
 
 			stackSize := runtime.Stack(buf, false)
@@ -535,7 +121,9 @@ func setupParser(inputStream string, errLisName string) (errLis *errorListener,
 		return nil
 	}
 
-	return errLis, stream, parser, deferFn
+	parserVisitor = newSchemaVisitor(stream, errList)
+
+	return parser, errList, parserVisitor, deferFn, err
 }
 
 // RecursivelyVisitPositions traverses a structure recursively, visiting all position struct types.

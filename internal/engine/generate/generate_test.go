@@ -179,7 +179,7 @@ func TestGenerateDDLStatement(t *testing.T) {
 			name: "alter table add column constraint NOT NULL",
 			sql: &parse.AlterTableStatement{
 				Table: "user",
-				Action: &parse.SetColumnConstraint{
+				Action: &parse.AlterColumnSet{
 					Column: "name",
 					Type:   parse.NOT_NULL,
 				},
@@ -191,7 +191,7 @@ func TestGenerateDDLStatement(t *testing.T) {
 			want: `ALTER TABLE user ALTER COLUMN name SET DEFAULT 10;`,
 			sql: &parse.AlterTableStatement{
 				Table: "user",
-				Action: &parse.SetColumnConstraint{
+				Action: &parse.AlterColumnSet{
 					Column: "name",
 					Type:   parse.DEFAULT,
 					Value: &parse.ExpressionLiteral{
@@ -206,7 +206,7 @@ func TestGenerateDDLStatement(t *testing.T) {
 			want: `ALTER TABLE user ALTER COLUMN name DROP NOT NULL;`,
 			sql: &parse.AlterTableStatement{
 				Table: "user",
-				Action: &parse.DropColumnConstraint{
+				Action: &parse.AlterColumnDrop{
 					Column: "name",
 					Type:   parse.NOT_NULL,
 				},
@@ -217,7 +217,7 @@ func TestGenerateDDLStatement(t *testing.T) {
 			want: `ALTER TABLE user ALTER COLUMN name DROP DEFAULT;`,
 			sql: &parse.AlterTableStatement{
 				Table: "user",
-				Action: &parse.DropColumnConstraint{
+				Action: &parse.AlterColumnDrop{
 					Column: "name",
 					Type:   parse.DEFAULT,
 				},
@@ -228,7 +228,7 @@ func TestGenerateDDLStatement(t *testing.T) {
 			want: `ALTER TABLE user ALTER COLUMN name DROP CONSTRAINT abc;`,
 			sql: &parse.AlterTableStatement{
 				Table: "user",
-				Action: &parse.DropColumnConstraint{
+				Action: &parse.AlterColumnDrop{
 					Column: "name",
 					Name:   "abc",
 				},

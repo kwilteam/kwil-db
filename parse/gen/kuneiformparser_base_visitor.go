@@ -7,19 +7,11 @@ type BaseKuneiformParserVisitor struct {
 	*antlr.BaseParseTreeVisitor
 }
 
-func (v *BaseKuneiformParserVisitor) VisitSchema_entry(ctx *Schema_entryContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitEntry(ctx *EntryContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitSql_entry(ctx *Sql_entryContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitAction_entry(ctx *Action_entryContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitProcedure_entry(ctx *Procedure_entryContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitStatement(ctx *StatementContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -71,47 +63,11 @@ func (v *BaseKuneiformParserVisitor) VisitVariable_list(ctx *Variable_listContex
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitSchema(ctx *SchemaContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitAnnotation(ctx *AnnotationContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitDatabase_declaration(ctx *Database_declarationContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitUse_declaration(ctx *Use_declarationContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitTable_declaration(ctx *Table_declarationContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
 func (v *BaseKuneiformParserVisitor) VisitColumn_def(ctx *Column_defContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
 func (v *BaseKuneiformParserVisitor) VisitTable_column_def(ctx *Table_column_defContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitIndex_def(ctx *Index_defContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitTable_index_def(ctx *Table_index_defContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitForeign_key_def(ctx *Foreign_key_defContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitForeign_key_action(ctx *Foreign_key_actionContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -140,18 +96,6 @@ func (v *BaseKuneiformParserVisitor) VisitFk_action(ctx *Fk_actionContext) inter
 }
 
 func (v *BaseKuneiformParserVisitor) VisitFk_constraint(ctx *Fk_constraintContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitAccess_modifier(ctx *Access_modifierContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitAction_declaration(ctx *Action_declarationContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitProcedure_declaration(ctx *Procedure_declarationContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -260,6 +204,22 @@ func (v *BaseKuneiformParserVisitor) VisitPrivilege(ctx *PrivilegeContext) inter
 }
 
 func (v *BaseKuneiformParserVisitor) VisitTransfer_ownership_statement(ctx *Transfer_ownership_statementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitCreate_action_statement(ctx *Create_action_statementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitDrop_action_statement(ctx *Drop_action_statementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitUse_extension_statement(ctx *Use_extension_statementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitUnuse_extension_statement(ctx *Unuse_extension_statementContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -408,22 +368,6 @@ func (v *BaseKuneiformParserVisitor) VisitSql_expr_list(ctx *Sql_expr_listContex
 }
 
 func (v *BaseKuneiformParserVisitor) VisitNormal_call_sql(ctx *Normal_call_sqlContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitAction_block(ctx *Action_blockContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitSql_action(ctx *Sql_actionContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitLocal_action(ctx *Local_actionContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitExtension_action(ctx *Extension_actionContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

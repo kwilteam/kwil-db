@@ -212,7 +212,7 @@ func loadSchema(file string) (*types.Schema, error) {
 		return nil, err
 	}
 
-	db, err := parse.Parse(d)
+	db, err := parse.ParseSchema(d)
 	if err != nil {
 		return nil, err
 	}

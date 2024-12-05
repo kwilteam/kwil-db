@@ -2213,7 +2213,7 @@ func Test_DDL(t *testing.T) {
 			sql:  `ALTER TABLE user ALTER COLUMN name SET NOT NULL;`,
 			want: &parse.AlterTableStatement{
 				Table: "user",
-				Action: &parse.SetColumnConstraint{
+				Action: &parse.AlterColumnSet{
 					Column: "name",
 					Type:   parse.ConstraintTypeNotNull,
 				},
@@ -2224,7 +2224,7 @@ func Test_DDL(t *testing.T) {
 			sql:  `ALTER TABLE user ALTER COLUMN name SET DEFAULT 10;`,
 			want: &parse.AlterTableStatement{
 				Table: "user",
-				Action: &parse.SetColumnConstraint{
+				Action: &parse.AlterColumnSet{
 					Column: "name",
 					Type:   parse.ConstraintTypeDefault,
 					Value: &parse.ExpressionLiteral{
@@ -2239,7 +2239,7 @@ func Test_DDL(t *testing.T) {
 			sql:  `ALTER TABLE user ALTER COLUMN name DROP NOT NULL;`,
 			want: &parse.AlterTableStatement{
 				Table: "user",
-				Action: &parse.DropColumnConstraint{
+				Action: &parse.AlterColumnDrop{
 					Column: "name",
 					Type:   parse.ConstraintTypeNotNull,
 				},
@@ -2250,7 +2250,7 @@ func Test_DDL(t *testing.T) {
 			sql:  `ALTER TABLE user ALTER COLUMN name DROP DEFAULT;`,
 			want: &parse.AlterTableStatement{
 				Table: "user",
-				Action: &parse.DropColumnConstraint{
+				Action: &parse.AlterColumnDrop{
 					Column: "name",
 					Type:   parse.ConstraintTypeDefault,
 				},
@@ -3427,7 +3427,7 @@ procedure is_admin ($address text) public view returns (bool) {}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := parse.Parse([]byte(tt.kf))
+			_, err := parse.ParseSchema([]byte(tt.kf))
 			if tt.err != nil {
 				require.ErrorIs(t, err, tt.err)
 				return

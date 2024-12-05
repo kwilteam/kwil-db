@@ -34,7 +34,7 @@ const (
 )
 
 func loadTestProcSchema() (*types.Schema, error) {
-	return parse.Parse([]byte(testProcsSchemaContent))
+	return parse.ParseSchema([]byte(testProcsSchemaContent))
 }
 
 func init() {

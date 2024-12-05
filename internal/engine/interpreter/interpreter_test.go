@@ -89,7 +89,7 @@ func Test_Interpeter(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			schema, err := parse.Parse([]byte(testSchema + test.proc))
+			schema, err := parse.ParseSchema([]byte(testSchema + test.proc))
 			require.NoError(t, err)
 
 			ctx := context.Background()

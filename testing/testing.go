@@ -115,7 +115,7 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 
 	var parsedSchemas []*types.Schema
 	for _, schema := range schemas {
-		s, err := parse.Parse([]byte(schema))
+		s, err := parse.ParseSchema([]byte(schema))
 		if err != nil {
 			return fmt.Errorf(`error parsing schema: %w`, err)
 		}

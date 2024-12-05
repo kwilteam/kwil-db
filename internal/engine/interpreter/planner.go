@@ -177,10 +177,6 @@ type ProcedureRunResult struct {
 	Values [][]*NamedValue
 }
 
-// functionCall contains logic for either a user-defined PL/pgSQL function, a built-in function,
-// or an action.
-type functionCall func(exec *executionContext, args []Value) (Cursor, error)
-
 // makeActionToExecutable creates an executable from an action
 func makeActionToExecutable(act *Action) *executable {
 	planner := &interpreterPlanner{}
@@ -439,7 +435,6 @@ func (i *interpreterPlanner) VisitProcedureStmtCall(p0 *parse.ProcedureStmtCall)
 
 // executeBlock executes a block of statements with their own sub-scope.
 // It takes a list of statements, and a list of variable allocations that will be made in the sub-scope.
-// TODO: deleteme
 func executeBlock(exec *executionContext, fn func([]Value) error,
 	allocs []*NamedValue, stmtFuncs []stmtFunc) error {
 	oldScope := exec.scope
@@ -560,10 +555,6 @@ func (i *interpreterPlanner) VisitLoopTermSQL(p0 *parse.LoopTermSQL) any {
 	})
 }
 
-type recordChanLooper struct {
-	ch <-chan *result
-}
-
 func (i *interpreterPlanner) VisitLoopTermVariable(p0 *parse.LoopTermVariable) any {
 	return loopTermFunc(func(exec *executionContext, fn func(Value) error) (err error) {
 		val, found := exec.getVariable(p0.Variable.Name)
@@ -590,29 +581,6 @@ func (i *interpreterPlanner) VisitLoopTermVariable(p0 *parse.LoopTermVariable) a
 
 		return nil
 	})
-}
-
-// loopReturn is an interface for iterating over the result of a loop term.
-type loopReturn interface {
-	Next(ctx context.Context) (Value, bool, error)
-}
-
-type arrayLooper struct {
-	arr   ArrayValue
-	index int64
-}
-
-func (a *arrayLooper) Next(ctx context.Context) (Value, bool, error) {
-	ret, err := a.arr.Index(a.index)
-	if err != nil {
-		if err == ErrIndexOutOfBounds {
-			return nil, true, nil
-		}
-		return nil, false, err
-	}
-
-	a.index++
-	return ret, false, nil
 }
 
 func (i *interpreterPlanner) VisitProcedureStmtIf(p0 *parse.ProcedureStmtIf) any {
@@ -1364,11 +1332,11 @@ func (i *interpreterPlanner) VisitAddColumnStatement(p0 *parse.AddColumn) any {
 	panic("TODO: Implement")
 }
 
-func (i *interpreterPlanner) VisitSetColumnConstraint(p0 *parse.SetColumnConstraint) any {
+func (i *interpreterPlanner) VisitSetColumnConstraint(p0 *parse.AlterColumnSet) any {
 	panic("TODO: Implement")
 }
 
-func (i *interpreterPlanner) VisitDropColumnConstraint(p0 *parse.DropColumnConstraint) any {
+func (i *interpreterPlanner) VisitDropColumnConstraint(p0 *parse.AlterColumnDrop) any {
 	panic("TODO: Implement")
 }
 

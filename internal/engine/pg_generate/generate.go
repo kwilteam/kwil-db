@@ -1,4 +1,5 @@
-package generate
+// pggenerate package is responsible for generating the Postgres-compatible SQL from the AST.
+package pggenerate
 
 import (
 	"fmt"
@@ -15,16 +16,27 @@ import (
 */
 
 // GenerateSQL generates Postgres compatible SQL from an AST
+// If orderParams is true, it will number the parameters as $1, $2, etc.
+// It will return the ordered parameters in the order they appear in the statement.
+// It will also qualify the table names with the pgSchema.
 func GenerateSQL(ast parse.Node, orderParams bool, pgSchema string) (stmt string, params []string, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("error generating SQL: %v", r)
+		}
+	}()
+
 	s := &sqlGenerator{
 		pgSchema:         pgSchema,
 		numberParameters: orderParams,
 	}
+
+	stmt = ast.Accept(s).(string)
+	return stmt, s.orderedParams, nil
 }
 
 // sqlVisitor creates Postgres compatible SQL from an AST
 type sqlGenerator struct {
-	parse.UnimplementedActionVisitor
 	// pgSchema is the schema name to prefix to the table names
 	pgSchema string
 	// numberParameters is a flag that indicates if we should number parameters as $1, $2, etc.,
@@ -66,6 +78,7 @@ func (s *sqlGenerator) VisitExpressionFunctionCall(p0 *parse.ExpressionFunctionC
 	// the schema name, since it is a local procedure
 	fn, ok := parse.Functions[p0.Name]
 	if !ok {
+		// TODO: we can get rid of this because it will no longer be the case (since we dont have procs)
 		// if not found, it is a local procedure
 		str.WriteString(s.pgSchema)
 		str.WriteString(".")
@@ -1369,6 +1382,11 @@ func formatParameterName(name string) string {
 	return "_param_" + name
 }
 
+// PgSessionPrefix is the prefix for all session variables.
+// It is used in combination with Postgre's current_setting function
+// to set contextual variables.
+const PgSessionPrefix = "ctx"
+
 // formatContextualVariableName formats a contextual variable name for usage in postgres.
 // This uses the current_setting function to get the value of the variable. It also
 // removes the @ prefix. If the type is not a text type, it will also type cast it.
@@ -1395,4 +1413,94 @@ func formatContextualVariableName(name string) string {
 	default:
 		panic("unallowed contextual variable type: " + dataType.String())
 	}
+}
+
+func (s *sqlGenerator) VisitProcedureStmtDeclaration(p0 *parse.ProcedureStmtDeclaration) any {
+	generateErr(s)
+	return nil
+}
+
+func (s *sqlGenerator) VisitProcedureStmtAssignment(p0 *parse.ProcedureStmtAssign) any {
+	generateErr(s)
+	return nil
+}
+
+func (s *sqlGenerator) VisitProcedureStmtCall(p0 *parse.ProcedureStmtCall) any {
+	generateErr(s)
+	return nil
+}
+
+func (s *sqlGenerator) VisitProcedureStmtForLoop(p0 *parse.ProcedureStmtForLoop) any {
+	generateErr(s)
+	return nil
+}
+
+func (s *sqlGenerator) VisitLoopTermRange(p0 *parse.LoopTermRange) any {
+	generateErr(s)
+	return nil
+}
+
+func (s *sqlGenerator) VisitLoopTermSQL(p0 *parse.LoopTermSQL) any {
+	generateErr(s)
+	return nil
+}
+
+func (s *sqlGenerator) VisitLoopTermVariable(p0 *parse.LoopTermVariable) any {
+	generateErr(s)
+	return nil
+}
+
+func (s *sqlGenerator) VisitProcedureStmtIf(p0 *parse.ProcedureStmtIf) any {
+	generateErr(s)
+	return nil
+}
+
+func (s *sqlGenerator) VisitIfThen(p0 *parse.IfThen) any {
+	generateErr(s)
+	return nil
+}
+
+func (s *sqlGenerator) VisitProcedureStmtSQL(p0 *parse.ProcedureStmtSQL) any {
+	generateErr(s)
+	return nil
+}
+
+func (s *sqlGenerator) VisitProcedureStmtBreak(p0 *parse.ProcedureStmtBreak) any {
+	generateErr(s)
+	return nil
+}
+
+func (s *sqlGenerator) VisitProcedureStmtReturn(p0 *parse.ProcedureStmtReturn) any {
+	generateErr(s)
+	return nil
+}
+
+func (s *sqlGenerator) VisitProcedureStmtReturnNext(p0 *parse.ProcedureStmtReturnNext) any {
+	generateErr(s)
+	return nil
+}
+
+func (s *sqlGenerator) VisitUseExtensionStatement(p0 *parse.UseExtensionStatement) any {
+	generateErr(s)
+	return nil
+}
+
+func (s *sqlGenerator) VisitUnuseExtensionStatement(p0 *parse.UnuseExtensionStatement) any {
+	generateErr(s)
+	return nil
+}
+
+func (s *sqlGenerator) VisitCreateActionStatement(p0 *parse.CreateActionStatement) any {
+	generateErr(s)
+	return nil
+}
+
+func (s *sqlGenerator) VisitDropActionStatement(p0 *parse.DropActionStatement) any {
+	generateErr(s)
+	return nil
+}
+
+// generateErr is a helper function that panics when a Visit method that is unexpected is called.
+func generateErr(t any) {
+	panic(fmt.Sprintf("SQL generate should never be called on %T", t))
 }

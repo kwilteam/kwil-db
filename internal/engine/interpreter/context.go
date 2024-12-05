@@ -1,7 +1,6 @@
 package interpreter
 
 import (
-	"context"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/common"
@@ -60,60 +59,8 @@ func (e *executionContext) getTable(namespace, tableName string) (*engine.Table,
 	return table, ok
 }
 
-// plan creates a logical plan from the AST.
-// It will also rewrite the SQL statement to be deterministic if necessary.
-func (e *executionContext) plan(sql string) (*logical.AnalyzedPlan, *parse.SQLStatement, error) {
-	res, err := parse.ParseSQL(sql)
-	if err != nil {
-		return nil, nil, err
-	}
-	if res.ParseErrs.Err() != nil {
-		return nil, nil, res.ParseErrs.Err()
-	}
-
-	analyzed, err := logical.CreateLogicalPlan(
-		res.AST,
-		e.getTable,
-		func(varName string) (dataType *types.DataType, found bool) {
-			val, found := e.getVariable(varName)
-			if !found {
-				return nil, false
-			}
-
-			// if it is a record, we need to return the record type
-			if _, ok := val.(*RecordValue); !ok {
-				return nil, false
-			}
-
-			return val.Type(), true
-		},
-		func(objName string) (obj map[string]*types.DataType, found bool) {
-			val, found := e.getVariable(objName)
-			if !found {
-				return nil, false
-			}
-
-			if rec, ok := val.(*RecordValue); ok {
-				dt := make(map[string]*types.DataType)
-				for _, field := range rec.Order {
-					dt[field] = rec.Fields[field].Type()
-				}
-
-				return dt, true
-			}
-
-			return nil, false
-		},
-		e.mutatingState,
-	)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	return analyzed, res.AST, nil
-}
-
 // query executes a query.
+// It will parse the SQL, create a logical plan, and execute the query.
 func (e *executionContext) query(sql string, fn func(*RecordValue) error) error {
 	res, err := parse.ParseSQL(sql)
 	if err != nil {
@@ -123,6 +70,8 @@ func (e *executionContext) query(sql string, fn func(*RecordValue) error) error 
 		return res.ParseErrs.Err()
 	}
 
+	// create a logical plan. This will make the query deterministic (if necessary),
+	// as well as tell us what the return types will be.
 	analyzed, err := logical.CreateLogicalPlan(
 		res.AST,
 		e.getTable,
@@ -300,152 +249,4 @@ type scopeContext struct {
 	variables map[string]Value
 	// namespace is the current namespace.
 	namespace string
-}
-
-// Cursor is the cursor for the current execution.
-// It is used to handle iteration over the results.
-type Cursor interface {
-	// Next moves the cursor to the next result.
-	// It returns the value returned, if the cursor is done, and an error.
-	// If the cursor is done, the value returned is not valid.
-	Next(context.Context) (RecordValue, bool, error)
-	// Close closes the cursor.
-	Close() error
-}
-
-// returnableCursor is a cursor that can be directly returned to
-// by the interpreter. This allows for progressively iterating over
-// results.
-type returnableCursor struct {
-	expectedShape []*types.DataType
-	recordChan    chan []Value
-	errChan       chan error
-}
-
-func newReturnableCursor(expectedShape []*types.DataType) *returnableCursor {
-	return &returnableCursor{
-		expectedShape: expectedShape,
-		recordChan:    make(chan []Value),
-		errChan:       make(chan error),
-	}
-}
-
-func (r *returnableCursor) Record() chan<- []Value {
-	return r.recordChan
-}
-
-func (r *returnableCursor) Err() chan<- error {
-	return r.errChan
-}
-
-func (r *returnableCursor) Close() error {
-	close(r.recordChan)
-	close(r.errChan)
-	return nil
-}
-
-func (r *returnableCursor) Next(ctx context.Context) (RecordValue, bool, error) {
-	select {
-	case rec, ok := <-r.recordChan:
-		if !ok {
-			return RecordValue{}, true, nil
-		} else {
-			// check if the shape is correct
-			if len(r.expectedShape) != len(rec) {
-				return RecordValue{}, false, fmt.Errorf("expected %d columns, got %d", len(r.expectedShape), len(rec))
-			}
-
-			record := RecordValue{
-				Fields: map[string]Value{},
-			}
-
-			for i, expected := range r.expectedShape {
-				if !expected.EqualsStrict(rec[i].Type()) {
-					return RecordValue{}, false, fmt.Errorf("expected type %s, got %s", expected, rec[i].Type())
-				}
-
-				record.Fields[expected.Name] = rec[i]
-				record.Order = append(record.Order, expected.Name)
-			}
-
-			return record, false, nil
-		}
-	case err := <-r.errChan:
-		// if the err is errReturn, we can swallow and just return done.
-		if err == errReturn {
-			return RecordValue{}, true, nil
-		}
-
-		return RecordValue{}, false, err
-	case <-ctx.Done():
-		return RecordValue{}, false, ctx.Err()
-	}
-}
-
-// returnChans is a helper interface for returning values to channels.
-type returnChans interface {
-	Record() chan<- []Value
-	Err() chan<- error
-}
-
-type returning interface {
-	Values([]Value)
-	// Err returns the error channel.
-	Err(error)
-}
-
-func newReturningIntercept() *returningIntercept {
-	recordChan := make(chan []Value)
-	errChan := make(chan error)
-
-	return &returningIntercept{
-		recordChan: recordChan,
-		errChan:    errChan,
-	}
-}
-
-type returningIntercept struct {
-	recordChan chan []Value
-	errChan    chan error
-}
-
-var _ returning = (*returningIntercept)(nil)
-
-func (r *returningIntercept) Values(vals []Value) {
-	r.recordChan <- vals
-}
-
-func (r *returningIntercept) Err(err error) {
-	r.errChan <- err
-}
-
-// singleRecordCursor is a cursor that returns a single record.
-type singleValueCursor struct {
-	rec  RecordValue
-	done bool
-}
-
-func (s *singleValueCursor) Next(context.Context) (RecordValue, bool, error) {
-	if s.done {
-		return RecordValue{}, true, nil
-	}
-
-	s.done = true
-	return s.rec, false, nil
-}
-
-func (s *singleValueCursor) Close() error {
-	s.done = true
-	return nil
-}
-
-func newSingleValueCursor(rec RecordValue) *singleValueCursor {
-	return &singleValueCursor{
-		rec: rec,
-	}
-}
-
-type result struct {
-	Record *RecordValue
-	Err    error
 }

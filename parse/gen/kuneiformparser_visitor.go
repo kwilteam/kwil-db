@@ -7,17 +7,11 @@ import "github.com/antlr4-go/antlr/v4"
 type KuneiformParserVisitor interface {
 	antlr.ParseTreeVisitor
 
-	// Visit a parse tree produced by KuneiformParser#schema_entry.
-	VisitSchema_entry(ctx *Schema_entryContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#entry.
+	VisitEntry(ctx *EntryContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#sql_entry.
-	VisitSql_entry(ctx *Sql_entryContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#action_entry.
-	VisitAction_entry(ctx *Action_entryContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#procedure_entry.
-	VisitProcedure_entry(ctx *Procedure_entryContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#statement.
+	VisitStatement(ctx *StatementContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#string_literal.
 	VisitString_literal(ctx *String_literalContext) interface{}
@@ -55,38 +49,11 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#variable_list.
 	VisitVariable_list(ctx *Variable_listContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#schema.
-	VisitSchema(ctx *SchemaContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#annotation.
-	VisitAnnotation(ctx *AnnotationContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#database_declaration.
-	VisitDatabase_declaration(ctx *Database_declarationContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#use_declaration.
-	VisitUse_declaration(ctx *Use_declarationContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#table_declaration.
-	VisitTable_declaration(ctx *Table_declarationContext) interface{}
-
 	// Visit a parse tree produced by KuneiformParser#column_def.
 	VisitColumn_def(ctx *Column_defContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#table_column_def.
 	VisitTable_column_def(ctx *Table_column_defContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#index_def.
-	VisitIndex_def(ctx *Index_defContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#table_index_def.
-	VisitTable_index_def(ctx *Table_index_defContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#foreign_key_def.
-	VisitForeign_key_def(ctx *Foreign_key_defContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#foreign_key_action.
-	VisitForeign_key_action(ctx *Foreign_key_actionContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#type_list.
 	VisitType_list(ctx *Type_listContext) interface{}
@@ -108,15 +75,6 @@ type KuneiformParserVisitor interface {
 
 	// Visit a parse tree produced by KuneiformParser#fk_constraint.
 	VisitFk_constraint(ctx *Fk_constraintContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#access_modifier.
-	VisitAccess_modifier(ctx *Access_modifierContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#action_declaration.
-	VisitAction_declaration(ctx *Action_declarationContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#procedure_declaration.
-	VisitProcedure_declaration(ctx *Procedure_declarationContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#procedure_return.
 	VisitProcedure_return(ctx *Procedure_returnContext) interface{}
@@ -198,6 +156,18 @@ type KuneiformParserVisitor interface {
 
 	// Visit a parse tree produced by KuneiformParser#transfer_ownership_statement.
 	VisitTransfer_ownership_statement(ctx *Transfer_ownership_statementContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#create_action_statement.
+	VisitCreate_action_statement(ctx *Create_action_statementContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#drop_action_statement.
+	VisitDrop_action_statement(ctx *Drop_action_statementContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#use_extension_statement.
+	VisitUse_extension_statement(ctx *Use_extension_statementContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#unuse_extension_statement.
+	VisitUnuse_extension_statement(ctx *Unuse_extension_statementContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#select_statement.
 	VisitSelect_statement(ctx *Select_statementContext) interface{}
@@ -309,18 +279,6 @@ type KuneiformParserVisitor interface {
 
 	// Visit a parse tree produced by KuneiformParser#normal_call_sql.
 	VisitNormal_call_sql(ctx *Normal_call_sqlContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#action_block.
-	VisitAction_block(ctx *Action_blockContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#sql_action.
-	VisitSql_action(ctx *Sql_actionContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#local_action.
-	VisitLocal_action(ctx *Local_actionContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#extension_action.
-	VisitExtension_action(ctx *Extension_actionContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#procedure_block.
 	VisitProcedure_block(ctx *Procedure_blockContext) interface{}
