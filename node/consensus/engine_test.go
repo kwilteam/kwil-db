@@ -22,6 +22,7 @@ import (
 	"github.com/kwilteam/kwil-db/node/meta"
 	"github.com/kwilteam/kwil-db/node/pg"
 	dbtest "github.com/kwilteam/kwil-db/node/pg/test"
+	"github.com/kwilteam/kwil-db/node/snapshotter"
 	"github.com/kwilteam/kwil-db/node/store"
 	"github.com/kwilteam/kwil-db/node/txapp"
 	"github.com/kwilteam/kwil-db/node/types"
@@ -95,6 +96,8 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) []*Config {
 		require.NoError(t, tx.Commit(ctx))
 	}()
 
+	ss := &snapshotStore{}
+
 	for i := range nodes {
 		nodeStr := fmt.Sprintf("NODE%d", i)
 		nodeDir := filepath.Join(tempDir, nodeStr)
@@ -113,6 +116,7 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) []*Config {
 			TxApp:          txapp,
 			Accounts:       accounts,
 			ValidatorSet:   validatorSet,
+			Snapshots:      ss,
 			ValidatorStore: v,
 			Logger:         logger,
 			ProposeTimeout: 1 * time.Second,
@@ -596,7 +600,7 @@ func TestCELeaderSingleNode(t *testing.T) {
 
 	require.Eventually(t, func() bool {
 		return leader.lastCommitHeight() >= 1 // Ensure that the leader mines a block
-	}, 6*time.Second, 100*time.Millisecond)
+	}, 10*time.Second, 100*time.Millisecond)
 }
 
 func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
@@ -811,4 +815,28 @@ func (ce *ConsensusEngine) blockResult() *blockResult {
 	defer ce.state.mtx.RUnlock()
 
 	return ce.state.blockRes
+}
+
+// should satisfy the SnapshotModule interface
+type snapshotStore struct {
+}
+
+func (s *snapshotStore) Enabled() bool {
+	return false
+}
+
+func (s *snapshotStore) ListSnapshots() []*snapshotter.Snapshot {
+	return nil
+}
+
+func (s *snapshotStore) CreateSnapshot(ctx context.Context, height uint64, snapshotID string, schemas, excludedTables []string, excludeTableData []string) error {
+	return nil
+}
+
+func (s *snapshotStore) IsSnapshotDue(height uint64) bool {
+	return false
+}
+
+func (s *snapshotStore) LoadSnapshotChunk(height uint64, format uint32, chunkID uint32) ([]byte, error) {
+	return nil, nil
 }

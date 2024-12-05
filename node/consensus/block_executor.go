@@ -305,7 +305,44 @@ func (ce *ConsensusEngine) commit() error {
 
 	// TODO: set the role based on the final validators
 
+	// Snapshots:
+	if err := ce.snapshotDB(ctx, height); err != nil {
+		ce.log.Warn("Failed to create snapshot of the database", "err", err)
+	}
+
 	ce.log.Info("Committed Block", "height", height, "hash", blkProp.blkHash, "appHash", appHash.String())
+	return nil
+}
+
+var (
+	statesyncSnapshotSchemas = []string{"kwild_voting", "kwild_internal", "kwild_chain", "kwild_accts", "kwild_migrations", "ds_*"}
+	statsyncExcludedTables   = []string{"kwild_internal.sentry"}
+)
+
+func (ce *ConsensusEngine) snapshotDB(ctx context.Context, height int64) error {
+	snapshotsDue := ce.snapshotter.Enabled() &&
+		(ce.snapshotter.IsSnapshotDue(uint64(height)) || len(ce.snapshotter.ListSnapshots()) == 0)
+	// snapshotsDue = snapshotsDue && height > max(1, a.cfg.InitialHeight)
+
+	if snapshotsDue && !ce.inSync.Load() {
+		// we make a snapshot tx but don't directly use it. This is because under the hood,
+		// we are using the pg_dump executable to create the snapshot, and we are simply
+		// giving pg_dump the snapshot ID to guarantee it has an isolated view of the database.
+		snapshotTx, snapshotId, err := ce.db.BeginSnapshotTx(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to start snapshot tx: %w", err)
+		}
+		defer snapshotTx.Rollback(ctx) // always rollback, since this is just for view isolation
+
+		err = ce.snapshotter.CreateSnapshot(ctx, uint64(height), snapshotId, statesyncSnapshotSchemas, statsyncExcludedTables, nil)
+		if err != nil {
+			return err
+		} else {
+			ce.log.Info("created snapshot", "height", height, "snapshot_id", snapshotId)
+			return nil
+		}
+	}
+
 	return nil
 }
 

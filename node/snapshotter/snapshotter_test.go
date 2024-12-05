@@ -1,4 +1,4 @@
-package statesync
+package snapshotter
 
 import (
 	"bufio"
@@ -18,7 +18,7 @@ const (
 
 func TestSanitizeLogicalDump(t *testing.T) {
 	dir := t.TempDir()
-	logger := log.NewStdOut(log.DebugLevel)
+	logger := log.DiscardLogger
 	// Create a snapshotter
 	snapshotter := NewSnapshotter(nil, dir, logger)
 

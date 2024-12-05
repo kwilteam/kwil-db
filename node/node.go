@@ -26,6 +26,7 @@ import (
 	"github.com/kwilteam/kwil-db/node/types"
 
 	"github.com/libp2p/go-libp2p"
+	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	p2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -59,11 +60,13 @@ type Node struct {
 	// pf *prefetch
 
 	// interfaces
-	bki  types.BlockStore
-	mp   types.MemPool
-	ce   ConsensusEngine
-	pm   peerManager // *peers.PeerMan
-	host host.Host
+	bki         types.BlockStore
+	mp          types.MemPool
+	ce          ConsensusEngine
+	pm          peerManager // *peers.PeerMan
+	ss          SnapshotStore
+	host        host.Host
+	statesyncer *StateSyncService
 
 	// broadcast channels
 	ackChan  chan AckRes                  // from consensus engine, to gossip to leader
@@ -111,20 +114,53 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 		return nil, fmt.Errorf("failed to create peer manager: %w", err)
 	}
 
+	// mode := dht.ModeClient
+	// if cfg.Snapshots.Enable {
+	// 	mode = dht.ModeServer
+	// }
+	mode := dht.ModeServer
+	ctx := context.Background()
+	dht, err := makeDHT(ctx, host, nil, mode)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create DHT: %w", err)
+	}
+	// dht.Close() ?
+	discoverer := makeDiscovery(dht)
+
+	// statesyncer
+	rcvdSnapsDir := filepath.Join(cfg.RootDir, "rcvd_snaps")
+	ssCfg := &statesyncConfig{
+		RcvdSnapsDir:  rcvdSnapsDir,
+		StateSyncCfg:  cfg.Statesync,
+		DBConfig:      cfg.DBConfig,
+		Logger:        logger.New("STATESYNC"),
+		DB:            cfg.DB,
+		Host:          host,
+		Discoverer:    discoverer,
+		SnapshotStore: cfg.Snapshotter,
+		BlockStore:    cfg.BlockStore,
+	}
+	ss, err := NewStateSyncService(ctx, ssCfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create state sync service: %w", err)
+	}
+
 	node := &Node{
-		log:      logger,
-		pubkey:   pubkey,
-		pex:      cfg.P2P.Pex,
-		host:     host,
-		pm:       pm,
-		mp:       cfg.Mempool,
-		bki:      cfg.BlockStore,
-		ce:       cfg.Consensus,
-		dir:      cfg.RootDir,
-		ackChan:  make(chan AckRes, 1),
-		resetMsg: make(chan ConsensusReset, 1),
-		discReq:  make(chan types.DiscoveryRequest, 1),
-		discResp: make(chan types.DiscoveryResponse, 1),
+		log:         logger,
+		pubkey:      pubkey,
+		pex:         cfg.P2P.Pex,
+		host:        host,
+		pm:          pm,
+		mp:          cfg.Mempool,
+		bki:         cfg.BlockStore,
+		ce:          cfg.Consensus,
+		dir:         cfg.RootDir,
+		ss:          cfg.Snapshotter,
+		statesyncer: ss,
+		ackChan:     make(chan AckRes, 1),
+		resetMsg:    make(chan ConsensusReset, 1),
+		discReq:     make(chan types.DiscoveryRequest, 1),
+		discResp:    make(chan types.DiscoveryResponse, 1),
 	}
 
 	host.SetStreamHandler(ProtocolIDTxAnn, node.txAnnStreamHandler)
@@ -153,30 +189,37 @@ func FormatPeerString(rawPubKey []byte, keyType crypto.KeyType, ip string, port 
 }
 
 func (n *Node) Addrs() []string {
-	hosts, ports := hostPort(n.host)
+	return addrs(n.host)
+}
+
+func addrs(h host.Host) []string {
+	hosts, ports, _ := hostPort(h)
 	if len(hosts) == 0 {
 		return nil
 	}
 
-	pubkeyType := n.pubkey.Type()
 	addrs := make([]string, len(hosts))
 	for i, h := range hosts {
-		addrs[i] = FormatPeerString(n.pubkey.Bytes(), pubkeyType, h, ports[i])
+		addrs[i] = fmt.Sprintf("%s:%d", h, ports[i])
+	}
+	return addrs
+}
+
+func maddrs(h host.Host) []string {
+	hosts, ports, protocols := hostPort(h)
+	id := h.ID()
+	if len(hosts) == 0 {
+		return nil
+	}
+	addrs := make([]string, len(hosts))
+	for i, host := range hosts {
+		addrs[i] = fmt.Sprintf("/%s/%s/tcp/%d/p2p/%s", protocols[i], host, ports[i], id)
 	}
 	return addrs
 }
 
 func (n *Node) MultiAddrs() []string {
-	hosts, ports := hostPort(n.host)
-	id := n.host.ID()
-	if len(hosts) == 0 {
-		return nil
-	}
-	addrs := make([]string, len(hosts))
-	for i, h := range hosts {
-		addrs[i] = fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s", h, ports[i], id)
-	}
-	return addrs
+	return maddrs(n.host)
 }
 
 func (n *Node) Dir() string {
@@ -252,6 +295,22 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 		n.log.Infof("Connected to address book peer %v", peerID)
 	}
 
+	// Advertise the snapshotcatalog service if snapshots are enabled
+	// umm, but gotcha, if a node has previous snapshots but snapshots are disabled, these snapshots will be unusable.
+	if n.ss.Enabled() {
+		advertise(ctx, snapshotCatalogNS, n.statesyncer.discoverer)
+	}
+
+	if err := n.statesyncer.Bootstrap(ctx); err != nil {
+		return fmt.Errorf("failed to bootstrap DHT service with the trusted snapshot providers: %w", err)
+	}
+
+	// Attempt statesync if enabled
+	if err := n.doStatesync(ctx); err != nil {
+		cancel()
+		return err
+	}
+
 	if err := n.startAckGossip(ctx, ps); err != nil {
 		cancel()
 		return err
@@ -305,6 +364,48 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 
 	n.log.Info("Node stopped.")
 	return nodeErr
+}
+
+// doStatesync attempts to perform statesync if the db is uninitialized.
+// It also initializes the blockstore with the initial block data at the
+// height of the discovered snapshot.
+func (n *Node) doStatesync(ctx context.Context) error {
+	// If statesync is enabled and the db is uninitialized, discover snapshots
+	if !n.statesyncer.cfg.Enable {
+		return nil
+	}
+
+	// Check if the Block store and DB are initialized
+	h, _, _ := n.bki.Best()
+	if h != 0 {
+		return nil
+	}
+
+	// check if the db is uninitialized
+	height, err := n.statesyncer.DiscoverSnapshots(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to attempt statesync: %w", err)
+	}
+
+	if height <= 0 { // no snapshots found, or statesync failed
+		return nil
+	}
+
+	// request and commit the block to the blockstore
+	_, appHash, rawBlk, err := n.getBlkHeight(ctx, height)
+	if err != nil {
+		return fmt.Errorf("failed to get statesync block %d: %w", height, err)
+	}
+	blk, err := types.DecodeBlock(rawBlk)
+	if err != nil {
+		return fmt.Errorf("failed to decode statesync block %d: %w", height, err)
+	}
+	// store block
+	if err := n.bki.Store(blk, appHash); err != nil {
+		return fmt.Errorf("failed to store statesync block to the blockstore %d: %w", height, err)
+	}
+
+	return nil
 }
 
 func (n *Node) Peers(context.Context) ([]*adminTypes.PeerInfo, error) {
@@ -375,6 +476,9 @@ var RequiredStreamProtocols = []protocol.ID{
 	ProtocolIDBlkAnn,
 	ProtocolIDBlockPropose,
 	pubsub.GossipSubID_v12,
+	ProtocolIDSnapshotCatalog,
+	ProtocolIDSnapshotChunk,
+	ProtocolIDSnapshotMeta,
 }
 
 func (n *Node) checkPeerProtos(ctx context.Context, peer peer.ID) error {
@@ -448,21 +552,25 @@ func newHost(ip string, port uint64, privKey crypto.PrivateKey) (host.Host, erro
 	return h, nil
 }
 
-func hostPort(host host.Host) ([]string, []int) {
+func hostPort(host host.Host) ([]string, []int, []string) {
 	var addrStr []string
 	var ports []int
+	var protocols []string              // ip4 or ip6
 	for _, addr := range host.Addrs() { // host.Network().ListenAddresses()
 		ps, _ := addr.ValueForProtocol(multiaddr.P_TCP)
 		port, _ := strconv.Atoi(ps)
 		ports = append(ports, port)
+		protocol := "ip4"
 		as, _ := addr.ValueForProtocol(multiaddr.P_IP4)
 		if as == "" {
 			as, _ = addr.ValueForProtocol(multiaddr.P_IP6)
+			protocol = "ip6"
 		}
 		addrStr = append(addrStr, as)
+		protocols = append(protocols, protocol)
 	}
 
-	return addrStr, ports
+	return addrStr, ports, protocols
 }
 
 func connectPeer(ctx context.Context, addr string, host host.Host) (*peer.AddrInfo, error) {

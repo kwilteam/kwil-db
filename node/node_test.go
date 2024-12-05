@@ -104,7 +104,7 @@ func newGenesis(t *testing.T, nodekeys [][]byte) ([]crypto.PrivateKey, *config.G
 	return privKeys, &genCfg
 }
 
-func setHupStreamHandlers(t *testing.T, h host.Host) {
+func setupStreamHandlers(t *testing.T, h host.Host) {
 	for _, proto := range RequiredStreamProtocols {
 		h.SetStreamHandler(proto, func(s network.Stream) {
 			t.Log("handling incoming stream for", proto)
@@ -287,15 +287,21 @@ func TestStreamsBlockFetch(t *testing.T) {
 	defaultConfigSet := config.DefaultConfig()
 	defaultConfigSet.Consensus.ProposeTimeout = 5 * time.Minute
 
+	ss := newSnapshotStore()
+
 	// log1 := log.New(log.WithName("NODE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
 	cfg1 := &Config{
-		RootDir:    rootDir,
-		PrivKey:    privKeys[0],
-		Logger:     log.DiscardLogger,
-		P2P:        &defaultConfigSet.P2P,
-		Mempool:    mempool.New(),
-		BlockStore: bs,
-		Consensus:  ce,
+		RootDir: rootDir,
+		PrivKey: privKeys[0],
+		Logger:  log.DiscardLogger,
+		P2P:     &defaultConfigSet.P2P,
+		// DB unused
+		DBConfig:    &defaultConfigSet.DB,
+		Statesync:   &defaultConfigSet.StateSync,
+		Mempool:     mempool.New(),
+		BlockStore:  bs,
+		Snapshotter: ss,
+		Consensus:   ce,
 	}
 	node1, err := NewNode(cfg1, WithHost(h1))
 	if err != nil {
@@ -307,7 +313,7 @@ func TestStreamsBlockFetch(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to add peer to mocknet: %v", err)
 	}
-	setHupStreamHandlers(t, h2)
+	setupStreamHandlers(t, h2)
 	// t.Logf("test host is %v", h2.ID())
 
 	wg.Add(1)

@@ -1,4 +1,4 @@
-package statesync
+package snapshotter
 
 import (
 	"bufio"
@@ -14,8 +14,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/internal/utils"
 )
 
 const (
@@ -45,12 +45,12 @@ const (
 // but it might not work if the first column is not unique.
 
 type Snapshotter struct {
-	dbConfig    *DBConfig
+	dbConfig    *config.DBConfig
 	snapshotDir string
 	log         log.Logger
 }
 
-func NewSnapshotter(cfg *DBConfig, dir string, logger log.Logger) *Snapshotter {
+func NewSnapshotter(cfg *config.DBConfig, dir string, logger log.Logger) *Snapshotter {
 	return &Snapshotter{
 		dbConfig:    cfg,
 		snapshotDir: dir,
@@ -118,9 +118,9 @@ func (s *Snapshotter) dbSnapshot(ctx context.Context, height uint64, format uint
 		// Snapshot ID ensures a consistent snapshot taken at the given block boundary across all nodes
 		"--dbname", s.dbConfig.DBName,
 		// Connection options
-		"-U", s.dbConfig.DBUser,
-		"-h", s.dbConfig.DBHost,
-		"-p", s.dbConfig.DBPort,
+		"-U", s.dbConfig.User,
+		"-h", s.dbConfig.Host,
+		"-p", s.dbConfig.Port,
 		"--no-password",
 		// Snapshot options
 		"--snapshot", snapshotID,
@@ -155,18 +155,18 @@ func (s *Snapshotter) dbSnapshot(ctx context.Context, height uint64, format uint
 
 	pgDumpCmd := exec.CommandContext(ctx, "pg_dump", args...)
 
-	if s.dbConfig.DBPass != "" {
-		pgDumpCmd.Env = append(pgDumpCmd.Env, "PGPASSWORD="+s.dbConfig.DBPass)
+	if s.dbConfig.Pass != "" {
+		pgDumpCmd.Env = append(pgDumpCmd.Env, "PGPASSWORD="+s.dbConfig.Pass)
 	}
 
-	s.log.Info("Executing pg_dump", log.String("cmd", pgDumpCmd.String()))
+	s.log.Info("Executing pg_dump", "cmd", pgDumpCmd.String())
 
 	output, err := pgDumpCmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("failed to execute pg_dump: %w, output: %s", err, string(output))
 	}
 
-	s.log.Info("pg_dump successful", log.Uint("height", height))
+	s.log.Info("pg_dump successful", "height", height)
 
 	return nil
 }
@@ -328,12 +328,12 @@ func (s *Snapshotter) sanitizeDump(height uint64, format uint32) ([]byte, error)
 		return nil, fmt.Errorf("failed to remove dump file: %w", err)
 	}
 
-	hash, err := utils.HashFile(sanitizedDumpFile)
+	hash, err := hashFile(sanitizedDumpFile)
 	if err != nil {
 		return nil, fmt.Errorf("failed to hash the sanitized dump file: %w", err)
 	}
 
-	s.log.Info("Sanitized dump file", log.Uint("height", height), log.String("snapshot-hash", fmt.Sprintf("%x", hash)))
+	s.log.Info("Sanitized dump file", "height", height, "snapshot-hash", fmt.Sprintf("%x", hash))
 
 	return hash, nil
 }
@@ -392,7 +392,7 @@ func (s *Snapshotter) compressDump(height uint64, format uint32) error {
 		return fmt.Errorf("failed to remove dump file: %w", err)
 	}
 
-	s.log.Info("Dump file compressed", log.Uint("height", height), log.Uint("Uncompressed dump size", uint64(stats.Size())), log.Uint("Compressed dump size", uint64(compressedStats.Size())))
+	s.log.Info("Dump file compressed", "height", height, "Uncompressed dump size", uint64(stats.Size()), "Compressed dump size", uint64(compressedStats.Size()))
 
 	return nil
 }
@@ -433,7 +433,7 @@ func (s *Snapshotter) splitDumpIntoChunks(height uint64, format uint32, sqlDumpH
 
 		// calculate the hash of the chunk
 		var chunkHash [HashLen]byte
-		hash, err := utils.HashFile(chunkFileName)
+		hash, err := hashFile(chunkFileName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to hash the chunk file: %w", err)
 		}
@@ -444,7 +444,7 @@ func (s *Snapshotter) splitDumpIntoChunks(height uint64, format uint32, sqlDumpH
 		fileSize += uint64(written)
 		chunkIndex++
 
-		s.log.Info("Chunk created", log.Uint("index", chunkIndex), log.String("chunkfile", chunkFileName), log.Int("size", written))
+		s.log.Info("Chunk created", "index", chunkIndex, "chunkfile", chunkFileName, "size", written)
 
 		if err == io.EOF || written < chunkSize {
 			break // EOF, Last chunk
@@ -481,7 +481,23 @@ func (s *Snapshotter) splitDumpIntoChunks(height uint64, format uint32, sqlDumpH
 		return nil, fmt.Errorf("failed to remove dump file: %w", err)
 	}
 
-	s.log.Info("Chunk files created successfully", log.Uint("height", height), log.Uint("chunk-count", chunkIndex), log.Uint("Total Snapzhot Size", fileSize))
+	s.log.Info("Chunk files created successfully", "height", height, "chunk-count", chunkIndex, "Total Snapzhot Size", fileSize)
 
 	return snapshot, nil
+}
+
+func hashFile(path string) ([]byte, error) {
+	file, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close()
+
+	hash := sha256.New()
+
+	if _, err := io.Copy(hash, file); err != nil {
+		return nil, err
+	}
+
+	return hash.Sum(nil), nil
 }

@@ -1,4 +1,4 @@
-package statesync
+package node
 
 import (
 	"bytes"
@@ -14,17 +14,20 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/internal/voting"
-
-	cometClient "github.com/cometbft/cometbft/rpc/client"
-	rpchttp "github.com/cometbft/cometbft/rpc/client/http"
+	"github.com/kwilteam/kwil-db/node/types/sql"
+	"github.com/kwilteam/kwil-db/node/voting"
 )
 
 const (
 	ABCISnapshotQueryPath        = "/snapshot/height"
 	ABCILatestSnapshotHeightPath = "/snapshot/latest"
+)
+
+var (
+	ErrStateSyncInProgress    = errors.New("statesync already in progress")
+	ErrStateSyncNotInProgress = errors.New("statesync not in progress")
+	ErrRejectSnapshotChunk    = errors.New("reject snapshot chunk")
 )
 
 // StateSyncer is responsible for initializing the database state from the
@@ -45,7 +48,7 @@ type StateSyncer struct {
 	snapshotsDir string
 
 	// trusted snapshot providers for verification - cometbft rfc servers
-	snapshotProviders []*rpchttp.HTTP
+	snapshotProviders []string
 
 	// State syncer state
 	snapshot   *Snapshot
@@ -64,18 +67,11 @@ type StateSyncer struct {
 func NewStateSyncer(ctx context.Context, cfg *DBConfig, snapshotDir string, providers []string, db sql.ReadTxMaker, logger log.Logger) (*StateSyncer, error) {
 
 	ss := &StateSyncer{
-		dbConfig:     cfg,
-		db:           db,
-		snapshotsDir: snapshotDir,
-		log:          logger,
-	}
-
-	for _, s := range providers {
-		clt, err := ChainRPCClient(s)
-		if err != nil {
-			return nil, fmt.Errorf("failed to create rpc client: %s, error %w", s, err)
-		}
-		ss.snapshotProviders = append(ss.snapshotProviders, clt)
+		dbConfig:          cfg,
+		db:                db,
+		snapshotsDir:      snapshotDir,
+		log:               logger,
+		snapshotProviders: providers,
 	}
 
 	// Ensure that the snapshot directory exists and is empty
@@ -92,7 +88,7 @@ func NewStateSyncer(ctx context.Context, cfg *DBConfig, snapshotDir string, prov
 // OfferSnapshot checks if the snapshot is valid and kicks off the state sync process
 // accepted snapshot is stored on disk for later processing
 func (ss *StateSyncer) OfferSnapshot(ctx context.Context, snapshot *Snapshot) error {
-	ss.log.Info("Offering snapshot", log.Int("height", int64(snapshot.Height)), log.Uint("format", snapshot.Format), log.String("App Hash", fmt.Sprintf("%x", snapshot.SnapshotHash)))
+	ss.log.Info("Offering snapshot", "height", snapshot.Height, "format", snapshot.Format, "chunk count", snapshot.ChunkCount, "hash", fmt.Sprintf("%x", snapshot.SnapshotHash))
 
 	// Check if we are already in the middle of a snapshot
 	if ss.snapshot != nil {
@@ -125,7 +121,7 @@ func (ss *StateSyncer) ApplySnapshotChunk(ctx context.Context, chunk []byte, ind
 
 	// Check if the chunk index is valid
 	if index >= ss.snapshot.ChunkCount {
-		ss.log.Error("Invalid chunk index", log.Uint("index", index), log.Uint("chunk-count", ss.snapshot.ChunkCount))
+		ss.log.Error("Invalid chunk index", "index", index, "chunk-count", ss.snapshot.ChunkCount)
 		return false, ErrRejectSnapshotChunk
 	}
 
@@ -218,7 +214,7 @@ func RestoreDB(ctx context.Context, snapshot io.Reader,
 	}
 	defer stdinPipe.Close()
 
-	logger.Info("Restore DB: ", log.String("command", cmd.String()))
+	logger.Info("Restore DB: ", "command", cmd.String())
 
 	if err := cmd.Start(); err != nil {
 		return err

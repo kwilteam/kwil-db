@@ -66,12 +66,13 @@ type ConsensusEngine struct {
 	bestHeightCh chan *discoveryMsg // to sync the leader with the network
 
 	// interfaces
-	db         DB
-	mempool    Mempool
-	blockStore BlockStore
-	txapp      TxApp
-	accounts   Accounts
-	validators Validators
+	db          DB
+	mempool     Mempool
+	blockStore  BlockStore
+	txapp       TxApp
+	accounts    Accounts
+	validators  Validators
+	snapshotter SnapshotModule
 
 	// Broadcasters
 	proposalBroadcaster     ProposalBroadcaster
@@ -171,6 +172,9 @@ type Config struct {
 	// Accounts is the store of the accounts.
 	Accounts Accounts
 
+	// SnapshotStore is the store of the snapshots.
+	Snapshots SnapshotModule
+
 	// TxApp is the transaction application layer.
 	TxApp TxApp
 
@@ -241,12 +245,13 @@ func New(cfg *Config) *ConsensusEngine {
 		resetChan:    make(chan int64, 1),
 		bestHeightCh: make(chan *discoveryMsg, 1),
 		// interfaces
-		mempool:    cfg.Mempool,
-		blockStore: cfg.BlockStore,
-		txapp:      cfg.TxApp,
-		accounts:   cfg.Accounts,
-		validators: cfg.ValidatorStore,
-		log:        logger,
+		mempool:     cfg.Mempool,
+		blockStore:  cfg.BlockStore,
+		txapp:       cfg.TxApp,
+		accounts:    cfg.Accounts,
+		validators:  cfg.ValidatorStore,
+		snapshotter: cfg.Snapshots,
+		log:         logger,
 	}
 
 	ce.role.Store(role)
@@ -450,6 +455,9 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 		return err
 	}
 
+	// Done with the catchup
+	ce.inSync.Store(false)
+
 	return nil
 }
 
@@ -504,7 +512,9 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 
 	if ce.role.Load() == types.RoleLeader && ce.state.lc.height > 0 {
 		// Announce block commit message for the last committed block
-		go ce.blkAnnouncer(ctx, ce.state.lc.blk, ce.state.lc.appHash) // TODO: can be made infrequent
+		if ce.state.lc.blk != nil {
+			go ce.blkAnnouncer(ctx, ce.state.lc.blk, ce.state.lc.appHash) // TODO: can be made infrequent
+		}
 		return
 	}
 

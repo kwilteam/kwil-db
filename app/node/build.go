@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/kwilteam/kwil-db/common"
@@ -19,6 +20,7 @@ import (
 	"github.com/kwilteam/kwil-db/node/mempool"
 	"github.com/kwilteam/kwil-db/node/meta"
 	"github.com/kwilteam/kwil-db/node/pg"
+	"github.com/kwilteam/kwil-db/node/snapshotter"
 	"github.com/kwilteam/kwil-db/node/store"
 	"github.com/kwilteam/kwil-db/node/txapp"
 	"github.com/kwilteam/kwil-db/node/voting"
@@ -62,11 +64,14 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	// TxAPP
 	txApp := buildTxApp(ctx, d, db, accounts, vs, e)
 
+	// Snapshot Store
+	ss := buildSnapshotStore(d)
+
 	// Consensus
-	ce := buildConsensusEngine(ctx, d, db, accounts, vs, mp, bs, txApp, valSet)
+	ce := buildConsensusEngine(ctx, d, db, accounts, vs, mp, bs, txApp, valSet, ss)
 
 	// Node
-	node := buildNode(d, mp, bs, ce)
+	node := buildNode(d, mp, bs, ce, ss, db)
 
 	// RPC Services
 	rpcSvcLogger := d.logger.New("user-json-svc")
@@ -184,7 +189,9 @@ func buildTxApp(ctx context.Context, d *coreDependencies, db *pg.DB, accounts *a
 	return txapp
 }
 
-func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB, accounts *accounts.Accounts, vs *voting.VoteStore, mempool *mempool.Mempool, bs *store.BlockStore, txapp *txapp.TxApp, valSet map[string]ktypes.Validator) *consensus.ConsensusEngine {
+func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB, accounts *accounts.Accounts, vs *voting.VoteStore,
+	mempool *mempool.Mempool, bs *store.BlockStore, txapp *txapp.TxApp, valSet map[string]ktypes.Validator,
+	ss *snapshotter.SnapshotStore) *consensus.ConsensusEngine {
 	leaderPubKey, err := crypto.UnmarshalSecp256k1PublicKey(d.genesisCfg.Leader)
 	if err != nil {
 		failBuild(err, "failed to parse leader public key")
@@ -199,9 +206,10 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB, acc
 		Mempool:        mempool,
 		ValidatorStore: vs,
 		TxApp:          txapp,
-		ValidatorSet:   valSet, // TODO: Where to set this validator set? in the constructor or after the ce is caughtup?
+		ValidatorSet:   valSet,
 		Logger:         d.logger.New("CONS"),
 		ProposeTimeout: d.cfg.Consensus.ProposeTimeout,
+		Snapshots:      ss,
 	}
 
 	ce := consensus.New(ceCfg)
@@ -212,16 +220,20 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB, acc
 	return ce
 }
 
-func buildNode(d *coreDependencies, mp *mempool.Mempool, bs *store.BlockStore, ce *consensus.ConsensusEngine) *node.Node {
+func buildNode(d *coreDependencies, mp *mempool.Mempool, bs *store.BlockStore, ce *consensus.ConsensusEngine, ss *snapshotter.SnapshotStore, db *pg.DB) *node.Node {
 	logger := d.logger.New("NODE")
 	nc := &node.Config{
-		RootDir:    d.rootDir,
-		PrivKey:    d.privKey,
-		P2P:        &d.cfg.P2P,
-		Mempool:    mp,
-		BlockStore: bs,
-		Consensus:  ce,
-		Logger:     logger,
+		RootDir:     d.rootDir,
+		PrivKey:     d.privKey,
+		DB:          db,
+		P2P:         &d.cfg.P2P,
+		Mempool:     mp,
+		BlockStore:  bs,
+		Consensus:   ce,
+		Statesync:   &d.cfg.StateSync,
+		Snapshotter: ss,
+		Logger:      logger,
+		DBConfig:    &d.cfg.DB,
 	}
 
 	node, err := node.NewNode(nc)
@@ -276,4 +288,26 @@ func buildEngine(d *coreDependencies, db *pg.DB) *execution.GlobalContext {
 	}
 
 	return eng
+}
+
+func buildSnapshotStore(d *coreDependencies) *snapshotter.SnapshotStore {
+	snapshotDir := filepath.Join(d.rootDir, "snapshots")
+	cfg := &snapshotter.SnapshotConfig{
+		SnapshotDir:     snapshotDir,
+		MaxSnapshots:    int(d.cfg.Snapshots.MaxSnapshots),
+		RecurringHeight: d.cfg.Snapshots.RecurringHeight,
+		Enable:          d.cfg.Snapshots.Enable,
+		DBConfig:        &d.cfg.DB,
+	}
+
+	if err := os.MkdirAll(snapshotDir, 0755); err != nil {
+		failBuild(err, "failed to create snapshot directory")
+	}
+
+	ss, err := snapshotter.NewSnapshotStore(cfg, d.logger.New("SNAP"))
+	if err != nil {
+		failBuild(err, "failed to create snapshot store")
+	}
+
+	return ss
 }

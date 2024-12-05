@@ -1,4 +1,4 @@
-package statesync
+package snapshotter
 
 import (
 	"encoding/json"

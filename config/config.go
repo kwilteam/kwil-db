@@ -93,6 +93,16 @@ func DefaultConfig() *Config {
 			ReadTxTimeout: Duration(45 * time.Second),
 			MaxConns:      60,
 		},
+		Snapshots: SnapshotConfig{
+			Enable:          false,
+			RecurringHeight: 14400,
+			MaxSnapshots:    3,
+		},
+		StateSync: StateSyncConfig{
+			Enable:           false,
+			DiscoveryTimeout: 30 * time.Second,
+			MaxRetries:       3,
+		},
 	}
 }
 
@@ -125,6 +135,8 @@ type Config struct {
 	Consensus ConsensusConfig `koanf:"consensus" toml:"consensus"`
 	DB        DBConfig        `koanf:"db" toml:"db"`
 	RPC       RPCConfig       `koanf:"rpc" toml:"rpc"`
+	Snapshots SnapshotConfig  `koanf:"snapshots" toml:"snapshots"`
+	StateSync StateSyncConfig `koanf:"state_sync" toml:"state_sync"`
 }
 
 // PeerConfig corresponds to the [peer] section of the config.
@@ -173,6 +185,20 @@ type RPCConfig struct {
 	Private            bool          `koanf:"private" toml:"private"`
 	ChallengeExpiry    time.Duration `koanf:"challenge_expiry" toml:"challenge_expiry"`
 	ChallengeRateLimit float64       `koanf:"challenge_rate_limit" toml:"challenge_rate_limit"`
+}
+
+type SnapshotConfig struct {
+	Enable          bool   `koanf:"enable" toml:"enable"`
+	RecurringHeight uint64 `koanf:"recurring_height" toml:"recurring_height"`
+	MaxSnapshots    uint64 `koanf:"max_snapshots" toml:"max_snapshots"`
+}
+
+type StateSyncConfig struct {
+	Enable           bool     `koanf:"enable" toml:"enable"`
+	TrustedProviders []string `koanf:"trusted_providers" toml:"trusted_providers"`
+
+	DiscoveryTimeout time.Duration `koanf:"discovery_timeout" toml:"discovery_time"`
+	MaxRetries       uint64        `koanf:"max_retries" toml:"max_retries"`
 }
 
 // ConfigToTOML marshals the config to TOML.

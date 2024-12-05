@@ -11,11 +11,15 @@ import (
 type Config struct {
 	RootDir string
 	PrivKey crypto.PrivateKey
+	DB      DB
 
-	P2P *config.PeerConfig
+	P2P       *config.PeerConfig
+	DBConfig  *config.DBConfig
+	Statesync *config.StateSyncConfig
 
-	Mempool    types.MemPool
-	BlockStore types.BlockStore
-	Consensus  ConsensusEngine
-	Logger     log.Logger
+	Mempool     types.MemPool
+	BlockStore  types.BlockStore
+	Consensus   ConsensusEngine
+	Snapshotter SnapshotStore
+	Logger      log.Logger
 }

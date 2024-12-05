@@ -1,4 +1,4 @@
-package statesync
+package snapshotter
 
 import (
 	"context"
@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
 )
 
@@ -44,19 +45,13 @@ import (
 	This can be extended to support other formats in the future.
 */
 
-type DBConfig struct {
-	DBUser string
-	DBPass string
-	DBHost string
-	DBPort string
-	DBName string
-}
-
 type SnapshotConfig struct {
 	// Snapshot store configuration
+	Enable          bool
 	SnapshotDir     string
 	MaxSnapshots    int
 	RecurringHeight uint64
+	DBConfig        *config.DBConfig
 }
 
 type SnapshotStore struct {
@@ -79,8 +74,8 @@ type DBSnapshotter interface {
 	CreateSnapshot(ctx context.Context, height uint64, snapshotID string, schemas, excludeTables []string, excludeTableData []string) (*Snapshot, error)
 }
 
-func NewSnapshotStore(cfg *SnapshotConfig, dbCfg *DBConfig, logger log.Logger) (*SnapshotStore, error) {
-	snapshotter := NewSnapshotter(dbCfg, cfg.SnapshotDir, logger)
+func NewSnapshotStore(cfg *SnapshotConfig, logger log.Logger) (*SnapshotStore, error) {
+	snapshotter := NewSnapshotter(cfg.DBConfig, cfg.SnapshotDir, logger)
 	ss := &SnapshotStore{
 		cfg:         cfg,
 		snapshots:   make(map[uint64]*Snapshot),
@@ -96,9 +91,13 @@ func NewSnapshotStore(cfg *SnapshotConfig, dbCfg *DBConfig, logger log.Logger) (
 	return ss, nil
 }
 
+func (s *SnapshotStore) Enabled() bool {
+	return s.cfg.Enable
+}
+
 // IsSnapshotDue checks if a snapshot is due at the given height.
 func (s *SnapshotStore) IsSnapshotDue(height uint64) bool {
-	if s.cfg.RecurringHeight == 0 {
+	if s.cfg.RecurringHeight == 0 || !s.cfg.Enable {
 		return false
 	}
 
@@ -116,6 +115,13 @@ func (s *SnapshotStore) ListSnapshots() []*Snapshot {
 	}
 
 	return snaps
+}
+
+func (s *SnapshotStore) GetSnapshot(height uint64, _ uint32) *Snapshot {
+	s.snapshotsMtx.RLock()
+	defer s.snapshotsMtx.RUnlock()
+
+	return s.snapshots[height]
 }
 
 // CreateSnapshot creates a new snapshot at the given height and snapshot ID.
@@ -248,13 +254,13 @@ func (s *SnapshotStore) loadSnapshots() error {
 		fileName := file.Name() // format: block-<height>
 		names := strings.Split(fileName, "-")
 		if len(names) != 2 {
-			s.log.Warn("invalid snapshot directory name, ignoring the snapshot", log.String("dir", fileName))
+			s.log.Warn("invalid snapshot directory name, ignoring the snapshot", "dir", fileName)
 			continue
 		}
 		height := names[1]
 		heightInt, err := strconv.ParseUint(height, 10, 64)
 		if err != nil {
-			s.log.Warn("invalid snapshot height, ignoring the snapshot", log.String("height", height))
+			s.log.Warn("invalid snapshot height, ignoring the snapshot", "height", height, "err", err)
 			continue
 		}
 
@@ -262,17 +268,15 @@ func (s *SnapshotStore) loadSnapshots() error {
 		headerFile := snapshotHeaderFile(s.cfg.SnapshotDir, heightInt, DefaultSnapshotFormat)
 		header, err := loadSnapshot(headerFile)
 		if err != nil {
-			s.log.Warn("Invalid snapshot header file, ignoring the snapshot",
-				log.String("height", height), log.Error(err))
+			s.log.Warn("Invalid snapshot header file, ignoring the snapshot", "height", height, "err", err)
 			continue
 		}
 
 		// Ensure that the chunk files exist
-		for i := uint32(0); i < header.ChunkCount; i++ {
+		for i := range header.ChunkCount {
 			chunkFile := snapshotChunkFile(s.cfg.SnapshotDir, heightInt, DefaultSnapshotFormat, i)
 			if _, err := os.Stat(chunkFile); err != nil { // chunk file doesn't exist
-				s.log.Warn("Invalid snapshot chunk file, ignoring the snapshot",
-					log.String("chunk_file", chunkFile), log.Error(err))
+				s.log.Warn("Invalid snapshot chunk file, ignoring the snapshot", "chunk_file", chunkFile, "err", err)
 				continue
 			}
 		}

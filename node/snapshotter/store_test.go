@@ -1,4 +1,4 @@
-package statesync
+package snapshotter
 
 import (
 	"context"
@@ -73,9 +73,10 @@ func NewMockSnapshotStore(dir string, cfg *SnapshotConfig, logger log.Logger) (*
 
 func TestCreateSnapshots(t *testing.T) {
 	dir := t.TempDir()
-	logger := log.NewStdOut(log.DebugLevel)
+	logger := log.DiscardLogger
 
 	cfg := &SnapshotConfig{
+		Enable:          true,
 		RecurringHeight: 1,
 		SnapshotDir:     dir,
 		MaxSnapshots:    2,
@@ -124,9 +125,10 @@ func TestCreateSnapshots(t *testing.T) {
 
 func TestRegisterSnapshot(t *testing.T) {
 	dir := t.TempDir()
-	logger := log.NewStdOut(log.DebugLevel)
+	logger := log.DiscardLogger
 
 	cfg := &SnapshotConfig{
+		Enable:          true,
 		RecurringHeight: 1,
 		SnapshotDir:     dir,
 		MaxSnapshots:    2,
@@ -202,7 +204,7 @@ func TestRegisterSnapshot(t *testing.T) {
 func TestLoadSnapshotChunk(t *testing.T) {
 	dir := t.TempDir()
 	snapshotter := NewMockSnapshotter(dir)
-	logger := log.NewStdOut(log.DebugLevel)
+	logger := log.DiscardLogger
 
 	cfg := &SnapshotConfig{
 		RecurringHeight: 1,

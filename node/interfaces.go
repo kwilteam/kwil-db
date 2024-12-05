@@ -4,7 +4,9 @@ import (
 	"context"
 
 	"github.com/kwilteam/kwil-db/node/consensus"
+	"github.com/kwilteam/kwil-db/node/snapshotter"
 	"github.com/kwilteam/kwil-db/node/types"
+	"github.com/kwilteam/kwil-db/node/types/sql"
 )
 
 type ConsensusEngine interface {
@@ -25,4 +27,15 @@ type ConsensusEngine interface {
 	Start(ctx context.Context, proposerBroadcaster consensus.ProposalBroadcaster,
 		blkAnnouncer consensus.BlkAnnouncer, ackBroadcaster consensus.AckBroadcaster,
 		blkRequester consensus.BlkRequester, stateResetter consensus.ResetStateBroadcaster, discoveryBroadcaster consensus.DiscoveryReqBroadcaster) error
+}
+
+type SnapshotStore interface {
+	Enabled() bool
+	GetSnapshot(height uint64, format uint32) *snapshotter.Snapshot
+	ListSnapshots() []*snapshotter.Snapshot
+	LoadSnapshotChunk(height uint64, format uint32, chunk uint32) ([]byte, error)
+}
+
+type DB interface {
+	sql.ReadTxMaker
 }

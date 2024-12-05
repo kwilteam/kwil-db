@@ -94,7 +94,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 		n.log.Warn("invalid height in blk ann request", "height", height)
 		return
 	}
-	n.log.Info("blk announcement received", "hash", blkid, "height", height)
+	n.log.Debug("blk announcement received", "hash", blkid, "height", height)
 
 	// If we are a validator and this is the commit ann for a proposed block
 	// that we already started executing, consensus engine will handle it.
@@ -112,7 +112,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 		return // we have or are currently fetching it, do nothing, assuming we have already re-announced
 	}
 
-	n.log.Info("retrieving new block", "hash", blkid)
+	n.log.Debug("retrieving new block", "hash", blkid)
 	t0 := time.Now()
 
 	// First try to get from this stream.
@@ -138,7 +138,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 		}
 	}
 
-	n.log.Infof("obtained content for block %q in %v", blkid, time.Since(t0))
+	n.log.Debugf("obtained content for block %q in %v", blkid, time.Since(t0))
 
 	blk, err := types.DecodeBlock(rawBlk)
 	if err != nil {
@@ -183,7 +183,7 @@ func (n *Node) announceRawBlk(ctx context.Context, blkHash types.Hash, height in
 		if peerID == from {
 			continue
 		}
-		n.log.Infof("advertising block %s (height %d / sz %d) to peer %v",
+		n.log.Debugf("advertising block %s (height %d / sz %d) to peer %v",
 			blkHash, height, len(rawBlk), peerID)
 		resID, err := blockAnnMsg{
 			Hash:      blkHash,
@@ -252,7 +252,7 @@ func (n *Node) getBlk(ctx context.Context, blkHash types.Hash) (int64, []byte, t
 			continue
 		}
 
-		n.log.Info("Obtained content for block", "block", blkHash, "elapsed", time.Since(t0))
+		n.log.Debug("Obtained content for block", "block", blkHash, "elapsed", time.Since(t0))
 
 		height := binary.LittleEndian.Uint64(resp[:8])
 		var appHash types.Hash
