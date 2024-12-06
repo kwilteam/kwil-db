@@ -41,6 +41,11 @@ var defaultGenesisParams = &consensus.GenesisParams{
 	},
 }
 
+func TestMain(m *testing.M) {
+	pg.UseLogger(log.New(log.WithName("DBS")))
+	m.Run()
+}
+
 func TestSingleNodeMocknet(t *testing.T) {
 	if testing.Short() {
 		t.Skip()
@@ -53,8 +58,6 @@ func TestSingleNodeMocknet(t *testing.T) {
 	}
 	bs1 := memstore.NewMemBS()
 	mp1 := mempool.New()
-
-	pg.UseLogger(log.New(log.WithName("DBS")))
 
 	db1 := initDB(t, "5432", "kwil_test_db")
 
@@ -154,8 +157,6 @@ func TestDualNodeMocknet(t *testing.T) {
 	}
 	bs1 := memstore.NewMemBS()
 	mp1 := mempool.New()
-
-	pg.UseLogger(log.New(log.WithName("DBS")))
 
 	db1 := initDB(t, "5432", "kwil_test_db")
 	func() {
@@ -332,10 +333,9 @@ func initDB(t *testing.T, port, dbName string) *pg.DB {
 }
 
 func cleanupDB(db *pg.DB) {
-	ctx := context.Background()
-	db.AutoCommit(true)
-	defer db.AutoCommit(false)
 	defer db.Close()
+	db.AutoCommit(true)
+	ctx := context.Background()
 	db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_chain CASCADE;`)
 	db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_internal CASCADE;`)
 }
