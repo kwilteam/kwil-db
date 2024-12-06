@@ -266,17 +266,34 @@ func (db *DB) EnsureFullReplicaIdentityDatasets(ctx context.Context) error {
 func (db *DB) Close() error {
 	db.cancel(nil)
 	db.repl.stop()
-	if db.tx != nil {
-		// This is a bug, so we are going to panic so the issue is not easily
-		// ignored, but we will rollback the tx so we don't hang or leak
-		// postgresql resources.
-		db.tx.Rollback(context.Background())
-		db.tx = nil
-		db.txid = ""
-		db.pool.Close()
-		panic("Closed the DB with an active transaction!")
+	if db.tx == nil {
+		return db.pool.Close()
 	}
-	return db.pool.Close()
+
+	// This is a bug, so we are going to panic so the issue is not easily
+	// ignored, but we will rollback the tx so we don't hang or leak
+	// postgresql resources.
+
+	if db.txid != "" {
+		logger.Warnln("Rolling back PREPARED transaction", db.txid)
+		// With PREPARE TRANSACTION already done, rollback the prepared transaction.
+		sqlRollback := fmt.Sprintf(`ROLLBACK PREPARED '%s'`, db.txid)
+		if _, err := db.tx.Exec(context.Background(), sqlRollback); err != nil {
+			return fmt.Errorf("ROLLBACK PREPARED failed: %v", err)
+		}
+		// We don't use Rollback, which normally releases automatically.
+		if rel, ok := db.tx.(releaser); ok {
+			rel.Release()
+		}
+		db.txid = ""
+	} else { // otherwise regular rollback
+		logger.Warnln("Rolling back regular transaction")
+		db.tx.Rollback(context.Background())
+	}
+
+	db.tx = nil
+	db.pool.Close()
+	panic("Closed the DB with an active transaction!")
 }
 
 // Done allows higher level systems to monitor the state of the DB backend
