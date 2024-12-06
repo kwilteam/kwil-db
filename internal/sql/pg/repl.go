@@ -501,8 +501,9 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 			logicalMsg.UserGID, logicalMsg.RollbackLSN, uint64(logicalMsg.RollbackLSN),
 			logicalMsg.EndLSN, uint64(logicalMsg.EndLSN))
 
-		hasher.Reset()
-		changesetWriter.finalize() // discard changeset
+		// ROLLBACK PREPARED would happen after PREPARE transaction, which is
+		// where we finalized the changeset. The that aborted will simply
+		// discard the changeset hash that they already received.
 
 	// v2 Stream control messages.  Only expected with large transactions.
 	case *pglogrepl.StreamStartMessageV2:
