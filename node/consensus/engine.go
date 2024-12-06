@@ -85,6 +85,9 @@ type ConsensusEngine struct {
 	blkRequester            BlkRequester
 	rstStateBroadcaster     ResetStateBroadcaster
 	discoveryReqBroadcaster DiscoveryReqBroadcaster
+
+	// waitgroup to track all the consensus goroutines
+	wg sync.WaitGroup
 }
 
 // ProposalBroadcaster broadcasts the new block proposal message to the network
@@ -339,7 +342,26 @@ func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster Propos
 	ce.startMining(ctx)
 
 	// start the event loop
-	return ce.runConsensusEventLoop(ctx)
+	ce.wg.Add(1)
+	go ce.runConsensusEventLoop(ctx)
+
+	ce.wg.Wait()
+	ce.close()
+	ce.log.Info("Consensus engine stopped")
+	return nil
+}
+
+func (ce *ConsensusEngine) close() {
+	ce.state.mtx.Lock()
+	defer ce.state.mtx.Unlock()
+
+	if ce.state.consensusTx != nil {
+		ce.log.Info("Rolling back the consensus tx")
+		err := ce.state.consensusTx.Rollback(context.Background())
+		if err != nil {
+			ce.log.Error("Error rolling back the consensus tx", "error", err)
+		}
+	}
 }
 
 // GenesisInit initializes the node with the genesis state. This included initializing the
@@ -403,7 +425,13 @@ func (ce *ConsensusEngine) GenesisInit(ctx context.Context) error {
 // Apart from the above events, the node also periodically checks if it needs to
 // catchup with the network and reannounce the messages.
 func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
+	defer func() {
+		ce.log.Info("Consensus event loop stopped...")
+		ce.wg.Done()
+	}()
+
 	// TODO: make these configurable?
+	ce.log.Info("Starting the consensus event loop...")
 	catchUpTicker := time.NewTicker(5 * time.Second)
 	reannounceTicker := time.NewTicker(3 * time.Second)
 	blkPropTicker := time.NewTicker(1 * time.Second)
@@ -430,7 +458,7 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 			ce.reannounceMsgs(ctx)
 
 		case height := <-ce.resetChan:
-			ce.resetBlockProp(height)
+			ce.resetBlockProp(ctx, height)
 
 		case m := <-ce.msgChan:
 			ce.handleConsensusMessages(ctx, m)
@@ -447,6 +475,7 @@ func (ce *ConsensusEngine) startMining(ctx context.Context) {
 	// validators and sentry nodes get activated when they receive a block proposal or block announce msgs.
 	if ce.role.Load() == types.RoleLeader {
 		ce.log.Infof("Starting the leader node")
+		ce.wg.Add(1)
 		go ce.startNewRound(ctx)
 	} else {
 		ce.log.Infof("Starting the validator/sentry node")
@@ -471,7 +500,7 @@ func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg cons
 		}
 
 	case *blockAnnounce:
-		if err := ce.commitBlock(v.blk, v.appHash); err != nil {
+		if err := ce.commitBlock(ctx, v.blk, v.appHash); err != nil {
 			ce.log.Error("Error processing committing block", "error", err)
 			return
 		}
@@ -483,7 +512,7 @@ func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg cons
 }
 
 // resetBlockProp aborts the block execution and resets the state to the last committed block.
-func (ce *ConsensusEngine) resetBlockProp(height int64) {
+func (ce *ConsensusEngine) resetBlockProp(ctx context.Context, height int64) {
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
@@ -497,7 +526,7 @@ func (ce *ConsensusEngine) resetBlockProp(height int64) {
 	if ce.state.lc.height == height {
 		if ce.state.blkProp != nil {
 			ce.log.Info("Resetting the block proposal", "height", height)
-			if err := ce.resetState(context.Background()); err != nil {
+			if err := ce.resetState(ctx); err != nil {
 				ce.log.Error("Error resetting the state", "error", err) // panic? or consensus error?
 			}
 		}
@@ -558,7 +587,7 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 
 	// Replay the blocks from the blockstore if the app hasn't played all the blocks yet.
 	if appHeight < storeHeight {
-		if err := ce.replayFromBlockStore(appHeight+1, storeHeight); err != nil {
+		if err := ce.replayFromBlockStore(ctx, appHeight+1, storeHeight); err != nil {
 			return err
 		}
 	}
@@ -587,7 +616,7 @@ func (ce *ConsensusEngine) setLastCommitInfo(height int64, blkHash types.Hash, a
 }
 
 // replayBlocks replays all the blocks from the blockstore if the app hasn't played all the blocks yet.
-func (ce *ConsensusEngine) replayFromBlockStore(startHeight, bestHeight int64) error {
+func (ce *ConsensusEngine) replayFromBlockStore(ctx context.Context, startHeight, bestHeight int64) error {
 	height := startHeight
 	t0 := time.Now()
 
@@ -604,7 +633,7 @@ func (ce *ConsensusEngine) replayFromBlockStore(startHeight, bestHeight int64) e
 			return nil // no more blocks to replay
 		}
 
-		err = ce.processAndCommit(blk, appHash)
+		err = ce.processAndCommit(ctx, blk, appHash)
 		if err != nil {
 			return fmt.Errorf("failed replaying block: %w", err)
 		}
@@ -685,13 +714,13 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 					return fmt.Errorf("failed to decode the block, blkHeight: %d, blkID: %x, error: %w", ce.state.blkProp.height, blkHash, err)
 				}
 
-				if err := ce.processAndCommit(blk, appHash); err != nil {
+				if err := ce.processAndCommit(ctx, blk, appHash); err != nil {
 					return fmt.Errorf("failed to replay the block: blkHeight: %d, blkID: %x, error: %w", ce.state.blkProp.height, blkHash, err)
 				}
 			} else {
 				if appHash == ce.state.blockRes.appHash {
 					// commit the block
-					if err := ce.commit(); err != nil {
+					if err := ce.commit(ctx); err != nil {
 						return fmt.Errorf("failed to commit the block: height: %d, error: %w", ce.state.blkProp.height, err)
 					}
 

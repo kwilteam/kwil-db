@@ -54,14 +54,12 @@ func (ce *ConsensusEngine) validateBlock(blk *types.Block) error {
 // executeBlock executes all the transactions in the block under a single pg consensus transaction,
 // enforcing the atomicity of the block execution. It also calculates the appHash for the block and
 // precommits the changeset to the pg database.
-func (ce *ConsensusEngine) executeBlock() (err error) {
+func (ce *ConsensusEngine) executeBlock(ctx context.Context) (err error) {
 	defer func() {
 		ce.stateInfo.mtx.Lock()
 		ce.stateInfo.status = Executed
 		ce.stateInfo.mtx.Unlock()
 	}()
-
-	ctx := context.Background() // TODO: Use block context with the chain params and stuff.
 
 	blkProp := ce.state.blkProp
 
@@ -258,11 +256,10 @@ func validatorUpdatesHash(updates map[string]*ktypes.Validator) types.Hash {
 
 // Commit method commits the block to the blockstore and postgres database.
 // It also updates the txIndexer and mempool with the transactions in the block.
-func (ce *ConsensusEngine) commit() error {
+func (ce *ConsensusEngine) commit(ctx context.Context) error {
 	// TODO: Lock mempool and update the mempool to remove the transactions in the block
 	// Mempool should not receive any new transactions until this Commit is done as
 	// we are updating the state and the tx checks should be done against the new state.
-	ctx := context.Background()
 	blkProp := ce.state.blkProp
 	height, appHash := ce.state.blkProp.height, ce.state.blockRes.appHash
 
@@ -280,13 +277,17 @@ func (ce *ConsensusEngine) commit() error {
 	}
 
 	// Update the chain meta store with the new height and the dirty
+	// we need to re-open a new transaction just to write the apphash
+	// TODO: it would be great to have a way to commit the apphash without
+	// opening a new transaction. This could leave us in a state where data is
+	// committed but the apphash is not, which would essentially nuke the chain.
 	ctxS := context.Background()
-	tx, err := ce.db.BeginTx(ctxS)
+	tx, err := ce.db.BeginTx(ctxS) // badly timed shutdown MUST NOT cancel now, we need consistency with consensus tx commit
 	if err != nil {
 		return err
 	}
 
-	if err := meta.SetChainState(ctx, tx, height, appHash[:], false); err != nil {
+	if err := meta.SetChainState(ctxS, tx, height, appHash[:], false); err != nil {
 		err2 := tx.Rollback(ctxS)
 		if err2 != nil {
 			ce.log.Error("Failed to rollback the transaction", "err", err2)

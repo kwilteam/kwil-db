@@ -26,6 +26,8 @@ var lastReset int64 = 0
 
 // startNewRound starts a new round of consensus process.
 func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
+	defer ce.wg.Done()
+
 	ce.log.Info("Starting a new round", "height", ce.state.lc.height+1)
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
@@ -55,7 +57,7 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	ce.stateInfo.mtx.Unlock()
 
 	// Execute the block and generate the appHash
-	if err := ce.executeBlock(); err != nil {
+	if err := ce.executeBlock(ctx); err != nil {
 		ce.log.Errorf("Error executing the block: %v", err)
 		return err
 	}
@@ -77,6 +79,8 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 			return err
 		}
 		go ce.rstStateBroadcaster(ce.state.lc.height)
+
+		ce.wg.Add(1)
 		go ce.startNewRound(ctx)
 		return nil
 	}
@@ -171,7 +175,7 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 		ce.log.Info("Majority of the validators have accepted the block, proceeding to commit the block",
 			"height", ce.state.blkProp.blk.Header.Height, "hash", ce.state.blkProp.blkHash, "acks", acks, "nacks", nacks)
 		// Commit the block and broadcast the blockAnn message
-		if err := ce.commit(); err != nil {
+		if err := ce.commit(ctx); err != nil {
 			ce.log.Errorf("Error committing the block (process votes): %v", err)
 			return err
 		}
@@ -183,6 +187,7 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 		// start the next round
 		ce.nextState()
 
+		ce.wg.Add(1)
 		go func() { // must not sleep with ce.state mutex locked
 			// Wait for the timeout to start the next round
 			select {
