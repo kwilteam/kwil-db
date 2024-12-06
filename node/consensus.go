@@ -415,11 +415,6 @@ func (n *Node) startDiscoveryRequestGossip(ctx context.Context, ps *pubsub.PubSu
 				return
 			}
 
-			// We're only interested if we are the validator.
-			if n.ce.Role() != types.RoleValidator {
-				continue // discard, we are just relaying to leader
-			}
-
 			if peer.ID(discMsg.From) == me {
 				continue
 			}

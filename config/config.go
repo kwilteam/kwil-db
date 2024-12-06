@@ -1,8 +1,11 @@
 package config
 
 import (
+	"cmp"
+	"encoding/binary"
 	"encoding/json"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/log"
@@ -78,6 +81,27 @@ func LoadGenesisConfig(filename string) (*GenesisConfig, error) {
 	}
 
 	return &nc, nil
+}
+
+// TODO: Harden this code to prevent from consensus breaking changes
+func (gc *GenesisConfig) ComputeGenesisHash() types.Hash {
+	hasher := ktypes.NewHasher()
+
+	hasher.Write([]byte(gc.ChainID))
+	hasher.Write(gc.Leader)
+
+	// sort the validators by public key
+	slices.SortFunc(gc.Validators, func(a, b ktypes.Validator) int {
+		return cmp.Compare(a.PubKey.String(), b.PubKey.String())
+	})
+
+	binary.Write(hasher, binary.BigEndian, gc.MaxBlockSize)
+	binary.Write(hasher, binary.BigEndian, gc.JoinExpiry)
+	binary.Write(hasher, binary.BigEndian, gc.VoteExpiry)
+	binary.Write(hasher, binary.BigEndian, gc.DisabledGasCosts)
+	binary.Write(hasher, binary.BigEndian, gc.MaxVotesPerTx)
+
+	return hasher.Sum(nil)
 }
 
 // const (

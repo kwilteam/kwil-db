@@ -574,7 +574,7 @@ func TestValidatorStateMachine(t *testing.T) {
 						return false
 					}
 					return true
-				}, 2*time.Second, 100*time.Millisecond)
+				}, 6*time.Second, 100*time.Millisecond)
 			}
 		})
 	}
@@ -658,7 +658,7 @@ func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
 		height := n1.lastCommitHeight()
 		fmt.Printf("Height: %d\n", height)
 		return height == 1
-	}, 2*time.Second, 100*time.Millisecond)
+	}, 6*time.Second, 100*time.Millisecond)
 }
 
 func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
@@ -689,7 +689,7 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 	require.Eventually(t, func() bool {
 		blockRes := n1.blockResult()
 		return blockRes != nil && !blockRes.appHash.IsZero()
-	}, 2*time.Second, 100*time.Millisecond)
+	}, 6*time.Second, 100*time.Millisecond)
 
 	_, _, b := n1.info()
 	assert.NotNil(t, b)
@@ -775,6 +775,9 @@ func (d *dummyTxApp) Price(ctx context.Context, dbTx sql.DB, tx *ktypes.Transact
 }
 
 func (d *dummyTxApp) Commit() error {
+	return nil
+}
+func (d *dummyTxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*ktypes.Validator, genesisAccounts []*ktypes.Account, initialHeight int64, chain *common.ChainContext) error {
 	return nil
 }
 

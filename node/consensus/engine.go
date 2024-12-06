@@ -50,8 +50,9 @@ type ConsensusEngine struct {
 
 	proposeTimeout time.Duration
 
-	networkHeight atomic.Int64
-	validatorSet  map[string]ktypes.Validator
+	networkHeight  atomic.Int64
+	validatorSet   map[string]ktypes.Validator
+	genesisAppHash types.Hash
 
 	// stores state machine state for the consensus engine
 	state  state
@@ -196,6 +197,7 @@ type Config struct {
 	// Leader is the public key of the leader.
 	Leader crypto.PublicKey
 
+	GenesisHash   types.Hash
 	GenesisParams *GenesisParams // *config.GenesisConfig
 
 	DB *pg.DB
@@ -298,13 +300,14 @@ func New(cfg *Config) *ConsensusEngine {
 		resetChan:    make(chan int64, 1),
 		bestHeightCh: make(chan *discoveryMsg, 1),
 		// interfaces
-		mempool:     cfg.Mempool,
-		blockStore:  cfg.BlockStore,
-		txapp:       cfg.TxApp,
-		accounts:    cfg.Accounts,
-		validators:  cfg.ValidatorStore,
-		snapshotter: cfg.Snapshots,
-		log:         logger,
+		mempool:        cfg.Mempool,
+		blockStore:     cfg.BlockStore,
+		txapp:          cfg.TxApp,
+		accounts:       cfg.Accounts,
+		validators:     cfg.ValidatorStore,
+		snapshotter:    cfg.Snapshots,
+		log:            logger,
+		genesisAppHash: cfg.GenesisHash,
 	}
 
 	ce.role.Store(role)
@@ -312,6 +315,8 @@ func New(cfg *Config) *ConsensusEngine {
 
 	return ce
 }
+
+var initialHeight int64 = 0 // TODO: get it from genesis?
 
 func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster ProposalBroadcaster,
 	blkAnnouncer BlkAnnouncer, ackBroadcaster AckBroadcaster, blkRequester BlkRequester, stateResetter ResetStateBroadcaster,
@@ -335,6 +340,52 @@ func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster Propos
 
 	// start the event loop
 	return ce.runConsensusEventLoop(ctx)
+}
+
+// GenesisInit initializes the node with the genesis state. This included initializing the
+// votestore with the genesis validators, accounts with the genesis allocations and the
+// chain meta store with the genesis network parameters.
+// This is called only once when the node is bootstrapping for the first time.
+func (ce *ConsensusEngine) GenesisInit(ctx context.Context) error {
+	genesisTx, err := ce.db.BeginTx(ctx)
+	if err != nil {
+		return err
+	}
+	defer genesisTx.Rollback(ctx)
+
+	// TODO: genesis allocs
+
+	// genesis validators
+	genVals := make([]*ktypes.Validator, 0, len(ce.validatorSet))
+	for _, v := range ce.validatorSet {
+		genVals = append(genVals, &ktypes.Validator{
+			PubKey: v.PubKey,
+			Power:  v.Power,
+		})
+	}
+
+	startParams := *ce.chainCtx.NetworkParameters
+
+	if err := ce.txapp.GenesisInit(ctx, genesisTx, genVals, nil, initialHeight, ce.chainCtx); err != nil {
+		return err
+	}
+
+	if err := meta.SetChainState(ctx, genesisTx, initialHeight, ce.genesisAppHash[:], false); err != nil {
+		return fmt.Errorf("error storing the genesis state: %w", err)
+	}
+
+	if err := meta.StoreDiff(ctx, genesisTx, &startParams, ce.chainCtx.NetworkParameters); err != nil {
+		return fmt.Errorf("error storing the genesis consensus params: %w", err)
+	}
+
+	// TODO: Genesis hash and what are the mechanics for producing the first block (genesis block)?
+	ce.txapp.Commit()
+
+	ce.state.lc.appHash = ce.genesisAppHash
+	ce.state.lc.height = initialHeight
+
+	ce.log.Info("Initialized chain", "height", initialHeight, "appHash", ce.state.lc.appHash.String())
+	return genesisTx.Commit(ctx)
 }
 
 // runEventLoop starts the event loop for the consensus engine.
@@ -497,13 +548,22 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 		ce.setLastCommitInfo(appHeight, blkHash, types.Hash(appHash))
 	}
 
+	if appHeight == -1 {
+		// This is the first time the node is bootstrapping
+		// initialize the db with the genesis state
+		if err := ce.GenesisInit(ctx); err != nil {
+			return fmt.Errorf("error initializing the genesis state: %w", err)
+		}
+	}
+
+	// Replay the blocks from the blockstore if the app hasn't played all the blocks yet.
 	if appHeight < storeHeight {
-		// Replay the blocks from the blockstore
 		if err := ce.replayFromBlockStore(appHeight+1, storeHeight); err != nil {
 			return err
 		}
 	}
 
+	// Sync with the network using the blocksync
 	if err := ce.doBlockSync(ctx); err != nil {
 		return err
 	}
