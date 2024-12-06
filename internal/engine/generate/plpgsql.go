@@ -1141,19 +1141,19 @@ type procedureGenerator struct {
 	procedure *types.Procedure
 }
 
-var _ parse.ProcedureVisitor = &procedureGenerator{}
+var _ parse.ActionVisitor = &procedureGenerator{}
 
-func (p *procedureGenerator) VisitProcedureStmtDeclaration(p0 *parse.ProcedureStmtDeclaration) any {
+func (p *procedureGenerator) VisitProcedureStmtDeclaration(p0 *parse.ActionStmtDeclaration) any {
 	// plpgsql declares variables at the top of the procedure
 	return ""
 }
 
-func (p *procedureGenerator) VisitProcedureStmtAssignment(p0 *parse.ProcedureStmtAssign) any {
+func (p *procedureGenerator) VisitProcedureStmtAssignment(p0 *parse.ActionStmtAssign) any {
 	varName := p0.Variable.Accept(p).(string)
 	return varName + " := " + p0.Value.Accept(p).(string) + ";\n"
 }
 
-func (p *procedureGenerator) VisitProcedureStmtCall(p0 *parse.ProcedureStmtCall) any {
+func (p *procedureGenerator) VisitProcedureStmtCall(p0 *parse.ActionStmtCall) any {
 	call := p0.Call.Accept(p).(string)
 
 	if len(p0.Receivers) == 0 {
@@ -1181,7 +1181,7 @@ func (p *procedureGenerator) VisitProcedureStmtCall(p0 *parse.ProcedureStmtCall)
 	return s.String()
 }
 
-func (p *procedureGenerator) VisitProcedureStmtForLoop(p0 *parse.ProcedureStmtForLoop) any {
+func (p *procedureGenerator) VisitProcedureStmtForLoop(p0 *parse.ActionStmtForLoop) any {
 	s := strings.Builder{}
 	// if we are iterating over an array, the syntax is different
 	switch v := p0.LoopTerm.(type) {
@@ -1227,7 +1227,7 @@ func (p *procedureGenerator) VisitLoopTermVariable(p0 *parse.LoopTermVariable) a
 	return fmt.Sprintf("ARRAY COALESCE(%s, '{}')", p0.Variable.Accept(p).(string))
 }
 
-func (p *procedureGenerator) VisitProcedureStmtIf(p0 *parse.ProcedureStmtIf) any {
+func (p *procedureGenerator) VisitProcedureStmtIf(p0 *parse.ActionStmtIf) any {
 	s := strings.Builder{}
 	for i, clause := range p0.IfThens {
 		if i == 0 {
@@ -1263,15 +1263,15 @@ func (p *procedureGenerator) VisitIfThen(p0 *parse.IfThen) any {
 	return s.String()
 }
 
-func (p *procedureGenerator) VisitProcedureStmtSQL(p0 *parse.ProcedureStmtSQL) any {
+func (p *procedureGenerator) VisitProcedureStmtSQL(p0 *parse.ActionStmtSQL) any {
 	return p0.SQL.Accept(p).(string) + ";\n"
 }
 
-func (p *procedureGenerator) VisitProcedureStmtBreak(p0 *parse.ProcedureStmtBreak) any {
+func (p *procedureGenerator) VisitProcedureStmtBreak(p0 *parse.ActionStmtBreak) any {
 	return "EXIT;\n"
 }
 
-func (p *procedureGenerator) VisitProcedureStmtReturn(p0 *parse.ProcedureStmtReturn) any {
+func (p *procedureGenerator) VisitProcedureStmtReturn(p0 *parse.ActionStmtReturn) any {
 	if p0.SQL != nil {
 		return "RETURN QUERY " + p0.SQL.Accept(p).(string) + ";\n"
 	}
@@ -1288,7 +1288,7 @@ func (p *procedureGenerator) VisitProcedureStmtReturn(p0 *parse.ProcedureStmtRet
 	return s.String()
 }
 
-func (p *procedureGenerator) VisitProcedureStmtReturnNext(p0 *parse.ProcedureStmtReturnNext) any {
+func (p *procedureGenerator) VisitProcedureStmtReturnNext(p0 *parse.ActionStmtReturnNext) any {
 	s := strings.Builder{}
 	for i, expr := range p0.Values {
 		// we do not format the return var for return next, but instead

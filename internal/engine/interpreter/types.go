@@ -21,7 +21,7 @@ type Action struct {
 
 	// Body is the logic of the action.
 	// TODO: delete this and just pass around strings
-	Body []parse.ProcedureStmt
+	Body []parse.ActionStmt
 
 	// RawBody is the unparsed logic of the action.
 	RawBody string `json:"raw_body"`

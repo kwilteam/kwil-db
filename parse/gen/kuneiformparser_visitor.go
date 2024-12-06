@@ -46,12 +46,6 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#variable.
 	VisitVariable(ctx *VariableContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#variable_list.
-	VisitVariable_list(ctx *Variable_listContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#column_def.
-	VisitColumn_def(ctx *Column_defContext) interface{}
-
 	// Visit a parse tree produced by KuneiformParser#table_column_def.
 	VisitTable_column_def(ctx *Table_column_defContext) interface{}
 
@@ -60,12 +54,6 @@ type KuneiformParserVisitor interface {
 
 	// Visit a parse tree produced by KuneiformParser#named_type_list.
 	VisitNamed_type_list(ctx *Named_type_listContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#typed_variable_list.
-	VisitTyped_variable_list(ctx *Typed_variable_listContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#constraint.
-	VisitConstraint(ctx *ConstraintContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#inline_constraint.
 	VisitInline_constraint(ctx *Inline_constraintContext) interface{}
@@ -76,14 +64,8 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#fk_constraint.
 	VisitFk_constraint(ctx *Fk_constraintContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#procedure_return.
-	VisitProcedure_return(ctx *Procedure_returnContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#sql_stmt.
-	VisitSql_stmt(ctx *Sql_stmtContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#ddl_stmt.
-	VisitDdl_stmt(ctx *Ddl_stmtContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#action_return.
+	VisitAction_return(ctx *Action_returnContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#sql_statement.
 	VisitSql_statement(ctx *Sql_statementContext) interface{}
@@ -280,53 +262,50 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#normal_call_sql.
 	VisitNormal_call_sql(ctx *Normal_call_sqlContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#procedure_block.
-	VisitProcedure_block(ctx *Procedure_blockContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#function_call_action_expr.
+	VisitFunction_call_action_expr(ctx *Function_call_action_exprContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#field_access_procedure_expr.
-	VisitField_access_procedure_expr(ctx *Field_access_procedure_exprContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#literal_action_expr.
+	VisitLiteral_action_expr(ctx *Literal_action_exprContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#literal_procedure_expr.
-	VisitLiteral_procedure_expr(ctx *Literal_procedure_exprContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#field_access_action_expr.
+	VisitField_access_action_expr(ctx *Field_access_action_exprContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#paren_procedure_expr.
-	VisitParen_procedure_expr(ctx *Paren_procedure_exprContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#is_action_expr.
+	VisitIs_action_expr(ctx *Is_action_exprContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#variable_procedure_expr.
-	VisitVariable_procedure_expr(ctx *Variable_procedure_exprContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#variable_action_expr.
+	VisitVariable_action_expr(ctx *Variable_action_exprContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#make_array_procedure_expr.
-	VisitMake_array_procedure_expr(ctx *Make_array_procedure_exprContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#make_array_action_expr.
+	VisitMake_array_action_expr(ctx *Make_array_action_exprContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#is_procedure_expr.
-	VisitIs_procedure_expr(ctx *Is_procedure_exprContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#comparison_action_expr.
+	VisitComparison_action_expr(ctx *Comparison_action_exprContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#procedure_expr_arithmetic.
-	VisitProcedure_expr_arithmetic(ctx *Procedure_expr_arithmeticContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#action_expr_arithmetic.
+	VisitAction_expr_arithmetic(ctx *Action_expr_arithmeticContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#unary_procedure_expr.
-	VisitUnary_procedure_expr(ctx *Unary_procedure_exprContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#array_access_action_expr.
+	VisitArray_access_action_expr(ctx *Array_access_action_exprContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#comparison_procedure_expr.
-	VisitComparison_procedure_expr(ctx *Comparison_procedure_exprContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#logical_action_expr.
+	VisitLogical_action_expr(ctx *Logical_action_exprContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#function_call_procedure_expr.
-	VisitFunction_call_procedure_expr(ctx *Function_call_procedure_exprContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#paren_action_expr.
+	VisitParen_action_expr(ctx *Paren_action_exprContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#logical_procedure_expr.
-	VisitLogical_procedure_expr(ctx *Logical_procedure_exprContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#unary_action_expr.
+	VisitUnary_action_expr(ctx *Unary_action_exprContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#array_access_procedure_expr.
-	VisitArray_access_procedure_expr(ctx *Array_access_procedure_exprContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#procedure_expr_list.
-	VisitProcedure_expr_list(ctx *Procedure_expr_listContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#action_expr_list.
+	VisitAction_expr_list(ctx *Action_expr_listContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#stmt_variable_declaration.
 	VisitStmt_variable_declaration(ctx *Stmt_variable_declarationContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#stmt_procedure_call.
-	VisitStmt_procedure_call(ctx *Stmt_procedure_callContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#stmt_action_call.
+	VisitStmt_action_call(ctx *Stmt_action_callContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#stmt_variable_assignment.
 	VisitStmt_variable_assignment(ctx *Stmt_variable_assignmentContext) interface{}
@@ -352,8 +331,8 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#variable_or_underscore.
 	VisitVariable_or_underscore(ctx *Variable_or_underscoreContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#normal_call_procedure.
-	VisitNormal_call_procedure(ctx *Normal_call_procedureContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#normal_call_action.
+	VisitNormal_call_action(ctx *Normal_call_actionContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#if_then_block.
 	VisitIf_then_block(ctx *If_then_blockContext) interface{}

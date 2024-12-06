@@ -10,7 +10,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/decimal"
 )
 
-// this file contains the ASTs for SQL, procedures, and actions.
+// this file contains the ASTs for SQL, DDL, and actions.
 
 // Node is a node in the AST.
 type Node interface {
@@ -575,7 +575,7 @@ type CreateActionStatement struct {
 	// It can be nil if the action does not return anything.
 	Returns *ActionReturn
 	// Statements are the statements in the action.
-	Statements []ProcedureStmt
+	Statements []ActionStmt
 }
 
 func (c *CreateActionStatement) topLevelStatement() {}
@@ -1397,37 +1397,37 @@ func (u *OnConflict) Accept(v Visitor) any {
 	return v.VisitUpsertClause(u)
 }
 
-// procedure ast:
+// action logic ast:
 
-// ProcedureStmt is a statement in a procedure.
-// it is the top-level interface for all procedure statements.
-type ProcedureStmt interface {
+// ActionStmt is a statement in a actiob.
+// it is the top-level interface for all action statements.
+type ActionStmt interface {
 	Node
-	procedureStmt()
+	actionStmt()
 }
 
-type baseProcedureStmt struct {
+type baseActionStmt struct {
 	Position
 }
 
-func (baseProcedureStmt) procedureStmt() {}
+func (baseActionStmt) actionStmt() {}
 
-// ProcedureStmtDeclaration is a variable declaration in a procedure.
-type ProcedureStmtDeclaration struct {
-	baseProcedureStmt
+// ActionStmtDeclaration is a variable declaration in an action.
+type ActionStmtDeclaration struct {
+	baseActionStmt
 	// Variable is the variable that is being declared.
 	Variable *ExpressionVariable
 	Type     *types.DataType
 }
 
-func (p *ProcedureStmtDeclaration) Accept(v Visitor) any {
-	return v.VisitProcedureStmtDeclaration(p)
+func (p *ActionStmtDeclaration) Accept(v Visitor) any {
+	return v.VisitActionStmtDeclaration(p)
 }
 
-// ProcedureStmtAssign is a variable assignment in a procedure.
+// ActionStmtAssign is a variable assignment in an action.
 // It should only be called on variables that have already been declared.
-type ProcedureStmtAssign struct {
-	baseProcedureStmt
+type ActionStmtAssign struct {
+	baseActionStmt
 	// Variable is the variable that is being assigned.
 	Variable Assignable
 	// Type is the type of the variable.
@@ -1438,35 +1438,35 @@ type ProcedureStmtAssign struct {
 	Value Expression
 }
 
-func (p *ProcedureStmtAssign) Accept(v Visitor) any {
-	return v.VisitProcedureStmtAssignment(p)
+func (p *ActionStmtAssign) Accept(v Visitor) any {
+	return v.VisitActionStmtAssignment(p)
 }
 
-// ProcedureStmtCall is a call to another procedure or built-in function.
-type ProcedureStmtCall struct {
-	baseProcedureStmt
+// ActionStmtCall is a call to another action or built-in function.
+type ActionStmtCall struct {
+	baseActionStmt
 	// Receivers are the variables being assigned. If nil, then the
 	// receiver can be ignored.
 	Receivers []*ExpressionVariable
 	Call      *ExpressionFunctionCall
 }
 
-func (p *ProcedureStmtCall) Accept(v Visitor) any {
-	return v.VisitProcedureStmtCall(p)
+func (p *ActionStmtCall) Accept(v Visitor) any {
+	return v.VisitActionStmtCall(p)
 }
 
-type ProcedureStmtForLoop struct {
-	baseProcedureStmt
+type ActionStmtForLoop struct {
+	baseActionStmt
 	// Receiver is the variable that is assigned on each iteration.
 	Receiver *ExpressionVariable
 	// LoopTerm is what the loop is looping through.
 	LoopTerm LoopTerm
 	// Body is the body of the loop.
-	Body []ProcedureStmt
+	Body []ActionStmt
 }
 
-func (p *ProcedureStmtForLoop) Accept(v Visitor) any {
-	return v.VisitProcedureStmtForLoop(p)
+func (p *ActionStmtForLoop) Accept(v Visitor) any {
+	return v.VisitActionStmtForLoop(p)
 }
 
 // LoopTerm what the loop is looping through.
@@ -1514,8 +1514,8 @@ func (e *LoopTermVariable) Accept(v Visitor) interface{} {
 	return v.VisitLoopTermVariable(e)
 }
 
-type ProcedureStmtIf struct {
-	baseProcedureStmt
+type ActionStmtIf struct {
+	baseActionStmt
 	// IfThens are the if statements.
 	// They are evaluated in order, as
 	// IF ... THEN ... ELSEIF ... THEN ...
@@ -1523,42 +1523,42 @@ type ProcedureStmtIf struct {
 	// Else is the else statement.
 	// It is evaluated if no other if statement
 	// is true.
-	Else []ProcedureStmt
+	Else []ActionStmt
 }
 
-func (p *ProcedureStmtIf) Accept(v Visitor) any {
-	return v.VisitProcedureStmtIf(p)
+func (p *ActionStmtIf) Accept(v Visitor) any {
+	return v.VisitActionStmtIf(p)
 }
 
 type IfThen struct {
 	Position
 	If   Expression
-	Then []ProcedureStmt
+	Then []ActionStmt
 }
 
 func (i *IfThen) Accept(v Visitor) any {
 	return v.VisitIfThen(i)
 }
 
-type ProcedureStmtSQL struct {
-	baseProcedureStmt
+type ActionStmtSQL struct {
+	baseActionStmt
 	SQL *SQLStatement
 }
 
-func (p *ProcedureStmtSQL) Accept(v Visitor) any {
-	return v.VisitProcedureStmtSQL(p)
+func (p *ActionStmtSQL) Accept(v Visitor) any {
+	return v.VisitActionStmtSQL(p)
 }
 
-type ProcedureStmtBreak struct {
-	baseProcedureStmt
+type ActionStmtBreak struct {
+	baseActionStmt
 }
 
-func (p *ProcedureStmtBreak) Accept(v Visitor) any {
-	return v.VisitProcedureStmtBreak(p)
+func (p *ActionStmtBreak) Accept(v Visitor) any {
+	return v.VisitActionStmtBreak(p)
 }
 
-type ProcedureStmtReturn struct {
-	baseProcedureStmt
+type ActionStmtReturn struct {
+	baseActionStmt
 	// Values are the values to return.
 	// Either values is set or SQL is set, but not both.
 	Values []Expression
@@ -1567,31 +1567,31 @@ type ProcedureStmtReturn struct {
 	SQL *SQLStatement
 }
 
-func (p *ProcedureStmtReturn) Accept(v Visitor) any {
-	return v.VisitProcedureStmtReturn(p)
+func (p *ActionStmtReturn) Accept(v Visitor) any {
+	return v.VisitActionStmtReturn(p)
 }
 
-type ProcedureStmtReturnNext struct {
-	baseProcedureStmt
+type ActionStmtReturnNext struct {
+	baseActionStmt
 	// Values are the values to return.
 	Values []Expression
 }
 
-func (p *ProcedureStmtReturnNext) Accept(v Visitor) any {
-	return v.VisitProcedureStmtReturnNext(p)
+func (p *ActionStmtReturnNext) Accept(v Visitor) any {
+	return v.VisitActionStmtReturnNext(p)
 }
 
 /*
 	There are three types of visitors, all which compose on each other:
-	- Visitor: top-level visitor capable of visiting actions, procedures, and SQL.
-	- ProcedureVisitor: a visitor capable of only visiting procedures and SQL. It must include
-	SQL because procedures themselves rely on SQL/
+	- Visitor: top-level visitor capable of visiting actions, DDL, and SQL.
+	- ActionVisitor: a visitor capable of only visiting actions and SQL. It must include
+	SQL because actions themselves rely on SQL/
 	- SQLVisitor: a visitor capable of only visiting SQL.
 */
 
 // Visitor is an interface for visiting nodes in the parse tree.
 type Visitor interface {
-	ProcedureVisitor
+	ActionVisitor
 	DDLVisitor
 }
 
@@ -1632,23 +1632,23 @@ type DDLVisitor interface {
 	VisitForeignKeyOutOfLineConstraint(*ForeignKeyOutOfLineConstraint) any
 }
 
-// ProcedureVisitor includes visit methods only needed to analyze procedures.
+// ActionVisitor includes visit methods only needed to analyze actions.
 // It does not need visit methods for structs that are for the schema or actions
-type ProcedureVisitor interface {
+type ActionVisitor interface {
 	SQLVisitor
-	VisitProcedureStmtDeclaration(*ProcedureStmtDeclaration) any
-	VisitProcedureStmtAssignment(*ProcedureStmtAssign) any
-	VisitProcedureStmtCall(*ProcedureStmtCall) any
-	VisitProcedureStmtForLoop(*ProcedureStmtForLoop) any
+	VisitActionStmtDeclaration(*ActionStmtDeclaration) any
+	VisitActionStmtAssignment(*ActionStmtAssign) any
+	VisitActionStmtCall(*ActionStmtCall) any
+	VisitActionStmtForLoop(*ActionStmtForLoop) any
 	VisitLoopTermRange(*LoopTermRange) any
 	VisitLoopTermSQL(*LoopTermSQL) any
 	VisitLoopTermVariable(*LoopTermVariable) any
-	VisitProcedureStmtIf(*ProcedureStmtIf) any
+	VisitActionStmtIf(*ActionStmtIf) any
 	VisitIfThen(*IfThen) any
-	VisitProcedureStmtSQL(*ProcedureStmtSQL) any
-	VisitProcedureStmtBreak(*ProcedureStmtBreak) any
-	VisitProcedureStmtReturn(*ProcedureStmtReturn) any
-	VisitProcedureStmtReturnNext(*ProcedureStmtReturnNext) any
+	VisitActionStmtSQL(*ActionStmtSQL) any
+	VisitActionStmtBreak(*ActionStmtBreak) any
+	VisitActionStmtReturn(*ActionStmtReturn) any
+	VisitActionStmtReturnNext(*ActionStmtReturnNext) any
 }
 
 // SQLVisitor is a visitor that only has methods for SQL nodes.
@@ -1692,61 +1692,61 @@ type SQLVisitor interface {
 	VisitOrderingTerm(*OrderingTerm) any
 }
 
-// UnimplementedProcedureVisitor is meant to be used when an implementing visitor only intends
-// to implement the ProcedureVisitor interface. It will implement the full visitor interface,
+// UnimplementedActionVisitor is meant to be used when an implementing visitor only intends
+// to implement the ActionVisitor interface. It will implement the full visitor interface,
 // but will panic if any of the methods are called. It does not implement the SQLVisitor or
-// ProcedureVisitor interfaces, so it alone cannot be used as a visitor.
-type UnimplementedProcedureVisitor struct{}
+// ActionVisitor interfaces, so it alone cannot be used as a visitor.
+type UnimplementedActionVisitor struct{}
 
-func (s *UnimplementedProcedureVisitor) VisitProcedureStmtDeclaration(p0 *ProcedureStmtDeclaration) any {
+func (s *UnimplementedActionVisitor) VisitActionStmtDeclaration(p0 *ActionStmtDeclaration) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
 }
 
-func (s *UnimplementedProcedureVisitor) VisitProcedureStmtAssignment(p0 *ProcedureStmtAssign) any {
+func (s *UnimplementedActionVisitor) VisitActionStmtAssignment(p0 *ActionStmtAssign) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
 }
 
-func (s *UnimplementedProcedureVisitor) VisitProcedureStmtCall(p0 *ProcedureStmtCall) any {
+func (s *UnimplementedActionVisitor) VisitActionStmtCall(p0 *ActionStmtCall) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
 }
 
-func (s *UnimplementedProcedureVisitor) VisitProcedureStmtForLoop(p0 *ProcedureStmtForLoop) any {
+func (s *UnimplementedActionVisitor) VisitActionStmtForLoop(p0 *ActionStmtForLoop) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
 }
 
-func (s *UnimplementedProcedureVisitor) VisitLoopTermRange(p0 *LoopTermRange) any {
+func (s *UnimplementedActionVisitor) VisitLoopTermRange(p0 *LoopTermRange) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
 }
 
-func (s *UnimplementedProcedureVisitor) VisitLoopTermSQL(p0 *LoopTermSQL) any {
+func (s *UnimplementedActionVisitor) VisitLoopTermSQL(p0 *LoopTermSQL) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
 }
 
-func (s *UnimplementedProcedureVisitor) VisitLoopTermVariable(p0 *LoopTermVariable) any {
+func (s *UnimplementedActionVisitor) VisitLoopTermVariable(p0 *LoopTermVariable) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
 }
 
-func (s *UnimplementedProcedureVisitor) VisitProcedureStmtIf(p0 *ProcedureStmtIf) any {
+func (s *UnimplementedActionVisitor) VisitActionStmtIf(p0 *ActionStmtIf) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
 }
 
-func (s *UnimplementedProcedureVisitor) VisitIfThen(p0 *IfThen) any {
+func (s *UnimplementedActionVisitor) VisitIfThen(p0 *IfThen) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
 }
 
-func (s *UnimplementedProcedureVisitor) VisitProcedureStmtSQL(p0 *ProcedureStmtSQL) any {
+func (s *UnimplementedActionVisitor) VisitActionStmtSQL(p0 *ActionStmtSQL) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
 }
 
-func (s *UnimplementedProcedureVisitor) VisitProcedureStmtBreak(p0 *ProcedureStmtBreak) any {
+func (s *UnimplementedActionVisitor) VisitActionStmtBreak(p0 *ActionStmtBreak) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
 }
 
-func (s *UnimplementedProcedureVisitor) VisitProcedureStmtReturn(p0 *ProcedureStmtReturn) any {
+func (s *UnimplementedActionVisitor) VisitActionStmtReturn(p0 *ActionStmtReturn) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
 }
 
-func (s *UnimplementedProcedureVisitor) VisitProcedureStmtReturnNext(p0 *ProcedureStmtReturnNext) any {
+func (s *UnimplementedActionVisitor) VisitActionStmtReturnNext(p0 *ActionStmtReturnNext) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
 }
 

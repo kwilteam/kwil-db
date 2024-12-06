@@ -8,17 +8,9 @@ options {
     tokenVocab = KuneiformLexer;
 }
 
-// there are 4 top-level entry points for the parser:
-// 1. schema_entry
-// 2. sql_entry
-// 3. action_entry
-// 4. procedure_entry
-// It is necessary to keep each type of entry separate, since some statements
-// can be ambiguous between the different types of entries. Callers will know
-// which entry to use based on when they are parsing.
-
+// entry point for the parser
 entry:
-    statement* EOF  // entry point for the parser
+    statement* EOF
 ;
 
 statement:
@@ -36,6 +28,8 @@ statement:
         | transfer_ownership_statement
         | create_action_statement
         | drop_action_statement
+        | use_extension_statement
+        | unuse_extension_statement
     ) SCOL
 ;
 
@@ -74,18 +68,10 @@ variable:
     VARIABLE | CONTEXTUAL_VARIABLE
 ;
 
-variable_list:
-    variable (COMMA variable)*
-;
-
 /*
     The following section includes parser rules for top-level Kuneiform.
     These are the rules that parse the schema / DDL, and are used pre-consensus.
 */
-
-column_def:
-    name=identifier type constraint*
-;
 
 table_column_def:
     name=identifier type inline_constraint*
@@ -97,15 +83,6 @@ type_list:
 
 named_type_list:
     identifier type (COMMA identifier type)*
-;
-
-typed_variable_list:
-    variable type (COMMA variable type)*
-;
-
-constraint:
-    // conditionally allow some tokens, since they are used elsewhere
-    (identifier| PRIMARY KEY? | NOT NULL | DEFAULT | UNIQUE) (LPAREN literal RPAREN)?
 ;
 
 inline_constraint:
@@ -126,7 +103,7 @@ fk_constraint:
     REFERENCES table=identifier LPAREN identifier_list RPAREN (fk_action (fk_action)?)? // can be up to 0-2 actions
 ;
 
-procedure_return:
+action_return:
     RETURNS (TABLE? LPAREN return_columns=named_type_list RPAREN
     | LPAREN unnamed_return_types=type_list RPAREN)
 ;
@@ -134,26 +111,6 @@ procedure_return:
 /*
     The following section includes parser rules for SQL.
 */
-
-// sql_stmt is a top-level SQL statement, it maps to SQLStmt interface in AST.
-sql_stmt:
-    (sql_statement | ddl_stmt) SCOL
-;
-
-ddl_stmt:
-    create_table_statement
-    | alter_table_statement
-    | drop_table_statement
-    | create_index_statement
-    | drop_index_statement
-    | create_role_statement
-    | drop_role_statement
-    | grant_statement
-    | revoke_statement
-    | transfer_ownership_statement
-    | create_action_statement
-    | drop_action_statement
-;
 
 sql_statement: // NOTE: This is only DDL. We should combine ddl and dml into sql_stmt in the future.
     (WITH RECURSIVE? common_table_expression (COMMA common_table_expression)*)?
@@ -248,8 +205,8 @@ create_action_statement:
     CREATE ACTION ((IF NOT EXISTS)|(OR REPLACE))? identifier
     LPAREN (VARIABLE type (COMMA VARIABLE type)*)? RPAREN
     (PUBLIC | PRIVATE) (OWNER | VIEW)*
-    procedure_return?
-    LBRACE proc_statement* RBRACE
+    action_return?
+    LBRACE action_statement* RBRACE
 ;
 
 drop_action_statement:
@@ -414,73 +371,69 @@ sql_function_call:
 */
 
 /*
-    This section includes parser rules for procedures
+    This section includes parser rules for actions
 */
 
-// procedure_block is the top-level rule for a procedure.
-procedure_block:
-    proc_statement*
-;
-
 // https://docs.kwil.com/docs/kuneiform/operators
-procedure_expr:
+action_expr:
     // highest precedence:
-    LPAREN procedure_expr RPAREN type_cast?                                                     # paren_procedure_expr
-    | procedure_expr PERIOD identifier type_cast?                                               # field_access_procedure_expr
-    | array_element=procedure_expr LBRACKET (
+    LPAREN action_expr RPAREN type_cast?                                                     # paren_action_expr
+    | action_expr PERIOD identifier type_cast?                                               # field_access_action_expr
+    | array_element=action_expr LBRACKET (
             // can be arr[1], arr[1:2], arr[1:], arr[:2], arr[:]
-            single=procedure_expr
-            | (left=procedure_expr? COL right=procedure_expr?)
-        ) RBRACKET type_cast?                                                                   # array_access_procedure_expr
-    | <assoc=right> (PLUS|MINUS|EXCL) procedure_expr                                            # unary_procedure_expr
-    | procedure_expr (STAR | DIV | MOD) procedure_expr                                          # procedure_expr_arithmetic
-    | procedure_expr (PLUS | MINUS) procedure_expr                                              # procedure_expr_arithmetic
+            single=action_expr
+            | (left=action_expr? COL right=action_expr?)
+        ) RBRACKET type_cast?                                                                   # array_access_action_expr
+    | <assoc=right> (PLUS|MINUS|EXCL) action_expr                                            # unary_action_expr
+    | action_expr (STAR | DIV | MOD) action_expr                                          # action_expr_arithmetic
+    | action_expr (PLUS | MINUS) action_expr                                              # action_expr_arithmetic
 
     // any unspecified operator:
-    | literal type_cast?                                                                        # literal_procedure_expr
-    | procedure_function_call type_cast?                                                        # function_call_procedure_expr
-    | variable type_cast?                                                                       # variable_procedure_expr
-    | LBRACKET (procedure_expr_list)? RBRACKET type_cast?                                       # make_array_procedure_expr
-    | procedure_expr CONCAT procedure_expr                                                      # procedure_expr_arithmetic
+    | literal type_cast?                                                                        # literal_action_expr
+    | action_function_call type_cast?                                                        # function_call_action_expr
+    | variable type_cast?                                                                       # variable_action_expr
+    | LBRACKET (action_expr_list)? RBRACKET type_cast?                                       # make_array_action_expr
+    | action_expr CONCAT action_expr                                                      # action_expr_arithmetic
 
     // the rest:
-    | procedure_expr (EQUALS | EQUATE | NEQ | LT | LTE | GT | GTE) procedure_expr               # comparison_procedure_expr
-    | left=procedure_expr IS NOT? ((DISTINCT FROM right=procedure_expr) | NULL | TRUE | FALSE)  # is_procedure_expr
-    | <assoc=right> (NOT) procedure_expr                                                        # unary_procedure_expr
-    | procedure_expr AND procedure_expr                                                         # logical_procedure_expr
-    | procedure_expr OR procedure_expr                                                          # logical_procedure_expr
+    | action_expr (EQUALS | EQUATE | NEQ | LT | LTE | GT | GTE) action_expr               # comparison_action_expr
+    | left=action_expr IS NOT? ((DISTINCT FROM right=action_expr) | NULL | TRUE | FALSE)  # is_action_expr
+    | <assoc=right> (NOT) action_expr                                                        # unary_action_expr
+    | action_expr AND action_expr                                                         # logical_action_expr
+    | action_expr OR action_expr                                                          # logical_action_expr
 ;
 
-procedure_expr_list:
-    procedure_expr (COMMA procedure_expr)*
+action_expr_list:
+    action_expr (COMMA action_expr)*
 ;
 
-proc_statement:
+// some of the action_statements have optional semicolons. This is for backwards compatibility.
+action_statement:
     VARIABLE type SCOL                                                                                  # stmt_variable_declaration
-    // stmt_procedure_call must go above stmt_variable_assignment due to lexer ambiguity
-    | ((variable_or_underscore) (COMMA (variable_or_underscore))* ASSIGN)? procedure_function_call SCOL # stmt_procedure_call
-    | procedure_expr type? ASSIGN procedure_expr SCOL                                                         # stmt_variable_assignment
-    | FOR receiver=VARIABLE IN (range|target_variable=variable|sql_statement) LBRACE proc_statement* RBRACE  # stmt_for_loop
-    | IF if_then_block (ELSEIF if_then_block)* (ELSE LBRACE proc_statement* RBRACE)?                         # stmt_if
+    // stmt_action_call must go above stmt_variable_assignment due to lexer ambiguity
+    | ((variable_or_underscore) (COMMA (variable_or_underscore))* ASSIGN)? action_function_call SCOL # stmt_action_call
+    | action_expr type? ASSIGN action_expr SCOL                                                         # stmt_variable_assignment
+    | FOR receiver=VARIABLE IN (range|target_variable=variable|sql_statement) LBRACE action_statement* RBRACE SCOL?  # stmt_for_loop
+    | IF if_then_block (ELSEIF if_then_block)* (ELSE LBRACE action_statement* RBRACE)? SCOL?                        # stmt_if
     | sql_statement SCOL                                                                                # stmt_sql
     | BREAK SCOL                                                                                        # stmt_break
-    | RETURN (procedure_expr_list|sql_statement)? SCOL                                                   # stmt_return
-    | RETURN NEXT procedure_expr_list SCOL                                                              # stmt_return_next
+    | RETURN (action_expr_list|sql_statement)? SCOL                                                   # stmt_return
+    | RETURN NEXT action_expr_list SCOL                                                              # stmt_return_next
 ;
 
 variable_or_underscore:
     VARIABLE | UNDERSCORE
 ;
 
-procedure_function_call:
-    (identifier PERIOD)? identifier LPAREN (procedure_expr_list)? RPAREN                                #normal_call_procedure
+action_function_call:
+    (identifier PERIOD)? identifier LPAREN (action_expr_list)? RPAREN                                #normal_call_action
 ;
 
 if_then_block:
-    procedure_expr LBRACE proc_statement* RBRACE
+    action_expr LBRACE action_statement* RBRACE
 ;
 
 // range used for for loops
 range:
-    procedure_expr RANGE procedure_expr
+    action_expr RANGE action_expr
 ;

@@ -270,13 +270,13 @@ var (
 
 type stmtFunc func(exec *executionContext, fn func([]Value) error) error
 
-func (i *interpreterPlanner) VisitProcedureStmtDeclaration(p0 *parse.ProcedureStmtDeclaration) any {
+func (i *interpreterPlanner) VisitProcedureStmtDeclaration(p0 *parse.ActionStmtDeclaration) any {
 	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
 		return exec.allocateVariable(p0.Variable.Name, NewNullValue(p0.Type))
 	})
 }
 
-func (i *interpreterPlanner) VisitProcedureStmtAssignment(p0 *parse.ProcedureStmtAssign) any {
+func (i *interpreterPlanner) VisitProcedureStmtAssignment(p0 *parse.ActionStmtAssign) any {
 	valFn := p0.Value.Accept(i).(exprFunc)
 
 	var arrFn exprFunc
@@ -333,7 +333,7 @@ func (i *interpreterPlanner) VisitProcedureStmtAssignment(p0 *parse.ProcedureStm
 	})
 }
 
-func (i *interpreterPlanner) VisitProcedureStmtCall(p0 *parse.ProcedureStmtCall) any {
+func (i *interpreterPlanner) VisitProcedureStmtCall(p0 *parse.ActionStmtCall) any {
 
 	// we cannot simply use the same visitor as the expression function call, because expression function
 	// calls always return exactly one value. Here, we can return 0 values, many values, or a table.
@@ -461,7 +461,7 @@ func executeBlock(exec *executionContext, fn func([]Value) error,
 	return nil
 }
 
-func (i *interpreterPlanner) VisitProcedureStmtForLoop(p0 *parse.ProcedureStmtForLoop) any {
+func (i *interpreterPlanner) VisitProcedureStmtForLoop(p0 *parse.ActionStmtForLoop) any {
 	stmtFns := make([]stmtFunc, len(p0.Body))
 	for j, stmt := range p0.Body {
 		stmtFns[j] = stmt.Accept(i).(stmtFunc)
@@ -583,7 +583,7 @@ func (i *interpreterPlanner) VisitLoopTermVariable(p0 *parse.LoopTermVariable) a
 	})
 }
 
-func (i *interpreterPlanner) VisitProcedureStmtIf(p0 *parse.ProcedureStmtIf) any {
+func (i *interpreterPlanner) VisitProcedureStmtIf(p0 *parse.ActionStmtIf) any {
 	var ifThenFns []struct {
 		If   exprFunc
 		Then []stmtFunc
@@ -654,7 +654,7 @@ func (i *interpreterPlanner) VisitProcedureStmtIf(p0 *parse.ProcedureStmtIf) any
 	})
 }
 
-func (i *interpreterPlanner) VisitProcedureStmtSQL(p0 *parse.ProcedureStmtSQL) any {
+func (i *interpreterPlanner) VisitProcedureStmtSQL(p0 *parse.ActionStmtSQL) any {
 	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
 		raw, err := p0.SQL.Raw()
 		if err != nil {
@@ -674,13 +674,13 @@ func (i *interpreterPlanner) VisitProcedureStmtSQL(p0 *parse.ProcedureStmtSQL) a
 	})
 }
 
-func (i *interpreterPlanner) VisitProcedureStmtBreak(p0 *parse.ProcedureStmtBreak) any {
+func (i *interpreterPlanner) VisitProcedureStmtBreak(p0 *parse.ActionStmtBreak) any {
 	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
 		return errBreak
 	})
 }
 
-func (i *interpreterPlanner) VisitProcedureStmtReturn(p0 *parse.ProcedureStmtReturn) any {
+func (i *interpreterPlanner) VisitProcedureStmtReturn(p0 *parse.ActionStmtReturn) any {
 	valFns := make([]exprFunc, len(p0.Values))
 	for j, v := range p0.Values {
 		valFns[j] = v.Accept(i).(exprFunc)
@@ -707,7 +707,7 @@ func (i *interpreterPlanner) VisitProcedureStmtReturn(p0 *parse.ProcedureStmtRet
 	})
 }
 
-func (i *interpreterPlanner) VisitProcedureStmtReturnNext(p0 *parse.ProcedureStmtReturnNext) any {
+func (i *interpreterPlanner) VisitProcedureStmtReturnNext(p0 *parse.ActionStmtReturnNext) any {
 	valFns := make([]exprFunc, len(p0.Values))
 	for j, v := range p0.Values {
 		valFns[j] = v.Accept(i).(exprFunc)

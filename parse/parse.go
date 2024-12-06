@@ -1,4 +1,4 @@
-// package parse contains logic for parsing Kuneiform schemas, procedures, actions,
+// package parse contains logic for parsing SQL, DDL, and Actions,
 // and SQL.
 package parse
 
@@ -30,7 +30,18 @@ func (r *ParseResult) Err() error {
 }
 
 // Parse parses a statement or set of statements separated by semicolons.
-func Parse(sql string) ([]TopLevelStatement, error) {
+func Parse(sql string) (t []TopLevelStatement, err error) {
+	// defer func() {
+	// 	if r := recover(); r != nil {
+	// 		switch x := r.(type) {
+	// 		case error:
+	// 			err = x
+	// 		default:
+	// 			err = fmt.Errorf("panic: %v", r)
+	// 		}
+	// 	}
+	// }()
+
 	res, err := ParseWithErrListener(sql)
 	if err != nil {
 		return nil, err
@@ -46,10 +57,13 @@ func Parse(sql string) ([]TopLevelStatement, error) {
 // ParseWithErrListener parses a statement or set of statements separated by semicolons.
 // It returns the parsed statements, as well as an error listener with position information.
 // Public consumers should opt for Parse instead, unless there is a specific need for the error listener.
-func ParseWithErrListener(sql string) (*ParseResult, error) {
+func ParseWithErrListener(sql string) (p *ParseResult, err error) {
 	parser, errLis, parseVisitor, deferFn, err := setupParser(sql)
 	if err != nil {
 		return nil, err
+	}
+	p = &ParseResult{
+		ParseErrs: errLis,
 	}
 
 	defer func() {
@@ -59,12 +73,9 @@ func ParseWithErrListener(sql string) (*ParseResult, error) {
 		}
 	}()
 
-	stmts := parser.Entry().Accept(parseVisitor).([]TopLevelStatement)
+	p.Statements = parser.Entry().Accept(parseVisitor).([]TopLevelStatement)
 
-	return &ParseResult{
-		Statements: stmts,
-		ParseErrs:  errLis,
-	}, nil
+	return p, nil
 }
 
 func setupParser(sql string) (parser *gen.KuneiformParser, errList *errorListener, parserVisitor *schemaVisitor, deferFn func(any) error, err error) {
@@ -76,19 +87,19 @@ func setupParser(sql string) (parser *gen.KuneiformParser, errList *errorListene
 		sql += ";"
 	}
 
-	errLis := newErrorListener("sql")
+	errList = newErrorListener("sql")
 	stream := antlr.NewInputStream(sql)
 
 	lexer := gen.NewKuneiformLexer(stream)
 	tokens := antlr.NewCommonTokenStream(lexer, antlr.TokenDefaultChannel)
 	parser = gen.NewKuneiformParser(tokens)
-	errLis.toks = tokens
+	errList.toks = tokens
 
 	// remove defaults
 	lexer.RemoveErrorListeners()
 	parser.RemoveErrorListeners()
-	lexer.AddErrorListener(errLis)
-	parser.AddErrorListener(errLis)
+	lexer.AddErrorListener(errList)
+	parser.AddErrorListener(errList)
 
 	parser.BuildParseTrees = true
 
@@ -106,7 +117,7 @@ func setupParser(sql string) (parser *gen.KuneiformParser, errList *errorListene
 		// any occur, swallow the panic and return the syntax errors.
 		// If the issue persists past syntax errors, the else block
 		// will return the error.
-		if errLis.Err() != nil {
+		if errList.Err() != nil {
 			return nil
 		} else if err != nil {
 			// stack trace since this is a core bug or unexpected error

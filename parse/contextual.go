@@ -4,6 +4,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
+// TODO: all of these should be moved to the engine.
 var (
 	// caller is the session variable for the caller.
 	CallerVar = "caller"
@@ -31,13 +32,3 @@ var (
 		Authenticator:  types.TextType,
 	}
 )
-
-// makeSessionVars creates a new map of session variables.
-// It includes the @ symbol in the keys.
-func makeSessionVars() map[string]*types.DataType {
-	newMap := make(map[string]*types.DataType)
-	for k, v := range SessionVars {
-		newMap["@"+k] = v.Copy()
-	}
-	return newMap
-}

@@ -43,12 +43,10 @@ DOUBLE_QUOTE: '"';
 
 
 // top-level blocks
-DATABASE:   'database';
 USE:        'use';
 UNUSE:      'unuse';
 TABLE:      'table';
 ACTION:     'action';
-PROCEDURE:  'procedure';
 
 PUBLIC:     'public';
 PRIVATE:    'private';

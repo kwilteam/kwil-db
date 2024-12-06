@@ -59,14 +59,6 @@ func (v *BaseKuneiformParserVisitor) VisitVariable(ctx *VariableContext) interfa
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitVariable_list(ctx *Variable_listContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitColumn_def(ctx *Column_defContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
 func (v *BaseKuneiformParserVisitor) VisitTable_column_def(ctx *Table_column_defContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -76,14 +68,6 @@ func (v *BaseKuneiformParserVisitor) VisitType_list(ctx *Type_listContext) inter
 }
 
 func (v *BaseKuneiformParserVisitor) VisitNamed_type_list(ctx *Named_type_listContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitTyped_variable_list(ctx *Typed_variable_listContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitConstraint(ctx *ConstraintContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -99,15 +83,7 @@ func (v *BaseKuneiformParserVisitor) VisitFk_constraint(ctx *Fk_constraintContex
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitProcedure_return(ctx *Procedure_returnContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitSql_stmt(ctx *Sql_stmtContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitDdl_stmt(ctx *Ddl_stmtContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitAction_return(ctx *Action_returnContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -371,59 +347,55 @@ func (v *BaseKuneiformParserVisitor) VisitNormal_call_sql(ctx *Normal_call_sqlCo
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitProcedure_block(ctx *Procedure_blockContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitFunction_call_action_expr(ctx *Function_call_action_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitField_access_procedure_expr(ctx *Field_access_procedure_exprContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitLiteral_action_expr(ctx *Literal_action_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitLiteral_procedure_expr(ctx *Literal_procedure_exprContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitField_access_action_expr(ctx *Field_access_action_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitParen_procedure_expr(ctx *Paren_procedure_exprContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitIs_action_expr(ctx *Is_action_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitVariable_procedure_expr(ctx *Variable_procedure_exprContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitVariable_action_expr(ctx *Variable_action_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitMake_array_procedure_expr(ctx *Make_array_procedure_exprContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitMake_array_action_expr(ctx *Make_array_action_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitIs_procedure_expr(ctx *Is_procedure_exprContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitComparison_action_expr(ctx *Comparison_action_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitProcedure_expr_arithmetic(ctx *Procedure_expr_arithmeticContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitAction_expr_arithmetic(ctx *Action_expr_arithmeticContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitUnary_procedure_expr(ctx *Unary_procedure_exprContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitArray_access_action_expr(ctx *Array_access_action_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitComparison_procedure_expr(ctx *Comparison_procedure_exprContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitLogical_action_expr(ctx *Logical_action_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitFunction_call_procedure_expr(ctx *Function_call_procedure_exprContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitParen_action_expr(ctx *Paren_action_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitLogical_procedure_expr(ctx *Logical_procedure_exprContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitUnary_action_expr(ctx *Unary_action_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitArray_access_procedure_expr(ctx *Array_access_procedure_exprContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitProcedure_expr_list(ctx *Procedure_expr_listContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitAction_expr_list(ctx *Action_expr_listContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -431,7 +403,7 @@ func (v *BaseKuneiformParserVisitor) VisitStmt_variable_declaration(ctx *Stmt_va
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitStmt_procedure_call(ctx *Stmt_procedure_callContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitStmt_action_call(ctx *Stmt_action_callContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
@@ -467,7 +439,7 @@ func (v *BaseKuneiformParserVisitor) VisitVariable_or_underscore(ctx *Variable_o
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitNormal_call_procedure(ctx *Normal_call_procedureContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitNormal_call_action(ctx *Normal_call_actionContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
