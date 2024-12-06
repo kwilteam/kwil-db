@@ -232,6 +232,8 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB, acc
 		failBuild(err, "failed to parse leader public key")
 	}
 
+	genHash := d.genesisCfg.ComputeGenesisHash()
+
 	ceCfg := &consensus.Config{
 		PrivateKey: d.privKey,
 		Leader:     leaderPubKey,
@@ -245,6 +247,7 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB, acc
 				MaxVotesPerTx:    d.genesisCfg.MaxVotesPerTx,
 			},
 		},
+		GenesisHash:    genHash,
 		DB:             db,
 		Accounts:       accounts,
 		BlockStore:     bs,

@@ -13,10 +13,12 @@ import (
 // caught up with the network, before it can start proposing blocks.
 // Else it can propose a block at a height that is already finalized
 // leading to a fork.
-
 func (ce *ConsensusEngine) doBlockSync(ctx context.Context) error {
 	if ce.role.Load() == types.RoleLeader {
-		if len(ce.validators.GetValidators()) == 1 {
+		// TODO: which validator set we should use here? whatever we have in the state?
+		// what if the current validators are not the same as the ones in the state?
+		// and they don't respond to the status request?
+		if len(ce.validatorSet) == 1 {
 			return nil // we are the network
 		}
 		// figure out the best height to sync with the network
