@@ -461,7 +461,8 @@ func (pm *PeerMan) Disconnected(net network.Network, conn network.Conn) {
 			delay *= 3 // ugh, but what was the reason
 		}
 		select {
-		case <-ctx.Done():
+		case <-ctx.Done(): // pm.done closed (shutdown)
+			return
 		case <-time.After(delay):
 		}
 		pm.reconnectWithRetry(ctx, peerID)

@@ -75,8 +75,9 @@ type Node struct {
 	discReq  chan types.DiscoveryRequest  // from consensus engine, to gossip to leader for calculating best height of the validators during blocksync.
 	discResp chan types.DiscoveryResponse // from gossip, to consensus engine for calculating best height of the validators during blocksync.
 
-	wg  sync.WaitGroup
-	log log.Logger
+	wg        sync.WaitGroup
+	log       log.Logger
+	dhtCloser func() error
 }
 
 // NewNode creates a new node. The config struct is for required configuration,
@@ -163,6 +164,7 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 		resetMsg:    make(chan ConsensusReset, 1),
 		discReq:     make(chan types.DiscoveryRequest, 1),
 		discResp:    make(chan types.DiscoveryResponse, 1),
+		dhtCloser:   dht.Close,
 	}
 
 	host.SetStreamHandler(ProtocolIDTxAnn, node.txAnnStreamHandler)
@@ -362,7 +364,17 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 	n.log.Info("Node started.")
 
 	<-ctx.Done()
+	n.log.Info("Stopping Node protocol handlers...")
 	n.wg.Wait()
+
+	n.log.Info("Stopping P2P services...")
+
+	if err = n.dhtCloser(); err != nil {
+		n.log.Warn("Failed to cleanly stop the DHT service: %v", err)
+	}
+	if err = n.host.Close(); err != nil {
+		n.log.Warn("Failed to cleanly stop P2P host: %v", err)
+	}
 
 	n.log.Info("Node stopped.")
 	return nodeErr
