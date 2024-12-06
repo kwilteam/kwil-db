@@ -175,6 +175,11 @@ func verifyStatus(_ *testing.T, val *ConsensusEngine, status Status, height int6
 	return nil
 }
 
+func TestMain(m *testing.M) {
+	pg.UseLogger(log.New(log.WithName("DBS"), log.WithFormat(log.FormatUnstructured)))
+	m.Run()
+}
+
 func TestValidatorStateMachine(t *testing.T) {
 	// t.Parallel()
 	type action struct {

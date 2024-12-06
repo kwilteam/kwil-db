@@ -152,6 +152,8 @@ func (mt *mysteryThing) Price(ctx context.Context, db sql.DB, tx *types.Transact
 }
 
 func buildDB(ctx context.Context, d *coreDependencies, closers *closeFuncs) *pg.DB {
+	pg.UseLogger(d.logger.New("PG"))
+
 	// TODO: restore from snapshots
 
 	db, err := d.dbOpener(ctx, d.cfg.DB.DBName, d.cfg.DB.MaxConns)
