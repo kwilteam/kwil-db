@@ -42,7 +42,7 @@ var defaultGenesisParams = &consensus.GenesisParams{
 }
 
 func TestMain(m *testing.M) {
-	pg.UseLogger(log.New(log.WithName("DBS")))
+	pg.UseLogger(log.New(log.WithName("DBS"), log.WithFormat(log.FormatUnstructured)))
 	m.Run()
 }
 
