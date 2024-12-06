@@ -57,10 +57,10 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	// metastore
 	buildMetaStore(ctx, db)
 
-	e := buildEngine(d, db)
-
 	// BlockStore
 	bs := buildBlockStore(d, closers)
+
+	e := buildEngine(d, db)
 
 	// Mempool
 	mp := mempool.New()
@@ -160,7 +160,7 @@ func buildDB(ctx context.Context, d *coreDependencies, closers *closeFuncs) *pg.
 	if err != nil {
 		failBuild(err, "failed to open kwild postgres database")
 	}
-	closers.addCloser(db.Close, "closing main DB")
+	closers.addCloser(db.Close, "Closing application DB")
 
 	// TODO: bring back the prev functionality
 	return db
@@ -172,7 +172,7 @@ func buildBlockStore(d *coreDependencies, closers *closeFuncs) *store.BlockStore
 	if err != nil {
 		failBuild(err, "failed to open blockstore")
 	}
-	closers.addCloser(bs.Close, "closing blockstore") // Close DB after stopping p2p
+	closers.addCloser(bs.Close, "Closing blockstore") // Close DB after stopping p2p
 
 	return bs
 }
