@@ -2,7 +2,7 @@
 
 The database for Web3.
 
-![banner](./assets/kwil-banner.jpeg)
+![banner](./kwil-banner.jpeg)
 
 [![Github-License](https://img.shields.io/badge/license-Apache%202.0-green)](./LICENSE.md)
 [![Release](https://img.shields.io/github/v/release/kwilteam/kwil-db)](https://github.com/kwilteam/kwil-db/releases)
