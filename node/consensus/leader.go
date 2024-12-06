@@ -26,11 +26,10 @@ var lastReset int64 = 0
 
 // startNewRound starts a new round of consensus process.
 func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
-	defer ce.wg.Done()
-
-	ce.log.Info("Starting a new round", "height", ce.state.lc.height+1)
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
+
+	ce.log.Info("Starting a new round", "height", ce.state.lc.height+1)
 
 	blkProp, err := ce.createBlockProposal()
 	if err != nil {
@@ -80,8 +79,9 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 		}
 		go ce.rstStateBroadcaster(ce.state.lc.height)
 
-		ce.wg.Add(1)
-		go ce.startNewRound(ctx)
+		// signal ce to start a new round
+		ce.newRound <- struct{}{}
+
 		return nil
 	}
 
@@ -187,7 +187,6 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 		// start the next round
 		ce.nextState()
 
-		ce.wg.Add(1)
 		go func() { // must not sleep with ce.state mutex locked
 			// Wait for the timeout to start the next round
 			select {
@@ -195,8 +194,11 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 				return
 			case <-time.After(ce.proposeTimeout):
 			}
-			ce.startNewRound(ctx)
+
+			// signal ce to start a new round
+			ce.newRound <- struct{}{}
 		}()
+
 	} else if ce.hasMajorityCeil(nacks) {
 		ce.log.Warnln("Majority of the validators have rejected the block, halting the network",
 			ce.state.blkProp.blk.Header.Height, acks, nacks)

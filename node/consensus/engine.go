@@ -64,6 +64,7 @@ type ConsensusEngine struct {
 	chainCtx *common.ChainContext
 
 	// Channels
+	newRound     chan struct{}
 	msgChan      chan consensusMessage
 	haltChan     chan struct{}      // can take a msg or reason for halting the network
 	resetChan    chan int64         // to reset the state of the consensus engine
@@ -302,6 +303,7 @@ func New(cfg *Config) *ConsensusEngine {
 		haltChan:     make(chan struct{}, 1),
 		resetChan:    make(chan int64, 1),
 		bestHeightCh: make(chan *discoveryMsg, 1),
+		newRound:     make(chan struct{}, 1),
 		// interfaces
 		mempool:        cfg.Mempool,
 		blockStore:     cfg.BlockStore,
@@ -332,6 +334,8 @@ func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster Propos
 	ce.discoveryReqBroadcaster = discoveryReqBroadcaster
 
 	ce.log.Info("Starting the consensus engine")
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
 
 	// Fast catchup the node with the network height
 	if err := ce.catchup(ctx); err != nil {
@@ -339,13 +343,25 @@ func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster Propos
 	}
 
 	// start mining
-	ce.startMining(ctx)
+	ce.wg.Add(1)
+	go func() {
+		defer ce.wg.Done()
+
+		ce.startMining(ctx)
+	}()
 
 	// start the event loop
 	ce.wg.Add(1)
-	go ce.runConsensusEventLoop(ctx)
+	go func() {
+		defer ce.wg.Done()
+		defer cancel() // stop CE in case event loop terminated early e.g. halt
+
+		ce.runConsensusEventLoop(ctx)
+		ce.log.Info("Consensus event loop stopped...")
+	}()
 
 	ce.wg.Wait()
+
 	ce.close()
 	ce.log.Info("Consensus engine stopped")
 	return nil
@@ -425,11 +441,6 @@ func (ce *ConsensusEngine) GenesisInit(ctx context.Context) error {
 // Apart from the above events, the node also periodically checks if it needs to
 // catchup with the network and reannounce the messages.
 func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
-	defer func() {
-		ce.log.Info("Consensus event loop stopped...")
-		ce.wg.Done()
-	}()
-
 	// TODO: make these configurable?
 	ce.log.Info("Starting the consensus event loop...")
 	catchUpTicker := time.NewTicker(5 * time.Second)
@@ -447,6 +458,12 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 			ce.resetState(ctx) // rollback the current block execution and stop the node
 			ce.log.Error("Received halt signal, stopping the consensus engine")
 			return nil
+
+		case <-ce.newRound:
+			if err := ce.startNewRound(ctx); err != nil {
+				ce.log.Error("Error starting a new round", "error", err)
+				return err
+			}
 
 		case <-catchUpTicker.C:
 			err := ce.doCatchup(ctx) // better name??
@@ -470,16 +487,17 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 }
 
 // startMining starts the mining process based on the role of the node.
-func (ce *ConsensusEngine) startMining(ctx context.Context) {
+func (ce *ConsensusEngine) startMining(_ context.Context) error {
 	// Start the mining process if the node is a leader
 	// validators and sentry nodes get activated when they receive a block proposal or block announce msgs.
 	if ce.role.Load() == types.RoleLeader {
 		ce.log.Infof("Starting the leader node")
-		ce.wg.Add(1)
-		go ce.startNewRound(ctx)
+		ce.newRound <- struct{}{}
 	} else {
 		ce.log.Infof("Starting the validator/sentry node")
 	}
+
+	return nil
 }
 
 // handleConsensusMessages handles the consensus messages based on the message type.
