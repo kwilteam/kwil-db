@@ -266,6 +266,16 @@ func (db *DB) EnsureFullReplicaIdentityDatasets(ctx context.Context) error {
 func (db *DB) Close() error {
 	db.cancel(nil)
 	db.repl.stop()
+	if db.tx != nil {
+		// This is a bug, so we are going to panic so the issue is not easily
+		// ignored, but we will rollback the tx so we don't hang or leak
+		// postgresql resources.
+		db.tx.Rollback(context.Background())
+		db.tx = nil
+		db.txid = ""
+		db.pool.Close()
+		panic("Closed the DB with an active transaction!")
+	}
 	return db.pool.Close()
 }
 
