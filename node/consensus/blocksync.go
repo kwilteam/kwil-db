@@ -122,7 +122,7 @@ func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context) error {
 			return fmt.Errorf("failed to decode block: %w", err)
 		}
 
-		if err := ce.processAndCommit(blk, appHash); err != nil {
+		if err := ce.processAndCommit(ctx, blk, appHash); err != nil {
 			return err
 		}
 	}
@@ -154,7 +154,7 @@ func (ce *ConsensusEngine) syncBlocksUntilHeight(ctx context.Context, startHeigh
 			return fmt.Errorf("failed to decode block: %w", err)
 		}
 
-		if err := ce.processAndCommit(blk, appHash); err != nil {
+		if err := ce.processAndCommit(ctx, blk, appHash); err != nil {
 			return err
 		}
 

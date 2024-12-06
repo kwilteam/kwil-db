@@ -182,7 +182,7 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 	ce.stateInfo.blkProp = blkPropMsg
 	ce.stateInfo.mtx.Unlock()
 
-	if err := ce.executeBlock(); err != nil {
+	if err := ce.executeBlock(ctx); err != nil {
 		ce.log.Error("Error executing block, sending NACK", "error", err)
 		go ce.ackBroadcaster(false, blkPropMsg.height, blkPropMsg.blkHash, nil)
 		return err
@@ -201,7 +201,7 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 // If the validator node processed a different block, it should rollback and reprocess the block.
 // Validator nodes can skip the block execution and directly commit the block if they have already processed the block.
 // The nodes should only commit the block if the appHash is valid, else halt the node.
-func (ce *ConsensusEngine) commitBlock(blk *types.Block, appHash types.Hash) error {
+func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *types.Block, appHash types.Hash) error {
 	if ce.role.Load() == types.RoleLeader {
 		return nil
 	}
@@ -217,20 +217,20 @@ func (ce *ConsensusEngine) commitBlock(blk *types.Block, appHash types.Hash) err
 	// - Incorrect AppHash: Halt the node.
 
 	if ce.role.Load() == types.RoleSentry {
-		return ce.processAndCommit(blk, appHash)
+		return ce.processAndCommit(ctx, blk, appHash)
 	}
 
 	// You are a validator
 	if ce.state.blkProp == nil {
-		return ce.processAndCommit(blk, appHash)
+		return ce.processAndCommit(ctx, blk, appHash)
 	}
 
 	if ce.state.blkProp.blkHash != blk.Header.Hash() {
 		// ce.state.cancelFunc() // abort the current block execution ??
-		if err := ce.resetState(context.Background()); err != nil {
+		if err := ce.resetState(ctx); err != nil {
 			ce.log.Error("error aborting execution of incorrect block proposal", "height", blk.Header.Height, "blkID", blk.Header.Hash(), "error", err)
 		}
-		return ce.processAndCommit(blk, appHash)
+		return ce.processAndCommit(ctx, blk, appHash)
 	}
 
 	if ce.state.blockRes == nil {
@@ -245,7 +245,7 @@ func (ce *ConsensusEngine) commitBlock(blk *types.Block, appHash types.Hash) err
 	}
 
 	// Commit the block
-	if err := ce.commit(); err != nil {
+	if err := ce.commit(ctx); err != nil {
 		ce.log.Errorf("Error committing block: height: %d, error: %v", blk.Header.Height, err)
 		return err
 	}
@@ -257,7 +257,7 @@ func (ce *ConsensusEngine) commitBlock(blk *types.Block, appHash types.Hash) err
 
 // processAndCommit: used by the sentry nodes and slow validators to process and commit the block.
 // This is used when the acks are not required to be sent back to the leader, essentially in catchup mode.
-func (ce *ConsensusEngine) processAndCommit(blk *types.Block, appHash types.Hash) error {
+func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *types.Block, appHash types.Hash) error {
 	ce.log.Info("Processing committed block", "height", blk.Header.Height, "hash", blk.Header.Hash(), "appHash", appHash)
 	if err := ce.validateBlock(blk); err != nil {
 		ce.log.Errorf("Error validating block: %v", err)
@@ -276,7 +276,7 @@ func (ce *ConsensusEngine) processAndCommit(blk *types.Block, appHash types.Hash
 	ce.stateInfo.blkProp = ce.state.blkProp
 	ce.stateInfo.mtx.Unlock()
 
-	if err := ce.executeBlock(); err != nil {
+	if err := ce.executeBlock(ctx); err != nil {
 		ce.log.Errorf("Error executing block: %v", err)
 		return err
 	}
@@ -288,7 +288,7 @@ func (ce *ConsensusEngine) processAndCommit(blk *types.Block, appHash types.Hash
 	}
 
 	// Commit the block if the appHash is valid
-	if err := ce.commit(); err != nil {
+	if err := ce.commit(ctx); err != nil {
 		ce.log.Errorf("Error committing block: %v", err)
 		return err
 	}

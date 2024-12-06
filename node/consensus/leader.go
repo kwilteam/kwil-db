@@ -26,9 +26,10 @@ var lastReset int64 = 0
 
 // startNewRound starts a new round of consensus process.
 func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
-	ce.log.Info("Starting a new round", "height", ce.state.lc.height+1)
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
+
+	ce.log.Info("Starting a new round", "height", ce.state.lc.height+1)
 
 	blkProp, err := ce.createBlockProposal()
 	if err != nil {
@@ -55,7 +56,7 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	ce.stateInfo.mtx.Unlock()
 
 	// Execute the block and generate the appHash
-	if err := ce.executeBlock(); err != nil {
+	if err := ce.executeBlock(ctx); err != nil {
 		ce.log.Errorf("Error executing the block: %v", err)
 		return err
 	}
@@ -77,7 +78,10 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 			return err
 		}
 		go ce.rstStateBroadcaster(ce.state.lc.height)
-		go ce.startNewRound(ctx)
+
+		// signal ce to start a new round
+		ce.newRound <- struct{}{}
+
 		return nil
 	}
 
@@ -171,7 +175,7 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 		ce.log.Info("Majority of the validators have accepted the block, proceeding to commit the block",
 			"height", ce.state.blkProp.blk.Header.Height, "hash", ce.state.blkProp.blkHash, "acks", acks, "nacks", nacks)
 		// Commit the block and broadcast the blockAnn message
-		if err := ce.commit(); err != nil {
+		if err := ce.commit(ctx); err != nil {
 			ce.log.Errorf("Error committing the block (process votes): %v", err)
 			return err
 		}
@@ -190,8 +194,11 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 				return
 			case <-time.After(ce.proposeTimeout):
 			}
-			ce.startNewRound(ctx)
+
+			// signal ce to start a new round
+			ce.newRound <- struct{}{}
 		}()
+
 	} else if ce.hasMajorityCeil(nacks) {
 		ce.log.Warnln("Majority of the validators have rejected the block, halting the network",
 			ce.state.blkProp.blk.Header.Height, acks, nacks)
