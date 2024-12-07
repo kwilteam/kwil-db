@@ -34,7 +34,8 @@ func NewCmdConfigure() *cobra.Command {
 				return display.PrintErr(cmd, errors.New("cannot configure run in silence mode"))
 			}
 
-			conf, err := config.LoadPersistedConfig()
+			// config.LoadPersistedConfig() => just the config file
+			conf, err := config.ActiveConfig() // considering merged config including flags and env
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}

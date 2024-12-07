@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
 	// NOTE: if extensions are used to build a kwild with new transaction
@@ -12,12 +11,13 @@ import (
 	// introduced by the consensus extensions.
 
 	root "github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 )
 
 func main() {
 	root := root.NewRootCmd()
 	if err := root.Execute(); err != nil {
-		fmt.Println(err)
+		config.PreRunPrintEffectiveConfig(root, nil) // only when --debug is set
 		os.Exit(-1)
 	}
 	os.Exit(0)
