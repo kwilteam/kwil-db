@@ -19,6 +19,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/rpc/client/user"
 	userClient "github.com/kwilteam/kwil-db/core/rpc/client/user/jsonrpc"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/utils"
 )
 
 // Client is a client that interacts with a public Kwil provider.
@@ -231,13 +232,12 @@ func (c *Client) GetSchema(ctx context.Context, dbid string) (*types.Schema, err
 	return ds, nil
 }
 
-/*
 // DeployDatabase deploys a database. TODO: remove
-func (c *Client) DeployDatabase(ctx context.Context, schema *types.Schema, opts ...clientType.TxOpt) (types.TxHash, error) {
+func (c *Client) DeployDatabase(ctx context.Context, schema *types.Schema, opts ...clientType.TxOpt) (types.Hash, error) {
 	txOpts := clientType.GetTxOpts(opts)
 	tx, err := c.newTx(ctx, schema, txOpts)
 	if err != nil {
-		return nil, err
+		return types.Hash{}, err
 	}
 
 	c.logger.Debug("deploying database",
@@ -249,13 +249,13 @@ func (c *Client) DeployDatabase(ctx context.Context, schema *types.Schema, opts 
 
 // DropDatabase drops a database by name, using the configured signer to derive
 // the DB ID. TODO: remove
-func (c *Client) DropDatabase(ctx context.Context, name string, opts ...clientType.TxOpt) (types.TxHash, error) {
+func (c *Client) DropDatabase(ctx context.Context, name string, opts ...clientType.TxOpt) (types.Hash, error) {
 	dbid := utils.GenerateDBID(name, c.Signer.Identity())
 	return c.DropDatabaseID(ctx, dbid, opts...)
 }
 
 // DropDatabaseID drops a database by ID. TODO: remove
-func (c *Client) DropDatabaseID(ctx context.Context, dbid string, opts ...clientType.TxOpt) (types.TxHash, error) {
+func (c *Client) DropDatabaseID(ctx context.Context, dbid string, opts ...clientType.TxOpt) (types.Hash, error) {
 	identifier := &types.DropSchema{
 		DBID: dbid,
 	}
@@ -263,7 +263,7 @@ func (c *Client) DropDatabaseID(ctx context.Context, dbid string, opts ...client
 	txOpts := clientType.GetTxOpts(opts)
 	tx, err := c.newTx(ctx, identifier, txOpts)
 	if err != nil {
-		return nil, err
+		return types.Hash{}, err
 	}
 
 	c.logger.Debug("deploying database",
@@ -273,12 +273,11 @@ func (c *Client) DropDatabaseID(ctx context.Context, dbid string, opts ...client
 
 	res, err := c.txClient.Broadcast(ctx, tx, syncBcastFlag(txOpts.SyncBcast))
 	if err != nil {
-		return nil, err
+		return types.Hash{}, err
 	}
 
 	return res, nil
 }
-*/
 
 // Execute executes a procedure or action.
 // It returns the receipt, as well as outputs which is the decoded body of the receipt.

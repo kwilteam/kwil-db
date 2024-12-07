@@ -77,10 +77,10 @@ func (m *mempool) applyTransaction(ctx *common.TxContext, tx *types.Transaction,
 			return errors.New("validator vote ids are not allowed during migration")
 		case types.PayloadTypeValidatorVoteBodies:
 			return errors.New("validator vote bodies are not allowed during migration")
-		// case types.PayloadTypeDeploySchema:
-		// 	return errors.New("deploy schema transactions are not allowed during migration")
-		// case types.PayloadTypeDropSchema:
-		// 	return errors.New("drop schema transactions are not allowed during migration")
+		case types.PayloadTypeDeploySchema:
+			return errors.New("deploy schema transactions are not allowed during migration")
+		case types.PayloadTypeDropSchema:
+			return errors.New("drop schema transactions are not allowed during migration")
 		case types.PayloadTypeTransfer:
 			return errors.New("transfer transactions are not allowed during migration")
 		}

@@ -20,9 +20,9 @@ type Client interface {
 	Call(ctx context.Context, dbid string, procedure string, inputs []any) (*CallResult, error)
 	ChainID() string
 	ChainInfo(ctx context.Context) (*types.ChainInfo, error)
-	// DeployDatabase(ctx context.Context, payload *types.Schema, opts ...TxOpt) (types.Hash, error)
-	// DropDatabase(ctx context.Context, name string, opts ...TxOpt) (types.Hash, error)
-	// DropDatabaseID(ctx context.Context, dbid string, opts ...TxOpt) (types.Hash, error)
+	DeployDatabase(ctx context.Context, payload *types.Schema, opts ...TxOpt) (types.Hash, error)
+	DropDatabase(ctx context.Context, name string, opts ...TxOpt) (types.Hash, error)
+	DropDatabaseID(ctx context.Context, dbid string, opts ...TxOpt) (types.Hash, error)
 	// DEPRECATED: Use Execute instead.
 	// ExecuteAction(ctx context.Context, dbid string, action string, tuples [][]any, opts ...TxOpt) (types.Hash, error)
 	Execute(ctx context.Context, dbid string, action string, tuples [][]any, opts ...TxOpt) (types.Hash, error)

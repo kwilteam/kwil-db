@@ -13,15 +13,17 @@ import (
 	"github.com/kwilteam/kwil-db/extensions/consensus"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/node/accounts"
+	"github.com/kwilteam/kwil-db/node/engine/execution"
+	"github.com/kwilteam/kwil-db/node/ident"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
 )
 
 func init() {
 	err := errors.Join(
-		// RegisterRoute(types.PayloadTypeDeploySchema, NewRoute(&deployDatasetRoute{})),
-		// RegisterRoute(types.PayloadTypeDropSchema, NewRoute(&dropDatasetRoute{})),
-		// RegisterRoute(types.PayloadTypeExecute, NewRoute(&executeActionRoute{})),
+		RegisterRoute(types.PayloadTypeDeploySchema, NewRoute(&deployDatasetRoute{})),
+		RegisterRoute(types.PayloadTypeDropSchema, NewRoute(&dropDatasetRoute{})),
+		RegisterRoute(types.PayloadTypeExecute, NewRoute(&executeActionRoute{})),
 		RegisterRoute(types.PayloadTypeTransfer, NewRoute(&transferRoute{})),
 		RegisterRoute(types.PayloadTypeValidatorJoin, NewRoute(&validatorJoinRoute{})),
 		RegisterRoute(types.PayloadTypeValidatorApprove, NewRoute(&validatorApproveRoute{})),
@@ -75,13 +77,6 @@ type ConsensusParams struct {
 type Pricer interface {
 	Price(ctx context.Context, router *TxApp, db sql.DB, tx *types.Transaction) (*big.Int, error)
 }
-
-// func codeForEngineError(err error) types.TxCode {
-// 	if err == nil {
-// 		return types.CodeOk
-// 	}
-// 	return types.CodeUnknownError
-// }
 
 // routes is a map of transaction payload types to their respective routes. This
 // should be updated if a coordinated height-based update introduces new routes
@@ -177,9 +172,9 @@ func (d *baseRoute) Execute(ctx *common.TxContext, router *TxApp, db sql.DB, tx 
 	defer tx2.Rollback(ctx.Ctx) // no-op if Commit succeeded
 
 	app := &common.App{
-		Service: svc,
-		DB:      tx2,
-		// Engine:     router.Engine,
+		Service:    svc,
+		DB:         tx2,
+		Engine:     router.Engine,
 		Accounts:   router.Accounts,
 		Validators: router.Validators,
 	}
@@ -204,6 +199,173 @@ func (d *baseRoute) Execute(ctx *common.TxContext, router *TxApp, db sql.DB, tx 
 // How would we change price? The Price method would store the value in a field
 // of the route, which is modified by the app. Alternatively, create a new
 // route or replace the route entirely (same payload type, new impl).
+
+func codeForEngineError(err error) types.TxCode {
+	if err == nil {
+		return types.CodeOk
+	}
+	if errors.Is(err, execution.ErrDatasetExists) {
+		return types.CodeDatasetExists
+	}
+	if errors.Is(err, execution.ErrDatasetNotFound) {
+		return types.CodeDatasetMissing
+	}
+	if errors.Is(err, execution.ErrInvalidSchema) {
+		return types.CodeInvalidSchema
+	}
+
+	return types.CodeUnknownError
+}
+
+type deployDatasetRoute struct {
+	schema     *types.Schema // set by PreTx
+	identifier string
+	authType   string
+}
+
+var _ consensus.Route = (*deployDatasetRoute)(nil)
+
+func (d *deployDatasetRoute) Name() string {
+	return types.PayloadTypeDeploySchema.String()
+}
+
+func (d *deployDatasetRoute) Price(ctx context.Context, app *common.App, tx *types.Transaction) (*big.Int, error) {
+	return big.NewInt(1000000000000000000), nil
+}
+
+func (d *deployDatasetRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *types.Transaction) (types.TxCode, error) {
+	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationInProgress ||
+		ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationCompleted {
+		return types.CodeNetworkInMigration, errors.New("cannot deploy dataset during migration")
+	}
+
+	schemaPayload := &types.Schema{}
+	err := schemaPayload.UnmarshalBinary(tx.Body.Payload)
+	if err != nil {
+		return types.CodeEncodingError, err
+	}
+
+	d.schema = schemaPayload
+
+	d.identifier, err = ident.Identifier(tx.Signature.Type, tx.Sender)
+	if err != nil {
+		return types.CodeUnknownError, err
+	}
+
+	d.authType = tx.Signature.Type
+
+	return 0, nil
+}
+
+func (d *deployDatasetRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
+	err := app.Engine.CreateDataset(ctx, app.DB, d.schema)
+	if err != nil {
+		return codeForEngineError(err), err
+	}
+	return 0, nil
+}
+
+type dropDatasetRoute struct {
+	dbid string
+}
+
+var _ consensus.Route = (*dropDatasetRoute)(nil)
+
+func (d *dropDatasetRoute) Name() string {
+	return types.PayloadTypeDropSchema.String()
+}
+
+func (d *dropDatasetRoute) Price(ctx context.Context, app *common.App, tx *types.Transaction) (*big.Int, error) {
+	return big.NewInt(10000000000000), nil
+}
+
+func (d *dropDatasetRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *types.Transaction) (types.TxCode, error) {
+	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationInProgress ||
+		ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationCompleted {
+		return types.CodeNetworkInMigration, errors.New("cannot drop dataset during migration")
+	}
+
+	drop := &types.DropSchema{}
+	err := drop.UnmarshalBinary(tx.Body.Payload)
+	if err != nil {
+		return types.CodeEncodingError, err
+	}
+
+	d.dbid = drop.DBID
+	return 0, nil
+}
+
+func (d *dropDatasetRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
+	err := app.Engine.DeleteDataset(ctx, app.DB, d.dbid)
+	if err != nil {
+		return codeForEngineError(err), err
+	}
+	return 0, nil
+}
+
+type executeActionRoute struct {
+	dbid   string
+	action string
+	args   [][]any
+}
+
+var _ consensus.Route = (*executeActionRoute)(nil)
+
+func (d *executeActionRoute) Name() string {
+	return types.PayloadTypeExecute.String()
+}
+
+func (d *executeActionRoute) Price(ctx context.Context, app *common.App, tx *types.Transaction) (*big.Int, error) {
+	return big.NewInt(2000000000000000), nil
+}
+
+func (d *executeActionRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *types.Transaction) (types.TxCode, error) {
+	action := &types.ActionExecution{}
+	err := action.UnmarshalBinary(tx.Body.Payload)
+	if err != nil {
+		return types.CodeEncodingError, err
+	}
+
+	d.action = action.Action
+	d.dbid = action.DBID
+
+	// here, we decode the [][]types.EncodedTypes into [][]any
+	args := make([][]any, len(action.Arguments))
+	for i, arg := range action.Arguments {
+		args[i] = make([]any, len(arg))
+		for j, val := range arg {
+			decoded, err := val.Decode()
+			if err != nil {
+				return types.CodeEncodingError, err
+			}
+			args[i][j] = decoded
+		}
+	}
+
+	// we want to execute the tx for as many arg arrays exist
+	// if there are no arg arrays, we want to execute it once
+	if len(args) == 0 {
+		args = make([][]any, 1)
+	}
+
+	d.args = args
+
+	return 0, nil
+}
+
+func (d *executeActionRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
+	for i := range d.args {
+		_, err := app.Engine.Procedure(ctx, app.DB, &common.ExecutionData{
+			Dataset:   d.dbid,
+			Procedure: d.action,
+			Args:      d.args[i],
+		})
+		if err != nil {
+			return codeForEngineError(err), err
+		}
+	}
+	return 0, nil
+}
 
 type transferRoute struct {
 	to  []byte

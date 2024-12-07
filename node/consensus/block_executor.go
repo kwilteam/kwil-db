@@ -73,6 +73,13 @@ func (ce *ConsensusEngine) executeBlock(ctx context.Context) (err error) {
 		return fmt.Errorf("begin outer tx failed: %w", err)
 	}
 
+	blockCtx := &common.BlockContext{
+		Height:       ce.state.blkProp.height,
+		Timestamp:    blkProp.blk.Header.Timestamp.Unix(),
+		ChainContext: ce.chainCtx,
+		Proposer:     ce.leader.Bytes(),
+	}
+
 	// TODO: log tracker
 
 	txResults := make([]ktypes.TxResult, len(ce.state.blkProp.blk.Txns))
@@ -98,7 +105,7 @@ func (ce *ConsensusEngine) executeBlock(ctx context.Context) (err error) {
 			Signer:        decodedTx.Sender,
 			Authenticator: decodedTx.Signature.Type,
 			Caller:        identifier,
-			// BlockContext: blkCtx,
+			BlockContext:  blockCtx,
 		}
 
 		select {
@@ -129,12 +136,6 @@ func (ce *ConsensusEngine) executeBlock(ctx context.Context) (err error) {
 
 	// TODO: Notify the changesets to the migrator
 
-	blockCtx := &common.BlockContext{ // TODO: fill in the network params once we have them
-		Height:       ce.state.blkProp.height,
-		Timestamp:    blkProp.blk.Header.Timestamp.Unix(),
-		ChainContext: ce.chainCtx,
-		Proposer:     ce.leader.Bytes(),
-	}
 	_, err = ce.txapp.Finalize(ctx, ce.state.consensusTx, blockCtx)
 	if err != nil {
 		ce.log.Error("Failed to finalize txapp", "err", err)

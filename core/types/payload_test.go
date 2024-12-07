@@ -36,7 +36,7 @@ func TestValidPayload(t *testing.T) {
 		pt    types.PayloadType
 		valid bool
 	}{
-		{"kv pair payload", types.PayloadTypeKV, true},
+		{"kv pair payload", types.PayloadTypeExecute, true},
 		{"registered payload", "testPayload", true},
 		{"invalid payload", types.PayloadType("unknown"), false},
 	}

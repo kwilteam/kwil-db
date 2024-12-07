@@ -588,7 +588,7 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 
 	if appHeight == storeHeight && !bytes.Equal(appHash, storeAppHash[:]) {
 		// This is not possible, PG mismatches with the Blockstore return error
-		return fmt.Errorf("AppHash mismatch, appHash: %x, storeAppHash: %x", appHash, storeAppHash)
+		return fmt.Errorf("AppHash mismatch, appHash: %x, storeAppHash: %v", appHash, storeAppHash)
 	}
 
 	if appHeight > 0 {
