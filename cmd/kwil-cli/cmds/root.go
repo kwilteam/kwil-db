@@ -38,7 +38,8 @@ func NewRootCmd() *cobra.Command {
 		SilenceUsage:      true,
 		DisableAutoGenTag: true,
 		PersistentPreRunE: bind.ChainPreRuns(bind.MaybeEnableCLIDebug,
-			config.PreRunBindFlags, config.PreRunBindConfigFile,
+			// Config priority, highest to lowest: env, flags, config.json
+			config.PreRunBindConfigFile, config.PreRunBindFlags, config.PreRunBindEnv,
 			config.PreRunPrintEffectiveConfig),
 		CompletionOptions: cobra.CompletionOptions{
 			DisableDefaultCmd: true,
@@ -53,7 +54,7 @@ func NewRootCmd() *cobra.Command {
 	config.BindConfigPath(rootCmd)
 
 	// Automatically define flags for all of the fields of the config struct.
-	config.SetFlags(rootCmd.Flags())
+	config.SetFlags(rootCmd.PersistentFlags()) // share configs with all subcommands
 
 	helpers.BindAssumeYesFlag(rootCmd) // --assume-yes/-Y
 

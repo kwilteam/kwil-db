@@ -78,22 +78,32 @@ func BindConfigPath(cmd *cobra.Command) {
 		configFile, desc)
 }
 
-func ConfigFilePath(cmd *cobra.Command) string {
-	// path, err := cmd.Flags().GetString(configFileFlag)
-	// if err != nil {
-	// 	fmt.Println("Unable to retrieve config file flag value:", err)
-	// 	return configFile
-	// }
+// ConfigFilePFlag returns the Flag for the --config flag. If the flag was not
+// correctly bound with [BindConfigPath] first, it returns nil.
+func ConfigFilePFlag(cmd *cobra.Command) *pflag.Flag {
+	return cmd.Flags().Lookup(configFileFlag)
+}
+
+// ConfigFilePath returns the value bound to the --config flag. If you need to
+// know if it was changed from the default or correctly bound, use [ConfigFilePFlag].
+func ConfigFilePath() string {
 	return configFile // bound to configFileFlag by pointer
 }
 
+// ConfigDir is the equivalent of filepath.Dir(ConfigFilePath()).
 func ConfigDir() string {
 	return filepath.Dir(configFile)
 }
 
 // PreRunBindConfigFile loads and merges settings from the JSON config file.
 func PreRunBindConfigFile(cmd *cobra.Command, args []string) error {
-	cfgPath := ConfigFilePath(cmd)
+	confFlag := ConfigFilePFlag(cmd)
+	if confFlag == nil {
+		return fmt.Errorf("--%s flag is not bound (missing BindConfigPath)", configFileFlag)
+	}
+	cfgPath := confFlag.Value.String()
+	cfgPathSet := confFlag.Changed // if true, error if file not found
+
 	cfgPath, err := helpers.ExpandPath(cfgPath)
 	if err != nil {
 		return err
@@ -105,14 +115,24 @@ func PreRunBindConfigFile(cmd *cobra.Command, args []string) error {
 		if !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("error loading config from %v: %w", confPath, err)
 		}
-		// Not an error, just no config file present.
+		if cfgPathSet {
+			return fmt.Errorf("specified config file at %v not found", confPath)
+		}
+		// Not an error, just no config file present at default location.
 		bind.Debugf("No config file present at %v", confPath)
 	}
 	return nil
 }
 
+// PreRunBindFlags binds the current command's flags to the merged config. Use
+// this with PersistentPreRunE in the root command to have it run for every
+// command, or use with PreRunE for just the current command.
 func PreRunBindFlags(cmd *cobra.Command, args []string) error {
-	flagSet := cmd.Flags()
+	return PreRunBindFlagset(cmd.Flags(), args)
+}
+
+// PreRunBindFlagset is like [PreRunBindFlags] be used for a specific flag set.
+func PreRunBindFlagset(flagSet *pflag.FlagSet, args []string) error {
 	err := k.Load(posflag.ProviderWithFlag(flagSet, ".", nil, /* <- k if we want defaults from the flags' defaults*/
 		func(f *pflag.Flag) (string, interface{}) {
 			// if !f.Changed { Debugf("not changed %v", f.Name) }

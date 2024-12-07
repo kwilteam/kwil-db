@@ -18,14 +18,16 @@ func pingCmd() *cobra.Command {
 		Long:  "Ping the kwil provider endpoint.  If successful, returns 'pong'.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			return client.DialClient(cmd.Context(), cmd, client.WithoutPrivateKey, func(ctx context.Context, client clientType.Client, cfg *config.KwilCliConfig) error {
-				res, err := client.Ping(ctx)
-				if err != nil {
-					return display.PrintErr(cmd, err)
-				}
+			return client.DialClient(cmd.Context(), cmd, client.WithoutPrivateKey,
+				func(ctx context.Context, client clientType.Client, cfg *config.KwilCliConfig) error {
+					res, err := client.Ping(ctx)
+					if err != nil {
+						return display.PrintErr(cmd, err)
+					}
 
-				return display.PrintCmd(cmd, display.RespString(res))
-			})
+					return display.PrintCmd(cmd, display.RespString(res))
+				},
+			)
 		},
 	}
 
