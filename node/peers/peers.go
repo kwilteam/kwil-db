@@ -164,7 +164,7 @@ func (pm *PeerMan) maintainMinPeers(ctx context.Context) {
 				pid := peerInfo.ID
 				err := pm.h.Connect(ctx, peer.AddrInfo{ID: pid})
 				if err != nil {
-					pm.log.Warnf("Failed to connect to peer %s: %v", pid, err)
+					pm.log.Warnf("Failed to connect to peer %s: %v", pid, CompressDialError(err))
 				} else {
 					pm.log.Infof("Connected to peer %s", pid)
 					added++
@@ -198,7 +198,7 @@ func (pm *PeerMan) startPex(ctx context.Context) {
 					if pm.addPeerAddrs(peer) {
 						// TODO: connection manager, with limits
 						if err = pm.c.Connect(ctx, peer); err != nil {
-							pm.log.Warnf("Failed to connect to %s: %v", peer.ID, err)
+							pm.log.Warnf("Failed to connect to %s: %v", peer.ID, CompressDialError(err))
 						}
 					}
 					count++
@@ -557,7 +557,6 @@ func (pm *PeerMan) reconnectWithRetry(ctx context.Context, peerID peer.ID) {
 			cancel()
 			err = CompressDialError(err)
 			pm.log.Infof("Failed to reconnect to peer %s (trying again in %v): %v", peerID, delay, err)
-
 		} else {
 			cancel()
 			pm.log.Infof("Successfully reconnected to peer %s", peerID)
