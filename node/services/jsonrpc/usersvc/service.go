@@ -42,7 +42,7 @@ type BlockchainTransactor interface {
 
 type NodeApp interface {
 	AccountInfo(ctx context.Context, db sql.DB, identifier []byte, pending bool) (balance *big.Int, nonce int64, err error)
-	Price(ctx context.Context, dbTx sql.DB, tx *types.Transaction, chainContext *common.ChainContext) (*big.Int, error)
+	Price(ctx context.Context, dbTx sql.DB, tx *types.Transaction) (*big.Int, error)
 	// GetMigrationMetadata(ctx context.Context) (*types.MigrationMetadata, error)
 }
 
@@ -497,7 +497,7 @@ func (svc *Service) EstimatePrice(ctx context.Context, req *userjson.EstimatePri
 	readTx := svc.db.BeginDelayedReadTx()
 	defer readTx.Rollback(ctx)
 
-	price, err := svc.nodeApp.Price(ctx, readTx, req.Tx, nil)
+	price, err := svc.nodeApp.Price(ctx, readTx, req.Tx)
 	if err != nil {
 		svc.log.Error("failed to estimate price", "error", err) // why not tell the client though?
 		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, "failed to estimate price", nil)

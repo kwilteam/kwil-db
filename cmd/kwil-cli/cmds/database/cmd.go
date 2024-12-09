@@ -28,8 +28,8 @@ func NewCmdDatabase() *cobra.Command {
 
 	// writeCmds create a transactions, requiring a private key for signing/
 	writeCmds := []*cobra.Command{
-		// deployCmd(),
-		// dropCmd(),
+		deployCmd(),
+		dropCmd(),
 		executeCmd(),
 		batchCmd(),
 	}

@@ -29,9 +29,8 @@ type Payload interface {
 }
 
 const (
-	PayloadTypeKV PayloadType = "kv"
-	// PayloadTypeDeploySchema        PayloadType = "deploy_schema"
-	// PayloadTypeDropSchema          PayloadType = "drop_schema"
+	PayloadTypeDeploySchema        PayloadType = "deploy_schema"
+	PayloadTypeDropSchema          PayloadType = "drop_schema"
 	PayloadTypeExecute             PayloadType = "execute"
 	PayloadTypeTransfer            PayloadType = "transfer"
 	PayloadTypeValidatorJoin       PayloadType = "validator_join"
@@ -90,10 +89,9 @@ func UnmarshalPayload(payloadType PayloadType, payload []byte) (Payload, error) 
 
 // payloadTypes includes native types and types registered from extensions.
 var payloadTypes = map[PayloadType]bool{
-	PayloadTypeKV: true, // TODO: remove this later
-	// PayloadTypeDeploySchema:        true,
-	// PayloadTypeDropSchema:          true,
-	// PayloadTypeExecute:             true,
+	PayloadTypeDeploySchema:        true,
+	PayloadTypeDropSchema:          true,
+	PayloadTypeExecute:             true,
 	PayloadTypeTransfer:            true,
 	PayloadTypeValidatorJoin:       true,
 	PayloadTypeValidatorLeave:      true,
@@ -119,14 +117,13 @@ func (p PayloadType) Valid() bool {
 		PayloadTypeCreateResolution,
 		PayloadTypeApproveResolution,
 		PayloadTypeDeleteResolution,
-		// PayloadTypeDeploySchema,
-		// PayloadTypeDropSchema,
-		// PayloadTypeExecute,
+		PayloadTypeDeploySchema,
+		PayloadTypeDropSchema,
+		PayloadTypeExecute,
 		// These should not come in user transactions, but they are not invalid
 		// payload types in general.
 		PayloadTypeValidatorVoteIDs,
-		PayloadTypeValidatorVoteBodies,
-		PayloadTypeKV: // TODO: remove this later
+		PayloadTypeValidatorVoteBodies:
 
 		return true
 	default: // check map that includes registered payloads from extensions
@@ -145,32 +142,6 @@ func RegisterPayload(pType PayloadType) {
 	payloadTypes[pType] = true
 }
 
-// KVPair payload for testing purposes
-type KVPayload struct {
-	Key   []byte
-	Value []byte
-}
-
-var _ Payload = &KVPayload{}
-
-var _ encoding.BinaryMarshaler = (*KVPayload)(nil)
-var _ encoding.BinaryMarshaler = KVPayload{}
-
-func (p KVPayload) MarshalBinary() ([]byte, error) {
-	return serialize.Encode(p)
-}
-
-var _ encoding.BinaryUnmarshaler = (*KVPayload)(nil)
-
-func (p *KVPayload) UnmarshalBinary(data []byte) error {
-	return serialize.Decode(data, p)
-}
-
-func (p *KVPayload) Type() PayloadType {
-	return PayloadTypeKV
-}
-
-/*
 // DropSchema is the payload that is used to drop a schema
 type DropSchema struct {
 	DBID string
@@ -189,7 +160,6 @@ func (s *DropSchema) UnmarshalBinary(b []byte) error {
 func (s *DropSchema) Type() PayloadType {
 	return PayloadTypeDropSchema
 }
-*/
 
 // ActionExecution is the payload that is used to execute an action
 type ActionExecution struct {

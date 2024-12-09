@@ -2,7 +2,6 @@ package node
 
 import (
 	"context"
-	"crypto/rand"
 	"errors"
 	"fmt"
 	"io"
@@ -10,7 +9,6 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
-	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
 
 	"github.com/libp2p/go-libp2p/core/network"
@@ -141,7 +139,7 @@ func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txHash typ
 	return nil
 }
 
-func randomTx(size int, signer auth.Signer) ([]byte, error) {
+/*func randomTx(size int, signer auth.Signer) ([]byte, error) {
 	payload := &ktypes.KVPayload{
 		Key:   randBytes(32),
 		Value: randBytes(size),
@@ -159,15 +157,21 @@ func randomTx(size int, signer auth.Signer) ([]byte, error) {
 	return tx.MarshalBinary()
 }
 
-// startTxAnns creates pretend transactions, adds them to the tx index, and
-// announces them to peers. This also does periodic reannouncement.
-func (n *Node) startTxAnns(ctx context.Context, newPeriod, reannouncePeriod time.Duration, sz int) {
+func randBytes(n int) []byte {
+	b := make([]byte, n)
+	rand.Read(b)
+	return b
+}*/
+
+// startTxAnns handles periodic reannouncement. It can also be modified to
+// regularly create dummy transactions.
+func (n *Node) startTxAnns(ctx context.Context, reannouncePeriod time.Duration) {
 	signer := secp256k1Signer()
 	if signer == nil {
 		panic("failed to create secp256k1 signer")
 	}
 
-	n.wg.Add(1)
+	/*n.wg.Add(1)
 	go func() {
 		defer n.wg.Done()
 
@@ -189,7 +193,7 @@ func (n *Node) startTxAnns(ctx context.Context, newPeriod, reannouncePeriod time
 			// n.log.Infof("announcing txid %v", txid)
 			n.announceTx(ctx, txHash, rawTx, n.host.ID())
 		}
-	}()
+	}()*/
 
 	n.wg.Add(1)
 	go func() {
@@ -220,12 +224,6 @@ func (n *Node) startTxAnns(ctx context.Context, newPeriod, reannouncePeriod time
 			}()
 		}
 	}()
-}
-
-func randBytes(n int) []byte {
-	b := make([]byte, n)
-	rand.Read(b)
-	return b
 }
 
 func secp256k1Signer() *auth.EthPersonalSigner {

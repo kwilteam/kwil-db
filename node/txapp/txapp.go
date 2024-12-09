@@ -26,7 +26,7 @@ import (
 // maintaining a mempool for uncommitted accounts, pricing transactions,
 // managing atomicity of the database, and managing the validator set.
 type TxApp struct {
-	// Engine     types.Engine // tracks deployed schemas
+	Engine     Engine     // tracks deployed schemas
 	Accounts   Accounts   // tracks account balances and nonces
 	Validators Validators // tracks validator power
 
@@ -57,7 +57,7 @@ func NewTxApp(ctx context.Context, db sql.Executor, engine common.Engine, signer
 	slices.Sort(resTypes)
 
 	t := &TxApp{
-		// Engine: engine,
+		Engine:     engine,
 		Accounts:   accounts,
 		Validators: validators,
 

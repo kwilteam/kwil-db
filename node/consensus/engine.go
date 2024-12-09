@@ -583,16 +583,7 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 
 	if appHeight > storeHeight {
 		// This is not possible, App can't be ahead of the store
-		return fmt.Errorf("app height %d is greater than the store height %d", appHeight, storeHeight)
-	}
-
-	if appHeight == storeHeight && !bytes.Equal(appHash, storeAppHash[:]) {
-		// This is not possible, PG mismatches with the Blockstore return error
-		return fmt.Errorf("AppHash mismatch, appHash: %x, storeAppHash: %x", appHash, storeAppHash)
-	}
-
-	if appHeight > 0 {
-		ce.setLastCommitInfo(appHeight, blkHash, types.Hash(appHash))
+		return fmt.Errorf("app height %d is greater than the store height %d (did you forget to reset postgres?)", appHeight, storeHeight)
 	}
 
 	if appHeight == -1 {
@@ -601,6 +592,13 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 		if err := ce.GenesisInit(ctx); err != nil {
 			return fmt.Errorf("error initializing the genesis state: %w", err)
 		}
+	} else if appHeight > 0 {
+		if appHeight == storeHeight && !bytes.Equal(appHash, storeAppHash[:]) {
+			// This is not possible, PG mismatches with the Blockstore return error
+			return fmt.Errorf("AppHash mismatch, appHash: %x, storeAppHash: %v", appHash, storeAppHash)
+		}
+
+		ce.setLastCommitInfo(appHeight, blkHash, types.Hash(appHash))
 	}
 
 	// Replay the blocks from the blockstore if the app hasn't played all the blocks yet.
@@ -724,16 +722,16 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 
 			if blkHash != ce.state.blkProp.blkHash { // processed incorrect block
 				if err := ce.resetState(ctx); err != nil {
-					return fmt.Errorf("error aborting incorrect block execution: height: %d, blkID: %x, error: %w", ce.state.blkProp.height, blkHash, err)
+					return fmt.Errorf("error aborting incorrect block execution: height: %d, blkID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
 				}
 
 				blk, err := types.DecodeBlock(rawBlk)
 				if err != nil {
-					return fmt.Errorf("failed to decode the block, blkHeight: %d, blkID: %x, error: %w", ce.state.blkProp.height, blkHash, err)
+					return fmt.Errorf("failed to decode the block, blkHeight: %d, blkID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
 				}
 
 				if err := ce.processAndCommit(ctx, blk, appHash); err != nil {
-					return fmt.Errorf("failed to replay the block: blkHeight: %d, blkID: %x, error: %w", ce.state.blkProp.height, blkHash, err)
+					return fmt.Errorf("failed to replay the block: blkHeight: %d, blkID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
 				}
 			} else {
 				if appHash == ce.state.blockRes.appHash {

@@ -82,10 +82,11 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 
 	// Node
 	node := buildNode(d, mp, bs, ce, ss, db)
+	appIface := &mysteryThing{txApp, ce}
 
 	// RPC Services
 	rpcSvcLogger := d.logger.New("USER")
-	jsonRPCTxSvc := usersvc.NewService(db, e, node, txApp, vs, rpcSvcLogger,
+	jsonRPCTxSvc := usersvc.NewService(db, e, node, appIface, vs, rpcSvcLogger,
 		usersvc.WithReadTxTimeout(time.Duration(d.cfg.DB.ReadTxTimeout)),
 		usersvc.WithPrivateMode(d.cfg.RPC.Private),
 		usersvc.WithChallengeExpiry(d.cfg.RPC.ChallengeExpiry),
@@ -112,7 +113,6 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 		// The admin service uses a client-style signer rather than just a private
 		// key because it is used to sign transactions and provide an Identity for
 		// account information (nonce and balance).
-		appIface := &mysteryThing{txApp, ce}
 		txSigner := &auth.EthPersonalSigner{Key: *d.privKey.(*crypto.Secp256k1PrivateKey)}
 		jsonAdminSvc := adminsvc.NewService(db, node, appIface, nil, txSigner, d.cfg,
 			d.genesisCfg.ChainID, adminServerLogger)

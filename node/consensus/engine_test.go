@@ -571,6 +571,7 @@ func TestValidatorStateMachine(t *testing.T) {
 			})
 
 			for _, act := range tc.actions {
+				t.Log("action", act.name)
 				act.trigger(t, leader, val)
 				require.Eventually(t, func() bool {
 					err := act.verify(t, leader, val)

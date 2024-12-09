@@ -30,7 +30,7 @@ type Schema struct {
 var _ Payload = (*Schema)(nil)
 
 func (s *Schema) Type() PayloadType {
-	return "to remove!"
+	return PayloadTypeDeploySchema
 }
 
 func (s Schema) SerializeSize() int {
