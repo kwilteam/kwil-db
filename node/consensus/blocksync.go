@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/jpillora/backoff"
+	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
 )
 
@@ -16,12 +17,13 @@ import (
 // leading to a fork.
 func (ce *ConsensusEngine) doBlockSync(ctx context.Context) error {
 	if ce.role.Load() == types.RoleLeader {
-		// TODO: which validator set we should use here? whatever we have in the state?
-		// what if the current validators are not the same as the ones in the state?
-		// and they don't respond to the status request?
+		// TODO: The validator set info that leader might have at the time it starts
+		// blocksync is outdated. And if the previous validators
 		if len(ce.validatorSet) == 1 {
 			return nil // we are the network
 		}
+		ce.log.Info("Starting block sync", "height", ce.state.lc.height)
+
 		// figure out the best height to sync with the network
 		// before starting to request blocks from the network.
 		bestHeight, err := ce.discoverBestHeight(ctx)
@@ -118,7 +120,7 @@ func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context) error {
 			return nil
 		}
 
-		blk, err := types.DecodeBlock(rawblk)
+		blk, err := ktypes.DecodeBlock(rawblk)
 		if err != nil {
 			return fmt.Errorf("failed to decode block: %w", err)
 		}
@@ -151,7 +153,7 @@ func (ce *ConsensusEngine) syncBlocksUntilHeight(ctx context.Context, startHeigh
 			return nil
 		}
 
-		blk, err := types.DecodeBlock(rawblk)
+		blk, err := ktypes.DecodeBlock(rawblk)
 		if err != nil {
 			return fmt.Errorf("failed to decode block: %w", err)
 		}

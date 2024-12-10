@@ -373,6 +373,10 @@ func (d *dummyTxApp) AccountInfo(ctx context.Context, dbTx sql.DB, identifier []
 	return big.NewInt(0), 0, nil
 }
 
+func (d *dummyTxApp) ApplyMempool(ctx *common.TxContext, db sql.DB, tx *ktypes.Transaction) error {
+	return nil
+}
+
 type validatorStore struct {
 	valSet []*ktypes.Validator
 }

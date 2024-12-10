@@ -73,6 +73,11 @@ type ConsensusEngine struct {
 	blockStore     BlockStore
 	blockProcessor BlockProcessor
 
+	// protects the mempool access. Commit takes this lock to ensure that
+	// no new txs are added to the mempool while the block is being committed
+	// i.e while the accounts are being updated.
+	mempoolMtx sync.Mutex
+
 	// Broadcasters
 	proposalBroadcaster     ProposalBroadcaster
 	blkAnnouncer            BlkAnnouncer
@@ -112,10 +117,10 @@ type Config struct {
 }
 
 // ProposalBroadcaster broadcasts the new block proposal message to the network
-type ProposalBroadcaster func(ctx context.Context, blk *types.Block)
+type ProposalBroadcaster func(ctx context.Context, blk *ktypes.Block)
 
 // BlkAnnouncer broadcasts the new committed block to the network using the blockAnn message
-type BlkAnnouncer func(ctx context.Context, blk *types.Block, appHash types.Hash)
+type BlkAnnouncer func(ctx context.Context, blk *ktypes.Block, appHash types.Hash)
 
 // AckBroadcaster gossips the ack/nack messages to the network
 type AckBroadcaster func(ack bool, height int64, blkID types.Hash, appHash *types.Hash) error
@@ -178,7 +183,7 @@ type lastCommit struct {
 	blkHash types.Hash
 
 	appHash types.Hash
-	blk     *types.Block // why is this needed? can be fetched from the blockstore too.
+	blk     *ktypes.Block // why is this needed? can be fetched from the blockstore too.
 }
 
 // New creates a new consensus engine.
@@ -253,8 +258,6 @@ func New(cfg *Config) *ConsensusEngine {
 	return ce
 }
 
-var initialHeight int64 = 0 // TODO: get it from genesis?
-
 func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster ProposalBroadcaster,
 	blkAnnouncer BlkAnnouncer, ackBroadcaster AckBroadcaster, blkRequester BlkRequester, stateResetter ResetStateBroadcaster,
 	discoveryReqBroadcaster DiscoveryReqBroadcaster) error {
@@ -308,31 +311,8 @@ func (ce *ConsensusEngine) close() {
 	}
 }
 
-// InitChain initializes the node with the genesis state. This included initializing the
-// votestore with the genesis validators, accounts with the genesis allocations and the
-// chain meta store with the genesis network parameters.
-// This is called only once when the node is bootstrapping for the first time.
-func (ce *ConsensusEngine) InitChain(ctx context.Context) error {
-	var valSet []*ktypes.Validator
-	for _, v := range ce.validatorSet {
-		val := &ktypes.Validator{
-			PubKey: v.PubKey,
-			Power:  v.Power,
-		}
-		valSet = append(valSet, val)
-	}
-
-	req := &ktypes.InitChainRequest{
-		Validators:    valSet,
-		InitialHeight: initialHeight,
-		GenesisHash:   ce.genesisAppHash,
-	}
-
-	return ce.blockProcessor.InitChain(ctx, req)
-}
-
 // runEventLoop starts the event loop for the consensus engine.
-// Below are the event triggers that nodes can receive depending on their role:
+// Below are the external event triggers that nodes can receive depending on their role:
 // Leader:
 //   - Acks
 //
@@ -472,8 +452,13 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 	if appHeight == -1 {
 		// This is the first time the node is bootstrapping
 		// initialize the db with the genesis state
-		if err := ce.InitChain(ctx); err != nil {
+		genHeight, genAppHash, err := ce.blockProcessor.InitChain(ctx)
+		if err != nil {
 			return fmt.Errorf("error initializing the chain: %w", err)
+		}
+		ce.state.lc.height = genHeight
+		if genAppHash != nil {
+			ce.state.lc.appHash = types.Hash(genAppHash)
 		}
 	} else if appHeight > 0 {
 		if appHeight == storeHeight && !bytes.Equal(appHash, storeAppHash[:]) {
@@ -496,9 +481,40 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 		return err
 	}
 
+	// Update the role of the node based on the final state of the validator set
+	ce.updateRole()
+
 	// Done with the catchup
 	ce.inSync.Store(false)
 
+	return nil
+}
+
+// updateRole updates the role of the node based on the final state of the validator set.
+func (ce *ConsensusEngine) updateRole() error {
+	valset := ce.blockProcessor.GetValidators()
+	pubKey := ce.privKey.Public()
+
+	currentRole := ce.role.Load()
+
+	if pubKey.Equals(ce.leader) {
+		ce.role.Store(types.RoleLeader)
+		return nil
+	}
+
+	for _, v := range valset {
+		if bytes.Equal(v.PubKey, pubKey.Bytes()) {
+			ce.role.Store(types.RoleValidator)
+			return nil
+		}
+	}
+
+	ce.role.Store(types.RoleSentry)
+	finalRole := ce.role.Load()
+
+	if currentRole != finalRole {
+		ce.log.Info("Role updated", "from", currentRole, "to", finalRole)
+	}
 	return nil
 }
 
@@ -562,7 +578,7 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 	if ce.role.Load() == types.RoleValidator {
 		// reannounce the acks, if still waiting for the commit message
 		if ce.state.blkProp != nil && ce.state.blockRes != nil &&
-			!ce.state.blockRes.appHash.IsZero() && ce.networkHeight.Load() <= ce.state.lc.height {
+			!ce.state.blockRes.appHash.IsZero() && ce.networkHeight.Load() <= ce.state.lc.height && ce.state.lc.height != 0 {
 			ce.log.Info("Reannouncing ACK", "ack", ce.state.blockRes.ack, "height", ce.state.blkProp.height, "hash", ce.state.blkProp.blkHash)
 			go ce.ackBroadcaster(ce.state.blockRes.ack, ce.state.blkProp.height, ce.state.blkProp.blkHash, &ce.state.blockRes.appHash)
 		}
@@ -608,7 +624,7 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 					return fmt.Errorf("error aborting incorrect block execution: height: %d, blkID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
 				}
 
-				blk, err := types.DecodeBlock(rawBlk)
+				blk, err := ktypes.DecodeBlock(rawBlk)
 				if err != nil {
 					return fmt.Errorf("failed to decode the block, blkHeight: %d, blkID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
 				}
@@ -639,6 +655,8 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 	}
 
 	ce.log.Info("Network Sync: ", "from", startHeight, "to (excluding)", ce.state.lc.height+1, "time", time.Since(t0), "appHash", ce.state.lc.appHash)
+
+	ce.updateRole()
 
 	return nil
 }

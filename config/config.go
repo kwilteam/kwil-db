@@ -56,8 +56,9 @@ type GenesisConfig struct {
 	// MaxVotesPerTx is the maximum number of votes that can be included in a
 	// single transaction.
 	MaxVotesPerTx int64 `json:"max_votes_per_tx"`
-
-	// TODO: AppHash is the hash of the genesis state.
+	// StateHash is the hash of the initial state of the chain, used when bootstrapping
+	// the chain with a network snapshot.
+	StateHash []byte `json:"state_hash"`
 }
 
 func (nc *GenesisConfig) SaveAs(filename string) error {

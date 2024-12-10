@@ -19,7 +19,7 @@ type DB interface {
 }
 
 type Mempool interface {
-	ReapN(maxSize int) ([]types.Hash, [][]byte)
+	PeekN(maxSize int) []types.NamedTx
 	Store(txid types.Hash, tx []byte)
 }
 
@@ -27,18 +27,22 @@ type Mempool interface {
 type BlockStore interface {
 	// GetBlockByHeight(height int64) (types.Block, error)
 	Best() (int64, types.Hash, types.Hash)
-	Store(block *types.Block, appHash types.Hash) error
+	Store(block *ktypes.Block, appHash types.Hash) error
 	// Have(blkid types.Hash) bool
-	Get(blkid types.Hash) (*types.Block, types.Hash, error)
-	GetByHeight(height int64) (types.Hash, *types.Block, types.Hash, error)
+	Get(blkid types.Hash) (*ktypes.Block, types.Hash, error)
+	GetByHeight(height int64) (types.Hash, *ktypes.Block, types.Hash, error)
 	StoreResults(hash types.Hash, results []ktypes.TxResult) error
 	// Results(hash types.Hash) ([]types.TxResult, error)
 }
 
 type BlockProcessor interface {
-	InitChain(ctx context.Context, req *ktypes.InitChainRequest) error
+	InitChain(ctx context.Context) (int64, []byte, error)
 	ExecuteBlock(ctx context.Context, req *ktypes.BlockExecRequest) (*ktypes.BlockExecResult, error)
-	Commit(ctx context.Context, height int64, appHash types.Hash, syncing bool) error
-	Close() error
+	Commit(ctx context.Context, req *ktypes.CommitRequest) error
 	Rollback(ctx context.Context, height int64, appHash ktypes.Hash) error
+	Close() error
+
+	CheckTx(ctx context.Context, tx []byte /*, recheck bool*/) error
+
+	GetValidators() []*ktypes.Validator
 }

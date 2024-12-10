@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 
+	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/consensus"
 	"github.com/kwilteam/kwil-db/node/snapshotter"
 	"github.com/kwilteam/kwil-db/node/types"
@@ -13,10 +14,10 @@ type ConsensusEngine interface {
 	Role() types.Role // maybe: Role() (rol types.Role, power int64)
 
 	AcceptProposal(height int64, blkID, prevBlkID types.Hash, leaderSig []byte, timestamp int64) bool
-	NotifyBlockProposal(blk *types.Block)
+	NotifyBlockProposal(blk *ktypes.Block)
 
 	AcceptCommit(height int64, blkID types.Hash, appHash types.Hash, leaderSig []byte) bool
-	NotifyBlockCommit(blk *types.Block, appHash types.Hash)
+	NotifyBlockCommit(blk *ktypes.Block, appHash types.Hash)
 
 	NotifyACK(validatorPK []byte, ack types.AckRes)
 
@@ -28,7 +29,7 @@ type ConsensusEngine interface {
 		blkAnnouncer consensus.BlkAnnouncer, ackBroadcaster consensus.AckBroadcaster,
 		blkRequester consensus.BlkRequester, stateResetter consensus.ResetStateBroadcaster, discoveryBroadcaster consensus.DiscoveryReqBroadcaster) error
 
-	CheckTx(tx []byte) error
+	CheckTx(ctx context.Context, tx []byte) error
 }
 
 type SnapshotStore interface {

@@ -420,7 +420,7 @@ func (n *Node) doStatesync(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("failed to get statesync block %d: %w", height, err)
 	}
-	blk, err := types.DecodeBlock(rawBlk)
+	blk, err := ktypes.DecodeBlock(rawBlk)
 	if err != nil {
 		return fmt.Errorf("failed to decode statesync block %d: %w", height, err)
 	}
@@ -500,6 +500,10 @@ func (n *Node) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, _ /*sync
 	txHash := types.HashBytes(rawTx)
 
 	// TODO: checkTx before accepting the Tx
+	if err := n.ce.CheckTx(ctx, rawTx); err != nil {
+		return nil, err
+	}
+
 	n.mp.Store(txHash, rawTx)
 
 	n.log.Infof("broadcasting new tx %v", txHash)

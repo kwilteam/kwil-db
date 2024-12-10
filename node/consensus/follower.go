@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
 )
 
@@ -201,7 +202,7 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 // If the validator node processed a different block, it should rollback and reprocess the block.
 // Validator nodes can skip the block execution and directly commit the block if they have already processed the block.
 // The nodes should only commit the block if the appHash is valid, else halt the node.
-func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *types.Block, appHash types.Hash) error {
+func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, appHash types.Hash) error {
 	if ce.role.Load() == types.RoleLeader {
 		return nil
 	}
@@ -257,7 +258,7 @@ func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *types.Block, ap
 
 // processAndCommit: used by the sentry nodes and slow validators to process and commit the block.
 // This is used when the acks are not required to be sent back to the leader, essentially in catchup mode.
-func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *types.Block, appHash types.Hash) error {
+func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Block, appHash types.Hash) error {
 	blkID := blk.Header.Hash()
 	ce.log.Info("Processing committed block", "height", blk.Header.Height, "hash", blkID, "appHash", appHash)
 	if err := ce.validateBlock(blk); err != nil {
@@ -288,7 +289,7 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *types.Bloc
 	}
 
 	// Commit the block if the appHash is valid
-	if err := ce.blockProcessor.Commit(ctx, blk.Header.Height, appHash, ce.inSync.Load()); err != nil {
+	if err := ce.commit(ctx); err != nil {
 		return fmt.Errorf("error committing block: %v", err)
 	}
 

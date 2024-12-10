@@ -729,14 +729,14 @@ func mockBlockRequester(_ context.Context, height int64) (types.Hash, types.Hash
 	return types.Hash{}, types.Hash{}, nil, errors.New("not implemented")
 }
 
-func mockBlockPropBroadcaster(_ context.Context, blk *types.Block) {
+func mockBlockPropBroadcaster(_ context.Context, blk *ktypes.Block) {
 }
 
 func mockVoteBroadcaster(ack bool, height int64, blkID types.Hash, appHash *types.Hash) error {
 	return nil
 }
 
-func mockBlkAnnouncer(_ context.Context, blk *types.Block, appHash types.Hash) {
+func mockBlkAnnouncer(_ context.Context, blk *ktypes.Block, appHash types.Hash) {
 }
 
 func mockResetStateBroadcaster(_ int64) error {
@@ -784,6 +784,10 @@ func (d *dummyTxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*k
 }
 func (d *dummyTxApp) AccountInfo(ctx context.Context, dbTx sql.DB, identifier []byte, pending bool) (balance *big.Int, nonce int64, err error) {
 	return big.NewInt(0), 0, nil
+}
+
+func (d *dummyTxApp) ApplyMempool(ctx *common.TxContext, db sql.DB, tx *ktypes.Transaction) error {
+	return nil
 }
 
 type validatorStore struct {

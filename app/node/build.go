@@ -67,7 +67,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	mp := mempool.New()
 
 	// accounts
-	accounts := buildAccountStore(ctx, db)
+	accounts := buildAccountStore(ctx, d, db)
 
 	// eventstore, votestore
 	_, vs := buildVoteStore(ctx, d, closers) // ev, vs
@@ -165,8 +165,9 @@ func buildBlockStore(d *coreDependencies, closers *closeFuncs) *store.BlockStore
 	return bs
 }
 
-func buildAccountStore(ctx context.Context, db *pg.DB) *accounts.Accounts {
-	accounts, err := accounts.InitializeAccountStore(ctx, db)
+func buildAccountStore(ctx context.Context, d *coreDependencies, db *pg.DB) *accounts.Accounts {
+	logger := d.logger.New("ACCOUNTS")
+	accounts, err := accounts.InitializeAccountStore(ctx, db, logger)
 	if err != nil {
 		failBuild(err, "failed to initialize account store")
 	}

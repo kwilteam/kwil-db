@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"sync"
 
+	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/versioning"
@@ -16,20 +17,25 @@ import (
 // Accounts represents an in-memory cache of accounts stored in a PostgreSQL database.
 // This is primarily used to optimize data reads.
 type Accounts struct {
+	// protects records and updates fields
 	mtx sync.RWMutex
 	// records is an in-memory cache of account records.
 	records map[string]*types.Account
-	// updates is a map of account identifiers (hex-encoded) to updated record values.
+	// updates is a map of account identifiers (hex-encoded) used to record
+	// account updates made by the transactions within a block.(spends, credits, transfers, etc.)
 	// These updates are applied to the records at the end of the block.
+	// Instead of using the repl stream to capture the updates, we use this in-memory cache.
+	// These updates are also used in Zero Downtime Migration to capture the spends in a block.
 	updates map[string]*types.Account
 
+	log log.Logger
 	// TODO: use lru cache of a capacity
 	// lru "github.com/hashicorp/golang-lru/v2"
 	// cache   *lru.Cache[string, *types.Account]
 
 }
 
-func InitializeAccountStore(ctx context.Context, db sql.DB) (*Accounts, error) {
+func InitializeAccountStore(ctx context.Context, db sql.DB, logger log.Logger) (*Accounts, error) {
 	upgradeFns := map[int64]versioning.UpgradeFunc{
 		0: initTables,
 	}
@@ -42,6 +48,7 @@ func InitializeAccountStore(ctx context.Context, db sql.DB) (*Accounts, error) {
 	return &Accounts{
 		records: make(map[string]*types.Account),
 		updates: make(map[string]*types.Account),
+		log:     logger,
 	}, nil
 }
 
@@ -66,20 +73,29 @@ func (a *Accounts) GetAccount(ctx context.Context, tx sql.Executor, account []by
 // If the account does not exist, it will return an error.
 // If uncommitted is true, it will check the in-memory cache for the account.
 func (a *Accounts) getAccount(ctx context.Context, tx sql.Executor, account []byte, uncommitted bool) (acct *types.Account, err error) {
-	a.mtx.RLock()
-	defer a.mtx.RUnlock()
+	a.mtx.Lock()
+	defer a.mtx.Unlock()
 
 	var ok bool
 	if uncommitted {
 		acct, ok = a.updates[hex.EncodeToString(account)]
 		if ok {
-			return acct, nil
+			a.log.Info("GetAccount: Found account in updates", "account", "id", hex.EncodeToString(account), "balance", acct.Balance, "nonce", acct.Nonce)
+			return &types.Account{
+				Identifier: acct.Identifier,
+				Balance:    acct.Balance,
+				Nonce:      acct.Nonce,
+			}, nil
 		}
 	}
 
 	acct, ok = a.records[hex.EncodeToString(account)]
 	if ok {
-		return acct, nil
+		return &types.Account{
+			Identifier: acct.Identifier,
+			Balance:    acct.Balance,
+			Nonce:      acct.Nonce,
+		}, nil
 	}
 
 	acct, err = getAccount(ctx, tx, account)
@@ -88,7 +104,11 @@ func (a *Accounts) getAccount(ctx context.Context, tx sql.Executor, account []by
 	}
 
 	// Add the account to the in-memory cache
-	a.records[hex.EncodeToString(account)] = acct
+	a.records[hex.EncodeToString(account)] = &types.Account{
+		Identifier: acct.Identifier,
+		Balance:    acct.Balance,
+		Nonce:      acct.Nonce,
+	}
 	return acct, nil
 }
 
@@ -227,7 +247,11 @@ func (a *Accounts) Commit() error {
 	defer a.mtx.Unlock()
 
 	for k, v := range a.updates {
-		a.records[k] = v
+		a.records[k] = &types.Account{
+			Identifier: v.Identifier,
+			Balance:    v.Balance,
+			Nonce:      v.Nonce,
+		}
 	}
 
 	a.updates = make(map[string]*types.Account)
@@ -254,12 +278,12 @@ func (a *Accounts) createAccount(ctx context.Context, tx sql.Executor, account [
 	// Record the account creation in the updates
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
+
 	a.updates[hex.EncodeToString(account)] = &types.Account{
 		Identifier: account,
 		Balance:    amt,
 		Nonce:      nonce,
 	}
-
 	return nil
 }
 
@@ -272,11 +296,10 @@ func (a *Accounts) updateAccount(ctx context.Context, tx sql.Executor, account [
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
-	acct, ok := a.updates[hex.EncodeToString(account)]
-	if ok {
-		acct.Balance = amount
-		acct.Nonce = nonce
+	a.updates[hex.EncodeToString(account)] = &types.Account{
+		Identifier: account,
+		Balance:    amount,
+		Nonce:      nonce,
 	}
-
 	return nil
 }

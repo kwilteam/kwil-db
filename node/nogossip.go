@@ -66,11 +66,17 @@ func (n *Node) txAnnStreamHandler(s network.Stream) {
 	// while we were fetching it
 
 	// store in mempool since it was not in tx index and thus not confirmed
-	n.mp.Store(txHash, rawTx)
-	fetched = true
+	ctx := context.Background()
+	if err := n.ce.CheckTx(ctx, rawTx); err != nil {
+		n.log.Warnf("tx %v failed check: %v", txHash, err)
+	} else {
+		n.mp.Store(txHash, rawTx)
 
-	// re-announce
-	go n.announceTx(context.Background(), txHash, rawTx, s.Conn().RemotePeer())
+		// re-announce
+		go n.announceTx(context.Background(), txHash, rawTx, s.Conn().RemotePeer())
+	}
+
+	fetched = true
 }
 
 func (n *Node) announceTx(ctx context.Context, txHash types.Hash, rawTx []byte, from peer.ID) {

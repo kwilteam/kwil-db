@@ -71,13 +71,13 @@ func fakeAppHash(height int64) types.Hash {
 	return types.HashBytes(binary.LittleEndian.AppendUint64(nil, uint64(height)))
 }
 
-func createTestBlock(height int64, numTxns int) (*types.Block, types.Hash) {
+func createTestBlock(height int64, numTxns int) (*ktypes.Block, types.Hash) {
 	txns := make([][]byte, numTxns)
 	for i := range numTxns {
 		txns[i] = []byte(strconv.FormatInt(height, 10) + strconv.Itoa(i) +
 			strings.Repeat("data", 1000))
 	}
-	return types.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5},
+	return ktypes.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5},
 		time.Unix(1729723553+height, 0), txns), fakeAppHash(height)
 }
 
@@ -124,8 +124,8 @@ type dummyCE struct {
 	rejectCommit bool
 
 	ackHandler         func(validatorPK []byte, ack types.AckRes)
-	blockCommitHandler func(blk *types.Block, appHash types.Hash)
-	blockPropHandler   func(blk *types.Block)
+	blockCommitHandler func(blk *ktypes.Block, appHash types.Hash)
+	blockPropHandler   func(blk *ktypes.Block)
 	resetStateHandler  func(height int64)
 
 	// mtx     sync.Mutex
@@ -147,7 +147,7 @@ func (ce *dummyCE) AcceptCommit(height int64, blkID, appHash types.Hash, leaderS
 	return !ce.rejectCommit
 }
 
-func (ce *dummyCE) NotifyBlockCommit(blk *types.Block, appHash types.Hash) {
+func (ce *dummyCE) NotifyBlockCommit(blk *ktypes.Block, appHash types.Hash) {
 	if ce.blockCommitHandler != nil {
 		ce.blockCommitHandler(blk, appHash)
 		return
@@ -175,7 +175,7 @@ func (ce *dummyCE) NotifyResetState(height int64) {
 	}
 }
 
-func (ce *dummyCE) NotifyBlockProposal(blk *types.Block) {
+func (ce *dummyCE) NotifyBlockProposal(blk *ktypes.Block) {
 	if ce.blockPropHandler != nil {
 		ce.blockPropHandler(blk)
 		return
@@ -188,7 +188,7 @@ func (ce *dummyCE) Role() types.Role {
 	return types.RoleLeader
 }
 
-func (ce *dummyCE) CheckTx(tx []byte) error {
+func (ce *dummyCE) CheckTx(ctx context.Context, tx []byte) error {
 	return nil
 }
 
@@ -211,7 +211,7 @@ func (ce *dummyCE) Fake() *faker {
 
 type faker dummyCE
 
-func (f *faker) Propose(ctx context.Context, blk *types.Block) {
+func (f *faker) Propose(ctx context.Context, blk *ktypes.Block) {
 	f.proposerBroadcaster(ctx, blk)
 }
 
@@ -227,7 +227,7 @@ func (f *faker) RequestBlock(ctx context.Context, height int64) {
 	f.blkRequester(ctx, height)
 }
 
-func (f *faker) AnnounceBlock(ctx context.Context, blk *types.Block, appHash types.Hash) {
+func (f *faker) AnnounceBlock(ctx context.Context, blk *ktypes.Block, appHash types.Hash) {
 	f.blkAnnouncer(ctx, blk, appHash)
 }
 
@@ -243,11 +243,11 @@ func (f *faker) SetACKHandler(ackHandler func(validatorPK []byte, ack types.AckR
 	f.ackHandler = ackHandler
 }
 
-func (f *faker) SetBlockCommitHandler(blockCommitHandler func(blk *types.Block, appHash types.Hash)) {
+func (f *faker) SetBlockCommitHandler(blockCommitHandler func(blk *ktypes.Block, appHash types.Hash)) {
 	f.blockCommitHandler = blockCommitHandler
 }
 
-func (f *faker) SetBlockPropHandler(blockPropHandler func(blk *types.Block)) {
+func (f *faker) SetBlockPropHandler(blockPropHandler func(blk *ktypes.Block)) {
 	f.blockPropHandler = blockPropHandler
 }
 

@@ -17,16 +17,16 @@ func TestGetRawBlockTx(t *testing.T) {
 	require.NoError(t, err)
 
 	makeRawBlock := func(txns [][]byte) []byte {
-		blk := NewBlock(1, Hash{1, 2, 3}, Hash{6, 7, 8}, Hash{}, time.Unix(1729890593, 0), txns)
+		blk := types.NewBlock(1, Hash{1, 2, 3}, Hash{6, 7, 8}, Hash{}, time.Unix(1729890593, 0), txns)
 		err := blk.Sign(privKey)
 		require.NoError(t, err)
-		return EncodeBlock(blk)
+		return types.EncodeBlock(blk)
 	}
 
 	t.Run("valid block signature", func(t *testing.T) {
 		txns := [][]byte{[]byte("tx1")}
 		rawBlock := makeRawBlock(txns)
-		blk, err := DecodeBlock(rawBlock)
+		blk, err := types.DecodeBlock(rawBlock)
 		require.NoError(t, err)
 
 		valid, err := blk.VerifySignature(pubKey)
@@ -41,7 +41,7 @@ func TestGetRawBlockTx(t *testing.T) {
 			[]byte("tx3"),
 		}
 		rawBlock := makeRawBlock(txns)
-		tx, err := GetRawBlockTx(rawBlock, 1)
+		tx, err := types.GetRawBlockTx(rawBlock, 1)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -52,11 +52,11 @@ func TestGetRawBlockTx(t *testing.T) {
 
 	t.Run("invalid transaction length", func(t *testing.T) {
 		buf := new(bytes.Buffer)
-		header := &BlockHeader{Height: 1, NumTxns: 1}
-		buf.Write(EncodeBlockHeader(header))
+		header := &types.BlockHeader{Height: 1, NumTxns: 1}
+		buf.Write(types.EncodeBlockHeader(header))
 		binary.Write(buf, binary.LittleEndian, uint32(1<<30)) // Very large tx length
 
-		_, err := GetRawBlockTx(buf.Bytes(), 0)
+		_, err := types.GetRawBlockTx(buf.Bytes(), 0)
 		if err == nil {
 			t.Error("expected error for invalid transaction length")
 		}
@@ -66,7 +66,7 @@ func TestGetRawBlockTx(t *testing.T) {
 		txns := [][]byte{[]byte("tx1")}
 		rawBlock := makeRawBlock(txns)
 
-		_, err := GetRawBlockTx(rawBlock, 1)
+		_, err := types.GetRawBlockTx(rawBlock, 1)
 		if err != ErrNotFound {
 			t.Errorf("got err %v, want ErrNotFound", err)
 		}
@@ -75,13 +75,13 @@ func TestGetRawBlockTx(t *testing.T) {
 	t.Run("corrupted block data", func(t *testing.T) {
 		txns := [][]byte{[]byte("tx1")}
 		rawBlock := makeRawBlock(txns)
-		blk, err := DecodeBlock(rawBlock)
+		blk, err := types.DecodeBlock(rawBlock)
 		require.NoError(t, err)
 
 		sigLen := len(blk.Signature) + 4
 		corrupted := rawBlock[:len(rawBlock)-1-sigLen]
 
-		_, err = GetRawBlockTx(corrupted, 0)
+		_, err = types.GetRawBlockTx(corrupted, 0)
 		if err == nil {
 			t.Error("expected error for corrupted block data")
 		}
@@ -90,7 +90,7 @@ func TestGetRawBlockTx(t *testing.T) {
 	t.Run("empty block", func(t *testing.T) {
 		rawBlock := makeRawBlock([][]byte{})
 
-		_, err := GetRawBlockTx(rawBlock, 0)
+		_, err := types.GetRawBlockTx(rawBlock, 0)
 		if err != ErrNotFound {
 			t.Errorf("got err %v, want ErrNotFound", err)
 		}

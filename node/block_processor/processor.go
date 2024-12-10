@@ -3,6 +3,7 @@ package blockprocessor
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -17,6 +18,8 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
+	authExt "github.com/kwilteam/kwil-db/extensions/auth"
+	"github.com/kwilteam/kwil-db/node/ident"
 	"github.com/kwilteam/kwil-db/node/meta"
 	"github.com/kwilteam/kwil-db/node/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
@@ -38,7 +41,6 @@ type BlockProcessor struct {
 	// consensus params
 	appHash  ktypes.Hash
 	height   int64
-	valSet   map[string]*ktypes.Validator
 	chainCtx *common.ChainContext
 
 	// consensus TX
@@ -62,8 +64,6 @@ func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Account
 		validators:  vs,
 		snapshotter: sp,
 		log:         logger,
-
-		valSet: make(map[string]*ktypes.Validator),
 	}
 
 	if genesisCfg == nil { // TODO: remove this
@@ -82,34 +82,11 @@ func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Account
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chain state: %w", err)
 	}
-
-	if height == -1 { // fresh initialization, initialize the chain state with the genesis params
-		if err := meta.SetChainState(ctx, tx, genesisCfg.InitialHeight, []byte{}, false); err != nil {
-			return nil, fmt.Errorf("failed to set chain state: %w", err)
-		}
-
-		bp.height = genesisCfg.InitialHeight
-		bp.appHash = ktypes.Hash{}
-	} else {
-		bp.height = height
-		copy(bp.appHash[:], appHash)
-	}
+	bp.height = height
+	copy(bp.appHash[:], appHash)
 
 	networkParams, err := meta.LoadParams(ctx, tx)
-	if errors.Is(err, meta.ErrParamsNotFound) {
-		networkParams = &common.NetworkParameters{
-			MaxBlockSize:     genesisCfg.MaxBlockSize,
-			JoinExpiry:       genesisCfg.JoinExpiry,
-			VoteExpiry:       genesisCfg.VoteExpiry,
-			DisabledGasCosts: genesisCfg.DisabledGasCosts,
-			// MigrationStatus : genesisCfg.MigrationStatus,
-			MaxVotesPerTx: genesisCfg.MaxVotesPerTx,
-		}
-
-		if err := meta.StoreParams(ctx, tx, networkParams); err != nil {
-			return nil, fmt.Errorf("failed to store the network parameters: %w", err)
-		}
-	} else if err != nil {
+	if err != nil && !errors.Is(err, meta.ErrParamsNotFound) {
 		return nil, fmt.Errorf("failed to load the network parameters: %w", err)
 	}
 
@@ -117,12 +94,6 @@ func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Account
 		ChainID:           genesisCfg.ChainID,
 		NetworkParameters: networkParams,
 		// MigrationParams:   genesisCfg.MigrationParams,
-	}
-
-	// TODO: load the validator set
-	validators := vs.GetValidators()
-	for _, v := range validators {
-		bp.valSet[hex.EncodeToString(v.PubKey)] = v
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -165,45 +136,119 @@ func (bp *BlockProcessor) Rollback(ctx context.Context, height int64, appHash kt
 	return nil
 }
 
+func (bp *BlockProcessor) CheckTx(ctx context.Context, incomingTx []byte) error {
+	var err error
+	tx := &ktypes.Transaction{}
+	if err = tx.UnmarshalBinary(incomingTx); err != nil {
+		bp.log.Debug("Failed to unmarshal the transaction", "err", err)
+		return fmt.Errorf("failed to unmarshal the transaction: %w", err)
+	}
+
+	bp.log.Info("Check transaction", "Sender", hex.EncodeToString(tx.Sender), "PayloadType", tx.Body.PayloadType.String(), "Nonce", tx.Body.Nonce, "TxFee", tx.Body.Fee.String())
+
+	// TODO: Ideally the chainID, signature and payload verification should only occur once per tx, fix that once the mempool can recognize fresh checkTx from rechecks.
+	// Verify the correct chain ID is set, if it is set.
+	if protected := tx.Body.ChainID != ""; protected && tx.Body.ChainID != bp.genesisParams.ChainID {
+		bp.log.Info("Wrong chain ID", "txChainID", tx.Body.ChainID)
+		return fmt.Errorf("wrong chain ID: %s", tx.Body.ChainID)
+	}
+
+	// Ensure that the transaction is valid in terms of the signature and the payload type
+	if err := ident.VerifyTransaction(tx); err != nil {
+		bp.log.Debug("Failed to verify the transaction", "err", err)
+		return fmt.Errorf("failed to verify the transaction: %w", err)
+	}
+
+	readTx, err := bp.db.BeginReadTx(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin read transaction: %w", err)
+	}
+	defer readTx.Rollback(ctx)
+
+	auth, err := authExt.GetAuthenticator(tx.Signature.Type)
+	if err != nil {
+		return fmt.Errorf("failed to get authenticator: %w", err)
+	}
+
+	ident, err := auth.Identifier(tx.Sender)
+	if err != nil {
+		return fmt.Errorf("failed to get identifier: %w", err)
+	}
+
+	txHash := sha256.Sum256(incomingTx)
+	err = bp.txapp.ApplyMempool(&common.TxContext{
+		Ctx: ctx,
+		BlockContext: &common.BlockContext{
+			ChainContext: bp.chainCtx,
+			Height:       bp.height + 1,           // ?? TODO: can crash as CheckTX can happen parallel to block execution
+			Proposer:     bp.genesisParams.Leader, // always the leader?
+		},
+		TxID:          hex.EncodeToString(txHash[:]),
+		Signer:        tx.Sender,
+		Caller:        ident,
+		Authenticator: tx.Signature.Type,
+	}, readTx, tx)
+	if err != nil {
+		// do appropriate logging
+		bp.log.Info("Failed to apply the transaction to the mempool", "tx", hex.EncodeToString(txHash[:]), "err", err)
+		return err
+	}
+
+	return nil
+}
+
 // InitChain initializes the node with the genesis state. This included initializing the
 // votestore with the genesis validators, accounts with the genesis allocations and the
 // chain meta store with the genesis network parameters.
 // This is called only once when the node is bootstrapping for the first time.
-func (bp *BlockProcessor) InitChain(ctx context.Context, req *ktypes.InitChainRequest) error {
+func (bp *BlockProcessor) InitChain(ctx context.Context) (int64, []byte, error) {
 	bp.mtx.Lock()
 	defer bp.mtx.Unlock()
 
 	genesisTx, err := bp.db.BeginTx(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to begin the genesis transaction: %w", err)
+		return -1, nil, fmt.Errorf("failed to begin the genesis transaction: %w", err)
 	}
 	defer genesisTx.Rollback(ctx)
 
-	// genesis validators
-	for _, v := range req.Validators {
-		bp.valSet[hex.EncodeToString(v.PubKey)] = v
+	genCfg := bp.genesisParams
+
+	if err := bp.txapp.GenesisInit(ctx, genesisTx, genCfg.Validators, nil, genCfg.InitialHeight, bp.chainCtx); err != nil {
+		return -1, nil, err
 	}
 
-	startParams := *bp.chainCtx.NetworkParameters
-
-	if err := bp.txapp.GenesisInit(ctx, genesisTx, req.Validators, nil, req.InitialHeight, bp.chainCtx); err != nil {
-		return err
+	if err := meta.SetChainState(ctx, genesisTx, genCfg.InitialHeight, genCfg.StateHash, false); err != nil {
+		return -1, nil, fmt.Errorf("error storing the genesis state: %w", err)
 	}
 
-	if err := meta.SetChainState(ctx, genesisTx, req.InitialHeight, req.GenesisHash[:], false); err != nil {
-		return fmt.Errorf("error storing the genesis state: %w", err)
+	networkParams := &common.NetworkParameters{
+		MaxBlockSize:     genCfg.MaxBlockSize,
+		JoinExpiry:       genCfg.JoinExpiry,
+		VoteExpiry:       genCfg.VoteExpiry,
+		DisabledGasCosts: genCfg.DisabledGasCosts,
+		// MigrationStatus : genesisCfg.MigrationStatus,
+		MaxVotesPerTx: genCfg.MaxVotesPerTx,
 	}
 
-	if err := meta.StoreDiff(ctx, genesisTx, &startParams, bp.chainCtx.NetworkParameters); err != nil {
-		return fmt.Errorf("error storing the genesis consensus params: %w", err)
+	if err := meta.StoreParams(ctx, genesisTx, networkParams); err != nil {
+		return -1, nil, fmt.Errorf("failed to store the network parameters: %w", err)
 	}
 
-	// TODO: Genesis hash and what are the mechanics for producing the first block (genesis block)?
-	bp.txapp.Commit()
+	if err := bp.txapp.Commit(); err != nil {
+		return -1, nil, fmt.Errorf("txapp commit failed: %w", err)
+	}
 
-	bp.log.Infof("Initialized chain: height %d, appHash: %s", req.InitialHeight, req.GenesisHash.String())
+	if err := genesisTx.Commit(ctx); err != nil {
+		return -1, nil, fmt.Errorf("genesis transaction commit failed: %w", err)
+	}
 
-	return genesisTx.Commit(ctx)
+	bp.height = genCfg.InitialHeight
+	copy(bp.appHash[:], genCfg.StateHash)
+	bp.chainCtx.NetworkParameters = networkParams
+
+	bp.log.Infof("Initialized chain: height %d, appHash: %s", genCfg.InitialHeight, hex.EncodeToString(genCfg.StateHash))
+
+	return genCfg.InitialHeight, genCfg.StateHash, nil
 }
 
 func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExecRequest) (blkResult *ktypes.BlockExecResult, err error) {
@@ -240,7 +285,6 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 
 		identifier, err := auth.Identifier(decodedTx.Sender)
 		if err != nil {
-			// bp.log.Error("Failed to get identifier for the block tx", "err", err)
 			return nil, fmt.Errorf("failed to get identifier for the block tx: %w", err)
 		}
 
@@ -269,7 +313,7 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 				}
 
 				txResult.Log = res.Error.Error()
-				bp.log.Debug("Failed to execute transaction", "tx", txHash, "err", res.Error)
+				bp.log.Info("Failed to execute transaction", "tx", txHash, "err", res.Error)
 			} else {
 				txResult.Log = "success"
 			}
@@ -303,15 +347,7 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 	valUpdates := bp.validators.ValidatorUpdates()
 	valUpdatesList := make([]*ktypes.Validator, 0) // TODO: maybe change the validatorUpdates API to return a list instead of map
 	valUpdatesHash := validatorUpdatesHash(valUpdates)
-	for k, v := range valUpdates {
-		if v.Power == 0 {
-			delete(bp.valSet, k)
-		} else {
-			bp.valSet[k] = &ktypes.Validator{
-				PubKey: v.PubKey,
-				Power:  v.Power,
-			}
-		}
+	for _, v := range valUpdates {
 		valUpdatesList = append(valUpdatesList, v)
 	}
 
@@ -335,7 +371,7 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 
 // Commit method commits the block to the blockstore and postgres database.
 // It also updates the txIndexer and mempool with the transactions in the block.
-func (bp *BlockProcessor) Commit(ctx context.Context, height int64, appHash ktypes.Hash, syncing bool) error {
+func (bp *BlockProcessor) Commit(ctx context.Context, req *ktypes.CommitRequest) error {
 	bp.mtx.Lock()
 	defer bp.mtx.Unlock()
 
@@ -356,7 +392,7 @@ func (bp *BlockProcessor) Commit(ctx context.Context, height int64, appHash ktyp
 		return err
 	}
 
-	if err := meta.SetChainState(ctxS, tx, height, appHash[:], false); err != nil {
+	if err := meta.SetChainState(ctxS, tx, req.Height, req.AppHash[:], false); err != nil {
 		err2 := tx.Rollback(ctxS)
 		if err2 != nil {
 			bp.log.Error("Failed to rollback the transaction", "err", err2)
@@ -374,11 +410,11 @@ func (bp *BlockProcessor) Commit(ctx context.Context, height int64, appHash ktyp
 	}
 
 	// Snapshots:
-	if err := bp.snapshotDB(ctx, height, syncing); err != nil {
+	if err := bp.snapshotDB(ctx, req.Height, req.Syncing); err != nil {
 		bp.log.Warn("Failed to create snapshot of the database", "err", err)
 	}
 
-	bp.log.Info("Committed Block", "height", height, "appHash", appHash.String())
+	bp.log.Info("Committed Block", "height", req.Height, "appHash", req.AppHash.String())
 	return nil
 }
 
@@ -475,11 +511,14 @@ func validatorUpdatesHash(updates map[string]*ktypes.Validator) types.Hash {
 	return hash.Sum(nil)
 }
 
-// We probably don't want to do this long term
 func (bp *BlockProcessor) Price(ctx context.Context, dbTx sql.DB, tx *ktypes.Transaction) (*big.Int, error) {
 	return bp.txapp.Price(ctx, dbTx, tx, bp.chainCtx)
 }
 
 func (bp *BlockProcessor) AccountInfo(ctx context.Context, db sql.DB, identifier []byte, pending bool) (balance *big.Int, nonce int64, err error) {
 	return bp.txapp.AccountInfo(ctx, db, identifier, pending)
+}
+
+func (bp *BlockProcessor) GetValidators() []*ktypes.Validator {
+	return bp.validators.GetValidators()
 }

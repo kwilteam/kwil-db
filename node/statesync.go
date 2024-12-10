@@ -13,6 +13,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
+	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/peers"
 	"github.com/kwilteam/kwil-db/node/types"
 	"github.com/libp2p/go-libp2p/core/discovery"
@@ -33,7 +34,7 @@ const (
 )
 
 type blockStore interface {
-	GetByHeight(height int64) (types.Hash, *types.Block, types.Hash, error)
+	GetByHeight(height int64) (types.Hash, *ktypes.Block, types.Hash, error)
 }
 
 type statesyncConfig struct {

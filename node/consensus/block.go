@@ -8,11 +8,11 @@ import (
 	"github.com/kwilteam/kwil-db/node/types"
 )
 
-// Block processing methods
-func (ce *ConsensusEngine) validateBlock(blk *types.Block) error {
+// TODO: should include consensus params hash
+func (ce *ConsensusEngine) validateBlock(blk *ktypes.Block) error {
 	// Validate if this is the correct block proposal to be processed.
-	if blk.Header.Version != types.BlockVersion {
-		return fmt.Errorf("block version mismatch, expected %d, got %d", types.BlockVersion, blk.Header.Version)
+	if blk.Header.Version != ktypes.BlockVersion {
+		return fmt.Errorf("block version mismatch, expected %d, got %d", ktypes.BlockVersion, blk.Header.Version)
 	}
 
 	if ce.state.lc.height+1 != blk.Header.Height {
@@ -41,8 +41,11 @@ func (ce *ConsensusEngine) validateBlock(blk *types.Block) error {
 	return nil
 }
 
-func (ce *ConsensusEngine) CheckTx(tx []byte) error {
-	return nil
+func (ce *ConsensusEngine) CheckTx(ctx context.Context, tx []byte) error {
+	ce.mempoolMtx.Lock()
+	defer ce.mempoolMtx.Unlock()
+
+	return ce.blockProcessor.CheckTx(ctx, tx)
 }
 
 func (ce *ConsensusEngine) executeBlock(ctx context.Context, blkProp *blockProposal) error {
@@ -60,6 +63,7 @@ func (ce *ConsensusEngine) executeBlock(ctx context.Context, blkProp *blockPropo
 	}
 	results, err := ce.blockProcessor.ExecuteBlock(ctx, req)
 	if err != nil {
+		ce.log.Warn("Error executing block", "height", blkProp.height, "hash", blkProp.blkHash, "error", err)
 		return fmt.Errorf("error executing block: %v", err)
 	}
 
@@ -69,16 +73,16 @@ func (ce *ConsensusEngine) executeBlock(ctx context.Context, blkProp *blockPropo
 		txResults: results.TxResults,
 	}
 
-	ce.log.Info("Executed block", "height", blkProp.height, "hash", blkProp.blkHash, "appHash", results.AppHash.String())
+	ce.log.Info("Executed block", "height", blkProp.height, "hash", blkProp.blkHash, "numTxs", blkProp.blk.Header.NumTxns, "appHash", results.AppHash.String())
 	return nil
 }
 
 // Commit method commits the block to the blockstore and postgres database.
 // It also updates the txIndexer and mempool with the transactions in the block.
 func (ce *ConsensusEngine) commit(ctx context.Context) error {
-	// TODO: Lock mempool and update the mempool to remove the transactions in the block
-	// Mempool should not receive any new transactions until this Commit is done as
-	// we are updating the state and the tx checks should be done against the new state.
+	ce.mempoolMtx.Lock()
+	defer ce.mempoolMtx.Unlock()
+
 	blkProp := ce.state.blkProp
 	height, appHash := ce.state.blkProp.height, ce.state.blockRes.appHash
 
@@ -90,17 +94,25 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 		return err
 	}
 
-	if err := ce.blockProcessor.Commit(ctx, height, appHash, false); err != nil {
+	req := &ktypes.CommitRequest{
+		Height:  height,
+		AppHash: appHash,
+		// To indicate if the node is syncing, used by the blockprocessor to decide if it should create snapshots.
+		Syncing: ce.inSync.Load(),
+	}
+	if err := ce.blockProcessor.Commit(ctx, req); err != nil { // clears the mempool cache
 		return err
 	}
 
 	// remove transactions from the mempool
 	for _, txn := range blkProp.blk.Txns {
-		txHash := types.HashBytes(txn)
+		txHash := types.HashBytes(txn) // TODO: can this be saved instead of recalculating?
 		ce.mempool.Store(txHash, nil)
 	}
 
-	// TODO: set the role based on the final validators
+	// TODO: reapply existing transaction  (checkTX)
+	// update the role of the node based on the final validator set at the end of the commit.
+	ce.updateRole()
 
 	ce.log.Info("Committed Block", "height", height, "hash", blkProp.blkHash, "appHash", appHash.String())
 	return nil

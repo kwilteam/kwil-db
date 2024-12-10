@@ -20,16 +20,19 @@ var lastReset int64 = 0
 //   - Broadcast the block proposal
 //   - Process the block and generate the appHash
 //   - Wait for the votes from the validators
+//   - Enter the commit phase if majority of the validators execute the block correctly
 //
 // 2. Commit Phase:
 //   - Commit the block and start next prepare phase
+//   - This phase includes committing the block to the block store, flushing out the mempool
+//     updating the chain state, creating snapshots, committing the pg db state etc.
 
-// startNewRound starts a new round of consensus process.
+// startNewRound starts a new round of consensus process (Prepare Phase).
 func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
-	ce.log.Info("Starting a new round", "height", ce.state.lc.height+1)
+	ce.log.Info("Starting a new consensus round", "height", ce.state.lc.height+1)
 
 	blkProp, err := ce.createBlockProposal()
 	if err != nil {
@@ -37,7 +40,7 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 		return err
 	}
 
-	ce.log.Info("Created a new block proposal", "height", blkProp.height, "hash", blkProp.blkHash, "header", blkProp.blk.Header)
+	ce.log.Info("Created a new block proposal", "height", blkProp.height, "hash", blkProp.blkHash)
 
 	// Validate the block proposal before announcing it to the network
 	if err := ce.validateBlock(blkProp.blk); err != nil {
@@ -95,9 +98,13 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 // This method orders the transactions in the nonce order and also
 // does basic gas and balance checks and enforces the block size limits.
 func (ce *ConsensusEngine) createBlockProposal() (*blockProposal, error) {
-	// TODO: ReapN shouldn't remove the transactions from the mempool
-	_, txns := ce.mempool.ReapN(blockTxCount)
-	blk := types.NewBlock(ce.state.lc.height+1, ce.state.lc.blkHash, ce.state.lc.appHash, ce.ValidatorSetHash(), time.Now(), txns)
+	nTxs := ce.mempool.PeekN(blockTxCount)
+	var txns [][]byte
+	for _, namedTx := range nTxs {
+		txns = append(txns, namedTx.Tx)
+	}
+
+	blk := ktypes.NewBlock(ce.state.lc.height+1, ce.state.lc.blkHash, ce.state.lc.appHash, ce.ValidatorSetHash(), time.Now(), txns)
 
 	// ValSet + valUpdatesHash
 
