@@ -12,7 +12,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
@@ -58,10 +57,8 @@ type ConsensusEngine struct {
 	state  state
 	inSync atomic.Bool // set when the node is still catching up with the network during bootstrapping
 
-	// copy of the state info for the p2p layer usage.
+	// copy of the minimal state info for the p2p layer usage.
 	stateInfo StateInfo
-
-	chainCtx *common.ChainContext
 
 	// Channels
 	newRound     chan struct{}
@@ -71,13 +68,10 @@ type ConsensusEngine struct {
 	bestHeightCh chan *discoveryMsg // to sync the leader with the network
 
 	// interfaces
-	db          DB
-	mempool     Mempool
-	blockStore  BlockStore
-	txapp       TxApp
-	accounts    Accounts
-	validators  Validators
-	snapshotter SnapshotModule
+	db             DB
+	mempool        Mempool
+	blockStore     BlockStore
+	blockProcessor BlockProcessor
 
 	// Broadcasters
 	proposalBroadcaster     ProposalBroadcaster
@@ -89,6 +83,32 @@ type ConsensusEngine struct {
 
 	// waitgroup to track all the consensus goroutines
 	wg sync.WaitGroup
+}
+
+// Config is the struct given to the constructor, [New].
+type Config struct {
+	// Signer is the private key of the node.
+	PrivateKey crypto.PrivateKey
+	// Leader is the public key of the leader.
+	Leader crypto.PublicKey
+
+	GenesisHash types.Hash
+
+	DB *pg.DB
+	// Mempool is the mempool of the node.
+	Mempool Mempool
+	// BlockStore is the blockstore of the node.
+	BlockStore BlockStore
+
+	BlockProcessor BlockProcessor
+
+	// ValidatorSet is the set of validators in the network.
+	ValidatorSet map[string]ktypes.Validator
+	// Logger is the logger of the node.
+	Logger log.Logger
+
+	// ProposeTimeout is the timeout for proposing a block.
+	ProposeTimeout time.Duration
 }
 
 // ProposalBroadcaster broadcasts the new block proposal message to the network
@@ -161,76 +181,6 @@ type lastCommit struct {
 	blk     *types.Block // why is this needed? can be fetched from the blockstore too.
 }
 
-type NetworkParams struct {
-	// MaxBlockSize is the maximum size of a block in bytes.
-	MaxBlockSize int64
-	// JoinExpiry is the number of blocks after which the validators
-	// join request expires if not approved.
-	JoinExpiry int64
-	// VoteExpiry is the default number of blocks after which the validators
-	// vote expires if not approved.
-	VoteExpiry int64
-	// DisabledGasCosts dictates whether gas costs are disabled.
-	DisabledGasCosts bool
-	// MaxVotesPerTx is the maximum number of votes that can be included in a
-	// single transaction.
-	MaxVotesPerTx int64
-}
-
-type GenesisParams struct {
-	ChainID string
-	Params  *NetworkParams
-}
-
-// TODO: remove this
-var defaultGenesisParams = &GenesisParams{
-	ChainID: "test-chain",
-	Params: &NetworkParams{
-		DisabledGasCosts: true,
-		JoinExpiry:       14400,
-		VoteExpiry:       108000,
-		MaxBlockSize:     6 * 1024 * 1024,
-		MaxVotesPerTx:    200,
-	},
-}
-
-// Config is the struct given to the constructor, [New].
-type Config struct {
-	// Signer is the private key of the node.
-	PrivateKey crypto.PrivateKey
-	// Leader is the public key of the leader.
-	Leader crypto.PublicKey
-
-	GenesisHash   types.Hash
-	GenesisParams *GenesisParams // *config.GenesisConfig
-
-	DB *pg.DB
-	// Mempool is the mempool of the node.
-	Mempool Mempool
-	// BlockStore is the blockstore of the node.
-	BlockStore BlockStore
-
-	// ValidatorStore is the store of the validators.
-	ValidatorStore Validators
-
-	// Accounts is the store of the accounts.
-	Accounts Accounts
-
-	// SnapshotStore is the store of the snapshots.
-	Snapshots SnapshotModule
-
-	// TxApp is the transaction application layer.
-	TxApp TxApp
-
-	// ValidatorSet is the set of validators in the network.
-	ValidatorSet map[string]ktypes.Validator
-	// Logger is the logger of the node.
-	Logger log.Logger
-
-	// ProposeTimeout is the timeout for proposing a block.
-	ProposeTimeout time.Duration
-}
-
 // New creates a new consensus engine.
 func New(cfg *Config) *ConsensusEngine {
 	logger := cfg.Logger
@@ -260,10 +210,6 @@ func New(cfg *Config) *ConsensusEngine {
 
 	signer := auth.GetSigner(cfg.PrivateKey)
 
-	if cfg.GenesisParams == nil {
-		cfg.GenesisParams = defaultGenesisParams // TODO: remove
-	}
-
 	// rethink how this state is initialized
 	ce := &ConsensusEngine{
 		signer:         signer,
@@ -287,17 +233,6 @@ func New(cfg *Config) *ConsensusEngine {
 			status:  Committed,
 			blkProp: nil,
 		},
-		chainCtx: &common.ChainContext{
-			ChainID: cfg.GenesisParams.ChainID,
-			NetworkParameters: &common.NetworkParameters{
-				MaxBlockSize:     cfg.GenesisParams.Params.MaxBlockSize,
-				JoinExpiry:       cfg.GenesisParams.Params.JoinExpiry,
-				VoteExpiry:       cfg.GenesisParams.Params.VoteExpiry,
-				DisabledGasCosts: cfg.GenesisParams.Params.DisabledGasCosts,
-				MaxVotesPerTx:    cfg.GenesisParams.Params.MaxVotesPerTx,
-			},
-			// MigrationParams:
-		},
 		validatorSet: maps.Clone(cfg.ValidatorSet),
 		msgChan:      make(chan consensusMessage, 1), // buffer size??
 		haltChan:     make(chan struct{}, 1),
@@ -307,10 +242,7 @@ func New(cfg *Config) *ConsensusEngine {
 		// interfaces
 		mempool:        cfg.Mempool,
 		blockStore:     cfg.BlockStore,
-		txapp:          cfg.TxApp,
-		accounts:       cfg.Accounts,
-		validators:     cfg.ValidatorStore,
-		snapshotter:    cfg.Snapshots,
+		blockProcessor: cfg.BlockProcessor,
 		log:            logger,
 		genesisAppHash: cfg.GenesisHash,
 	}
@@ -371,59 +303,32 @@ func (ce *ConsensusEngine) close() {
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
-	if ce.state.consensusTx != nil {
-		ce.log.Info("Rolling back the consensus tx")
-		err := ce.state.consensusTx.Rollback(context.Background())
-		if err != nil {
-			ce.log.Error("Error rolling back the consensus tx", "error", err)
-		}
+	if err := ce.blockProcessor.Close(); err != nil {
+		ce.log.Error("Error closing the block processor", "error", err)
 	}
 }
 
-// GenesisInit initializes the node with the genesis state. This included initializing the
+// InitChain initializes the node with the genesis state. This included initializing the
 // votestore with the genesis validators, accounts with the genesis allocations and the
 // chain meta store with the genesis network parameters.
 // This is called only once when the node is bootstrapping for the first time.
-func (ce *ConsensusEngine) GenesisInit(ctx context.Context) error {
-	genesisTx, err := ce.db.BeginTx(ctx)
-	if err != nil {
-		return err
-	}
-	defer genesisTx.Rollback(ctx)
-
-	// TODO: genesis allocs
-
-	// genesis validators
-	genVals := make([]*ktypes.Validator, 0, len(ce.validatorSet))
+func (ce *ConsensusEngine) InitChain(ctx context.Context) error {
+	var valSet []*ktypes.Validator
 	for _, v := range ce.validatorSet {
-		genVals = append(genVals, &ktypes.Validator{
+		val := &ktypes.Validator{
 			PubKey: v.PubKey,
 			Power:  v.Power,
-		})
+		}
+		valSet = append(valSet, val)
 	}
 
-	startParams := *ce.chainCtx.NetworkParameters
-
-	if err := ce.txapp.GenesisInit(ctx, genesisTx, genVals, nil, initialHeight, ce.chainCtx); err != nil {
-		return err
+	req := &ktypes.InitChainRequest{
+		Validators:    valSet,
+		InitialHeight: initialHeight,
+		GenesisHash:   ce.genesisAppHash,
 	}
 
-	if err := meta.SetChainState(ctx, genesisTx, initialHeight, ce.genesisAppHash[:], false); err != nil {
-		return fmt.Errorf("error storing the genesis state: %w", err)
-	}
-
-	if err := meta.StoreDiff(ctx, genesisTx, &startParams, ce.chainCtx.NetworkParameters); err != nil {
-		return fmt.Errorf("error storing the genesis consensus params: %w", err)
-	}
-
-	// TODO: Genesis hash and what are the mechanics for producing the first block (genesis block)?
-	ce.txapp.Commit()
-
-	ce.state.lc.appHash = ce.genesisAppHash
-	ce.state.lc.height = initialHeight
-
-	ce.log.Info("Initialized chain", "height", initialHeight, "appHash", ce.state.lc.appHash.String())
-	return genesisTx.Commit(ctx)
+	return ce.blockProcessor.InitChain(ctx, req)
 }
 
 // runEventLoop starts the event loop for the consensus engine.
@@ -455,7 +360,7 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 
 		case <-ce.haltChan:
 			// Halt the network
-			ce.resetState(ctx) // rollback the current block execution and stop the node
+			// ce.resetState(ctx) // rollback the current block execution and stop the node
 			ce.log.Error("Received halt signal, stopping the consensus engine")
 			return nil
 
@@ -529,28 +434,6 @@ func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg cons
 
 }
 
-// resetBlockProp aborts the block execution and resets the state to the last committed block.
-func (ce *ConsensusEngine) resetBlockProp(ctx context.Context, height int64) {
-	ce.state.mtx.Lock()
-	defer ce.state.mtx.Unlock()
-
-	// If we are currently executing any transactions corresponding to the blk at height +1
-	// 1. Cancel the execution context -> so that the transactions stop
-	// 2. Rollback the consensus tx
-	// 3. Reset the blkProp and blockRes
-	// 4. This should never happen after the commit phase, (blk should have never made it to the blockstore)
-
-	ce.log.Info("Reset msg: ", "height", height)
-	if ce.state.lc.height == height {
-		if ce.state.blkProp != nil {
-			ce.log.Info("Resetting the block proposal", "height", height)
-			if err := ce.resetState(ctx); err != nil {
-				ce.log.Error("Error resetting the state", "error", err) // panic? or consensus error?
-			}
-		}
-	}
-}
-
 // catchup syncs the node first with the local blockstore and then with the network.
 func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 	// Figure out the app state and initialize the node state.
@@ -589,8 +472,8 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 	if appHeight == -1 {
 		// This is the first time the node is bootstrapping
 		// initialize the db with the genesis state
-		if err := ce.GenesisInit(ctx); err != nil {
-			return fmt.Errorf("error initializing the genesis state: %w", err)
+		if err := ce.InitChain(ctx); err != nil {
+			return fmt.Errorf("error initializing the chain: %w", err)
 		}
 	} else if appHeight > 0 {
 		if appHeight == storeHeight && !bytes.Equal(appHash, storeAppHash[:]) {
@@ -758,6 +641,28 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 	ce.log.Info("Network Sync: ", "from", startHeight, "to (excluding)", ce.state.lc.height+1, "time", time.Since(t0), "appHash", ce.state.lc.appHash)
 
 	return nil
+}
+
+// resetBlockProp aborts the block execution and resets the state to the last committed block.
+func (ce *ConsensusEngine) resetBlockProp(ctx context.Context, height int64) {
+	ce.state.mtx.Lock()
+	defer ce.state.mtx.Unlock()
+
+	// If we are currently executing any transactions corresponding to the blk at height +1
+	// 1. Cancel the execution context -> so that the transactions stop
+	// 2. Rollback the consensus tx
+	// 3. Reset the blkProp and blockRes
+	// 4. This should never happen after the commit phase, (blk should have never made it to the blockstore)
+
+	ce.log.Info("Reset msg: ", "height", height)
+	if ce.state.lc.height == height {
+		if ce.state.blkProp != nil {
+			ce.log.Info("Resetting the block proposal", "height", height)
+			if err := ce.resetState(ctx); err != nil {
+				ce.log.Error("Error resetting the state", "error", err) // panic? or consensus error?
+			}
+		}
+	}
 }
 
 func (ce *ConsensusEngine) Role() types.Role {

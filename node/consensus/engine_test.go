@@ -17,8 +17,10 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
+	blockprocessor "github.com/kwilteam/kwil-db/node/block_processor"
 	"github.com/kwilteam/kwil-db/node/mempool"
 	"github.com/kwilteam/kwil-db/node/meta"
 	"github.com/kwilteam/kwil-db/node/pg"
@@ -99,6 +101,9 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) []*Config {
 
 	ss := &snapshotStore{}
 
+	genCfg := config.DefaultGenesisConfig()
+	genCfg.Leader = pubKeys[0].Bytes()
+
 	for i := range nodes {
 		nodeStr := fmt.Sprintf("NODE%d", i)
 		nodeDir := filepath.Join(tempDir, nodeStr)
@@ -109,17 +114,16 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) []*Config {
 		bs, err := store.NewBlockStore(nodeDir)
 		assert.NoError(t, err)
 
+		bp, err := blockprocessor.NewBlockProcessor(ctx, db, txapp, accounts, v, ss, genCfg, log.New(log.WithName("BP")))
+		assert.NoError(t, err)
+
 		ceConfigs[i] = &Config{
-			GenesisParams:  defaultGenesisParams,
 			PrivateKey:     privKeys[i],
 			Leader:         pubKeys[0],
 			Mempool:        mempool.New(),
 			BlockStore:     bs,
-			TxApp:          txapp,
-			Accounts:       accounts,
+			BlockProcessor: bp,
 			ValidatorSet:   validatorSet,
-			Snapshots:      ss,
-			ValidatorStore: v,
 			Logger:         logger,
 			ProposeTimeout: 1 * time.Second,
 		}
@@ -245,11 +249,6 @@ func TestValidatorStateMachine(t *testing.T) {
 						val.NotifyBlockCommit(blkProp1.blk, types.Hash{})
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
-						// ensure that the halt channel is closed
-						_, ok := <-val.haltChan
-						if ok {
-							return errors.New("halt channel not closed")
-						}
 						if val.lastCommitHeight() != 0 {
 							return fmt.Errorf("expected height 0, got %d", val.lastCommitHeight())
 						}
@@ -633,7 +632,7 @@ func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
 	})
 
 	n1.bestHeightCh <- &discoveryMsg{
-		BestHeight: 1,
+		BestHeight: 0,
 		Sender:     ceConfigs[1].PrivateKey.Public().Bytes(),
 	}
 
@@ -677,18 +676,19 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
 	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		n1.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster)
-	}()
 
 	t.Cleanup(func() {
 		cancel()
 		wg.Wait()
 	})
 
+	go func() {
+		defer wg.Done()
+		n1.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster)
+	}()
+
 	n1.bestHeightCh <- &discoveryMsg{
-		BestHeight: 1,
+		BestHeight: 0,
 		Sender:     ceConfigs[1].PrivateKey.Public().Bytes(),
 	}
 
@@ -722,10 +722,6 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 	// node should not commit the block and halt
 	time.Sleep(500 * time.Millisecond)
 	assert.Equal(t, n1.lastCommitHeight(), int64(0))
-	fmt.Println("is Halt channel closed")
-	_, ok := <-n1.haltChan
-	assert.False(t, ok)
-	fmt.Println("Halt channel closed")
 }
 
 // MockBroadcasters
@@ -785,6 +781,9 @@ func (d *dummyTxApp) Commit() error {
 }
 func (d *dummyTxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*ktypes.Validator, genesisAccounts []*ktypes.Account, initialHeight int64, chain *common.ChainContext) error {
 	return nil
+}
+func (d *dummyTxApp) AccountInfo(ctx context.Context, dbTx sql.DB, identifier []byte, pending bool) (balance *big.Int, nonce int64, err error) {
+	return big.NewInt(0), 0, nil
 }
 
 type validatorStore struct {

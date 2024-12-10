@@ -56,7 +56,7 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	ce.stateInfo.mtx.Unlock()
 
 	// Execute the block and generate the appHash
-	if err := ce.executeBlock(ctx); err != nil {
+	if err := ce.executeBlock(ctx, blkProp); err != nil {
 		ce.log.Errorf("Error executing the block: %v", err)
 		return err
 	}
@@ -199,10 +199,10 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 			ce.newRound <- struct{}{}
 		}()
 
-	} else if ce.hasMajorityCeil(nacks) {
+	} else if ce.hasMajorityFloor(nacks) {
 		ce.log.Warnln("Majority of the validators have rejected the block, halting the network",
 			ce.state.blkProp.blk.Header.Height, acks, nacks)
-		close(ce.haltChan)
+		ce.haltChan <- struct{}{}
 		return nil
 	}
 
