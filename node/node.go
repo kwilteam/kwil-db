@@ -32,6 +32,7 @@ import (
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	noise "github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
@@ -48,7 +49,7 @@ type peerManager interface {
 	network.Notifiee
 	Start(context.Context) error
 	ConnectedPeers() []peers.PeerInfo
-	KnownPeers() []peers.PeerInfo
+	KnownPeers() ([]peers.PeerInfo, []peers.PeerInfo, []peers.PeerInfo)
 }
 
 type Node struct {
@@ -247,16 +248,25 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 		return err
 	}
 
-	bootpeers, err = peers.ConvertPeersToMultiAddr(bootpeers)
+	bootpeersMA, err := peers.ConvertPeersToMultiAddr(bootpeers)
 	if err != nil {
 		return err
 	}
 
 	// connect to bootstrap peers, if any
-	for _, peer := range bootpeers {
-		peerInfo, err := connectPeer(ctx, peer, n.host)
+	for i, peer := range bootpeersMA {
+		peerInfo, err := makePeerAddrInfo(peer)
+		if err != nil {
+			n.log.Warnf("invalid bootnode address %v from setting %v", peer, bootpeers[i])
+			continue
+		}
+		err = connectPeerAddrInfo(ctx, peerInfo, n.host)
 		if err != nil {
 			n.log.Errorf("failed to connect to %v: %v", peer, err)
+			// Add it to the peer store anyway since this was specified as a
+			// bootnode, which is supposed to be persistent, so we should try to
+			// connect again later.
+			n.host.Peerstore().AddAddrs(peerInfo.ID, peerInfo.Addrs, peerstore.PermanentAddrTTL)
 			continue
 		}
 		if err = n.checkPeerProtos(ctx, peerInfo.ID); err != nil {
@@ -294,6 +304,7 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 			Addrs: peerAddrs,
 		}); err != nil {
 			n.log.Warnf("Unable to connect to peer %s: %v", peerID, peers.CompressDialError(err))
+			continue
 		}
 		n.log.Infof("Connected to address book peer %v", peerID)
 	}
@@ -567,6 +578,16 @@ func newHost(ip string, port uint64, privKey crypto.PrivateKey) (host.Host, erro
 
 	// cg := peers.NewProtocolGater()
 
+	// The BasicConnManager can keep connections below an upper limit, dropping
+	// down to some lower limit (presumably to keep a dynamic peer list), but it
+	// won't try to initiation new connections to reach the min. Maybe this will
+	// be helpful later, so leaving as a comment:
+
+	// cm, err := connmgr.NewConnManager(60, 100, connmgr.WithGracePeriod(20*time.Minute)) // TODO: absorb this into peerman
+	// if err != nil {
+	// 	return nil, nil, err
+	// }
+
 	h, err := libp2p.New(
 		libp2p.Transport(tcp.NewTCPTransport),
 		libp2p.Security(noise.ID, noise.New), // modified TLS based on node-ID
@@ -574,6 +595,7 @@ func newHost(ip string, port uint64, privKey crypto.PrivateKey) (host.Host, erro
 		// listenAddrs,
 		libp2p.Identity(privKeyP2P),
 		// libp2p.ConnectionGater(cg),
+		// libp2p.ConnectionManager(cm),
 	) // libp2p.RandomIdentity, in-mem peer store, ...
 	if err != nil {
 		return nil, err
@@ -605,7 +627,7 @@ func hostPort(host host.Host) ([]string, []int, []string) {
 	return addrStr, ports, protocols
 }
 
-func connectPeer(ctx context.Context, addr string, host host.Host) (*peer.AddrInfo, error) {
+func makePeerAddrInfo(addr string) (*peer.AddrInfo, error) {
 	// Turn the destination into a multiaddr.
 	maddr, err := multiaddr.NewMultiaddr(addr)
 	if err != nil {
@@ -613,7 +635,16 @@ func connectPeer(ctx context.Context, addr string, host host.Host) (*peer.AddrIn
 	}
 
 	// Extract the peer ID from the multiaddr.
-	info, err := peer.AddrInfoFromP2pAddr(maddr)
+	return peer.AddrInfoFromP2pAddr(maddr)
+}
+
+func connectPeerAddrInfo(ctx context.Context, info *peer.AddrInfo, host host.Host) error {
+	return host.Connect(ctx, *info)
+}
+
+func connectPeer(ctx context.Context, addr string, host host.Host) (*peer.AddrInfo, error) {
+	// Extract the peer ID and address info from the multiaddr.
+	info, err := makePeerAddrInfo(addr)
 	if err != nil {
 		return nil, err
 	}

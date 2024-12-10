@@ -51,8 +51,9 @@ type PeerMan struct {
 
 	requiredProtocols []protocol.ID
 
-	pex      bool
-	addrBook string
+	pex               bool
+	addrBook          string
+	targetConnections int
 
 	done  chan struct{}
 	close func()
@@ -83,6 +84,7 @@ func NewPeerMan(pex bool, addrBook string, logger log.Logger, h host.Host,
 		pex:               pex,
 		requestPeers:      requestPeers,
 		addrBook:          addrBook,
+		targetConnections: 20, // TODO: configurable max(1, targetConnections)
 		disconnects:       make(map[peer.ID]time.Time),
 		noReconnect:       make(map[peer.ID]bool),
 	}
@@ -114,6 +116,12 @@ func (pm *PeerMan) Start(ctx context.Context) error {
 		pm.removeOldPeers()
 	}()
 
+	pm.wg.Add(1)
+	go func() {
+		defer pm.wg.Done()
+		pm.maintainMinPeers(ctx)
+	}()
+
 	<-ctx.Done()
 
 	pm.close()
@@ -121,6 +129,60 @@ func (pm *PeerMan) Start(ctx context.Context) error {
 	pm.wg.Wait()
 
 	return nil
+}
+
+const (
+	urgentConnInterval = time.Second
+	normalConnInterval = 20 * urgentConnInterval
+)
+
+func (pm *PeerMan) maintainMinPeers(ctx context.Context) {
+	// Start with a fast iteration until we determine that we either have some
+	// connected peers, or we don't even have candidate addresses yet.
+	ticker := time.NewTicker(urgentConnInterval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+		case <-ctx.Done():
+			return
+		}
+
+		_, activeConns, unconnectedPeers := pm.KnownPeers()
+		if numActive := len(activeConns); numActive < pm.targetConnections {
+			if numActive == 0 && len(unconnectedPeers) == 0 {
+				pm.log.Warnln("No connected peers and no known addresses to dial!")
+				continue
+			}
+
+			pm.log.Infof("Active connections: %d, below target: %d. Initiating new connections.",
+				numActive, pm.targetConnections)
+
+			var added int
+			for _, peerInfo := range unconnectedPeers {
+				pid := peerInfo.ID
+				err := pm.h.Connect(ctx, peer.AddrInfo{ID: pid})
+				if err != nil {
+					pm.log.Warnf("Failed to connect to peer %s: %v", pid, CompressDialError(err))
+				} else {
+					pm.log.Infof("Connected to peer %s", pid)
+					added++
+				}
+			}
+
+			if added == 0 && numActive == 0 {
+				// Keep trying known peer addresses more frequently until we
+				// have at least on connection.
+				ticker.Reset(urgentConnInterval)
+			} else {
+				ticker.Reset(normalConnInterval)
+			}
+		} else {
+			pm.log.Debugf("Have %d connections and %d candidates of %d target", numActive, len(unconnectedPeers), pm.targetConnections)
+		}
+
+	}
 }
 
 func (pm *PeerMan) startPex(ctx context.Context) {
@@ -136,7 +198,7 @@ func (pm *PeerMan) startPex(ctx context.Context) {
 					if pm.addPeerAddrs(peer) {
 						// TODO: connection manager, with limits
 						if err = pm.c.Connect(ctx, peer); err != nil {
-							pm.log.Warnf("Failed to connect to %s: %v", peer.ID, err)
+							pm.log.Warnf("Failed to connect to %s: %v", peer.ID, CompressDialError(err))
 						}
 					}
 					count++
@@ -219,12 +281,13 @@ func (pm *PeerMan) ConnectedPeers() []PeerInfo {
 
 // KnownPeers returns a list of peer info for all known peers (connected or just
 // in peer store).
-func (pm *PeerMan) KnownPeers() []PeerInfo {
+func (pm *PeerMan) KnownPeers() (all, connected, disconnected []PeerInfo) {
 	// connected peers first
 	peers := pm.ConnectedPeers()
 	connectedPeers := make(map[peer.ID]bool)
 	for _, peerInfo := range peers {
 		connectedPeers[peerInfo.ID] = true
+		connected = append(connected, peerInfo)
 	}
 
 	// all others in peer store
@@ -241,10 +304,11 @@ func (pm *PeerMan) KnownPeers() []PeerInfo {
 			continue
 		}
 
+		disconnected = append(disconnected, *peerInfo)
 		peers = append(peers, *peerInfo)
 	}
 
-	return peers
+	return peers, connected, disconnected
 }
 
 func CheckProtocolSupport(_ context.Context, ps peerstore.Peerstore, peerID peer.ID, protoIDs ...protocol.ID) (bool, error) {
@@ -304,14 +368,14 @@ func peerInfo(ps peerstore.Peerstore, peerID peer.ID) (*PeerInfo, error) {
 }
 
 func (pm *PeerMan) PrintKnownPeers() {
-	peers := pm.KnownPeers()
+	peers, _, _ := pm.KnownPeers()
 	for _, p := range peers {
 		pm.log.Info("Known peer", "id", p.ID.String())
 	}
 }
 
 func (pm *PeerMan) savePeers() error {
-	peerList := pm.KnownPeers()
+	peerList, _, _ := pm.KnownPeers()
 	pm.log.Infof("saving %d peers to address book", len(peerList))
 	if err := persistPeers(peerList, pm.addrBook); err != nil {
 		return err
@@ -493,7 +557,6 @@ func (pm *PeerMan) reconnectWithRetry(ctx context.Context, peerID peer.ID) {
 			cancel()
 			err = CompressDialError(err)
 			pm.log.Infof("Failed to reconnect to peer %s (trying again in %v): %v", peerID, delay, err)
-
 		} else {
 			cancel()
 			pm.log.Infof("Successfully reconnected to peer %s", peerID)
