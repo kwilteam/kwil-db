@@ -98,7 +98,7 @@ func TestGetRawBlockTx(t *testing.T) {
 }
 func TestCalcMerkleRoot(t *testing.T) {
 	t.Run("empty slice", func(t *testing.T) {
-		root := CalcMerkleRoot([]Hash{})
+		root := types.CalcMerkleRoot([]Hash{})
 		if root != (Hash{}) {
 			t.Errorf("empty slice should return zero hash, got %x", root)
 		}
@@ -106,7 +106,7 @@ func TestCalcMerkleRoot(t *testing.T) {
 
 	t.Run("single leaf", func(t *testing.T) {
 		leaf := Hash{1, 2, 3, 4}
-		root := CalcMerkleRoot([]Hash{leaf})
+		root := types.CalcMerkleRoot([]Hash{leaf})
 		if root != leaf {
 			t.Errorf("single leaf should return same hash, got %x, want %x", root, leaf)
 		}
@@ -115,7 +115,7 @@ func TestCalcMerkleRoot(t *testing.T) {
 	t.Run("two leaves", func(t *testing.T) {
 		leaf1 := Hash{1, 2, 3, 4}
 		leaf2 := Hash{5, 6, 7, 8}
-		root := CalcMerkleRoot([]Hash{leaf1, leaf2})
+		root := types.CalcMerkleRoot([]Hash{leaf1, leaf2})
 
 		var buf [HashLen * 2]byte
 		copy(buf[:HashLen], leaf1[:])
@@ -133,7 +133,7 @@ func TestCalcMerkleRoot(t *testing.T) {
 			{2, 2, 2, 2},
 			{3, 3, 3, 3},
 		}
-		CalcMerkleRoot(leaves)
+		types.CalcMerkleRoot(leaves)
 
 		// Verify original slice not modified
 		if leaves[2] != (Hash{3, 3, 3, 3}) {
@@ -148,11 +148,11 @@ func TestCalcMerkleRoot(t *testing.T) {
 			{3, 3, 3, 3},
 			{4, 4, 4, 4},
 		}
-		root1 := CalcMerkleRoot(leaves)
+		root1 := types.CalcMerkleRoot(leaves)
 
 		// Calculate same root with modified order
 		leaves[0], leaves[1] = leaves[1], leaves[0]
-		root2 := CalcMerkleRoot(leaves)
+		root2 := types.CalcMerkleRoot(leaves)
 
 		if root1 == root2 {
 			t.Error("roots should differ when leaf order changes")
@@ -167,7 +167,7 @@ func TestCalcMerkleRoot(t *testing.T) {
 		originalCopy := make([]Hash, len(original))
 		copy(originalCopy, original)
 
-		CalcMerkleRoot(original)
+		types.CalcMerkleRoot(original)
 
 		for i := range original {
 			if original[i] != originalCopy[i] {

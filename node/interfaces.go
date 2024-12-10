@@ -27,6 +27,8 @@ type ConsensusEngine interface {
 	Start(ctx context.Context, proposerBroadcaster consensus.ProposalBroadcaster,
 		blkAnnouncer consensus.BlkAnnouncer, ackBroadcaster consensus.AckBroadcaster,
 		blkRequester consensus.BlkRequester, stateResetter consensus.ResetStateBroadcaster, discoveryBroadcaster consensus.DiscoveryReqBroadcaster) error
+
+	CheckTx(tx []byte) error
 }
 
 type SnapshotStore interface {

@@ -93,10 +93,10 @@ func newGenesis(t *testing.T, nodekeys [][]byte) ([]crypto.PrivateKey, *config.G
 
 	genCfg := config.GenesisConfig{
 		Leader:     privKeys[0].Public().Bytes(),
-		Validators: []ktypes.Validator{},
+		Validators: []*ktypes.Validator{},
 	}
 	for _, priv := range privKeys {
-		genCfg.Validators = append(genCfg.Validators, ktypes.Validator{
+		genCfg.Validators = append(genCfg.Validators, &ktypes.Validator{
 			PubKey: priv.Public().Bytes(),
 			Power:  1,
 		})
@@ -186,6 +186,10 @@ func (ce *dummyCE) NotifyDiscoveryMessage(validatorPK []byte, height int64) {}
 
 func (ce *dummyCE) Role() types.Role {
 	return types.RoleLeader
+}
+
+func (ce *dummyCE) CheckTx(tx []byte) error {
+	return nil
 }
 
 func (ce *dummyCE) Start(ctx context.Context, proposerBroadcaster consensus.ProposalBroadcaster,
