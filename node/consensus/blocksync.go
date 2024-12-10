@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jpillora/backoff"
 	"github.com/kwilteam/kwil-db/node/types"
 )
 
@@ -139,10 +140,11 @@ func (ce *ConsensusEngine) syncBlocksUntilHeight(ctx context.Context, startHeigh
 	t0 := time.Now()
 
 	for height <= endHeight {
-		_, appHash, rawblk, err := ce.blkRequester(ctx, height)
+		// TODO: This is used in blocksync for leader, failure of fetching the block after certain retries should fail the node
+		_, appHash, rawblk, err := ce.getBlock(ctx, height)
 		if err != nil { // all kinds of errors?
 			ce.log.Info("Error requesting block from network", "height", ce.state.lc.height+1, "error", err)
-			return nil // no more blocks to sync from network.
+			return fmt.Errorf("error requesting block from network: height : %d, error: %w", ce.state.lc.height+1, err)
 		}
 
 		if ce.state.lc.height != 0 && appHash.IsZero() {
@@ -164,4 +166,41 @@ func (ce *ConsensusEngine) syncBlocksUntilHeight(ctx context.Context, startHeigh
 	ce.log.Info("Block sync completed", "startHeight", startHeight, "endHeight", endHeight, "duration", time.Since(t0))
 
 	return nil
+}
+
+func (ce *ConsensusEngine) getBlock(ctx context.Context, height int64) (blkID types.Hash, appHash types.Hash, rawBlk []byte, err error) {
+	err = retry(ctx, 15, func() error {
+		blkID, appHash, rawBlk, err = ce.blkRequester(ctx, height)
+		return err
+	})
+
+	return blkID, appHash, rawBlk, err
+}
+
+// retry will retry the function until it is successful, or reached the max retries
+func retry(ctx context.Context, maxRetries int64, fn func() error) error {
+	retrier := &backoff.Backoff{
+		Min:    100 * time.Millisecond,
+		Max:    500 * time.Millisecond,
+		Factor: 2,
+		Jitter: true,
+	}
+
+	for {
+		err := fn()
+		if err == nil {
+			return nil
+		}
+
+		// fail after maxRetries retries
+		if retrier.Attempt() > float64(maxRetries) {
+			return err
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(retrier.Duration()):
+		}
+	}
 }

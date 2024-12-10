@@ -499,6 +499,7 @@ func (n *Node) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, _ /*sync
 	rawTx, _ := tx.MarshalBinary()
 	txHash := types.HashBytes(rawTx)
 
+	// TODO: checkTx before accepting the Tx
 	n.mp.Store(txHash, rawTx)
 
 	n.log.Infof("broadcasting new tx %v", txHash)

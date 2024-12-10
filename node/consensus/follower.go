@@ -182,7 +182,7 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 	ce.stateInfo.blkProp = blkPropMsg
 	ce.stateInfo.mtx.Unlock()
 
-	if err := ce.executeBlock(ctx); err != nil {
+	if err := ce.executeBlock(ctx, blkPropMsg); err != nil {
 		ce.log.Error("Error executing block, sending NACK", "error", err)
 		go ce.ackBroadcaster(false, blkPropMsg.height, blkPropMsg.blkHash, nil)
 		return err
@@ -258,7 +258,8 @@ func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *types.Block, ap
 // processAndCommit: used by the sentry nodes and slow validators to process and commit the block.
 // This is used when the acks are not required to be sent back to the leader, essentially in catchup mode.
 func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *types.Block, appHash types.Hash) error {
-	ce.log.Info("Processing committed block", "height", blk.Header.Height, "hash", blk.Header.Hash(), "appHash", appHash)
+	blkID := blk.Header.Hash()
+	ce.log.Info("Processing committed block", "height", blk.Header.Height, "hash", blkID, "appHash", appHash)
 	if err := ce.validateBlock(blk); err != nil {
 		ce.log.Errorf("Error validating block: %v", err)
 		return err // who gets this error?
@@ -276,9 +277,8 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *types.Bloc
 	ce.stateInfo.blkProp = ce.state.blkProp
 	ce.stateInfo.mtx.Unlock()
 
-	if err := ce.executeBlock(ctx); err != nil {
-		ce.log.Errorf("Error executing block: %v", err)
-		return err
+	if err := ce.executeBlock(ctx, ce.state.blkProp); err != nil {
+		return fmt.Errorf("error executing block: %v", err)
 	}
 
 	if ce.state.blockRes.appHash != appHash {
@@ -288,9 +288,8 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *types.Bloc
 	}
 
 	// Commit the block if the appHash is valid
-	if err := ce.commit(ctx); err != nil {
-		ce.log.Errorf("Error committing block: %v", err)
-		return err
+	if err := ce.blockProcessor.Commit(ctx, blk.Header.Height, appHash, ce.inSync.Load()); err != nil {
+		return fmt.Errorf("error committing block: %v", err)
 	}
 
 	ce.nextState()

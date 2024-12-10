@@ -7,7 +7,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"math/big"
 	"net"
 	"net/url"
 	"os"
@@ -18,11 +17,11 @@ import (
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
-	"github.com/kwilteam/kwil-db/core/types"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/node"
 	"github.com/kwilteam/kwil-db/node/accounts"
+	blockprocessor "github.com/kwilteam/kwil-db/node/block_processor"
 	"github.com/kwilteam/kwil-db/node/consensus"
 	"github.com/kwilteam/kwil-db/node/engine/execution"
 	"github.com/kwilteam/kwil-db/node/mempool"
@@ -31,7 +30,6 @@ import (
 	"github.com/kwilteam/kwil-db/node/snapshotter"
 	"github.com/kwilteam/kwil-db/node/store"
 	"github.com/kwilteam/kwil-db/node/txapp"
-	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
 
 	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
@@ -48,7 +46,10 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 
 	valSet := make(map[string]ktypes.Validator)
 	for _, v := range d.genesisCfg.Validators {
-		valSet[hex.EncodeToString(v.PubKey)] = v
+		valSet[hex.EncodeToString(v.PubKey)] = ktypes.Validator{
+			PubKey: v.PubKey,
+			Power:  v.Power,
+		}
 	}
 
 	// Initialize DB
@@ -77,16 +78,18 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	// Snapshot Store
 	ss := buildSnapshotStore(d)
 
+	// BlockProcessor
+	bp := buildBlockProcessor(ctx, d, db, txApp, accounts, vs, ss)
+
 	// Consensus
-	ce := buildConsensusEngine(ctx, d, db, accounts, vs, mp, bs, txApp, valSet, ss)
+	ce := buildConsensusEngine(ctx, d, db, mp, bs, bp, valSet)
 
 	// Node
 	node := buildNode(d, mp, bs, ce, ss, db)
-	appIface := &mysteryThing{txApp, ce}
 
 	// RPC Services
 	rpcSvcLogger := d.logger.New("USER")
-	jsonRPCTxSvc := usersvc.NewService(db, e, node, appIface, vs, rpcSvcLogger,
+	jsonRPCTxSvc := usersvc.NewService(db, e, node, bp, vs, rpcSvcLogger,
 		usersvc.WithReadTxTimeout(time.Duration(d.cfg.DB.ReadTxTimeout)),
 		usersvc.WithPrivateMode(d.cfg.RPC.Private),
 		usersvc.WithChallengeExpiry(d.cfg.RPC.ChallengeExpiry),
@@ -114,7 +117,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 		// key because it is used to sign transactions and provide an Identity for
 		// account information (nonce and balance).
 		txSigner := &auth.EthPersonalSigner{Key: *d.privKey.(*crypto.Secp256k1PrivateKey)}
-		jsonAdminSvc := adminsvc.NewService(db, node, appIface, nil, txSigner, d.cfg,
+		jsonAdminSvc := adminsvc.NewService(db, node, bp, nil, txSigner, d.cfg,
 			d.genesisCfg.ChainID, adminServerLogger)
 		jsonRPCAdminServer = buildJRPCAdminServer(d)
 		jsonRPCAdminServer.RegisterSvc(jsonAdminSvc)
@@ -134,21 +137,6 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	}
 
 	return s
-}
-
-var _ adminsvc.App = (*mysteryThing)(nil)
-
-type mysteryThing struct {
-	txApp *txapp.TxApp
-	ce    *consensus.ConsensusEngine
-}
-
-func (mt *mysteryThing) AccountInfo(ctx context.Context, db sql.DB, identifier []byte, pending bool) (balance *big.Int, nonce int64, err error) {
-	return mt.txApp.AccountInfo(ctx, db, identifier, pending)
-}
-
-func (mt *mysteryThing) Price(ctx context.Context, db sql.DB, tx *types.Transaction) (*big.Int, error) {
-	return mt.ce.Price(ctx, db, tx)
 }
 
 func buildDB(ctx context.Context, d *coreDependencies, closers *closeFuncs) *pg.DB {
@@ -226,40 +214,32 @@ func buildTxApp(ctx context.Context, d *coreDependencies, db *pg.DB, accounts *a
 	return txapp
 }
 
-func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB, accounts *accounts.Accounts, vs *voting.VoteStore,
-	mempool *mempool.Mempool, bs *store.BlockStore, txapp *txapp.TxApp, valSet map[string]ktypes.Validator,
-	ss *snapshotter.SnapshotStore) *consensus.ConsensusEngine {
+func buildBlockProcessor(ctx context.Context, d *coreDependencies, db *pg.DB, txapp *txapp.TxApp, accounts *accounts.Accounts, vs *voting.VoteStore, ss *snapshotter.SnapshotStore) *blockprocessor.BlockProcessor {
+	bp, err := blockprocessor.NewBlockProcessor(ctx, db, txapp, accounts, vs, ss, d.genesisCfg, d.logger.New("BP"))
+	if err != nil {
+		failBuild(err, "failed to create block processor")
+	}
+
+	return bp
+}
+
+func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB,
+	mempool *mempool.Mempool, bs *store.BlockStore, bp *blockprocessor.BlockProcessor, valSet map[string]ktypes.Validator) *consensus.ConsensusEngine {
 	leaderPubKey, err := crypto.UnmarshalSecp256k1PublicKey(d.genesisCfg.Leader)
 	if err != nil {
 		failBuild(err, "failed to parse leader public key")
 	}
 
-	genHash := d.genesisCfg.ComputeGenesisHash()
-
 	ceCfg := &consensus.Config{
-		PrivateKey: d.privKey,
-		Leader:     leaderPubKey,
-		GenesisParams: &consensus.GenesisParams{
-			ChainID: d.genesisCfg.ChainID,
-			Params: &consensus.NetworkParams{
-				MaxBlockSize:     d.genesisCfg.MaxBlockSize,
-				JoinExpiry:       d.genesisCfg.JoinExpiry,
-				VoteExpiry:       d.genesisCfg.VoteExpiry,
-				DisabledGasCosts: d.genesisCfg.DisabledGasCosts,
-				MaxVotesPerTx:    d.genesisCfg.MaxVotesPerTx,
-			},
-		},
-		GenesisHash:    genHash,
+		PrivateKey:     d.privKey,
+		Leader:         leaderPubKey,
 		DB:             db,
-		Accounts:       accounts,
 		BlockStore:     bs,
+		BlockProcessor: bp,
 		Mempool:        mempool,
-		ValidatorStore: vs,
-		TxApp:          txapp,
 		ValidatorSet:   valSet,
 		Logger:         d.logger.New("CONS"),
 		ProposeTimeout: d.cfg.Consensus.ProposeTimeout,
-		Snapshots:      ss,
 	}
 
 	ce := consensus.New(ceCfg)
