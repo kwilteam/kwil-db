@@ -99,6 +99,7 @@ func (mp *Mempool) ReapN(n int) []types.NamedTx {
 	defer mp.mtx.Unlock()
 	n = min(n, len(mp.txQ))
 	txns := slices.Clone(mp.txQ[:n])
+	mp.txQ = mp.txQ[n:]
 	for _, tx := range txns {
 		delete(mp.txns, tx.Hash)
 	}
