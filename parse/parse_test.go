@@ -1115,6 +1115,27 @@ func Test_SQL(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "namespacing",
+			sql:  `{test}SELECT * FROM users;`,
+			want: &SQLStatement{
+				Namespacing: Namespacing{
+					NamespacePrefix: "test",
+				},
+				SQL: &SelectStatement{
+					SelectCores: []*SelectCore{
+						{
+							Columns: []ResultColumn{
+								&ResultColumnWildcard{},
+							},
+							From: &RelationTable{
+								Table: "users",
+							},
+						},
+					},
+				},
+			},
+		},
 	}
 
 	for _, tt := range tests {
@@ -1919,6 +1940,8 @@ func TestCreateActionStatements(t *testing.T) {
 			require.NoError(t, err)
 
 			require.Len(t, res, 1)
+
+			tt.expect.Raw = res[0].(*CreateActionStatement).Raw
 
 			assertPositionsAreSet(t, res[0])
 

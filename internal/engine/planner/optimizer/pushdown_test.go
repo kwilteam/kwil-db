@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/engine"
 	"github.com/kwilteam/kwil-db/internal/engine/planner/logical"
 	"github.com/kwilteam/kwil-db/parse"
 	"github.com/stretchr/testify/require"
@@ -28,18 +29,18 @@ func Test_Pushdown(t *testing.T) {
 		},
 		{
 			name: "push down join",
-			sql:  "select * from users u inner join posts p on u.id = p.owner_id where u.name = p.content",
-			wt: "Return: id [uuid], name [text], age [int], id [uuid], owner_id [uuid], content [text], created_at [int]\n" +
-				"└─Project: u.id; u.name; u.age; p.id; p.owner_id; p.content; p.created_at\n" +
+			sql:  "select u.* from users u inner join posts p on u.id = p.owner_id where u.name = p.content",
+			wt: "Return: id [uuid], name [text], age [int]\n" +
+				"└─Project: u.id; u.name; u.age\n" +
 				"  └─Join [inner]: u.id = p.owner_id AND u.name = p.content\n" +
 				"    ├─Scan Table [alias=\"u\"]: users [physical]\n" +
 				"    └─Scan Table [alias=\"p\"]: posts [physical]\n",
 		},
 		{
 			name: "pushdown through join",
-			sql:  "select * from users u inner join posts p on u.id = p.owner_id where u.name = 'foo'",
-			wt: "Return: id [uuid], name [text], age [int], id [uuid], owner_id [uuid], content [text], created_at [int]\n" +
-				"└─Project: u.id; u.name; u.age; p.id; p.owner_id; p.content; p.created_at\n" +
+			sql:  "select u.* from users u inner join posts p on u.id = p.owner_id where u.name = 'foo'",
+			wt: "Return: id [uuid], name [text], age [int]\n" +
+				"└─Project: u.id; u.name; u.age\n" +
 				"  └─Join [inner]: u.id = p.owner_id\n" +
 				"    ├─Scan Table [alias=\"u\"]: users [physical] filter=[u.name = 'foo']\n" +
 				"    └─Scan Table [alias=\"p\"]: posts [physical]\n",
@@ -100,14 +101,18 @@ func Test_Pushdown(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			schema, err := parse.ParseSchema([]byte(testSchema))
+
+			parsedSql, err := parse.Parse(test.sql)
 			require.NoError(t, err)
 
-			parsedSql, err := parse.ParseSQL(test.sql)
-			require.NoError(t, err)
-			require.NoError(t, parsedSql.ParseErrs.Err())
-
-			plan, err := logical.CreateLogicalPlan(parsedSql.AST, schema, map[string]*types.DataType{}, map[string]map[string]*types.DataType{}, false)
+			plan, err := logical.CreateLogicalPlan(parsedSql[0].(*parse.SQLStatement),
+				func(namespace, tableName string) (table *engine.Table, found bool) {
+					t, found := testTables[tableName]
+					return t, found
+				},
+				func(varName string) (dataType *types.DataType, found bool) { return nil, false },
+				func(objName string) (obj map[string]*types.DataType, found bool) { return nil, false },
+				false, "")
 			require.NoError(t, err)
 
 			newPlan, err := PushdownPredicates(plan.Plan)
@@ -132,37 +137,69 @@ func Test_Pushdown(t *testing.T) {
 // special error for testing that will match any error
 var errAny = errors.New("any error")
 
-var testSchema = `database planner;
-
-table users {
-	id uuid primary key,
-	name text,
-	age int max(150),
-	#name_idx unique(name),
-	#age_idx index(age)
+var testTables = map[string]*engine.Table{
+	"users": {
+		Name: "users",
+		Columns: []*engine.Column{
+			{
+				Name:         "id",
+				DataType:     types.UUIDType,
+				IsPrimaryKey: true,
+			},
+			{
+				Name:     "name",
+				DataType: types.TextType,
+			},
+			{
+				Name:     "age",
+				DataType: types.IntType,
+			},
+		},
+		Indexes: []*engine.Index{
+			{
+				Name: "name_idx",
+				Type: engine.UNIQUE_BTREE,
+				Columns: []string{
+					"name",
+				},
+			},
+		},
+	},
+	"posts": {
+		Name: "posts",
+		Columns: []*engine.Column{
+			{
+				Name:         "id",
+				DataType:     types.UUIDType,
+				IsPrimaryKey: true,
+			},
+			{
+				Name:     "owner_id",
+				DataType: types.UUIDType,
+			},
+			{
+				Name:     "content",
+				DataType: types.TextType,
+			},
+			{
+				Name:     "created_at",
+				DataType: types.IntType,
+			},
+		},
+		Constraints: map[string]*engine.Constraint{
+			"content_unique": {
+				Type: engine.ConstraintUnique,
+				Columns: []string{
+					"content",
+				},
+			},
+			"owner_created_idx": {
+				Type: engine.ConstraintUnique,
+				Columns: []string{
+					"owner_id",
+					"created_at",
+				},
+			},
+		},
+	},
 }
-
-table posts {
-	id uuid primary key,
-	owner_id uuid not null,
-	content text maxlen(300) unique,
-	created_at int not null,
-	foreign key (owner_id) references users(id) on delete cascade on update cascade,
-	#owner_created_idx unique(owner_id, created_at)
-}
-
-procedure posts_by_user($name text) public view returns table(content text) {
-	return select p.content from posts p
-		inner join users u on p.owner_id = u.id
-		where u.name = $name;
-}
-
-procedure post_count($id uuid) public view returns (int) {
-	for $row in select count(*) as count from posts where owner_id = $id {
-		return $row.count;
-	}
-}
-
-foreign procedure owned_cars($id int) returns table(owner_name text, brand text, model text)
-foreign procedure car_count($id uuid) returns (int)
-`

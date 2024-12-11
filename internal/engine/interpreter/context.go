@@ -7,7 +7,7 @@ import (
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine"
-	"github.com/kwilteam/kwil-db/internal/engine/generate"
+	pggenerate "github.com/kwilteam/kwil-db/internal/engine/pg_generate"
 	"github.com/kwilteam/kwil-db/internal/engine/planner/logical"
 	"github.com/kwilteam/kwil-db/parse"
 )
@@ -18,14 +18,6 @@ type executionContext struct {
 	txCtx *common.TxContext
 	// scope is the current scope.
 	scope *scopeContext
-	// availableFunctions is a map of both built-in functions and user-defined PL/pgSQL functions.
-	// When the interpreter planner is created, it will be populated with all built-in functions,
-	// and then it will be updated with user-defined functions, effectively allowing users to override
-	// some function name with their own implementation. This allows Kwil to add new built-in
-	// functions without worrying about breaking user schemas.
-	// This will not include aggregate and window functions, as those can only be used in SQL.
-	// availableFunctions maps local action names to their execution func.
-	availableFunctions map[string]*executable
 	// mutatingState is true if the execution is capable of mutating state.
 	// If true, it must also be deterministic.
 	mutatingState bool
@@ -37,22 +29,44 @@ type executionContext struct {
 	accessController *accessController
 }
 
-// hasPrivilege checks if the current user has a privilege.
-func (e *executionContext) hasPrivilege(priv privilege) bool {
-	return e.accessController.HasPrivilege(e.txCtx.Caller, &e.scope.namespace, priv)
+// checkPrivilege checks that the current user has a privilege,
+// and returns an error if they do not.
+func (e *executionContext) checkPrivilege(priv privilege) error {
+	if !e.accessController.HasPrivilege(e.txCtx.Caller, &e.scope.namespace, priv) {
+		return fmt.Errorf("%w: %s", ErrDoesNotHavePriv, priv)
+	}
+
+	return nil
 }
 
-// getTable gets a table from the interpreter.
-// It can optionally be given a namespace to search in.
-// If the namespace is empty, it will search the current namespace.
-func (e *executionContext) getTable(namespace, tableName string) (*engine.Table, bool) {
+// currentNamespace gets the current namespace.
+func (e *executionContext) currentNamespace() *namespace {
+	return e.namespaces[e.scope.namespace]
+}
+
+// getNamespace gets the specified namespace.
+// If the namespace does not exist, it will return an error.
+// If the namespace is empty, it will return the current namespace.
+func (e *executionContext) getNamespace(namespace string) (*namespace, error) {
 	if namespace == "" {
 		namespace = e.scope.namespace
 	}
 
 	ns, ok := e.namespaces[namespace]
 	if !ok {
-		return nil, false
+		return nil, fmt.Errorf("%w: %s", ErrNamespaceNotFound, namespace)
+	}
+
+	return ns, nil
+}
+
+// getTable gets a table from the interpreter.
+// It can optionally be given a namespace to search in.
+// If the namespace is empty, it will search the current namespace.
+func (e *executionContext) getTable(namespace, tableName string) (*engine.Table, bool) {
+	ns, err := e.getNamespace(namespace)
+	if err != nil {
+		panic(err) // we should never hit an error here
 	}
 
 	table, ok := ns.tables[tableName]
@@ -62,18 +76,26 @@ func (e *executionContext) getTable(namespace, tableName string) (*engine.Table,
 // query executes a query.
 // It will parse the SQL, create a logical plan, and execute the query.
 func (e *executionContext) query(sql string, fn func(*RecordValue) error) error {
-	res, err := parse.ParseSQL(sql)
+	res, err := parse.Parse(sql)
 	if err != nil {
 		return err
 	}
-	if res.ParseErrs.Err() != nil {
-		return res.ParseErrs.Err()
+
+	if len(res) != 1 {
+		// this is an internal bug b/c `query` is only called with a single statement
+		// from the interpreter
+		return fmt.Errorf("internal bug: expected exactly 1 statement, got %d", len(res))
+	}
+
+	sqlStmt, ok := res[0].(*parse.SQLStatement)
+	if !ok {
+		return fmt.Errorf("internal bug: expected *parse.SQLStatement, got %T", res[0])
 	}
 
 	// create a logical plan. This will make the query deterministic (if necessary),
 	// as well as tell us what the return types will be.
 	analyzed, err := logical.CreateLogicalPlan(
-		res.AST,
+		sqlStmt,
 		e.getTable,
 		func(varName string) (dataType *types.DataType, found bool) {
 			val, found := e.getVariable(varName)
@@ -81,8 +103,8 @@ func (e *executionContext) query(sql string, fn func(*RecordValue) error) error 
 				return nil, false
 			}
 
-			// if it is a record, we need to return the record type
-			if _, ok := val.(*RecordValue); !ok {
+			// if it is a record, then return nil
+			if _, ok := val.(*RecordValue); ok {
 				return nil, false
 			}
 
@@ -106,12 +128,13 @@ func (e *executionContext) query(sql string, fn func(*RecordValue) error) error 
 			return nil, false
 		},
 		e.mutatingState,
+		e.scope.namespace,
 	)
 	if err != nil {
 		return err
 	}
 
-	generatedSQL, params, err := generate.WriteSQL(res.AST, true, pgSchema)
+	generatedSQL, params, err := pggenerate.GenerateSQL(sqlStmt, e.scope.namespace)
 	if err != nil {
 		return err
 	}
@@ -144,7 +167,7 @@ func (e *executionContext) query(sql string, fn func(*RecordValue) error) error 
 	}
 
 	return query(e.txCtx.Ctx, e.db, generatedSQL, scanValues, func() error {
-		record := RecordValue{}
+		record := newRecordValue()
 		for i, field := range analyzed.Plan.Relation().Fields {
 			if field.Name == "" {
 				continue
@@ -156,7 +179,7 @@ func (e *executionContext) query(sql string, fn func(*RecordValue) error) error 
 			}
 		}
 
-		return fn(&record)
+		return fn(record)
 	}, args)
 }
 
@@ -224,8 +247,55 @@ func (e *executionContext) allocateVariable(name string, value Value) error {
 // It searches the parent scopes if the variable is not found.
 // It returns the value and a boolean indicating if the variable was found.
 func (e *executionContext) getVariable(name string) (Value, bool) {
-	v, _, f := getVarFromScope(name, e.scope)
-	return v, f
+	if len(name) == 0 {
+		return nil, false
+	}
+
+	switch name[0] {
+	case '$':
+		v, _, f := getVarFromScope(name, e.scope)
+		return v, f
+	case '@':
+		switch name[1:] {
+		case "caller":
+			return &TextValue{Val: e.txCtx.Caller}, true
+		case "txid":
+			return &TextValue{Val: e.txCtx.TxID}, true
+		case "signer":
+			return &BlobValue{Val: e.txCtx.Signer}, true
+		case "height":
+			return &IntValue{Val: e.txCtx.BlockContext.Height}, true
+		case "foreign_caller":
+			if e.scope.parent != nil {
+				return &TextValue{Val: e.scope.parent.namespace}, true
+			} else {
+				return &TextValue{Val: ""}, true
+			}
+		case "block_timestamp":
+			return &IntValue{Val: e.txCtx.BlockContext.Timestamp}, true
+		case "authenticator":
+			return &TextValue{Val: e.txCtx.Authenticator}, true
+		}
+	}
+
+	return nil, false
+}
+
+// reloadTables reloads the cached tables from the database for the current namespace.
+func (e *executionContext) reloadTables() error {
+	tables, err := listTablesInNamespace(e.txCtx.Ctx, e.db, e.scope.namespace)
+	if err != nil {
+		return err
+	}
+
+	ns := e.namespaces[e.scope.namespace]
+
+	ns.tables = make(map[string]*engine.Table)
+	for _, table := range tables {
+		ns.tables[table.Name] = table
+	}
+
+	return nil
 }
 
 // getVarFromScope recursively searches the scopes for a variable.

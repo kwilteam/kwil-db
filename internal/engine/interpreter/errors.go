@@ -11,4 +11,5 @@ var (
 	ErrActionMutatesState    = errors.New("action mutates state")
 	ErrActionOwnerOnly       = errors.New("action is owner-only")
 	ErrDoesNotHavePriv       = errors.New("does not have privilege")
+	ErrNamespaceNotFound     = errors.New("namespace not found")
 )

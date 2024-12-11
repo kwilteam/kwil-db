@@ -18,6 +18,30 @@ type Table struct {
 	Constraints map[string]*Constraint
 }
 
+// Copy deep copies the table.
+func (t *Table) Copy() *Table {
+	table := &Table{
+		Name:        t.Name,
+		Columns:     make([]*Column, len(t.Columns)),
+		Indexes:     make([]*Index, len(t.Indexes)),
+		Constraints: make(map[string]*Constraint),
+	}
+
+	for i, col := range t.Columns {
+		table.Columns[i] = col.Copy()
+	}
+
+	for i, idx := range t.Indexes {
+		table.Indexes[i] = idx.Copy()
+	}
+
+	for name, constraint := range t.Constraints {
+		table.Constraints[name] = constraint.Copy()
+	}
+
+	return table
+}
+
 func (t *Table) PrimaryKeyCols() []*Column {
 	var pkCols []*Column
 	for _, col := range t.Columns {
@@ -78,16 +102,37 @@ type Column struct {
 	IsPrimaryKey bool
 }
 
-// TODO: constraints should be tied to the table
+func (c *Column) Copy() *Column {
+	return &Column{
+		Name:         c.Name,
+		DataType:     c.DataType.Copy(),
+		Nullable:     c.Nullable,
+		IsPrimaryKey: c.IsPrimaryKey,
+	}
+}
+
 // Constraint is a constraint in the schema.
 type Constraint struct {
-	// Name is the name of the constraint.
-	// It must be unique within the schema.
-	Name string
 	// Type is the type of the constraint.
 	Type ConstraintType
 	// Columns is a list of column names that the constraint is on.
 	Columns []string
+}
+
+func (c *Constraint) Copy() *Constraint {
+	return &Constraint{
+		Type:    c.Type,
+		Columns: append([]string{}, c.Columns...),
+	}
+}
+
+func (c *Constraint) ContainsColumn(col string) bool {
+	for _, column := range c.Columns {
+		if column == col {
+			return true
+		}
+	}
+	return false
 }
 
 type ConstraintType string
@@ -106,6 +151,23 @@ type Index struct {
 	Name    string    `json:"name"`
 	Columns []string  `json:"columns"`
 	Type    IndexType `json:"type"`
+}
+
+func (i *Index) Copy() *Index {
+	return &Index{
+		Name:    i.Name,
+		Columns: append([]string{}, i.Columns...),
+		Type:    i.Type,
+	}
+}
+
+func (i *Index) ContainsColumn(col string) bool {
+	for _, column := range i.Columns {
+		if column == col {
+			return true
+		}
+	}
+	return false
 }
 
 // index types

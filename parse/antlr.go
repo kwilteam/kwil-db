@@ -59,39 +59,62 @@ func (s *schemaVisitor) VisitEntry(ctx *gen.EntryContext) any {
 }
 
 func (s *schemaVisitor) VisitStatement(ctx *gen.StatementContext) any {
+	var s2 TopLevelStatement
 	switch {
 	case ctx.Sql_statement() != nil:
-		s2 := ctx.Sql_statement().Accept(s).(*SQLStatement)
-		r := s.getTextFromStream(ctx.GetStart().GetStart(), ctx.GetStop().GetStop())
-		s2.raw = &r
-		return s2
+		s3 := ctx.Sql_statement().Accept(s).(*SQLStatement)
+		r := s.getTextFromStream(ctx.GetStart().GetStart(), ctx.GetStop().GetStop()) + ";"
+		s3.raw = &r
+		s2 = s3
 	case ctx.Create_table_statement() != nil:
-		return ctx.Create_table_statement().Accept(s)
+		s2 = ctx.Create_table_statement().Accept(s).(TopLevelStatement)
 	case ctx.Alter_table_statement() != nil:
-		return ctx.Alter_table_statement().Accept(s)
+		s2 = ctx.Alter_table_statement().Accept(s).(TopLevelStatement)
 	case ctx.Drop_table_statement() != nil:
-		return ctx.Drop_table_statement().Accept(s)
+		s2 = ctx.Drop_table_statement().Accept(s).(TopLevelStatement)
 	case ctx.Create_index_statement() != nil:
-		return ctx.Create_index_statement().Accept(s)
+		s2 = ctx.Create_index_statement().Accept(s).(TopLevelStatement)
 	case ctx.Drop_index_statement() != nil:
-		return ctx.Drop_index_statement().Accept(s)
+		s2 = ctx.Drop_index_statement().Accept(s).(TopLevelStatement)
 	case ctx.Create_role_statement() != nil:
-		return ctx.Create_role_statement().Accept(s)
+		s2 = ctx.Create_role_statement().Accept(s).(TopLevelStatement)
 	case ctx.Drop_role_statement() != nil:
-		return ctx.Drop_role_statement().Accept(s)
+		s2 = ctx.Drop_role_statement().Accept(s).(TopLevelStatement)
 	case ctx.Grant_statement() != nil:
-		return ctx.Grant_statement().Accept(s)
+		s2 = ctx.Grant_statement().Accept(s).(TopLevelStatement)
 	case ctx.Revoke_statement() != nil:
-		return ctx.Revoke_statement().Accept(s)
+		s2 = ctx.Revoke_statement().Accept(s).(TopLevelStatement)
 	case ctx.Transfer_ownership_statement() != nil:
-		return ctx.Transfer_ownership_statement().Accept(s)
+		s2 = ctx.Transfer_ownership_statement().Accept(s).(TopLevelStatement)
 	case ctx.Create_action_statement() != nil:
-		return ctx.Create_action_statement().Accept(s)
+		s3 := ctx.Create_action_statement().Accept(s).(*CreateActionStatement)
+		r := s.getTextFromStream(ctx.GetStart().GetStart(), ctx.GetStop().GetStop()) + ";"
+		s3.Raw = r
+		s2 = s3
 	case ctx.Drop_action_statement() != nil:
-		return ctx.Drop_action_statement().Accept(s)
+		s2 = ctx.Drop_action_statement().Accept(s).(TopLevelStatement)
+	case ctx.Create_namespace_statement() != nil:
+		s2 = ctx.Create_namespace_statement().Accept(s).(TopLevelStatement)
+	case ctx.Drop_namespace_statement() != nil:
+		s2 = ctx.Drop_namespace_statement().Accept(s).(TopLevelStatement)
+	case ctx.Use_extension_statement() != nil:
+		s2 = ctx.Use_extension_statement().Accept(s).(TopLevelStatement)
+	case ctx.Unuse_extension_statement() != nil:
+		s2 = ctx.Unuse_extension_statement().Accept(s).(TopLevelStatement)
 	default:
 		panic(fmt.Sprintf("unknown parser entry: %s", ctx.GetText()))
 	}
+
+	if ctx.GetNamespace() != nil {
+		namespaceable, ok := s2.(Namespaceable)
+		if !ok {
+			s.errs.RuleErr(ctx, ErrSyntax, fmt.Sprintf("statement %T cannot have a namespace", s2))
+		} else {
+			namespaceable.SetNamespacePrefix(s.getIdent(ctx.GetNamespace()))
+		}
+	}
+
+	return s2
 }
 
 func (s *schemaVisitor) VisitCreate_action_statement(ctx *gen.Create_action_statementContext) any {
@@ -102,6 +125,7 @@ func (s *schemaVisitor) VisitCreate_action_statement(ctx *gen.Create_action_stat
 		Public:      ctx.PUBLIC() != nil,
 		Parameters:  arr[*NamedType](len(ctx.AllType_())),
 		Statements:  arr[ActionStmt](len(ctx.AllAction_statement())),
+		Raw:         s.getTextFromStream(ctx.GetStart().GetStart(), ctx.GetStop().GetStop()),
 	}
 
 	if cas.IfNotExists && cas.OrReplace {
@@ -150,6 +174,26 @@ func (s *schemaVisitor) VisitDrop_action_statement(ctx *gen.Drop_action_statemen
 	}
 	das.Set(ctx)
 	return das
+}
+
+func (s *schemaVisitor) VisitCreate_namespace_statement(ctx *gen.Create_namespace_statementContext) any {
+	cns := &CreateNamespaceStatement{
+		IfNotExists: ctx.EXISTS() != nil,
+		Namespace:   s.getIdent(ctx.Identifier()),
+	}
+
+	cns.Set(ctx)
+	return cns
+}
+
+func (s *schemaVisitor) VisitDrop_namespace_statement(ctx *gen.Drop_namespace_statementContext) any {
+	dns := &DropNamespaceStatement{
+		IfExists:  ctx.EXISTS() != nil,
+		Namespace: s.getIdent(ctx.Identifier()),
+	}
+
+	dns.Set(ctx)
+	return dns
 }
 
 // unknownExpression creates a new literal with an unknown type and null value.
@@ -378,12 +422,6 @@ func (s *schemaVisitor) VisitVariable(ctx *gen.VariableContext) any {
 			Prefix: VariablePrefixAt,
 		}
 		tok = ctx.CONTEXTUAL_VARIABLE().GetSymbol()
-
-		_, ok := SessionVars[e.Name[1:]]
-		if !ok {
-			s.errs.RuleErr(ctx, ErrUnknownContextualVariable, e.Name)
-		}
-
 	default:
 		panic("unknown variable")
 	}
@@ -667,6 +705,10 @@ func (s *schemaVisitor) VisitFk_constraint(ctx *gen.Fk_constraintContext) any {
 		RefTable:   s.getIdent(ctx.GetTable()),
 		RefColumns: ctx.Identifier_list().Accept(s).([]string),
 		Actions:    arr[*ForeignKeyAction](len(ctx.AllFk_action())),
+	}
+
+	if ctx.GetNamespace() != nil {
+		c.RefTableNamespace = s.getIdent(ctx.GetNamespace())
 	}
 
 	for i, a := range ctx.AllFk_action() {
@@ -1165,11 +1207,15 @@ func (s *schemaVisitor) VisitSelect_core(ctx *gen.Select_coreContext) any {
 
 func (s *schemaVisitor) VisitTable_relation(ctx *gen.Table_relationContext) any {
 	t := &RelationTable{
-		Table: strings.ToLower(ctx.GetTable_name().Accept(s).(string)),
+		Table: s.getIdent(ctx.GetTable_name()),
 	}
 
 	if ctx.GetAlias() != nil {
-		t.Alias = strings.ToLower(ctx.GetAlias().Accept(s).(string))
+		t.Alias = s.getIdent(ctx.GetAlias())
+	}
+
+	if ctx.GetNamespace() != nil {
+		t.Namespace = s.getIdent(ctx.GetNamespace())
 	}
 
 	t.Set(ctx)
@@ -1664,6 +1710,19 @@ func (s *schemaVisitor) VisitUnary_sql_expr(ctx *gen.Unary_sql_exprContext) any 
 		e.Operator = UnaryOperatorPos
 	default:
 		panic("unknown unary operator")
+	}
+
+	e.Set(ctx)
+	return e
+}
+
+func (s *schemaVisitor) VisitMake_array_sql_expr(ctx *gen.Make_array_sql_exprContext) any {
+	e := &ExpressionMakeArray{
+		Values: ctx.Sql_expr_list().Accept(s).([]Expression),
+	}
+
+	if ctx.Type_cast() != nil {
+		e.TypeCast = ctx.Type_cast().Accept(s).(*types.DataType)
 	}
 
 	e.Set(ctx)
@@ -2225,17 +2284,9 @@ func (s *schemaVisitor) VisitStmt_return_next(ctx *gen.Stmt_return_nextContext) 
 func (s *schemaVisitor) VisitNormal_call_action(ctx *gen.Normal_call_actionContext) any {
 	call := &ExpressionFunctionCall{}
 
-	allIdent := ctx.AllIdentifier()
-	switch len(allIdent) {
-	case 1:
-		// unqualified
-		call.Name = s.getIdent(allIdent[0])
-	case 2:
-		// qualified
-		call.Qualifier = s.getIdent(allIdent[0])
-		call.Name = s.getIdent(allIdent[1])
-	default:
-		panic("invalid function call") // should never happen
+	call.Name = s.getIdent(ctx.GetFunction())
+	if ctx.GetNamespace() != nil {
+		call.Namespace = s.getIdent(ctx.GetNamespace())
 	}
 
 	// distinct and * cannot be used in action function calls

@@ -72,6 +72,9 @@ type ScanSource interface {
 
 // TableScanSource represents a scan of a physical table or a CTE.
 type TableScanSource struct {
+	// Namespace is the namespace of the table being scanned.
+	Namespace string
+	// TableName is the name of the table being scanned.
 	TableName string
 	Type      TableSourceType
 
@@ -88,7 +91,13 @@ func (t *TableScanSource) Children() []Traversable {
 }
 
 func (t *TableScanSource) FormatScan() string {
-	return t.TableName + " [" + t.Type.String() + "]"
+	str := strings.Builder{}
+	if t.Namespace != "" {
+		str.WriteString(t.Namespace)
+		str.WriteString(".")
+	}
+	str.WriteString(t.TableName + " [" + t.Type.String() + "]")
+	return str.String()
 }
 
 func (t *TableScanSource) Plans() []Plan {
@@ -107,7 +116,7 @@ func (t *TableScanSource) Equal(other Traversable) bool {
 		return false
 	}
 
-	return t.TableName == o.TableName && t.Type == o.Type
+	return t.TableName == o.TableName && t.Type == o.Type && t.Namespace == o.Namespace
 }
 
 type TableSourceType int
@@ -376,7 +385,7 @@ func (s *Scan) String() string {
 	str := strings.Builder{}
 	switch t := s.Source.(type) {
 	case *TableScanSource:
-		// if relation name == table name, remove the alias
+		// if relation name == table name, remove the alias because it is redundant
 		if t.TableName == s.RelationName {
 			alias = ""
 		}
@@ -1224,6 +1233,7 @@ type SubplanType int
 const (
 	SubplanTypeSubquery SubplanType = iota
 	SubplanTypeCTE
+	SubplanTypeRecursiveCTE
 )
 
 func (s SubplanType) String() string {
@@ -1232,6 +1242,8 @@ func (s SubplanType) String() string {
 		return "subquery"
 	case SubplanTypeCTE:
 		return "cte"
+	case SubplanTypeRecursiveCTE:
+		return "recursive cte"
 	default:
 		panic(fmt.Sprintf("unknown subplan type %d", s))
 	}

@@ -2,6 +2,7 @@ package interpreter
 
 import (
 	"context"
+	_ "embed"
 	"fmt"
 	"maps"
 
@@ -12,32 +13,6 @@ import (
 	"github.com/kwilteam/kwil-db/internal/engine"
 	"github.com/kwilteam/kwil-db/parse"
 )
-
-const defaultNamespace = "main"
-
-// TODO: move this into the SQL package once pg supports this
-type DB interface {
-	sql.TxMaker
-	Execute(ctx context.Context, stmt string, args ...any) (Rows, error)
-}
-
-type Rows interface {
-	Next() bool
-	Scan(dest ...interface{}) error
-	Close() error
-	Err() error
-}
-
-// TODO: delete this
-// simply using this for planning
-type IInterpeter interface {
-	// ExecuteRaw executes a raw Postgres SQL statement against the database.
-	ExecuteRaw(ctx context.Context, db sql.DB, statement string) (Rows, error)
-	// Execute executes Kwil SQL statements against the database.
-	ExecuteAdmin(ctx context.Context, db DB, statement string) (Rows, error)
-	// Call executes an action against the database.
-	Call(ctx *common.TxContext, db DB, action string, args []any) (Rows, error)
-}
 
 // Interpreter interprets Kwil SQL statements.
 type Interpreter struct {
@@ -55,90 +30,54 @@ type Interpreter struct {
 // It is conceptually equivalent to Postgres's schema, but is given a
 // different name to avoid confusion.
 type namespace struct {
+	// availableFunctions is a map of both built-in functions and user-defined PL/pgSQL functions.
+	// When the interpreter planner is created, it will be populated with all built-in functions,
+	// and then it will be updated with user-defined functions, effectively allowing users to override
+	// some function name with their own implementation. This allows Kwil to add new built-in
+	// functions without worrying about breaking user schemas.
+	// This will not include aggregate and window functions, as those can only be used in SQL.
+	// availableFunctions maps local action names to their execution func.
 	availableFunctions map[string]*executable
 	tables             map[string]*engine.Table
 	actions            map[string]*Action
+	// builtin is true if the namespace is a built-in namespace.
+	// Built-in namespaces are not allowed to be dropped.
+	builtin bool
 }
 
 // NewInterpreter creates a new interpreter.
 // It reads currently stored namespaces and loads them into memory.
 func NewInterpreter(ctx context.Context, db sql.DB, log log.Logger) (*Interpreter, error) {
+	// we need to check if it is initialized. We will do this by checking if the schema kwild_engine exists
+	res, err := db.Execute(ctx, "SELECT EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'kwild_engine')")
+	if err != nil {
+		return nil, err
+	}
+
+	switch len(res.Rows) {
+	case 0:
+		return nil, fmt.Errorf("could not determine if the database is initialized")
+	case 1:
+		if !res.Rows[0][0].(bool) {
+			err = initSQL(ctx, db)
+			if err != nil {
+				return nil, err
+			}
+		}
+	default:
+		return nil, fmt.Errorf("unexpected number of rows returned")
+	}
+
 	availableFuncs := make(map[string]*executable)
 
 	// we will convert all built-in functions to be executables
 	for funcName, impl := range parse.Functions {
 		if scalarImpl, ok := impl.(*parse.ScalarFunctionDefinition); ok {
-			funcName := funcName // avoid shadowing
-			exec := &executable{
-				Name: funcName,
-				ReturnType: func(v []Value) (*ActionReturn, error) {
-					dataTypes := make([]*types.DataType, len(v))
-					for i, arg := range v {
-						dataTypes[i] = arg.Type()
-					}
-
-					retTyp, err := scalarImpl.ValidateArgsFunc(dataTypes)
-					if err != nil {
-						return nil, err
-					}
-
-					return &ActionReturn{
-						IsTable: false,
-						Fields:  []*NamedType{{Name: funcName, Type: retTyp}},
-					}, nil
-				},
-				Func: func(e *executionContext, args []Value, fn func([]Value) error) error {
-					//convert args to any
-					params := make([]string, len(args))
-					argTypes := make([]*types.DataType, len(args))
-					for i, arg := range args {
-						params[i] = fmt.Sprintf("$%d", i+1)
-						argTypes[i] = arg.Type()
-					}
-
-					// get the expected return type
-					retTyp, err := scalarImpl.ValidateArgsFunc(argTypes)
-					if err != nil {
-						return err
-					}
-
-					zeroVal, err := NewZeroValue(retTyp)
-					if err != nil {
-						return err
-					}
-
-					// format the function
-					pgFormat, err := scalarImpl.PGFormatFunc(params)
-					if err != nil {
-						return err
-					}
-
-					// execute the query
-					iters := 0
-					err = query(ctx, db, pgFormat, []Value{zeroVal}, func() error {
-						iters++
-						return nil
-					}, args)
-					if err != nil {
-						return err
-					}
-					if iters != 1 {
-						return fmt.Errorf("expected 1 row, got %d", iters)
-					}
-
-					return fn([]Value{zeroVal})
-				},
-			}
-
-			availableFuncs[funcName] = exec
+			availableFuncs[funcName] = funcDefToExecutable(funcName, scalarImpl)
 		}
 	}
 
-	namespaces, err := listNamespaceTables(ctx, db)
-	if err != nil {
-		return nil, err
-	}
-	actions, err := loadActions(ctx, db)
+	namespaces, err := listNamespaces(ctx, db)
 	if err != nil {
 		return nil, err
 	}
@@ -147,24 +86,36 @@ func NewInterpreter(ctx context.Context, db sql.DB, log log.Logger) (*Interprete
 		availableFunctions: availableFuncs,
 		namespaces:         make(map[string]*namespace),
 	}
-	for name, tables := range namespaces {
-		actions, ok := actions[name]
-		if !ok {
-			// can be empty if no actions are defined for the namespace
-			actions = make(map[string]*Action)
+	for _, name := range namespaces {
+		tables, err := listTablesInNamespace(ctx, db, name)
+		if err != nil {
+			return nil, err
+		}
+
+		tblMap := make(map[string]*engine.Table)
+		for _, tbl := range tables {
+			tblMap[tbl.Name] = tbl
+		}
+
+		actions, err := listActionsInNamespace(ctx, db, name)
+		if err != nil {
+			return nil, err
 		}
 
 		// now, we override the built-in functions with the actions
 		namespaceFunctions := maps.Clone(availableFuncs)
+		actionsMap := make(map[string]*Action)
 		for _, action := range actions {
 			exec := makeActionToExecutable(action)
 			namespaceFunctions[exec.Name] = exec
+			actionsMap[action.Name] = action
 		}
 
 		interpreter.namespaces[name] = &namespace{
-			tables:             tables,
+			tables:             tblMap,
 			availableFunctions: namespaceFunctions,
-			actions:            actions,
+			actions:            actionsMap,
+			builtin:            isBuiltInNamespace(name),
 		}
 	}
 
@@ -175,6 +126,103 @@ func NewInterpreter(ctx context.Context, db sql.DB, log log.Logger) (*Interprete
 	interpreter.accessController = accessController
 
 	return interpreter, nil
+}
+
+// funcDefToExecutable converts a function definition to an executable.
+func funcDefToExecutable(funcName string, funcDef *parse.ScalarFunctionDefinition) *executable {
+	return &executable{
+		Name: funcName,
+		ReturnType: func(v []Value) (*ActionReturn, error) {
+			dataTypes := make([]*types.DataType, len(v))
+			for i, arg := range v {
+				dataTypes[i] = arg.Type()
+			}
+
+			retTyp, err := funcDef.ValidateArgsFunc(dataTypes)
+			if err != nil {
+				return nil, err
+			}
+
+			return &ActionReturn{
+				IsTable: false,
+				Fields:  []*NamedType{{Name: funcName, Type: retTyp}},
+			}, nil
+		},
+		Func: func(e *executionContext, args []Value, fn func([]Value) error) error {
+			//convert args to any
+			params := make([]string, len(args))
+			argTypes := make([]*types.DataType, len(args))
+			for i, arg := range args {
+				params[i] = fmt.Sprintf("$%d", i+1)
+				argTypes[i] = arg.Type()
+			}
+
+			// get the expected return type
+			retTyp, err := funcDef.ValidateArgsFunc(argTypes)
+			if err != nil {
+				return err
+			}
+
+			zeroVal, err := NewZeroValue(retTyp)
+			if err != nil {
+				return err
+			}
+
+			// format the function
+			pgFormat, err := funcDef.PGFormatFunc(params)
+			if err != nil {
+				return err
+			}
+
+			// execute the query
+			iters := 0
+			err = query(e.txCtx.Ctx, e.db, pgFormat, []Value{zeroVal}, func() error {
+				iters++
+				return nil
+			}, args)
+			if err != nil {
+				return err
+			}
+			if iters != 1 {
+				return fmt.Errorf("expected 1 row, got %d", iters)
+			}
+
+			return fn([]Value{zeroVal})
+		},
+	}
+}
+
+// Execute executes a statement against the database.
+func (i *Interpreter) Execute(ctx *common.TxContext, db sql.DB, statement string, fn func([]Value) error) error {
+	if fn == nil {
+		fn = func([]Value) error { return nil }
+	}
+
+	// parse the statement
+	ast, err := parse.Parse(statement)
+	if err != nil {
+		return err
+	}
+
+	if len(ast) == 0 {
+		return fmt.Errorf("no valid statements provided: %s", statement)
+	}
+
+	execCtx, err := i.newExecCtx(ctx, db, defaultNamespace)
+	if err != nil {
+		return err
+	}
+
+	interpPlanner := interpreterPlanner{}
+
+	for _, stmt := range ast {
+		err = stmt.Accept(&interpPlanner).(stmtFunc)(execCtx, fn)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 // Call executes an action against the database.
@@ -222,63 +270,46 @@ func (i *Interpreter) Call(ctx *common.TxContext, db sql.DB, namespace, action s
 		argVals[i] = val
 	}
 
-	return exec.Func(&executionContext{
-		txCtx:              ctx,
-		scope:              newScope(namespace),
-		availableFunctions: ns.availableFunctions,
-		// if we can write, then we are in execution, and should be deterministic
-		mutatingState:    accessModer.AccessMode() == sql.ReadWrite,
-		db:               db,
-		namespaces:       i.namespaces,
-		accessController: i.accessController,
-	}, argVals, resultFn)
-}
-
-// Initialize initializes the interpreter.
-// It takes a single slice of bytes, which should be a public key.
-// This public key will be made the initial owner of the "main" namespace.
-func (i *Interpreter) Initialize(ctx context.Context, db sql.DB, owner []byte) error {
-	if len(owner) == 0 {
-		return fmt.Errorf("owner must not be empty for initialization")
-	}
-
-	_, ok := i.namespaces[defaultNamespace]
-	if ok {
-		return fmt.Errorf("default namespace has already been initialized")
-	}
-
-	// create the namespace
-	i.namespaces[defaultNamespace] = &namespace{}
-
-	return i.CreateNamespace(ctx, db, defaultNamespace, owner)
-}
-
-// CreateNamespace creates a new namespace, owned by the given public key.
-// It is only meant to be called from within extensions, and not from the SQL layer.
-// TODO: this should probably be replaced with a general SQL interface, where they can
-// do "CREATE NAMESPACE" and "CREATE TABLE" statements.
-func (i *Interpreter) CreateNamespace(ctx context.Context, db sql.DB, name string, owner []byte) error {
-	if len(owner) == 0 {
-		return fmt.Errorf("owner must not be empty for namespace creation")
-	}
-
-	_, ok := i.namespaces[name]
-	if ok {
-		return fmt.Errorf(`namespace "%s" already exists`, name)
-	}
-
-	// insert the namespace into the database
-	err := createUserNamespace(ctx, db, name, owner)
+	execCtx, err := i.newExecCtx(ctx, db, namespace)
 	if err != nil {
 		return err
 	}
 
-	// create the namespace
-	i.namespaces[name] = &namespace{
-		availableFunctions: maps.Clone(i.availableFunctions),
-		tables:             make(map[string]*engine.Table),
-		actions:            make(map[string]*Action),
+	return exec.Func(execCtx, argVals, resultFn)
+}
+
+// newExecCtx creates a new execution context.
+func (i *Interpreter) newExecCtx(txCtx *common.TxContext, db sql.DB, namespace string) (*executionContext, error) {
+	am, ok := db.(sql.AccessModer)
+	if !ok {
+		return nil, fmt.Errorf("database does not implement AccessModer")
 	}
 
+	return &executionContext{
+		txCtx:            txCtx,
+		scope:            newScope(namespace),
+		mutatingState:    am.AccessMode() == sql.ReadWrite,
+		db:               db,
+		namespaces:       i.namespaces,
+		accessController: i.accessController,
+	}, nil
+}
+
+// SetOwner initializes the interpreter's database by setting the owner.
+// It will overwrite the owner if it is already set.
+func (i *Interpreter) SetOwner(ctx context.Context, db sql.DB, owner string) error {
+	err := i.accessController.SetOwnership(ctx, db, string(owner))
+	if err != nil {
+		return err
+	}
 	return nil
+}
+
+const (
+	defaultNamespace = "main"
+	infoNamespace    = "info"
+)
+
+func isBuiltInNamespace(namespace string) bool {
+	return namespace == defaultNamespace || namespace == infoNamespace
 }

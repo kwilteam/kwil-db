@@ -44,6 +44,13 @@ func Test_Planner(t *testing.T) {
 				"  └─Empty Scan\n",
 		},
 		{
+			name: "select array",
+			sql:  "select ARRAY[1, 2, 3]",
+			wt: "Return: ?column? [int[]]\n" +
+				"└─Project: [1, 2, 3]\n" +
+				"  └─Empty Scan\n",
+		},
+		{
 			name: "select with filter",
 			sql:  "select id, name from users where age > 18",
 			wt: "Return: id [uuid], name [text]\n" +
@@ -564,7 +571,7 @@ func Test_Planner(t *testing.T) {
 			err:  logical.ErrIllegalConflictArbiter,
 		},
 		{
-			name: "conflict on compound unique index",
+			name: "conflict on composite unique index",
 			sql:  "insert into posts values ('123e4567-e89b-12d3-a456-426614174000'::uuid, '123e4567-e89b-12d3-a456-426614174001'::uuid, 'hello', 1) on conflict (owner_id, created_at) do update set content = 'hello'",
 			wt: "Insert [posts]: id [uuid], owner_id [uuid], content [text], created_at [int]\n" +
 				"├─Values: ('123e4567-e89b-12d3-a456-426614174000'::uuid, '123e4567-e89b-12d3-a456-426614174001'::uuid, 'hello', 1)\n" +
@@ -590,26 +597,49 @@ func Test_Planner(t *testing.T) {
 				"└─Project: users.id; users.name; users.age\n" +
 				"  └─Scan Table: users [physical]\n",
 		},
+		{
+			name: "recursive CTE",
+			sql: `with recursive r as (
+				select 1 as n
+				union all
+				select n+1 from r where n < 10
+			)
+			select * from r;`,
+			wt: "Return: n [int]\n" +
+				"└─Project: r.n\n" +
+				"  └─Scan Table: r [cte]\n" +
+				"Subplan [recursive cte] [id=r] [r.n -> n]\n" +
+				"└─Set: union all\n" +
+				"  ├─Project: 1 AS n\n" +
+				"  │ └─Empty Scan\n" +
+				"  └─Project: r.n + 1\n" +
+				"    └─Filter: r.n < 10\n" +
+				"      └─Scan Table: r [cte]\n",
+		},
 	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			parsedSql, err := parse.ParseSQL(test.sql)
+			parsedSql, err := parse.Parse(test.sql)
 			require.NoError(t, err)
-			require.NoError(t, parsedSql.ParseErrs.Err())
+			require.Len(t, parsedSql, 1)
 
-			plan, err := logical.CreateLogicalPlan(parsedSql.AST,
+			sqlPlan, ok := parsedSql[0].(*parse.SQLStatement)
+			require.True(t, ok)
+
+			plan, err := logical.CreateLogicalPlan(sqlPlan,
 				func(namespace, tableName string) (table *engine.Table, found bool) {
-					m := map[string]*engine.Table{
-						"users": {
-							Name: "users", // TODO: replace this with a parsed table once gavin adds it
-							// I am intentionally leaving this bug here so I do not forget to fix it
-						},
-					}
-
-					table, found = m[tableName]
+					table, found = testTables[tableName]
 					return table, found
-				}, parsedSql, test.vars, test.objects, false)
+				}, func(varName string) (dataType *types.DataType, found bool) {
+					dataType, found = test.vars[varName]
+					return dataType, found
+				},
+				func(objName string) (obj map[string]*types.DataType, found bool) {
+					obj, ok := test.objects[objName]
+					return obj, ok
+				},
+				false, "")
 			if test.err != nil {
 				require.Error(t, err)
 
@@ -647,37 +677,72 @@ func Test_Planner(t *testing.T) {
 	}
 }
 
+var testTables = map[string]*engine.Table{
+	"users": {
+		Name: "users",
+		Columns: []*engine.Column{
+			{
+				Name:         "id",
+				DataType:     types.UUIDType,
+				IsPrimaryKey: true,
+			},
+			{
+				Name:     "name",
+				DataType: types.TextType,
+			},
+			{
+				Name:     "age",
+				DataType: types.IntType,
+			},
+		},
+		Indexes: []*engine.Index{
+			{
+				Name: "name_idx",
+				Type: engine.UNIQUE_BTREE,
+				Columns: []string{
+					"name",
+				},
+			},
+		},
+	},
+	"posts": {
+		Name: "posts",
+		Columns: []*engine.Column{
+			{
+				Name:         "id",
+				DataType:     types.UUIDType,
+				IsPrimaryKey: true,
+			},
+			{
+				Name:     "owner_id",
+				DataType: types.UUIDType,
+			},
+			{
+				Name:     "content",
+				DataType: types.TextType,
+			},
+			{
+				Name:     "created_at",
+				DataType: types.IntType,
+			},
+		},
+		Constraints: map[string]*engine.Constraint{
+			"content_unique": {
+				Type: engine.ConstraintUnique,
+				Columns: []string{
+					"content",
+				},
+			},
+			"owner_created_idx": {
+				Type: engine.ConstraintUnique,
+				Columns: []string{
+					"owner_id",
+					"created_at",
+				},
+			},
+		},
+	},
+}
+
 // special error for testing that will match any error
 var errAny = errors.New("any error")
-
-var testSchema = `database planner;
-
-table users {
-	id uuid primary key,
-	name text,
-	age int max(150),
-	#name_idx unique(name),
-	#age_idx index(age)
-}
-
-table posts {
-	id uuid primary key,
-	owner_id uuid not null,
-	content text maxlen(300) unique,
-	created_at int not null,
-	foreign key (owner_id) references users(id) on delete cascade on update cascade,
-	#owner_created_idx unique(owner_id, created_at)
-}
-
-procedure posts_by_user($name text) public view returns table(content text) {
-	return select p.content from posts p
-		inner join users u on p.owner_id = u.id
-		where u.name = $name;
-}
-
-procedure post_count($id uuid) public view returns (int) {
-	for $row in select count(*) as count from posts where owner_id = $id {
-		return $row.count;
-	}
-}
-`

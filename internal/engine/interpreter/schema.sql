@@ -2,14 +2,14 @@
     This section contains all of the DDL for creating the schema for `kwild_engine`, which is
     the internal schema for the engine. This stores all metadata for actions.
 */
-CREATE SCHEMA kwild_engine;
+CREATE SCHEMA IF NOT EXISTS kwild_engine;
 
 DO $$ 
 BEGIN
     -- scalar_data_type is an enumeration of all scalar data types supported by the engine
     BEGIN
         CREATE TYPE kwild_engine.scalar_data_type AS ENUM (
-            'int8', 'text', 'bool', 'uuid', 'numeric', 'bytea'
+            'INT8', 'TEXT', 'BOOL', 'UUID', 'NUMERIC', 'BYTEA'
         );
     EXCEPTION
         WHEN duplicate_object THEN NULL;
@@ -47,13 +47,14 @@ CREATE TABLE IF NOT EXISTS kwild_engine.namespaces (
     name TEXT NOT NULL UNIQUE
 );
 
+
 -- actions is a table that stores all actions in the engine
 CREATE TABLE IF NOT EXISTS kwild_engine.actions (
     id BIGSERIAL PRIMARY KEY,
     schema_name TEXT NOT NULL REFERENCES kwild_engine.namespaces(name) ON UPDATE CASCADE ON DELETE CASCADE,
     name TEXT NOT NULL UNIQUE,
     public BOOLEAN NOT NULL DEFAULT FALSE,
-    raw_body TEXT NOT NULL,
+    raw_statement TEXT NOT NULL,
     returns_table BOOLEAN NOT NULL DEFAULT FALSE,
     modifiers kwild_engine.modifiers[]
 );
@@ -146,37 +147,25 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-
--- drop_action is a function that drops an action from the engine
-CREATE FUNCTION kwild_engine.drop_action(
-    action_name_input TEXT
-) RETURNS VOID AS $$
-BEGIN
-    DELETE FROM kwild_engine.actions
-    WHERE name = action_name_input;
-END;
-$$ LANGUAGE plpgsql;
-
 /*
     This section creates the schema the `kwild` schema, which is the public user-facing schema.
     End users can access the views in this schema to get information about the database.
 
     All views are ordered to ensure that they are deterministic when queried.
 */
-CREATE SCHEMA kwild;
+CREATE SCHEMA IF NOT EXISTS info;
+INSERT INTO kwild_engine.namespaces (name) VALUES ('info') ON CONFLICT DO NOTHING;
 
-SET search_path TO kwild;
-
--- kwil_tables is a public view that provides a list of all tables in the database
-CREATE VIEW kwil_tables AS
+-- info.tables is a public view that provides a list of all tables in the database
+CREATE VIEW info.tables AS
 SELECT tablename::TEXT AS name, schemaname::TEXT AS schema
 FROM pg_tables
 JOIN kwild_engine.namespaces us
     ON schemaname = us.name
 ORDER BY 1, 2;
 
--- kwil_columns is a public view that provides a list of all columns in the database
-CREATE VIEW kwil_columns AS
+-- info.columns is a public view that provides a list of all columns in the database
+CREATE VIEW info.columns AS
 SELECT 
     c.table_schema::TEXT AS schema_name,
     c.table_name::TEXT AS table_name,
@@ -221,8 +210,8 @@ ORDER BY
     c.ordinal_position,
     1, 2, 3, 4, 5, 6, 7, 8;
 
--- kwil_indexes is a public view that provides a list of all indexes in the database
-CREATE VIEW kwil_indexes AS
+-- info.indexes is a public view that provides a list of all indexes in the database
+CREATE VIEW info.indexes AS
 SELECT 
     n.nspname::TEXT AS schema_name,
     c.relname::TEXT AS table_name,
@@ -242,8 +231,8 @@ JOIN
 GROUP BY n.nspname, c.relname, ic.relname, i.indisprimary, i.indisunique
 ORDER BY 1,2,3,4,5,6;
 
--- kwil_constraints is a public view that provides a list of all constraints in the database
-CREATE VIEW kwil_constraints AS
+-- info.constraints is a public view that provides a list of all constraints in the database
+CREATE VIEW info.constraints AS
 SELECT 
     pg_namespace.nspname::TEXT AS schema_name,
     conname AS constraint_name,
@@ -274,8 +263,8 @@ GROUP BY
 ORDER BY 
     1, 2, 3, 4, 5, 6;
 
--- kwil_foreign_keys is a public view that provides a list of all foreign keys in the database
-CREATE VIEW kwil_foreign_keys AS
+-- info.foreign_keys is a public view that provides a list of all foreign keys in the database
+CREATE VIEW info.foreign_keys AS
 SELECT 
     pg_namespace.nspname::TEXT AS schema_name,
     conname AS constraint_name,
@@ -315,14 +304,14 @@ ORDER BY
     table_name, constraint_name,
     1, 2, 3, 4, 5, 6;
 
--- kwil_actions is a public view that provides a list of all actions in the database
-CREATE VIEW kwil_actions AS
+-- actions is a public view that provides a list of all actions in the database
+CREATE VIEW info.actions AS
 SELECT 
     a.schema_name,
     a.id,
     a.name::TEXT,
     a.public,
-    a.raw_body,
+    a.raw_statement,
     a.modifiers::TEXT[] AS modifiers,
     a.returns_table,
     array_agg(
@@ -344,12 +333,12 @@ JOIN kwild_engine.parameters p
     ON a.id = p.action_id
 LEFT JOIN kwild_engine.return_fields r
     ON a.id = r.action_id
-GROUP BY a.schema_name, a.id, a.name, a.public, a.raw_body, a.returns_table
+GROUP BY a.schema_name, a.id, a.name, a.public, a.raw_statement, a.returns_table
 ORDER BY a.name,
     1, 2, 3, 4, 5, 6; --TODO: do we need to order 7, 8?
 
 -- roles is a public view that provides a list of all roles in the database
-CREATE VIEW roles AS
+CREATE VIEW info.roles AS
 SELECT 
     name
 FROM
@@ -357,7 +346,7 @@ FROM
 ORDER BY
     name;
 
-CREATE VIEW user_roles AS
+CREATE VIEW info.user_roles AS
 SELECT 
     user_identifier,
     r.name AS role
@@ -370,7 +359,7 @@ ORDER BY
     1, 2;
 
 -- role_privileges is a public view that provides a list of all role privileges in the database
-CREATE VIEW role_privileges AS
+CREATE VIEW info.role_privileges AS
 SELECT 
     r.name AS role,
     p.privilege_type AS privilege,
@@ -385,3 +374,7 @@ LEFT JOIN
     ON p.namespace_id = n.id
 ORDER BY
     1, 2, 3;
+
+-- lastly, we need to create a default namespace for the user
+CREATE SCHEMA IF NOT EXISTS main;
+INSERT INTO kwild_engine.namespaces (name) VALUES ('main') ON CONFLICT DO NOTHING;

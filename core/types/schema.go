@@ -1125,25 +1125,30 @@ func (c *DataType) String() string {
 
 // PGScalar returns the scalar representation of the type in Postgres.
 func (c *DataType) PGScalar() (string, error) {
+	kwilType, ok := typeAlias[c.Name]
+	if !ok {
+		return "", fmt.Errorf("unknown type: %s", c.Name)
+	}
 	var scalar string
-	switch strings.ToLower(c.Name) {
+
+	switch kwilType {
 	case intStr:
-		scalar = "int8"
+		scalar = "INT8"
 	case textStr:
-		scalar = "text"
+		scalar = "TEXT"
 	case boolStr:
-		scalar = "bool"
+		scalar = "BOOL"
 	case blobStr:
-		scalar = "bytea"
+		scalar = "BYTEA"
 	case uuidStr:
-		scalar = "uuid"
+		scalar = "UUID"
 	case uint256Str:
-		scalar = "uint256"
+		return "", fmt.Errorf("uint256 is no longer supported")
 	case DecimalStr:
 		if c.Metadata == nil {
-			scalar = "numeric"
+			scalar = "NUMERIC"
 		} else {
-			scalar = fmt.Sprintf("numeric(%d,%d)", c.Metadata[0], c.Metadata[1])
+			scalar = fmt.Sprintf("NUMERIC(%d,%d)", c.Metadata[0], c.Metadata[1])
 		}
 	case nullStr:
 		return "", fmt.Errorf("cannot have null column type")
@@ -1350,6 +1355,7 @@ var typeAlias = map[string]string{
 	"text":    textStr,
 	"int":     intStr,
 	"integer": intStr,
+	"bigint":  intStr,
 	"int8":    intStr,
 	"bool":    boolStr,
 	"boolean": boolStr,

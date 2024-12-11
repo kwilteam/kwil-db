@@ -1,6 +1,8 @@
 package interpreter
 
 import (
+	"fmt"
+
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/parse"
 )
@@ -23,11 +25,57 @@ type Action struct {
 	// TODO: delete this and just pass around strings
 	Body []parse.ActionStmt
 
-	// RawBody is the unparsed logic of the action.
-	RawBody string `json:"raw_body"`
+	// RawStatement is the unparsed CREATE ACTION statement.
+	RawStatement string `json:"raw_statement"`
 
 	// Returns specifies the return types of the action.
 	Returns *ActionReturn `json:"return_types"`
+}
+
+// FromAST sets the fields of the action from an AST node.
+func (a *Action) FromAST(ast *parse.CreateActionStatement) error {
+	a.Name = ast.Name
+	a.Public = ast.Public
+	a.RawStatement = ast.Raw
+	a.Body = ast.Statements
+
+	a.Parameters = convertNamedTypes(ast.Parameters)
+
+	if ast.Returns != nil {
+		a.Returns = &ActionReturn{
+			IsTable: ast.Returns.IsTable,
+			Fields:  convertNamedTypes(ast.Returns.Fields),
+		}
+	}
+
+	modSet := make(map[Modifier]struct{})
+	a.Modifiers = []Modifier{}
+	for _, m := range ast.Modifiers {
+		mod := Modifier(m)
+
+		if !mod.Valid() {
+			return fmt.Errorf("unknown modifier %s", mod)
+		}
+
+		if _, ok := modSet[mod]; !ok {
+			modSet[mod] = struct{}{}
+			a.Modifiers = append(a.Modifiers, mod)
+		}
+	}
+
+	return nil
+}
+
+// convertNamedTypes converts a list of named types from the AST to the internal representation.
+func convertNamedTypes(params []*parse.NamedType) []*NamedType {
+	namedTypes := make([]*NamedType, len(params))
+	for i, p := range params {
+		namedTypes[i] = &NamedType{
+			Name: p.Name,
+			Type: p.Type,
+		}
+	}
+	return namedTypes
 }
 
 // OwnerOnly returns true if the action is owner only.
@@ -78,6 +126,14 @@ const (
 	// Owner requires that the caller is the owner of the database.
 	ModifierOwner Modifier = "OWNER"
 )
+
+func (m Modifier) Valid() bool {
+	switch m {
+	case ModifierView, ModifierOwner:
+		return true
+	}
+	return false
+}
 
 // // Table is a table in the schema.
 // type Table struct {

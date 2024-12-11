@@ -16,6 +16,7 @@ import (
 type GetVarTypeFunc = func(varName string) (dataType *types.DataType, found bool)
 
 // GetObjectFieldTypeFunc is a function that gets the type of a field in an object.
+// TODO: we will need a way to either bind objects or pass in their fields.
 type GetObjectFunc = func(objName string) (obj map[string]*types.DataType, found bool)
 
 // GetTableFunc is a function that gets a table by name.
@@ -25,8 +26,9 @@ type GetTableFunc = func(namespace string, tableName string) (table *engine.Tabl
 // CreateLogicalPlan creates a logical plan from a SQL statement.
 // If applyDefaultOrdering is true, it will rewrite the query to apply default ordering.
 // Default ordering will modify the passed query.
+// If defaultNamespace is not empty, it will be used as the default namespace for all tables.
 func CreateLogicalPlan(statement *parse.SQLStatement, tables GetTableFunc,
-	vars GetVarTypeFunc, objects GetObjectFunc, applyDefaultOrdering bool,
+	vars GetVarTypeFunc, objects GetObjectFunc, applyDefaultOrdering bool, defaultNamespace string,
 ) (analyzed *AnalyzedPlan, err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -44,6 +46,7 @@ func CreateLogicalPlan(statement *parse.SQLStatement, tables GetTableFunc,
 		Variables:            vars,
 		Objects:              objects,
 		applyDefaultOrdering: applyDefaultOrdering,
+		defaultNamespace:     defaultNamespace,
 	}
 
 	scope := &scopeContext{
@@ -125,6 +128,8 @@ type planContext struct {
 	// applyDefaultOrdering is true if the query should be rewritten
 	// to apply default ordering.
 	applyDefaultOrdering bool
+	// defaultNamespace is the default namespace (schema in Postgres) for all tables.
+	defaultNamespace string
 }
 
 // scopeContext contains information about the current scope of the query.
@@ -147,6 +152,22 @@ type scopeContext struct {
 	onAggregateFuncExpr func(*parse.ExpressionFunctionCall, *parse.AggregateFunctionDefinition, map[string]*IdentifiedExpr) (Expression, *Field, error)
 	// aggViolationColumn is the column that is causing an aggregate violation.
 	aggViolationColumn string
+	cteCtx             cteContext
+}
+
+// cteContext contains information about the common table expression context.
+type cteContext struct {
+	// statementCanBeRecursive is true if the current statement can be recursive
+	// and we are processing a CTE.
+	statementCanBeRecursive bool
+	// recursiveCTEShape is the shape of the current CTE.
+	// It is set based off of the relation of the first select core.
+	// If it is nil, then the recursive CTE cannot be referenced here.
+	recursiveCTEShape *Relation
+	// currentCTEName is the current CTE being processed.
+	currentCTEName string
+	// usedRecursiveCTE is true if the recursive CTE has been used.
+	usedRecursiveCTE bool
 }
 
 type QuerySection string
@@ -167,11 +188,16 @@ const (
 
 // sqlStmt builds a logical plan for a top-level SQL statement.
 func (s *scopeContext) sqlStmt(node *parse.SQLStatement) (TopLevelPlan, error) {
+	if node.Recursive {
+		s.cteCtx.statementCanBeRecursive = true
+	}
 	for _, cte := range node.CTEs {
+		s.cteCtx.currentCTEName = cte.Name
 		if err := s.cte(cte); err != nil {
 			return nil, err
 		}
 	}
+	s.cteCtx = cteContext{} // reset the CTE context
 
 	switch node := node.SQL.(type) {
 	default:
@@ -203,6 +229,10 @@ func (s *scopeContext) sqlStmt(node *parse.SQLStatement) (TopLevelPlan, error) {
 
 // cte builds a common table expression.
 func (s *scopeContext) cte(node *parse.CommonTableExpression) error {
+	s.cteCtx.usedRecursiveCTE = false
+	defer func() {
+		s.cteCtx.usedRecursiveCTE = false
+	}()
 	plan, rel, err := s.selectStmt(node.Query)
 	if err != nil {
 		return err
@@ -232,11 +262,16 @@ func (s *scopeContext) cte(node *parse.CommonTableExpression) error {
 		}
 	}
 
+	subplanType := SubplanTypeCTE
+	if s.cteCtx.usedRecursiveCTE {
+		subplanType = SubplanTypeRecursiveCTE
+	}
+
 	s.plan.CTEs[node.Name] = rel
 	s.plan.CTEPlans = append(s.plan.CTEPlans, &Subplan{
 		Plan:      plan,
 		ID:        node.Name,
-		Type:      SubplanTypeCTE,
+		Type:      subplanType,
 		extraInfo: extraInfo,
 	})
 
@@ -273,6 +308,9 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan Plan, rel *
 		panic("no select cores")
 	}
 
+	// isRecursive is true if the statement is recursive
+	isRecursive := false
+
 	var projectFunc func(Plan) Plan
 	var preProjectRel, resultRel *Relation
 	var groupingTerms map[string]*IdentifiedExpr
@@ -281,14 +319,14 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan Plan, rel *
 		return nil, nil, err
 	}
 
-	logSection := false
+	logSection := false // basic flag to help us log the statement section when an error occurs
 	querySection := querySectionUnknown
 	defer func() {
-		// the resulting relation will always be resultRel
+		// the resulting relation will always be resultRel, regardless of ordering and limiting
 		rel = resultRel
 		if logSection {
 			if err != nil {
-				err = fmt.Errorf("error in %s section: %w", querySection, err)
+				err = makeSectionErr(querySection, err)
 			}
 		}
 	}()
@@ -317,6 +355,14 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan Plan, rel *
 
 		querySection = querySectionCompound
 		for i, core := range node.SelectCores[1:] {
+			// if we are in the first UNION / INTERSECT / EXCEPT, we can reference a recursive CTE
+			if i == 0 && s.cteCtx.statementCanBeRecursive {
+				s.cteCtx.recursiveCTEShape = resultRel
+				isRecursive = true
+			} else {
+				s.cteCtx.recursiveCTEShape = nil
+			}
+
 			// if a compound query, then old group by terms cannot be referenced in ORDER / LIMIT / OFFSET
 			groupingTerms = nil
 
@@ -345,13 +391,28 @@ func (s *scopeContext) selectStmt(node *parse.SelectStatement) (plan Plan, rel *
 
 	// if applyDefaultOrdering is true, we need to order all results.
 	// In postgres, this is simply done by adding ORDER BY 1, 2, 3, ...
-	if s.plan.applyDefaultOrdering {
-		for i := range rel.Fields {
+	// We don't apply default ordering to recursive CTEs, since they are
+	// not allowed to have an ORDER BY clause. This is ok, because they cannot
+	// be limited either, and so any referencing query will select the recursive
+	// cte's full result set and have its own ORDER BY clause.
+	if s.plan.applyDefaultOrdering && !isRecursive {
+		for i := range resultRel.Fields {
 			node.Ordering = append(node.Ordering, &parse.OrderingTerm{
 				Expression: &parse.ExpressionLiteral{
-					Value: strconv.Itoa(i + 1), // 1-indexed
+					Value: i + 1, // 1-indexed
+					Type:  types.IntType.Copy(),
 				},
 			})
+		}
+	}
+
+	// if it is recursive, we need to enforce no ORDER BY, LIMIT
+	if isRecursive {
+		if len(node.Ordering) > 0 {
+			return nil, nil, errors.New("recursive CTEs cannot have an ORDER BY clause")
+		}
+		if node.Limit != nil {
+			return nil, nil, errors.New("recursive CTEs cannot have a LIMIT clause")
 		}
 	}
 
@@ -435,6 +496,11 @@ func (s *scopeContext) buildSort(plan Plan, rel *Relation, ordering []*parse.Ord
 	return sort, nil
 }
 
+// makeSectionErr creates an error for a section of a query.
+func makeSectionErr(sec QuerySection, err error) error {
+	return fmt.Errorf("error in %s section of sql statement: %w", sec, err)
+}
+
 // selectCore builds a logical plan for a select core.
 // The order of building is:
 // 1. from (combining any joins into single source plan)
@@ -461,7 +527,7 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (preProjectPlan Plan, 
 	querySection := querySectionUnknown
 	defer func() {
 		if err != nil {
-			err = fmt.Errorf("error in %s section: %w", querySection, err)
+			err = makeSectionErr(querySection, err)
 		}
 	}()
 
@@ -513,12 +579,14 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (preProjectPlan Plan, 
 
 	querySection = querySectionUnknown
 	// wildcards expand all columns found at this point.
+	// For example, if we have a table "users" with columns "id" and "name",
+	// "SELECT * FROM USERS GROUP BY id" is selecting both "id" and "name" (which will fail, but that's not the point).
 	results, err := s.expandResultCols(rel, node.Columns)
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
 
-	// otherwise, we need to build the group by and having clauses.
+	// we need to build the group by and having clauses.
 	// This means that for all result columns, we need to rewrite any
 	// column references or aggregate usage as columnrefs to the aggregate
 	// functions matching term.
@@ -950,7 +1018,8 @@ func (s *scopeContext) planWindow(plan Plan, rel *Relation, win *parse.WindowImp
 		for i := range win.OrderBy {
 			win.OrderBy = append(win.OrderBy, &parse.OrderingTerm{
 				Expression: &parse.ExpressionLiteral{
-					Value: strconv.Itoa(i + 1),
+					Value: i + 1,
+					Type:  types.IntType.Copy(),
 				},
 			})
 		}
@@ -1998,14 +2067,37 @@ func (s *scopeContext) table(node parse.Table) (*Scan, *Relation, error) {
 
 		var scanTblType TableSourceType
 		var rel *Relation
-		if physicalTbl, ok := s.plan.Tables("", node.Table); ok {
-			scanTblType = TableSourcePhysical
-			rel = relationFromTable(physicalTbl)
-		} else if cte, ok := s.plan.CTEs[node.Table]; ok {
+
+		// we first check if it is a recursive CTE, then any CTE, then a physical table
+		if node.Table == s.cteCtx.currentCTEName && node.Namespace == "" {
+			// if the shape is nil, then we are in a recursive CTE but we cannot reference it here.
+			// For example, this might be the case if we have:
+			// WITH RECURSIVE cte AS (SELECT * FROM cte) ...
+			// In this case, the recursive CTE cannot reference itself in the subquery, because
+			// it needs a base case followed by a UNION ALL to reference itself.
+			if s.cteCtx.recursiveCTEShape == nil {
+				return nil, nil, fmt.Errorf("recursive CTE %s cannot reference itself in this context", node.Table)
+			}
+
+			scanTblType = TableSourceCTE
+			rel = s.cteCtx.recursiveCTEShape
+			s.cteCtx.usedRecursiveCTE = true
+		} else if cte, ok := s.plan.CTEs[node.Table]; ok && node.Namespace == "" { // only use a cte if no namespace is specified
 			scanTblType = TableSourceCTE
 			rel = cte
 		} else {
-			return nil, nil, fmt.Errorf(`unknown table "%s"`, node.Table)
+			// if it is a physical table, then we need to qualify it
+			if node.Namespace == "" {
+				node.Namespace = s.plan.defaultNamespace
+			}
+
+			physicalTbl, ok := s.plan.Tables(node.Namespace, node.Table)
+			if !ok {
+				return nil, nil, fmt.Errorf(`%w: "%s"`, ErrUnknownTable, node.Table)
+			}
+
+			scanTblType = TableSourcePhysical
+			rel = relationFromTable(physicalTbl)
 		}
 
 		for _, col := range rel.Fields {
@@ -2014,6 +2106,7 @@ func (s *scopeContext) table(node parse.Table) (*Scan, *Relation, error) {
 
 		return &Scan{
 			Source: &TableScanSource{
+				Namespace: node.Namespace,
 				TableName: node.Table,
 				Type:      scanTblType,
 				rel:       rel.Copy(),
@@ -2301,18 +2394,29 @@ func (s *scopeContext) buildUpsert(node *parse.OnConflict, table *engine.Table, 
 				Column:         col.Name,
 				ConstraintType: PrimaryKeyConstraintIndex,
 			}
-		} else if table.SearchConstraint(col.Name, engine.ConstraintUnique) != nil {
-			arbiterIndex = &IndexColumnConstraint{
-				Table:          table.Name,
-				Column:         col.Name,
-				ConstraintType: UniqueConstraintIndex,
-			}
 		} else {
+			done := false
 			// check all indexes for unique indexes that match the column
 			for _, idx := range table.Indexes {
 				if (idx.Type == engine.UNIQUE_BTREE || idx.Type == engine.PRIMARY) && len(idx.Columns) == 1 && idx.Columns[0] == col.Name {
 					arbiterIndex = &IndexNamed{
 						Name: idx.Name,
+					}
+					done = true
+					break
+				}
+			}
+
+			if !done {
+				// check all constraints for unique constraints that match the column
+				for _, con := range table.Constraints {
+					if con.Type == engine.ConstraintUnique && len(con.Columns) == 1 && con.Columns[0] == col.Name {
+						arbiterIndex = &IndexColumnConstraint{
+							Table:          table.Name,
+							Column:         col.Name,
+							ConstraintType: UniqueConstraintIndex,
+						}
+						break
 					}
 				}
 			}
@@ -2322,33 +2426,59 @@ func (s *scopeContext) buildUpsert(node *parse.OnConflict, table *engine.Table, 
 			return nil, fmt.Errorf(`%w: conflict column "%s" must have a unique index or be a primary key`, ErrIllegalConflictArbiter, node.ConflictColumns[0])
 		}
 	default:
+		// colsMatch checks if two slices of strings are equal
+		// It is order-independent
+		colsMatch := func(want, have []string) bool {
+			if len(want) != len(have) {
+				return false
+			}
+
+			found := make(map[string]struct{}, len(want))
+			for _, col := range want {
+				found[col] = struct{}{}
+			}
+
+			for _, col := range have {
+				_, ok := found[col]
+				if !ok {
+					return false
+				}
+			}
+
+			return true
+		}
+
+		found := false
+
 		// check all indexes for a unique or pk index that matches the columns
 		for _, idx := range table.Indexes {
 			if idx.Type != engine.UNIQUE_BTREE && idx.Type != engine.PRIMARY {
 				continue
 			}
 
-			if len(idx.Columns) != len(node.ConflictColumns) {
+			if !colsMatch(node.ConflictColumns, idx.Columns) {
 				continue
 			}
 
-			inIdxCols := make(map[string]struct{}, len(idx.Columns))
-			for _, col := range idx.Columns {
-				inIdxCols[col] = struct{}{}
+			arbiterIndex = &IndexNamed{
+				Name: idx.Name,
 			}
+			break
+		}
 
-			hasAllCols := true
-			for _, col := range node.ConflictColumns {
-				_, ok := inIdxCols[col]
-				if !ok {
-					hasAllCols = false
-					break
+		if !found {
+			// check all constraints for a unique constraint that matches the columns
+			for name, con := range table.Constraints {
+				if con.Type != engine.ConstraintUnique {
+					continue
 				}
-			}
 
-			if hasAllCols {
+				if !colsMatch(node.ConflictColumns, con.Columns) {
+					continue
+				}
+
 				arbiterIndex = &IndexNamed{
-					Name: idx.Name,
+					Name: name,
 				}
 				break
 			}
@@ -2498,6 +2628,7 @@ func (s *scopeContext) cartesian(targetTable, alias string, from parse.Table, jo
 	// plan the target table
 	var targetPlan Plan = &Scan{
 		Source: &TableScanSource{
+			Namespace: s.plan.defaultNamespace, // target table of update or delete is always in the default namespace
 			TableName: targetTable,
 			Type:      TableSourcePhysical,
 			rel:       rel.Copy(),

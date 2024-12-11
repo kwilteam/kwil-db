@@ -31,16 +31,16 @@ func (r *ParseResult) Err() error {
 
 // Parse parses a statement or set of statements separated by semicolons.
 func Parse(sql string) (t []TopLevelStatement, err error) {
-	// defer func() {
-	// 	if r := recover(); r != nil {
-	// 		switch x := r.(type) {
-	// 		case error:
-	// 			err = x
-	// 		default:
-	// 			err = fmt.Errorf("panic: %v", r)
-	// 		}
-	// 	}
-	// }()
+	defer func() {
+		if r := recover(); r != nil {
+			switch x := r.(type) {
+			case error:
+				err = x
+			default:
+				err = fmt.Errorf("panic: %v", r)
+			}
+		}
+	}()
 
 	res, err := ParseWithErrListener(sql)
 	if err != nil {

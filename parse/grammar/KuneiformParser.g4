@@ -10,10 +10,12 @@ options {
 
 // entry point for the parser
 entry:
-    statement* EOF
+ // optional semicolons, but required if there are multiple statements to delimit them
+    statement (SCOL statement)* SCOL? EOF
 ;
 
 statement:
+    (LBRACE namespace=identifier RBRACE)?
     (
         sql_statement
         | create_table_statement
@@ -30,7 +32,9 @@ statement:
         | drop_action_statement
         | use_extension_statement
         | unuse_extension_statement
-    ) SCOL
+        | create_namespace_statement
+        | drop_namespace_statement
+    )
 ;
 
 /*
@@ -100,7 +104,7 @@ fk_action:
 ;
 
 fk_constraint:
-    REFERENCES table=identifier LPAREN identifier_list RPAREN (fk_action (fk_action)?)? // can be up to 0-2 actions
+    REFERENCES (namespace=identifier PERIOD)? table=identifier LPAREN identifier_list RPAREN (fk_action (fk_action)?)? // can be up to 0-2 actions
 ;
 
 action_return:
@@ -182,11 +186,11 @@ drop_role_statement:
 ;
 
 grant_statement:
-    GRANT (privilege_list|grant_role=identifier) (ON namespace=identifier) TO (role=identifier|user=STRING_)
+    GRANT (privilege_list|grant_role=identifier) (ON namespace=identifier)? TO (role=identifier|user=STRING_)
 ;
 
 revoke_statement:
-    REVOKE (privilege_list|grant_role=identifier) (ON namespace=identifier) FROM (role=identifier|user=STRING_)
+    REVOKE (privilege_list|grant_role=identifier) (ON namespace=identifier)? FROM (role=identifier|user=STRING_)
 ;
 
 privilege_list:
@@ -194,7 +198,7 @@ privilege_list:
 ;
 
 privilege:
-    SELECT | INSERT | UPDATE | DELETE | CREATE | DROP | ALTER | ROLES | CALL
+    SELECT | INSERT | UPDATE | DELETE | CREATE | DROP | ALTER | ROLES | CALL | USE
 ;
 
 transfer_ownership_statement:
@@ -221,6 +225,14 @@ use_extension_statement:
 
 unuse_extension_statement:
     UNUSE alias=identifier (IF EXISTS)?
+;
+
+create_namespace_statement:
+    CREATE NAMESPACE (IF NOT EXISTS)? identifier
+;
+
+drop_namespace_statement:
+    DROP NAMESPACE (IF EXISTS)? identifier
 ;
 
 select_statement:
@@ -252,7 +264,7 @@ select_core:
 ;
 
 relation:
-    table_name=identifier (AS? alias=identifier)?               # table_relation
+    (namespace=identifier PERIOD)? table_name=identifier (AS? alias=identifier)?   # table_relation
     // aliases are technically required in Kuneiform for subquery and function calls,
     // but we allow it to pass here since it is standard SQL to not require it, and
     // we can throw a better error message after parsing.
@@ -327,6 +339,7 @@ sql_expr:
     | sql_function_call (FILTER LPAREN WHERE sql_expr RPAREN)? OVER (window|identifier)     # window_function_call_sql_expr
     | sql_function_call type_cast?                                                          # function_call_sql_expr
     | variable type_cast?                                                                   # variable_sql_expr
+    | ARRAY LBRACKET (sql_expr_list)? RBRACKET type_cast?                                   # make_array_sql_expr
     | (table=identifier PERIOD)? column=identifier type_cast?                               # column_sql_expr
     | CASE case_clause=sql_expr?
         (when_then_clause)+
@@ -392,7 +405,7 @@ action_expr:
     | literal type_cast?                                                                        # literal_action_expr
     | action_function_call type_cast?                                                        # function_call_action_expr
     | variable type_cast?                                                                       # variable_action_expr
-    | LBRACKET (action_expr_list)? RBRACKET type_cast?                                       # make_array_action_expr
+    | ARRAY? LBRACKET (action_expr_list)? RBRACKET type_cast?                                       # make_array_action_expr // array is optional for backwards compatibility
     | action_expr CONCAT action_expr                                                      # action_expr_arithmetic
 
     // the rest:
@@ -426,7 +439,7 @@ variable_or_underscore:
 ;
 
 action_function_call:
-    (identifier PERIOD)? identifier LPAREN (action_expr_list)? RPAREN                                #normal_call_action
+    (namespace=identifier PERIOD)? function=identifier LPAREN (action_expr_list)? RPAREN                                #normal_call_action
 ;
 
 if_then_block:

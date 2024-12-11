@@ -151,6 +151,12 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#unuse_extension_statement.
 	VisitUnuse_extension_statement(ctx *Unuse_extension_statementContext) interface{}
 
+	// Visit a parse tree produced by KuneiformParser#create_namespace_statement.
+	VisitCreate_namespace_statement(ctx *Create_namespace_statementContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#drop_namespace_statement.
+	VisitDrop_namespace_statement(ctx *Drop_namespace_statementContext) interface{}
+
 	// Visit a parse tree produced by KuneiformParser#select_statement.
 	VisitSelect_statement(ctx *Select_statementContext) interface{}
 
@@ -222,6 +228,9 @@ type KuneiformParserVisitor interface {
 
 	// Visit a parse tree produced by KuneiformParser#collate_sql_expr.
 	VisitCollate_sql_expr(ctx *Collate_sql_exprContext) interface{}
+
+	// Visit a parse tree produced by KuneiformParser#make_array_sql_expr.
+	VisitMake_array_sql_expr(ctx *Make_array_sql_exprContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#variable_sql_expr.
 	VisitVariable_sql_expr(ctx *Variable_sql_exprContext) interface{}

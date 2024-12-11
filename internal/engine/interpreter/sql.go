@@ -15,8 +15,6 @@ import (
 	"github.com/kwilteam/kwil-db/parse"
 )
 
-const pgSchema = `kwild_public` // TODO: remove me, since we are now multi-schema
-
 var (
 	//go:embed schema.sql
 	schemaInitSQL string
@@ -44,14 +42,25 @@ func returnsExactlyOneInt64(rows *sql.ResultSet) (int64, error) {
 	return 0, fmt.Errorf("expected int64, got %T", rows.Rows[0][0])
 }
 
-// createUserNamespace creates a new schema for a user.
-func createUserNamespace(ctx context.Context, db sql.DB, name string, owner []byte) error {
+// createNamespace creates a new schema for a user.
+func createNamespace(ctx context.Context, db sql.DB, name string) error {
 	_, err := db.Execute(ctx, `CREATE SCHEMA `+name)
 	if err != nil {
 		return err
 	}
 
-	_, err = db.Execute(ctx, `INSERT INTO kwild_engine.namespaces (name, owner) VALUES ($1, $2)`, name, owner)
+	_, err = db.Execute(ctx, `INSERT INTO kwild_engine.namespaces (name) VALUES ($1)`, name)
+	return err
+}
+
+// dropNamespace drops a schema for a user.
+func dropNamespace(ctx context.Context, db sql.DB, name string) error {
+	_, err := db.Execute(ctx, `DROP SCHEMA `+name+` CASCADE`)
+	if err != nil {
+		return err
+	}
+
+	_, err = db.Execute(ctx, `DELETE FROM kwild_engine.namespaces WHERE name = $1`, name)
 	return err
 }
 
@@ -68,9 +77,9 @@ func storeAction(ctx context.Context, db sql.DB, namespace string, action *Actio
 		modStrs[i] = string(mod)
 	}
 
-	res, err := db.Execute(ctx, `INSERT INTO kwild_engine.actions (name, schema_name, public, raw_body, modifiers, returns_table)
+	res, err := db.Execute(ctx, `INSERT INTO kwild_engine.actions (name, schema_name, public, raw_statement, modifiers, returns_table)
 		VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-		action.Name, namespace, action.Public, action.RawBody, modStrs, returnsTable)
+		action.Name, namespace, action.Public, action.RawStatement, modStrs, returnsTable)
 	if err != nil {
 		return err
 	}
@@ -112,167 +121,81 @@ func storeAction(ctx context.Context, db sql.DB, namespace string, action *Actio
 	return nil
 }
 
-// loadActions loads all actions from the database.
-// it maps: schema -> action name -> action
-func loadActions(ctx context.Context, db sql.DB) (map[string]map[string]*Action, error) {
-	schemas := make(map[string]map[string]*Action)
+// // loadActions loads all actions from the database.
+// // it maps: schema -> action name -> action
+// func loadActions(ctx context.Context, db sql.DB) (map[string]map[string]*Action, error) {
+// 	schemas := make(map[string]map[string]*Action)
 
-	var id int64
-	var schemaName, name, rawBody string
-	var public, returnsTable bool
-	var modifiers []string
-	scans := []any{
-		&id,
-		&schemaName,
-		&name,
-		&public,
-		&rawBody,
-		&modifiers,
-		&returnsTable,
-	}
+// 	var schemaName, rawStmt string
+// 	scans := []any{
+// 		&schemaName,
+// 		&rawStmt,
+// 	}
 
-	err := pg.QueryRowFunc(ctx, db, `SELECT id, schema_name, name, public, raw_body, modifiers::TEXT[], returns_table FROM kwild_engine.actions`,
-		scans, func() error {
-			action := &Action{
-				Name:    name,
-				Public:  public,
-				RawBody: rawBody,
-			}
+// 	err := pg.QueryRowFunc(ctx, db, `SELECT schema_name, raw_statement FROM kwild_engine.actions`,
+// 		scans, func() error {
+// 			schema, ok := schemas[schemaName]
+// 			if !ok {
+// 				schema = make(map[string]*Action)
+// 				schemas[schemaName] = schema
+// 			}
 
-			schema, ok := schemas[schemaName]
-			if !ok {
-				schema = make(map[string]*Action)
-				schemas[schemaName] = schema
-			}
+// 			res, err := parse.Parse(rawStmt)
+// 			if err != nil {
+// 				return err
+// 			}
 
-			for _, mod := range modifiers {
-				action.Modifiers = append(action.Modifiers, Modifier(mod))
-			}
+// 			if len(res) != 1 {
+// 				return fmt.Errorf("expected exactly 1 statement, got %d", len(res))
+// 			}
 
-			res, err := parse.ParseActionBodyWithoutValidation(action.RawBody)
-			if err != nil {
-				return err
-			}
-			if res.Errs.Err() != nil {
-				return res.Errs.Err()
-			}
-			action.Body = res.AST
+// 			createActionStmt, ok := res[0].(*parse.CreateActionStatement)
+// 			if !ok {
+// 				return fmt.Errorf("expected CreateActionStatement, got %T", res[0])
+// 			}
 
-			if returnsTable {
-				action.Returns = &ActionReturn{
-					IsTable: true,
-					Fields:  nil,
-				}
-			}
+// 			act := &Action{}
+// 			err = act.FromAST(createActionStmt)
+// 			if err != nil {
+// 				return err
+// 			}
 
-			schema[action.Name] = action
+// 			schema[act.Name] = act
+// 			return nil
+// 		})
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	return schemas, nil
+// }
+
+// listNamespaces lists all namespaces that are created.
+func listNamespaces(ctx context.Context, db sql.DB) ([]string, error) {
+	var namespaces []string
+	var namespace string
+	err := pg.QueryRowFunc(ctx, db, `SELECT name FROM kwild_engine.namespaces`, []any{&namespace},
+		func() error {
+			namespaces = append(namespaces, namespace)
 			return nil
-		})
+		},
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	var actionName, paramName, paramScalarType string
-	var paramIsArray bool
-	var paramMetadata []byte
-	scans = []any{
-		&actionName,
-		&schemaName,
-		&paramName,
-		&paramScalarType,
-		&paramIsArray,
-		&paramMetadata,
-	}
-
-	err = pg.QueryRowFunc(ctx, db, `SELECT a.name, a.schema_name, p.name, p.scalar_type::TEXT, p.is_array, p.metadata FROM kwild_engine.parameters p
-		JOIN kwild_engine.actions a ON a.id = action_id`, scans, func() error {
-		action, ok := schemas[schemaName][actionName]
-		if !ok {
-			// suggests an internal error
-			return fmt.Errorf("action %s not found", actionName)
-		}
-
-		dt, err := types.ParseDataType(paramScalarType)
-		if err != nil {
-			return err
-		}
-
-		if paramMetadata != nil {
-			dt.Metadata = reconstructTypeMetadata(paramMetadata)
-		}
-
-		dt.IsArray = paramIsArray
-
-		action.Parameters = append(action.Parameters, &NamedType{
-			Name: paramName,
-			Type: dt,
-		})
-
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	// technically redundant with the scans slice defined above, but it's clearer this way,
-	// just to show what this query expects
-	scans = []any{
-		&actionName,
-		&schemaName,
-		&paramName,
-		&paramScalarType,
-		&paramIsArray,
-		&paramMetadata,
-	}
-
-	err = pg.QueryRowFunc(ctx, db, `SELECT a.name, a.schema_name, p.name, p.scalar_type::TEXT, p.is_array, p.metadata FROM kwild_engine.return_fields p
-		JOIN kwild_engine.actions a ON a.id = action_id`, scans, func() error {
-		action, ok := schemas[schemaName][actionName]
-		if !ok {
-			// suggests an internal error
-			return fmt.Errorf("action %s not found", actionName)
-		}
-
-		// if the action doesn't have a return type, create one.
-		// Up until this point, we only knew if an action had a return if it returned a table.
-		// But if a row is returned here for an action, that means it has a return type.
-		if action.Returns == nil {
-			action.Returns = &ActionReturn{
-				IsTable: false,
-			}
-		}
-
-		dt, err := types.ParseDataType(paramScalarType)
-		if err != nil {
-			return err
-		}
-
-		if paramMetadata != nil {
-			dt.Metadata = reconstructTypeMetadata(paramMetadata)
-		}
-
-		dt.IsArray = paramIsArray
-
-		action.Returns.Fields = append(action.Returns.Fields, &NamedType{
-			Name: paramName,
-			Type: dt,
-		})
-
-		return nil
-	})
-
-	return schemas, err
+	return namespaces, nil
 }
 
-// listNamespaceTables lists all namespaces that are created by users.
-// It returns a mapping of schemas -> table names -> tables.
-func listNamespaceTables(ctx context.Context, db sql.DB) (map[string]map[string]*engine.Table, error) {
-	schemas := make(map[string]map[string]*engine.Table)
+// listTablesInNamespace lists all tables in a namespace.
+func listTablesInNamespace(ctx context.Context, db sql.DB, namespace string) ([]*engine.Table, error) {
+	tables := make([]*engine.Table, 0)
 	var schemaName string
 	var tblName string
 	var colNames, dataTypes, indexNames, constraintNames, constraintTypes, fkNames, fkOnUpdate, fkOnDelete []string
 	var indexCols, constraintCols, fkCols [][]string
 	var isNullables, isPrimaryKeys, isPKs, isUniques []bool
+
 	scans := []any{
 		&schemaName,
 		&tblName,
@@ -299,7 +222,7 @@ func listNamespaceTables(ctx context.Context, db sql.DB) (map[string]map[string]
 			array_agg(c.data_type ORDER BY c.ordinal_position) AS data_types,
 			array_agg(c.is_nullable ORDER BY c.ordinal_position) AS is_nullables,
 			array_agg(c.is_primary_key ORDER BY c.ordinal_position) AS is_primary_keys
-		FROM kwil_columns c
+		FROM info.columns c
 		GROUP BY c.schema_name, c.table_name
 	),
 	indexes AS (
@@ -308,14 +231,14 @@ func listNamespaceTables(ctx context.Context, db sql.DB) (map[string]map[string]
 			array_agg(i.is_pk ORDER BY i.index_name) AS is_pks,
 			array_agg(i.is_unique ORDER BY i.index_name) AS is_uniques,
 			array_agg(i.column_names ORDER BY i.index_name) AS column_names
-		FROM kwil_indexes i
+		FROM info.indexes i
 		GROUP BY i.schema_name, i.table_name
 	), constraints AS (
 		SELECT c.schema_name, c.table_name,
 			array_agg(c.constraint_name ORDER BY c.constraint_name) AS constraint_names,
 			array_agg(c.constraint_type ORDER BY c.constraint_name) AS constraint_types,
 			array_agg(c.columns ORDER BY c.constraint_name) AS columns
-		FROM kwil_constraints c
+		FROM info.constraints c
 		GROUP BY c.schema_name, c.table_name
 	), foreign_keys AS (
 		SELECT f.schema_name, f.table_name,
@@ -323,39 +246,28 @@ func listNamespaceTables(ctx context.Context, db sql.DB) (map[string]map[string]
 			array_agg(f.columns ORDER BY f.constraint_name) AS columns,
 			array_agg(f.on_update ORDER BY f.constraint_name) AS on_updates,
 			array_agg(f.on_delete ORDER BY f.constraint_name) AS on_deletes
-		FROM kwil_foreign_keys f
+		FROM info.foreign_keys f
 		GROUP BY f.schema_name, f.table_name
 	)
-	SELECT 
+	SELECT
 		t.schema, t.name,
 		c.column_names, c.data_types, c.is_nullables, c.is_primary_keys,
 		i.index_names, i.is_pks, i.is_uniques, i.column_names,
 		co.constraint_names, co.constraint_types, co.columns,
 		f.constraint_names, f.columns, f.on_updates, f.on_deletes
-	FROM kwil_tables t
+	FROM info.tables t
 	JOIN columns c ON t.name = c.table_name AND t.schema = c.schema_name
 	LEFT JOIN indexes i ON t.name = i.table_name AND t.schema = i.schema_name
 	LEFT JOIN constraints co ON t.name = co.table_name AND t.schema = co.schema_name
 	LEFT JOIN foreign_keys f ON t.name = f.table_name AND t.schema = f.schema_name
-		`, scans,
+	WHERE t.schema = $1`, scans,
 		func() error {
-			schema, ok := schemas[schemaName]
-			if !ok {
-				schema = make(map[string]*engine.Table)
-				schemas[schemaName] = schema
-			}
-
-			_, ok = schema[tblName]
-			if ok {
-				// some basic validation
-				return fmt.Errorf("duplicate table %s", tblName)
-			}
-
 			tbl := &engine.Table{
 				Name:        tblName,
 				Constraints: make(map[string]*engine.Constraint),
 			}
-			schema[tblName] = tbl
+
+			tables = append(tables, tbl)
 
 			// add columns
 			for i, colName := range colNames {
@@ -406,7 +318,6 @@ func listNamespaceTables(ctx context.Context, db sql.DB) (map[string]map[string]
 				}
 
 				tbl.Constraints[constraintName] = &engine.Constraint{
-					Name:    constraintName,
 					Type:    constraintType,
 					Columns: constraintCols[i],
 				}
@@ -420,71 +331,61 @@ func listNamespaceTables(ctx context.Context, db sql.DB) (map[string]map[string]
 				}
 
 				fk := &engine.Constraint{
-					Name:    fkName,
 					Type:    engine.ConstraintFK,
 					Columns: fkCols[i],
 				}
 
 				tbl.Constraints[fkName] = fk
 			}
-
-			schemas[schemaName][tblName] = tbl
 			return nil
-		},
+		}, namespace,
 	)
 	if err != nil {
 		return nil, err
 	}
 
-	return schemas, nil
+	return tables, nil
 }
 
-// getNamespaceOwners returns the owners of the given namespaces.
-// It maps the namespace to the owner's public key.
-func getNamespaceOwners(ctx context.Context, db sql.DB) (map[string][]byte, error) {
-	owners := make(map[string][]byte)
-	var name string
-	var owner []byte
+// listActionsInNamespace lists all actions in a namespace.
+func listActionsInNamespace(ctx context.Context, db sql.DB, namespace string) ([]*Action, error) {
+	var actions []*Action
+	var rawStmt string
 	scans := []any{
-		&name,
-		&owner,
+		&rawStmt,
 	}
 
-	err := pg.QueryRowFunc(ctx, db, `SELECT name, owner FROM kwild_engine.namespaces`, scans, func() error {
-		owners[name] = owner
-		return nil
-	})
+	err := pg.QueryRowFunc(ctx, db, `SELECT raw_statement FROM kwild_engine.actions WHERE schema_name = $1`, scans,
+		func() error {
+			res, err := parse.Parse(rawStmt)
+			if err != nil {
+				return err
+			}
+
+			if len(res) != 1 {
+				return fmt.Errorf("expected exactly 1 statement, got %d", len(res))
+			}
+
+			createActionStmt, ok := res[0].(*parse.CreateActionStatement)
+			if !ok {
+				return fmt.Errorf("expected CreateActionStatement, got %T", res[0])
+			}
+
+			act := &Action{}
+			err = act.FromAST(createActionStmt)
+			if err != nil {
+				return err
+			}
+
+			actions = append(actions, act)
+			return nil
+		}, namespace,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	return owners, nil
-}
-
-// namedTypeFromRow creates a NamedType from a row.
-func namedTypeFromRow(row []interface{}) (*NamedType, error) {
-	if len(row) != 4 {
-		return nil, fmt.Errorf("expected 4 columns, got %d", len(row))
-	}
-
-	dt := &types.DataType{
-		Name:    row[1].(string),
-		IsArray: row[2].(bool),
-	}
-
-	switch meta := row[3].(type) {
-	case nil:
-		// no metadata
-	case []byte:
-		dt.Metadata = reconstructTypeMetadata(meta)
-	default:
-		return nil, fmt.Errorf("unexpected metadata type %T", meta)
-	}
-
-	return &NamedType{
-		Name: row[0].(string),
-		Type: dt,
-	}, nil
+	return actions, nil
 }
 
 // getTypeMetadata gets the serialized type metadata.
@@ -499,18 +400,6 @@ func getTypeMetadata(t *types.DataType) []byte {
 	binary.LittleEndian.PutUint16(meta[2:], t.Metadata[1])
 
 	return meta
-}
-
-// reconstructTypeMetadata reconstructs the type metadata from the serialized form.
-func reconstructTypeMetadata(meta []byte) *[2]uint16 {
-	if len(meta) == 0 {
-		return nil
-	}
-
-	return &[2]uint16{
-		binary.LittleEndian.Uint16(meta[:2]),
-		binary.LittleEndian.Uint16(meta[2:]),
-	}
 }
 
 // query executes a SQL query with the given values.
@@ -534,5 +423,10 @@ func query(ctx context.Context, db sql.DB, query string, scanVals []Value, fn fu
 		}
 	}
 
-	return pg.QueryRowFunc(ctx, db, query, recVals, fn, argVals)
+	err = pg.QueryRowFunc(ctx, db, query, recVals, fn, argVals...)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }

@@ -2,16 +2,18 @@ package interpreter
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/stretchr/testify/require"
 )
 
-func Test_SQL(t *testing.T) {
+func Test_built_in_sql(t *testing.T) {
 	type testcase struct {
 		name string
 		fn   func(ctx context.Context, db sql.DB)
@@ -20,24 +22,26 @@ func Test_SQL(t *testing.T) {
 		{
 			name: "test store and load actions",
 			fn: func(ctx context.Context, db sql.DB) {
-				for _, act := range test_AllActions {
+				for _, act := range all_test_actions {
 					err := storeAction(ctx, db, "main", act)
 					require.NoError(t, err)
 				}
 
-				schemas, err := loadActions(ctx, db)
+				actions, err := listActionsInNamespace(ctx, db, "main")
 				require.NoError(t, err)
 
-				mainSchema, ok := schemas["main"]
-				require.True(t, ok)
+				actMap := map[string]*Action{}
+				for _, act := range actions {
+					actMap[act.Name] = act
+				}
 
-				require.Equal(t, len(test_AllActions), len(mainSchema))
-				for _, act := range test_AllActions {
-					stored, ok := mainSchema[act.Name]
+				require.Equal(t, len(all_test_actions), len(actMap))
+				for _, act := range all_test_actions {
+					stored, ok := actMap[act.Name]
 					require.True(t, ok)
 					require.Equal(t, act.Name, stored.Name)
 					require.Equal(t, act.Public, stored.Public)
-					require.Equal(t, act.RawBody, stored.RawBody)
+					require.Equal(t, act.RawStatement, stored.RawStatement)
 					require.Equal(t, act.Modifiers, stored.Modifiers)
 					namedTypesEq(t, act.Parameters, stored.Parameters)
 
@@ -80,7 +84,7 @@ func Test_SQL(t *testing.T) {
 				_, err = db.Execute(ctx, `CREATE INDEX user_ages ON main.users (age);`)
 				require.NoError(t, err)
 
-				err = createUserNamespace(ctx, db, "other", []byte("owner"))
+				err = createNamespace(ctx, db, "other")
 				require.NoError(t, err)
 
 				_, err = db.Execute(ctx, `CREATE TABLE other.my_table (id UUID PRIMARY KEY);`)
@@ -134,17 +138,14 @@ func Test_SQL(t *testing.T) {
 							},
 							Constraints: map[string]*engine.Constraint{
 								"users_name_check": {
-									Name:    "users_name_check",
 									Type:    engine.ConstraintCheck,
 									Columns: []string{"name"},
 								},
 								"users_age_check": {
-									Name:    "users_age_check",
 									Type:    engine.ConstraintCheck,
 									Columns: []string{"age"},
 								},
 								"users_wallet_address_key": {
-									Name:    "users_wallet_address_key",
 									Type:    engine.ConstraintUnique,
 									Columns: []string{"wallet_address"},
 								},
@@ -177,7 +178,6 @@ func Test_SQL(t *testing.T) {
 							},
 							Constraints: map[string]*engine.Constraint{
 								"posts_author_id_fkey": {
-									Name:    "posts_author_id_fkey",
 									Type:    engine.ConstraintFK,
 									Columns: []string{"author_id"},
 								},
@@ -205,12 +205,20 @@ func Test_SQL(t *testing.T) {
 					},
 				}
 
-				storedSchemas, err := listNamespaceTables(ctx, db)
-				require.NoError(t, err)
+				tables := map[string]map[string]*engine.Table{}
 
-				require.Equal(t, len(wantSchemas), len(storedSchemas))
+				for schemaName := range wantSchemas {
+					tbls, err := listTablesInNamespace(ctx, db, schemaName)
+					require.NoError(t, err)
+					tables[schemaName] = map[string]*engine.Table{}
+					for _, tbl := range tbls {
+						tables[schemaName][tbl.Name] = tbl
+					}
+				}
+
+				require.Equal(t, len(wantSchemas), len(tables))
 				for schemaName, wantSchema := range wantSchemas {
-					storedTbls, ok := storedSchemas[schemaName]
+					storedTbls, ok := tables[schemaName]
 					require.True(t, ok)
 					for _, want := range wantSchema {
 						stored, ok := storedTbls[want.Name]
@@ -234,7 +242,6 @@ func Test_SQL(t *testing.T) {
 						require.Equal(t, len(stored.Constraints), len(want.Constraints))
 						for i, wc := range want.Constraints {
 							sc := stored.Constraints[i]
-							require.Equal(t, wc.Name, sc.Name)
 							require.Equal(t, wc.Type, sc.Type)
 							require.Equal(t, wc.Columns, sc.Columns)
 						}
@@ -267,12 +274,59 @@ func Test_SQL(t *testing.T) {
 			require.NoError(t, err)
 			defer tx.Rollback(ctx) // always rollback to avoid cleanup
 
-			err = initSQL(ctx, tx)
+			interp, err := NewInterpreter(ctx, tx, log.New(log.Config{}))
+			require.NoError(t, err)
+
+			err = interp.SetOwner(ctx, tx, "owner")
 			require.NoError(t, err)
 
 			test.fn(ctx, tx)
 		})
 	}
+}
+
+// NewTestInterpeter creates a new interpreter for testing.
+func NewTestInterpeter(t *testing.T) (interpreter *Interpreter, db sql.DB, cleanup func(), err error) {
+	cfg := &pg.DBConfig{
+		PoolConfig: pg.PoolConfig{
+			ConnConfig: pg.ConnConfig{
+				Host:   "127.0.0.1",
+				Port:   "5432",
+				User:   "kwild",
+				Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
+				DBName: "kwil_test_db",
+			},
+			MaxConns: 11,
+		},
+	}
+
+	ctx := context.Background()
+
+	pgdb, err := pg.NewDB(ctx, cfg)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	tx, err := pgdb.BeginTx(ctx)
+	if err != nil {
+		return nil, nil, nil, errors.Join(err, pgdb.Close())
+	}
+
+	interp, err := NewInterpreter(ctx, tx, log.New(log.Config{}))
+	if err != nil {
+		return nil, nil, nil, errors.Join(err, tx.Rollback(ctx), pgdb.Close())
+	}
+
+	return interp, tx, func() {
+		err := tx.Rollback(ctx)
+		if err != nil {
+			t.Logf("failed to rollback transaction: %v", err)
+		}
+		err = pgdb.Close()
+		if err != nil {
+			t.Logf("failed to close database: %v", err)
+		}
+	}, nil
 }
 
 func namedTypesEq(t *testing.T, a, b []*NamedType) {

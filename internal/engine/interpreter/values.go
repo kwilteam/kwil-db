@@ -3,9 +3,9 @@ package interpreter
 import (
 	"fmt"
 	"math/big"
-	"reflect"
 	"strconv"
 
+	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
 )
@@ -20,7 +20,6 @@ type ValueMapping struct {
 }
 
 var (
-	goTypeToValue   = map[reflect.Type]ValueMapping{}
 	kwilTypeToValue = map[struct {
 		name    string
 		isArray bool
@@ -304,6 +303,7 @@ func makeTypeErr(left, right Value) error {
 }
 
 type IntValue struct {
+	pgtype.Int8
 	Val int64
 }
 
@@ -1783,6 +1783,12 @@ func (n *NullValue) Set(i int64, v ScalarValue) error {
 
 func (n *NullValue) Cast(t *types.DataType) (Value, error) {
 	return &NullValue{DataType: t}, nil
+}
+
+func newRecordValue() *RecordValue {
+	return &RecordValue{
+		Fields: make(map[string]Value),
+	}
 }
 
 type RecordValue struct {

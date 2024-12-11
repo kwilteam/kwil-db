@@ -9,6 +9,8 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/internal/engine"
+	pggenerate "github.com/kwilteam/kwil-db/internal/engine/pg_generate"
 	"github.com/kwilteam/kwil-db/parse"
 )
 
@@ -270,13 +272,13 @@ var (
 
 type stmtFunc func(exec *executionContext, fn func([]Value) error) error
 
-func (i *interpreterPlanner) VisitProcedureStmtDeclaration(p0 *parse.ActionStmtDeclaration) any {
+func (i *interpreterPlanner) VisitActionStmtDeclaration(p0 *parse.ActionStmtDeclaration) any {
 	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
 		return exec.allocateVariable(p0.Variable.Name, NewNullValue(p0.Type))
 	})
 }
 
-func (i *interpreterPlanner) VisitProcedureStmtAssignment(p0 *parse.ActionStmtAssign) any {
+func (i *interpreterPlanner) VisitActionStmtAssignment(p0 *parse.ActionStmtAssign) any {
 	valFn := p0.Value.Accept(i).(exprFunc)
 
 	var arrFn exprFunc
@@ -333,7 +335,7 @@ func (i *interpreterPlanner) VisitProcedureStmtAssignment(p0 *parse.ActionStmtAs
 	})
 }
 
-func (i *interpreterPlanner) VisitProcedureStmtCall(p0 *parse.ActionStmtCall) any {
+func (i *interpreterPlanner) VisitActionStmtCall(p0 *parse.ActionStmtCall) any {
 
 	// we cannot simply use the same visitor as the expression function call, because expression function
 	// calls always return exactly one value. Here, we can return 0 values, many values, or a table.
@@ -349,9 +351,14 @@ func (i *interpreterPlanner) VisitProcedureStmtCall(p0 *parse.ActionStmtCall) an
 	}
 
 	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
-		funcDef, ok := exec.availableFunctions[p0.Call.Name]
+		ns, err := exec.getNamespace(p0.Call.Namespace)
+		if err != nil {
+			return err
+		}
+
+		funcDef, ok := ns.availableFunctions[p0.Call.Name]
 		if !ok {
-			return fmt.Errorf(`action "%s" no longer exists`, p0.Call.Name)
+			return fmt.Errorf(`unknown action "%s" in namespace "%s"`, p0.Call.Name, p0.Call.Namespace)
 		}
 
 		vals := make([]Value, len(args))
@@ -461,7 +468,7 @@ func executeBlock(exec *executionContext, fn func([]Value) error,
 	return nil
 }
 
-func (i *interpreterPlanner) VisitProcedureStmtForLoop(p0 *parse.ActionStmtForLoop) any {
+func (i *interpreterPlanner) VisitActionStmtForLoop(p0 *parse.ActionStmtForLoop) any {
 	stmtFns := make([]stmtFunc, len(p0.Body))
 	for j, stmt := range p0.Body {
 		stmtFns[j] = stmt.Accept(i).(stmtFunc)
@@ -583,7 +590,7 @@ func (i *interpreterPlanner) VisitLoopTermVariable(p0 *parse.LoopTermVariable) a
 	})
 }
 
-func (i *interpreterPlanner) VisitProcedureStmtIf(p0 *parse.ActionStmtIf) any {
+func (i *interpreterPlanner) VisitActionStmtIf(p0 *parse.ActionStmtIf) any {
 	var ifThenFns []struct {
 		If   exprFunc
 		Then []stmtFunc
@@ -654,7 +661,7 @@ func (i *interpreterPlanner) VisitProcedureStmtIf(p0 *parse.ActionStmtIf) any {
 	})
 }
 
-func (i *interpreterPlanner) VisitProcedureStmtSQL(p0 *parse.ActionStmtSQL) any {
+func (i *interpreterPlanner) VisitActionStmtSQL(p0 *parse.ActionStmtSQL) any {
 	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
 		raw, err := p0.SQL.Raw()
 		if err != nil {
@@ -674,13 +681,13 @@ func (i *interpreterPlanner) VisitProcedureStmtSQL(p0 *parse.ActionStmtSQL) any 
 	})
 }
 
-func (i *interpreterPlanner) VisitProcedureStmtBreak(p0 *parse.ActionStmtBreak) any {
+func (i *interpreterPlanner) VisitActionStmtBreak(p0 *parse.ActionStmtBreak) any {
 	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
 		return errBreak
 	})
 }
 
-func (i *interpreterPlanner) VisitProcedureStmtReturn(p0 *parse.ActionStmtReturn) any {
+func (i *interpreterPlanner) VisitActionStmtReturn(p0 *parse.ActionStmtReturn) any {
 	valFns := make([]exprFunc, len(p0.Values))
 	for j, v := range p0.Values {
 		valFns[j] = v.Accept(i).(exprFunc)
@@ -707,7 +714,7 @@ func (i *interpreterPlanner) VisitProcedureStmtReturn(p0 *parse.ActionStmtReturn
 	})
 }
 
-func (i *interpreterPlanner) VisitProcedureStmtReturnNext(p0 *parse.ActionStmtReturnNext) any {
+func (i *interpreterPlanner) VisitActionStmtReturnNext(p0 *parse.ActionStmtReturnNext) any {
 	valFns := make([]exprFunc, len(p0.Values))
 	for j, v := range p0.Values {
 		valFns[j] = v.Accept(i).(exprFunc)
@@ -752,10 +759,14 @@ func (i *interpreterPlanner) VisitExpressionFunctionCall(p0 *parse.ExpressionFun
 	}
 
 	return exprFunc(func(exec *executionContext) (Value, error) {
-		// we check again because the action might have been dropped
-		funcDef, ok := exec.availableFunctions[p0.Name]
+		ns, err := exec.getNamespace(p0.Namespace)
+		if err != nil {
+			return nil, err
+		}
+
+		execute, ok := ns.availableFunctions[p0.Name]
 		if !ok {
-			return nil, fmt.Errorf(`function "%s" no longer exists`, p0.Name)
+			return nil, fmt.Errorf(`unknown function "%s" in namespace "%s"`, p0.Name, p0.Namespace)
 		}
 
 		vals := make([]Value, len(args))
@@ -768,7 +779,7 @@ func (i *interpreterPlanner) VisitExpressionFunctionCall(p0 *parse.ExpressionFun
 			vals[j] = val
 		}
 
-		returns, err := funcDef.ReturnType(vals)
+		returns, err := execute.ReturnType(vals)
 		if err != nil {
 			return nil, err
 		}
@@ -785,7 +796,7 @@ func (i *interpreterPlanner) VisitExpressionFunctionCall(p0 *parse.ExpressionFun
 
 		var val Value
 		iters := 0
-		err = funcDef.Func(exec, vals, func(received []Value) error {
+		err = execute.Func(exec, vals, func(received []Value) error {
 			iters++
 			if len(received) != 1 {
 				return fmt.Errorf(`expected function "%s" to return 1 value, but it returned %d`, p0.Name, len(received))
@@ -1143,13 +1154,37 @@ func (i *interpreterPlanner) VisitTransferOwnershipStatement(p0 *parse.TransferO
 			return fmt.Errorf("%w: %s", ErrDoesNotHavePriv, "caller must be owner")
 		}
 
-		return exec.accessController.TransferOwnership(exec.txCtx.Ctx, exec.db, p0.To)
+		return exec.accessController.SetOwnership(exec.txCtx.Ctx, exec.db, p0.To)
 	})
 }
 
 /*
 	top-level adhoc
 */
+
+// handleNamespaced is a helper function that handles statements namespaced with curly braces.
+func handleNamespaced(exec *executionContext, stmt parse.Namespaceable) (reset func(), err error) {
+	// if no special namespace is set, we can just return a no-op function
+	if stmt.GetNamespacePrefix() == "" {
+		return func() {}, nil
+	}
+
+	// otherwise, we need to set the current namespace
+	oldNs := exec.scope.namespace
+
+	// ensure the new namespace exists
+	_, err = exec.getNamespace(stmt.GetNamespacePrefix())
+	if err != nil {
+		return nil, err
+	}
+
+	// set the new namespace
+	exec.scope.namespace = stmt.GetNamespacePrefix()
+
+	return func() {
+		exec.scope.namespace = oldNs
+	}, nil
+}
 
 func (i *interpreterPlanner) VisitSQLStatement(p0 *parse.SQLStatement) any {
 	mutatesState := true
@@ -1172,8 +1207,14 @@ func (i *interpreterPlanner) VisitSQLStatement(p0 *parse.SQLStatement) any {
 		panic(err)
 	}
 	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
-		if !exec.hasPrivilege(privilege) {
-			return fmt.Errorf("%w: %s", ErrDoesNotHavePriv, privilege)
+		reset, err := handleNamespaced(exec, p0)
+		if err != nil {
+			return err
+		}
+		defer reset()
+
+		if err := exec.checkPrivilege(privilege); err != nil {
+			return err
 		}
 
 		// if the query is trying to mutate state but the exec ctx cant then we should error
@@ -1190,6 +1231,394 @@ func (i *interpreterPlanner) VisitSQLStatement(p0 *parse.SQLStatement) any {
 			return fn(vals)
 		})
 	})
+}
+
+// here, we other top-level statements that are not covered by the other visitors.
+
+// genAndExec generates and executes a DML statement.
+// It should only be used for DDL statements, which do not bind or return values.
+func genAndExec(exec *executionContext, stmt parse.TopLevelStatement) error {
+	sql, _, err := pggenerate.GenerateSQL(stmt, exec.scope.namespace)
+	if err != nil {
+		return err
+	}
+
+	_, err = exec.db.Execute(exec.txCtx.Ctx, sql)
+	return err
+}
+
+func (i *interpreterPlanner) VisitAlterTableStatement(p0 *parse.AlterTableStatement) any {
+	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
+		reset, err := handleNamespaced(exec, p0)
+		if err != nil {
+			return err
+		}
+		defer reset()
+
+		// ensure that the caller has the necessary privileges
+		if err := exec.checkPrivilege(AlterPrivilege); err != nil {
+			return err
+		}
+
+		// ensure the table exists
+		_, found := exec.getTable("", p0.Table)
+		if !found {
+			return fmt.Errorf("table %s does not exist", p0.Table)
+		}
+
+		// instead of handling every case and how it should change the in-memory objects, we just
+		// generate the SQL and execute it, and then completely refresh the in-memory objects for this schema.
+		// This isn't the most efficient way to do it, but it's the easiest to implement, and since DDL isn't
+		// really a hotpath, it's fine.
+		err = genAndExec(exec, p0)
+		if err != nil {
+			return err
+		}
+
+		return exec.reloadTables()
+	})
+}
+
+func (i *interpreterPlanner) VisitCreateTableStatement(p0 *parse.CreateTableStatement) any {
+	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
+		reset, err := handleNamespaced(exec, p0)
+		if err != nil {
+			return err
+		}
+		defer reset()
+
+		// ensure that the caller has the necessary privileges
+		if err := exec.checkPrivilege(CreatePrivilege); err != nil {
+			return err
+		}
+
+		// ensure the table does not already exist
+		_, found := exec.getTable("", p0.Name)
+		if found {
+			if p0.IfNotExists {
+				return nil
+			}
+
+			return fmt.Errorf(`table "%s" already exists`, p0.Name)
+		}
+
+		err = genAndExec(exec, p0)
+		if err != nil {
+			return err
+		}
+
+		return exec.reloadTables()
+	})
+}
+
+func (i *interpreterPlanner) VisitDropTableStatement(p0 *parse.DropTableStatement) any {
+	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
+		reset, err := handleNamespaced(exec, p0)
+		if err != nil {
+			return err
+		}
+		defer reset()
+
+		// ensure that the caller has the necessary privileges
+		if err := exec.checkPrivilege(DropPrivilege); err != nil {
+			return err
+		}
+
+		for _, table := range p0.Tables {
+			// ensure the table exists
+			_, found := exec.getTable("", table)
+			if !found {
+				if p0.IfExists {
+					continue
+				}
+
+				return fmt.Errorf(`table "%s" does not exist`, table)
+			}
+		}
+
+		if err := genAndExec(exec, p0); err != nil {
+			return err
+		}
+
+		return exec.reloadTables()
+	})
+}
+
+func (i *interpreterPlanner) VisitCreateIndexStatement(p0 *parse.CreateIndexStatement) any {
+	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
+		reset, err := handleNamespaced(exec, p0)
+		if err != nil {
+			return err
+		}
+		defer reset()
+
+		// ensure that the caller has the necessary privileges
+		if err := exec.checkPrivilege(CreatePrivilege); err != nil {
+			return err
+		}
+
+		// ensure the table exists
+		tbl, found := exec.getTable("", p0.On)
+		if !found {
+			return fmt.Errorf(`table "%s" does not exist`, p0.On)
+		}
+
+		// ensure the columns exist
+		tblCols := make(map[string]struct{}, len(tbl.Columns))
+		for _, col := range tbl.Columns {
+			tblCols[col.Name] = struct{}{}
+		}
+
+		for _, col := range p0.Columns {
+			if _, found := tblCols[col]; !found {
+				return fmt.Errorf(`column "%s" does not exist in table "%s"`, col, p0.On)
+			}
+		}
+
+		if err := genAndExec(exec, p0); err != nil {
+			return err
+		}
+
+		// we reload tables here because we track indexes in the table object
+		return exec.reloadTables()
+	})
+}
+
+func (i *interpreterPlanner) VisitDropIndexStatement(p0 *parse.DropIndexStatement) any {
+	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
+		reset, err := handleNamespaced(exec, p0)
+		if err != nil {
+			return err
+		}
+		defer reset()
+
+		// ensure that the caller has the necessary privileges
+		if err := exec.checkPrivilege(DropPrivilege); err != nil {
+			return err
+		}
+
+		if err := genAndExec(exec, p0); err != nil {
+			return err
+		}
+
+		// we reload tables here because we track indexes in the table object
+		return exec.reloadTables()
+	})
+}
+
+func (i *interpreterPlanner) VisitUseExtensionStatement(p0 *parse.UseExtensionStatement) any {
+	configValues := make([]exprFunc, len(p0.Config))
+	for j, config := range p0.Config {
+		configValues[j] = config.Value.Accept(i).(exprFunc)
+	}
+
+	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
+		// ensure that the caller has the necessary privileges
+		if err := exec.checkPrivilege(UsePrivilege); err != nil {
+			return err
+		}
+
+		panic("TODO: we need to find a way to implement new extensions")
+	})
+}
+
+func (i *interpreterPlanner) VisitUnuseExtensionStatement(p0 *parse.UnuseExtensionStatement) any {
+	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
+		// ensure that the caller has the necessary privileges
+		if err := exec.checkPrivilege(UsePrivilege); err != nil {
+			return err
+		}
+
+		_, exists := exec.namespaces[p0.Alias]
+		if !exists {
+			if p0.IfExists {
+				return nil
+			}
+
+			return fmt.Errorf(`extension initialized with alias "%s" does not exist`, p0.Alias)
+		}
+
+		delete(exec.namespaces, p0.Alias)
+
+		return nil
+	})
+}
+
+func (i *interpreterPlanner) VisitCreateActionStatement(p0 *parse.CreateActionStatement) any {
+	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
+		reset, err := handleNamespaced(exec, p0)
+		if err != nil {
+			return err
+		}
+		defer reset()
+
+		if err := exec.checkPrivilege(CreatePrivilege); err != nil {
+			return err
+		}
+
+		namespace := exec.namespaces[exec.scope.namespace]
+
+		// we check in the available functions map because there is a chance that the user is overwriting an existing function.
+		if _, exists := namespace.availableFunctions[p0.Name]; exists {
+			if p0.IfNotExists {
+				return nil
+			} else if p0.OrReplace {
+				delete(namespace.availableFunctions, p0.Name)
+				delete(namespace.actions, p0.Name)
+			} else {
+				return fmt.Errorf(`action/function "%s" already exists`, p0.Name)
+			}
+		}
+
+		act := Action{}
+		if err := act.FromAST(p0); err != nil {
+			return err
+		}
+
+		err = storeAction(exec.txCtx.Ctx, exec.db, exec.scope.namespace, &act)
+		if err != nil {
+			return err
+		}
+
+		execute := makeActionToExecutable(&act)
+		namespace.availableFunctions[p0.Name] = execute
+		namespace.actions[p0.Name] = &act
+
+		return nil
+	})
+}
+
+func (i *interpreterPlanner) VisitDropActionStatement(p0 *parse.DropActionStatement) any {
+	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
+		reset, err := handleNamespaced(exec, p0)
+		if err != nil {
+			return err
+		}
+		defer reset()
+
+		if err := exec.checkPrivilege(DropPrivilege); err != nil {
+			return err
+		}
+
+		namespace := exec.namespaces[exec.scope.namespace]
+
+		// we check if it exists in the actions map because we want to ensure that it is an action and not a function.
+		if _, exists := namespace.actions[p0.Name]; !exists {
+			if p0.IfExists {
+				return nil
+			}
+
+			return fmt.Errorf(`action "%s" does not exist`, p0.Name)
+		}
+
+		delete(namespace.availableFunctions, p0.Name)
+		delete(namespace.actions, p0.Name)
+
+		// there is a case where an action overwrites a function. We should restore the function if it exists.
+		if funcDef, ok := parse.Functions[p0.Name]; ok {
+			if scalarFunc, ok := funcDef.(*parse.ScalarFunctionDefinition); ok {
+				namespace.availableFunctions[p0.Name] = funcDefToExecutable(p0.Name, scalarFunc)
+			}
+		}
+
+		return nil
+	})
+}
+
+func (i *interpreterPlanner) VisitCreateNamespaceStatement(p0 *parse.CreateNamespaceStatement) any {
+	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
+		if err := exec.checkPrivilege(CreatePrivilege); err != nil {
+			return err
+		}
+
+		if _, exists := exec.namespaces[p0.Namespace]; exists {
+			if p0.IfNotExists {
+				return nil
+			}
+
+			return fmt.Errorf(`namespace "%s" already exists`, p0.Namespace)
+		}
+
+		if err := createNamespace(exec.txCtx.Ctx, exec.db, p0.Namespace); err != nil {
+			return err
+		}
+
+		exec.namespaces[p0.Namespace] = &namespace{
+			availableFunctions: make(map[string]*executable),
+			tables:             make(map[string]*engine.Table),
+			actions:            make(map[string]*Action),
+		}
+
+		return nil
+	})
+}
+
+func (i *interpreterPlanner) VisitDropNamespaceStatement(p0 *parse.DropNamespaceStatement) any {
+	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
+		if err := exec.checkPrivilege(DropPrivilege); err != nil {
+			return err
+		}
+
+		ns, exists := exec.namespaces[p0.Namespace]
+		if !exists {
+			if p0.IfExists {
+				return nil
+			}
+
+			return fmt.Errorf(`namespace "%s" does not exist`, p0.Namespace)
+		}
+
+		if ns.builtin {
+			return fmt.Errorf(`cannot drop builtin namespace "%s"`, p0.Namespace)
+		}
+
+		if err := dropNamespace(exec.txCtx.Ctx, exec.db, p0.Namespace); err != nil {
+			return err
+		}
+
+		delete(exec.namespaces, p0.Namespace)
+		exec.accessController.DeleteNamespace(p0.Namespace)
+
+		return nil
+	})
+}
+
+// below are the alter table statements
+
+func (i *interpreterPlanner) VisitAddColumn(p0 *parse.AddColumn) any {
+	panic("intepreter planner should not be called for alter table statements")
+}
+
+func (i *interpreterPlanner) VisitDropColumn(p0 *parse.DropColumn) any {
+	panic("intepreter planner should not be called for alter table statements")
+}
+
+func (i *interpreterPlanner) VisitRenameColumn(p0 *parse.RenameColumn) any {
+	panic("intepreter planner should not be called for alter table statements")
+}
+
+func (i *interpreterPlanner) VisitRenameTable(p0 *parse.RenameTable) any {
+	panic("intepreter planner should not be called for alter table statements")
+}
+
+func (i *interpreterPlanner) VisitAddTableConstraint(p0 *parse.AddTableConstraint) any {
+	panic("intepreter planner should not be called for alter table statements")
+}
+
+func (i *interpreterPlanner) VisitDropTableConstraint(p0 *parse.DropTableConstraint) any {
+	panic("intepreter planner should not be called for alter table statements")
+}
+
+func (i *interpreterPlanner) VisitColumn(p0 *parse.Column) any {
+	panic("intepreter planner should not be called for alter table statements")
+}
+
+func (i *interpreterPlanner) VisitAlterColumnSet(p0 *parse.AlterColumnSet) any {
+	panic("intepreter planner should not be called for alter table statements")
+}
+
+func (i *interpreterPlanner) VisitAlterColumnDrop(p0 *parse.AlterColumnDrop) any {
+	panic("intepreter planner should not be called for alter table statements")
 }
 
 // below this, I have all visitors that are SQL specific. We don't need to implement them,
@@ -1279,20 +1708,8 @@ func (i *interpreterPlanner) VisitOrderingTerm(p0 *parse.OrderingTerm) any {
 	panic("intepreter planner should not be called for SQL expressions")
 }
 
-func (i *interpreterPlanner) VisitActionStmtSQL(p0 *parse.ActionStmtSQL) any {
-	panic("intepreter planner should not be called for SQL expressions")
-}
-
-func (i *interpreterPlanner) VisitActionStmtExtensionCall(p0 *parse.ActionStmtExtensionCall) any {
-	panic("intepreter planner should not be called for SQL expressions")
-}
-
-func (i *interpreterPlanner) VisitActionStmtActionCall(p0 *parse.ActionStmtActionCall) any {
-	panic("intepreter planner should not be called for SQL expressions")
-}
-
 func (i *interpreterPlanner) VisitIfThen(p0 *parse.IfThen) any {
-	// we handle this directly in VisitProcedureStmtIf
+	// we handle this directly in VisitActionStmtIf
 	panic("VisitIfThen should never be called by the interpreter")
 }
 
@@ -1308,66 +1725,38 @@ func (i *interpreterPlanner) VisitExpressionWindowFunctionCall(p0 *parse.Express
 	panic("intepreter planner should not be called for SQL expressions")
 }
 
-func (i *interpreterPlanner) VisitAlterTableStatement(p0 *parse.AlterTableStatement) any {
-	panic("intepreter planner should not be called for SQL expressions")
+func (i *interpreterPlanner) VisitPrimaryKeyInlineConstraint(p0 *parse.PrimaryKeyInlineConstraint) any {
+	panic("interpreter planner should never be called for table constraints")
 }
 
-func (i *interpreterPlanner) VisitCreateTableStatement(p0 *parse.CreateTableStatement) any {
-	panic("TODO: Implement")
+func (i *interpreterPlanner) VisitPrimaryKeyOutOfLineConstraint(p0 *parse.PrimaryKeyOutOfLineConstraint) any {
+	panic("interpreter planner should never be called for table constraints")
 }
 
-func (i *interpreterPlanner) VisitDropTableStatement(p0 *parse.DropTableStatement) any {
-	panic("TODO: Implement")
+func (i *interpreterPlanner) VisitUniqueInlineConstraint(p0 *parse.UniqueInlineConstraint) any {
+	panic("interpreter planner should never be called for table constraints")
 }
 
-func (i *interpreterPlanner) VisitCreateIndexStatement(p0 *parse.CreateIndexStatement) any {
-	panic("TODO: Implement")
+func (i *interpreterPlanner) VisitUniqueOutOfLineConstraint(p0 *parse.UniqueOutOfLineConstraint) any {
+	panic("interpreter planner should never be called for table constraints")
 }
 
-func (i *interpreterPlanner) VisitDropIndexStatement(p0 *parse.DropIndexStatement) any {
-	panic("TODO: Implement")
+func (i *interpreterPlanner) VisitDefaultConstraint(p0 *parse.DefaultConstraint) any {
+	panic("interpreter planner should never be called for table constraints")
 }
 
-func (i *interpreterPlanner) VisitAddColumnStatement(p0 *parse.AddColumn) any {
-	panic("TODO: Implement")
+func (i *interpreterPlanner) VisitNotNullConstraint(p0 *parse.NotNullConstraint) any {
+	panic("interpreter planner should never be called for table constraints")
 }
 
-func (i *interpreterPlanner) VisitSetColumnConstraint(p0 *parse.AlterColumnSet) any {
-	panic("TODO: Implement")
+func (i *interpreterPlanner) VisitCheckConstraint(p0 *parse.CheckConstraint) any {
+	panic("interpreter planner should never be called for table constraints")
 }
 
-func (i *interpreterPlanner) VisitDropColumnConstraint(p0 *parse.AlterColumnDrop) any {
-	panic("TODO: Implement")
+func (i *interpreterPlanner) VisitForeignKeyReferences(p0 *parse.ForeignKeyReferences) any {
+	panic("interpreter planner should never be called for table constraints")
 }
 
-func (i *interpreterPlanner) VisitAddColumn(p0 *parse.AddColumn) any {
-	panic("TODO: Implement")
-}
-
-func (i *interpreterPlanner) VisitDropColumn(p0 *parse.DropColumn) any {
-	panic("TODO: Implement")
-}
-
-func (i *interpreterPlanner) VisitRenameColumn(p0 *parse.RenameColumn) any {
-	panic("TODO: Implement")
-}
-
-func (i *interpreterPlanner) VisitRenameTable(p0 *parse.RenameTable) any {
-	panic("TODO: Implement")
-}
-
-func (i *interpreterPlanner) VisitAddTableConstraint(p0 *parse.AddTableConstraint) any {
-	panic("TODO: Implement")
-}
-
-func (i *interpreterPlanner) VisitDropTableConstraint(p0 *parse.DropTableConstraint) any {
-	panic("TODO: Implement")
-}
-
-func (i *interpreterPlanner) VisitTableIndex(p0 *parse.TableIndex) any {
-	panic("TODO: Implement")
-}
-
-func (i *interpreterPlanner) VisitColumn(p0 *parse.Column) any {
+func (i *interpreterPlanner) VisitForeignKeyOutOfLineConstraint(p0 *parse.ForeignKeyOutOfLineConstraint) any {
 	panic("TODO: Implement")
 }

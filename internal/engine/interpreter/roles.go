@@ -42,7 +42,7 @@ func newAccessController(ctx context.Context, db sql.DB) (*accessController, err
 	getRolesStmt := `
 	SELECT
 		r.name AS name,
-		array_agg(ur.user_id) AS users,
+		array_agg(ur.user_identifier) AS users,
 		array_agg(rp.privilege_type) AS privileges,
 		array_agg(n.name) AS namespaces
 	FROM kwild_engine.roles r
@@ -159,6 +159,13 @@ func (a *accessController) DeleteRole(ctx context.Context, db sql.DB, role strin
 	}
 
 	return nil
+}
+
+// DeleteNamespace deletes all roles and privileges associated with a namespace.
+func (a *accessController) DeleteNamespace(namespace string) {
+	for _, role := range a.roles {
+		delete(role.namespacePrivileges, namespace)
+	}
 }
 
 func (a *accessController) HasPrivilege(user string, namespace *string, privilege privilege) bool {
@@ -373,15 +380,17 @@ func (a *accessController) UnassignRole(ctx context.Context, db sql.DB, role str
 
 const ownerKey = "db_owner"
 
-func (a *accessController) TransferOwnership(ctx context.Context, db sql.DB, newOwner string) error {
+// SetOwnership sets the owner of the database.
+// It will overwrite the current owner.
+func (a *accessController) SetOwnership(ctx context.Context, db sql.DB, user string) error {
 	// update the db
-	_, err := db.Execute(ctx, "UPDATE kwild_engine.metadata SET value = $1 WHERE key = $2", newOwner, ownerKey)
+	_, err := db.Execute(ctx, "INSERT INTO kwild_engine.metadata (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2", ownerKey, user)
 	if err != nil {
 		return err
 	}
 
 	// update the cache
-	a.owner = newOwner
+	a.owner = user
 
 	return nil
 }
@@ -461,6 +470,7 @@ var privilegeNames = map[privilege]struct{}{
 	DropPrivilege:   {},
 	AlterPrivilege:  {},
 	RolesPrivilege:  {},
+	UsePrivilege:    {},
 }
 
 type privilege string
@@ -484,6 +494,8 @@ const (
 	CreatePrivilege privilege = "CREATE"
 	// can drop objects
 	DropPrivilege privilege = "DROP"
+	// use can use extensions
+	UsePrivilege privilege = "USE"
 	// can alter objects
 	AlterPrivilege privilege = "ALTER"
 	// can manage roles.

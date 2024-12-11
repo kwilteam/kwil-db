@@ -199,6 +199,14 @@ func (v *BaseKuneiformParserVisitor) VisitUnuse_extension_statement(ctx *Unuse_e
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseKuneiformParserVisitor) VisitCreate_namespace_statement(ctx *Create_namespace_statementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitDrop_namespace_statement(ctx *Drop_namespace_statementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseKuneiformParserVisitor) VisitSelect_statement(ctx *Select_statementContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -292,6 +300,10 @@ func (v *BaseKuneiformParserVisitor) VisitParen_sql_expr(ctx *Paren_sql_exprCont
 }
 
 func (v *BaseKuneiformParserVisitor) VisitCollate_sql_expr(ctx *Collate_sql_exprContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
+func (v *BaseKuneiformParserVisitor) VisitMake_array_sql_expr(ctx *Make_array_sql_exprContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

@@ -115,9 +115,9 @@ func literalToString(value any) (string, error) {
 type ExpressionFunctionCall struct {
 	Position
 	Typecastable
-	// Qualifier is the qualified name of the function.
-	// It can be nil if the function is not qualified.
-	Qualifier string
+	// Namespace is the namespace/schema that the function is in.
+	// It can be empty if the function is in the default namespace.
+	Namespace string
 	// Name is the name of the function.
 	Name string
 	// Args are the arguments to the function call.
@@ -296,7 +296,7 @@ type ComparisonOperator string
 
 const (
 	ComparisonOperatorEqual              ComparisonOperator = "="
-	ComparisonOperatorNotEqual           ComparisonOperator = "!="
+	ComparisonOperatorNotEqual           ComparisonOperator = "<>"
 	ComparisonOperatorGreaterThan        ComparisonOperator = ">"
 	ComparisonOperatorLessThan           ComparisonOperator = "<"
 	ComparisonOperatorGreaterThanOrEqual ComparisonOperator = ">="
@@ -321,8 +321,8 @@ func (e *ExpressionLogical) Accept(v Visitor) any {
 type LogicalOperator string
 
 const (
-	LogicalOperatorAnd LogicalOperator = "and"
-	LogicalOperatorOr  LogicalOperator = "or"
+	LogicalOperatorAnd LogicalOperator = "AND"
+	LogicalOperatorOr  LogicalOperator = "OR"
 )
 
 // ExpressionArithmetic is an arithmetic expression.
@@ -367,7 +367,7 @@ type UnaryOperator string
 
 const (
 	// Not can be either NOT or !
-	UnaryOperatorNot UnaryOperator = "not"
+	UnaryOperatorNot UnaryOperator = "NOT"
 	UnaryOperatorNeg UnaryOperator = "-"
 	UnaryOperatorPos UnaryOperator = "+"
 )
@@ -521,9 +521,31 @@ func (c *CommonTableExpression) Accept(v Visitor) any {
 	return v.VisitCommonTableExpression(c)
 }
 
+// Namespacing is a struct that can have a namespace prefix.
+// This is used for top-level statements that can have a namespace prefix
+// using curly braces.
+type Namespacing struct {
+	NamespacePrefix string
+}
+
+func (n *Namespacing) SetNamespacePrefix(prefix string) {
+	n.NamespacePrefix = prefix
+}
+
+func (n *Namespacing) GetNamespacePrefix() string {
+	return n.NamespacePrefix
+}
+
+type Namespaceable interface {
+	TopLevelStatement
+	SetNamespacePrefix(string)
+	GetNamespacePrefix() string
+}
+
 // SQLStatement is a DML statement with common table expression.
 type SQLStatement struct {
 	Position
+	Namespacing
 	CTEs []*CommonTableExpression
 	// Recursive is true if the RECURSIVE keyword is present.
 	Recursive bool
@@ -533,11 +555,12 @@ type SQLStatement struct {
 	raw *string
 }
 
+func (s *SQLStatement) topLevelStatement() {}
+
 func (s *SQLStatement) Accept(v Visitor) any {
 	return v.VisitSQLStatement(s)
 }
 
-func (s *SQLStatement) topLevelStatement() {}
 func (s *SQLStatement) Raw() (string, error) {
 	if s.raw == nil {
 		return "", fmt.Errorf("raw SQL is not set")
@@ -556,6 +579,7 @@ type SQLCore interface {
 // CreateActionStatement is a CREATE ACTION statement.
 type CreateActionStatement struct {
 	Position
+	Namespacing
 	// Either IfNotExists or OrReplace can be true, but not both.
 	// Both can be false.
 	IfNotExists bool
@@ -576,6 +600,8 @@ type CreateActionStatement struct {
 	Returns *ActionReturn
 	// Statements are the statements in the action.
 	Statements []ActionStmt
+	// Raw is the raw CREATE ACTION statement.
+	Raw string
 }
 
 func (c *CreateActionStatement) topLevelStatement() {}
@@ -592,6 +618,7 @@ type NamedType struct {
 
 type DropActionStatement struct {
 	Position
+	Namespacing
 	// IfExists is true if the IF EXISTS clause is present.
 	IfExists bool
 	// Name is the name of the action.
@@ -616,7 +643,7 @@ type ActionReturn struct {
 // CreateTableStatement is a CREATE TABLE statement.
 type CreateTableStatement struct {
 	Position
-
+	Namespacing
 	IfNotExists bool
 	Name        string
 	Columns     []*Column
@@ -750,9 +777,12 @@ func (c *CheckConstraint) LocalColumns() []string { return nil }
 type ForeignKeyReferences struct {
 	Position
 
-	RefTable   string
-	RefColumns []string
-	Actions    []*ForeignKeyAction
+	// RefTableNamespace is the qualifier of the referenced table.
+	// It can be empty if the table is in the same schema.
+	RefTableNamespace string
+	RefTable          string
+	RefColumns        []string
+	Actions           []*ForeignKeyAction
 }
 
 func (c *ForeignKeyReferences) Accept(v Visitor) any {
@@ -779,9 +809,9 @@ type IndexType string
 
 const (
 	// IndexTypeBTree is the default index, created by using `INDEX`.
-	IndexTypeBTree IndexType = "btree"
+	IndexTypeBTree IndexType = "BTREE"
 	// IndexTypeUnique is a unique BTree index, created by using `UNIQUE INDEX`.
-	IndexTypeUnique IndexType = "unique"
+	IndexTypeUnique IndexType = "UNIQUE"
 )
 
 // ForeignKey is a foreign key in a table.
@@ -857,17 +887,17 @@ const (
 
 type DropTableStatement struct {
 	Position
-
+	Namespacing
 	Tables   []string
 	IfExists bool
 	Behavior DropBehavior
 }
 
+func (s *DropTableStatement) topLevelStatement() {}
+
 func (s *DropTableStatement) Accept(v Visitor) any {
 	return v.VisitDropTableStatement(s)
 }
-
-func (s *DropTableStatement) topLevelStatement() {}
 
 type AlterTableAction interface {
 	Node
@@ -878,12 +908,14 @@ type AlterTableAction interface {
 // AlterTableStatement is a ALTER TABLE statement.
 type AlterTableStatement struct {
 	Position
-
+	Namespacing
 	Table  string
 	Action AlterTableAction
 }
 
 func (a *AlterTableStatement) topLevelStatement() {}
+
+func (a *AlterTableStatement) alterTableAction() {}
 
 func (a *AlterTableStatement) Accept(v Visitor) any {
 	return v.VisitAlterTableStatement(a)
@@ -940,105 +972,98 @@ type AlterColumnSet struct {
 	Value *ExpressionLiteral
 }
 
+func (a *AlterColumnSet) alterTableAction() {}
+
 func (a *AlterColumnSet) Accept(v Visitor) any {
 	return v.VisitAlterColumnSet(a)
 }
 
-func (a *AlterColumnSet) alterTableAction() {}
-
 // AlterColumnDrop is "ALTER COLUMN ... DROP ..." statement.
 type AlterColumnDrop struct {
 	Position
-
 	Column string
 	Type   SingleColumnConstraintType
 }
+
+func (a *AlterColumnDrop) alterTableAction() {}
 
 func (a *AlterColumnDrop) Accept(v Visitor) any {
 	return v.VisitAlterColumnDrop(a)
 }
 
-func (a *AlterColumnDrop) alterTableAction() {}
-
 type AddColumn struct {
 	Position
-
 	Name string
 	Type *types.DataType
 }
+
+func (a *AddColumn) alterTableAction() {}
 
 func (a *AddColumn) Accept(v Visitor) any {
 	return v.VisitAddColumn(a)
 }
 
-func (a *AddColumn) alterTableAction() {}
-
 type DropColumn struct {
 	Position
-
 	Name string
 }
+
+func (a *DropColumn) alterTableAction() {}
 
 func (a *DropColumn) Accept(v Visitor) any {
 	return v.VisitDropColumn(a)
 }
 
-func (a *DropColumn) alterTableAction() {}
-
 type RenameColumn struct {
 	Position
-
 	OldName string
 	NewName string
 }
+
+func (a *RenameColumn) alterTableAction() {}
 
 func (a *RenameColumn) Accept(v Visitor) any {
 	return v.VisitRenameColumn(a)
 }
 
-func (a *RenameColumn) alterTableAction() {}
-
 type RenameTable struct {
 	Position
-
 	Name string
 }
+
+func (a *RenameTable) alterTableAction() {}
 
 func (a *RenameTable) Accept(v Visitor) any {
 	return v.VisitRenameTable(a)
 }
 
-func (a *RenameTable) alterTableAction() {}
-
 // AddTableConstraint is a constraint that is being added to a table.
 // It is used to specify multi-column constraints.
 type AddTableConstraint struct {
 	Position
-
 	Constraint *OutOfLineConstraint
 }
+
+func (a *AddTableConstraint) alterTableAction() {}
 
 func (a *AddTableConstraint) Accept(v Visitor) any {
 	return v.VisitAddTableConstraint(a)
 }
 
-func (a *AddTableConstraint) alterTableAction() {}
-
 type DropTableConstraint struct {
 	Position
-
 	Name string
 }
+
+func (a *DropTableConstraint) alterTableAction() {}
 
 func (a *DropTableConstraint) Accept(v Visitor) any {
 	return v.VisitDropTableConstraint(a)
 }
 
-func (a *DropTableConstraint) alterTableAction() {}
-
 type CreateIndexStatement struct {
 	Position
-
+	Namespacing
 	IfNotExists bool
 	Name        string
 	On          string
@@ -1046,15 +1071,15 @@ type CreateIndexStatement struct {
 	Type        IndexType
 }
 
+func (s *CreateIndexStatement) topLevelStatement() {}
+
 func (s *CreateIndexStatement) Accept(v Visitor) any {
 	return v.VisitCreateIndexStatement(s)
 }
 
-func (s *CreateIndexStatement) topLevelStatement() {}
-
 type DropIndexStatement struct {
 	Position
-
+	Namespacing
 	Name       string
 	CheckExist bool
 }
@@ -1088,11 +1113,11 @@ type GrantOrRevokeStatement struct {
 	ToUser string
 }
 
+func (g *GrantOrRevokeStatement) topLevelStatement() {}
+
 func (g *GrantOrRevokeStatement) Accept(v Visitor) any {
 	return v.VisitGrantOrRevokeStatement(g)
 }
-
-func (g *GrantOrRevokeStatement) topLevelStatement() {}
 
 type CreateRoleStatement struct {
 	Position
@@ -1102,11 +1127,11 @@ type CreateRoleStatement struct {
 	Role string
 }
 
+func (c *CreateRoleStatement) topLevelStatement() {}
+
 func (c *CreateRoleStatement) Accept(v Visitor) any {
 	return v.VisitCreateRoleStatement(c)
 }
-
-func (c *CreateRoleStatement) topLevelStatement() {}
 
 type DropRoleStatement struct {
 	Position
@@ -1116,11 +1141,11 @@ type DropRoleStatement struct {
 	Role string
 }
 
+func (d *DropRoleStatement) topLevelStatement() {}
+
 func (d *DropRoleStatement) Accept(v Visitor) any {
 	return v.VisitDropRoleStatement(d)
 }
-
-func (d *DropRoleStatement) topLevelStatement() {}
 
 type TransferOwnershipStatement struct {
 	Position
@@ -1128,11 +1153,11 @@ type TransferOwnershipStatement struct {
 	To string
 }
 
+func (t *TransferOwnershipStatement) topLevelStatement() {}
+
 func (t *TransferOwnershipStatement) Accept(v Visitor) any {
 	return v.VisitTransferOwnershipStatement(t)
 }
-
-func (t *TransferOwnershipStatement) topLevelStatement() {}
 
 type UseExtensionStatement struct {
 	Position
@@ -1145,11 +1170,11 @@ type UseExtensionStatement struct {
 	Alias string
 }
 
+func (u *UseExtensionStatement) topLevelStatement() {}
+
 func (u *UseExtensionStatement) Accept(v Visitor) any {
 	return v.VisitUseExtensionStatement(u)
 }
-
-func (u *UseExtensionStatement) topLevelStatement() {}
 
 type UnuseExtensionStatement struct {
 	Position
@@ -1157,11 +1182,39 @@ type UnuseExtensionStatement struct {
 	Alias    string
 }
 
+func (u *UnuseExtensionStatement) topLevelStatement() {}
+
 func (u *UnuseExtensionStatement) Accept(v Visitor) any {
 	return v.VisitUnuseExtensionStatement(u)
 }
 
-func (u *UnuseExtensionStatement) topLevelStatement() {}
+type CreateNamespaceStatement struct {
+	Position
+	// IfNotExists is true if the IF NOT EXISTS clause is present.
+	IfNotExists bool
+	// Namespace is the namespace that is being created.
+	Namespace string
+}
+
+func (c *CreateNamespaceStatement) topLevelStatement() {}
+
+func (c *CreateNamespaceStatement) Accept(v Visitor) any {
+	return v.VisitCreateNamespaceStatement(c)
+}
+
+type DropNamespaceStatement struct {
+	Position
+	// IfExists is true if the IF EXISTS clause is present.
+	IfExists bool
+	// Namespace is the namespace that is being dropped.
+	Namespace string
+}
+
+func (d *DropNamespaceStatement) topLevelStatement() {}
+
+func (d *DropNamespaceStatement) Accept(v Visitor) any {
+	return v.VisitDropNamespaceStatement(d)
+}
 
 // SelectStatement is a SELECT statement.
 type SelectStatement struct {
@@ -1281,6 +1334,10 @@ type Table interface {
 
 type RelationTable struct {
 	Position
+	// Namespace is the namespace of the table.
+	// If it is empty, then the table is in the current namespace.
+	Namespace string
+	// Table is the name of the table.
 	Table string
 	Alias string // can be empty
 }
@@ -1618,6 +1675,8 @@ type DDLVisitor interface {
 	VisitTransferOwnershipStatement(*TransferOwnershipStatement) any
 	VisitUseExtensionStatement(*UseExtensionStatement) any
 	VisitUnuseExtensionStatement(*UnuseExtensionStatement) any
+	VisitCreateNamespaceStatement(*CreateNamespaceStatement) any
+	VisitDropNamespaceStatement(*DropNamespaceStatement) any
 	VisitCreateActionStatement(*CreateActionStatement) any
 	VisitDropActionStatement(*DropActionStatement) any
 	// Constraints
@@ -1873,5 +1932,13 @@ func (u *UnimplementedDDLVisitor) VisitUseExtensionStatement(p0 *UseExtensionSta
 }
 
 func (u *UnimplementedDDLVisitor) VisitUnuseExtensionStatement(p0 *UnuseExtensionStatement) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitCreateNamespaceStatement(p0 *CreateNamespaceStatement) any {
+	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
+}
+
+func (u *UnimplementedDDLVisitor) VisitDropNamespaceStatement(p0 *DropNamespaceStatement) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
 }
