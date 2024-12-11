@@ -3,7 +3,6 @@ package blockprocessor
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
@@ -136,15 +135,15 @@ func (bp *BlockProcessor) Rollback(ctx context.Context, height int64, appHash kt
 	return nil
 }
 
-func (bp *BlockProcessor) CheckTx(ctx context.Context, incomingTx []byte, recheck bool) error {
-	var err error
-	tx := &ktypes.Transaction{}
-	if err = tx.UnmarshalBinary(incomingTx); err != nil {
-		bp.log.Debug("Failed to unmarshal the transaction", "err", err)
-		return fmt.Errorf("failed to unmarshal the transaction: %w", err)
+func (bp *BlockProcessor) CheckTx(ctx context.Context, tx *ktypes.Transaction, recheck bool) error {
+	rawTx, err := tx.MarshalBinary()
+	if err != nil {
+		return fmt.Errorf("invalid transaction: %v", err) // e.g. missing fields
 	}
+	txHash := types.HashBytes(rawTx)
 
-	bp.log.Info("Check transaction", "Recheck", recheck, "Sender", hex.EncodeToString(tx.Sender), "PayloadType", tx.Body.PayloadType.String(), "Nonce", tx.Body.Nonce, "TxFee", tx.Body.Fee.String())
+	bp.log.Info("Check transaction", "Recheck", recheck, "Hash", txHash, "Sender", hex.EncodeToString(tx.Sender),
+		"PayloadType", tx.Body.PayloadType.String(), "Nonce", tx.Body.Nonce, "TxFee", tx.Body.Fee.String())
 
 	if !recheck {
 		// Verify the correct chain ID is set, if it is set.
@@ -176,7 +175,6 @@ func (bp *BlockProcessor) CheckTx(ctx context.Context, incomingTx []byte, rechec
 		return fmt.Errorf("failed to get identifier: %w", err)
 	}
 
-	txHash := sha256.Sum256(incomingTx)
 	err = bp.txapp.ApplyMempool(&common.TxContext{
 		Ctx: ctx,
 		BlockContext: &common.BlockContext{

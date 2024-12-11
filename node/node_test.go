@@ -188,7 +188,7 @@ func (ce *dummyCE) Role() types.Role {
 	return types.RoleLeader
 }
 
-func (ce *dummyCE) CheckTx(ctx context.Context, tx []byte) error {
+func (ce *dummyCE) CheckTx(ctx context.Context, tx *ktypes.Transaction) error {
 	return nil
 }
 

@@ -101,7 +101,15 @@ func (ce *ConsensusEngine) createBlockProposal() (*blockProposal, error) {
 	nTxs := ce.mempool.PeekN(blockTxCount)
 	var txns [][]byte
 	for _, namedTx := range nTxs {
-		txns = append(txns, namedTx.Tx)
+		rawTx, err := namedTx.Tx.MarshalBinary()
+		if err != nil { // this is a bug
+			ce.log.Errorf("invalid transaction from mempool rejected",
+				"hash", namedTx.Hash, "error", err)
+			ce.mempool.Remove(namedTx.Hash)
+			continue
+			// return nil, fmt.Errorf("invalid transaction: %v", err) // e.g. nil/missing body
+		}
+		txns = append(txns, rawTx)
 	}
 
 	blk := ktypes.NewBlock(ce.state.lc.height+1, ce.state.lc.blkHash, ce.state.lc.appHash, ce.ValidatorSetHash(), time.Now(), txns)

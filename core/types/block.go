@@ -62,8 +62,8 @@ type BlockHeader struct {
 
 type Block struct {
 	Header    *BlockHeader
-	Txns      [][]byte
-	Signature []byte // Signature is the block producer's signature (leader in our model)
+	Txns      [][]byte // TODO: convert to []*Transaction
+	Signature []byte   // Signature is the block producer's signature (leader in our model)
 }
 
 func (b *Block) Hash() Hash {

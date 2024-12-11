@@ -471,12 +471,8 @@ func (n *Node) Status(ctx context.Context) (*adminTypes.Status, error) {
 }
 
 func (n *Node) TxQuery(ctx context.Context, hash types.Hash, prove bool) (*ktypes.TxQueryResponse, error) {
-	raw, height, blkHash, blkIdx, err := n.bki.GetTx(hash)
+	tx, height, blkHash, blkIdx, err := n.bki.GetTx(hash)
 	if err != nil {
-		return nil, err
-	}
-	var tx ktypes.Transaction
-	if err = tx.UnmarshalBinary(raw); err != nil {
 		return nil, err
 	}
 	blkResults, err := n.bki.Results(blkHash)
@@ -488,7 +484,7 @@ func (n *Node) TxQuery(ctx context.Context, hash types.Hash, prove bool) (*ktype
 	}
 	res := blkResults[blkIdx]
 	return &ktypes.TxQueryResponse{
-		Tx:     &tx,
+		Tx:     tx,
 		Hash:   hash,
 		Height: height,
 		Result: &res,
@@ -499,12 +495,11 @@ func (n *Node) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, _ /*sync
 	rawTx, _ := tx.MarshalBinary()
 	txHash := types.HashBytes(rawTx)
 
-	// TODO: checkTx before accepting the Tx
-	if err := n.ce.CheckTx(ctx, rawTx); err != nil {
+	if err := n.ce.CheckTx(ctx, tx); err != nil {
 		return nil, err
 	}
 
-	n.mp.Store(txHash, rawTx)
+	n.mp.Store(txHash, tx)
 
 	n.log.Infof("broadcasting new tx %v", txHash)
 	n.announceTx(ctx, txHash, rawTx, n.host.ID())
