@@ -4,7 +4,6 @@ import (
 	"context"
 
 	ktypes "github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/node/mempool"
 	"github.com/kwilteam/kwil-db/node/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )
@@ -22,7 +21,6 @@ type DB interface {
 type Mempool interface {
 	PeekN(maxSize int) []types.NamedTx
 	Remove(txid types.Hash)
-	RecheckTxs(ctx context.Context, checkFn mempool.CheckFn)
 }
 
 // BlockStore includes both txns and blocks
@@ -35,7 +33,6 @@ type BlockStore interface {
 	GetByHeight(height int64) (types.Hash, *ktypes.Block, types.Hash, error)
 	StoreResults(hash types.Hash, results []ktypes.TxResult) error
 	// Results(hash types.Hash) ([]types.TxResult, error)
-
 }
 
 type BlockProcessor interface {
@@ -48,6 +45,7 @@ type BlockProcessor interface {
 	CheckTx(ctx context.Context, tx *ktypes.Transaction, recheck bool) error
 
 	GetValidators() []*ktypes.Validator
+	ConsensusParams() *ktypes.ConsensusParams
 
 	BlockExecutionStatus() ktypes.BlockExecutionStatus
 }

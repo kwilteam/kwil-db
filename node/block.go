@@ -302,7 +302,7 @@ func (n *Node) getBlkHeight(ctx context.Context, height int64) (types.Hash, type
 
 // BlockByHeight returns the block by height. If height <= 0, the latest block
 // will be returned.
-func (n *Node) BlockByHeight(_ context.Context, height int64) (types.Hash, *ktypes.Block, types.Hash, error) {
+func (n *Node) BlockByHeight(height int64) (types.Hash, *ktypes.Block, types.Hash, error) {
 	if height <= 0 { // I think this is correct since block height starts from 1
 		height, _, _ = n.bki.Best()
 	}
@@ -310,11 +310,11 @@ func (n *Node) BlockByHeight(_ context.Context, height int64) (types.Hash, *ktyp
 }
 
 // BlockByHash returns the block by block hash.
-func (n *Node) BlockByHash(_ context.Context, hash types.Hash) (*ktypes.Block, types.Hash, error) {
+func (n *Node) BlockByHash(hash types.Hash) (*ktypes.Block, types.Hash, error) {
 	return n.bki.Get(hash)
 }
 
 // BlockResultByHash returns the block result by block hash.
-func (n *Node) BlockResultByHash(_ context.Context, hash types.Hash) ([]ktypes.TxResult, error) {
+func (n *Node) BlockResultByHash(hash types.Hash) ([]ktypes.TxResult, error) {
 	return n.bki.Results(hash)
 }

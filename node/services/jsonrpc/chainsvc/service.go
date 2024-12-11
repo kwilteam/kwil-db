@@ -36,12 +36,13 @@ var (
 // Node specifies the methods required for chain service to interact with the blockchain.
 type Node interface {
 	// BlockByHeight returns block info at height. If height=0, the latest block will be returned.
-	BlockByHeight(ctx context.Context, height int64) (ktypes.Hash, *ktypes.Block, ktypes.Hash, error)
-	BlockByHash(ctx context.Context, hash ktypes.Hash) (*ktypes.Block, ktypes.Hash, error)
-	BlockResultByHash(ctx context.Context, hash ktypes.Hash) ([]ktypes.TxResult, error)
-	ChainTx(ctx context.Context, hash ktypes.Hash) (*chaintypes.ChainTx, error)
-	BlockHeight(ctx context.Context) int64
-	ChainUnconfirmedTx(ctx context.Context, limit int) (int, []nodetypes.NamedTx)
+	BlockByHeight(height int64) (ktypes.Hash, *ktypes.Block, ktypes.Hash, error)
+	BlockByHash(hash ktypes.Hash) (*ktypes.Block, ktypes.Hash, error)
+	BlockResultByHash(hash ktypes.Hash) ([]ktypes.TxResult, error)
+	ChainTx(hash ktypes.Hash) (*chaintypes.ChainTx, error)
+	BlockHeight() int64
+	ChainUnconfirmedTx(limit int) (int, []nodetypes.NamedTx)
+	ConsensusParams() *ktypes.ConsensusParams
 }
 
 type Validators interface {
@@ -55,11 +56,11 @@ type Service struct {
 	blockchain Node // node is the local node that can accept transactions.
 }
 
-func NewService(log log.Logger, blockchain Node, genesisCfg *config.GenesisConfig) *Service {
+func NewService(log log.Logger, blockchain Node, voting Validators, genesisCfg *config.GenesisConfig) *Service {
 	return &Service{
 		log:        log,
 		genesisCfg: genesisCfg,
-		//voting:     voting, // TODO
+		voting:     voting,
 		blockchain: blockchain,
 	}
 }
@@ -104,6 +105,9 @@ func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 		chainjson.MethodGenesis: rpcserver.MakeMethodDef(svc.Genesis,
 			"retrieve the genesis info",
 			"genesis information"),
+		chainjson.MethodConsensusParams: rpcserver.MakeMethodDef(svc.ConsensusParams,
+			"retrieve the consensus parameers",
+			"consensus parameters"),
 		chainjson.MethodValidators: rpcserver.MakeMethodDef(svc.Validators,
 			"retrieve validator info at certain height",
 			"validator information at certain height"),
@@ -113,10 +117,10 @@ func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 	}
 }
 
-func (svc *Service) HealthMethod(ctx context.Context, _ *chainjson.HealthRequest) (*chainjson.HealthResponse, *jsonrpc.Error) {
+func (svc *Service) HealthMethod(_ context.Context, _ *chainjson.HealthRequest) (*chainjson.HealthResponse, *jsonrpc.Error) {
 	return &chainjson.HealthResponse{
 		ChainID: svc.genesisCfg.ChainID,
-		Height:  svc.blockchain.BlockHeight(ctx),
+		Height:  svc.blockchain.BlockHeight(),
 		Healthy: true,
 	}, nil
 }
@@ -134,14 +138,14 @@ func verHandler(context.Context, *userjson.VersionRequest) (*userjson.VersionRes
 
 // Block returns block information either by block height or block hash.
 // If both provided, block hash will be used.
-func (svc *Service) Block(ctx context.Context, req *chainjson.BlockRequest) (*chainjson.BlockResponse, *jsonrpc.Error) {
+func (svc *Service) Block(_ context.Context, req *chainjson.BlockRequest) (*chainjson.BlockResponse, *jsonrpc.Error) {
 	if req.Height < 0 {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "height cannot be negative", nil)
 	}
 
 	// prioritize req.Hash over req.Height
 	if !req.Hash.IsZero() {
-		block, appHash, err := svc.blockchain.BlockByHash(ctx, req.Hash)
+		block, appHash, err := svc.blockchain.BlockByHash(req.Hash)
 		if err != nil {
 			svc.log.Error("block by hash", "hash", req.Hash, "error", err)
 			return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to get block", nil)
@@ -156,7 +160,7 @@ func (svc *Service) Block(ctx context.Context, req *chainjson.BlockRequest) (*ch
 		}, nil
 	}
 
-	blockHash, block, appHash, err := svc.blockchain.BlockByHeight(ctx, req.Height)
+	blockHash, block, appHash, err := svc.blockchain.BlockByHeight(req.Height)
 	svc.log.Error("block by height", "height", req.Height, "hash", req.Hash, "error", err)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to get block", nil)
@@ -173,19 +177,19 @@ func (svc *Service) Block(ctx context.Context, req *chainjson.BlockRequest) (*ch
 
 // BlockResult returns block result either by block height or bloch hash.
 // If both provided, block hash will be used.
-func (svc *Service) BlockResult(ctx context.Context, req *chainjson.BlockResultRequest) (*chainjson.BlockResultResponse, *jsonrpc.Error) {
+func (svc *Service) BlockResult(_ context.Context, req *chainjson.BlockResultRequest) (*chainjson.BlockResultResponse, *jsonrpc.Error) {
 	if req.Height < 0 {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "height cannot be negative", nil)
 	}
 
 	if !req.Hash.IsZero() {
-		block, _, err := svc.blockchain.BlockByHash(ctx, req.Hash)
+		block, _, err := svc.blockchain.BlockByHash(req.Hash)
 		if err != nil {
 			svc.log.Error("block by hash", "hash", req.Hash, "error", err)
 			return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to get block: "+err.Error(), nil)
 		}
 
-		txResults, err := svc.blockchain.BlockResultByHash(ctx, req.Hash)
+		txResults, err := svc.blockchain.BlockResultByHash(req.Hash)
 		if err != nil {
 			svc.log.Error("block result by hash", "hash", req.Hash, "error", err)
 			return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to get block result: "+err.Error(), nil)
@@ -197,13 +201,13 @@ func (svc *Service) BlockResult(ctx context.Context, req *chainjson.BlockResultR
 		}, nil
 	}
 
-	blockHash, block, _, err := svc.blockchain.BlockByHeight(ctx, req.Height)
+	blockHash, block, _, err := svc.blockchain.BlockByHeight(req.Height)
 	svc.log.Error("block by height", "height", req.Height, "hash", req.Hash, "error", err)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to get block", nil)
 	}
 
-	txResults, err := svc.blockchain.BlockResultByHash(ctx, blockHash)
+	txResults, err := svc.blockchain.BlockResultByHash(blockHash)
 	if err != nil {
 		svc.log.Error("block result by hash", "hash", req.Hash, "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to get block result: "+err.Error(), nil)
@@ -216,12 +220,12 @@ func (svc *Service) BlockResult(ctx context.Context, req *chainjson.BlockResultR
 }
 
 // Tx returns a transaction by hash.
-func (svc *Service) Tx(ctx context.Context, req *chainjson.TxRequest) (*chaintypes.ChainTx, *jsonrpc.Error) {
+func (svc *Service) Tx(_ context.Context, req *chainjson.TxRequest) (*chaintypes.ChainTx, *jsonrpc.Error) {
 	if req.Hash.IsZero() {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "hash is required", nil)
 	}
 
-	tx, err := svc.blockchain.ChainTx(ctx, req.Hash)
+	tx, err := svc.blockchain.ChainTx(req.Hash)
 	if err != nil {
 		svc.log.Error("tx by hash", "hash", req.Hash, "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to get tx: "+err.Error(), nil)
@@ -230,7 +234,7 @@ func (svc *Service) Tx(ctx context.Context, req *chainjson.TxRequest) (*chaintyp
 	return tx, nil
 }
 
-func (svc *Service) Genesis(ctx context.Context, req *chainjson.GenesisRequest) (*chainjson.GenesisResponse, *jsonrpc.Error) {
+func (svc *Service) Genesis(ctx context.Context, _ *chainjson.GenesisRequest) (*chainjson.GenesisResponse, *jsonrpc.Error) {
 	return &chainjson.GenesisResponse{
 		ChainID:          svc.genesisCfg.ChainID,
 		Leader:           svc.genesisCfg.Leader,
@@ -243,29 +247,32 @@ func (svc *Service) Genesis(ctx context.Context, req *chainjson.GenesisRequest) 
 	}, nil
 }
 
+func (svc *Service) ConsensusParams(_ context.Context, _ *chainjson.ConsensusParamsRequest) (*chainjson.ConsensusParamsResponse, *jsonrpc.Error) {
+	return (*chainjson.ConsensusParamsResponse)(svc.blockchain.ConsensusParams()), nil
+}
+
 // Validators returns validator set at certain height. Default to latest height.
-func (svc *Service) Validators(ctx context.Context, req *chainjson.ValidatorsRequest) (*chainjson.ValidatorsResponse, *jsonrpc.Error) {
-	panic("Plz inject voting dependency")
-	// should be able to get validator set at req.Height
-	//vals := svc.voting.GetValidators()
-	//
-	//pbValidators := make([]*ktypes.Validator, len(vals))
-	//for i, vi := range vals {
-	//	pbValidators[i] = &ktypes.Validator{
-	//		Role:   vi.Role,
-	//		PubKey: vi.PubKey,
-	//		Power:  vi.Power,
-	//	}
-	//}
-	//
-	//return &chainjson.ValidatorsResponse{
-	//	Height:     svc.blockchain.BlockHeight(ctx),
-	//	Validators: nil,
-	//}, nil
+func (svc *Service) Validators(_ context.Context, _ *chainjson.ValidatorsRequest) (*chainjson.ValidatorsResponse, *jsonrpc.Error) {
+	// NOTE: should be able to get validator set at req.Height
+	vals := svc.voting.GetValidators()
+
+	pbValidators := make([]*ktypes.Validator, len(vals))
+	for i, vi := range vals {
+		pbValidators[i] = &ktypes.Validator{
+			Role:   vi.Role,
+			PubKey: vi.PubKey,
+			Power:  vi.Power,
+		}
+	}
+
+	return &chainjson.ValidatorsResponse{
+		Height:     svc.blockchain.BlockHeight(),
+		Validators: nil,
+	}, nil
 }
 
 // UnconfirmedTxs returns the unconfirmed txs. Default return 10 txs, max return 50 txs.
-func (svc *Service) UnconfirmedTxs(ctx context.Context, req *chainjson.UnconfirmedTxsRequest) (*chainjson.UnconfirmedTxsResponse, *jsonrpc.Error) {
+func (svc *Service) UnconfirmedTxs(_ context.Context, req *chainjson.UnconfirmedTxsRequest) (*chainjson.UnconfirmedTxsResponse, *jsonrpc.Error) {
 	if req.Limit < 0 {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "invalid limit", nil)
 	}
@@ -275,7 +282,7 @@ func (svc *Service) UnconfirmedTxs(ctx context.Context, req *chainjson.Unconfirm
 	if req.Limit == 0 {
 		req.Limit = 10
 	}
-	total, txs := svc.blockchain.ChainUnconfirmedTx(ctx, req.Limit)
+	total, txs := svc.blockchain.ChainUnconfirmedTx(req.Limit)
 	return &chainjson.UnconfirmedTxsResponse{
 		Total: total,
 		Txs:   convertNamedTxs(txs),

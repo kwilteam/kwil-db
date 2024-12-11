@@ -512,7 +512,7 @@ func (n *Node) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, _ /*sync
 }
 
 // ChainTx return tx info that is used in Chain rpc.
-func (n *Node) ChainTx(_ context.Context, hash types.Hash) (*chainTypes.ChainTx, error) {
+func (n *Node) ChainTx(hash types.Hash) (*chainTypes.ChainTx, error) {
 	raw, height, blkHash, blkIdx, err := n.bki.GetTx(hash)
 	if err != nil {
 		return nil, err
@@ -535,7 +535,7 @@ func (n *Node) ChainTx(_ context.Context, hash types.Hash) (*chainTypes.ChainTx,
 }
 
 // ChainUnconfirmedTx return unconfirmed tx info that is used in Chain rpc.
-func (n *Node) ChainUnconfirmedTx(_ context.Context, limit int) (int, []types.NamedTx) {
+func (n *Node) ChainUnconfirmedTx(limit int) (int, []types.NamedTx) {
 	total := n.mp.Size()
 	if limit <= 0 {
 		return total, nil
@@ -543,9 +543,13 @@ func (n *Node) ChainUnconfirmedTx(_ context.Context, limit int) (int, []types.Na
 	return n.mp.Size(), n.mp.PeekN(limit)
 }
 
-func (n *Node) BlockHeight(ctx context.Context) int64 {
+func (n *Node) BlockHeight() int64 {
 	height, _, _ := n.bki.Best()
 	return height
+}
+
+func (n *Node) ConsensusParams() *ktypes.ConsensusParams {
+	return n.ce.ConsensusParams()
 }
 
 var RequiredStreamProtocols = []protocol.ID{

@@ -127,7 +127,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	}
 
 	chainRpcSvcLogger := d.logger.New("CHAIN")
-	jsonChainSvc := chainsvc.NewService(chainRpcSvcLogger, node, d.genesisCfg)
+	jsonChainSvc := chainsvc.NewService(chainRpcSvcLogger, node, vs, d.genesisCfg)
 	jsonRPCServer.RegisterSvc(jsonChainSvc)
 
 	s := &server{

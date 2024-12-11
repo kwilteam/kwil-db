@@ -23,6 +23,7 @@ type TxRequest struct {
 }
 
 type GenesisRequest struct{}
+type ConsensusParamsRequest struct{}
 type ValidatorsRequest struct {
 	Height int64 `json:"height"`
 }
