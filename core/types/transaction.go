@@ -296,9 +296,9 @@ var _ io.ReaderFrom = (*Transaction)(nil)
 func (t *Transaction) ReadFrom(r io.Reader) (int64, error) {
 	n, err := t.deserialize(r)
 	if err != nil {
-		return int64(n), err
+		return n, err
 	}
-	return int64(n), nil
+	return n, nil
 }
 
 var _ encoding.BinaryUnmarshaler = (*Transaction)(nil)
@@ -312,7 +312,7 @@ func (t *Transaction) UnmarshalBinary(data []byte) error {
 	if !t.strictUnmarshal {
 		return nil
 	}
-	if n != len(data) {
+	if n != int64(len(data)) {
 		return errors.New("failed to read all")
 	}
 	if r.Len() != 0 {
@@ -374,54 +374,49 @@ func (tb TransactionBody) WriteTo(w io.Writer) (int64, error) {
 var _ io.ReaderFrom = (*TransactionBody)(nil)
 
 func (tb *TransactionBody) ReadFrom(r io.Reader) (int64, error) {
-	var n int
+	cr := utils.NewCountingReader(r)
+
 	// Description Length + Description
-	desc, err := readString(r)
+	desc, err := readString(cr)
 	if err != nil {
-		return int64(n), fmt.Errorf("failed to read transaction body description: %w", err)
+		return cr.ReadCount(), fmt.Errorf("failed to read transaction body description: %w", err)
 	}
 	tb.Description = desc
-	n += 4 + len(desc)
 
 	// serialized Payload
-	payload, err := readBytes(r)
+	payload, err := readBytes(cr)
 	if err != nil {
-		return int64(n), fmt.Errorf("failed to read transaction body payload: %w", err)
+		return cr.ReadCount(), fmt.Errorf("failed to read transaction body payload: %w", err)
 	}
 	tb.Payload = payload
-	n += 4 + len(payload)
 
 	// PayloadType
-	payloadType, err := readString(r)
+	payloadType, err := readString(cr)
 	if err != nil {
-		return int64(n), fmt.Errorf("failed to read transaction body payload type: %w", err)
+		return cr.ReadCount(), fmt.Errorf("failed to read transaction body payload type: %w", err)
 	}
 	tb.PayloadType = PayloadType(payloadType)
-	n += 4 + len(payloadType)
 
 	// Fee (big.Int)
-	b, ni, err := readBigInt(r)
+	b, _, err := readBigInt(cr)
 	if err != nil {
-		return int64(n), fmt.Errorf("failed to read transaction body fee: %w", err)
+		return cr.ReadCount(), fmt.Errorf("failed to read transaction body fee: %w", err)
 	}
 	tb.Fee = b // may be nil
-	n += ni
 
 	// Nonce
-	if err := binary.Read(r, binary.LittleEndian, &tb.Nonce); err != nil {
-		return int64(n), fmt.Errorf("failed to read transaction body nonce: %w", err)
+	if err := binary.Read(cr, binary.LittleEndian, &tb.Nonce); err != nil {
+		return cr.ReadCount(), fmt.Errorf("failed to read transaction body nonce: %w", err)
 	}
-	n += 8
 
 	// ChainID
-	chainID, err := readString(r)
+	chainID, err := readString(cr)
 	if err != nil {
-		return int64(n), fmt.Errorf("failed to read transaction body chain ID: %w", err)
+		return cr.ReadCount(), fmt.Errorf("failed to read transaction body chain ID: %w", err)
 	}
 	tb.ChainID = chainID
-	n += 4 + len(chainID)
 
-	return int64(n), nil
+	return cr.ReadCount(), nil
 }
 
 var _ encoding.BinaryUnmarshaler = (*TransactionBody)(nil)
@@ -489,38 +484,35 @@ func (t *Transaction) serialize(w io.Writer) (err error) {
 	return nil
 }
 
-func (t *Transaction) deserialize(r io.Reader) (int, error) {
-	var n int
+func (t *Transaction) deserialize(r io.Reader) (int64, error) {
+	cr := utils.NewCountingReader(r)
 
 	// Signature
-	sigBytes, err := readBytes(r)
+	sigBytes, err := readBytes(cr)
 	if err != nil {
-		return n, fmt.Errorf("failed to read transaction signature: %w", err)
+		return cr.ReadCount(), fmt.Errorf("failed to read transaction signature: %w", err)
 	}
-	n += 4 + len(sigBytes)
 
 	if len(sigBytes) != 0 {
 		var signature auth.Signature
 		if err = signature.UnmarshalBinary(sigBytes); err != nil {
-			return 0, fmt.Errorf("failed to unmarshal transaction signature: %w", err)
+			return cr.ReadCount(), fmt.Errorf("failed to unmarshal transaction signature: %w", err)
 		}
 		t.Signature = &signature
 	}
 
 	// TxBody
 	var body TransactionBody
-	bodyLen, err := body.ReadFrom(r)
+	_, err = body.ReadFrom(cr)
 	if err != nil {
-		return 0, fmt.Errorf("failed to read transaction body: %w", err)
+		return cr.ReadCount(), fmt.Errorf("failed to read transaction body: %w", err)
 	}
 	t.Body = &body
-	n += int(bodyLen)
 	/* if we need to support nil body...
-	bodyBytes, err := readBytes(r)
+	bodyBytes, err := readBytes(cr)
 	if err != nil {
 		return 0, fmt.Errorf("failed to read transaction body: %w", err)
 	}
-	n += 4 + len(bodyBytes)
 	if len(bodyBytes) != 0 {
 		var body TransactionBody
 		body.StrictUnmarshal()
@@ -531,22 +523,20 @@ func (t *Transaction) deserialize(r io.Reader) (int, error) {
 	}*/
 
 	// SerializationType
-	serType, err := readString(r)
+	serType, err := readString(cr)
 	if err != nil {
-		return 0, fmt.Errorf("failed to read transaction serialization type: %w", err)
+		return cr.ReadCount(), fmt.Errorf("failed to read transaction serialization type: %w", err)
 	}
-	n += 4 + len(serType)
 	t.Serialization = SignedMsgSerializationType(serType)
 
 	// Sender
-	senderBytes, err := readBytes(r)
+	senderBytes, err := readBytes(cr)
 	if err != nil {
-		return 0, fmt.Errorf("failed to read transaction sender: %w", err)
+		return cr.ReadCount(), fmt.Errorf("failed to read transaction sender: %w", err)
 	}
-	n += 4 + len(senderBytes)
 	t.Sender = senderBytes
 
-	return n, nil
+	return cr.ReadCount(), nil
 }
 
 func writeBytes(w io.Writer, data []byte) error {
