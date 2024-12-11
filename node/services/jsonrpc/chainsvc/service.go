@@ -247,21 +247,21 @@ func (svc *Service) Genesis(ctx context.Context, req *chainjson.GenesisRequest) 
 func (svc *Service) Validators(ctx context.Context, req *chainjson.ValidatorsRequest) (*chainjson.ValidatorsResponse, *jsonrpc.Error) {
 	panic("Plz inject voting dependency")
 	// should be able to get validator set at req.Height
-	vals := svc.voting.GetValidators()
-
-	pbValidators := make([]*ktypes.Validator, len(vals))
-	for i, vi := range vals {
-		pbValidators[i] = &ktypes.Validator{
-			Role:   vi.Role,
-			PubKey: vi.PubKey,
-			Power:  vi.Power,
-		}
-	}
-
-	return &chainjson.ValidatorsResponse{
-		Height:     svc.blockchain.BlockHeight(ctx),
-		Validators: nil,
-	}, nil
+	//vals := svc.voting.GetValidators()
+	//
+	//pbValidators := make([]*ktypes.Validator, len(vals))
+	//for i, vi := range vals {
+	//	pbValidators[i] = &ktypes.Validator{
+	//		Role:   vi.Role,
+	//		PubKey: vi.PubKey,
+	//		Power:  vi.Power,
+	//	}
+	//}
+	//
+	//return &chainjson.ValidatorsResponse{
+	//	Height:     svc.blockchain.BlockHeight(ctx),
+	//	Validators: nil,
+	//}, nil
 }
 
 // UnconfirmedTxs returns the unconfirmed txs. Default return 10 txs, max return 50 txs.
