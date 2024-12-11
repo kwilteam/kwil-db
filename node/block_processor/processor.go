@@ -523,3 +523,17 @@ func (bp *BlockProcessor) AccountInfo(ctx context.Context, db sql.DB, identifier
 func (bp *BlockProcessor) GetValidators() []*ktypes.Validator {
 	return bp.validators.GetValidators()
 }
+
+func (bp *BlockProcessor) ConsensusParams() *ktypes.ConsensusParams {
+	bp.mtx.Lock()
+	defer bp.mtx.Unlock()
+
+	return &ktypes.ConsensusParams{
+		MaxBlockSize:     bp.chainCtx.NetworkParameters.MaxBlockSize,
+		JoinExpiry:       bp.chainCtx.NetworkParameters.JoinExpiry,
+		VoteExpiry:       bp.chainCtx.NetworkParameters.VoteExpiry,
+		DisabledGasCosts: bp.chainCtx.NetworkParameters.DisabledGasCosts,
+		MaxVotesPerTx:    bp.chainCtx.NetworkParameters.MaxVotesPerTx,
+		MigrationStatus:  bp.chainCtx.NetworkParameters.MigrationStatus,
+	}
+}
