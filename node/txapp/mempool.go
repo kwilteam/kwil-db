@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
@@ -23,12 +24,13 @@ type mempool struct {
 	acctsMtx sync.Mutex // protects accounts
 
 	nodeAddr []byte
+	log      log.Logger
 }
 
 // accountInfo retrieves the account info from the mempool state or the account store.
 func (m *mempool) accountInfo(ctx context.Context, tx sql.Executor, acctID []byte) (*types.Account, error) {
 	if acctInfo, ok := m.accounts[string(acctID)]; ok {
-		return acctInfo, nil // there is an unconfirmed tx for this account
+		return acctInfo, nil // there are unconfirmed txs for this account
 	}
 
 	// get account from account store
@@ -38,6 +40,7 @@ func (m *mempool) accountInfo(ctx context.Context, tx sql.Executor, acctID []byt
 	}
 
 	m.accounts[string(acctID)] = acct
+	m.log.Info("added new account to mempool records", "account", hex.EncodeToString(acctID), "nonce", acct.Nonce, "balance", acct.Balance)
 
 	return acct, nil
 }
@@ -231,6 +234,8 @@ func (m *mempool) applyTransaction(ctx *common.TxContext, tx *types.Transaction,
 	// Due to which it accepts the next transaction with nonce+1, instead of nonce
 	// (but Tx with nonce is never pushed to the consensus pool).
 	acct.Nonce = int64(tx.Body.Nonce)
+
+	m.log.Info("applied transaction to mempool state", "account", hex.EncodeToString(tx.Sender), "nonce", acct.Nonce, "balance", acct.Balance)
 
 	return nil
 }

@@ -3,6 +3,7 @@ package consensus
 import (
 	"fmt"
 
+	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
 )
 
@@ -35,7 +36,7 @@ func (ce *ConsensusEngine) sendConsensusMessage(msg *consensusMessage) {
 type blockProposal struct {
 	height  int64
 	blkHash types.Hash
-	blk     *types.Block
+	blk     *ktypes.Block
 }
 
 func (bpm *blockProposal) Type() consensusMsgType {
@@ -70,7 +71,7 @@ func (vm *vote) String() string {
 // Ensure that the source of the block announce is the leader.
 type blockAnnounce struct {
 	appHash types.Hash
-	blk     *types.Block
+	blk     *ktypes.Block
 }
 
 func (bam *blockAnnounce) Type() consensusMsgType {
@@ -96,7 +97,7 @@ func (ce *ConsensusEngine) sendResetMsg(height int64) {
 
 // NotifyBlockProposal is used by the p2p stream handler to notify the consensus engine of a block proposal.
 // Only a validator should receive block proposals and notify the consensus engine, whereas others should ignore this message.
-func (ce *ConsensusEngine) NotifyBlockProposal(blk *types.Block) {
+func (ce *ConsensusEngine) NotifyBlockProposal(blk *ktypes.Block) {
 	if ce.role.Load() == types.RoleLeader {
 		return
 	}
@@ -116,7 +117,7 @@ func (ce *ConsensusEngine) NotifyBlockProposal(blk *types.Block) {
 
 // NotifyBlockCommit is used by the p2p stream handler to notify the consensus engine of a committed block.
 // Leader should ignore this message.
-func (ce *ConsensusEngine) NotifyBlockCommit(blk *types.Block, appHash types.Hash) {
+func (ce *ConsensusEngine) NotifyBlockCommit(blk *ktypes.Block, appHash types.Hash) {
 	if ce.role.Load() == types.RoleLeader {
 		return
 	}

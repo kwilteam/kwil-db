@@ -19,6 +19,7 @@ import (
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
+	blockprocessor "github.com/kwilteam/kwil-db/node/block_processor"
 	"github.com/kwilteam/kwil-db/node/consensus"
 	"github.com/kwilteam/kwil-db/node/mempool"
 	"github.com/kwilteam/kwil-db/node/meta"
@@ -29,17 +30,6 @@ import (
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
 )
-
-var defaultGenesisParams = &consensus.GenesisParams{
-	ChainID: "test-chain",
-	Params: &consensus.NetworkParams{
-		DisabledGasCosts: true,
-		JoinExpiry:       14400,
-		VoteExpiry:       108000,
-		MaxBlockSize:     6 * 1024 * 1024,
-		MaxVotesPerTx:    200,
-	},
-}
 
 func TestMain(m *testing.M) {
 	pg.UseLogger(log.New(log.WithName("DBS"), log.WithFormat(log.FormatUnstructured)))
@@ -87,29 +77,33 @@ func TestSingleNodeMocknet(t *testing.T) {
 	}
 	ss := newSnapshotStore()
 
-	// _, vsReal, err := voting.NewResolutionStore(ctx, db1)
-	// require.NoError(t, err)
+	_, vsReal, err := voting.NewResolutionStore(ctx, db1)
+	require.NoError(t, err)
+
+	genCfg := config.DefaultGenesisConfig()
+	genCfg.Leader = privKeys[0].Public().Bytes()
+	genCfg.Validators = valSetList
+
+	bpl := log.New(log.WithName("BP1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
+	bp, err := blockprocessor.NewBlockProcessor(ctx, db1, newDummyTxApp(valSetList), &mockAccounts{}, vsReal, ss, genCfg, bpl)
+	require.NoError(t, err)
 
 	ceCfg1 := &consensus.Config{
-		GenesisParams:  defaultGenesisParams,
 		PrivateKey:     privKeys[0],
 		ValidatorSet:   valSet,
 		Leader:         privKeys[0].Public(),
 		Mempool:        mp1,
 		BlockStore:     bs1,
-		Accounts:       &mockAccounts{},
-		ValidatorStore: newValidatorStore(valSetList), // vsReal
-		TxApp:          newDummyTxApp(valSetList),
+		BlockProcessor: bp,
 		Logger:         log.New(log.WithName("CE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
 		ProposeTimeout: 1 * time.Second,
 		DB:             db1,
-		Snapshots:      ss,
 	}
 	ce1 := consensus.New(ceCfg1)
 	defaultConfigSet := config.DefaultConfig()
 	log1 := log.New(log.WithName("NODE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
 	cfg1 := &Config{
-		ChainID:     defaultGenesisParams.ChainID,
+		ChainID:     genCfg.ChainID,
 		RootDir:     root1,
 		PrivKey:     privKeys[0],
 		Logger:      log1,
@@ -203,28 +197,31 @@ func TestDualNodeMocknet(t *testing.T) {
 	}
 	ss := newSnapshotStore()
 
-	_, vsReal, err := voting.NewResolutionStore(ctx, db1)
+	genCfg := config.DefaultGenesisConfig()
+	genCfg.Leader = privKeys[0].Public().Bytes()
+	genCfg.Validators = valSetList
+
+	// _, vsReal, err := voting.NewResolutionStore(ctx, db1)
+
+	bpl1 := log.New(log.WithName("BP1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
+	bp1, err := blockprocessor.NewBlockProcessor(ctx, db1, newDummyTxApp(valSetList), &mockAccounts{}, newValidatorStore(valSetList), ss, genCfg, bpl1)
 
 	ceCfg1 := &consensus.Config{
-		GenesisParams:  defaultGenesisParams,
 		PrivateKey:     privKeys[0],
 		ValidatorSet:   valSet,
 		Leader:         privKeys[0].Public(),
 		Mempool:        mp1,
 		BlockStore:     bs1,
-		Accounts:       &mockAccounts{},
-		ValidatorStore: vsReal,
-		TxApp:          newDummyTxApp(valSetList),
 		Logger:         log.New(log.WithName("CE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
 		ProposeTimeout: 1 * time.Second,
 		DB:             db1,
-		Snapshots:      ss,
+		BlockProcessor: bp1,
 	}
 	ce1 := consensus.New(ceCfg1)
 	defaultConfigSet := config.DefaultConfig()
 	log1 := log.New(log.WithName("NODE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
 	cfg1 := &Config{
-		ChainID:     defaultGenesisParams.ChainID,
+		ChainID:     genCfg.ChainID,
 		RootDir:     root1,
 		PrivKey:     privKeys[0],
 		Logger:      log1,
@@ -249,20 +246,19 @@ func TestDualNodeMocknet(t *testing.T) {
 
 	time.Sleep(20 * time.Millisecond)
 
+	// _, vsReal2, err := voting.NewResolutionStore(ctx, db2)
+	bpl2 := log.New(log.WithName("BP2"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
+	bp2, err := blockprocessor.NewBlockProcessor(ctx, db2, newDummyTxApp(valSetList), &mockAccounts{}, newValidatorStore(valSetList), ss, genCfg, bpl2)
 	ceCfg2 := &consensus.Config{
-		GenesisParams:  defaultGenesisParams,
 		PrivateKey:     privKeys[1],
 		ValidatorSet:   valSet,
 		Leader:         privKeys[0].Public(),
 		Mempool:        mp2,
 		BlockStore:     bs2,
-		Accounts:       &mockAccounts{},
-		ValidatorStore: newValidatorStore(valSetList),
-		TxApp:          newDummyTxApp(valSetList),
+		BlockProcessor: bp2,
 		Logger:         log.New(log.WithName("CE2"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
 		ProposeTimeout: 1 * time.Second,
 		DB:             db2,
-		Snapshots:      ss,
 	}
 	ce2 := consensus.New(ceCfg2)
 
@@ -370,6 +366,14 @@ func (d *dummyTxApp) Commit() error {
 }
 
 func (d *dummyTxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*ktypes.Validator, genesisAccounts []*ktypes.Account, initialHeight int64, chain *common.ChainContext) error {
+	return nil
+}
+
+func (d *dummyTxApp) AccountInfo(ctx context.Context, dbTx sql.DB, identifier []byte, pending bool) (*big.Int, int64, error) {
+	return big.NewInt(0), 0, nil
+}
+
+func (d *dummyTxApp) ApplyMempool(ctx *common.TxContext, db sql.DB, tx *ktypes.Transaction) error {
 	return nil
 }
 

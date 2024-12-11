@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/node/pg"
 
 	"github.com/stretchr/testify/require"
@@ -40,7 +41,7 @@ func Test_AccountsLive(t *testing.T) {
 
 			defer db.Execute(ctx, `DROP SCHEMA IF EXISTS `+schemaName+` CASCADE;`)
 
-			accounts, err := InitializeAccountStore(ctx, tx)
+			accounts, err := InitializeAccountStore(ctx, tx, log.DiscardLogger)
 			require.NoError(t, err)
 
 			tc.fn(t, tx, accounts, nil, true)
@@ -60,7 +61,7 @@ func TestGetAccount(t *testing.T) {
 
 	defer db.Execute(ctx, `DROP SCHEMA IF EXISTS `+schemaName+` CASCADE;`)
 
-	accounts, err := InitializeAccountStore(ctx, tx1)
+	accounts, err := InitializeAccountStore(ctx, tx1, log.DiscardLogger)
 	require.NoError(t, err)
 	tx1.Commit(ctx)
 

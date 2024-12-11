@@ -85,7 +85,7 @@ func generateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, start
 	genConfig := &config.GenesisConfig{
 		ChainID:          "kwil-testnet",
 		Leader:           leaderPub.Bytes(), // rethink this so it can be different key types?
-		Validators:       make([]ktypes.Validator, numVals),
+		Validators:       make([]*ktypes.Validator, numVals),
 		DisabledGasCosts: true,
 		JoinExpiry:       14400,
 		VoteExpiry:       108000,
@@ -94,7 +94,7 @@ func generateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, start
 	}
 
 	for i := range numVals {
-		genConfig.Validators[i] = ktypes.Validator{
+		genConfig.Validators[i] = &ktypes.Validator{
 			PubKey: keys[i].Public().Bytes(),
 			Power:  1,
 		}

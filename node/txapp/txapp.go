@@ -68,6 +68,7 @@ func NewTxApp(ctx context.Context, db sql.Executor, engine common.Engine, signer
 			// nodeAddr:     signer.Identity(),
 			accountMgr:   accounts,
 			validatorMgr: validators,
+			log:          service.Logger,
 		},
 		signer:   signer,
 		resTypes: resTypes,
@@ -410,6 +411,7 @@ type Spend struct {
 // recordSpend records a spend occurred during the block execution.
 // This only records spends during migrations.
 func (r *TxApp) recordSpend(ctx *common.TxContext, spend *Spend) {
+	r.service.Logger.Info("record spend", "account", spend.Account, "amount", spend.Amount, "nonce", spend.Nonce)
 	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationInProgress {
 		r.spends = append(r.spends, spend)
 	}
@@ -436,6 +438,12 @@ func (r *TxApp) checkAndSpend(ctx *common.TxContext, tx *types.Transaction, pric
 		if err != nil {
 			return nil, types.CodeUnknownError, err
 		}
+	}
+
+	// Get account info
+	account, err := r.Accounts.GetAccount(ctx.Ctx, dbTx, tx.Sender)
+	if err == nil {
+		r.service.Logger.Info("account info", "account", tx.Sender, "balance", account.Balance, "nonce", account.Nonce)
 	}
 
 	// check if the transaction consented to spending enough tokens

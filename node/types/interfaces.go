@@ -2,13 +2,17 @@ package types
 
 import (
 	"context"
-	"errors"
 
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
-var ErrNotFound = errors.New("not found")
+var ErrNotFound = types.ErrNotFound
 
+var HashBytes = types.HashBytes
+
+const HashLen = types.HashLen
+
+type Hash = types.Hash
 type BlockStore interface {
 	BlockGetter
 	BlockStorer
@@ -24,8 +28,8 @@ type BlockStore interface {
 
 type BlockGetter interface {
 	Have(Hash) bool
-	Get(Hash) (*Block, Hash, error)
-	GetByHeight(int64) (Hash, *Block, Hash, error) // note: we can impl GetBlockHeader easily too
+	Get(Hash) (*types.Block, Hash, error)
+	GetByHeight(int64) (Hash, *types.Block, Hash, error) // note: we can impl GetBlockHeader easily too
 }
 
 type RawGetter interface {
@@ -34,7 +38,7 @@ type RawGetter interface {
 }
 
 type BlockStorer interface {
-	Store(*Block, Hash) error
+	Store(*types.Block, Hash) error
 }
 
 type BlockResultsStorer interface {
@@ -59,14 +63,14 @@ type MemPool interface {
 }
 
 type QualifiedBlock struct { // basically just caches the hash
-	Block    *Block
+	Block    *types.Block
 	Hash     Hash
 	Proposed bool
 	AppHash  *Hash
 }
 
 type Execution interface {
-	ExecBlock(blk *Block) (commit func(context.Context, bool) error, appHash Hash, res []types.TxResult, err error)
+	ExecBlock(blk *types.Block) (commit func(context.Context, bool) error, appHash Hash, res []types.TxResult, err error)
 }
 
 type NamedTx struct {

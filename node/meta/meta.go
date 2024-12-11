@@ -93,9 +93,11 @@ func GetChainState(ctx context.Context, db sql.Executor) (height int64, appHash 
 		return 0, nil, false, fmt.Errorf("invalid type for height (%T)", res.Rows[0][0])
 	}
 
-	appHash, ok = row[1].([]byte)
-	if !ok {
-		return 0, nil, false, fmt.Errorf("expected bytes for apphash, got %T", row[1])
+	if row[1] != nil {
+		appHash, ok = row[1].([]byte)
+		if !ok {
+			return 0, nil, false, fmt.Errorf("expected bytes for apphash, got %T", row[1])
+		}
 	}
 
 	dirty, ok = row[2].(bool)
