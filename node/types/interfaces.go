@@ -1,8 +1,6 @@
 package types
 
 import (
-	"context"
-
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
@@ -68,10 +66,6 @@ type QualifiedBlock struct { // basically just caches the hash
 	Hash     Hash
 	Proposed bool
 	AppHash  *Hash
-}
-
-type Execution interface {
-	ExecBlock(blk *types.Block) (commit func(context.Context, bool) error, appHash Hash, res []types.TxResult, err error)
 }
 
 type NamedTx struct {
