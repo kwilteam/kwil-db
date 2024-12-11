@@ -1,11 +1,8 @@
 package config
 
 import (
-	"cmp"
-	"encoding/binary"
 	"encoding/json"
 	"os"
-	"slices"
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/log"
@@ -39,11 +36,12 @@ func (d *Duration) UnmarshalText(text []byte) error {
 }
 
 type GenesisConfig struct {
-	ChainID string `json:"chain_id"`
+	ChainID       string `json:"chain_id"`
+	InitialHeight int64  `json:"initial_height"`
 	// Leader is the leader's public key.
 	Leader types.HexBytes `json:"leader"`
 	// Validators is the list of genesis validators (including the leader).
-	Validators []ktypes.Validator `json:"validators"`
+	Validators []*ktypes.Validator `json:"validators"`
 
 	// MaxBlockSize is the maximum size of a block in bytes.
 	MaxBlockSize int64 `json:"max_block_size"`
@@ -58,6 +56,9 @@ type GenesisConfig struct {
 	// MaxVotesPerTx is the maximum number of votes that can be included in a
 	// single transaction.
 	MaxVotesPerTx int64 `json:"max_votes_per_tx"`
+	// StateHash is the hash of the initial state of the chain, used when bootstrapping
+	// the chain with a network snapshot.
+	StateHash []byte `json:"state_hash"`
 }
 
 func (nc *GenesisConfig) SaveAs(filename string) error {
@@ -83,25 +84,18 @@ func LoadGenesisConfig(filename string) (*GenesisConfig, error) {
 	return &nc, nil
 }
 
-// TODO: Harden this code to prevent from consensus breaking changes
-func (gc *GenesisConfig) ComputeGenesisHash() types.Hash {
-	hasher := ktypes.NewHasher()
-
-	hasher.Write([]byte(gc.ChainID))
-	hasher.Write(gc.Leader)
-
-	// sort the validators by public key
-	slices.SortFunc(gc.Validators, func(a, b ktypes.Validator) int {
-		return cmp.Compare(a.PubKey.String(), b.PubKey.String())
-	})
-
-	binary.Write(hasher, binary.BigEndian, gc.MaxBlockSize)
-	binary.Write(hasher, binary.BigEndian, gc.JoinExpiry)
-	binary.Write(hasher, binary.BigEndian, gc.VoteExpiry)
-	binary.Write(hasher, binary.BigEndian, gc.DisabledGasCosts)
-	binary.Write(hasher, binary.BigEndian, gc.MaxVotesPerTx)
-
-	return hasher.Sum(nil)
+func DefaultGenesisConfig() *GenesisConfig {
+	return &GenesisConfig{
+		ChainID:          "kwil-test-chain",
+		InitialHeight:    0,
+		Leader:           types.HexBytes{},
+		Validators:       []*ktypes.Validator{},
+		DisabledGasCosts: true,
+		JoinExpiry:       14400,
+		VoteExpiry:       108000,
+		MaxBlockSize:     6 * 1024 * 1024,
+		MaxVotesPerTx:    200,
+	}
 }
 
 // const (

@@ -11,6 +11,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
+	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/snapshotter"
 	"github.com/kwilteam/kwil-db/node/types"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
@@ -46,7 +47,7 @@ var (
 type mockBS struct {
 }
 
-func (m *mockBS) GetByHeight(height int64) (types.Hash, *types.Block, types.Hash, error) {
+func (m *mockBS) GetByHeight(height int64) (types.Hash, *ktypes.Block, types.Hash, error) {
 	return types.Hash{}, nil, types.Hash{}, nil
 }
 

@@ -19,7 +19,7 @@ type MemBS struct {
 	mtx       sync.RWMutex
 	idx       map[types.Hash]int64
 	hashes    map[int64]blockHashes
-	blocks    map[types.Hash]*types.Block
+	blocks    map[types.Hash]*ktypes.Block
 	txResults map[types.Hash][]ktypes.TxResult
 	txIds     map[types.Hash]types.Hash // tx hash -> block hash
 	fetching  map[types.Hash]bool       // TODO: remove, app concern
@@ -29,7 +29,7 @@ func NewMemBS() *MemBS {
 	return &MemBS{
 		idx:       make(map[types.Hash]int64),
 		hashes:    make(map[int64]blockHashes),
-		blocks:    make(map[types.Hash]*types.Block),
+		blocks:    make(map[types.Hash]*ktypes.Block),
 		txResults: make(map[types.Hash][]ktypes.TxResult),
 		txIds:     make(map[types.Hash]types.Hash),
 		fetching:  make(map[types.Hash]bool),
@@ -38,7 +38,7 @@ func NewMemBS() *MemBS {
 
 var _ types.BlockStore = &MemBS{}
 
-func (bs *MemBS) Get(hash types.Hash) (*types.Block, types.Hash, error) {
+func (bs *MemBS) Get(hash types.Hash) (*ktypes.Block, types.Hash, error) {
 	bs.mtx.RLock()
 	defer bs.mtx.RUnlock()
 	blk, have := bs.blocks[hash]
@@ -52,7 +52,7 @@ func (bs *MemBS) Get(hash types.Hash) (*types.Block, types.Hash, error) {
 	return blk, hashes.appHash, nil
 }
 
-func (bs *MemBS) GetByHeight(height int64) (types.Hash, *types.Block, types.Hash, error) {
+func (bs *MemBS) GetByHeight(height int64) (types.Hash, *ktypes.Block, types.Hash, error) {
 	// time.Sleep(100 * time.Millisecond) // wtf where is there a logic race in CE?
 	bs.mtx.RLock()
 	defer bs.mtx.RUnlock()
@@ -74,7 +74,7 @@ func (bs *MemBS) Have(blkid types.Hash) bool {
 	return have
 }
 
-func (bs *MemBS) Store(block *types.Block, appHash types.Hash) error {
+func (bs *MemBS) Store(block *ktypes.Block, appHash types.Hash) error {
 	bs.mtx.Lock()
 	defer bs.mtx.Unlock()
 	blkHash := block.Hash()

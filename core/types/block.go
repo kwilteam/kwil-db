@@ -3,24 +3,20 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"slices"
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
-	"github.com/kwilteam/kwil-db/core/types"
 )
 
 const (
 	BlockVersion = 0
 )
 
-var HashBytes = types.HashBytes
-
-const HashLen = types.HashLen
-
-type Hash = types.Hash
+var ErrNotFound = errors.New("not found")
 
 func NewBlock(height int64, prevHash, appHash, valSetHash Hash, stamp time.Time, txns [][]byte) *Block {
 	numTxns := len(txns)
@@ -207,7 +203,7 @@ func EncodeBlockHeader(hdr *BlockHeader) []byte {
 }
 
 func (bh *BlockHeader) Hash() Hash {
-	hasher := types.NewHasher()
+	hasher := NewHasher()
 	bh.writeBlockHeader(hasher)
 	return hasher.Sum(nil)
 }
@@ -295,7 +291,7 @@ func CalcMerkleRoot(leaves []Hash) Hash {
 		for i := range len(leaves) / 2 {
 			copy(left, leaves[i*2][:])
 			copy(right, leaves[i*2+1][:])
-			leaves[i] = types.HashBytes(both)
+			leaves[i] = HashBytes(both)
 		}
 		leaves = leaves[:len(leaves)/2]
 	}

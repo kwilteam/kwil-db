@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 
+	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -157,8 +158,8 @@ func (bp *blockProp) WriteTo(w io.Writer) (int64, error) {
 	return n, nil*/
 }
 
-func (n *Node) announceBlkProp(ctx context.Context, blk *types.Block) {
-	rawBlk := types.EncodeBlock(blk)
+func (n *Node) announceBlkProp(ctx context.Context, blk *ktypes.Block) {
+	rawBlk := ktypes.EncodeBlock(blk)
 	blkHash := blk.Hash()
 	height := blk.Header.Height
 
@@ -242,7 +243,7 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 
 	// Q: header first, or full serialized block?
 
-	blk, err := types.DecodeBlock(blkProp)
+	blk, err := ktypes.DecodeBlock(blkProp)
 	if err != nil {
 		n.log.Warnf("decodeBlock failed for proposal at height %d: %v", height, err)
 		return

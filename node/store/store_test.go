@@ -67,13 +67,13 @@ func fakeAppHash(height int64) types.Hash {
 	return types.HashBytes(binary.LittleEndian.AppendUint64(nil, uint64(height)))
 }
 
-func createTestBlock(height int64, numTxns int) (*types.Block, types.Hash) {
+func createTestBlock(height int64, numTxns int) (*ktypes.Block, types.Hash) {
 	txns := make([][]byte, numTxns)
 	for i := range numTxns {
 		txns[i] = []byte(strconv.FormatInt(height, 10) + strconv.Itoa(i) +
 			strings.Repeat("data", 1000))
 	}
-	return types.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5},
+	return ktypes.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5},
 		time.Unix(1729723553+height, 0), txns), fakeAppHash(height)
 }
 
@@ -92,7 +92,7 @@ func TestBlockStore_StoreAndGet(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	height, data := blk.Header.Height, types.EncodeBlock(blk)
+	height, data := blk.Header.Height, ktypes.EncodeBlock(blk)
 
 	if height != block.Header.Height {
 		t.Errorf("Expected height %d, got %d", block.Header.Height, height)
@@ -106,7 +106,7 @@ func TestBlockStore_StoreAndGet(t *testing.T) {
 		t.Errorf("Expected app hash %v, got %v", appHash, gotAppHash)
 	}
 
-	retrievedBlock, err := types.DecodeBlock(data)
+	retrievedBlock, err := ktypes.DecodeBlock(data)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -221,7 +221,7 @@ func TestBlockStore_HaveTx(t *testing.T) {
 
 func TestBlockStore_StoreWithNoTransactions(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
-	block := types.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{},
+	block := ktypes.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{},
 		time.Unix(1729723553, 0), [][]byte{})
 	appHash := fakeAppHash(1)
 
@@ -244,7 +244,7 @@ func TestBlockStore_StoreWithNoTransactions(t *testing.T) {
 
 func TestBlockStore_StoreWithEmptyTransactions(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
-	block := types.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{},
+	block := ktypes.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{},
 		time.Unix(1729723553, 0), [][]byte{{}, {}})
 	appHash := fakeAppHash(1)
 
@@ -338,7 +338,7 @@ func TestBlockStore_StoreWithLargeTransactions(t *testing.T) {
 	}
 	otherTx := []byte{1, 2, 3}
 
-	block := types.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{},
+	block := ktypes.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{},
 		time.Unix(1729723553, 0), [][]byte{largeTx, otherTx})
 	appHash := fakeAppHash(1)
 
@@ -420,7 +420,7 @@ func TestLargeBlockStore(t *testing.T) {
 		}
 
 		// Create and store block
-		block := types.NewBlock(height, prevHash, prevAppHash, types.Hash{}, time.Now(), txs)
+		block := ktypes.NewBlock(height, prevHash, prevAppHash, types.Hash{}, time.Now(), txs)
 		appHash := types.HashBytes([]byte(fmt.Sprintf("app-%d", height)))
 		err = bs.Store(block, appHash)
 		if err != nil {
@@ -531,7 +531,7 @@ func TestBlockStore_StoreAndGetResults(t *testing.T) {
 func TestBlockStore_StoreResultsEmptyBlock(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
-	block := types.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{},
+	block := ktypes.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{},
 		time.Unix(1729723553, 0), [][]byte{})
 	appHash := fakeAppHash(1)
 

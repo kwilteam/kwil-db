@@ -100,7 +100,7 @@ func NewBlockStore(dir string, opts ...Option) (*BlockStore, error) {
 			var height int64
 			err := item.Value(func(val []byte) error {
 				r := bytes.NewReader(val)
-				blockHeader, err := types.DecodeBlockHeader(r)
+				blockHeader, err := ktypes.DecodeBlockHeader(r)
 				if err != nil {
 					return err
 				}
@@ -221,7 +221,7 @@ func (bki *BlockStore) Results(hash types.Hash) ([]ktypes.TxResult, error) {
 			return err
 		}
 		return item.Value(func(val []byte) error {
-			header, err := types.DecodeBlockHeader(bytes.NewReader(val))
+			header, err := ktypes.DecodeBlockHeader(bytes.NewReader(val))
 			if err != nil {
 				return err
 			}
@@ -283,7 +283,7 @@ func (bki *BlockStore) Result(hash types.Hash, idx uint32) (*ktypes.TxResult, er
 	return &res, err
 }
 
-func (bki *BlockStore) Store(blk *types.Block, appHash types.Hash) error {
+func (bki *BlockStore) Store(blk *ktypes.Block, appHash types.Hash) error {
 	blkHash := blk.Hash()
 	height := blk.Header.Height
 
@@ -292,14 +292,14 @@ func (bki *BlockStore) Store(blk *types.Block, appHash types.Hash) error {
 
 	// Store block metadata (header + signature)
 	key := slices.Concat(nsHeader, blkHash[:])
-	err := txn.Set(key, append(types.EncodeBlockHeader(blk.Header), blk.Signature...))
+	err := txn.Set(key, append(ktypes.EncodeBlockHeader(blk.Header), blk.Signature...))
 	if err != nil {
 		return err
 	}
 
 	// Store the block contents with the nsBlock prefix
 	key = slices.Concat(nsBlock, blkHash[:])
-	err = txn.Set(key, types.EncodeBlock(blk))
+	err = txn.Set(key, ktypes.EncodeBlock(blk))
 	if err != nil {
 		return err
 	}
@@ -379,12 +379,12 @@ func (bki *BlockStore) Best() (int64, types.Hash, types.Hash) {
 	return bestHeight, bestHash, bestAppHash
 }
 
-func (bki *BlockStore) Get(blkHash types.Hash) (*types.Block, types.Hash, error) {
+func (bki *BlockStore) Get(blkHash types.Hash) (*ktypes.Block, types.Hash, error) {
 	if !bki.Have(blkHash) {
 		return nil, types.Hash{}, types.ErrNotFound
 	}
 
-	var block *types.Block
+	var block *ktypes.Block
 	var appHash types.Hash
 	err := bki.db.View(func(txn *badger.Txn) error {
 		// Load the block and get the tx
@@ -395,7 +395,7 @@ func (bki *BlockStore) Get(blkHash types.Hash) (*types.Block, types.Hash, error)
 		}
 
 		err = item.Value(func(val []byte) error {
-			block, err = types.DecodeBlock(val)
+			block, err = ktypes.DecodeBlock(val)
 			return err
 		})
 		if err != nil {
@@ -425,7 +425,7 @@ func (bki *BlockStore) Get(blkHash types.Hash) (*types.Block, types.Hash, error)
 // GetByHeight retrieves the full block based on the block height. The returned
 // hash is a convenience for the caller to spare computing it. The app hash,
 // which is encoded in the next block header, is also returned.
-func (bki *BlockStore) GetByHeight(height int64) (types.Hash, *types.Block, types.Hash, error) {
+func (bki *BlockStore) GetByHeight(height int64) (types.Hash, *ktypes.Block, types.Hash, error) {
 	bki.mtx.RLock()
 	defer bki.mtx.RUnlock()
 
@@ -498,7 +498,7 @@ func (bki *BlockStore) GetTx(txHash types.Hash) (raw []byte, height int64, blkHa
 		}
 
 		return item.Value(func(val []byte) error {
-			raw, err = types.GetRawBlockTx(val, blkIdx)
+			raw, err = ktypes.GetRawBlockTx(val, blkIdx)
 			return err
 			// block, err := types.DecodeBlock(val)
 			// if err != nil {

@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
 )
 
@@ -14,13 +15,13 @@ func fakeAppHash(height int64) types.Hash {
 	return types.HashBytes(binary.LittleEndian.AppendUint64(nil, uint64(height)))
 }
 
-func createTestBlock(height int64, numTxns int) (*types.Block, types.Hash) {
+func createTestBlock(height int64, numTxns int) (*ktypes.Block, types.Hash) {
 	txns := make([][]byte, numTxns)
 	for i := range numTxns {
 		txns[i] = []byte(strconv.FormatInt(height, 10) + strconv.Itoa(i) +
 			strings.Repeat("data", 1000))
 	}
-	return types.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5},
+	return ktypes.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5},
 		time.Unix(1729723553+height, 0), txns), fakeAppHash(height)
 }
 
@@ -51,10 +52,10 @@ func TestMemBS_StoreAndGet(t *testing.T) {
 func TestMemBS_GetByHeight(t *testing.T) {
 	bs := NewMemBS()
 
-	blocks := []*types.Block{
-		{Header: &types.BlockHeader{Height: 1}},
-		{Header: &types.BlockHeader{Height: 2}},
-		{Header: &types.BlockHeader{Height: 3}},
+	blocks := []*ktypes.Block{
+		{Header: &ktypes.BlockHeader{Height: 1}},
+		{Header: &ktypes.BlockHeader{Height: 2}},
+		{Header: &ktypes.BlockHeader{Height: 3}},
 	}
 
 	for i, block := range blocks {
@@ -85,10 +86,10 @@ func TestMemBS_GetByHeight(t *testing.T) {
 func TestMemBS_Best(t *testing.T) {
 	bs := NewMemBS()
 
-	blocks := []*types.Block{
-		{Header: &types.BlockHeader{Height: 1}},
-		{Header: &types.BlockHeader{Height: 3}},
-		{Header: &types.BlockHeader{Height: 2}},
+	blocks := []*ktypes.Block{
+		{Header: &ktypes.BlockHeader{Height: 1}},
+		{Header: &ktypes.BlockHeader{Height: 3}},
+		{Header: &ktypes.BlockHeader{Height: 2}},
 	}
 
 	for i, block := range blocks {
@@ -156,7 +157,7 @@ func TestMemBS_StoreAndGetTx(t *testing.T) {
 
 func TestMemBS_PreFetch(t *testing.T) {
 	bs := NewMemBS()
-	block := &types.Block{Header: &types.BlockHeader{Height: 1}}
+	block := &ktypes.Block{Header: &ktypes.BlockHeader{Height: 1}}
 
 	if err := bs.Store(block, types.Hash{}); err != nil {
 		t.Fatal(err)

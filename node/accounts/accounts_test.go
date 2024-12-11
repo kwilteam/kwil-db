@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 
@@ -375,6 +376,7 @@ func Test_Accounts(t *testing.T) {
 			accounts := &Accounts{
 				records: make(map[string]*types.Account),
 				updates: make(map[string]*types.Account),
+				log:     log.DiscardLogger,
 			}
 
 			tc.fn(t, tx, accounts, db, true)

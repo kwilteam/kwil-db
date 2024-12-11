@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/jpillora/backoff"
+	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
 )
 
@@ -15,12 +17,13 @@ import (
 // leading to a fork.
 func (ce *ConsensusEngine) doBlockSync(ctx context.Context) error {
 	if ce.role.Load() == types.RoleLeader {
-		// TODO: which validator set we should use here? whatever we have in the state?
-		// what if the current validators are not the same as the ones in the state?
-		// and they don't respond to the status request?
+		// TODO: The validator set info that leader might have at the time it starts
+		// blocksync is outdated. And if the previous validators
 		if len(ce.validatorSet) == 1 {
 			return nil // we are the network
 		}
+		ce.log.Info("Starting block sync", "height", ce.state.lc.height)
+
 		// figure out the best height to sync with the network
 		// before starting to request blocks from the network.
 		bestHeight, err := ce.discoverBestHeight(ctx)
@@ -117,7 +120,7 @@ func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context) error {
 			return nil
 		}
 
-		blk, err := types.DecodeBlock(rawblk)
+		blk, err := ktypes.DecodeBlock(rawblk)
 		if err != nil {
 			return fmt.Errorf("failed to decode block: %w", err)
 		}
@@ -139,17 +142,18 @@ func (ce *ConsensusEngine) syncBlocksUntilHeight(ctx context.Context, startHeigh
 	t0 := time.Now()
 
 	for height <= endHeight {
-		_, appHash, rawblk, err := ce.blkRequester(ctx, height)
+		// TODO: This is used in blocksync for leader, failure of fetching the block after certain retries should fail the node
+		_, appHash, rawblk, err := ce.getBlock(ctx, height)
 		if err != nil { // all kinds of errors?
 			ce.log.Info("Error requesting block from network", "height", ce.state.lc.height+1, "error", err)
-			return nil // no more blocks to sync from network.
+			return fmt.Errorf("error requesting block from network: height : %d, error: %w", ce.state.lc.height+1, err)
 		}
 
 		if ce.state.lc.height != 0 && appHash.IsZero() {
 			return nil
 		}
 
-		blk, err := types.DecodeBlock(rawblk)
+		blk, err := ktypes.DecodeBlock(rawblk)
 		if err != nil {
 			return fmt.Errorf("failed to decode block: %w", err)
 		}
@@ -164,4 +168,41 @@ func (ce *ConsensusEngine) syncBlocksUntilHeight(ctx context.Context, startHeigh
 	ce.log.Info("Block sync completed", "startHeight", startHeight, "endHeight", endHeight, "duration", time.Since(t0))
 
 	return nil
+}
+
+func (ce *ConsensusEngine) getBlock(ctx context.Context, height int64) (blkID types.Hash, appHash types.Hash, rawBlk []byte, err error) {
+	err = retry(ctx, 15, func() error {
+		blkID, appHash, rawBlk, err = ce.blkRequester(ctx, height)
+		return err
+	})
+
+	return blkID, appHash, rawBlk, err
+}
+
+// retry will retry the function until it is successful, or reached the max retries
+func retry(ctx context.Context, maxRetries int64, fn func() error) error {
+	retrier := &backoff.Backoff{
+		Min:    100 * time.Millisecond,
+		Max:    500 * time.Millisecond,
+		Factor: 2,
+		Jitter: true,
+	}
+
+	for {
+		err := fn()
+		if err == nil {
+			return nil
+		}
+
+		// fail after maxRetries retries
+		if retrier.Attempt() > float64(maxRetries) {
+			return err
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(retrier.Duration()):
+		}
+	}
 }

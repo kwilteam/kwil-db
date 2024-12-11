@@ -7,6 +7,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 
@@ -18,6 +19,7 @@ func Test_MempoolWithoutGas(t *testing.T) {
 	m := &mempool{
 		accounts:   make(map[string]*types.Account),
 		accountMgr: &accounts,
+		log:        log.DiscardLogger,
 	}
 
 	ctx := context.Background()
@@ -69,6 +71,7 @@ func Test_MempoolWithGas(t *testing.T) {
 	m := &mempool{
 		accounts:   make(map[string]*types.Account),
 		accountMgr: &mockAccount{},
+		log:        log.DiscardLogger,
 	}
 
 	txCtx := &common.TxContext{

@@ -6,8 +6,8 @@ import (
 	"errors"
 	"time"
 
+	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
-
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
@@ -35,7 +35,7 @@ func (n *Node) blkGetStreamHandler(s network.Stream) {
 		s.SetWriteDeadline(time.Now().Add(reqRWTimeout))
 		s.Write(noData) // don't have it
 	} else {
-		rawBlk := types.EncodeBlock(blk)
+		rawBlk := ktypes.EncodeBlock(blk)
 		s.SetWriteDeadline(time.Now().Add(blkSendTimeout))
 		binary.Write(s, binary.LittleEndian, blk.Header.Height)
 		s.Write(appHash[:])
@@ -60,7 +60,7 @@ func (n *Node) blkGetHeightStreamHandler(s network.Stream) {
 		s.SetWriteDeadline(time.Now().Add(reqRWTimeout))
 		s.Write(noData) // don't have it
 	} else {
-		rawBlk := types.EncodeBlock(blk) // blkHash := blk.Hash()
+		rawBlk := ktypes.EncodeBlock(blk) // blkHash := blk.Hash()
 		// maybe we remove hash from the protocol, was thinking receiver could
 		// hang up earlier depending...
 		s.SetWriteDeadline(time.Now().Add(blkSendTimeout))
@@ -140,7 +140,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 
 	n.log.Debugf("obtained content for block %q in %v", blkid, time.Since(t0))
 
-	blk, err := types.DecodeBlock(rawBlk)
+	blk, err := ktypes.DecodeBlock(rawBlk)
 	if err != nil {
 		n.log.Infof("decodeBlock failed for %v: %v", blkid, err)
 		return
@@ -163,10 +163,10 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 	}()
 }
 
-func (n *Node) announceBlk(ctx context.Context, blk *types.Block, appHash types.Hash) {
+func (n *Node) announceBlk(ctx context.Context, blk *ktypes.Block, appHash types.Hash) {
 	blkHash := blk.Hash()
 	n.log.Debugln("announceBlk", blk.Header.Height, blkHash, appHash)
-	rawBlk := types.EncodeBlock(blk)
+	rawBlk := ktypes.EncodeBlock(blk)
 	from := n.host.ID() // this announcement originates from us (not a reannouncement)
 	n.announceRawBlk(ctx, blkHash, blk.Header.Height, rawBlk, appHash, from, blk.Signature)
 }
