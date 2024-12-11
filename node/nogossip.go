@@ -71,12 +71,11 @@ func (n *Node) txAnnStreamHandler(s network.Stream) {
 		n.log.Warnf("tx %v failed check: %v", txHash, err)
 	} else {
 		n.mp.Store(txHash, rawTx)
+		fetched = true
 
 		// re-announce
 		go n.announceTx(context.Background(), txHash, rawTx, s.Conn().RemotePeer())
 	}
-
-	fetched = true
 }
 
 func (n *Node) announceTx(ctx context.Context, txHash types.Hash, rawTx []byte, from peer.ID) {

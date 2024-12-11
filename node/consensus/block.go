@@ -45,7 +45,7 @@ func (ce *ConsensusEngine) CheckTx(ctx context.Context, tx []byte) error {
 	ce.mempoolMtx.Lock()
 	defer ce.mempoolMtx.Unlock()
 
-	return ce.blockProcessor.CheckTx(ctx, tx)
+	return ce.blockProcessor.CheckTx(ctx, tx, false)
 }
 
 func (ce *ConsensusEngine) executeBlock(ctx context.Context, blkProp *blockProposal) error {
@@ -111,6 +111,10 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 	}
 
 	// TODO: reapply existing transaction  (checkTX)
+	// get all the transactions from mempool and recheck them, the transactions should be checked
+	// in the order of nonce (stable sort to maintain relative order)
+	// ce.blockProcessor.CheckTx(ctx, tx, true)
+
 	// update the role of the node based on the final validator set at the end of the commit.
 	ce.updateRole()
 

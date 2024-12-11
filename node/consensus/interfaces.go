@@ -42,7 +42,7 @@ type BlockProcessor interface {
 	Rollback(ctx context.Context, height int64, appHash ktypes.Hash) error
 	Close() error
 
-	CheckTx(ctx context.Context, tx []byte /*, recheck bool*/) error
+	CheckTx(ctx context.Context, tx []byte, recheck bool) error
 
 	GetValidators() []*ktypes.Validator
 }

@@ -136,7 +136,7 @@ func (bp *BlockProcessor) Rollback(ctx context.Context, height int64, appHash kt
 	return nil
 }
 
-func (bp *BlockProcessor) CheckTx(ctx context.Context, incomingTx []byte) error {
+func (bp *BlockProcessor) CheckTx(ctx context.Context, incomingTx []byte, recheck bool) error {
 	var err error
 	tx := &ktypes.Transaction{}
 	if err = tx.UnmarshalBinary(incomingTx); err != nil {
@@ -144,19 +144,20 @@ func (bp *BlockProcessor) CheckTx(ctx context.Context, incomingTx []byte) error 
 		return fmt.Errorf("failed to unmarshal the transaction: %w", err)
 	}
 
-	bp.log.Info("Check transaction", "Sender", hex.EncodeToString(tx.Sender), "PayloadType", tx.Body.PayloadType.String(), "Nonce", tx.Body.Nonce, "TxFee", tx.Body.Fee.String())
+	bp.log.Info("Check transaction", "Recheck", recheck, "Sender", hex.EncodeToString(tx.Sender), "PayloadType", tx.Body.PayloadType.String(), "Nonce", tx.Body.Nonce, "TxFee", tx.Body.Fee.String())
 
-	// TODO: Ideally the chainID, signature and payload verification should only occur once per tx, fix that once the mempool can recognize fresh checkTx from rechecks.
-	// Verify the correct chain ID is set, if it is set.
-	if protected := tx.Body.ChainID != ""; protected && tx.Body.ChainID != bp.genesisParams.ChainID {
-		bp.log.Info("Wrong chain ID", "txChainID", tx.Body.ChainID)
-		return fmt.Errorf("wrong chain ID: %s", tx.Body.ChainID)
-	}
+	if !recheck {
+		// Verify the correct chain ID is set, if it is set.
+		if protected := tx.Body.ChainID != ""; protected && tx.Body.ChainID != bp.genesisParams.ChainID {
+			bp.log.Info("Wrong chain ID", "txChainID", tx.Body.ChainID)
+			return fmt.Errorf("wrong chain ID: %s", tx.Body.ChainID)
+		}
 
-	// Ensure that the transaction is valid in terms of the signature and the payload type
-	if err := ident.VerifyTransaction(tx); err != nil {
-		bp.log.Debug("Failed to verify the transaction", "err", err)
-		return fmt.Errorf("failed to verify the transaction: %w", err)
+		// Ensure that the transaction is valid in terms of the signature and the payload type
+		if err := ident.VerifyTransaction(tx); err != nil {
+			bp.log.Debug("Failed to verify the transaction", "err", err)
+			return fmt.Errorf("failed to verify the transaction: %w", err)
+		}
 	}
 
 	readTx, err := bp.db.BeginReadTx(ctx)
