@@ -116,7 +116,7 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 	// ce.blockProcessor.CheckTx(ctx, tx, true)
 
 	// update the role of the node based on the final validator set at the end of the commit.
-	ce.updateRole()
+	ce.updateValidatorSetAndRole()
 
 	ce.log.Info("Committed Block", "height", height, "hash", blkProp.blkHash, "appHash", appHash.String())
 	return nil

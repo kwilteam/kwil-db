@@ -50,7 +50,7 @@ type ConsensusEngine struct {
 	proposeTimeout time.Duration
 
 	networkHeight  atomic.Int64
-	validatorSet   map[string]ktypes.Validator
+	validatorSet   map[string]ktypes.Validator // key: hex encoded pubkey
 	genesisAppHash types.Hash
 
 	// stores state machine state for the consensus engine
@@ -456,10 +456,10 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("error initializing the chain: %w", err)
 		}
+
 		ce.state.lc.height = genHeight
-		if genAppHash != nil {
-			ce.state.lc.appHash = types.Hash(genAppHash)
-		}
+		copy(ce.state.lc.appHash[:], genAppHash)
+
 	} else if appHeight > 0 {
 		if appHeight == storeHeight && !bytes.Equal(appHash, storeAppHash[:]) {
 			// This is not possible, PG mismatches with the Blockstore return error
@@ -482,7 +482,7 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 	}
 
 	// Update the role of the node based on the final state of the validator set
-	ce.updateRole()
+	ce.updateValidatorSetAndRole()
 
 	// Done with the catchup
 	ce.inSync.Store(false)
@@ -490,10 +490,19 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 	return nil
 }
 
-// updateRole updates the role of the node based on the final state of the validator set.
-func (ce *ConsensusEngine) updateRole() error {
+// updateRole updates the validator set and role of the node based on the final state of the validator set.
+// This is called at the end of the commit phase or at the end of the catchup phase during bootstrapping.
+func (ce *ConsensusEngine) updateValidatorSetAndRole() error {
 	valset := ce.blockProcessor.GetValidators()
 	pubKey := ce.privKey.Public()
+
+	ce.validatorSet = make(map[string]ktypes.Validator)
+	for _, v := range valset {
+		ce.validatorSet[hex.EncodeToString(v.PubKey)] = ktypes.Validator{
+			PubKey: v.PubKey,
+			Power:  v.Power,
+		}
+	}
 
 	currentRole := ce.role.Load()
 
@@ -502,14 +511,13 @@ func (ce *ConsensusEngine) updateRole() error {
 		return nil
 	}
 
-	for _, v := range valset {
-		if bytes.Equal(v.PubKey, pubKey.Bytes()) {
-			ce.role.Store(types.RoleValidator)
-			return nil
-		}
+	_, ok := ce.validatorSet[hex.EncodeToString(pubKey.Bytes())]
+	if ok {
+		ce.role.Store(types.RoleValidator)
+	} else {
+		ce.role.Store(types.RoleSentry)
 	}
 
-	ce.role.Store(types.RoleSentry)
 	finalRole := ce.role.Load()
 
 	if currentRole != finalRole {
@@ -522,8 +530,6 @@ func (ce *ConsensusEngine) setLastCommitInfo(height int64, blkHash types.Hash, a
 	ce.state.lc.height = height
 	ce.state.lc.appHash = appHash
 	ce.state.lc.blkHash = blkHash
-	// TODO: do we need to set the block ???
-	// ce.state.lc.blk = nil
 
 	ce.stateInfo.height = height
 	ce.stateInfo.status = Committed
@@ -656,7 +662,7 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 
 	ce.log.Info("Network Sync: ", "from", startHeight, "to (excluding)", ce.state.lc.height+1, "time", time.Since(t0), "appHash", ce.state.lc.appHash)
 
-	ce.updateRole()
+	ce.updateValidatorSetAndRole()
 
 	return nil
 }
