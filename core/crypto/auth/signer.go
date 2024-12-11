@@ -7,14 +7,14 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/kwilteam/kwil-db/core/crypto"
 	"golang.org/x/crypto/sha3"
+
+	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/utils"
 )
 
 // Signature is a signature with a designated AuthType, which should
 // be used to determine how to verify the signature.
-// It seems a bit weird to have a field "Signature" inside a struct called "Signature",
-// but I am keeping it like this for compatibility with the old code.
 type Signature struct {
 	// Data is the raw signature bytes
 	Data []byte `json:"sig"`
@@ -23,23 +23,36 @@ type Signature struct {
 	Type string `json:"type"`
 }
 
+var _ io.WriterTo = Signature{}
+
+func (s Signature) WriteTo(w io.Writer) (int64, error) {
+	cw := utils.NewCountingWriter(w)
+	if err := binary.Write(cw, binary.LittleEndian, uint32(len(s.Data))); err != nil {
+		return cw.Written(), fmt.Errorf("failed to write signature length: %w", err)
+	}
+	if err := binary.Write(cw, binary.LittleEndian, s.Data); err != nil {
+		return cw.Written(), fmt.Errorf("failed to write signature data: %w", err)
+	}
+
+	if err := binary.Write(cw, binary.LittleEndian, uint32(len(s.Type))); err != nil {
+		return cw.Written(), fmt.Errorf("failed to write signature type length: %w", err)
+	}
+	if err := binary.Write(cw, binary.LittleEndian, []byte(s.Type)); err != nil {
+		return cw.Written(), fmt.Errorf("failed to write signature type: %w", err)
+	}
+
+	return cw.Written(), nil
+}
+
 func (s Signature) MarshalBinary() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	if err := binary.Write(buf, binary.LittleEndian, uint32(len(s.Data))); err != nil {
-		return nil, fmt.Errorf("failed to write signature length: %w", err)
-	}
-	if err := binary.Write(buf, binary.LittleEndian, s.Data); err != nil {
-		return nil, fmt.Errorf("failed to write signature data: %w", err)
-	}
-
-	if err := binary.Write(buf, binary.LittleEndian, uint32(len(s.Type))); err != nil {
-		return nil, fmt.Errorf("failed to write signature type length: %w", err)
-	}
-	if err := binary.Write(buf, binary.LittleEndian, []byte(s.Type)); err != nil {
-		return nil, fmt.Errorf("failed to write signature type: %w", err)
-	}
-
+	s.WriteTo(buf) // does not error with a bytes.Buffer as the Writer
 	return buf.Bytes(), nil
+}
+
+func (s Signature) Bytes() []byte {
+	b, _ := s.MarshalBinary() // does not error
+	return b
 }
 
 func (s *Signature) UnmarshalBinary(data []byte) error {

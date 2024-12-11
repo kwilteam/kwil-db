@@ -12,6 +12,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/utils"
 )
 
 type ResultBroadcastTx struct {
@@ -48,10 +49,21 @@ type Transaction struct {
 	Sender HexBytes `json:"sender"`
 
 	strictUnmarshal bool
+	// cachedHash      *Hash // maybe maybe maybe... this would require a mutex or careful use
 }
 
 func (t *Transaction) StrictUnmarshal() {
 	t.strictUnmarshal = true
+}
+
+// Hash gives the hash of the transaction that is the unique identifier for the
+// transaction.
+func (t *Transaction) Hash() (Hash, error) {
+	raw, err := t.MarshalBinary()
+	if err != nil {
+		return Hash{}, err
+	}
+	return HashBytes(raw), nil
 }
 
 // TransactionBody is the body of a transaction that gets included in the
@@ -259,23 +271,12 @@ func (t *TransactionBody) SerializeMsg(mst SignedMsgSerializationType) ([]byte, 
 	return nil, errors.New("invalid serialization type")
 }
 
-type countingWriter struct {
-	w io.Writer
-	c int64
-}
-
-func (cw *countingWriter) Write(p []byte) (int, error) {
-	n, err := cw.w.Write(p)
-	cw.c += int64(n)
-	return n, err
-}
-
 var _ io.WriterTo = (*Transaction)(nil)
 
 func (t *Transaction) WriteTo(w io.Writer) (int64, error) {
-	cw := &countingWriter{w: w}
+	cw := utils.NewCountingWriter(w)
 	err := t.serialize(cw)
-	return cw.c, err
+	return cw.Written(), err
 }
 
 var _ encoding.BinaryMarshaler = (*Transaction)(nil)
@@ -320,43 +321,54 @@ func (t *Transaction) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
+func (tb TransactionBody) Bytes() []byte {
+	b, _ := tb.MarshalBinary() // does not error
+	return b
+}
+
 var _ encoding.BinaryMarshaler = (*TransactionBody)(nil)
 
-func (tb *TransactionBody) MarshalBinary() ([]byte, error) {
+func (tb TransactionBody) MarshalBinary() ([]byte, error) {
 	buf := new(bytes.Buffer)
+	tb.WriteTo(buf) // no error with bytes.Buffer
+	return buf.Bytes(), nil
+}
 
+var _ io.WriterTo = TransactionBody{}
+
+func (tb TransactionBody) WriteTo(w io.Writer) (int64, error) {
+	cw := utils.NewCountingWriter(w)
 	// Description Length + Description
-	if err := writeString(buf, tb.Description); err != nil {
-		return nil, fmt.Errorf("failed to write transaction body description: %w", err)
+	if err := writeString(cw, tb.Description); err != nil {
+		return cw.Written(), fmt.Errorf("failed to write transaction body description: %w", err)
 	}
 
 	// serialized Payload
-	if err := writeBytes(buf, tb.Payload); err != nil {
-		return nil, fmt.Errorf("failed to write transaction body payload: %w", err)
+	if err := writeBytes(cw, tb.Payload); err != nil {
+		return cw.Written(), fmt.Errorf("failed to write transaction body payload: %w", err)
 	}
 
 	// PayloadType
 	payloadType := tb.PayloadType.String()
-	if err := writeString(buf, payloadType); err != nil {
-		return nil, fmt.Errorf("failed to write transaction body payload type: %w", err)
+	if err := writeString(cw, payloadType); err != nil {
+		return cw.Written(), fmt.Errorf("failed to write transaction body payload type: %w", err)
 	}
 
 	// Fee (big.Int)
-	if err := writeBigInt(buf, tb.Fee); err != nil {
-		return nil, fmt.Errorf("failed to write transaction fee: %w", err)
+	if err := writeBigInt(cw, tb.Fee); err != nil {
+		return cw.Written(), fmt.Errorf("failed to write transaction fee: %w", err)
 	}
 
 	// Nonce
-	if err := binary.Write(buf, binary.LittleEndian, tb.Nonce); err != nil {
-		return nil, fmt.Errorf("failed to write transaction body nonce: %w", err)
+	if err := binary.Write(cw, binary.LittleEndian, tb.Nonce); err != nil {
+		return cw.Written(), fmt.Errorf("failed to write transaction body nonce: %w", err)
 	}
 
 	// ChainID
-	if err := writeString(buf, tb.ChainID); err != nil {
-		return nil, fmt.Errorf("failed to write transaction body chain ID: %w", err)
+	if err := writeString(cw, tb.ChainID); err != nil {
+		return cw.Written(), fmt.Errorf("failed to write transaction body chain ID: %w", err)
 	}
-
-	return buf.Bytes(), nil
+	return cw.Written(), nil
 }
 
 var _ io.ReaderFrom = (*TransactionBody)(nil)
@@ -436,26 +448,21 @@ func (tb *TransactionBody) UnmarshalBinary(data []byte) error {
 }
 
 func (t *Transaction) serialize(w io.Writer) (err error) {
+	if t.Body == nil {
+		return errors.New("missing transaction body")
+	}
+
 	// Tx Signature
 	var sigBytes []byte
 	if t.Signature != nil {
-		if sigBytes, err = t.Signature.MarshalBinary(); err != nil {
-			return fmt.Errorf("failed to marshal transaction signature: %w", err)
-		}
+		sigBytes = t.Signature.Bytes()
 	}
 	if err := writeBytes(w, sigBytes); err != nil {
 		return fmt.Errorf("failed to write transaction signature: %w", err)
 	}
 
 	// Tx Body
-	if t.Body == nil {
-		return errors.New("missing transaction body")
-	}
-	txBodyBytes, err := t.Body.MarshalBinary()
-	if err != nil {
-		return fmt.Errorf("failed to marshal transaction body: %w", err)
-	}
-	if _, err := w.Write(txBodyBytes); err != nil {
+	if _, err := t.Body.WriteTo(w); err != nil {
 		return fmt.Errorf("failed to write transaction body: %w", err)
 	}
 	/*var txBodyBytes []byte
