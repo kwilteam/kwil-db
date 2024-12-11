@@ -192,6 +192,10 @@ func (ce *dummyCE) CheckTx(ctx context.Context, tx *ktypes.Transaction) error {
 	return nil
 }
 
+func (ce *dummyCE) ConsensusParams() *ktypes.ConsensusParams {
+	return nil
+}
+
 func (ce *dummyCE) Start(ctx context.Context, proposerBroadcaster consensus.ProposalBroadcaster,
 	blkAnnouncer consensus.BlkAnnouncer, ackBroadcaster consensus.AckBroadcaster,
 	blkRequester consensus.BlkRequester, stateResetter consensus.ResetStateBroadcaster, discReqBroadcaster consensus.DiscoveryReqBroadcaster) error {

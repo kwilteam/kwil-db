@@ -3,6 +3,7 @@ package types
 
 import (
 	"encoding/json"
+
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
