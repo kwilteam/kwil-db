@@ -42,6 +42,8 @@ type Authenticator interface {
 
 func GetAuthenticator(authType string) Authenticator {
 	switch authType {
+	case Secp256k1Auth:
+		return Secp25k1Authenticator{}
 	case EthPersonalSignAuth:
 		return EthSecp256k1Authenticator{}
 	case Ed25519Auth:

@@ -199,7 +199,7 @@ func buildMetaStore(ctx context.Context, db *pg.DB) {
 
 func buildTxApp(ctx context.Context, d *coreDependencies, db *pg.DB, accounts *accounts.Accounts,
 	votestore *voting.VoteStore, engine *execution.GlobalContext) *txapp.TxApp {
-	signer := auth.GetSigner(d.privKey)
+	signer := auth.GetNodeSigner(d.privKey)
 	service := &common.Service{
 		Logger:   d.logger.New("TXAPP"),
 		Identity: signer.Identity(),

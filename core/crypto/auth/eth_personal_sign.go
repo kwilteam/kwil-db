@@ -26,6 +26,9 @@ var _ Authenticator = EthSecp256k1Authenticator{}
 // Identifier returns an ethereum address hex string from address bytes.
 // It will include the 0x prefix, and the address will be checksum-able.
 func (EthSecp256k1Authenticator) Identifier(ident []byte) (string, error) {
+	if len(ident) != 20 {
+		return "", fmt.Errorf("invalid eth address with %d bytes", len(ident))
+	}
 	return fmt.Sprintf("0x%x", ident), nil
 }
 
