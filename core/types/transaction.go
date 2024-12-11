@@ -259,6 +259,25 @@ func (t *TransactionBody) SerializeMsg(mst SignedMsgSerializationType) ([]byte, 
 	return nil, errors.New("invalid serialization type")
 }
 
+type countingWriter struct {
+	w io.Writer
+	c int64
+}
+
+func (cw *countingWriter) Write(p []byte) (int, error) {
+	n, err := cw.w.Write(p)
+	cw.c += int64(n)
+	return n, err
+}
+
+var _ io.WriterTo = (*Transaction)(nil)
+
+func (t *Transaction) WriteTo(w io.Writer) (int64, error) {
+	cw := &countingWriter{w: w}
+	err := t.serialize(cw)
+	return cw.c, err
+}
+
 var _ encoding.BinaryMarshaler = (*Transaction)(nil)
 
 // MarshalBinary produces the full binary serialization of the transaction,

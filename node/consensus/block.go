@@ -41,7 +41,7 @@ func (ce *ConsensusEngine) validateBlock(blk *ktypes.Block) error {
 	return nil
 }
 
-func (ce *ConsensusEngine) CheckTx(ctx context.Context, tx []byte) error {
+func (ce *ConsensusEngine) CheckTx(ctx context.Context, tx *ktypes.Transaction) error {
 	ce.mempoolMtx.Lock()
 	defer ce.mempoolMtx.Unlock()
 
@@ -107,7 +107,7 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 	// remove transactions from the mempool
 	for _, txn := range blkProp.blk.Txns {
 		txHash := types.HashBytes(txn) // TODO: can this be saved instead of recalculating?
-		ce.mempool.Store(txHash, nil)
+		ce.mempool.Remove(txHash)
 	}
 
 	// TODO: reapply existing transaction  (checkTX)

@@ -1,8 +1,10 @@
 package mempool
 
 import (
+	"slices"
 	"sync"
 
+	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
 )
 
@@ -10,13 +12,15 @@ import (
 
 type Mempool struct {
 	mtx      sync.RWMutex
-	txns     map[types.Hash][]byte
+	txns     map[types.Hash]*ktypes.Transaction
+	txQ      []types.NamedTx
 	fetching map[types.Hash]bool
+	// acctTxns map[string][]types.NamedTx
 }
 
 func New() *Mempool {
 	return &Mempool{
-		txns:     make(map[types.Hash][]byte),
+		txns:     make(map[types.Hash]*ktypes.Transaction),
 		fetching: make(map[types.Hash]bool),
 	}
 }
@@ -28,15 +32,38 @@ func (mp *Mempool) Have(txid types.Hash) bool { // this is racy
 	return have
 }
 
-func (mp *Mempool) Store(txid types.Hash, raw []byte) {
+func (mp *Mempool) Remove(txid types.Hash) {
 	mp.mtx.Lock()
 	defer mp.mtx.Unlock()
-	if raw == nil {
-		delete(mp.txns, txid)
-		delete(mp.fetching, txid)
+	mp.remove(txid)
+}
+
+func (mp *Mempool) remove(txid types.Hash) {
+	idx := slices.IndexFunc(mp.txQ, func(a types.NamedTx) bool {
+		return a.Hash == txid
+	})
+	if idx == -1 {
 		return
 	}
-	mp.txns[txid] = raw
+	mp.txQ = slices.Delete(mp.txQ, idx, idx+1) // remove txQ[idx]
+	delete(mp.txns, txid)
+}
+
+func (mp *Mempool) Store(txid types.Hash, tx *ktypes.Transaction) {
+	mp.mtx.Lock()
+	defer mp.mtx.Unlock()
+	delete(mp.fetching, txid)
+
+	if tx == nil { // legacy semantics for removal
+		mp.remove(txid)
+		return
+	}
+
+	mp.txns[txid] = tx
+	mp.txQ = append(mp.txQ, types.NamedTx{
+		Hash: txid,
+		Tx:   tx,
+	})
 }
 
 func (mp *Mempool) PreFetch(txid types.Hash) bool { // probably make node business
@@ -57,43 +84,32 @@ func (mp *Mempool) PreFetch(txid types.Hash) bool { // probably make node busine
 func (mp *Mempool) Size() int {
 	mp.mtx.RLock()
 	defer mp.mtx.RUnlock()
-	return len(mp.txns)
+	return len(mp.txQ)
 }
 
-func (mp *Mempool) Get(txid types.Hash) []byte {
+func (mp *Mempool) Get(txid types.Hash) *ktypes.Transaction {
 	mp.mtx.RLock()
 	defer mp.mtx.RUnlock()
 	return mp.txns[txid]
 }
 
-func (mp *Mempool) ReapN(n int) ([]types.Hash, [][]byte) {
+// ReapN extracts the first n transactions in the queue
+func (mp *Mempool) ReapN(n int) []types.NamedTx {
 	mp.mtx.Lock()
 	defer mp.mtx.Unlock()
-	n = min(n, len(mp.txns))
-	txids := make([]types.Hash, 0, n)
-	txns := make([][]byte, 0, n)
-	for txid, rawTx := range mp.txns {
-		delete(mp.txns, txid)
-		txids = append(txids, txid)
-		txns = append(txns, rawTx)
-		if len(txids) == cap(txids) {
-			break
-		}
+	n = min(n, len(mp.txQ))
+	txns := slices.Clone(mp.txQ[:n])
+	for _, tx := range txns {
+		delete(mp.txns, tx.Hash)
 	}
-	return txids, txns
+	return txns
 }
 
 func (mp *Mempool) PeekN(n int) []types.NamedTx {
 	mp.mtx.RLock()
 	defer mp.mtx.RUnlock()
 	n = min(n, len(mp.txns))
-	txns := make([]types.NamedTx, 0, n)
-	for txid, rawTx := range mp.txns {
-		txns = append(txns, types.NamedTx{Hash: txid, Tx: rawTx})
-		if len(txns) == n {
-			break
-		}
-	}
-
+	txns := make([]types.NamedTx, n)
+	copy(txns, mp.txQ)
 	return txns
 }

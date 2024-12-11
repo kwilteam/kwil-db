@@ -48,15 +48,16 @@ type BlockResultsStorer interface {
 }
 
 type TxGetter interface {
-	GetTx(txHash types.Hash) (raw []byte, height int64, blkHash types.Hash, blkIdx uint32, err error)
+	GetTx(txHash types.Hash) (raw *types.Transaction, height int64, blkHash types.Hash, blkIdx uint32, err error)
 	HaveTx(Hash) bool
 }
 
 type MemPool interface {
 	Size() int
-	ReapN(int) ([]Hash, [][]byte) // Reap(n int, maxBts int) ([]Hash, [][]byte)
-	Get(Hash) []byte
-	Store(Hash, []byte)
+	ReapN(int) []NamedTx
+	Get(Hash) *types.Transaction
+	Remove(Hash)
+	Store(Hash, *types.Transaction)
 	PeekN(n int) []NamedTx
 	// Check([]byte)
 	PreFetch(txid Hash) bool // should be app level instead
@@ -75,5 +76,5 @@ type Execution interface {
 
 type NamedTx struct {
 	Hash Hash
-	Tx   []byte
+	Tx   *types.Transaction
 }

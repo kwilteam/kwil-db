@@ -29,7 +29,7 @@ type ConsensusEngine interface {
 		blkAnnouncer consensus.BlkAnnouncer, ackBroadcaster consensus.AckBroadcaster,
 		blkRequester consensus.BlkRequester, stateResetter consensus.ResetStateBroadcaster, discoveryBroadcaster consensus.DiscoveryReqBroadcaster) error
 
-	CheckTx(ctx context.Context, tx []byte) error
+	CheckTx(ctx context.Context, tx *ktypes.Transaction) error
 }
 
 type SnapshotStore interface {

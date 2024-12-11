@@ -9,6 +9,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
 
 	"github.com/libp2p/go-libp2p/core/network"
@@ -60,6 +61,12 @@ func (n *Node) txAnnStreamHandler(s network.Stream) {
 		}
 	}
 
+	var tx ktypes.Transaction
+	if err = tx.UnmarshalBinary(rawTx); err != nil {
+		n.log.Errorf("invalid transaction received %v: %v", txHash, err)
+		return
+	}
+
 	// n.log.Infof("obtained content for tx %q in %v", txid, time.Since(t0))
 
 	// here we could check tx index again in case a block was mined with it
@@ -67,10 +74,10 @@ func (n *Node) txAnnStreamHandler(s network.Stream) {
 
 	// store in mempool since it was not in tx index and thus not confirmed
 	ctx := context.Background()
-	if err := n.ce.CheckTx(ctx, rawTx); err != nil {
+	if err := n.ce.CheckTx(ctx, &tx); err != nil {
 		n.log.Warnf("tx %v failed check: %v", txHash, err)
 	} else {
-		n.mp.Store(txHash, rawTx)
+		n.mp.Store(txHash, &tx)
 		fetched = true
 
 		// re-announce
@@ -220,7 +227,12 @@ func (n *Node) startTxAnns(ctx context.Context, reannouncePeriod time.Duration) 
 				n.log.Infof("re-announcing %d unconfirmed txns", len(txns))
 
 				for _, nt := range txns {
-					n.announceTx(ctx, nt.Hash, nt.Tx, n.host.ID()) // response handling is async
+					rawTx, err := nt.Tx.MarshalBinary()
+					if err != nil {
+						n.log.Errorf("Failed to marshal transaction %v: %v", nt.Hash, err)
+						continue
+					}
+					n.announceTx(ctx, nt.Hash, rawTx, n.host.ID()) // response handling is async
 					if ctx.Err() != nil {
 						n.log.Warn("interrupting long re-broadcast")
 						break

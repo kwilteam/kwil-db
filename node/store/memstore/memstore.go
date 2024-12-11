@@ -158,7 +158,7 @@ func (bs *MemBS) PreFetch(blkid types.Hash) (bool, func()) {
 
 func (bs *MemBS) Close() error { return nil }
 
-func (bs *MemBS) GetTx(txHash types.Hash) (raw []byte, height int64, hash types.Hash, idx uint32, err error) {
+func (bs *MemBS) GetTx(txHash types.Hash) (tx *ktypes.Transaction, height int64, hash types.Hash, idx uint32, err error) {
 	bs.mtx.RLock()
 	defer bs.mtx.RUnlock()
 	// check the tx index, pull the block and then search for the tx with the expected hash
@@ -170,8 +170,12 @@ func (bs *MemBS) GetTx(txHash types.Hash) (raw []byte, height int64, hash types.
 	if !have {
 		return nil, 0, types.Hash{}, 0, types.ErrNotFound
 	}
-	for idx, tx := range blk.Txns {
-		if types.HashBytes(tx) == txHash {
+	for idx, rawTx := range blk.Txns {
+		if types.HashBytes(rawTx) == txHash {
+			tx := new(ktypes.Transaction)
+			if err = tx.UnmarshalBinary(rawTx); err != nil {
+				return nil, 0, types.Hash{}, 0, err
+			}
 			return tx, blk.Header.Height, blk.Hash(), uint32(idx), nil
 		}
 	}

@@ -1,12 +1,14 @@
 package memstore
 
 import (
+	"bytes"
 	"encoding/binary"
-	"strconv"
+	"math/big"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
 )
@@ -15,20 +17,40 @@ func fakeAppHash(height int64) types.Hash {
 	return types.HashBytes(binary.LittleEndian.AppendUint64(nil, uint64(height)))
 }
 
-func createTestBlock(height int64, numTxns int) (*ktypes.Block, types.Hash) {
+func newTx(nonce uint64, sender string) *ktypes.Transaction {
+	return &ktypes.Transaction{
+		Signature: &auth.Signature{},
+		Body: &ktypes.TransactionBody{
+			Description: "test",
+			Payload:     []byte(`random payload`),
+			Fee:         big.NewInt(0),
+			Nonce:       nonce,
+		},
+		Sender: []byte(sender),
+	}
+}
+
+func createTestBlock(height int64, numTxns int) (*ktypes.Block, types.Hash, []*ktypes.Transaction) {
+	txs := make([]*ktypes.Transaction, numTxns)
 	txns := make([][]byte, numTxns)
 	for i := range numTxns {
-		txns[i] = []byte(strconv.FormatInt(height, 10) + strconv.Itoa(i) +
-			strings.Repeat("data", 1000))
+		tx := newTx(uint64(i)+uint64(height), "sender")
+		tx.Body.Payload = []byte(strings.Repeat("data", 1000))
+		rawTx, err := tx.MarshalBinary()
+		if err != nil {
+			panic(err)
+		}
+		txs[i] = tx
+		txns[i] = rawTx
 	}
 	return ktypes.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5},
-		time.Unix(1729723553+height, 0), txns), fakeAppHash(height)
+		time.Unix(1729723553+height, 0), txns), fakeAppHash(height), txs
 }
 
 func TestMemBS_StoreAndGet(t *testing.T) {
 	bs := NewMemBS()
 
-	block, appHash := createTestBlock(1, 2)
+	block, appHash, _ := createTestBlock(1, 2)
 
 	err := bs.Store(block, appHash)
 	if err != nil {
@@ -125,7 +147,7 @@ func TestMemBS_StoreAndGetTx(t *testing.T) {
 	// tx2 := []byte("tx2")
 	// txns := [][]byte{tx1, tx2}
 	// block := types.NewBlock(1, prevHash, appHash, valSetHash, time.Unix(123456789, 0), txns)
-	block, _ := createTestBlock(1, 2)
+	block, _, _ := createTestBlock(1, 2)
 	tx1 := block.Txns[0]
 
 	if err := bs.Store(block, types.Hash{1, 2, 3}); err != nil {
@@ -142,8 +164,12 @@ func TestMemBS_StoreAndGetTx(t *testing.T) {
 		t.Errorf("got height %d, want 1", height)
 	}
 
-	if string(gotTx) != string(tx1) {
-		t.Errorf("got tx %s, want %s", string(gotTx), string(tx1))
+	gotRawTx, err := gotTx.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !bytes.Equal(gotRawTx, tx1) {
+		t.Errorf("got tx %x, want %x", gotRawTx, tx1)
 	}
 
 	if blkHash := block.Hash(); hash != blkHash {

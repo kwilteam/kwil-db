@@ -469,7 +469,8 @@ func (bki *BlockStore) HaveTx(txHash types.Hash) bool {
 
 // GetTx returns the raw bytes of the transaction, and information on the block
 // containing the transaction.
-func (bki *BlockStore) GetTx(txHash types.Hash) (raw []byte, height int64, blkHash types.Hash, blkIdx uint32, err error) {
+func (bki *BlockStore) GetTx(txHash types.Hash) (tx *ktypes.Transaction, height int64, blkHash types.Hash, blkIdx uint32, err error) {
+	var raw []byte
 	err = bki.db.View(func(txn *badger.Txn) error {
 		// Get block info from the tx index
 		key := slices.Concat(nsTxn, txHash[:]) // tdb["t:txHash"] => blk info
@@ -515,5 +516,13 @@ func (bki *BlockStore) GetTx(txHash types.Hash) (raw []byte, height int64, blkHa
 	if errors.Is(err, badger.ErrKeyNotFound) {
 		err = types.ErrNotFound
 	}
+
+	if len(raw) == 0 {
+		return
+	}
+
+	tx = new(ktypes.Transaction)
+	err = tx.UnmarshalBinary(raw)
+
 	return
 }

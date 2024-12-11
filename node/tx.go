@@ -103,23 +103,23 @@ func (n *Node) txGetStreamHandler(s network.Stream) {
 	}
 
 	// first check mempool
-	rawTx := n.mp.Get(req.Hash)
-	if rawTx != nil {
-		s.Write(rawTx)
+	tx := n.mp.Get(req.Hash)
+	if tx != nil {
+		tx.WriteTo(s)
 		return
 	}
 
 	// this is racy, and should be different in product
 
 	// then confirmed tx index
-	rawTx, _, _, _, err := n.bki.GetTx(req.Hash)
+	tx, _, _, _, err := n.bki.GetTx(req.Hash)
 	if err != nil {
 		if !errors.Is(err, types.ErrNotFound) {
 			n.log.Errorf("unexpected GetTx error: %v", err)
 		}
 		s.Write(noData) // don't have it
 	} else {
-		s.Write(rawTx)
+		tx.WriteTo(s)
 	}
 
 	// NOTE: response could also include conf/unconf or block height (-1 or N)

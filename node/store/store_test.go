@@ -5,15 +5,16 @@ import (
 	crand "crypto/rand"
 	"encoding/binary"
 	"fmt"
+	"math/big"
 	"math/rand/v2"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"testing"
 	"text/tabwriter"
 	"time"
 
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
 )
@@ -67,20 +68,27 @@ func fakeAppHash(height int64) types.Hash {
 	return types.HashBytes(binary.LittleEndian.AppendUint64(nil, uint64(height)))
 }
 
-func createTestBlock(height int64, numTxns int) (*ktypes.Block, types.Hash) {
+func createTestBlock(height int64, numTxns int) (*ktypes.Block, types.Hash, []*ktypes.Transaction) {
+	txs := make([]*ktypes.Transaction, numTxns)
 	txns := make([][]byte, numTxns)
 	for i := range numTxns {
-		txns[i] = []byte(strconv.FormatInt(height, 10) + strconv.Itoa(i) +
-			strings.Repeat("data", 1000))
+		tx := newTx(uint64(i)+uint64(height), "sender")
+		tx.Body.Payload = []byte(strings.Repeat("data", 1000))
+		rawTx, err := tx.MarshalBinary()
+		if err != nil {
+			panic(err)
+		}
+		txs[i] = tx
+		txns[i] = rawTx
 	}
 	return ktypes.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5},
-		time.Unix(1729723553+height, 0), txns), fakeAppHash(height)
+		time.Unix(1729723553+height, 0), txns), fakeAppHash(height), txs
 }
 
 func TestBlockStore_StoreAndGet(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
-	block, appHash := createTestBlock(1, 2)
+	block, appHash, _ := createTestBlock(1, 2)
 	err := bs.Store(block, appHash)
 	if err != nil {
 		t.Fatal(err)
@@ -121,7 +129,7 @@ func TestBlockStore_StoreAndGet(t *testing.T) {
 func TestBlockStore_GetByHeight(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
-	block, appHash := createTestBlock(1, 2)
+	block, appHash, _ := createTestBlock(1, 2)
 	bs.Store(block, appHash)
 
 	gotHash, blk, gotAppHash, err := bs.GetByHeight(1)
@@ -148,7 +156,7 @@ func TestBlockStore_GetByHeight(t *testing.T) {
 func TestBlockStore_Have(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
-	block, appHash := createTestBlock(1, 2)
+	block, appHash, _ := createTestBlock(1, 2)
 	hash := block.Hash()
 
 	if bs.Have(hash) {
@@ -167,18 +175,23 @@ func TestBlockStore_Have(t *testing.T) {
 func TestBlockStore_GetTx(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
-	block, appHash := createTestBlock(1, 3)
+	block, appHash, _ := createTestBlock(1, 3)
 	bs.Store(block, appHash)
 
 	for i := range block.Txns {
 		txHash := types.HashBytes(block.Txns[i])
-		txData, height, _, _, err := bs.GetTx(txHash)
+		tx, height, _, _, err := bs.GetTx(txHash)
 		if err != nil {
 			t.Fatal(err)
 		}
 
 		if height != block.Header.Height {
 			t.Errorf("Expected tx height %d, got %d", block.Header.Height, height)
+		}
+
+		txData, err := tx.MarshalBinary()
+		if err != nil {
+			t.Fatal(err)
 		}
 
 		if !bytes.Equal(txData, block.Txns[i]) {
@@ -190,7 +203,7 @@ func TestBlockStore_GetTx(t *testing.T) {
 func TestBlockStore_HaveTx(t *testing.T) {
 	bs, dir := setupTestBlockStore(t)
 
-	block, appHash := createTestBlock(1, 6)
+	block, appHash, _ := createTestBlock(1, 6)
 	txHash := types.HashBytes(block.Txns[0])
 
 	if bs.HaveTx(txHash) {
@@ -273,7 +286,7 @@ func TestBlockStore_StoreConcurrent(t *testing.T) {
 	for i := range 3 {
 		go func(start int) {
 			for j := range blockCount {
-				block, appHash := createTestBlock(int64(start*blockCount+j), 2)
+				block, appHash, _ := createTestBlock(int64(start*blockCount+j), 2)
 				err := bs.Store(block, appHash)
 				if err != nil {
 					t.Error(err)
@@ -306,7 +319,7 @@ func TestBlockStore_StoreConcurrent(t *testing.T) {
 
 func TestBlockStore_StoreDuplicateBlock(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
-	block, appHash := createTestBlock(1, 2)
+	block, appHash, _ := createTestBlock(1, 2)
 
 	err := bs.Store(block, appHash)
 	if err != nil {
@@ -332,17 +345,30 @@ func TestBlockStore_StoreDuplicateBlock(t *testing.T) {
 
 func TestBlockStore_StoreWithLargeTransactions(t *testing.T) {
 	bs, _ := setupTestBlockStore(t, true)
-	largeTx := make([]byte, 1<<20) // 1MB transaction
-	for i := range largeTx {
-		largeTx[i] = byte(i % 256)
+	largeTxPayload := make([]byte, 1<<20) // 1MB transaction
+	for i := range largeTxPayload {
+		largeTxPayload[i] = byte(i % 256)
 	}
-	otherTx := []byte{1, 2, 3}
+
+	largeTx := newTx(2, "moo")
+	largeTx.Body.Payload = largeTxPayload
+	otherTx := newTx(1, "Adsf")
+	otherTx.Body.Payload = []byte{1, 2, 3}
+
+	largeTxRaw, err := largeTx.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
+	otherTxRaw, err := otherTx.MarshalBinary()
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	block := ktypes.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{},
-		time.Unix(1729723553, 0), [][]byte{largeTx, otherTx})
+		time.Unix(1729723553, 0), [][]byte{largeTxRaw, otherTxRaw})
 	appHash := fakeAppHash(1)
 
-	err := bs.Store(block, appHash)
+	err = bs.Store(block, appHash)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -359,13 +385,17 @@ func TestBlockStore_StoreWithLargeTransactions(t *testing.T) {
 		t.Fatal("apphash mismatch")
 	}
 
-	for _, tx := range [][]byte{largeTx, otherTx} {
-		txHash := types.HashBytes(tx)
-		txData, _, _, _, err := bs.GetTx(txHash)
+	for _, rawTx := range [][]byte{largeTxRaw, otherTxRaw} {
+		txHash := types.HashBytes(rawTx)
+		tx, _, _, _, err := bs.GetTx(txHash)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !bytes.Equal(txData, tx) {
+		txData, err := tx.MarshalBinary()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(txData, rawTx) {
 			t.Error("Retrieved transaction data doesn't match original")
 		}
 	}
@@ -377,6 +407,19 @@ func TestBlockStore_StoreWithLargeTransactions(t *testing.T) {
 	// } else {
 	// 	prettyPrintFileSizes(filesInfo)
 	// }
+}
+
+func newTx(nonce uint64, sender string) *ktypes.Transaction {
+	return &ktypes.Transaction{
+		Signature: &auth.Signature{},
+		Body: &ktypes.TransactionBody{
+			Description: "test",
+			Payload:     []byte(`random payload`),
+			Fee:         big.NewInt(0),
+			Nonce:       nonce,
+		},
+		Sender: []byte(sender),
+	}
 }
 
 func TestLargeBlockStore(t *testing.T) {
@@ -403,9 +446,9 @@ func TestLargeBlockStore(t *testing.T) {
 	rng := rand.New(rngSrc)
 
 	// Patterned tx body to make it compressible
-	txBody := make([]byte, txSize-8)
-	for i := range txBody {
-		txBody[i] = byte(i % 16)
+	txPayload := make([]byte, txSize-8)
+	for i := range txPayload {
+		txPayload[i] = byte(i % 16)
 	}
 
 	// Create blocks with random transactions
@@ -413,10 +456,13 @@ func TestLargeBlockStore(t *testing.T) {
 		// Generate random transactions
 		txs := make([][]byte, txsPerBlock)
 		for i := range txs {
-			tx := make([]byte, txSize)
-			rngSrc.Read(tx[:8]) // like a nonce, ensures txs are unique
-			copy(tx[8:], txBody)
-			txs[i] = tx
+			tx := newTx(uint64(i), "sendername")
+			tx.Body.Payload = make([]byte, txSize)
+			copy(tx.Body.Payload, txPayload)
+			txs[i], err = tx.MarshalBinary()
+			if err != nil {
+				t.Fatal(err)
+			}
 		}
 
 		// Create and store block
@@ -449,14 +495,18 @@ func TestLargeBlockStore(t *testing.T) {
 
 			txIdx := rng.IntN(len(txs))
 			txHash := types.HashBytes(txs[txIdx])
-			gotTx, gotHeight, _, _, err := bs.GetTx(txHash)
+			tx, gotHeight, _, _, err := bs.GetTx(txHash)
 			if err != nil {
 				t.Errorf("Failed to get tx at height %d, idx %d: %v", height, txIdx, err)
+			}
+			txData, err := tx.MarshalBinary()
+			if err != nil {
+				t.Fatal(err)
 			}
 			if gotHeight != height {
 				t.Errorf("Wrong tx height. Got %d, want %d", gotHeight, height)
 			}
-			if !bytes.Equal(gotTx, txs[txIdx]) {
+			if !bytes.Equal(txData, txs[txIdx]) {
 				t.Error("Retrieved tx data mismatch")
 			}
 		}
@@ -492,7 +542,7 @@ func getDirSize(path string) int64 {
 func TestBlockStore_StoreAndGetResults(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
-	block, appHash := createTestBlock(1, 3)
+	block, appHash, _ := createTestBlock(1, 3)
 	err := bs.Store(block, appHash)
 	if err != nil {
 		t.Fatal(err)
@@ -569,7 +619,7 @@ func TestBlockStore_ResultsNonExistentBlock(t *testing.T) {
 func TestBlockStore_StoreResultsLargeData(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
-	block, appHash := createTestBlock(1, 2)
+	block, appHash, _ := createTestBlock(1, 2)
 	err := bs.Store(block, appHash)
 	if err != nil {
 		t.Fatal(err)
@@ -605,7 +655,7 @@ func TestBlockStore_StoreResultsLargeData(t *testing.T) {
 func TestBlockStore_StoreResultsMismatchedCount(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
-	block, appHash := createTestBlock(1, 2)
+	block, appHash, _ := createTestBlock(1, 2)
 	err := bs.Store(block, appHash)
 	if err != nil {
 		t.Fatal(err)
@@ -632,7 +682,7 @@ func TestBlockStore_StoreResultsMismatchedCount(t *testing.T) {
 func TestBlockStore_Result(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
-	block, appHash := createTestBlock(1, 3)
+	block, appHash, _ := createTestBlock(1, 3)
 	err := bs.Store(block, appHash)
 	if err != nil {
 		t.Fatal(err)
