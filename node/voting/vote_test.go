@@ -103,7 +103,7 @@ func Test_Voting(t *testing.T) {
 				voters = v.GetValidators()
 				require.Len(t, voters, 2)
 
-				voterAPower, err := v.GetValidatorPower(ctx, db, []byte("a"))
+				voterAPower, err := v.GetValidatorPower(ctx, []byte("a"))
 				require.NoError(t, err)
 
 				require.Equal(t, int64(100), voterAPower)

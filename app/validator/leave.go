@@ -1,11 +1,12 @@
-package validators
+package validator
 
 import (
 	"context"
 
-	"github.com/kwilteam/kwil-db/cmd/common/display"
-	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
 	"github.com/spf13/cobra"
+
+	"github.com/kwilteam/kwil-db/app/rpc"
+	"github.com/kwilteam/kwil-db/app/shared/display"
 )
 
 var (
@@ -25,7 +26,7 @@ func leaveCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 
-			clt, err := common.GetAdminSvcClient(ctx, cmd)
+			clt, err := rpc.AdminSvcClient(ctx, cmd)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}

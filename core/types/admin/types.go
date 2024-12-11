@@ -32,13 +32,7 @@ type SyncInfo struct {
 }
 
 // ValidatorInfo describes a validator node.
-type ValidatorInfo struct {
-	Role   string         `json:"role"`
-	PubKey types.HexBytes `json:"pubkey"`
-	// Power  int64          `json:"power"`
-}
-
-// type ValidatorInfo = types.Validator
+type ValidatorInfo = types.Validator
 
 // Status includes a comprehensive summary of a nodes status, including if the
 // service is running, its best block and if it is syncing, its identity on

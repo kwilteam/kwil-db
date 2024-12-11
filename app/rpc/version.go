@@ -1,10 +1,9 @@
-package node
+package rpc
 
 import (
 	"context"
 
-	"github.com/kwilteam/kwil-db/cmd/common/display"
-	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
+	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/spf13/cobra"
 )
 
@@ -24,7 +23,7 @@ func versionCmd() *cobra.Command {
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := context.Background()
-			client, err := common.GetAdminSvcClient(ctx, cmd)
+			client, err := AdminSvcClient(ctx, cmd)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
@@ -38,7 +37,7 @@ func versionCmd() *cobra.Command {
 		},
 	}
 
-	common.BindRPCFlags(cmd)
+	BindRPCFlags(cmd)
 
 	return cmd
 }

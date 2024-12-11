@@ -433,13 +433,27 @@ func (n *Node) doStatesync(ctx context.Context) error {
 }
 
 func (n *Node) Peers(context.Context) ([]*adminTypes.PeerInfo, error) {
-	return []*adminTypes.PeerInfo{ // TODO
-		{
+	peers := n.pm.ConnectedPeers()
+	var peersInfo []*adminTypes.PeerInfo
+	for _, peer := range peers {
+		conns := n.host.Network().ConnsToPeer(peer.ID)
+		if len(conns) == 0 { // should be at least one
+			continue
+		}
+
+		var addr string
+		if len(peer.Addrs) > 0 {
+			host, port, _ := maHostPort(peer.Addrs[0])
+			addr = net.JoinHostPort(host, port)
+		}
+
+		peersInfo = append(peersInfo, &adminTypes.PeerInfo{
 			NodeInfo:   &adminTypes.NodeInfo{},
-			Inbound:    false,
-			RemoteAddr: "",
-		},
-	}, nil
+			Inbound:    conns[0].Stat().Direction == network.DirInbound,
+			RemoteAddr: addr,
+		})
+	}
+	return peersInfo, nil
 }
 
 func (n *Node) Status(ctx context.Context) (*adminTypes.Status, error) {
@@ -448,11 +462,11 @@ func (n *Node) Status(ctx context.Context) (*adminTypes.Status, error) {
 	if addrs := n.Addrs(); len(addrs) > 0 {
 		addr = addrs[0]
 	}
-	pkHex := hex.EncodeToString(n.pubkey.Bytes())
-	return &adminTypes.Status{ // TODO
+	pkBytes := n.pubkey.Bytes()
+	return &adminTypes.Status{
 		Node: &adminTypes.NodeInfo{
 			ChainID:    n.chainID,
-			NodeID:     pkHex,
+			NodeID:     hex.EncodeToString(pkBytes),
 			ListenAddr: addr,
 		},
 		Sync: &adminTypes.SyncInfo{
@@ -464,7 +478,7 @@ func (n *Node) Status(ctx context.Context) (*adminTypes.Status, error) {
 		},
 		Validator: &adminTypes.ValidatorInfo{
 			Role:   n.ce.Role().String(),
-			PubKey: ktypes.HexBytes(pkHex),
+			PubKey: pkBytes,
 			// Power: 1,
 		},
 	}, nil
@@ -606,21 +620,26 @@ func newHost(ip string, port uint64, privKey crypto.PrivateKey) (host.Host, erro
 	return h, nil
 }
 
+func maHostPort(addr multiaddr.Multiaddr) (host, port, protocol string) {
+	port, _ = addr.ValueForProtocol(multiaddr.P_TCP)
+	protocol = "ip4"
+	host, _ = addr.ValueForProtocol(multiaddr.P_IP4)
+	if host == "" {
+		host, _ = addr.ValueForProtocol(multiaddr.P_IP6)
+		protocol = "ip6"
+	}
+	return
+}
+
 func hostPort(host host.Host) ([]string, []int, []string) {
 	var addrStr []string
 	var ports []int
 	var protocols []string              // ip4 or ip6
 	for _, addr := range host.Addrs() { // host.Network().ListenAddresses()
-		ps, _ := addr.ValueForProtocol(multiaddr.P_TCP)
-		port, _ := strconv.Atoi(ps)
+		host, portStr, protocol := maHostPort(addr)
+		port, _ := strconv.Atoi(portStr)
 		ports = append(ports, port)
-		protocol := "ip4"
-		as, _ := addr.ValueForProtocol(multiaddr.P_IP4)
-		if as == "" {
-			as, _ = addr.ValueForProtocol(multiaddr.P_IP6)
-			protocol = "ip6"
-		}
-		addrStr = append(addrStr, as)
+		addrStr = append(addrStr, host)
 		protocols = append(protocols, protocol)
 	}
 

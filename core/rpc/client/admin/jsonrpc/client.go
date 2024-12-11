@@ -149,7 +149,7 @@ func (cl *Client) Status(ctx context.Context) (*adminTypes.Status, error) {
 		Validator: &adminTypes.ValidatorInfo{
 			Role:   res.Validator.Role,
 			PubKey: res.Validator.PubKey,
-			// Power:  res.Validator.Power,
+			Power:  res.Validator.Power,
 		},
 	}, nil
 }

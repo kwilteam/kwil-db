@@ -335,7 +335,7 @@ func (v *mockValidator) GetValidators() []*types.Validator {
 	return nil
 }
 
-func (v *mockValidator) GetValidatorPower(_ context.Context, _ sql.Executor, pubKey []byte) (int64, error) {
+func (v *mockValidator) GetValidatorPower(_ context.Context, pubKey []byte) (int64, error) {
 	return v.getVoterFn()
 }
 

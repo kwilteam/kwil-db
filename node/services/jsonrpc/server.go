@@ -280,6 +280,8 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 	var h http.Handler
 	h = http.HandlerFunc(s.handlerJSONRPCV1) // last, after middleware below
 	h = http.MaxBytesHandler(h, int64(cfg.reqSzLimit))
+	// h = middleware.Logger(h)
+	h = middleware.Recoverer(h)
 	// amazingly, exceeding the server's write timeout does not cancel request
 	// contexts: https://github.com/golang/go/issues/59602
 	// So, we add a timeout to the Request's context.
@@ -292,7 +294,8 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 	h = compMW(h)
 	h = reqCounter(h, metrics[reqCounterName])
 	h = realIPHandler(h, cfg.proxyCount) // for effective rate limiting
-	h = recoverer(h, log)                // first, wrap with defer and call next ^
+
+	// h = recoverer(h, log) // first, wrap with defer and call next ^
 
 	mux.Handle(pathRPCV1, h) // do not add method! We need to handle OPTIONS for CORS, but only POST in JSON-RPC
 
@@ -384,7 +387,7 @@ func jsonRPCTimeoutHandler(h http.Handler, timeout time.Duration, logger log.Log
 	// downstream and we don't have the request ID.
 	resp := jsonrpc.NewErrorResponse(-1, jsonrpc.NewError(jsonrpc.ErrorTimeout, "RPC timeout", nil))
 	respMsg, _ := json.Marshal(resp)
-	h = http.TimeoutHandler(h, timeout, string(respMsg))
+	h = http.TimeoutHandler(h, timeout, string(respMsg)) // https://github.com/golang/go/issues/27375
 
 	// Log total request handling time (including transfer).
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -443,7 +446,7 @@ func recoverer(h http.Handler, log log.Logger) http.Handler {
 				}
 
 				debugStack := debug.Stack()
-				log.Errorf("panic:\n%v", string(debugStack))
+				log.Errorf("panic: %v\n%v", rvr, string(debugStack))
 
 				w.WriteHeader(http.StatusInternalServerError)
 			}

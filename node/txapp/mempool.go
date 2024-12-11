@@ -120,7 +120,7 @@ func (m *mempool) applyTransaction(ctx *common.TxContext, tx *types.Transaction,
 	// seems like maybe this should go in the switch statement below,
 	// but I put it here to avoid extra db call for account info
 	if tx.Body.PayloadType == types.PayloadTypeValidatorVoteIDs {
-		power, err := m.validatorMgr.GetValidatorPower(ctx.Ctx, dbTx, tx.Sender)
+		power, err := m.validatorMgr.GetValidatorPower(ctx.Ctx, tx.Sender)
 		if err != nil {
 			return err
 		}

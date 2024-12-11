@@ -1,11 +1,10 @@
-package node
+package rpc
 
 import (
 	"context"
 	"encoding/json"
 
-	"github.com/kwilteam/kwil-db/cmd/common/display"
-	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
+	"github.com/kwilteam/kwil-db/app/shared/display"
 	types "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/spf13/cobra"
 )
@@ -26,7 +25,7 @@ func peersCmd() *cobra.Command {
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := context.Background()
-			client, err := common.GetAdminSvcClient(ctx, cmd)
+			client, err := AdminSvcClient(ctx, cmd)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
@@ -40,7 +39,7 @@ func peersCmd() *cobra.Command {
 		},
 	}
 
-	common.BindRPCFlags(cmd)
+	BindRPCFlags(cmd)
 
 	return cmd
 }
