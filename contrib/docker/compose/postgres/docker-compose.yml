@@ -12,9 +12,10 @@ services:
       # POSTGRES_USER: kwild
       # POSTGRES_PASSWORD: kwild
       # POSTGRES_DB: kwild
-    volumes: 
+    volumes:
       - kwildb:/var/lib/postgresql/data
 
 volumes:
   kwildb:
     driver: local
+

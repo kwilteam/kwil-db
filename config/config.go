@@ -6,8 +6,7 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/log"
-	ktypes "github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/node/types"
+	"github.com/kwilteam/kwil-db/core/types"
 
 	"github.com/pelletier/go-toml/v2"
 )
@@ -41,7 +40,7 @@ type GenesisConfig struct {
 	// Leader is the leader's public key.
 	Leader types.HexBytes `json:"leader"`
 	// Validators is the list of genesis validators (including the leader).
-	Validators []*ktypes.Validator `json:"validators"`
+	Validators []*types.Validator `json:"validators"`
 
 	// MaxBlockSize is the maximum size of a block in bytes.
 	MaxBlockSize int64 `json:"max_block_size"`
@@ -89,7 +88,7 @@ func DefaultGenesisConfig() *GenesisConfig {
 		ChainID:          "kwil-test-chain",
 		InitialHeight:    0,
 		Leader:           types.HexBytes{},
-		Validators:       []*ktypes.Validator{},
+		Validators:       []*types.Validator{},
 		DisabledGasCosts: true,
 		JoinExpiry:       14400,
 		VoteExpiry:       108000,
