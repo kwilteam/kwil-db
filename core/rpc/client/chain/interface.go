@@ -17,5 +17,5 @@ type Client interface {
 	Genesis(ctx context.Context) (*chaintypes.Genesis, error)
 	ConsensusParams(ctx context.Context) (*types.ConsensusParams, error)
 	Validators(ctx context.Context) (height int64, validators []*types.Validator, err error)
-	UnconfirmedTxs(ctx context.Context) (total int64, tx chaintypes.NamedTx, err error)
+	UnconfirmedTxs(ctx context.Context) (total int, txs []chaintypes.NamedTx, err error)
 }
