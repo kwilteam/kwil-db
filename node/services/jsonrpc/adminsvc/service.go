@@ -299,7 +299,7 @@ func (svc *Service) sendTx(ctx context.Context, payload ktypes.Payload) (*userjs
 		return nil, jsonrpc.NewError(jsonrpc.ErrorAccountInternal, "account info error", nil)
 	}
 
-	tx, err := ktypes.CreateTransaction(payload, svc.chainID, uint64(nonce+1))
+	tx, err := ktypes.CreateNodeTransaction(payload, svc.chainID, uint64(nonce+1))
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "unable to create transaction", nil)
 	}

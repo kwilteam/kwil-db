@@ -189,6 +189,8 @@ const (
 	// it needs a signer that signs
 	SignedMsgConcat SignedMsgSerializationType = "concat"
 
+	SignedMsgDirect SignedMsgSerializationType = "direct"
+
 	// DefaultSignedMsgSerType is the default serialization type
 	// It's `concat` for now, since it's the only one known works for every signer
 	DefaultSignedMsgSerType = SignedMsgConcat
@@ -196,6 +198,16 @@ const (
 
 // CreateTransaction creates a new unsigned transaction.
 func CreateTransaction(contents Payload, chainID string, nonce uint64) (*Transaction, error) {
+	return createTransaction(contents, chainID, nonce, DefaultSignedMsgSerType)
+}
+
+// CreateNodeTransaction creates a new unsigned transaction with the "direct"
+// serialization type.
+func CreateNodeTransaction(contents Payload, chainID string, nonce uint64) (*Transaction, error) {
+	return createTransaction(contents, chainID, nonce, SignedMsgDirect)
+}
+
+func createTransaction(contents Payload, chainID string, nonce uint64, sert SignedMsgSerializationType) (*Transaction, error) {
 	data, err := contents.MarshalBinary()
 	if err != nil {
 		return nil, err
@@ -209,7 +221,7 @@ func CreateTransaction(contents Payload, chainID string, nonce uint64) (*Transac
 			Nonce:       nonce,
 			ChainID:     chainID,
 		},
-		Serialization: DefaultSignedMsgSerType,
+		Serialization: sert,
 	}, nil
 }
 
@@ -252,6 +264,13 @@ func (t *TransactionBody) SerializeMsg(mst SignedMsgSerializationType) ([]byte, 
 	}
 
 	switch mst {
+	case SignedMsgDirect:
+		msg, err := t.MarshalBinary()
+		if err != nil {
+			return nil, fmt.Errorf("failed to serialize transaction body: %v", err)
+		}
+		sigHash := crypto.Sha256(msg) // could just be msg
+		return sigHash[:], nil
 	case SignedMsgConcat:
 		// Make a human-readable message using a template(txMsgToSignTmplV0).
 		// In this message scheme, the displayed "token" is a hash of the
