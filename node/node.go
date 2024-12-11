@@ -512,8 +512,8 @@ func (n *Node) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, _ /*sync
 }
 
 // ChainTx return tx info that is used in Chain rpc.
-func (n *Node) ChainTx(hash types.Hash) (*chainTypes.ChainTx, error) {
-	raw, height, blkHash, blkIdx, err := n.bki.GetTx(hash)
+func (n *Node) ChainTx(hash types.Hash) (*chainTypes.Tx, error) {
+	tx, height, blkHash, blkIdx, err := n.bki.GetTx(hash)
 	if err != nil {
 		return nil, err
 	}
@@ -525,11 +525,11 @@ func (n *Node) ChainTx(hash types.Hash) (*chainTypes.ChainTx, error) {
 		return nil, errors.New("invalid block index")
 	}
 	res := blkResults[blkIdx]
-	return &chainTypes.ChainTx{
+	return &chainTypes.Tx{
 		Hash:     hash,
 		Height:   height,
 		Index:    blkIdx,
-		Tx:       raw,
+		Tx:       tx,
 		TxResult: &res,
 	}, nil
 }

@@ -39,7 +39,7 @@ type Node interface {
 	BlockByHeight(height int64) (ktypes.Hash, *ktypes.Block, ktypes.Hash, error)
 	BlockByHash(hash ktypes.Hash) (*ktypes.Block, ktypes.Hash, error)
 	BlockResultByHash(hash ktypes.Hash) ([]ktypes.TxResult, error)
-	ChainTx(hash ktypes.Hash) (*chaintypes.ChainTx, error)
+	ChainTx(hash ktypes.Hash) (*chaintypes.Tx, error)
 	BlockHeight() int64
 	ChainUnconfirmedTx(limit int) (int, []nodetypes.NamedTx)
 	ConsensusParams() *ktypes.ConsensusParams
@@ -152,7 +152,7 @@ func (svc *Service) Block(_ context.Context, req *chainjson.BlockRequest) (*chai
 		}
 
 		return &chainjson.BlockResponse{
-			Header:    (*chainjson.BlockHeader)(block.Header),
+			Header:    (*chaintypes.BlockHeader)(block.Header),
 			Txns:      block.Txns,
 			Signature: block.Signature,
 			Hash:      req.Hash,
@@ -167,7 +167,7 @@ func (svc *Service) Block(_ context.Context, req *chainjson.BlockRequest) (*chai
 	}
 
 	return &chainjson.BlockResponse{
-		Header:    (*chainjson.BlockHeader)(block.Header),
+		Header:    (*chaintypes.BlockHeader)(block.Header),
 		Txns:      block.Txns,
 		Signature: block.Signature,
 		Hash:      blockHash,
@@ -197,6 +197,7 @@ func (svc *Service) BlockResult(_ context.Context, req *chainjson.BlockResultReq
 
 		return &chainjson.BlockResultResponse{
 			Height:    block.Header.Height,
+			Hash:      req.Hash,
 			TxResults: txResults,
 		}, nil
 	}
@@ -215,12 +216,13 @@ func (svc *Service) BlockResult(_ context.Context, req *chainjson.BlockResultReq
 
 	return &chainjson.BlockResultResponse{
 		Height:    block.Header.Height,
+		Hash:      blockHash,
 		TxResults: txResults,
 	}, nil
 }
 
 // Tx returns a transaction by hash.
-func (svc *Service) Tx(_ context.Context, req *chainjson.TxRequest) (*chaintypes.ChainTx, *jsonrpc.Error) {
+func (svc *Service) Tx(_ context.Context, req *chainjson.TxRequest) (*chainjson.TxResponse, *jsonrpc.Error) {
 	if req.Hash.IsZero() {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "hash is required", nil)
 	}
@@ -231,7 +233,7 @@ func (svc *Service) Tx(_ context.Context, req *chainjson.TxRequest) (*chaintypes
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to get tx: "+err.Error(), nil)
 	}
 
-	return tx, nil
+	return (*chainjson.TxResponse)(tx), nil
 }
 
 func (svc *Service) Genesis(ctx context.Context, _ *chainjson.GenesisRequest) (*chainjson.GenesisResponse, *jsonrpc.Error) {
@@ -255,19 +257,9 @@ func (svc *Service) ConsensusParams(_ context.Context, _ *chainjson.ConsensusPar
 func (svc *Service) Validators(_ context.Context, _ *chainjson.ValidatorsRequest) (*chainjson.ValidatorsResponse, *jsonrpc.Error) {
 	// NOTE: should be able to get validator set at req.Height
 	vals := svc.voting.GetValidators()
-
-	pbValidators := make([]*ktypes.Validator, len(vals))
-	for i, vi := range vals {
-		pbValidators[i] = &ktypes.Validator{
-			Role:   vi.Role,
-			PubKey: vi.PubKey,
-			Power:  vi.Power,
-		}
-	}
-
 	return &chainjson.ValidatorsResponse{
 		Height:     svc.blockchain.BlockHeight(),
-		Validators: nil,
+		Validators: vals,
 	}, nil
 }
 
@@ -292,10 +284,10 @@ func (svc *Service) UnconfirmedTxs(_ context.Context, req *chainjson.Unconfirmed
 // The admin Service must be usable as a Svc registered with a JSON-RPC Server.
 var _ rpcserver.Svc = (*Service)(nil)
 
-func convertNamedTxs(txs []nodetypes.NamedTx) []chainjson.NamedTx {
-	res := make([]chainjson.NamedTx, len(txs))
+func convertNamedTxs(txs []nodetypes.NamedTx) []chaintypes.NamedTx {
+	res := make([]chaintypes.NamedTx, len(txs))
 	for i, tx := range txs {
-		res[i] = chainjson.NamedTx{
+		res[i] = chaintypes.NamedTx{
 			Hash: tx.Hash,
 			Tx:   tx.Tx,
 		}
