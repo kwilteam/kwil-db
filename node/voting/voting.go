@@ -672,3 +672,10 @@ func (v *VoteStore) ValidatorUpdates() map[string]*types.Validator {
 
 	return v.valUpdates
 }
+
+func (v *VoteStore) Rollback() {
+	v.mtx.Lock()
+	defer v.mtx.Unlock()
+
+	v.valUpdates = make(map[string]*types.Validator)
+}

@@ -1,5 +1,7 @@
 package types
 
+import "time"
+
 // This file contains the messages exchanged between the consensus engine and the block processor.
 
 type BlockExecRequest struct {
@@ -39,4 +41,12 @@ type ConsensusParams struct {
 	// MaxVotesPerTx is the maximum number of votes that can be included in a
 	// single transaction.
 	MaxVotesPerTx int64
+}
+
+type BlockExecutionStatus struct {
+	StartTime time.Time
+	EndTime   time.Time
+	Height    int64
+	TxIDs     []Hash
+	TxStatus  map[string]bool
 }

@@ -42,6 +42,9 @@ type BlockProcessor struct {
 	height   int64
 	chainCtx *common.ChainContext
 
+	status   *blockExecStatus
+	statusMu sync.RWMutex // very granular mutex to protect access to the block execution status
+
 	// consensus TX
 	consensusTx sql.PreparedTx
 
@@ -130,7 +133,23 @@ func (bp *BlockProcessor) Rollback(ctx context.Context, height int64, appHash kt
 	// set the block proposer back to it's previous state
 	bp.height = height
 	bp.appHash = appHash
-	// TODO: how about validatorset and consensus params? rethink rollback
+
+	readTx, err := bp.db.BeginReadTx(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to begin read transaction: %w", err)
+	}
+	defer readTx.Rollback(ctx)
+
+	networkParams, err := meta.LoadParams(ctx, readTx)
+	if err != nil {
+		return fmt.Errorf("failed to load the network parameters: %w", err)
+	}
+
+	bp.chainCtx.NetworkParameters = networkParams
+	// how about updates to the migration params? do we need to rollback them as well?
+
+	// Rollback internal state updates to the validators, accounts and mempool.
+	bp.txapp.Rollback()
 
 	return nil
 }
@@ -261,6 +280,7 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 
 	bp.consensusTx, err = bp.db.BeginPreparedTx(ctx)
 	if err != nil {
+		bp.consensusTx = nil // safety measure
 		return nil, fmt.Errorf("failed to begin the consensus transaction: %w", err)
 	}
 
@@ -272,6 +292,9 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 	}
 
 	txResults := make([]ktypes.TxResult, len(req.Block.Txns))
+
+	bp.initBlockExecutionStatus(req.Block)
+
 	for i, tx := range req.Block.Txns {
 		decodedTx := &ktypes.Transaction{}
 		if err := decodedTx.UnmarshalBinary(tx); err != nil {
@@ -297,15 +320,18 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 		}
 
 		select {
-		case <-ctx.Done(): // TODO: is this the best way to abort the block execution?
-			bp.log.Info("Block execution cancelled", "height", req.Height)
-			return nil, nil // TODO: or error? or trigger resetState?
+		case <-ctx.Done():
+			return nil, ctx.Err() // notify the caller about the context cancellation or deadline exceeded error
 		default:
 			res := bp.txapp.Execute(txCtx, bp.consensusTx, decodedTx)
 			txResult := ktypes.TxResult{
 				Code: uint32(res.ResponseCode),
 				Gas:  res.Spend,
 			}
+
+			// bookkeeping for the block execution status
+			bp.updateBlockExecutionStatus(txHash)
+
 			if res.Error != nil {
 				if sql.IsFatalDBError(res.Error) {
 					return nil, fmt.Errorf("fatal db error during block execution: %w", res.Error)
@@ -321,6 +347,9 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 		}
 	}
 
+	// record the end time of the block execution
+	bp.recordBlockExecEndTime()
+
 	_, err = bp.txapp.Finalize(ctx, bp.consensusTx, blockCtx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to finalize the block execution: %w", err)
@@ -330,11 +359,14 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 		return nil, fmt.Errorf("failed to set the chain state: %w", err)
 	}
 
+	// TODO: update the consensus params in the meta store
+
 	// Create a new changeset processor
 	csp := newChangesetProcessor()
 	// "migrator" module subscribes to the changeset processor to store changesets during the migration
 	csErrChan := make(chan error, 1)
 	defer close(csErrChan)
+
 	// TODO: Subscribe to the changesets
 	go csp.BroadcastChangesets(ctx)
 
@@ -354,9 +386,6 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 	txResultsHash := txResultsHash(txResults)
 
 	nextHash := bp.nextAppHash(bp.appHash, types.Hash(appHash), valUpdatesHash, accountsHash, txResultsHash)
-
-	bp.height = req.Height
-	bp.appHash = nextHash
 
 	bp.log.Info("Executed Block", "height", req.Height, "blkHash", req.BlockID, "appHash", nextHash)
 
@@ -412,6 +441,11 @@ func (bp *BlockProcessor) Commit(ctx context.Context, req *ktypes.CommitRequest)
 	if err := bp.snapshotDB(ctx, req.Height, req.Syncing); err != nil {
 		bp.log.Warn("Failed to create snapshot of the database", "err", err)
 	}
+
+	bp.clearBlockExecutionStatus() // TODO: not very sure where to clear this
+
+	bp.height = req.Height
+	copy(bp.appHash[:], req.AppHash[:])
 
 	bp.log.Info("Committed Block", "height", req.Height, "appHash", req.AppHash.String())
 	return nil

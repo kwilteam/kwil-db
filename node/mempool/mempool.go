@@ -1,6 +1,7 @@
 package mempool
 
 import (
+	"context"
 	"slices"
 	"sync"
 
@@ -113,4 +114,17 @@ func (mp *Mempool) PeekN(n int) []types.NamedTx {
 	txns := make([]types.NamedTx, n)
 	copy(txns, mp.txQ)
 	return txns
+}
+
+type CheckFn func(ctx context.Context, tx *ktypes.Transaction, recheck bool) error
+
+func (mp *Mempool) RecheckTxs(ctx context.Context, fn CheckFn) {
+	mp.mtx.RLock()
+	defer mp.mtx.RUnlock()
+
+	for _, tx := range mp.txQ {
+		if err := fn(ctx, tx.Tx, true); err != nil {
+			mp.remove(tx.Hash)
+		}
+	}
 }

@@ -19,7 +19,6 @@ import (
 	"github.com/kwilteam/kwil-db/node/meta"
 	"github.com/kwilteam/kwil-db/node/pg"
 	"github.com/kwilteam/kwil-db/node/types"
-	"github.com/kwilteam/kwil-db/node/types/sql"
 )
 
 const (
@@ -59,6 +58,13 @@ type ConsensusEngine struct {
 
 	// copy of the minimal state info for the p2p layer usage.
 	stateInfo StateInfo
+
+	cancelFnMtx     sync.Mutex // protects blkExecCancelFn, longRunningTxs and numResets
+	blkExecCancelFn context.CancelFunc
+	// list of txs to be removed from the mempool
+	// only used by the leader and protected by the cancelFnMtx
+	longRunningTxs []ktypes.Hash
+	numResets      int64
 
 	// Channels
 	newRound     chan struct{}
@@ -160,8 +166,6 @@ type StateInfo struct {
 // Consensus state that is applicable for processing the blioc at a speociifc height.
 type state struct {
 	mtx sync.RWMutex
-
-	consensusTx sql.PreparedTx
 
 	blkProp  *blockProposal
 	blockRes *blockResult
@@ -626,7 +630,7 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 			}
 
 			if blkHash != ce.state.blkProp.blkHash { // processed incorrect block
-				if err := ce.resetState(ctx); err != nil {
+				if err := ce.rollbackState(ctx); err != nil {
 					return fmt.Errorf("error aborting incorrect block execution: height: %d, blkID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
 				}
 
@@ -672,20 +676,29 @@ func (ce *ConsensusEngine) resetBlockProp(ctx context.Context, height int64) {
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
-	// If we are currently executing any transactions corresponding to the blk at height +1
-	// 1. Cancel the execution context -> so that the transactions stop
-	// 2. Rollback the consensus tx
-	// 3. Reset the blkProp and blockRes
-	// 4. This should never happen after the commit phase, (blk should have never made it to the blockstore)
-
+	// We will only honor the reset request if it's from the leader (already verified by now)
+	// and the height is same as the last committed block height and the
+	// block is still executing or waiting for the block commit message.
 	ce.log.Info("Reset msg: ", "height", height)
 	if ce.state.lc.height == height {
 		if ce.state.blkProp != nil {
 			ce.log.Info("Resetting the block proposal", "height", height)
-			if err := ce.resetState(ctx); err != nil {
-				ce.log.Error("Error resetting the state", "error", err) // panic? or consensus error?
+			// cancel the context
+			ce.cancelFnMtx.Lock()
+			if ce.blkExecCancelFn != nil {
+				ce.blkExecCancelFn()
 			}
+			ce.cancelFnMtx.Unlock()
+
+			if err := ce.rollbackState(ctx); err != nil {
+				ce.log.Error("Error rolling back the state", "error", err)
+			}
+
+		} else {
+			ce.log.Info("Block already committed or executed, nothing to reset", "height", height)
 		}
+	} else {
+		ce.log.Warn("Invalid reset request", "height", height, "lastCommittedHeight", ce.state.lc.height)
 	}
 }
 

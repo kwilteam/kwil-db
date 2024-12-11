@@ -303,3 +303,10 @@ func (a *Accounts) updateAccount(ctx context.Context, tx sql.Executor, account [
 	}
 	return nil
 }
+
+func (a *Accounts) Rollback() {
+	a.mtx.Lock()
+	defer a.mtx.Unlock()
+
+	a.updates = make(map[string]*types.Account)
+}
