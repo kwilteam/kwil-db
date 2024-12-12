@@ -77,6 +77,7 @@ func TestSingleNodeMocknet(t *testing.T) {
 	for _, v := range valSet {
 		valSetList = append(valSetList, &v)
 	}
+
 	ss := newSnapshotStore()
 
 	_, vsReal, err := voting.NewResolutionStore(ctx, db1)
@@ -123,6 +124,7 @@ func TestSingleNodeMocknet(t *testing.T) {
 		Snapshotter: ss,
 		DBConfig:    &defaultConfigSet.DB,
 		Statesync:   &defaultConfigSet.StateSync,
+		BlockProc:   &dummyBP{vals: valSetList},
 	}
 	node1, err := NewNode(cfg1, WithHost(h1))
 	if err != nil {
@@ -247,6 +249,7 @@ func TestDualNodeMocknet(t *testing.T) {
 		Snapshotter: ss,
 		DBConfig:    &defaultConfigSet.DB,
 		Statesync:   &defaultConfigSet.StateSync,
+		BlockProc:   &dummyBP{vals: valSetList},
 	}
 	node1, err := NewNode(cfg1, WithHost(h1))
 	if err != nil {
@@ -294,6 +297,7 @@ func TestDualNodeMocknet(t *testing.T) {
 		Snapshotter: ss,
 		DBConfig:    &defaultConfigSet.DB,
 		Statesync:   &defaultConfigSet.StateSync,
+		BlockProc:   &dummyBP{vals: valSetList},
 	}
 	node2, err := NewNode(cfg2, WithHost(h2))
 	if err != nil {

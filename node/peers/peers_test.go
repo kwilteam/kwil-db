@@ -15,32 +15,42 @@ func TestPersistAndLoadPeers(t *testing.T) {
 	ma1, _ := ma.NewMultiaddr("/ip4/127.0.0.1/tcp/4001")
 	ma1b, _ := ma.NewMultiaddr("/ip4/127.0.0.2/tcp/4001")
 	pid1, _ := peer.Decode("16Uiu2HAm8iRUsTzYepLP8pdJL3645ACP7VBfZQ7yFbLfdb7WvkL7")
+	pk1, err := pubKeyFromPeerID(pid1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nid1 := NodeIDFromPubKey(pk1)
 	ma2, _ := ma.NewMultiaddr("/ip4/127.0.0.1/tcp/4002")
 	pid2, _ := peer.Decode("16Uiu2HAkx2kfP117VnYnaQGprgXBoMpjfxGXCpizju3cX7ZUzRhv")
+	pk2, err := pubKeyFromPeerID(pid2)
+	if err != nil {
+		t.Fatal(err)
+	}
+	nid2 := NodeIDFromPubKey(pk2)
 
 	tempDir := t.TempDir()
 	testFile := filepath.Join(tempDir, "test_peers.json")
 
-	testPeers := []PeerInfo{
+	testPeers := []PersistentPeerInfo{
 		{
-			AddrInfo: AddrInfo{
-				ID:    pid1,
-				Addrs: []ma.Multiaddr{ma1, ma1b},
-			},
-			Protos: []protocol.ID{"ProtocolWhatever"},
+			NodeID:      nid1,
+			Addrs:       []ma.Multiaddr{ma1, ma1b},
+			Protos:      []protocol.ID{"ProtocolWhatever"},
+			Whitelisted: true,
 		},
 		{
-			AddrInfo: AddrInfo{
-				ID:    pid2,
-				Addrs: []ma.Multiaddr{ma2},
-			},
-			Protos: []protocol.ID{"ProtocolWhatever", "ProtocolOther"},
+			NodeID:      nid2,
+			Addrs:       []ma.Multiaddr{ma2},
+			Protos:      []protocol.ID{"ProtocolWhatever", "ProtocolOther"},
+			Whitelisted: false,
 		},
 	}
 
 	t.Run("persist and load peers successfully", func(t *testing.T) {
 		err := persistPeers(testPeers, testFile)
 		require.NoError(t, err)
+
+		t.Log(testFile)
 
 		loadedPeers, err := loadPeers(testFile)
 		require.NoError(t, err)
@@ -49,7 +59,7 @@ func TestPersistAndLoadPeers(t *testing.T) {
 
 	t.Run("persist empty peer list", func(t *testing.T) {
 		emptyFile := filepath.Join(tempDir, "empty_peers.json")
-		err := persistPeers([]PeerInfo{}, emptyFile)
+		err := persistPeers([]PersistentPeerInfo{}, emptyFile)
 		require.NoError(t, err)
 
 		loadedPeers, err := loadPeers(emptyFile)

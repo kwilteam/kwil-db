@@ -29,15 +29,15 @@ type Node interface {
 	BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (*ktypes.ResultBroadcastTx, error)
 }
 
-type P2P interface {
-	// AddPeer adds a peer to the node's peer list and persists it.
-	AddPeer(ctx context.Context, nodeID string) error
+type Whitelister interface { // maybe merge with Node since it's same job
+	// AddPeer adds a peer to the node's peer whitelist and persists it.
+	AddPeer(nodeID string) error
 
-	// RemovePeer removes a peer from the node's peer list permanently.
-	RemovePeer(ctx context.Context, nodeID string) error
+	// RemovePeer removes a peer from the node's peer whitelist permanently.
+	RemovePeer(nodeID string) error
 
-	// ListPeers returns the list of peers in the node's whitelist.
-	ListPeers(ctx context.Context) []string
+	// List returns the list of peers in the node's whitelist.
+	List() []string
 }
 
 type App interface {
@@ -61,7 +61,7 @@ type Service struct {
 	app        App
 	voting     Validators
 	db         sql.DelayedReadTxMaker
-	p2p        P2P
+	whitelist  Whitelister
 
 	cfg     *config.Config
 	chainID string
@@ -220,11 +220,11 @@ func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
 
 // NewService constructs a new Service.
 func NewService(db sql.DelayedReadTxMaker, blockchain Node, app App,
-	vs Validators, p2p P2P, txSigner auth.Signer, cfg *config.Config,
+	vs Validators, wl Whitelister, txSigner auth.Signer, cfg *config.Config,
 	chainID string, logger log.Logger) *Service {
 	return &Service{
 		blockchain: blockchain,
-		p2p:        p2p,
+		whitelist:  wl,
 		app:        app,
 		voting:     vs,
 		signer:     txSigner,
@@ -484,7 +484,7 @@ func (svc *Service) GetConfig(ctx context.Context, req *adminjson.GetConfigReque
 }
 
 func (svc *Service) AddPeer(ctx context.Context, req *adminjson.PeerRequest) (*adminjson.PeerResponse, *jsonrpc.Error) {
-	err := svc.p2p.AddPeer(ctx, req.PeerID)
+	err := svc.whitelist.AddPeer(req.PeerID)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to add a peer. Reason: "+err.Error(), nil)
 	}
@@ -492,7 +492,7 @@ func (svc *Service) AddPeer(ctx context.Context, req *adminjson.PeerRequest) (*a
 }
 
 func (svc *Service) RemovePeer(ctx context.Context, req *adminjson.PeerRequest) (*adminjson.PeerResponse, *jsonrpc.Error) {
-	err := svc.p2p.RemovePeer(ctx, req.PeerID)
+	err := svc.whitelist.RemovePeer(req.PeerID)
 	if err != nil {
 		svc.log.Error("failed to remove peer", "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to remove peer : "+err.Error(), nil)
@@ -502,7 +502,7 @@ func (svc *Service) RemovePeer(ctx context.Context, req *adminjson.PeerRequest) 
 
 func (svc *Service) ListPeers(ctx context.Context, req *adminjson.PeersRequest) (*adminjson.ListPeersResponse, *jsonrpc.Error) {
 	return &adminjson.ListPeersResponse{
-		Peers: svc.p2p.ListPeers(ctx),
+		Peers: svc.whitelist.List(),
 	}, nil
 }
 

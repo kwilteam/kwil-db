@@ -22,5 +22,6 @@ type Config struct {
 	BlockStore  types.BlockStore
 	Consensus   ConsensusEngine
 	Snapshotter SnapshotStore
+	BlockProc   BlockProcessor
 	Logger      log.Logger
 }

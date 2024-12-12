@@ -90,7 +90,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	ce := buildConsensusEngine(ctx, d, db, mp, bs, bp, valSet)
 
 	// Node
-	node := buildNode(d, mp, bs, ce, ss, db)
+	node := buildNode(d, mp, bs, ce, ss, db, bp)
 
 	// listeners
 	lm := buildListenerManager(d, es, bp, node)
@@ -125,8 +125,8 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 		// key because it is used to sign transactions and provide an Identity for
 		// account information (nonce and balance).
 		txSigner := &auth.EthPersonalSigner{Key: *d.privKey.(*crypto.Secp256k1PrivateKey)}
-		jsonAdminSvc := adminsvc.NewService(db, node, bp, vs, nil, txSigner, d.cfg,
-			d.genesisCfg.ChainID, adminServerLogger)
+		jsonAdminSvc := adminsvc.NewService(db, node, bp, vs, node.Whitelister(),
+			txSigner, d.cfg, d.genesisCfg.ChainID, adminServerLogger)
 		jsonRPCAdminServer = buildJRPCAdminServer(d)
 		jsonRPCAdminServer.RegisterSvc(jsonAdminSvc)
 		jsonRPCAdminServer.RegisterSvc(jsonRPCTxSvc)
@@ -383,7 +383,9 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB,
 	return ce
 }
 
-func buildNode(d *coreDependencies, mp *mempool.Mempool, bs *store.BlockStore, ce *consensus.ConsensusEngine, ss *snapshotter.SnapshotStore, db *pg.DB) *node.Node {
+func buildNode(d *coreDependencies, mp *mempool.Mempool, bs *store.BlockStore,
+	ce *consensus.ConsensusEngine, ss *snapshotter.SnapshotStore, db *pg.DB,
+	bp *blockprocessor.BlockProcessor) *node.Node {
 	logger := d.logger.New("NODE")
 	nc := &node.Config{
 		ChainID:     d.genesisCfg.ChainID,
@@ -396,6 +398,7 @@ func buildNode(d *coreDependencies, mp *mempool.Mempool, bs *store.BlockStore, c
 		Consensus:   ce,
 		Statesync:   &d.cfg.StateSync,
 		Snapshotter: ss,
+		BlockProc:   bp,
 		Logger:      logger,
 		DBConfig:    &d.cfg.DB,
 	}

@@ -277,6 +277,8 @@ func (bp *BlockProcessor) InitChain(ctx context.Context) (int64, []byte, error) 
 		return -1, nil, fmt.Errorf("genesis transaction commit failed: %w", err)
 	}
 
+	bp.announceValidators()
+
 	bp.height.Store(genCfg.InitialHeight)
 	copy(bp.appHash[:], genCfg.StateHash)
 	bp.chainCtx.NetworkParameters = networkParams
