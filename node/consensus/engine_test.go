@@ -275,7 +275,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "blkPropNew",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.NotifyBlockProposal(blkProp1.blk)
+						val.NotifyBlockProposal(blkProp2.blk)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Executed, 0, blkProp2.blkHash)
@@ -553,8 +553,10 @@ func TestValidatorStateMachine(t *testing.T) {
 			val := New(ceConfigs[1])
 			blkProp1, err = leader.createBlockProposal()
 			assert.NoError(t, err)
+			time.Sleep(300 * time.Millisecond) // just to ensure that the block hashes are different due to start time
 			blkProp2, err = leader.createBlockProposal()
 			assert.NoError(t, err)
+			t.Logf("blkProp1: %s, blkProp2: %s", blkProp1.blkHash.String(), blkProp2.blkHash.String())
 
 			ctx, cancel := context.WithCancel(context.Background())
 			var wg sync.WaitGroup
