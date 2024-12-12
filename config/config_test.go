@@ -4,18 +4,13 @@ import (
 	"encoding/hex"
 	"fmt"
 	"slices"
-	"strings"
 	"testing"
 	"time"
 
+	gotoml "github.com/pelletier/go-toml/v2"
+
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/node/types"
-
-	"github.com/davecgh/go-spew/spew"
-	"github.com/knadh/koanf/parsers/toml/v2"
-	"github.com/knadh/koanf/providers/rawbytes"
-	"github.com/knadh/koanf/v2"
-	gotoml "github.com/pelletier/go-toml/v2"
 )
 
 func mustDecodeHex(s string) types.HexBytes {
@@ -50,84 +45,6 @@ func TestMarshalDuration(t *testing.T) {
 		t.Fatalf("got %v, want %v", tt2.Duration, tt.Duration)
 	}
 }
-
-func TestMarshalConfig(t *testing.T) {
-	cfg := Config{
-		LogLevel:   log.LevelInfo,
-		LogFormat:  log.FormatUnstructured,
-		PrivateKey: mustDecodeHex("ababababab"),
-		P2P: PeerConfig{
-			IP:        "127.0.0.1",
-			Port:      6600,
-			Pex:       true,
-			BootNodes: []string{"/ip4/127.0.0.1/tcp/6600/p2p/16Uiu2HAkx2kfP117VnYnaQGprgXBoMpjfxGXCpizju3cX7ZUzRhv"},
-		},
-	}
-
-	inToml, err := gotoml.Marshal(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Log("gotoml:\n" + string(inToml))
-
-	k := koanf.New(".")
-	err = k.Load(rawbytes.Provider(inToml), toml.Parser(), koanf.WithMergeFunc(func(src, dest map[string]interface{}) error {
-		// remove underscores from keys so all sources have the same keys, and
-		// we can unmarshal into the Config struct with koanf tags, where there
-		// are no underscores.
-		for k, v := range src {
-			dest[strings.ReplaceAll(k, "_", "")] = v
-		}
-		return nil
-	}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	k.Print()
-
-	var inCfg Config
-	k.UnmarshalWithConf("", &inCfg, koanf.UnmarshalConf{Tag: "koanf"})
-
-	k.KeyMap()
-	spew.Dump(inCfg)
-
-	// k.Marshal just marshals the internal map[string]interface{}:
-	// outTomlK, err := k.Marshal(toml.Parser())
-	// if err != nil {
-	// 	t.Fatal(err)
-	// }
-	// t.Log("ktoml:\n" + string(outTomlK))
-
-	// go-toml.Marshal uses the "toml" tags of the Config struct:
-	outToml, err := gotoml.Marshal(inCfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Log("gotoml:\n" + string(outToml))
-}
-
-// nolint I'm going to use this
-var testConfigToml = `
-log_level = 'info'
-log_format = 'plain'
-private_key = "ababababab"
-
-[pg]
-host = '127.0.0.1'
-port = 5435
-user = 'kwild'
-pass = 'kwild'
-dbname = 'kwild'
-max_connections = 10
-
-[peer]
-ip = '127.0.0.1'
-port = 6600
-pex = true
-bootnode = '/ip4/127.0.0.1/tcp/6600/p2p/16Uiu2HAkx2kfP117VnYnaQGprgXBoMpjfxGXCpizju3cX7ZUzRhv'
-`
 
 func TestConfigSaveAndLoad(t *testing.T) {
 	tempFile := t.TempDir() + "/config.toml"

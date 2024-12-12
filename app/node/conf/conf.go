@@ -38,7 +38,7 @@ import (
 // that combines multiple config sources according to the enabled preruns.
 var k = koanf.New(".")
 
-const koanfTag = "koanf"
+const koanfTag = "toml"
 
 // ActiveConfig retrieves the current merged config. This is influenced by the
 // other functions in this package, including: BindDefaults,

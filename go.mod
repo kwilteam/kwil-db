@@ -2,12 +2,6 @@ module github.com/kwilteam/kwil-db
 
 go 1.22.0
 
-// These replaces can be removed after this is merged to main.
-replace (
-	github.com/kwilteam/kwil-db/core => ./core
-	github.com/kwilteam/kwil-db/parse => ./parse
-)
-
 require (
 	github.com/dgraph-io/badger/v4 v4.3.1
 	github.com/go-chi/chi/v5 v5.1.0
@@ -18,12 +12,11 @@ require (
 	github.com/knadh/koanf/providers/env v1.0.0
 	github.com/knadh/koanf/providers/file v1.1.2
 	github.com/knadh/koanf/providers/posflag v0.1.0
-	github.com/knadh/koanf/providers/rawbytes v0.1.0
 	github.com/knadh/koanf/providers/structs v0.1.0
-	github.com/knadh/koanf/v2 v2.1.1
-	github.com/kwilteam/kwil-db/core v0.3.1
-	github.com/kwilteam/kwil-db/parse v0.3.3
-	github.com/libp2p/go-libp2p v0.37.1
+	github.com/knadh/koanf/v2 v2.1.2
+	github.com/kwilteam/kwil-db/core v0.3.1-0.20241212163115-7353f2761884
+	github.com/kwilteam/kwil-db/parse v0.3.1-0.20241212163115-7353f2761884
+	github.com/libp2p/go-libp2p v0.37.2
 	github.com/libp2p/go-libp2p-kad-dht v0.28.1
 	github.com/libp2p/go-libp2p-pubsub v0.12.0
 	github.com/manifoldco/promptui v0.9.0
@@ -35,7 +28,7 @@ require (
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.10.0
-	golang.org/x/sync v0.9.0
+	golang.org/x/sync v0.10.0
 	golang.org/x/time v0.8.0
 )
 
@@ -91,7 +84,7 @@ require (
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
 	github.com/containerd/cgroups v1.1.0 // indirect
 	github.com/coreos/go-systemd/v22 v22.5.0 // indirect
-	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
+	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/davidlazar/go-crypto v0.0.0-20200604182044-b73af7476f6c // indirect
 	github.com/dgraph-io/ristretto v1.0.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
@@ -137,7 +130,7 @@ require (
 	github.com/mr-tron/base58 v1.2.0 // indirect
 	github.com/multiformats/go-base32 v0.1.0 // indirect
 	github.com/multiformats/go-base36 v0.2.0 // indirect
-	github.com/multiformats/go-multiaddr-dns v0.4.0 // indirect
+	github.com/multiformats/go-multiaddr-dns v0.4.1 // indirect
 	github.com/multiformats/go-multiaddr-fmt v0.1.0 // indirect
 	github.com/multiformats/go-multibase v0.2.0 // indirect
 	github.com/multiformats/go-multicodec v0.9.0 // indirect
@@ -170,7 +163,7 @@ require (
 	github.com/prometheus/common v0.60.1 // indirect
 	github.com/prometheus/procfs v0.15.1 // indirect
 	github.com/quic-go/qpack v0.5.1 // indirect
-	github.com/quic-go/quic-go v0.48.1 // indirect
+	github.com/quic-go/quic-go v0.48.2 // indirect
 	github.com/quic-go/webtransport-go v0.8.1-0.20241018022711-4ac2c9250e66 // indirect
 	github.com/raulk/go-watchdog v1.3.0 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect

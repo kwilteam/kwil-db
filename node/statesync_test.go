@@ -168,7 +168,7 @@ func testSSConfig(enable bool, providers []string) *config.StateSyncConfig {
 	return &config.StateSyncConfig{
 		Enable:           enable,
 		TrustedProviders: providers,
-		DiscoveryTimeout: 5 * time.Second,
+		DiscoveryTimeout: config.Duration(5 * time.Second),
 		MaxRetries:       3,
 	}
 }

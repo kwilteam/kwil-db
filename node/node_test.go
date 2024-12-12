@@ -293,7 +293,7 @@ func TestStreamsBlockFetch(t *testing.T) {
 	privKeys, _ := newGenesis(t, [][]byte{pk1})
 
 	defaultConfigSet := config.DefaultConfig()
-	defaultConfigSet.Consensus.ProposeTimeout = 5 * time.Minute
+	defaultConfigSet.Consensus.ProposeTimeout = config.Duration(5 * time.Minute)
 
 	ss := newSnapshotStore()
 
