@@ -21,33 +21,53 @@ const (
 	ed25519Addr   = "0aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842"
 )
 
+var secp256k1PubKey string // from secp256k1Key
+
+func init() {
+	pk, err := hex.DecodeString(secp256k1Key)
+	if err != nil {
+		panic(err)
+	}
+	k, err := crypto.UnmarshalSecp256k1PrivateKey(pk)
+	if err != nil {
+		panic(err)
+	}
+	secp256k1PubKey = hex.EncodeToString(k.Public().Bytes())
+}
+
 func Test_AuthSignAndVerify(t *testing.T) {
 
 	// testCase will take a signer
 	// it will sign a message and verify the signature using
 	// the proper authenticator.  It will then check that the
-	// address is correct
+	// identifier is correct
 	type testCase struct {
 		name          string
 		signer        auth.Signer
 		authenticator auth.Authenticator
-		address       string
+		ident         string
 	}
 
 	var msg = []byte("foo")
 
 	testCases := []testCase{
 		{
+			name:          "Secp256k1 sha256",
+			signer:        secp256k1PlainSigner(t, [32]byte{1, 2, 3}),
+			authenticator: auth.Secp25k1Authenticator{},
+			ident:         "03fdfb57fb936a3fccef973c99041317d0543a5f5c1d772ca60adca30c6c2606c6", // 33 byte compressed pubkey
+		},
+		{
 			name:          "eth personal sign",
 			signer:        secp256k1Signer(t, [32]byte{1, 2, 3}),
 			authenticator: auth.EthSecp256k1Authenticator{},
-			address:       "0x1b7c6c9938cd93c10910dbc4d4ac8c9275e96925",
+			ident:         "0x1b7c6c9938cd93c10910dbc4d4ac8c9275e96925", // 0x prefixed 20 byte address
 		},
 		{
 			name:          "ed25519",
 			signer:        ed25519Signer(t, [32]byte{1, 2, 3}),
 			authenticator: auth.Ed25519Authenticator{},
-			address:       "57b8983ac97d18aaa1eb428890d0abe673a843cf4a42e83ab875efd250c9dcb1",
+			ident:         "57b8983ac97d18aaa1eb428890d0abe673a843cf4a42e83ab875efd250c9dcb1", // 32 byte pubkey
 		},
 	}
 
@@ -61,14 +81,30 @@ func Test_AuthSignAndVerify(t *testing.T) {
 			assert.NoError(t, err)
 
 			// check the address
-			address, err := tc.authenticator.Identifier(tc.signer.Identity())
+			identifier, err := tc.authenticator.Identifier(tc.signer.Identity())
 			assert.NoError(t, err)
 
-			if tc.address != address {
-				t.Errorf("address mismatch, got %v want %v", address, tc.address)
+			if tc.ident != identifier {
+				t.Errorf("address mismatch, got %v want %v", identifier, tc.ident)
 			}
 		})
 	}
+}
+
+func TestSecp256k1PlainIdentifier(t *testing.T) {
+	pk, err := hex.DecodeString(secp256k1Key)
+	require.NoError(t, err)
+
+	k, err := crypto.UnmarshalSecp256k1PrivateKey(pk)
+	require.NoError(t, err)
+
+	signer := &auth.Secp256k1Signer{Secp256k1PrivateKey: *k}
+	authenticator := auth.Secp25k1Authenticator{}
+
+	identifier, err := authenticator.Identifier(signer.Identity())
+	require.NoError(t, err)
+
+	assert.Equal(t, secp256k1PubKey, identifier)
 }
 
 func TestSecp256k1Identifier(t *testing.T) {
@@ -128,6 +164,19 @@ func (dr *deterministicPRNG) Read(p []byte) (n int, err error) {
 		dr.readLen = 8 - len(p)
 	}
 	return n, nil
+}
+
+func secp256k1PlainSigner(t *testing.T, seed [32]byte) *auth.Secp256k1Signer {
+	rngSrc := rand.NewChaCha8(seed)
+	privKey, _, err := crypto.GenerateSecp256k1Key(&deterministicPRNG{ChaCha8: rngSrc})
+	require.NoError(t, err)
+
+	fmt.Println("Private Key:", privKey)
+	privKeyBytes := privKey.Bytes()
+	k, err := crypto.UnmarshalSecp256k1PrivateKey(privKeyBytes)
+	require.NoError(t, err)
+
+	return &auth.Secp256k1Signer{Secp256k1PrivateKey: *k}
 }
 
 func secp256k1Signer(t *testing.T, seed [32]byte) *auth.EthPersonalSigner {

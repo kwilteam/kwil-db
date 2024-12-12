@@ -1,12 +1,12 @@
-package node
+package rpc
 
 import (
 	"context"
 	"encoding/json"
 
-	"github.com/kwilteam/kwil-db/cmd/common/display"
-	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
-	"github.com/pelletier/go-toml/v2"
+	"github.com/kwilteam/kwil-db/app/shared/display"
+	"github.com/kwilteam/kwil-db/config"
+
 	"github.com/spf13/cobra"
 )
 
@@ -25,7 +25,7 @@ func dumpCfgCmd() *cobra.Command {
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx := context.Background()
-			client, err := common.GetAdminSvcClient(ctx, cmd)
+			client, err := AdminSvcClient(ctx, cmd)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
@@ -35,31 +35,38 @@ func dumpCfgCmd() *cobra.Command {
 				return display.PrintErr(cmd, err)
 			}
 
-			cfg := make(map[string]interface{})
-			err = json.Unmarshal(bts, &cfg)
+			var cfg config.Config
+			err = cfg.FromTOML(bts)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
 
-			return display.PrintCmd(cmd, &cfgMsg{cfg: cfg})
+			return display.PrintCmd(cmd, &cfgMsg{toml: bts, cfg: &cfg})
 		},
 	}
 
-	common.BindRPCFlags(cmd)
+	BindRPCFlags(cmd)
 
 	return cmd
 }
 
 type cfgMsg struct {
-	cfg map[string]interface{}
+	toml []byte
+	cfg  *config.Config
 }
 
 var _ display.MsgFormatter = (*cfgMsg)(nil)
 
 func (c *cfgMsg) MarshalJSON() ([]byte, error) {
-	return json.Marshal(c.cfg)
+	return json.Marshal(struct {
+		OK   bool   `json:"ok"`
+		TOML string `json:"toml"`
+	}{
+		OK:   true,
+		TOML: string(c.toml),
+	})
 }
 
 func (c *cfgMsg) MarshalText() ([]byte, error) {
-	return toml.Marshal(c.cfg)
+	return c.cfg.ToTOML()
 }

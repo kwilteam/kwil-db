@@ -125,7 +125,7 @@ type Accounts interface {
 type Validators interface {
 	// GetValidatorPower retrieves the power of the given validator. If
 	// the validator does not exist, it will return 0.
-	GetValidatorPower(ctx context.Context, tx sql.Executor, validator []byte) (int64, error)
+	GetValidatorPower(ctx context.Context, validator []byte) (int64, error)
 	// GetValidators retrieves all validators.
 	GetValidators() []*types.Validator
 	// SetValidatorPower sets the power of a validator. If the target

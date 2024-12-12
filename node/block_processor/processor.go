@@ -304,6 +304,9 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 		txHash := types.HashBytes(tx)
 
 		auth := auth.GetAuthenticator(decodedTx.Signature.Type)
+		if auth == nil {
+			return nil, fmt.Errorf("unsupported signature type: %v", decodedTx.Signature.Type)
+		}
 
 		identifier, err := auth.Identifier(decodedTx.Sender)
 		if err != nil {

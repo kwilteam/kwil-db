@@ -1,12 +1,12 @@
-package node
+package rpc
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
 
-	"github.com/kwilteam/kwil-db/cmd/common/display"
-	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
+	"github.com/kwilteam/kwil-db/app/shared/bind"
+	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/core/rpc/transport"
 	"github.com/spf13/cobra"
 )
@@ -31,7 +31,7 @@ func genAuthKeyCmd() *cobra.Command {
 		Example: genAuthKeyExample,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			rootDir := common.DefaultKwilAdminRoot()
+			rootDir, _ := bind.RootDir(cmd)
 
 			if !filepath.IsAbs(keyFile) {
 				keyFile = filepath.Join(rootDir, keyFile)
@@ -62,9 +62,4 @@ func genAuthKeyCmd() *cobra.Command {
 	cmd.Flags().StringVar(&certFile, "tlscert", "auth.cert", "output path for the new client certificate")
 
 	return cmd
-}
-
-func fileExists(path string) bool {
-	_, err := os.Stat(path)
-	return !os.IsNotExist(err)
 }

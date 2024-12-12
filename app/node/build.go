@@ -118,7 +118,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 		// key because it is used to sign transactions and provide an Identity for
 		// account information (nonce and balance).
 		txSigner := &auth.EthPersonalSigner{Key: *d.privKey.(*crypto.Secp256k1PrivateKey)}
-		jsonAdminSvc := adminsvc.NewService(db, node, bp, nil, txSigner, d.cfg,
+		jsonAdminSvc := adminsvc.NewService(db, node, bp, vs, nil, txSigner, d.cfg,
 			d.genesisCfg.ChainID, adminServerLogger)
 		jsonRPCAdminServer = buildJRPCAdminServer(d)
 		jsonRPCAdminServer.RegisterSvc(jsonAdminSvc)
@@ -204,7 +204,7 @@ func buildMetaStore(ctx context.Context, db *pg.DB) {
 
 func buildTxApp(ctx context.Context, d *coreDependencies, db *pg.DB, accounts *accounts.Accounts,
 	votestore *voting.VoteStore, engine *execution.GlobalContext) *txapp.TxApp {
-	signer := auth.GetSigner(d.privKey)
+	signer := auth.GetNodeSigner(d.privKey)
 	service := &common.Service{
 		Logger:   d.logger.New("TXAPP"),
 		Identity: signer.Identity(),

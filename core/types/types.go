@@ -42,7 +42,7 @@ type JoinRequest struct {
 type Validator struct {
 	Role   string   `json:"role"`
 	PubKey HexBytes `json:"pubkey"`
-	Power  int64    `json:"power,omitempty"`
+	Power  int64    `json:"power"`
 }
 
 // ValidatorRemoveProposal is a proposal from an existing validator (remover) to

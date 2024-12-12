@@ -13,7 +13,6 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
-	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/meta"
@@ -40,7 +39,6 @@ var zeroHash = types.Hash{}
 // - Once the leader receives the threshold acks with the same appHash as the leader, the block is committed and the leader broadcasts the blockAnn message to the network. Nodes that receive this message will enter into the commit phase where they verify the appHash and commit the block.
 type ConsensusEngine struct {
 	role    atomic.Value // types.Role, role can change over the lifetime of the node
-	signer  auth.Signer
 	privKey crypto.PrivateKey
 	pubKey  crypto.PublicKey
 	leader  crypto.PublicKey
@@ -217,11 +215,8 @@ func New(cfg *Config) *ConsensusEngine {
 		}
 	}
 
-	signer := auth.GetSigner(cfg.PrivateKey)
-
 	// rethink how this state is initialized
 	ce := &ConsensusEngine{
-		signer:         signer,
 		pubKey:         pubKey,
 		privKey:        cfg.PrivateKey,
 		leader:         cfg.Leader,

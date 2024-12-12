@@ -2,6 +2,7 @@ package auth
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -140,7 +141,18 @@ type Signer interface {
 	AuthType() string
 }
 
-func GetSigner(key crypto.PrivateKey) Signer {
+func GetNodeSigner(key crypto.PrivateKey) Signer {
+	switch key := key.(type) {
+	case *crypto.Secp256k1PrivateKey:
+		return &Secp256k1Signer{Secp256k1PrivateKey: *key} // id is pubkey / sign/verify with just sha256, no text hash
+	case *crypto.Ed25519PrivateKey:
+		return &Ed25519Signer{Ed25519PrivateKey: *key}
+	default:
+		return nil
+	}
+}
+
+func GetUserSigner(key crypto.PrivateKey) Signer {
 	switch key := key.(type) {
 	case *crypto.Secp256k1PrivateKey:
 		return &EthPersonalSigner{Key: *key}
@@ -149,6 +161,34 @@ func GetSigner(key crypto.PrivateKey) Signer {
 	default:
 		return nil
 	}
+}
+
+type Secp256k1Signer struct {
+	crypto.Secp256k1PrivateKey
+}
+
+var _ Signer = (*Secp256k1Signer)(nil)
+
+func (s *Secp256k1Signer) Sign(msg []byte) (*Signature, error) {
+	hash := sha256.Sum256(msg)
+	signatureBts, err := s.Secp256k1PrivateKey.SignRaw(hash[:])
+	if err != nil {
+		return nil, err
+	}
+
+	return &Signature{
+		Data: signatureBts,
+		Type: Secp256k1Auth,
+	}, nil
+}
+
+// Identity returns the identity of the signer (public key for this signer).
+func (s *Secp256k1Signer) Identity() []byte {
+	return s.Secp256k1PrivateKey.Public().Bytes()
+}
+
+func (*Secp256k1Signer) AuthType() string {
+	return Secp256k1Auth
 }
 
 // EthPersonalSecp256k1Signer is a signer that signs messages using the

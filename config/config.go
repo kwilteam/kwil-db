@@ -268,6 +268,10 @@ func (nc Config) ToTOML() ([]byte, error) {
 	return toml.Marshal(nc)
 }
 
+func (nc *Config) FromTOML(b []byte) error {
+	return toml.Unmarshal(b, &nc)
+}
+
 func (nc *Config) SaveAs(filename string) error {
 	bts, err := nc.ToTOML()
 	if err != nil {

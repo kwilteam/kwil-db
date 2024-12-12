@@ -19,4 +19,9 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+
+	err = authExt.RegisterAuthenticator(authExt.ModAdd, auth.Secp256k1Auth, auth.Secp25k1Authenticator{})
+	if err != nil {
+		panic(err)
+	}
 }

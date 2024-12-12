@@ -456,7 +456,7 @@ func (d *validatorJoinRoute) PreTx(ctx *common.TxContext, svc *common.Service, t
 
 func (d *validatorJoinRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
 	// ensure this candidate is not already a validator
-	power, err := app.Validators.GetValidatorPower(ctx.Ctx, app.DB, tx.Sender)
+	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}
@@ -547,7 +547,7 @@ func (d *validatorApproveRoute) InTx(ctx *common.TxContext, app *common.App, tx 
 	}
 
 	// ensure that sender is a validator
-	power, err := app.Validators.GetValidatorPower(ctx.Ctx, app.DB, tx.Sender)
+	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}
@@ -609,7 +609,7 @@ func (d *validatorRemoveRoute) InTx(ctx *common.TxContext, app *common.App, tx *
 	}
 
 	// ensure the sender is a validator
-	power, err := app.Validators.GetValidatorPower(ctx.Ctx, app.DB, tx.Sender)
+	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}
@@ -618,7 +618,7 @@ func (d *validatorRemoveRoute) InTx(ctx *common.TxContext, app *common.App, tx *
 	}
 
 	// ensure that the target is a validator
-	power, err = app.Validators.GetValidatorPower(ctx.Ctx, app.DB, d.target)
+	power, err = app.Validators.GetValidatorPower(ctx.Ctx, d.target)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}
@@ -673,7 +673,7 @@ func (d *validatorLeaveRoute) PreTx(ctx *common.TxContext, svc *common.Service, 
 }
 
 func (d *validatorLeaveRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
-	power, err := app.Validators.GetValidatorPower(ctx.Ctx, app.DB, tx.Sender)
+	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}
@@ -719,7 +719,7 @@ func (d *validatorVoteIDsRoute) PreTx(ctx *common.TxContext, svc *common.Service
 
 func (d *validatorVoteIDsRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
 	// if the caller has 0 power, they are not a validator, and should not be able to vote
-	power, err := app.Validators.GetValidatorPower(ctx.Ctx, app.DB, tx.Sender)
+	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}
@@ -913,7 +913,7 @@ func (d *createResolutionRoute) PreTx(ctx *common.TxContext, svc *common.Service
 func (d *createResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
 	// ensure the sender is a validator
 	// only validators can create resolutions
-	power, err := app.Validators.GetValidatorPower(ctx.Ctx, app.DB, tx.Sender)
+	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}
@@ -969,7 +969,7 @@ func (d *approveResolutionRoute) PreTx(ctx *common.TxContext, svc *common.Servic
 
 func (d *approveResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
 	// ensure the sender is a validator
-	power, err := app.Validators.GetValidatorPower(ctx.Ctx, app.DB, tx.Sender)
+	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}

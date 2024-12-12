@@ -584,7 +584,7 @@ func (v *VoteStore) SetValidatorPower(ctx context.Context, db sql.Executor, reci
 
 // GetValidatorPower gets the power of a voter.
 // If the voter does not exist, it will return 0.
-func (v *VoteStore) GetValidatorPower(ctx context.Context, db sql.Executor, identifier []byte) (power int64, err error) {
+func (v *VoteStore) GetValidatorPower(ctx context.Context, identifier []byte) (power int64, err error) {
 	v.mtx.Lock()
 	defer v.mtx.Unlock()
 

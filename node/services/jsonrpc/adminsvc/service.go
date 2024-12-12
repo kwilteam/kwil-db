@@ -12,11 +12,11 @@ import (
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	adminjson "github.com/kwilteam/kwil-db/core/rpc/json/admin"
 	userjson "github.com/kwilteam/kwil-db/core/rpc/json/user"
-	coretypes "github.com/kwilteam/kwil-db/core/types"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	types "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
+	nodetypes "github.com/kwilteam/kwil-db/node/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
 	"github.com/kwilteam/kwil-db/version"
@@ -27,7 +27,7 @@ import (
 type Node interface {
 	Status(context.Context) (*types.Status, error)
 	Peers(context.Context) ([]*types.PeerInfo, error)
-	BroadcastTx(ctx context.Context, tx *coretypes.Transaction, sync uint8) (*coretypes.ResultBroadcastTx, error)
+	BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (*ktypes.ResultBroadcastTx, error)
 }
 
 type P2P interface {
@@ -46,13 +46,13 @@ type App interface {
 	// If unconfirmed is true, the account found in the mempool is returned.
 	// Otherwise, the account found in the blockchain is returned.
 	AccountInfo(ctx context.Context, db sql.DB, identifier []byte, unconfirmed bool) (balance *big.Int, nonce int64, err error)
-	Price(ctx context.Context, db sql.DB, tx *coretypes.Transaction) (*big.Int, error)
+	Price(ctx context.Context, db sql.DB, tx *ktypes.Transaction) (*big.Int, error)
 }
 
 type Validators interface {
 	SetValidatorPower(ctx context.Context, tx sql.Executor, pubKey []byte, power int64) error
-	GetValidatorPower(ctx context.Context, tx sql.Executor, pubKey []byte) (int64, error)
-	GetValidators() []*coretypes.Validator
+	GetValidatorPower(ctx context.Context, pubKey []byte) (int64, error)
+	GetValidators() []*ktypes.Validator
 }
 
 type Service struct {
@@ -144,7 +144,7 @@ func (svc *Service) HealthMethod(ctx context.Context, _ *userjson.HealthRequest)
 		Role:          status.Validator.Role,
 		NumValidators: len(vals.Validators),
 	}, nil
-	// slices.ContainsFunc(vals.Validators, func(v *coretypes.Validator) bool { return bytes.Equal(v.PubKey, status.Validator.PubKey) })
+	// slices.ContainsFunc(vals.Validators, func(v *ktypes.Validator) bool { return bytes.Equal(v.PubKey, status.Validator.PubKey) })
 }
 
 func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
@@ -222,12 +222,13 @@ func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
 
 // NewService constructs a new Service.
 func NewService(db sql.DelayedReadTxMaker, blockchain Node, app App,
-	p2p P2P, txSigner auth.Signer, cfg *config.Config,
+	vs Validators, p2p P2P, txSigner auth.Signer, cfg *config.Config,
 	chainID string, logger log.Logger) *Service {
 	return &Service{
 		blockchain: blockchain,
 		p2p:        p2p,
 		app:        app,
+		voting:     vs,
 		signer:     txSigner,
 		chainID:    chainID,
 		cfg:        cfg,
@@ -252,13 +253,19 @@ func (svc *Service) Status(ctx context.Context, req *adminjson.StatusRequest) (*
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "node status unavailable", nil)
 	}
 
+	var power int64
+	switch status.Validator.Role {
+	case nodetypes.RoleLeader.String(), nodetypes.RoleValidator.String():
+		power, _ = svc.voting.GetValidatorPower(ctx, status.Validator.PubKey)
+	}
+
 	return &adminjson.StatusResponse{
 		Node: status.Node,
 		Sync: convertSyncInfo(status.Sync),
 		Validator: &adminjson.Validator{ // TODO: weed out the type dups
 			Role:   status.Validator.Role,
 			PubKey: status.Validator.PubKey,
-			// Power:  status.Validator.Power,
+			Power:  power,
 		},
 	}, nil
 }
@@ -282,7 +289,7 @@ func (svc *Service) Peers(ctx context.Context, _ *adminjson.PeersRequest) (*admi
 }
 
 // sendTx makes a transaction and sends it to the local node.
-func (svc *Service) sendTx(ctx context.Context, payload coretypes.Payload) (*userjson.BroadcastResponse, *jsonrpc.Error) {
+func (svc *Service) sendTx(ctx context.Context, payload ktypes.Payload) (*userjson.BroadcastResponse, *jsonrpc.Error) {
 	readTx := svc.db.BeginDelayedReadTx()
 	defer readTx.Rollback(ctx)
 
@@ -292,7 +299,7 @@ func (svc *Service) sendTx(ctx context.Context, payload coretypes.Payload) (*use
 		return nil, jsonrpc.NewError(jsonrpc.ErrorAccountInternal, "account info error", nil)
 	}
 
-	tx, err := coretypes.CreateTransaction(payload, svc.chainID, uint64(nonce+1))
+	tx, err := ktypes.CreateNodeTransaction(payload, svc.chainID, uint64(nonce+1))
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "unable to create transaction", nil)
 	}
@@ -318,7 +325,7 @@ func (svc *Service) sendTx(ctx context.Context, payload coretypes.Payload) (*use
 
 	code, txHash := res.Code, res.Hash
 
-	if txCode := coretypes.TxCode(code); txCode != coretypes.CodeOk {
+	if txCode := ktypes.TxCode(code); txCode != ktypes.CodeOk {
 		errData := &userjson.BroadcastError{
 			TxCode:  uint32(txCode), // e.g. invalid nonce, wrong chain, etc.
 			Hash:    txHash.String(),
@@ -336,19 +343,19 @@ func (svc *Service) sendTx(ctx context.Context, payload coretypes.Payload) (*use
 }
 
 func (svc *Service) Approve(ctx context.Context, req *adminjson.ApproveRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
-	return svc.sendTx(ctx, &coretypes.ValidatorApprove{
+	return svc.sendTx(ctx, &ktypes.ValidatorApprove{
 		Candidate: req.PubKey,
 	})
 }
 
 func (svc *Service) Join(ctx context.Context, req *adminjson.JoinRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
-	return svc.sendTx(ctx, &coretypes.ValidatorJoin{
+	return svc.sendTx(ctx, &ktypes.ValidatorJoin{
 		Power: 1,
 	})
 }
 
 func (svc *Service) Remove(ctx context.Context, req *adminjson.RemoveRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
-	return svc.sendTx(ctx, &coretypes.ValidatorRemove{
+	return svc.sendTx(ctx, &ktypes.ValidatorRemove{
 		Validator: req.PubKey,
 	})
 }
@@ -385,7 +392,7 @@ func (svc *Service) JoinStatus(ctx context.Context, req *adminjson.JoinStatusReq
 }
 
 func (svc *Service) Leave(ctx context.Context, req *adminjson.LeaveRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
-	return svc.sendTx(ctx, &coretypes.ValidatorLeave{})
+	return svc.sendTx(ctx, &ktypes.ValidatorLeave{})
 }
 
 func (svc *Service) ListValidators(ctx context.Context, req *adminjson.ListValidatorsRequest) (*adminjson.ListValidatorsResponse, *jsonrpc.Error) {
@@ -396,7 +403,7 @@ func (svc *Service) ListValidators(ctx context.Context, req *adminjson.ListValid
 		pbValidators[i] = &adminjson.Validator{
 			Role:   vi.Role,
 			PubKey: vi.PubKey,
-			// Power:  vi.Power,
+			Power:  vi.Power,
 		}
 	}
 
@@ -507,8 +514,8 @@ func (svc *Service) ListPeers(ctx context.Context, req *adminjson.PeersRequest) 
 }
 
 func (svc *Service) CreateResolution(ctx context.Context, req *adminjson.CreateResolutionRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
-	res := &coretypes.CreateResolution{
-		Resolution: &coretypes.VotableEvent{
+	res := &ktypes.CreateResolution{
+		Resolution: &ktypes.VotableEvent{
 			Type: req.ResolutionType,
 			Body: req.Resolution,
 		},
@@ -518,7 +525,7 @@ func (svc *Service) CreateResolution(ctx context.Context, req *adminjson.CreateR
 }
 
 func (svc *Service) ApproveResolution(ctx context.Context, req *adminjson.ApproveResolutionRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
-	res := &coretypes.ApproveResolution{
+	res := &ktypes.ApproveResolution{
 		ResolutionID: req.ResolutionID,
 	}
 
@@ -527,7 +534,7 @@ func (svc *Service) ApproveResolution(ctx context.Context, req *adminjson.Approv
 
 /* disabled until the tx route is tested
 func (svc *Service) DeleteResolution(ctx context.Context, req *adminjson.DeleteResolutionRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
-	res := &coretypes.DeleteResolution{
+	res := &ktypes.DeleteResolution{
 		ResolutionID: req.ResolutionID,
 	}
 
@@ -553,7 +560,7 @@ func (svc *Service) ResolutionStatus(ctx context.Context, req *adminjson.Resolut
 	// }
 
 	return &adminjson.ResolutionStatusResponse{
-		Status: &coretypes.PendingResolution{
+		Status: &ktypes.PendingResolution{
 			ResolutionID: req.ResolutionID,
 			ExpiresAt:    resolution.ExpirationHeight,
 			Board:        nil, // resolution.Voters ???

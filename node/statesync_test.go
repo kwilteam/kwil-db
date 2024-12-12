@@ -207,7 +207,7 @@ func TestStateSyncService(t *testing.T) {
 	// bootstrap the ss3 with the trusted providers
 	for _, addr := range addrs {
 		i, err := connectPeer(ctx, addr, h3)
-		assert.NoError(t, err)
+		require.NoError(t, err)
 		ss3.trustedProviders = append(ss3.trustedProviders, i)
 	}
 

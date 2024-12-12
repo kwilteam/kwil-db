@@ -31,9 +31,10 @@ func init() {
 }
 
 var (
-	signer1 = getSigner("7c67e60fce0c403ff40193a3128e5f3d8c2139aed36d76d7b5f1e70ec19c43f00aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842")
-
-	signer2 = getSigner("2b8615d7ee7b7d3fc7d6b89d9b31c045ca5c4d220c82eab25420873c99010422fb35029f37e80148ae89588710eb7d692e96a070d48e579cad51a253e9d1c030")
+	signer1 = getSigner("81487a6b7bd63f77da1d09758bf657448425c398bbbb63b8a304f0551c182703")
+	signer2 = getSigner("24ee0732c3f9d7ff2b45def78260968bbdf2d977675e968bcbcf98726c2bddd2")
+	// signer1Ed = getSigner("7c67e60fce0c403ff40193a3128e5f3d8c2139aed36d76d7b5f1e70ec19c43f00aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842")
+	// signer2Ed = getSigner("2b8615d7ee7b7d3fc7d6b89d9b31c045ca5c4d220c82eab25420873c99010422fb35029f37e80148ae89588710eb7d692e96a070d48e579cad51a253e9d1c030")
 )
 
 type getVoterPowerFunc func() (int64, error)
@@ -337,7 +338,7 @@ func (v *mockValidator) GetValidators() []*types.Validator {
 	return nil
 }
 
-func (v *mockValidator) GetValidatorPower(_ context.Context, _ sql.Executor, pubKey []byte) (int64, error) {
+func (v *mockValidator) GetValidatorPower(_ context.Context, pubKey []byte) (int64, error) {
 	return v.getVoterFn()
 }
 
@@ -352,14 +353,19 @@ func (v *mockValidator) Commit() error {
 func (v *mockValidator) Rollback() {}
 
 func getSigner(hexPrivKey string) auth.Signer {
+	//pk, _, err := crypto.GenerateSecp256k1Key(nil)
 	bts, err := hex.DecodeString(hexPrivKey)
 	if err != nil {
 		panic(err)
 	}
-	pk, err := crypto.UnmarshalEd25519PrivateKey(bts)
+	// pk, err := crypto.UnmarshalEd25519PrivateKey(bts)
+	// if err != nil {
+	// 	panic(err)
+	// }
+	pk, err := crypto.UnmarshalSecp256k1PrivateKey(bts)
 	if err != nil {
 		panic(err)
 	}
 
-	return auth.GetSigner(pk)
+	return auth.GetNodeSigner(pk)
 }
