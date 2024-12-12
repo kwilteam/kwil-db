@@ -601,7 +601,7 @@ func (v *VoteStore) GetValidators() []*types.Validator {
 	v.mtx.Lock()
 	defer v.mtx.Unlock()
 
-	vals := make([]*types.Validator, 0)
+	vals := make([]*types.Validator, 0, len(v.validatorSet))
 	for _, val := range v.validatorSet {
 		vals = append(vals, &types.Validator{
 			PubKey: slices.Clone(val.PubKey),

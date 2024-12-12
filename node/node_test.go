@@ -114,6 +114,16 @@ func setupStreamHandlers(t *testing.T, h host.Host) {
 	}
 }
 
+type dummyBP struct {
+	vals []*ktypes.Validator
+}
+
+func (bp *dummyBP) GetValidators() []*ktypes.Validator { return bp.vals }
+
+func (bp *dummyBP) SubscribeValidators() <-chan []*ktypes.Validator {
+	return make(<-chan []*ktypes.Validator, 1)
+}
+
 // func hupStreamHandler(s network.Stream) { s.Close() }
 
 var _ ConsensusEngine = &dummyCE{}
@@ -316,6 +326,7 @@ func TestStreamsBlockFetch(t *testing.T) {
 		BlockStore:  bs,
 		Snapshotter: ss,
 		Consensus:   ce,
+		BlockProc:   &dummyBP{},
 	}
 	node1, err := NewNode(cfg1, WithHost(h1))
 	if err != nil {

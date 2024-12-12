@@ -13,6 +13,7 @@ import (
 	"github.com/kwilteam/kwil-db/app/shared/bind"
 	"github.com/kwilteam/kwil-db/app/snapshot"
 	"github.com/kwilteam/kwil-db/app/validator"
+	"github.com/kwilteam/kwil-db/app/whitelist"
 	"github.com/kwilteam/kwil-db/version"
 
 	"github.com/spf13/cobra"
@@ -59,6 +60,7 @@ func RootCmd() *cobra.Command {
 	cmd.AddCommand(rpc.NewAdminCmd())
 	cmd.AddCommand(validator.NewValidatorsCmd())
 	cmd.AddCommand(setup.SetupCmd())
+	cmd.AddCommand(whitelist.WhitelistCmd())
 	cmd.AddCommand(key.KeyCmd())
 	cmd.AddCommand(snapshot.NewSnapshotCmd())
 

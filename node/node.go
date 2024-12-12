@@ -12,7 +12,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -29,6 +28,7 @@ import (
 	"github.com/libp2p/go-libp2p"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
+	"github.com/libp2p/go-libp2p/core/connmgr"
 	p2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -38,7 +38,6 @@ import (
 	noise "github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/multiformats/go-multiaddr"
-	//libp2ptls "github.com/libp2p/go-libp2p/p2p/security/tls"
 )
 
 const (
@@ -51,6 +50,60 @@ type peerManager interface {
 	Start(context.Context) error
 	ConnectedPeers() []peers.PeerInfo
 	KnownPeers() ([]peers.PeerInfo, []peers.PeerInfo, []peers.PeerInfo)
+	Connect(ctx context.Context, info peers.AddrInfo) error
+
+	// Whitelist methods
+	Allow(p peer.ID)
+	AllowPersistent(p peer.ID)
+	Disallow(p peer.ID)
+	// Allowed() []peer.ID
+	AllowedPersistent() []peer.ID
+	// IsAllowed(p peer.ID) bool
+}
+
+type WhitelistMgr struct {
+	pm     peerManager
+	logger log.Logger
+}
+
+// Whitelister is a shim between the a Kwil consumer like RPC service and the
+// p2p layer (PeerMan) which manages the persistent and effective white list in
+// terms of libp2p types.
+func (n *Node) Whitelister() *WhitelistMgr {
+	return &WhitelistMgr{pm: n.pm, logger: n.log.New("WHITELIST")}
+}
+
+func (wl *WhitelistMgr) AddPeer(nodeID string) error {
+	wl.logger.Info(nodeID)
+	peerID, err := nodeIDToPeerID(nodeID)
+	if err != nil {
+		return err
+	}
+	wl.logger.Info(peerID.String())
+	wl.pm.AllowPersistent(peerID)
+	return nil
+}
+
+func (wl *WhitelistMgr) RemovePeer(nodeID string) error {
+	peerID, err := nodeIDToPeerID(nodeID)
+	if err != nil {
+		return err
+	}
+	wl.pm.Disallow(peerID)
+	return nil
+}
+
+func (wl *WhitelistMgr) List() []string {
+	var list []string
+	for _, peerID := range wl.pm.AllowedPersistent() {
+		nodeID, err := peers.NodeIDFromPeerID(peerID.String())
+		if err != nil { // this shouldn't happen
+			wl.logger.Errorf("invalid peer ID in whitelist: %v", err)
+			continue // return nil, err
+		}
+		list = append(list, nodeID)
+	}
+	return list
 }
 
 type Node struct {
@@ -69,6 +122,7 @@ type Node struct {
 	ss          SnapshotStore
 	host        host.Host
 	statesyncer *StateSyncService
+	bp          BlockProcessor
 
 	// broadcast channels
 	ackChan  chan AckRes                  // from consensus engine, to gossip to leader
@@ -96,10 +150,29 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 
 	pubkey := cfg.PrivKey.Public()
 
+	// This connection gater is logically be part of PeerMan, but the libp2p
+	// Host constructor needs it, and PeerMan needs Host for its peerstore
+	// and connect method. For now we create it here and give it to both.
+	var cg *peers.WhitelistGater
+	if cfg.P2P.PrivateMode {
+		logger.Infof("Private P2P mode enabled")
+		var peerWhitelist []peer.ID
+		for _, nodeID := range cfg.P2P.Whitelist {
+			peerID, err := nodeIDToPeerID(nodeID)
+			if err != nil {
+				return nil, fmt.Errorf("invalid whitelist node ID: %w", err)
+			}
+			peerWhitelist = append(peerWhitelist, peerID)
+			logger.Infof("Adding peer to whitelist: %v", nodeID)
+		}
+		cg = peers.NewWhitelistGater(peerWhitelist, peers.WithLogger(logger.New("PEERFILT")))
+		// PeerMan adds more from address book.
+	}
+
 	var err error
 	host := options.host
 	if host == nil {
-		host, err = newHost(cfg.P2P.IP, cfg.P2P.Port, cfg.PrivKey)
+		host, err = newHost(cfg.P2P.IP, cfg.P2P.Port, cfg.PrivKey, cg)
 		if err != nil {
 			return nil, fmt.Errorf("cannot create host: %w", err)
 		}
@@ -108,8 +181,7 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 	addrBookPath := filepath.Join(cfg.RootDir, "addrbook.json")
 
 	pm, err := peers.NewPeerMan(cfg.P2P.Pex, addrBookPath,
-		logger.New("PEERS"),
-		host, // tooo much, become minimal interface
+		logger.New("PEERS"), cg, host,
 		func(ctx context.Context, peerID peer.ID) ([]peer.AddrInfo, error) {
 			return RequestPeers(ctx, host.ID(), host, logger)
 		}, RequiredStreamProtocols)
@@ -127,7 +199,6 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create DHT: %w", err)
 	}
-	// dht.Close() ?
 	discoverer := makeDiscovery(dht)
 
 	// statesyncer
@@ -154,18 +225,20 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 		pex:         cfg.P2P.Pex,
 		host:        host,
 		pm:          pm,
+		statesyncer: ss,
+		dhtCloser:   dht.Close,
 		mp:          cfg.Mempool,
 		bki:         cfg.BlockStore,
 		ce:          cfg.Consensus,
 		dir:         cfg.RootDir,
 		chainID:     cfg.ChainID,
 		ss:          cfg.Snapshotter,
-		statesyncer: ss,
-		ackChan:     make(chan AckRes, 1),
-		resetMsg:    make(chan ConsensusReset, 1),
-		discReq:     make(chan types.DiscoveryRequest, 1),
-		discResp:    make(chan types.DiscoveryResponse, 1),
-		dhtCloser:   dht.Close,
+		bp:          cfg.BlockProc,
+
+		ackChan:  make(chan AckRes, 1),
+		resetMsg: make(chan ConsensusReset, 1),
+		discReq:  make(chan types.DiscoveryRequest, 1),
+		discResp: make(chan types.DiscoveryResponse, 1),
 	}
 
 	host.SetStreamHandler(ProtocolIDTxAnn, node.txAnnStreamHandler)
@@ -175,7 +248,6 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 	host.SetStreamHandler(ProtocolIDTx, node.txGetStreamHandler)
 
 	host.SetStreamHandler(ProtocolIDBlockPropose, node.blkPropStreamHandler)
-	// host.SetStreamHandler(ProtocolIDACKProposal, node.blkAckStreamHandler)
 
 	if cfg.P2P.Pex {
 		host.SetStreamHandler(ProtocolIDDiscover, node.peerDiscoveryStreamHandler)
@@ -254,14 +326,20 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 		return err
 	}
 
-	// connect to bootstrap peers, if any
+	// connect to bootstrap peers, if any.
+	//
+	// NOTE: it may be preferable to simply add to Host's peer store here and
+	// let PeerMan manage connections.
 	for i, peer := range bootpeersMA {
 		peerInfo, err := makePeerAddrInfo(peer)
 		if err != nil {
 			n.log.Warnf("invalid bootnode address %v from setting %v", peer, bootpeers[i])
 			continue
 		}
-		err = connectPeerAddrInfo(ctx, peerInfo, n.host)
+
+		n.pm.Allow(peerInfo.ID)
+
+		err = n.pm.Connect(ctx, peers.AddrInfo(*peerInfo))
 		if err != nil {
 			n.log.Errorf("failed to connect to %v: %v", peer, err)
 			// Add it to the peer store anyway since this was specified as a
@@ -282,33 +360,44 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 		// n.host.ConnManager().TagPeer(peerID, "validatorish", 1)
 	} // else would use persistent peer store (address book)
 
-	// Connect to peers in peer store.
-	bootedPeers := n.pm.ConnectedPeers()
-	for _, peerID := range n.host.Peerstore().Peers() {
-		if slices.ContainsFunc(bootedPeers, func(p peers.PeerInfo) bool {
-			return p.ID == peerID
-		}) {
-			continue // already connected
-		}
-		if n.host.ID() == peerID {
+	for _, val := range n.bp.GetValidators() {
+		n.log.Infof("Adding validator %v to peer whitelist", val.PubKey)
+		peerID, err := peerIDForValidator(val.PubKey)
+		if err != nil {
+			n.log.Errorf("cannot get peerID for validator (%v): %v", val.PubKey, err)
 			continue
 		}
-		peerAddrs := n.host.Peerstore().Addrs(peerID)
-		if len(peerAddrs) == 0 {
-			n.log.Warnf("No addresses found for peer %s, skipping.", peerID)
-			continue
-		}
-
-		// Create AddrInfo from peerID and known addresses
-		if err := n.host.Connect(ctx, peer.AddrInfo{
-			ID:    peerID,
-			Addrs: peerAddrs,
-		}); err != nil {
-			n.log.Warnf("Unable to connect to peer %s: %v", peerID, peers.CompressDialError(err))
-			continue
-		}
-		n.log.Infof("Connected to address book peer %v", peerID)
+		n.pm.Allow(peerID)
 	}
+
+	valSub := n.bp.SubscribeValidators()
+	n.wg.Add(1)
+	go func() {
+		defer n.wg.Done()
+		for {
+			select {
+			case valUpdates, open := <-valSub:
+				if !open {
+					return
+				}
+				// update peer filter
+				for _, up := range valUpdates {
+					peerID, err := peerIDForValidator(up.PubKey)
+					if err != nil {
+						n.log.Errorf("cannot get peerID for validator (%v): %v", up.PubKey, err)
+						continue
+					}
+					if up.Power > 0 {
+						n.pm.Allow(peerID)
+					} else {
+						n.pm.Disallow(peerID)
+					}
+				}
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
 
 	// Advertise the snapshotcatalog service if snapshots are enabled
 	// umm, but gotcha, if a node has previous snapshots but snapshots are disabled, these snapshots will be unusable.
@@ -389,6 +478,50 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 
 	n.log.Info("Node stopped.")
 	return nodeErr
+}
+
+func peerIDForValidator(pubkeyBts []byte) (peer.ID, error) {
+	// We only support secp256k1 keys for validators presently.
+	pk, err := crypto.UnmarshalSecp256k1PublicKey(pubkeyBts)
+	if err != nil {
+		return "", fmt.Errorf("Invalid validator pubkey: %vw", err)
+	}
+	peerID, err := peer.IDFromPublicKey((*p2pcrypto.Secp256k1PublicKey)(pk))
+	if err != nil {
+		return "", fmt.Errorf("Invalid validator pubkey: %w", err)
+	}
+	return peerID, nil
+}
+
+func nodeIDToPeerID(nodeID string) (peer.ID, error) {
+	pubKey, err := peers.NodeIDToPubKey(nodeID)
+	if err != nil {
+		return "", err
+	}
+	return pubkeyToPeerID(pubKey)
+}
+
+func pubkeyToPeerID(pubkey crypto.PublicKey) (peer.ID, error) {
+	var p2pPub p2pcrypto.PubKey
+	var err error
+	switch pt := pubkey.(type) {
+	case *crypto.Secp256k1PublicKey:
+		p2pPub = (*p2pcrypto.Secp256k1PublicKey)(pt)
+	case *crypto.Ed25519PublicKey:
+		// no shortcuts for ed25519
+		rawPub := pubkey.Bytes()
+		p2pPub, err = p2pcrypto.UnmarshalEd25519PublicKey(rawPub)
+	default:
+		return "", fmt.Errorf("unsupported pubkey type: %T", pubkey)
+	}
+	if err != nil {
+		return "", err
+	}
+	p2pAddr, err := peer.IDFromPublicKey(p2pPub)
+	if err != nil {
+		return "", err
+	}
+	return p2pAddr, nil
 }
 
 // doStatesync attempts to perform statesync if the db is uninitialized.
@@ -611,7 +744,7 @@ func NewKey(r io.Reader) crypto.PrivateKey {
 	return privKey
 }
 
-func newHost(ip string, port uint64, privKey crypto.PrivateKey) (host.Host, error) {
+func newHost(ip string, port uint64, privKey crypto.PrivateKey, wl *peers.WhitelistGater) (host.Host, error) {
 	// convert to the libp2p crypto key type
 	var privKeyP2P p2pcrypto.PrivKey
 	var err error
@@ -631,8 +764,6 @@ func newHost(ip string, port uint64, privKey crypto.PrivateKey) (host.Host, erro
 
 	// listenAddrs := libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0", "/ip4/0.0.0.0/tcp/0/ws")
 
-	// cg := peers.NewProtocolGater()
-
 	// The BasicConnManager can keep connections below an upper limit, dropping
 	// down to some lower limit (presumably to keep a dynamic peer list), but it
 	// won't try to initiation new connections to reach the min. Maybe this will
@@ -643,13 +774,20 @@ func newHost(ip string, port uint64, privKey crypto.PrivateKey) (host.Host, erro
 	// 	return nil, nil, err
 	// }
 
+	// libp2p.New is fine with a nil interface (not an non-nil interface to a
+	// nil concrete instance).
+	var cg connmgr.ConnectionGater
+	if wl != nil { // cfg.P2P.PrivateMode
+		cg = wl
+	}
+
 	h, err := libp2p.New(
 		libp2p.Transport(tcp.NewTCPTransport),
 		libp2p.Security(noise.ID, noise.New), // modified TLS based on node-ID
 		libp2p.ListenAddrs(sourceMultiAddr),
 		// listenAddrs,
 		libp2p.Identity(privKeyP2P),
-		// libp2p.ConnectionGater(cg),
+		libp2p.ConnectionGater(cg),
 		// libp2p.ConnectionManager(cm),
 	) // libp2p.RandomIdentity, in-mem peer store, ...
 	if err != nil {
@@ -696,10 +834,6 @@ func makePeerAddrInfo(addr string) (*peer.AddrInfo, error) {
 
 	// Extract the peer ID from the multiaddr.
 	return peer.AddrInfoFromP2pAddr(maddr)
-}
-
-func connectPeerAddrInfo(ctx context.Context, info *peer.AddrInfo, host host.Host) error {
-	return host.Connect(ctx, *info)
 }
 
 func connectPeer(ctx context.Context, addr string, host host.Host) (*peer.AddrInfo, error) {

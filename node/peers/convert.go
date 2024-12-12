@@ -16,6 +16,31 @@ import (
 	"github.com/multiformats/go-multiaddr"
 )
 
+/* PeerList is a silly way to encapsulate libp2p types.
+type PeerList struct {
+	pids peer.IDSlice
+}
+
+func (pl PeerList) String() string {
+	return pl.pids.String()
+}
+
+func NewPeerList(nodeIDs []string) (*PeerList, error) {
+	pl := new(PeerList)
+	for _, nodeID := range nodeIDs {
+		pk, err := NodeIDToPubKey(nodeID)
+		if err != nil {
+			return nil, err
+		}
+		_, pid, err := convertPubKey(pk)
+		if err != nil {
+			return nil, err
+		}
+		pl.pids = append(pl.pids, pid)
+	}
+	return pl, nil
+}*/
+
 // PeerIDFromPubKey converts a pubkey to a peer ID string.
 func PeerIDFromPubKey(pubkey crypto.PublicKey) (string, error) {
 	_, peerID, err := convertPubKey(pubkey)
@@ -76,6 +101,55 @@ func convertPubKey(pubkey crypto.PublicKey) (p2pcrypto.PubKey, peer.ID, error) {
 	return p2pPub, p2pAddr, nil
 }
 
+// Convert from go-libp2p's peer.ID format to Kwil's node ID format.
+func NodeIDFromPeerID(peerID string) (string, error) {
+	pk, err := PubKeyFromPeerID(peerID)
+	if err != nil { // peers should have IDENTITY peer IDs
+		return "", err
+	}
+	return NodeIDFromPubKey(pk), nil
+}
+
+func NodeIDFromPubKey(pubkey crypto.PublicKey) string {
+	if pubkey == nil {
+		return "<invalid>"
+	}
+	return fmt.Sprintf("%x#%d", pubkey.Bytes(), pubkey.Type())
+}
+
+func NodeIDToPubKey(nodeID string) (crypto.PublicKey, error) {
+	parts := strings.Split(nodeID, "#")
+	if len(parts) != 2 {
+		return nil, errors.New("invalid peer notation")
+	}
+	pubkeyStr, keyTypeStr := parts[0], parts[1]
+	keyType, err := strconv.ParseUint(keyTypeStr, 10, 16)
+	if err != nil {
+		return nil, errors.New("invalid key type in peer notation")
+	}
+	pubkeyBts, err := hex.DecodeString(pubkeyStr)
+	if err != nil {
+		return nil, fmt.Errorf("invalid node pubkey: %w", err)
+	}
+	switch crypto.KeyType(keyType) {
+	case crypto.KeyTypeSecp256k1:
+		return crypto.UnmarshalSecp256k1PublicKey(pubkeyBts)
+	case crypto.KeyTypeEd25519:
+		return crypto.UnmarshalEd25519PublicKey(pubkeyBts)
+	default:
+		return nil, errors.New("unsupported key type")
+	}
+}
+
+func nodeIDToPeerID(nodeID string) (peer.ID, error) {
+	pk, err := NodeIDToPubKey(nodeID)
+	if err != nil {
+		return "", fmt.Errorf("pubkey not recoverable from node ID: %w", err)
+	}
+	_, peerID, err := convertPubKey(pk)
+	return peerID, err
+}
+
 // ConvertPeersToMultiAddr convert a peer from pubkeyHex#keyTypeInt@ip:port to /ip4/ip/tcp/port/p2p/peerID
 func ConvertPeersToMultiAddr(peers []string) ([]string, error) {
 	addrs := make([]string, len(peers))
@@ -87,31 +161,11 @@ func ConvertPeersToMultiAddr(peers []string) ([]string, error) {
 		}
 		addr := parts[1]
 
-		parts = strings.Split(parts[0], "#")
-		if len(parts) != 2 {
-			return nil, errors.New("invalid peer notation")
-		}
-		pubkeyStr, keyTypeStr := parts[0], parts[1]
-		keyType, err := strconv.ParseUint(keyTypeStr, 10, 16)
-		if err != nil {
-			return nil, errors.New("invalid key type in peer notation")
-		}
-		pubkeyBts, err := hex.DecodeString(pubkeyStr)
+		pubkey, err := NodeIDToPubKey(parts[0])
 		if err != nil {
 			return nil, err
 		}
-		var pubkey crypto.PublicKey
-		switch crypto.KeyType(keyType) {
-		case crypto.KeyTypeSecp256k1:
-			pubkey, err = crypto.UnmarshalSecp256k1PublicKey(pubkeyBts)
-		case crypto.KeyTypeEd25519:
-			pubkey, err = crypto.UnmarshalEd25519PublicKey(pubkeyBts)
-		default:
-			return nil, errors.New("unsupported key type")
-		}
-		if err != nil {
-			return nil, err
-		}
+
 		peerID, err := PeerIDFromPubKey(pubkey)
 		if err != nil {
 			return nil, err

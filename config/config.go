@@ -182,12 +182,14 @@ type Config struct {
 	GenesisState string                       `toml:"genesis_state" comment:"path to the genesis state file, relative to the root directory"`
 }
 
-// PeerConfig corresponds to the [peer] section of the config.
+// PeerConfig corresponds to the [p2p] section of the config.
 type PeerConfig struct {
-	IP        string   `toml:"ip" comment:"IP address to listen on for P2P connections"`
-	Port      uint64   `toml:"port" comment:"port to listen on for P2P connections"`
-	Pex       bool     `toml:"pex" comment:"enable peer exchange"`
-	BootNodes []string `toml:"bootnodes" comment:"bootnodes to connect to on startup"`
+	IP          string   `toml:"ip" comment:"IP address to listen on for P2P connections"`
+	Port        uint64   `toml:"port" comment:"port to listen on for P2P connections"`
+	Pex         bool     `toml:"pex" comment:"enable peer exchange"`
+	BootNodes   []string `toml:"bootnodes" comment:"bootnodes to connect to on startup"`
+	PrivateMode bool     `toml:"private" comment:"operate in private mode using a node ID whitelist"`
+	Whitelist   []string `toml:"whitelist" comment:"allowed node IDs when in private mode"`
 }
 
 type DBConfig struct {

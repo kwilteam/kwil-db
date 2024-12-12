@@ -4,9 +4,10 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/kwilteam/kwil-db/cmd/common/display"
-	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
 	"github.com/spf13/cobra"
+
+	"github.com/kwilteam/kwil-db/app/rpc"
+	"github.com/kwilteam/kwil-db/app/shared/display"
 )
 
 func removeCmd() *cobra.Command {
@@ -17,7 +18,7 @@ func removeCmd() *cobra.Command {
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
-			client, err := common.GetAdminSvcClient(ctx, cmd)
+			client, err := rpc.AdminSvcClient(ctx, cmd)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
@@ -30,7 +31,7 @@ func removeCmd() *cobra.Command {
 			return display.PrintCmd(cmd, &removeMsg{peerID: args[0]})
 		},
 	}
-	common.BindRPCFlags(cmd)
+	rpc.BindRPCFlags(cmd)
 
 	return cmd
 }

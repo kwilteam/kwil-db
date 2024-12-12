@@ -47,6 +47,11 @@ type PeerMan struct {
 	c   Connector
 	ps  peerstore.Peerstore
 
+	// the connection gater enforces an effective ephemeral whitelist.
+	cg                  *WhitelistGater
+	wlMtx               sync.RWMutex
+	persistentWhitelist map[peer.ID]bool // whitelist to persist
+
 	requestPeers RemotePeersFn
 
 	requiredProtocols []protocol.ID
@@ -65,18 +70,20 @@ type PeerMan struct {
 	noReconnect map[peer.ID]bool
 }
 
-func NewPeerMan(pex bool, addrBook string, logger log.Logger, h host.Host,
+func NewPeerMan(pex bool, addrBook string, logger log.Logger, cg *WhitelistGater, h host.Host,
 	requestPeers RemotePeersFn, requiredProtocols []protocol.ID) (*PeerMan, error) {
 	if logger == nil {
 		logger = log.DiscardLogger
 	}
 	done := make(chan struct{})
 	pm := &PeerMan{
-		h:    h, // tmp
-		c:    h,
-		ps:   h.Peerstore(),
-		log:  logger,
-		done: done,
+		h:                   h, // tmp: tooo much, should become minimal interface, maybe set after construction
+		c:                   h,
+		ps:                  h.Peerstore(),
+		cg:                  cg,
+		persistentWhitelist: make(map[peer.ID]bool),
+		log:                 logger,
+		done:                done,
 		close: sync.OnceFunc(func() {
 			close(done)
 		}),
@@ -89,11 +96,10 @@ func NewPeerMan(pex bool, addrBook string, logger log.Logger, h host.Host,
 		noReconnect:       make(map[peer.ID]bool),
 	}
 
-	peerInfo, err := loadPeers(pm.addrBook)
+	numPeers, err := pm.loadAddrBook()
 	if err != nil && !errors.Is(err, os.ErrNotExist) {
 		return nil, fmt.Errorf("failed to load address book %s", pm.addrBook)
 	}
-	numPeers := pm.addPeers(peerInfo, peerstore.RecentlyConnectedAddrTTL)
 	logger.Infof("Loaded address book with %d peers", numPeers)
 
 	return pm, nil
@@ -128,7 +134,7 @@ func (pm *PeerMan) Start(ctx context.Context) error {
 
 	pm.wg.Wait()
 
-	return nil
+	return pm.savePeers()
 }
 
 const (
@@ -162,6 +168,12 @@ func (pm *PeerMan) maintainMinPeers(ctx context.Context) {
 			var added int
 			for _, peerInfo := range unconnectedPeers {
 				pid := peerInfo.ID
+				if pm.h.ID() == pid {
+					continue
+				}
+				if !pm.IsAllowed(pid) {
+					continue // Connect would error anyway, just be silent
+				}
 				err := pm.h.Connect(ctx, peer.AddrInfo{ID: pid})
 				if err != nil {
 					pm.log.Warnf("Failed to connect to peer %s: %v", pid, CompressDialError(err))
@@ -180,8 +192,8 @@ func (pm *PeerMan) maintainMinPeers(ctx context.Context) {
 			}
 		} else {
 			pm.log.Debugf("Have %d connections and %d candidates of %d target", numActive, len(unconnectedPeers), pm.targetConnections)
+			ticker.Reset(normalConnInterval)
 		}
-
 	}
 }
 
@@ -267,7 +279,7 @@ func (pm *PeerMan) ConnectedPeers() []PeerInfo {
 		if peerID == pm.h.ID() { // me
 			continue
 		}
-		peerInfo, err := peerInfo(pm.ps, peerID)
+		peerInfo, err := pm.peerInfo(peerID)
 		if err != nil {
 			pm.log.Warnf("peerInfo for %v: %v", peerID, err)
 			continue
@@ -298,7 +310,7 @@ func (pm *PeerMan) KnownPeers() (all, connected, disconnected []PeerInfo) {
 		if connectedPeers[peerID] {
 			continue // it is connected
 		}
-		peerInfo, err := peerInfo(pm.ps, peerID)
+		peerInfo, err := pm.peerInfo(peerID)
 		if err != nil {
 			pm.log.Warnf("peerInfo for %v: %v", peerID, err)
 			continue
@@ -319,19 +331,6 @@ func CheckProtocolSupport(_ context.Context, ps peerstore.Peerstore, peerID peer
 		return false, fmt.Errorf("Failed to check protocols for peer %v: %w", peerID, err)
 	}
 	return len(protoIDs) == len(supported), nil
-
-	// supportedProtos, err := h.Peerstore().GetProtocols(peerID)
-	// if err != nil {
-	// 	return false, err
-	// }
-	// log.Printf("protos supported by %v: %v\n", peerID, supportedProtos)
-
-	// for _, protoID := range protoIDs {
-	// 	if !slices.Contains(supportedProtos, protoID) {
-	// 		return false, nil
-	// 	}
-	// }
-	// return true, nil
 }
 
 func RequirePeerProtos(ctx context.Context, ps peerstore.Peerstore, peer peer.ID, protoIDs ...protocol.ID) error {
@@ -347,13 +346,13 @@ func RequirePeerProtos(ctx context.Context, ps peerstore.Peerstore, peer peer.ID
 	return nil
 }
 
-func peerInfo(ps peerstore.Peerstore, peerID peer.ID) (*PeerInfo, error) {
-	addrs := ps.Addrs(peerID)
+func (pm *PeerMan) peerInfo(peerID peer.ID) (*PeerInfo, error) {
+	addrs := pm.ps.Addrs(peerID)
 	if len(addrs) == 0 {
 		return nil, fmt.Errorf("no addresses for peer %v", peerID)
 	}
 
-	supportedProtos, err := ps.GetProtocols(peerID)
+	supportedProtos, err := pm.ps.GetProtocols(peerID)
 	if err != nil {
 		return nil, fmt.Errorf("GetProtocols for %v: %w", peerID, err)
 	}
@@ -368,30 +367,50 @@ func peerInfo(ps peerstore.Peerstore, peerID peer.ID) (*PeerInfo, error) {
 }
 
 func (pm *PeerMan) PrintKnownPeers() {
-	peers, _, _ := pm.KnownPeers()
-	for _, p := range peers {
-		pm.log.Info("Known peer", "id", p.ID.String())
+	_, connected, disconnected := pm.KnownPeers()
+	for _, p := range connected {
+		pm.log.Info("Known peer", "id", p.ID.String(), "connected", true)
+	}
+	for _, p := range disconnected {
+		pm.log.Info("Known peer", "id", p.ID.String(), "connected", false)
 	}
 }
 
+// savePeers writes the address book file.
 func (pm *PeerMan) savePeers() error {
 	peerList, _, _ := pm.KnownPeers()
 	pm.log.Infof("saving %d peers to address book", len(peerList))
-	if err := persistPeers(peerList, pm.addrBook); err != nil {
-		return err
+
+	// set whitelist flag for persistence
+	pm.wlMtx.RLock()
+	persistentPeerList := make([]PersistentPeerInfo, len(peerList))
+	for i, peerInfo := range peerList {
+		pk, _ := pubKeyFromPeerID(peerInfo.ID)
+		if pk == nil {
+			pm.log.Errorf("Invalid peer ID %v", peerInfo.ID)
+			continue
+		}
+		nodeID := NodeIDFromPubKey(pk)
+		persistentPeerList[i] = PersistentPeerInfo{
+			NodeID:      nodeID,
+			Addrs:       peerInfo.Addrs,
+			Protos:      peerInfo.Protos,
+			Whitelisted: pm.persistentWhitelist[peerInfo.ID],
+		}
+		pm.log.Infoln("saving", peerInfo.ID, nodeID)
 	}
-	return nil
+	pm.wlMtx.RUnlock()
+
+	return persistPeers(persistentPeerList, pm.addrBook)
 }
 
 // persistPeers saves known peers to a JSON file
-func persistPeers(peers []PeerInfo, filePath string) error {
-	// Marshal peerList to JSON
+func persistPeers(peers []PersistentPeerInfo, filePath string) error {
 	data, err := json.MarshalIndent(peers, "", "  ")
 	if err != nil {
 		return fmt.Errorf("marshaling peers to JSON: %v", err)
 	}
 
-	// Write to file
 	err = os.WriteFile(filePath, data, 0644)
 	if err != nil {
 		return fmt.Errorf("writing peers to file: %w", err)
@@ -399,54 +418,141 @@ func persistPeers(peers []PeerInfo, filePath string) error {
 	return nil
 }
 
-func loadPeers(filePath string) ([]PeerInfo, error) {
+func loadPeers(filePath string) ([]PersistentPeerInfo, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read peerstore file: %w", err)
 	}
 
-	var peerList []PeerInfo
+	var peerList []PersistentPeerInfo
 	if err := json.Unmarshal(data, &peerList); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal peerstore data: %w", err)
 	}
 	return peerList, nil
 }
 
-func (pm *PeerMan) addPeers(peerList []PeerInfo, ttl time.Duration) int {
+func (pm *PeerMan) loadAddrBook() (int, error) {
+	peerList, err := loadPeers(pm.addrBook)
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		return 0, fmt.Errorf("failed to load address book %s", pm.addrBook)
+	}
+
 	var count int
 	for _, pInfo := range peerList {
-		// for _, addr := range pInfo.Addrs {
-		// 	ps.AddAddr(pInfo.ID, addr, peerstore.PermanentAddrTTL)
-		// }
-		addrs := pm.ps.Addrs(pInfo.ID)
-		for _, addr := range pInfo.Addrs {
-			if !multiaddr.Contains(addrs, addr) {
-				pm.ps.AddAddr(pInfo.ID, addr, ttl)
-				pm.log.Infof("Added new peer address to store: %v @ %v", pInfo.ID, addr)
-				count++
-			}
-			// TODO: we need a connect hook to change to forever on connect
+		peerID, err := nodeIDToPeerID(pInfo.NodeID)
+		if err != nil {
+			pm.log.Errorf("invalid node ID in address book (%v): %w", pInfo.NodeID, err)
+			continue
 		}
-		//addPeerAddrs(ps, peer.AddrInfo(pInfo.AddrInfo))
-		for _, proto := range pInfo.Protos {
-			if err := pm.ps.AddProtocols(pInfo.ID, proto); err != nil {
-				pm.log.Warnf("Error adding protocol %s for peer %s: %v", proto, pInfo.ID, err)
+
+		if pm.cg != nil { // private mode
+			if pInfo.Whitelisted {
+				pm.cg.Allow(peerID)
+				pm.mtx.Lock()
+				pm.persistentWhitelist[peerID] = true
+				pm.mtx.Unlock()
 			}
+		}
+
+		peerInfo := PeerInfo{
+			AddrInfo: AddrInfo{
+				ID:    peerID,
+				Addrs: pInfo.Addrs,
+			},
+			Protos: pInfo.Protos,
+		}
+
+		if pm.addPeer(peerInfo, peerstore.RecentlyConnectedAddrTTL) {
+			count++
 		}
 	}
 
-	return count
+	return count, nil
+}
+
+// addPeer adds a peer to the peerstore and returns if a new address was added
+// for the peer. This does not check peer whitelist in private mode.
+func (pm *PeerMan) addPeer(pInfo PeerInfo, ttl time.Duration) bool {
+	var addrCount int
+
+	knownAddrs := pm.ps.Addrs(pInfo.ID)
+	for _, addr := range pInfo.Addrs {
+		if multiaddr.Contains(knownAddrs, addr) {
+			continue // address already known
+		}
+		pm.ps.AddAddr(pInfo.ID, addr, ttl)
+		pm.log.Infof("Added new peer address to store: %v @ %v", pInfo.ID, addr)
+		addrCount++
+	}
+	for _, proto := range pInfo.Protos {
+		if err := pm.ps.AddProtocols(pInfo.ID, proto); err != nil {
+			pm.log.Warnf("Error adding protocol %s for peer %s: %v", proto, pInfo.ID, err)
+		}
+	}
+
+	return addrCount > 0
+}
+
+func (pm *PeerMan) Connect(ctx context.Context, info AddrInfo) error {
+	if !pm.cg.IsAllowed(info.ID) {
+		return errors.New("peer not whitelisted while in private mode")
+	} // else it still wouldn't pass the connection gater, but we don't want to try or touch the peerstore
+	return pm.c.Connect(ctx, peer.AddrInfo(info))
+}
+
+func (pm *PeerMan) Allow(p peer.ID) {
+	pm.cg.Allow(p)
+}
+
+func (pm *PeerMan) AllowPersistent(p peer.ID) {
+	pm.mtx.Lock()
+	pm.persistentWhitelist[p] = true
+	pm.mtx.Unlock()
+	if err := pm.savePeers(); err != nil {
+		pm.log.Errorf("failed to save address book: %v", err)
+	}
+	pm.cg.Allow(p)
+}
+
+func (pm *PeerMan) Disallow(p peer.ID) {
+	pm.mtx.Lock()
+	delete(pm.persistentWhitelist, p)
+	pm.mtx.Unlock()
+	pm.cg.Disallow(p)
+}
+
+func (pm *PeerMan) IsAllowed(p peer.ID) bool {
+	return pm.cg.IsAllowed(p)
+}
+
+func (pm *PeerMan) Allowed() []peer.ID {
+	return pm.cg.Allowed()
+}
+
+func (pm *PeerMan) AllowedPersistent() []peer.ID {
+	var peerList []peer.ID
+	pm.mtx.Lock()
+	defer pm.mtx.Unlock()
+	for peerID := range pm.persistentWhitelist {
+		peerList = append(peerList, peerID)
+	}
+	return peerList
 }
 
 // addPeerAddrs adds a discovered peer to the local peer store.
 func (pm *PeerMan) addPeerAddrs(p peer.AddrInfo) (added bool) {
-	numAdded := pm.addPeers([]PeerInfo{
-		{
+	// We may have discovered the address of a whitelisted peer ID.
+	// 	if !pm.cg.IsAllowed(p.ID) {
+	// 		return
+	//  }
+
+	return pm.addPeer(
+		PeerInfo{
 			AddrInfo: AddrInfo(p),
 			// No known protocols, yet
 		},
-	}, peerstore.TempAddrTTL)
-	return numAdded > 0
+		peerstore.TempAddrTTL,
+	)
 }
 
 // Connected is triggered when a peer connects
@@ -589,6 +695,9 @@ func (pm *PeerMan) removeOldPeers() {
 			pm.mtx.Lock()
 			defer pm.mtx.Unlock()
 			for peerID, disconnectTime := range pm.disconnects {
+				if pm.persistentWhitelist[peerID] {
+					continue
+				}
 				if now.Sub(disconnectTime) > disconnectLimit {
 					pm.ps.RemovePeer(peerID)
 					delete(pm.disconnects, peerID) // Remove from tracking map

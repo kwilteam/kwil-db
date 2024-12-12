@@ -36,6 +36,11 @@ type ConsensusEngine interface {
 	ConsensusParams() *ktypes.ConsensusParams
 }
 
+type BlockProcessor interface {
+	GetValidators() []*ktypes.Validator
+	SubscribeValidators() <-chan []*ktypes.Validator
+}
+
 type SnapshotStore interface {
 	Enabled() bool
 	GetSnapshot(height uint64, format uint32) *snapshotter.Snapshot
