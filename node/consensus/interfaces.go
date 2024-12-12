@@ -3,8 +3,9 @@ package consensus
 import (
 	"context"
 
-	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/mempool"
+
+	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )
@@ -35,7 +36,6 @@ type BlockStore interface {
 	GetByHeight(height int64) (types.Hash, *ktypes.Block, types.Hash, error)
 	StoreResults(hash types.Hash, results []ktypes.TxResult) error
 	// Results(hash types.Hash) ([]types.TxResult, error)
-
 }
 
 type BlockProcessor interface {
@@ -48,6 +48,7 @@ type BlockProcessor interface {
 	CheckTx(ctx context.Context, tx *ktypes.Transaction, recheck bool) error
 
 	GetValidators() []*ktypes.Validator
+	ConsensusParams() *ktypes.ConsensusParams
 
 	BlockExecutionStatus() ktypes.BlockExecutionStatus
 }

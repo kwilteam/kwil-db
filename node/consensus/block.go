@@ -48,6 +48,10 @@ func (ce *ConsensusEngine) CheckTx(ctx context.Context, tx *ktypes.Transaction) 
 	return ce.blockProcessor.CheckTx(ctx, tx, false)
 }
 
+func (ce *ConsensusEngine) ConsensusParams() *ktypes.ConsensusParams {
+	return ce.blockProcessor.ConsensusParams()
+}
+
 func (ce *ConsensusEngine) executeBlock(ctx context.Context, blkProp *blockProposal) error {
 	defer func() {
 		ce.stateInfo.mtx.Lock()

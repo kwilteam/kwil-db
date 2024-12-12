@@ -22,6 +22,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	adminTypes "github.com/kwilteam/kwil-db/core/types/admin"
+	chainTypes "github.com/kwilteam/kwil-db/core/types/chain"
 	"github.com/kwilteam/kwil-db/node/peers"
 	"github.com/kwilteam/kwil-db/node/types"
 
@@ -508,6 +509,47 @@ func (n *Node) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, _ /*sync
 		Hash: txHash,
 		// Log and Code just for sync?
 	}, nil
+}
+
+// ChainTx return tx info that is used in Chain rpc.
+func (n *Node) ChainTx(hash types.Hash) (*chainTypes.Tx, error) {
+	tx, height, blkHash, blkIdx, err := n.bki.GetTx(hash)
+	if err != nil {
+		return nil, err
+	}
+	blkResults, err := n.bki.Results(blkHash)
+	if err != nil {
+		return nil, err
+	}
+	if int(blkIdx) >= len(blkResults) {
+		return nil, errors.New("invalid block index")
+	}
+	res := blkResults[blkIdx]
+	return &chainTypes.Tx{
+		Hash:     hash,
+		Height:   height,
+		Index:    blkIdx,
+		Tx:       tx,
+		TxResult: &res,
+	}, nil
+}
+
+// ChainUnconfirmedTx return unconfirmed tx info that is used in Chain rpc.
+func (n *Node) ChainUnconfirmedTx(limit int) (int, []types.NamedTx) {
+	total := n.mp.Size()
+	if limit <= 0 {
+		return total, nil
+	}
+	return n.mp.Size(), n.mp.PeekN(limit)
+}
+
+func (n *Node) BlockHeight() int64 {
+	height, _, _ := n.bki.Best()
+	return height
+}
+
+func (n *Node) ConsensusParams() *ktypes.ConsensusParams {
+	return n.ce.ConsensusParams()
 }
 
 var RequiredStreamProtocols = []protocol.ID{

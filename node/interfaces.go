@@ -30,6 +30,8 @@ type ConsensusEngine interface {
 		blkRequester consensus.BlkRequester, stateResetter consensus.ResetStateBroadcaster, discoveryBroadcaster consensus.DiscoveryReqBroadcaster) error
 
 	CheckTx(ctx context.Context, tx *ktypes.Transaction) error
+
+	ConsensusParams() *ktypes.ConsensusParams
 }
 
 type SnapshotStore interface {

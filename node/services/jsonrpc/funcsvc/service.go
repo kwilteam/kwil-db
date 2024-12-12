@@ -68,14 +68,6 @@ func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 	}
 }
 
-func (svc *Service) Handlers() map[jsonrpc.Method]rpcserver.MethodHandler {
-	handlers := make(map[jsonrpc.Method]rpcserver.MethodHandler)
-	for method, def := range svc.Methods() {
-		handlers[method] = def.Handler
-	}
-	return handlers
-}
-
 // VerifySignature checks the signature with the given public key and message.
 // This only verifies the signature against known kwil-db singing schema, which
 // is determined by the signature's type.

@@ -34,6 +34,7 @@ import (
 
 	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/node/services/jsonrpc/adminsvc"
+	"github.com/kwilteam/kwil-db/node/services/jsonrpc/chainsvc"
 	"github.com/kwilteam/kwil-db/node/services/jsonrpc/funcsvc"
 	"github.com/kwilteam/kwil-db/node/services/jsonrpc/usersvc"
 )
@@ -94,7 +95,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 		usersvc.WithPrivateMode(d.cfg.RPC.Private),
 		usersvc.WithChallengeExpiry(d.cfg.RPC.ChallengeExpiry),
 		usersvc.WithChallengeRateLimit(d.cfg.RPC.ChallengeRateLimit),
-	// usersvc.WithBlockAgeHealth(6*totalConsensusTimeouts.Dur()),
+		// usersvc.WithBlockAgeHealth(6*totalConsensusTimeouts.Dur()),
 	)
 
 	rpcServerLogger := d.logger.New("RPC")
@@ -124,6 +125,10 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 		jsonRPCAdminServer.RegisterSvc(jsonRPCTxSvc)
 		jsonRPCAdminServer.RegisterSvc(&funcsvc.Service{})
 	}
+
+	chainRpcSvcLogger := d.logger.New("CHAIN")
+	jsonChainSvc := chainsvc.NewService(chainRpcSvcLogger, node, vs, d.genesisCfg)
+	jsonRPCServer.RegisterSvc(jsonChainSvc)
 
 	s := &server{
 		cfg:                d.cfg,
