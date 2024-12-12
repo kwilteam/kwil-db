@@ -327,6 +327,8 @@ func (a *mockAccount) Commit() error {
 	return nil
 }
 
+func (a *mockAccount) Rollback() {}
+
 type mockValidator struct {
 	getVoterFn getVoterPowerFunc
 }
@@ -346,6 +348,8 @@ func (v *mockValidator) SetValidatorPower(_ context.Context, _ sql.Executor, pub
 func (v *mockValidator) Commit() error {
 	return nil
 }
+
+func (v *mockValidator) Rollback() {}
 
 func getSigner(hexPrivKey string) auth.Signer {
 	bts, err := hex.DecodeString(hexPrivKey)

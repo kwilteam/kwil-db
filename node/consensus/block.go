@@ -110,10 +110,8 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 		ce.mempool.Remove(txHash)
 	}
 
-	// TODO: reapply existing transaction  (checkTX)
-	// get all the transactions from mempool and recheck them, the transactions should be checked
-	// in the order of nonce (stable sort to maintain relative order)
-	// ce.blockProcessor.CheckTx(ctx, tx, true)
+	// recheck the transactions in the mempool
+	ce.mempool.RecheckTxs(ctx, ce.blockProcessor.CheckTx)
 
 	// update the role of the node based on the final validator set at the end of the commit.
 	ce.updateValidatorSetAndRole()
@@ -130,29 +128,24 @@ func (ce *ConsensusEngine) nextState() {
 		blk:     ce.state.blkProp.blk,
 	}
 
-	ce.state.blkProp = nil
-	ce.state.blockRes = nil
-	ce.state.votes = make(map[string]*vote)
-	ce.state.consensusTx = nil
-
-	// update the stateInfo
-	ce.stateInfo.mtx.Lock()
-	ce.stateInfo.status = Committed
-	ce.stateInfo.blkProp = nil
-	ce.stateInfo.height = ce.state.lc.height
-	ce.stateInfo.mtx.Unlock()
+	ce.resetState()
 }
 
-func (ce *ConsensusEngine) resetState(ctx context.Context) error {
+func (ce *ConsensusEngine) rollbackState(ctx context.Context) error {
 	// Revert back any state changes occurred due to the current block
 	if err := ce.blockProcessor.Rollback(ctx, ce.state.lc.height, ce.state.lc.appHash); err != nil {
 		return err
 	}
 
+	ce.resetState()
+
+	return nil
+}
+
+func (ce *ConsensusEngine) resetState() {
 	ce.state.blkProp = nil
 	ce.state.blockRes = nil
 	ce.state.votes = make(map[string]*vote)
-	ce.state.consensusTx = nil
 
 	// update the stateInfo
 	ce.stateInfo.mtx.Lock()
@@ -161,5 +154,8 @@ func (ce *ConsensusEngine) resetState(ctx context.Context) error {
 	ce.stateInfo.height = ce.state.lc.height
 	ce.stateInfo.mtx.Unlock()
 
-	return nil
+	ce.cancelFnMtx.Lock()
+	ce.blkExecCancelFn = nil
+	ce.longRunningTxs = make([]ktypes.Hash, 0)
+	ce.cancelFnMtx.Unlock()
 }

@@ -169,6 +169,13 @@ func (r *TxApp) Commit() error {
 	return nil
 }
 
+func (r *TxApp) Rollback() {
+	r.Accounts.Rollback()
+	r.Validators.Rollback()
+
+	r.mempool.reset() // will issue recheck before next block
+}
+
 // processVotes confirms resolutions that have been approved by the network,
 // expires resolutions that have expired, and properly credits proposers and voters.
 func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.BlockContext) error {

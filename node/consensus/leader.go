@@ -12,22 +12,26 @@ import (
 	"github.com/kwilteam/kwil-db/node/types"
 )
 
-var lastReset int64 = 0
-
-// Leader is the node that proposes the block and drives the consensus process:
+// The Leader is responsible for proposing blocks and managing the consensus process:
 // 1. Prepare Phase:
 //   - Create a block proposal
 //   - Broadcast the block proposal
 //   - Process the block and generate the appHash
-//   - Wait for the votes from the validators
-//   - Enter the commit phase if majority of the validators execute the block correctly
+//   - Wait for votes from validators
+//   - Enter the commit phase if the majority of validators approve the block
 //
 // 2. Commit Phase:
-//   - Commit the block and start next prepare phase
-//   - This phase includes committing the block to the block store, flushing out the mempool
-//     updating the chain state, creating snapshots, committing the pg db state etc.
+//   - Commit the block and initiate the next prepare phase
+//   - This phase includes committing the block to the block store, clearing the mempool,
+//     updating the chain state, creating snapshots, committing the pg db state, etc.
+//
+// The Leader can also issue ResetState messages using "kwil-admin reset <reset-block-height> <problematic-tx-list>"
+// When a leader receives a ResetState request, it will broadcast the ResetState message to the network to
+// halt the current block execution if the current block height equals reset-block-height + 1. The leader will stop processing
+// the current block, revert any state changes made, and remove the problematic transactions from the mempool before
+// reproposing the block.
 
-// startNewRound starts a new round of consensus process (Prepare Phase).
+// startNewRound initiates a new round of the consensus process (Prepare Phase).
 func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
@@ -58,8 +62,50 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	ce.stateInfo.blkProp = blkProp
 	ce.stateInfo.mtx.Unlock()
 
+	// execCtx is applicable only for the duration of the block execution
+	// This is used to give leader the ability to cancel the block execution.
+	execCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Set the cancel function for the block execution
+	ce.cancelFnMtx.Lock()
+	ce.blkExecCancelFn = cancel
+	ce.cancelFnMtx.Unlock()
+
 	// Execute the block and generate the appHash
-	if err := ce.executeBlock(ctx, blkProp); err != nil {
+	if err := ce.executeBlock(execCtx, blkProp); err != nil {
+		// check if the error is due to context cancellation
+		ce.log.Errorf("Error executing the block: %v", err)
+		if execCtx.Err() != nil && errors.Is(err, context.Canceled) {
+			ce.log.Warn("Block execution cancelled by the leader", "height", blkProp.height, "hash", blkProp.blkHash)
+
+			// trigger a reset state message
+			go ce.rstStateBroadcaster(ce.state.lc.height)
+
+			ce.cancelFnMtx.Lock()
+			// Remove the long running transactions from the mempool
+			ce.log.Info("Removing long running transactions from the mempool as per leader's request", "txIDs", ce.longRunningTxs)
+			for _, txID := range ce.longRunningTxs {
+				ce.mempool.Remove(txID)
+			}
+			ce.numResets++
+			ce.cancelFnMtx.Unlock()
+
+			if err := ce.rollbackState(ctx); err != nil {
+				ce.log.Errorf("Error resetting the state: %v", err)
+				return fmt.Errorf("error resetting the state: %v", err)
+			}
+
+			// Recheck the transactions in the mempool
+			ce.mempoolMtx.Lock()
+			ce.mempool.RecheckTxs(ctx, ce.blockProcessor.CheckTx)
+			ce.mempoolMtx.Unlock()
+
+			// signal ce to start a new round
+			ce.newRound <- struct{}{}
+			return nil
+		}
+
 		ce.log.Errorf("Error executing the block: %v", err)
 		return err
 	}
@@ -70,22 +116,6 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 		appHash: &ce.state.blockRes.appHash,
 		blkHash: blkProp.blkHash,
 		height:  blkProp.height,
-	}
-
-	// TODO: test resetState
-	if ce.state.blkProp.height%10 == 0 && lastReset != ce.state.blkProp.height {
-		lastReset = ce.state.blkProp.height
-		ce.log.Info("Resetting the state (for testing purposes)", "height", lastReset, " blkHash", ce.state.blkProp.blkHash)
-		if err := ce.resetState(ctx); err != nil {
-			ce.log.Errorf("Error resetting the state: %v", err)
-			return err
-		}
-		go ce.rstStateBroadcaster(ce.state.lc.height)
-
-		// signal ce to start a new round
-		ce.newRound <- struct{}{}
-
-		return nil
 	}
 
 	ce.processVotes(ctx)
@@ -243,4 +273,50 @@ func (ce *ConsensusEngine) ValidatorSetHash() types.Hash {
 	}
 
 	return hasher.Sum(nil)
+}
+
+// CancelBlockExecution is used by the leader to manually cancel the block execution
+// if it is taking too long to execute. This method takes the height of the block to
+// be cancelled and the list of long transaction IDs to be evicted from the mempool.
+// One concern is: what if the block finishes execution and the leader tries to cancel it,
+// and the resolutions update some internal state that cannot be reverted?
+func (ce *ConsensusEngine) CancelBlockExecution(height int64, txIDs []types.Hash) error {
+	ce.log.Info("Block execution cancel request received", "height", height)
+	// Ensure we are cancelling the block execution for the current block
+	ce.stateInfo.mtx.RLock()
+	defer ce.stateInfo.mtx.RUnlock()
+
+	// Check if the height is the same as the current block height
+	if height != ce.stateInfo.height+1 {
+		ce.log.Warn("Cannot cancel block execution, block height does not match", "height", height, "current", ce.stateInfo.height+1)
+		return fmt.Errorf("cannot cancel block execution for block height %d, currently executing %d", height, ce.stateInfo.height+1)
+	}
+
+	// Check if a block is proposed
+	if ce.stateInfo.blkProp == nil {
+		ce.log.Warn("Cannot cancel block execution, no block is proposed yet", "height", height)
+		return fmt.Errorf("cannot cancel block execution, no block is proposed yet")
+	}
+
+	// Cannot cancel if the block is already finished executing or committed
+	if ce.stateInfo.status != Proposed {
+		ce.log.Warn("Cannot cancel block execution, block is already executed or committed", "height", height)
+		return fmt.Errorf("cannot cancel block execution, block is already executed or committed")
+	}
+
+	// Cancel the block execution
+	ce.cancelFnMtx.Lock()
+	defer ce.cancelFnMtx.Unlock()
+
+	ce.longRunningTxs = append([]ktypes.Hash{}, txIDs...)
+
+	if ce.blkExecCancelFn != nil {
+		ce.log.Info("Cancelling block execution", "height", height, "txIDs", txIDs)
+		ce.blkExecCancelFn()
+	} else {
+		ce.log.Error("Block execution cancel function not set")
+		return errors.New("block execution cancel function not set")
+	}
+
+	return nil
 }

@@ -17,6 +17,7 @@ type Accounts interface {
 	GetAccount(ctx context.Context, tx sql.Executor, acctID []byte) (*types.Account, error)
 	ApplySpend(ctx context.Context, tx sql.Executor, acctID []byte, amount *big.Int, nonce int64) error
 	Commit() error
+	Rollback()
 }
 
 type Validators interface {
@@ -24,6 +25,7 @@ type Validators interface {
 	GetValidatorPower(ctx context.Context, tx sql.Executor, pubKey []byte) (int64, error)
 	GetValidators() []*types.Validator
 	Commit() error
+	Rollback()
 }
 
 // Rebroadcaster is a service that marks events for rebroadcasting.

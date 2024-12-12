@@ -162,7 +162,7 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 		}
 
 		ce.log.Info("Aborting execution of stale block proposal", "height", blkPropMsg.height, "blkHash", ce.state.blkProp.blkHash)
-		if err := ce.resetState(ctx); err != nil {
+		if err := ce.rollbackState(ctx); err != nil {
 			ce.log.Error("Error aborting execution of block", "height", blkPropMsg.height, "blkID", ce.state.blkProp.blkHash, "error", err)
 			return err
 		}
@@ -183,7 +183,17 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 	ce.stateInfo.blkProp = blkPropMsg
 	ce.stateInfo.mtx.Unlock()
 
-	if err := ce.executeBlock(ctx, blkPropMsg); err != nil {
+	// execCtx is applicable only for the duration of the block execution
+	// This is used to react to the leader's reset message by cancelling the block execution.
+	execCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	// Set the cancel function for the block execution
+	ce.cancelFnMtx.Lock()
+	ce.blkExecCancelFn = cancel
+	ce.cancelFnMtx.Unlock()
+
+	if err := ce.executeBlock(execCtx, blkPropMsg); err != nil {
 		ce.log.Error("Error executing block, sending NACK", "error", err)
 		go ce.ackBroadcaster(false, blkPropMsg.height, blkPropMsg.blkHash, nil)
 		return err
@@ -227,8 +237,7 @@ func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, a
 	}
 
 	if ce.state.blkProp.blkHash != blk.Header.Hash() {
-		// ce.state.cancelFunc() // abort the current block execution ??
-		if err := ce.resetState(ctx); err != nil {
+		if err := ce.rollbackState(ctx); err != nil {
 			ce.log.Error("error aborting execution of incorrect block proposal", "height", blk.Header.Height, "blkID", blk.Header.Hash(), "error", err)
 		}
 		return ce.processAndCommit(ctx, blk, appHash)

@@ -365,6 +365,8 @@ func (d *dummyTxApp) Commit() error {
 	return nil
 }
 
+func (d *dummyTxApp) Rollback() {}
+
 func (d *dummyTxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*ktypes.Validator, genesisAccounts []*ktypes.Account, initialHeight int64, chain *common.ChainContext) error {
 	return nil
 }

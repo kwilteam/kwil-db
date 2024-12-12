@@ -36,6 +36,7 @@ type TxApp interface {
 	Execute(ctx *common.TxContext, db sql.DB, tx *ktypes.Transaction) *txapp.TxResponse
 	Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) (finalValidators []*ktypes.Validator, err error)
 	Commit() error
+	Rollback()
 	GenesisInit(ctx context.Context, db sql.DB, validators []*ktypes.Validator, genesisAccounts []*ktypes.Account, initialHeight int64, chain *common.ChainContext) error
 	ApplyMempool(ctx *common.TxContext, db sql.DB, tx *types.Transaction) error
 
