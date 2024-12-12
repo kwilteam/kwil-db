@@ -3,6 +3,8 @@ package consensus
 import (
 	"context"
 
+	"github.com/kwilteam/kwil-db/node/mempool"
+
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
@@ -21,6 +23,7 @@ type DB interface {
 type Mempool interface {
 	PeekN(maxSize int) []types.NamedTx
 	Remove(txid types.Hash)
+	RecheckTxs(ctx context.Context, checkFn mempool.CheckFn)
 }
 
 // BlockStore includes both txns and blocks
