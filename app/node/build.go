@@ -93,14 +93,14 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	jsonRPCTxSvc := usersvc.NewService(db, e, node, bp, vs, rpcSvcLogger,
 		usersvc.WithReadTxTimeout(time.Duration(d.cfg.DB.ReadTxTimeout)),
 		usersvc.WithPrivateMode(d.cfg.RPC.Private),
-		usersvc.WithChallengeExpiry(d.cfg.RPC.ChallengeExpiry),
+		usersvc.WithChallengeExpiry(time.Duration(d.cfg.RPC.ChallengeExpiry)),
 		usersvc.WithChallengeRateLimit(d.cfg.RPC.ChallengeRateLimit),
 		// usersvc.WithBlockAgeHealth(6*totalConsensusTimeouts.Dur()),
 	)
 
 	rpcServerLogger := d.logger.New("RPC")
 	jsonRPCServer, err := rpcserver.NewServer(d.cfg.RPC.ListenAddress,
-		rpcServerLogger, rpcserver.WithTimeout(d.cfg.RPC.Timeout),
+		rpcServerLogger, rpcserver.WithTimeout(time.Duration(d.cfg.RPC.Timeout)),
 		rpcserver.WithReqSizeLimit(d.cfg.RPC.MaxReqSize),
 		rpcserver.WithCORS(), rpcserver.WithServerInfo(&usersvc.SpecInfo),
 		rpcserver.WithMetricsNamespace("kwil_json_rpc_user_server"))
@@ -245,7 +245,7 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB,
 		Mempool:        mempool,
 		ValidatorSet:   valSet,
 		Logger:         d.logger.New("CONS"),
-		ProposeTimeout: d.cfg.Consensus.ProposeTimeout,
+		ProposeTimeout: time.Duration(d.cfg.Consensus.ProposeTimeout),
 	}
 
 	ce := consensus.New(ceCfg)

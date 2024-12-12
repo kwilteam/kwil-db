@@ -108,7 +108,8 @@ func DefaultConfig() *Config {
 	return &Config{
 		LogLevel:  log.LevelInfo,
 		LogFormat: log.FormatUnstructured,
-		// Private key is empty by default.
+		// Private key is empty by default. This should probably be moved back
+		// to a key file again to avoid accidentally leaking the key.
 		P2P: PeerConfig{
 			IP:        "0.0.0.0",
 			Port:      6600,
@@ -116,7 +117,7 @@ func DefaultConfig() *Config {
 			BootNodes: []string{},
 		},
 		Consensus: ConsensusConfig{
-			ProposeTimeout: 1000 * time.Millisecond,
+			ProposeTimeout: Duration(1000 * time.Millisecond),
 			MaxBlockSize:   50_000_000,
 			MaxTxsPerBlock: 20_000,
 		},
@@ -131,15 +132,15 @@ func DefaultConfig() *Config {
 		},
 		RPC: RPCConfig{
 			ListenAddress:      "0.0.0.0:8484",
-			Timeout:            20 * time.Second,
+			Timeout:            Duration(20 * time.Second),
 			MaxReqSize:         6_000_000,
 			Private:            false,
-			ChallengeExpiry:    30 * time.Second,
+			ChallengeExpiry:    Duration(30 * time.Second),
 			ChallengeRateLimit: 10,
 		},
 		Admin: AdminConfig{
 			Enable:        true,
-			ListenAddress: "/tmp/kwil2-admin.socket",
+			ListenAddress: "/tmp/kwild.socket",
 			Pass:          "",
 			NoTLS:         false,
 			TLSCertFile:   "admin.cert",
@@ -152,7 +153,7 @@ func DefaultConfig() *Config {
 		},
 		StateSync: StateSyncConfig{
 			Enable:           false,
-			DiscoveryTimeout: 30 * time.Second,
+			DiscoveryTimeout: Duration(30 * time.Second),
 			MaxRetries:       3,
 		},
 	}
@@ -160,46 +161,30 @@ func DefaultConfig() *Config {
 
 // Config is the node's config.
 type Config struct {
-	// NOTE about tags:
-	//
-	//  - toml tags are used to marshal into a toml file with pelletier's go-toml
-	//    (gotoml.Marshal: Config{} => []byte(tomlString))
-	//
-	//  - koanf tags are used to unmarshal into this struct from a koanf instance
-	//    (k.Unmarshal: map[string]interface{} => Config{})
-	//
-	// Presently these tags are the same. If we change the canonicalization,
-	// such as removing both dashes and underscores, the tags would be different.
+	LogLevel  log.Level  `toml:"log_level" comment:"log level\npossible values: 'debug', 'info', 'warn', and 'error'"`
+	LogFormat log.Format `toml:"log_format" comment:"log format\npossible values: 'json', 'text' (kv), and 'plain' (fmt-style)"`
+	// LogOutput []string   `toml:"log_output" comment:"output paths for the log"`
 
-	LogLevel  log.Level  `koanf:"log_level" toml:"log_level" comment:"log level"`
-	LogFormat log.Format `koanf:"log_format" toml:"log_format" comment:"log format"`
-	// LogOutput []string   `koanf:"log_output" toml:"log_output" comment:"output paths for the log"`
+	PrivateKey types.HexBytes `toml:"privkey" comment:"private key to use for node"`
 
-	PrivateKey types.HexBytes `koanf:"privkey" toml:"privkey" comment:"private key to use for node"`
+	// ProfileMode string `toml:"profile_mode"`
+	// ProfileFile string `toml:"profile_file"`
 
-	// ProfileMode string `koanf:"profile_mode" toml:"profile_mode"`
-	// ProfileFile string `koanf:"profile_file" toml:"profile_file"`
-
-	// subsections below
-
-	P2P PeerConfig `koanf:"p2p" toml:"p2p"`
-
-	Consensus ConsensusConfig `koanf:"consensus" toml:"consensus"`
-	DB        DBConfig        `koanf:"db" toml:"db"`
-	RPC       RPCConfig       `koanf:"rpc" toml:"rpc"`
-	Admin     AdminConfig     `koanf:"admin" toml:"admin"`
-	Snapshots SnapshotConfig  `koanf:"snapshots" toml:"snapshots"`
-	StateSync StateSyncConfig `koanf:"state_sync" toml:"state_sync"`
+	P2P       PeerConfig      `toml:"p2p" comment:"P2P related configuration"`
+	Consensus ConsensusConfig `toml:"consensus" comment:"Consensus related configuration"`
+	DB        DBConfig        `toml:"db" comment:"DB (PostgreSQL) related configuration"`
+	RPC       RPCConfig       `toml:"rpc" comment:"User RPC service configuration"`
+	Admin     AdminConfig     `toml:"admin" comment:"Admin RPC service configuration"`
+	Snapshots SnapshotConfig  `toml:"snapshots" comment:"Snapshot creation and provider configuration"`
+	StateSync StateSyncConfig `toml:"state_sync" comment:"Statesync configuration (vs block sync)"`
 }
 
 // PeerConfig corresponds to the [peer] section of the config.
 type PeerConfig struct {
-	IP        string   `koanf:"ip" toml:"ip" comment:"ip to listen on for P2P connections"`
-	Port      uint64   `koanf:"port" toml:"port" comment:"port to listen on for P2P connections"`
-	Pex       bool     `koanf:"pex" toml:"pex" comment:"enable peer exchange"`
-	BootNodes []string `koanf:"bootnodes" toml:"bootnodes" comment:"bootnodes to connect to on startup"`
-
-	// ListenAddr string // "127.0.0.1:6600"
+	IP        string   `toml:"ip" comment:"IP address to listen on for P2P connections"`
+	Port      uint64   `toml:"port" comment:"port to listen on for P2P connections"`
+	Pex       bool     `toml:"pex" comment:"enable peer exchange"`
+	BootNodes []string `toml:"bootnodes" comment:"bootnodes to connect to on startup"`
 }
 
 type DBConfig struct {
@@ -215,55 +200,63 @@ type DBConfig struct {
 	// However, this is less error prone, and prevents passing settings that
 	// would alter the functionality of the connection. An advanced option could
 	// be added to supplement the conn string if that seems useful.
-	Host          string   `koanf:"host" toml:"host"`
-	Port          string   `koanf:"port" toml:"port"`
-	User          string   `koanf:"user" toml:"user"`
-	Pass          string   `koanf:"pass" toml:"pass"`
-	DBName        string   `koanf:"dbname" toml:"dbname"`
-	ReadTxTimeout Duration `koanf:"read_timeout" toml:"read_timeout"`
-	MaxConns      uint32   `koanf:"max_connections" toml:"max_connections"`
+	Host          string   `toml:"host" comment:"postgres host name (IP or UNIX socket path)"`
+	Port          string   `toml:"port" comment:"postgres TCP port (leave empty for UNIX socket)"`
+	User          string   `toml:"user" comment:"postgres role/user name"`
+	Pass          string   `toml:"pass" comment:"postgres password if required for the user and host"`
+	DBName        string   `toml:"dbname" comment:"postgres database name"`
+	ReadTxTimeout Duration `toml:"read_timeout" comment:"timeout on read transactions from user RPC calls and queries"`
+	MaxConns      uint32   `toml:"max_connections" comment:"maximum number of DB connections to permit"`
 }
 
 type ConsensusConfig struct {
-	ProposeTimeout time.Duration `koanf:"propose_timeout" toml:"propose_timeout" comment:"timeout for proposing a block"`
-	MaxBlockSize   uint64        `koanf:"max_block_size" toml:"max_block_size" comment:"max size of a block in bytes"`
-	MaxTxsPerBlock uint64        `koanf:"max_txs_per_block" toml:"max_txs_per_block" comment:"max number of transactions per block"`
+	ProposeTimeout Duration `toml:"propose_timeout" comment:"timeout for proposing a block (applies to leader)"`
+	MaxBlockSize   uint64   `toml:"max_block_size" comment:"max size of a block in bytes"`
+	MaxTxsPerBlock uint64   `toml:"max_txs_per_block" comment:"max number of transactions per block"`
 	// ? reannounce intervals?
 }
 
 type RPCConfig struct {
-	ListenAddress      string        `koanf:"listen" toml:"listen"`
-	Timeout            time.Duration `koanf:"timeout" toml:"timeout"`
-	MaxReqSize         int           `koanf:"max_req_size" toml:"max_req_size"`
-	Private            bool          `koanf:"private" toml:"private"`
-	ChallengeExpiry    time.Duration `koanf:"challenge_expiry" toml:"challenge_expiry"`
-	ChallengeRateLimit float64       `koanf:"challenge_rate_limit" toml:"challenge_rate_limit"`
+	ListenAddress      string   `toml:"listen" comment:"address in host:port format on which the RPC server will listen"`
+	Timeout            Duration `toml:"timeout" comment:"user request duration limit after which it is cancelled"`
+	MaxReqSize         int      `toml:"max_req_size" comment:"largest permissible user request size"`
+	Private            bool     `toml:"private" comment:"enable private mode that requires challenge authentication for each call"`
+	ChallengeExpiry    Duration `toml:"challenge_expiry" comment:"lifetime of a server-generated challenge"`
+	ChallengeRateLimit float64  `toml:"challenge_rate_limit" comment:"maximum number of challenges per second that a user can request"`
 }
 
 type AdminConfig struct {
-	Enable        bool   `koanf:"enable" toml:"enable"`
-	ListenAddress string `koanf:"listen" toml:"listen"`
-	Pass          string `koanf:"pass" toml:"pass"`
-	NoTLS         bool   `koanf:"notls" toml:"notls"`
-	TLSCertFile   string `koanf:"cert" toml:"cert"`
-	TLSKeyFile    string `koanf:"key" toml:"key"`
+	Enable        bool   `toml:"enable" comment:"enable the admin RPC service"`
+	ListenAddress string `toml:"listen" comment:"address in host:port format or UNIX socket path on which the admin RPC server will listen"`
+	Pass          string `toml:"pass" comment:"optional password for the admin service"`
+	NoTLS         bool   `toml:"notls" comment:"disable TLS when the listen address is not a loopback IP or UNIX socket"`
+	TLSCertFile   string `toml:"cert" comment:"TLS certificate for use with a non-loopback listen address when notls is not true"`
+	TLSKeyFile    string `toml:"key" comment:"TLS key for use with a non-loopback listen address when notls is not true"`
 }
 
 type SnapshotConfig struct {
-	Enable          bool   `koanf:"enable" toml:"enable"`
-	RecurringHeight uint64 `koanf:"recurring_height" toml:"recurring_height"`
-	MaxSnapshots    uint64 `koanf:"max_snapshots" toml:"max_snapshots"`
+	Enable          bool   `toml:"enable" comment:"enable creating and providing snapshots for peers using statesync"`
+	RecurringHeight uint64 `toml:"recurring_height" comment:"snapshot creation period in blocks"`
+	MaxSnapshots    uint64 `toml:"max_snapshots" comment:"number of snapshots to keep, after the oldest is removed when creating a new one"`
 }
 
 type StateSyncConfig struct {
-	Enable           bool     `koanf:"enable" toml:"enable"`
-	TrustedProviders []string `koanf:"trusted_providers" toml:"trusted_providers"`
+	Enable           bool     `toml:"enable" comment:"enable using statesync rather than blocksync"`
+	TrustedProviders []string `toml:"trusted_providers" comment:"trusted snapshot providers in node ID format (see bootnodes)"`
 
-	DiscoveryTimeout time.Duration `koanf:"discovery_timeout" toml:"discovery_time"`
-	MaxRetries       uint64        `koanf:"max_retries" toml:"max_retries"`
+	DiscoveryTimeout Duration `toml:"discovery_time" comment:"how long to discover snapshots before selecting one to use"`
+	MaxRetries       uint64   `toml:"max_retries" comment:"how many times to try after failing to apply a snapshot before switching to blocksync"`
 }
 
-// ConfigToTOML marshals the config to TOML.
+// ConfigToTOML marshals the config to TOML. The `toml` struct field tag
+// specifies the field names. For example:
+//
+//	Enable  bool  `toml:"enable,commented" comment:"enable the thing"`
+//
+// The above field will be written like:
+//
+//	# enable the thing
+//	#enable=false
 func (nc Config) ToTOML() ([]byte, error) {
 	return toml.Marshal(nc)
 }
@@ -272,13 +265,19 @@ func (nc *Config) FromTOML(b []byte) error {
 	return toml.Unmarshal(b, &nc)
 }
 
+// SaveAs writes the Config to the specified TOML file.
 func (nc *Config) SaveAs(filename string) error {
 	bts, err := nc.ToTOML()
 	if err != nil {
 		return err
 	}
 
-	// TODO: write a toml header/comment or perhaps use a text/template toml file
+	// TODO: write a toml header/comment or do some prettification. The template
+	// was a maintenance burden, and we get setting and section comment with
+	// field tags, so I do not prefer ea template. If it does not look pretty
+	// enough, we may consider some basic post-processing of bts before writing
+	// it. For example, insert newlines before each "#", write a header at the
+	// top, etc.
 
 	return os.WriteFile(filename, bts, 0644)
 }

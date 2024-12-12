@@ -64,7 +64,7 @@ func (s *StateSyncService) DiscoverSnapshots(ctx context.Context) (int64, error)
 		select {
 		case <-ctx.Done():
 			return -1, ctx.Err()
-		case <-time.After(s.cfg.DiscoveryTimeout):
+		case <-time.After(time.Duration(s.cfg.DiscoveryTimeout)):
 			s.log.Info("Selecting the best snapshot...")
 		}
 
