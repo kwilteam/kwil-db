@@ -15,6 +15,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/node/pg"
 	"github.com/kwilteam/kwil-db/node/types"
 )
 
@@ -307,4 +308,70 @@ func mergeFunc(src, dest map[string]interface{}, keyFn func(s string) string) er
 		dest[key] = srcVal
 	}
 	return nil
+}
+
+// bindPostgresFlags binds flags to connect to a postgres database.
+func BindPostgresFlags(cmd *cobra.Command) {
+	cmd.Flags().String("dbname", "kwild", "Name of the database in the PostgreSQL server")
+	cmd.Flags().String("user", "postgres", "User with administrative privileges on the database")
+	cmd.Flags().String("password", "", "Password for the database user")
+	cmd.Flags().String("host", "localhost", "Host of the database")
+	cmd.Flags().String("port", "5432", "Port of the database")
+}
+
+// getPostgresFlags returns the postgres flags from the given command.
+func GetPostgresFlags(cmd *cobra.Command) (*pg.ConnConfig, error) {
+	return mergePostgresFlags(defaultPostgresConnConfig(), cmd)
+}
+
+// mergePostgresFlags merges the given connection config with the flags from the given command.
+// It only sets the fields that are set in the flags.
+func mergePostgresFlags(conf *pg.ConnConfig, cmd *cobra.Command) (*pg.ConnConfig, error) {
+	var err error
+	if cmd.Flags().Changed("dbname") {
+		conf.DBName, err = cmd.Flags().GetString("dbname")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if cmd.Flags().Changed("user") {
+		conf.User, err = cmd.Flags().GetString("user")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if cmd.Flags().Changed("password") {
+		conf.Pass, err = cmd.Flags().GetString("password")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if cmd.Flags().Changed("host") {
+		conf.Host, err = cmd.Flags().GetString("host")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if cmd.Flags().Changed("port") {
+		conf.Port, err = cmd.Flags().GetString("port")
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return conf, nil
+}
+
+// DefaultPostgresConnConfig returns a default connection config for a postgres database.
+func defaultPostgresConnConfig() *pg.ConnConfig {
+	return &pg.ConnConfig{
+		DBName: "kwild",
+		User:   "postgres",
+		Host:   "localhost",
+		Port:   "5432",
+	}
 }

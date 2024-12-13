@@ -11,19 +11,19 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math/big"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strconv"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/cmd/common/display"
-	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
-	"github.com/kwilteam/kwil-db/common/chain"
-	"github.com/kwilteam/kwil-db/internal/abci/meta"
-	"github.com/kwilteam/kwil-db/internal/sql/pg"
-
+	"github.com/kwilteam/kwil-db/app/shared/bind"
+	"github.com/kwilteam/kwil-db/app/shared/display"
+	"github.com/kwilteam/kwil-db/config"
+	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/node"
+	"github.com/kwilteam/kwil-db/node/meta"
+	"github.com/kwilteam/kwil-db/node/pg"
 	"github.com/spf13/cobra"
 )
 
@@ -39,7 +39,7 @@ kwil-admin snapshot create --dbname kwildb --user user1 --password pass1 --host 
 
 # Snapshot and genesis files will be created in the snapshot directory
 ls /path/to/snapshot/dir
-genesis.json    kwildb-snapshot.sql.gz`
+genesis.json    snapshot.sql.gz`
 )
 
 /*
@@ -54,7 +54,6 @@ WHERE pg_stat_activity.datname = 'kwild'
 
 func createCmd() *cobra.Command {
 	var snapshotDir string
-	var maxRowSize int
 	cmd := &cobra.Command{
 		Use:     "create",
 		Short:   "Creates a snapshot of the database.",
@@ -62,12 +61,12 @@ func createCmd() *cobra.Command {
 		Example: createExample,
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			snapshotDir, err := common.ExpandPath(snapshotDir)
+			snapshotDir, err := node.ExpandPath(snapshotDir)
 			if err != nil {
 				return display.PrintErr(cmd, fmt.Errorf("failed to expand snapshot directory path: %v", err))
 			}
 
-			pgConf, err := common.GetPostgresFlags(cmd)
+			pgConf, err := bind.GetPostgresFlags(cmd)
 			if err != nil {
 				return display.PrintErr(cmd, fmt.Errorf("failed to get postgres flags: %v", err))
 			}
@@ -82,12 +81,8 @@ func createCmd() *cobra.Command {
 		},
 	}
 
-	common.BindPostgresFlags(cmd)
+	bind.BindPostgresFlags(cmd)
 	cmd.Flags().StringVar(&snapshotDir, "snapdir", "kwild-snaps", "Directory to store the snapshot and hash files")
-
-	// TODO: Remove below flags
-	cmd.Flags().IntVar(&maxRowSize, "max-row-size", 4*1024*1024, "Maximum row size to read from pg_dump (default: 4MB). Adjust this accordingly if you encounter 'bufio.Scanner: token too long' error.")
-	cmd.Flags().MarkDeprecated("max-row-size", "max-row-size has no more influence on the snapshot creation process. It is deprecated and will be removed in v0.10.0")
 	return cmd
 
 }
@@ -106,12 +101,12 @@ func (c *createSnapshotRes) MarshalText() (text []byte, err error) {
 }
 
 func migrationSnapshotFile(snapshotDir string) string {
-	return filepath.Join(snapshotDir, "kwildb-snapshot.sql.gz")
+	return filepath.Join(snapshotDir, "snapshot.sql.gz")
 }
 
 // PGDump uses pg_dump to create a snapshot of the database.
 // It returns messages to log and an error if any.
-func PGDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, snapshotDir string) (height int64, logs []string, genesisConfig *chain.GenesisConfig, err error) {
+func PGDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, snapshotDir string) (height int64, logs []string, genesisConfig *config.GenesisConfig, err error) {
 	// Get the chain height
 	height, err = chainHeight(ctx, dbName, dbUser, dbPass, dbHost, dbPort)
 	if err != nil {
@@ -194,8 +189,8 @@ func PGDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 	hasher := sha256.New()
 	var inVotersBlock, schemaStarted bool
 	var validatorCount int64
-	genCfg := chain.DefaultGenesisConfig()
-	genCfg.Alloc = make(map[string]*big.Int)
+	genCfg := config.DefaultGenesisConfig()
+	// genCfg.Alloc = make(map[string]*big.Int)
 	multiWriter := io.MultiWriter(gzipWriter, hasher)
 	var totalBytes int64
 
@@ -241,10 +236,9 @@ func PGDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 				return -1, nil, nil, fmt.Errorf("failed to parse power: %w", err)
 			}
 
-			genCfg.Validators = append(genCfg.Validators, &chain.GenesisValidator{
+			genCfg.Validators = append(genCfg.Validators, &types.Validator{
 				PubKey: voterID,
 				Power:  power,
-				Name:   fmt.Sprintf("validator-%d", validatorCount),
 			})
 			validatorCount++
 		} else {
@@ -295,7 +289,7 @@ func PGDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 	}
 
 	hash := hasher.Sum(nil)
-	genCfg.DataAppHash = hash
+	genCfg.StateHash = hash
 
 	// Write the genesis config to a file
 	genesisFile := filepath.Join(snapshotDir, "genesis.json")
@@ -324,7 +318,7 @@ func chainHeight(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort str
 	}
 	defer pool.Close()
 
-	height, _, err := meta.GetChainState(ctx, pool)
+	height, _, _, err := meta.GetChainState(ctx, pool)
 	if err != nil {
 		return 0, fmt.Errorf("failed to get chain state: %w", err)
 	}

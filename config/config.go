@@ -56,7 +56,7 @@ type GenesisConfig struct {
 	// single transaction.
 	MaxVotesPerTx int64 `json:"max_votes_per_tx"`
 	// StateHash is the hash of the initial state of the chain, used when bootstrapping
-	// the chain with a network snapshot.
+	// the chain with a network snapshot during migration.
 	StateHash []byte `json:"state_hash"`
 }
 
@@ -171,14 +171,15 @@ type Config struct {
 	// ProfileMode string `toml:"profile_mode"`
 	// ProfileFile string `toml:"profile_file"`
 
-	P2P        PeerConfig                   `toml:"p2p" comment:"P2P related configuration"`
-	Consensus  ConsensusConfig              `toml:"consensus" comment:"Consensus related configuration"`
-	DB         DBConfig                     `toml:"db" comment:"DB (PostgreSQL) related configuration"`
-	RPC        RPCConfig                    `toml:"rpc" comment:"User RPC service configuration"`
-	Admin      AdminConfig                  `toml:"admin" comment:"Admin RPC service configuration"`
-	Snapshots  SnapshotConfig               `toml:"snapshots" comment:"Snapshot creation and provider configuration"`
-	StateSync  StateSyncConfig              `toml:"state_sync" comment:"Statesync configuration (vs block sync)"`
-	Extensions map[string]map[string]string `toml:"extensions" comment:"extension configuration"`
+	P2P          PeerConfig                   `toml:"p2p" comment:"P2P related configuration"`
+	Consensus    ConsensusConfig              `toml:"consensus" comment:"Consensus related configuration"`
+	DB           DBConfig                     `toml:"db" comment:"DB (PostgreSQL) related configuration"`
+	RPC          RPCConfig                    `toml:"rpc" comment:"User RPC service configuration"`
+	Admin        AdminConfig                  `toml:"admin" comment:"Admin RPC service configuration"`
+	Snapshots    SnapshotConfig               `toml:"snapshots" comment:"Snapshot creation and provider configuration"`
+	StateSync    StateSyncConfig              `toml:"state_sync" comment:"Statesync configuration (vs block sync)"`
+	Extensions   map[string]map[string]string `toml:"extensions" comment:"extension configuration"`
+	GenesisState string                       `toml:"genesis_state" comment:"path to the genesis state file, relative to the root directory"`
 }
 
 // PeerConfig corresponds to the [peer] section of the config.

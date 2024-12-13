@@ -1,12 +1,14 @@
 package node
 
 import (
+	"compress/gzip"
 	"context"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"net/url"
 	"os"
@@ -31,6 +33,7 @@ import (
 	"github.com/kwilteam/kwil-db/node/snapshotter"
 	"github.com/kwilteam/kwil-db/node/store"
 	"github.com/kwilteam/kwil-db/node/txapp"
+	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
 
 	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
@@ -153,6 +156,7 @@ func buildDB(ctx context.Context, d *coreDependencies, closers *closeFuncs) *pg.
 	pg.UseLogger(d.logger.New("PG"))
 
 	// TODO: restore from snapshots
+	fromSnapshot := restoreDB(d)
 
 	db, err := d.dbOpener(ctx, d.cfg.DB.DBName, d.cfg.DB.MaxConns)
 	if err != nil {
@@ -160,8 +164,119 @@ func buildDB(ctx context.Context, d *coreDependencies, closers *closeFuncs) *pg.
 	}
 	closers.addCloser(db.Close, "Closing application DB")
 
-	// TODO: bring back the prev functionality
+	if fromSnapshot {
+		d.logger.Info("DB restored from snapshot", "snapshot", d.cfg.GenesisState)
+		// readjust the expiry heights of all the pending resolutions after snapshot restore for Zero-downtime migrations
+		// snapshot tool handles the migration expiry height readjustment for offline migrations
+		// adjustExpiration := false
+		// startHeight := d.genesisCfg.ConsensusParams.Migration.StartHeight
+		// if d.cfg.MigrationConfig.Enable && startHeight != 0 {
+		// 	adjustExpiration = true
+		// }
+
+		// err = migrations.CleanupResolutionsAfterMigration(d.ctx, db, adjustExpiration, startHeight)
+		// if err != nil {
+		// 	failBuild(err, "failed to cleanup resolutions after snapshot restore")
+		// }
+
+		if err = db.EnsureFullReplicaIdentityDatasets(d.ctx); err != nil {
+			failBuild(err, "failed enable full replica identity on user datasets")
+		}
+	}
 	return db
+}
+
+// restoreDB restores the database from a snapshot if the genesis apphash is specified.
+// StateHash in the genesis config ensures that all the nodes in the network start from the same state.
+// StateHash in the genesis config should match the hash of the snapshot file.
+// Snapshot file can be compressed or uncompressed represented by .gz extension.
+// DB restoration from snapshot is skipped in the following scenarios:
+//   - If the DB is already initialized (i.e this is not a new node)
+//   - If the StateHash is not set in the genesis config
+//   - If statesync is enabled. Statesync will take care of syncing the database
+//     to the network state using statesync snapshots.
+//
+// returns true if the DB was restored from snapshot, false otherwise.
+func restoreDB(d *coreDependencies) bool {
+	if d.cfg.StateSync.Enable || len(d.genesisCfg.StateHash) == 0 || isDbInitialized(d) {
+		return false
+	}
+
+	genCfg := d.genesisCfg
+	appCfg := d.cfg
+
+	// DB is uninitialized and genesis statehash is set, so db should be restored from snapshot.
+	// Ensure that the snapshot file exists and the snapshot hash matches the genesis apphash.
+
+	if genCfg.StateHash != nil && appCfg.GenesisState == "" {
+		failBuild(nil, "snapshot file not provided")
+	}
+
+	// Snapshot file exists
+	filename := filepath.Join(d.rootDir, appCfg.GenesisState)
+	snapFile, err := os.Open(filename)
+	if err != nil {
+		failBuild(err, "failed to open genesis state file")
+	}
+
+	// Check if the snapshot file is compressed, if yes decompress it
+	var reader io.Reader
+	if strings.HasSuffix(appCfg.GenesisState, ".gz") {
+		// Decompress the snapshot file
+		gzipReader, err := gzip.NewReader(snapFile)
+		if err != nil {
+			failBuild(err, "failed to create gzip reader")
+		}
+		defer gzipReader.Close()
+		reader = gzipReader
+	} else {
+		reader = snapFile
+	}
+
+	// Restore DB from the snapshot if snapshot matches.
+	err = node.RestoreDB(d.ctx, reader, &appCfg.DB, genCfg.StateHash, d.logger)
+	if err != nil {
+		failBuild(err, "failed to restore DB from snapshot")
+	}
+	return true
+}
+
+// isDbInitialized checks if the database is already initialized.
+func isDbInitialized(d *coreDependencies) bool {
+	db, err := d.poolOpener(d.ctx, d.cfg.DB.DBName, 3)
+	if err != nil {
+		failBuild(err, "kwild database open failed")
+	}
+	defer db.Close()
+
+	// Check if the kwild_voting schema exists
+	exists, err := schemaExists(d.ctx, db, "kwild_voting")
+	if err != nil {
+		failBuild(err, "failed to check if schema exists")
+	}
+
+	// If the schema exists, the database is already initialized
+	// If the schema does not exist, the database is not initialized
+	return exists
+}
+
+// schemaExists checks if the schema with the given name exists in the database
+func schemaExists(ctx context.Context, db sql.Executor, schema string) (bool, error) {
+	query := fmt.Sprintf("SELECT 1 FROM information_schema.schemata WHERE schema_name = '%s'", schema)
+	res, err := db.Execute(ctx, query)
+	if err != nil {
+		return false, err
+	}
+
+	if len(res.Rows) == 0 {
+		return false, nil
+	}
+
+	if len(res.Rows) > 1 {
+		return false, fmt.Errorf("more than one schema found with name %s", schema)
+	}
+
+	return true, nil
 }
 
 func buildBlockStore(d *coreDependencies, closers *closeFuncs) *store.BlockStore {
