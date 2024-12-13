@@ -534,7 +534,7 @@ func TestPrepareVoteBodyTx(t *testing.T) {
 			events: []*types.VotableEvent{evt1, evt2, evt3},
 			fn: func(ctx context.Context, bp *BlockProcessor, es *mockEventStore) error {
 
-				emptyTxSize, err := bp.emptyVodeBodyTxSize()
+				emptyTxSize, err := bp.emptyVoteBodyTxSize()
 				require.NoError(t, err)
 
 				// support evt1

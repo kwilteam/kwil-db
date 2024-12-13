@@ -73,6 +73,7 @@ func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Account
 		validators:  vs,
 		snapshotter: sp,
 		signer:      signer,
+		events:      es,
 		log:         logger,
 	}
 
