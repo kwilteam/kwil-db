@@ -46,12 +46,12 @@ var creditEventSignature ethcommon.Hash = crypto.Keccak256Hash([]byte("Credit(ad
 type ethClient struct {
 	targetAddress ethcommon.Address
 	maxRetries    int64
-	logger        log.SugaredLogger
+	logger        log.Logger
 	client        *ethclient.Client
 }
 
 // newEthClient creates a new ethereum client
-func newEthClient(ctx context.Context, rpcurl string, maxRetries int64, targetAddress ethcommon.Address, logger log.SugaredLogger) (*ethClient, error) {
+func newEthClient(ctx context.Context, rpcurl string, maxRetries int64, targetAddress ethcommon.Address, logger log.Logger) (*ethClient, error) {
 	var client *ethclient.Client
 
 	// I don't set the max retries here because this only gets run on startup

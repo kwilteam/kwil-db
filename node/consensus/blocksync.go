@@ -62,7 +62,7 @@ func (ce *ConsensusEngine) discoverBestHeight(ctx context.Context) (int64, error
 			case <-cancelCtx.Done():
 				return
 			case <-time.After(delay):
-				if ce.inSync.Load() {
+				if ce.InCatchup() { // if we are still in catchup, broadcast again
 					ce.discoveryReqBroadcaster()
 					delay = min(2*delay, 16*time.Second)
 				}

@@ -10,6 +10,7 @@ import (
 	"github.com/kwilteam/kwil-db/node/snapshotter"
 	"github.com/kwilteam/kwil-db/node/txapp"
 	"github.com/kwilteam/kwil-db/node/types/sql"
+	"github.com/kwilteam/kwil-db/node/voting"
 )
 
 // DB is the interface for the main SQL database. All queries must be executed
@@ -65,3 +66,19 @@ type SnapshotModule interface {
 
 	Enabled() bool
 }
+
+// EventStore allows the BlockProcessor to read events from the event store.
+type EventStore interface {
+	// GetUnbroadcastedEvents filters out the events observed by the validator
+	// that are not previously broadcasted.
+	GetUnbroadcastedEvents(ctx context.Context) ([]*types.UUID, error)
+
+	// MarkBroadcasted marks list of events as broadcasted.
+	MarkBroadcasted(ctx context.Context, ids []*types.UUID) error
+}
+
+var (
+	// getEvents gets all events, even if they have been
+	// marked received
+	getEvents = voting.GetEvents
+)

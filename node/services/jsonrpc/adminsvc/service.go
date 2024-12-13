@@ -16,7 +16,6 @@ import (
 	types "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
-	nodetypes "github.com/kwilteam/kwil-db/node/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
 	"github.com/kwilteam/kwil-db/version"
@@ -141,7 +140,6 @@ func (svc *Service) HealthMethod(ctx context.Context, _ *userjson.HealthRequest)
 		Healthy:       happy,
 		Version:       apiSemver,
 		PubKey:        status.Validator.PubKey,
-		Role:          status.Validator.Role,
 		NumValidators: len(vals.Validators),
 	}, nil
 	// slices.ContainsFunc(vals.Validators, func(v *ktypes.Validator) bool { return bytes.Equal(v.PubKey, status.Validator.PubKey) })
@@ -254,16 +252,12 @@ func (svc *Service) Status(ctx context.Context, req *adminjson.StatusRequest) (*
 	}
 
 	var power int64
-	switch status.Validator.Role {
-	case nodetypes.RoleLeader.String(), nodetypes.RoleValidator.String():
-		power, _ = svc.voting.GetValidatorPower(ctx, status.Validator.PubKey)
-	}
+	power, _ = svc.voting.GetValidatorPower(ctx, status.Validator.PubKey)
 
 	return &adminjson.StatusResponse{
 		Node: status.Node,
 		Sync: convertSyncInfo(status.Sync),
 		Validator: &adminjson.Validator{ // TODO: weed out the type dups
-			Role:   status.Validator.Role,
 			PubKey: status.Validator.PubKey,
 			Power:  power,
 		},
@@ -401,7 +395,6 @@ func (svc *Service) ListValidators(ctx context.Context, req *adminjson.ListValid
 	pbValidators := make([]*adminjson.Validator, len(vals))
 	for i, vi := range vals {
 		pbValidators[i] = &adminjson.Validator{
-			Role:   vi.Role,
 			PubKey: vi.PubKey,
 			Power:  vi.Power,
 		}

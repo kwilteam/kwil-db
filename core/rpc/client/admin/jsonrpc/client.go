@@ -147,7 +147,6 @@ func (cl *Client) Status(ctx context.Context) (*adminTypes.Status, error) {
 			Syncing:         res.Sync.Syncing,
 		},
 		Validator: &adminTypes.ValidatorInfo{
-			Role:   res.Validator.Role,
 			PubKey: res.Validator.PubKey,
 			Power:  res.Validator.Power,
 		},

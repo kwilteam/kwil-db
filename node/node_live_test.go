@@ -17,6 +17,8 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/config"
+	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	blockprocessor "github.com/kwilteam/kwil-db/node/block_processor"
@@ -84,8 +86,15 @@ func TestSingleNodeMocknet(t *testing.T) {
 	genCfg.Leader = privKeys[0].Public().Bytes()
 	genCfg.Validators = valSetList
 
+	k, err := crypto.UnmarshalSecp256k1PrivateKey(pk1)
+	require.NoError(t, err)
+
+	signer1 := &auth.EthPersonalSigner{Key: *k}
+
+	es := &mockEventStore{}
+
 	bpl := log.New(log.WithName("BP1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
-	bp, err := blockprocessor.NewBlockProcessor(ctx, db1, newDummyTxApp(valSetList), &mockAccounts{}, vsReal, ss, genCfg, bpl)
+	bp, err := blockprocessor.NewBlockProcessor(ctx, db1, newDummyTxApp(valSetList), &mockAccounts{}, vsReal, ss, es, genCfg, signer1, bpl)
 	require.NoError(t, err)
 
 	ceCfg1 := &consensus.Config{
@@ -203,8 +212,14 @@ func TestDualNodeMocknet(t *testing.T) {
 
 	// _, vsReal, err := voting.NewResolutionStore(ctx, db1)
 
+	k, err := crypto.UnmarshalSecp256k1PrivateKey(pk1)
+	require.NoError(t, err)
+
+	signer1 := &auth.EthPersonalSigner{Key: *k}
+	es1 := &mockEventStore{}
+
 	bpl1 := log.New(log.WithName("BP1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
-	bp1, err := blockprocessor.NewBlockProcessor(ctx, db1, newDummyTxApp(valSetList), &mockAccounts{}, newValidatorStore(valSetList), ss, genCfg, bpl1)
+	bp1, err := blockprocessor.NewBlockProcessor(ctx, db1, newDummyTxApp(valSetList), &mockAccounts{}, newValidatorStore(valSetList), ss, es1, genCfg, signer1, bpl1)
 
 	ceCfg1 := &consensus.Config{
 		PrivateKey:     privKeys[0],
@@ -246,9 +261,14 @@ func TestDualNodeMocknet(t *testing.T) {
 
 	time.Sleep(20 * time.Millisecond)
 
+	k2, err := crypto.UnmarshalSecp256k1PrivateKey(pk2)
+	require.NoError(t, err)
+
+	signer2 := &auth.EthPersonalSigner{Key: *k2}
+	es2 := &mockEventStore{}
 	// _, vsReal2, err := voting.NewResolutionStore(ctx, db2)
 	bpl2 := log.New(log.WithName("BP2"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
-	bp2, err := blockprocessor.NewBlockProcessor(ctx, db2, newDummyTxApp(valSetList), &mockAccounts{}, newValidatorStore(valSetList), ss, genCfg, bpl2)
+	bp2, err := blockprocessor.NewBlockProcessor(ctx, db2, newDummyTxApp(valSetList), &mockAccounts{}, newValidatorStore(valSetList), ss, es2, genCfg, signer2, bpl2)
 	ceCfg2 := &consensus.Config{
 		PrivateKey:     privKeys[1],
 		ValidatorSet:   valSet,
@@ -401,4 +421,20 @@ type mockAccounts struct{}
 
 func (m *mockAccounts) Updates() []*ktypes.Account {
 	return nil
+}
+
+type mockEventStore struct {
+	events []*ktypes.VotableEvent
+}
+
+func (m *mockEventStore) MarkBroadcasted(ctx context.Context, ids []*ktypes.UUID) error {
+	return nil
+}
+
+func (m *mockEventStore) GetUnbroadcastedEvents(ctx context.Context) ([]*ktypes.UUID, error) {
+	var ids []*ktypes.UUID
+	for _, event := range m.events {
+		ids = append(ids, event.ID())
+	}
+	return ids, nil
 }

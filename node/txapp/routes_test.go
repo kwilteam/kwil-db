@@ -353,15 +353,10 @@ func (v *mockValidator) Commit() error {
 func (v *mockValidator) Rollback() {}
 
 func getSigner(hexPrivKey string) auth.Signer {
-	//pk, _, err := crypto.GenerateSecp256k1Key(nil)
 	bts, err := hex.DecodeString(hexPrivKey)
 	if err != nil {
 		panic(err)
 	}
-	// pk, err := crypto.UnmarshalEd25519PrivateKey(bts)
-	// if err != nil {
-	// 	panic(err)
-	// }
 	pk, err := crypto.UnmarshalSecp256k1PrivateKey(bts)
 	if err != nil {
 		panic(err)

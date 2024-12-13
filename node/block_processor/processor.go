@@ -11,6 +11,7 @@ import (
 	"slices"
 	"sort"
 	"sync"
+	"sync/atomic"
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/config"
@@ -35,11 +36,12 @@ import (
 type BlockProcessor struct {
 	// config
 	genesisParams *config.GenesisConfig
+	signer        auth.Signer
 
 	mtx sync.Mutex // mutex to protect the consensus params
 	// consensus params
 	appHash  ktypes.Hash
-	height   int64
+	height   atomic.Int64
 	chainCtx *common.ChainContext
 
 	status   *blockExecStatus
@@ -54,10 +56,15 @@ type BlockProcessor struct {
 	accounts    Accounts
 	validators  ValidatorModule
 	snapshotter SnapshotModule
+	events      EventStore
 	log         log.Logger
+
+	broadcastTxFn BroadcastTxFn
 }
 
-func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Accounts, vs ValidatorModule, sp SnapshotModule, genesisCfg *config.GenesisConfig, logger log.Logger) (*BlockProcessor, error) {
+type BroadcastTxFn func(ctx context.Context, tx *ktypes.Transaction, sync uint8) (*ktypes.ResultBroadcastTx, error)
+
+func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Accounts, vs ValidatorModule, sp SnapshotModule, es EventStore, genesisCfg *config.GenesisConfig, signer auth.Signer, logger log.Logger) (*BlockProcessor, error) {
 	// get network parameters from the chain context
 	bp := &BlockProcessor{
 		db:          db,
@@ -65,6 +72,7 @@ func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Account
 		accounts:    accounts,
 		validators:  vs,
 		snapshotter: sp,
+		signer:      signer,
 		log:         logger,
 	}
 
@@ -84,7 +92,7 @@ func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Account
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chain state: %w", err)
 	}
-	bp.height = height
+	bp.height.Store(height)
 	copy(bp.appHash[:], appHash)
 
 	networkParams, err := meta.LoadParams(ctx, tx)
@@ -103,6 +111,10 @@ func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Account
 	}
 
 	return bp, nil
+}
+
+func (bp *BlockProcessor) SetBroadcastTxFn(fn BroadcastTxFn) {
+	bp.broadcastTxFn = fn
 }
 
 func (bp *BlockProcessor) Close() error {
@@ -131,7 +143,7 @@ func (bp *BlockProcessor) Rollback(ctx context.Context, height int64, appHash kt
 	}
 
 	// set the block proposer back to it's previous state
-	bp.height = height
+	bp.height.Store(height)
 	bp.appHash = appHash
 
 	readTx, err := bp.db.BeginReadTx(ctx)
@@ -198,7 +210,7 @@ func (bp *BlockProcessor) CheckTx(ctx context.Context, tx *ktypes.Transaction, r
 		Ctx: ctx,
 		BlockContext: &common.BlockContext{
 			ChainContext: bp.chainCtx,
-			Height:       bp.height + 1,           // ?? TODO: can crash as CheckTX can happen parallel to block execution
+			Height:       bp.height.Load() + 1,
 			Proposer:     bp.genesisParams.Leader, // always the leader?
 		},
 		TxID:          hex.EncodeToString(txHash[:]),
@@ -260,7 +272,7 @@ func (bp *BlockProcessor) InitChain(ctx context.Context) (int64, []byte, error) 
 		return -1, nil, fmt.Errorf("genesis transaction commit failed: %w", err)
 	}
 
-	bp.height = genCfg.InitialHeight
+	bp.height.Store(genCfg.InitialHeight)
 	copy(bp.appHash[:], genCfg.StateHash)
 	bp.chainCtx.NetworkParameters = networkParams
 
@@ -352,6 +364,13 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 
 	// record the end time of the block execution
 	bp.recordBlockExecEndTime()
+
+	// Broadcast any voteID events that have not been broadcasted yet
+	if bp.broadcastTxFn != nil {
+		if err = bp.BroadcastVoteIDTx(ctx, bp.consensusTx); err != nil {
+			return nil, fmt.Errorf("failed to broadcast the voteID transactions: %w", err)
+		}
+	}
 
 	_, err = bp.txapp.Finalize(ctx, bp.consensusTx, blockCtx)
 	if err != nil {
@@ -447,11 +466,20 @@ func (bp *BlockProcessor) Commit(ctx context.Context, req *ktypes.CommitRequest)
 
 	bp.clearBlockExecutionStatus() // TODO: not very sure where to clear this
 
-	bp.height = req.Height
+	bp.height.Store(req.Height)
 	copy(bp.appHash[:], req.AppHash[:])
 
 	bp.log.Info("Committed Block", "height", req.Height, "appHash", req.AppHash.String())
 	return nil
+}
+
+// This function enforces proper nonce ordering, validates transactions, and ensures
+// that consensus limits such as the maximum block size, maxVotesPerTx are met. It also adds
+// validator vote transactions for events observed by the leader. This function is
+// used exclusively by the leader node to prepare the proposal block.
+func (bp *BlockProcessor) PrepareProposal(ctx context.Context, txs [][]byte) (finalTxs [][]byte, invalidTxs [][]byte, err error) {
+	// unmarshal and index the transactions
+	return bp.prepareBlockTransactions(ctx, txs)
 }
 
 var (
@@ -570,5 +598,19 @@ func (bp *BlockProcessor) ConsensusParams() *ktypes.ConsensusParams {
 		DisabledGasCosts: bp.chainCtx.NetworkParameters.DisabledGasCosts,
 		MaxVotesPerTx:    bp.chainCtx.NetworkParameters.MaxVotesPerTx,
 		MigrationStatus:  bp.chainCtx.NetworkParameters.MigrationStatus,
+	}
+}
+
+func (bp *BlockProcessor) SetNetworkParameters(params *common.NetworkParameters) {
+	bp.mtx.Lock()
+	defer bp.mtx.Unlock()
+
+	bp.chainCtx.NetworkParameters = &common.NetworkParameters{
+		MaxBlockSize:     params.MaxBlockSize,
+		JoinExpiry:       params.JoinExpiry,
+		VoteExpiry:       params.VoteExpiry,
+		DisabledGasCosts: params.DisabledGasCosts,
+		MaxVotesPerTx:    params.MaxVotesPerTx,
+		MigrationStatus:  params.MigrationStatus,
 	}
 }

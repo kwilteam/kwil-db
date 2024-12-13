@@ -64,12 +64,11 @@ func NewTxApp(ctx context.Context, db sql.Executor, engine common.Engine, signer
 
 		events: events,
 		mempool: &mempool{
-			accounts: make(map[string]*types.Account),
-			// TODO: what is this nodeAddr used for?
-			// nodeAddr:     signer.Identity(),
+			accounts:     make(map[string]*types.Account),
 			accountMgr:   accounts,
 			validatorMgr: validators,
-			log:          service.Logger,
+			nodeAddr:     signer.Identity(),
+			log:          service.Logger.New("mempool"),
 		},
 		signer:   signer,
 		resTypes: resTypes,
@@ -123,7 +122,7 @@ func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.
 // use them to store any changes to the network parameters in the database during Finalize.
 func (r *TxApp) Begin(ctx context.Context, height int64) error {
 	// Before executing transaction in this block, add/remove/update functionality.
-	// TODO:
+	// TODO: active forks, not for the beta
 	return nil
 }
 
@@ -600,6 +599,10 @@ func (r *TxApp) announceValidators() {
 			r.service.Logger.Warn("Validator update channel is blocking")
 		}
 	}
+}
+
+func (r *TxApp) GetValidators() []*types.Validator {
+	return r.Validators.GetValidators()
 }
 
 func validatorSetPower(validators []*types.Validator) int64 {
