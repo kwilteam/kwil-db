@@ -254,7 +254,7 @@ func (bp *BlockProcessor) prepareValidatorVoteBodyTx(ctx context.Context, nonce 
 		eventMap[*evt.ID()] = evt
 	}
 
-	emptyTxSz, err := bp.emptyVodeBodyTxSize()
+	emptyTxSz, err := bp.emptyVoteBodyTxSize()
 	if err != nil {
 		return nil, err
 	}
@@ -322,7 +322,7 @@ func (bp *BlockProcessor) prepareValidatorVoteBodyTx(ctx context.Context, nonce 
 // emptyVodeBodyTxSize returns the size of an empty validator vote body transaction.
 // used to estimate the size of the validator vote body transactions with events as the
 // size is directly proportional to the events size.
-func (bp *BlockProcessor) emptyVodeBodyTxSize() (int64, error) {
+func (bp *BlockProcessor) emptyVoteBodyTxSize() (int64, error) {
 	payload := &types.ValidatorVoteBodies{
 		Events: []*types.VotableEvent{},
 	}
