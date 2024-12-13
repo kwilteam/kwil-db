@@ -4,6 +4,7 @@ import (
 	"context"
 
 	ktypes "github.com/kwilteam/kwil-db/core/types"
+	blockprocessor "github.com/kwilteam/kwil-db/node/block_processor"
 	"github.com/kwilteam/kwil-db/node/consensus"
 	"github.com/kwilteam/kwil-db/node/snapshotter"
 	"github.com/kwilteam/kwil-db/node/types"
@@ -12,6 +13,7 @@ import (
 
 type ConsensusEngine interface {
 	Role() types.Role // maybe: Role() (rol types.Role, power int64)
+	InCatchup() bool
 
 	AcceptProposal(height int64, blkID, prevBlkID types.Hash, leaderSig []byte, timestamp int64) bool
 	NotifyBlockProposal(blk *ktypes.Block)
@@ -27,7 +29,7 @@ type ConsensusEngine interface {
 
 	Start(ctx context.Context, proposerBroadcaster consensus.ProposalBroadcaster,
 		blkAnnouncer consensus.BlkAnnouncer, ackBroadcaster consensus.AckBroadcaster,
-		blkRequester consensus.BlkRequester, stateResetter consensus.ResetStateBroadcaster, discoveryBroadcaster consensus.DiscoveryReqBroadcaster) error
+		blkRequester consensus.BlkRequester, stateResetter consensus.ResetStateBroadcaster, discoveryBroadcaster consensus.DiscoveryReqBroadcaster, txBroadcaster blockprocessor.BroadcastTxFn) error
 
 	CheckTx(ctx context.Context, tx *ktypes.Transaction) error
 

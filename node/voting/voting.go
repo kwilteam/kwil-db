@@ -603,7 +603,10 @@ func (v *VoteStore) GetValidators() []*types.Validator {
 
 	vals := make([]*types.Validator, 0)
 	for _, val := range v.validatorSet {
-		vals = append(vals, val)
+		vals = append(vals, &types.Validator{
+			PubKey: slices.Clone(val.PubKey),
+			Power:  val.Power,
+		})
 	}
 
 	return vals

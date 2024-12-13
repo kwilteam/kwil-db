@@ -19,6 +19,7 @@ import (
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	blockprocessor "github.com/kwilteam/kwil-db/node/block_processor"
 	"github.com/kwilteam/kwil-db/node/mempool"
@@ -114,8 +115,19 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) []*Config {
 		bs, err := store.NewBlockStore(nodeDir)
 		assert.NoError(t, err)
 
-		bp, err := blockprocessor.NewBlockProcessor(ctx, db, txapp, accounts, v, ss, genCfg, log.New(log.WithName("BP")))
+		signer := auth.GetNodeSigner(privKeys[i])
+
+		ev := &mockEventStore{}
+
+		bp, err := blockprocessor.NewBlockProcessor(ctx, db, txapp, accounts, v, ss, ev, genCfg, signer, log.New(log.WithName("BP")))
 		assert.NoError(t, err)
+		bp.SetNetworkParameters(&common.NetworkParameters{
+			MaxBlockSize:     genCfg.MaxBlockSize,
+			JoinExpiry:       genCfg.JoinExpiry,
+			VoteExpiry:       genCfg.VoteExpiry,
+			DisabledGasCosts: true,
+			MaxVotesPerTx:    genCfg.MaxVotesPerTx,
+		})
 
 		ceConfigs[i] = &Config{
 			PrivateKey:     privKeys[i],
@@ -551,19 +563,21 @@ func TestValidatorStateMachine(t *testing.T) {
 
 			leader := New(ceConfigs[0])
 			val := New(ceConfigs[1])
-			blkProp1, err = leader.createBlockProposal()
+
+			ctxM := context.Background()
+			blkProp1, err = leader.createBlockProposal(ctxM)
 			assert.NoError(t, err)
 			time.Sleep(300 * time.Millisecond) // just to ensure that the block hashes are different due to start time
-			blkProp2, err = leader.createBlockProposal()
+			blkProp2, err = leader.createBlockProposal(ctxM)
 			assert.NoError(t, err)
 			t.Logf("blkProp1: %s, blkProp2: %s", blkProp1.blkHash.String(), blkProp2.blkHash.String())
 
-			ctx, cancel := context.WithCancel(context.Background())
+			ctx, cancel := context.WithCancel(ctxM)
 			var wg sync.WaitGroup
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				val.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster)
+				val.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster, nil)
 			}()
 
 			t.Cleanup(func() {
@@ -599,7 +613,7 @@ func TestCELeaderSingleNode(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		leader.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster)
+		leader.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster, nil)
 	}()
 
 	t.Cleanup(func() {
@@ -625,7 +639,7 @@ func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
 	go func() {
 		defer wg.Done()
 		n1.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster,
-			mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster)
+			mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster, nil)
 	}()
 
 	t.Cleanup(func() {
@@ -686,7 +700,7 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 
 	go func() {
 		defer wg.Done()
-		n1.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster)
+		n1.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster, nil)
 	}()
 
 	n1.bestHeightCh <- &discoveryMsg{
@@ -862,4 +876,20 @@ func (s *snapshotStore) IsSnapshotDue(height uint64) bool {
 
 func (s *snapshotStore) LoadSnapshotChunk(height uint64, format uint32, chunkID uint32) ([]byte, error) {
 	return nil, nil
+}
+
+type mockEventStore struct {
+	events []*ktypes.VotableEvent
+}
+
+func (m *mockEventStore) MarkBroadcasted(ctx context.Context, ids []*ktypes.UUID) error {
+	return nil
+}
+
+func (m *mockEventStore) GetUnbroadcastedEvents(ctx context.Context) ([]*ktypes.UUID, error) {
+	var ids []*ktypes.UUID
+	for _, event := range m.events {
+		ids = append(ids, event.ID())
+	}
+	return ids, nil
 }

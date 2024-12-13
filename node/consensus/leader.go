@@ -38,7 +38,7 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 
 	ce.log.Info("Starting a new consensus round", "height", ce.state.lc.height+1)
 
-	blkProp, err := ce.createBlockProposal()
+	blkProp, err := ce.createBlockProposal(ctx)
 	if err != nil {
 		ce.log.Errorf("Error creating a block proposal: %v", err)
 		return err
@@ -127,7 +127,7 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 // proposer transactions such as ValidatorVoteBodies.
 // This method orders the transactions in the nonce order and also
 // does basic gas and balance checks and enforces the block size limits.
-func (ce *ConsensusEngine) createBlockProposal() (*blockProposal, error) {
+func (ce *ConsensusEngine) createBlockProposal(ctx context.Context) (*blockProposal, error) {
 	nTxs := ce.mempool.PeekN(blockTxCount)
 	var txns [][]byte
 	for _, namedTx := range nTxs {
@@ -142,7 +142,18 @@ func (ce *ConsensusEngine) createBlockProposal() (*blockProposal, error) {
 		txns = append(txns, rawTx)
 	}
 
-	blk := ktypes.NewBlock(ce.state.lc.height+1, ce.state.lc.blkHash, ce.state.lc.appHash, ce.ValidatorSetHash(), time.Now(), txns)
+	finalTxs, invalidTxs, err := ce.blockProcessor.PrepareProposal(ctx, txns)
+	if err != nil {
+		ce.log.Errorf("Error preparing the block proposal: %v", err)
+		return nil, err
+	}
+
+	// remove invalid transactions from the mempool
+	for _, tx := range invalidTxs {
+		ce.mempool.Remove(types.Hash(tx))
+	}
+
+	blk := ktypes.NewBlock(ce.state.lc.height+1, ce.state.lc.blkHash, ce.state.lc.appHash, ce.ValidatorSetHash(), time.Now(), finalTxs)
 
 	// ValSet + valUpdatesHash
 

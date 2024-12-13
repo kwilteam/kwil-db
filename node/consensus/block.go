@@ -102,7 +102,7 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 		Height:  height,
 		AppHash: appHash,
 		// To indicate if the node is syncing, used by the blockprocessor to decide if it should create snapshots.
-		Syncing: ce.inSync.Load(),
+		Syncing: ce.InCatchup(),
 	}
 	if err := ce.blockProcessor.Commit(ctx, req); err != nil { // clears the mempool cache
 		return err

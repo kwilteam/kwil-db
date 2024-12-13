@@ -15,6 +15,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/node"
 	"github.com/kwilteam/kwil-db/node/consensus"
+	"github.com/kwilteam/kwil-db/node/listeners"
 	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/version"
 
@@ -35,6 +36,7 @@ type server struct {
 	// subsystems
 	node               *node.Node
 	ce                 *consensus.ConsensusEngine
+	listeners          *listeners.ListenerManager
 	jsonRPCServer      *rpcserver.Server
 	jsonRPCAdminServer *rpcserver.Server
 }
@@ -163,6 +165,17 @@ func (s *server) Start(ctx context.Context) error {
 		}
 		return nil
 	})
+
+	// Start listener manager
+	group.Go(func() error {
+		go func() {
+			<-groupCtx.Done()
+			s.log.Info("stop listeners")
+			s.listeners.Stop()
+		}()
+		return s.listeners.Start()
+	})
+	s.log.Info("listener manager started")
 
 	// TODO: node is starting the consensus engine for ease of testing
 	// Start the consensus engine

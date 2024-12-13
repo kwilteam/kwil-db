@@ -20,6 +20,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
+	blockprocessor "github.com/kwilteam/kwil-db/node/block_processor"
 	"github.com/kwilteam/kwil-db/node/consensus"
 	"github.com/kwilteam/kwil-db/node/mempool"
 	"github.com/kwilteam/kwil-db/node/store/memstore"
@@ -196,9 +197,14 @@ func (ce *dummyCE) ConsensusParams() *ktypes.ConsensusParams {
 	return nil
 }
 
+func (ce *dummyCE) InCatchup() bool {
+	return false
+}
+
 func (ce *dummyCE) Start(ctx context.Context, proposerBroadcaster consensus.ProposalBroadcaster,
 	blkAnnouncer consensus.BlkAnnouncer, ackBroadcaster consensus.AckBroadcaster,
-	blkRequester consensus.BlkRequester, stateResetter consensus.ResetStateBroadcaster, discReqBroadcaster consensus.DiscoveryReqBroadcaster) error {
+	blkRequester consensus.BlkRequester, stateResetter consensus.ResetStateBroadcaster,
+	discReqBroadcaster consensus.DiscoveryReqBroadcaster, txBroadcaster blockprocessor.BroadcastTxFn) error {
 	ce.proposerBroadcaster = proposerBroadcaster
 	ce.blkAnnouncer = blkAnnouncer
 	ce.ackBroadcaster = ackBroadcaster

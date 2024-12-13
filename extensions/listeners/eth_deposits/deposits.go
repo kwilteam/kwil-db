@@ -37,7 +37,7 @@ func init() {
 // It will search for a local extension configuration named "eth_deposit".
 func Start(ctx context.Context, service *common.Service, eventStore listeners.EventStore) error {
 	config := &EthDepositConfig{}
-	listenerConfig, ok := service.LocalConfig.AppConfig.Extensions[ListenerName]
+	listenerConfig, ok := service.LocalConfig.Extensions[ListenerName]
 	if !ok {
 		service.Logger.Warn("no eth_deposit configuration found, eth_deposit oracle will not start")
 		return nil // no configuration, so we don't start the oracle
@@ -72,7 +72,7 @@ func Start(ctx context.Context, service *common.Service, eventStore listeners.Ev
 	if err != nil {
 		return fmt.Errorf("failed to get current block height: %w", err)
 	}
-	service.Logger.S.Infof("ETH best block: %v", currentHeight)
+	service.Logger.Infof("ETH best block: %v", currentHeight)
 
 	if lastHeight > currentHeight-config.RequiredConfirmations {
 		return fmt.Errorf("starting height is greater than the last confirmed eth block height")
@@ -135,7 +135,7 @@ func Start(ctx context.Context, service *common.Service, eventStore listeners.Ev
 // height range. This means inserting any that have not already been processed
 // for broadcast in a Kwil vote ID / approval transaction, and then storing the
 // processed height.
-func processEvents(ctx context.Context, from, to int64, client *ethClient, eventStore listeners.EventStore, logger log.SugaredLogger) error {
+func processEvents(ctx context.Context, from, to int64, client *ethClient, eventStore listeners.EventStore, logger log.Logger) error {
 	logs, err := client.GetCreditEventLogs(ctx, from, to)
 	if err != nil {
 		return fmt.Errorf("failed to get credit event logs: %w", err)

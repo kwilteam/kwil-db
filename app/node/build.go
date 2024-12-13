@@ -24,6 +24,7 @@ import (
 	blockprocessor "github.com/kwilteam/kwil-db/node/block_processor"
 	"github.com/kwilteam/kwil-db/node/consensus"
 	"github.com/kwilteam/kwil-db/node/engine/execution"
+	"github.com/kwilteam/kwil-db/node/listeners"
 	"github.com/kwilteam/kwil-db/node/mempool"
 	"github.com/kwilteam/kwil-db/node/meta"
 	"github.com/kwilteam/kwil-db/node/pg"
@@ -71,7 +72,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	accounts := buildAccountStore(ctx, d, db)
 
 	// eventstore, votestore
-	_, vs := buildVoteStore(ctx, d, closers) // ev, vs
+	es, vs := buildVoteStore(ctx, d, closers) // ev, vs
 
 	// TxAPP
 	txApp := buildTxApp(ctx, d, db, accounts, vs, e)
@@ -80,13 +81,16 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	ss := buildSnapshotStore(d)
 
 	// BlockProcessor
-	bp := buildBlockProcessor(ctx, d, db, txApp, accounts, vs, ss)
+	bp := buildBlockProcessor(ctx, d, db, txApp, accounts, vs, ss, es)
 
 	// Consensus
 	ce := buildConsensusEngine(ctx, d, db, mp, bs, bp, valSet)
 
 	// Node
 	node := buildNode(d, mp, bs, ce, ss, db)
+
+	// listeners
+	lm := buildListenerManager(d, es, txApp, node)
 
 	// RPC Services
 	rpcSvcLogger := d.logger.New("USER")
@@ -135,6 +139,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 		closers:            closers,
 		node:               node,
 		ce:                 ce,
+		listeners:          lm,
 		jsonRPCServer:      jsonRPCServer,
 		jsonRPCAdminServer: jsonRPCAdminServer,
 		dbCtx:              db,
@@ -202,17 +207,23 @@ func buildMetaStore(ctx context.Context, db *pg.DB) {
 	}
 }
 
+// service returns a common.Service with the given logger name
+func (c *coreDependencies) service(loggerName string) *common.Service {
+	signer := auth.GetNodeSigner(c.privKey)
+
+	return &common.Service{
+		Logger:        c.logger.New(loggerName),
+		GenesisConfig: c.genesisCfg,
+		LocalConfig:   c.cfg,
+		Identity:      signer.Identity(),
+	}
+}
+
 func buildTxApp(ctx context.Context, d *coreDependencies, db *pg.DB, accounts *accounts.Accounts,
 	votestore *voting.VoteStore, engine *execution.GlobalContext) *txapp.TxApp {
 	signer := auth.GetNodeSigner(d.privKey)
-	service := &common.Service{
-		Logger:   d.logger.New("TXAPP"),
-		Identity: signer.Identity(),
-		// TODO: pass extension configs
-		// ExtensionConfigs: make(map[string]map[string]string),
-	}
 
-	txapp, err := txapp.NewTxApp(ctx, db, engine, signer, nil, service, accounts, votestore)
+	txapp, err := txapp.NewTxApp(ctx, db, engine, signer, nil, d.service("TxAPP"), accounts, votestore)
 	if err != nil {
 		failBuild(err, "failed to create txapp")
 	}
@@ -220,8 +231,9 @@ func buildTxApp(ctx context.Context, d *coreDependencies, db *pg.DB, accounts *a
 	return txapp
 }
 
-func buildBlockProcessor(ctx context.Context, d *coreDependencies, db *pg.DB, txapp *txapp.TxApp, accounts *accounts.Accounts, vs *voting.VoteStore, ss *snapshotter.SnapshotStore) *blockprocessor.BlockProcessor {
-	bp, err := blockprocessor.NewBlockProcessor(ctx, db, txapp, accounts, vs, ss, d.genesisCfg, d.logger.New("BP"))
+func buildBlockProcessor(ctx context.Context, d *coreDependencies, db *pg.DB, txapp *txapp.TxApp, accounts *accounts.Accounts, vs *voting.VoteStore, ss *snapshotter.SnapshotStore, es *voting.EventStore) *blockprocessor.BlockProcessor {
+	signer := auth.GetNodeSigner(d.privKey)
+	bp, err := blockprocessor.NewBlockProcessor(ctx, db, txapp, accounts, vs, ss, es, d.genesisCfg, signer, d.logger.New("BP"))
 	if err != nil {
 		failBuild(err, "failed to create block processor")
 	}
@@ -347,6 +359,10 @@ func buildSnapshotStore(d *coreDependencies) *snapshotter.SnapshotStore {
 	}
 
 	return ss
+}
+
+func buildListenerManager(d *coreDependencies, ev *voting.EventStore, txapp *txapp.TxApp, node *node.Node) *listeners.ListenerManager {
+	return listeners.NewListenerManager(d.service("ListenerManager"), ev, txapp, node)
 }
 
 func buildJRPCAdminServer(d *coreDependencies) *rpcserver.Server {

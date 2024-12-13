@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding"
 	"encoding/binary"
 	"errors"
@@ -606,7 +607,31 @@ type ValidatorVoteBodies struct {
 var _ Payload = (*ValidatorVoteBodies)(nil)
 
 func (v *ValidatorVoteBodies) MarshalBinary() ([]byte, error) {
-	return serialize.Encode(v)
+	buf := new(bytes.Buffer)
+	// Length of events (uint32)
+	if err := binary.Write(buf, binary.LittleEndian, uint32(len(v.Events))); err != nil {
+		return nil, err
+	}
+	for _, event := range v.Events {
+		// Length of event type (uint32)
+		if err := binary.Write(buf, binary.LittleEndian, uint32(len(event.Type))); err != nil {
+			return nil, err
+		}
+		// Event type
+		if _, err := buf.WriteString(event.Type); err != nil {
+			return nil, err
+		}
+		// Length of event body (uint32)
+		if err := binary.Write(buf, binary.LittleEndian, uint32(len(event.Body))); err != nil {
+			return nil, err
+		}
+		// Event body
+		if _, err := buf.Write(event.Body); err != nil {
+			return nil, err
+		}
+	}
+
+	return buf.Bytes(), nil
 }
 
 func (v *ValidatorVoteBodies) Type() PayloadType {
@@ -614,7 +639,35 @@ func (v *ValidatorVoteBodies) Type() PayloadType {
 }
 
 func (v *ValidatorVoteBodies) UnmarshalBinary(p0 []byte) error {
-	return serialize.Decode(p0, v)
+	buf := bytes.NewBuffer(p0)
+	var numEvents uint32
+	if err := binary.Read(buf, binary.LittleEndian, &numEvents); err != nil {
+		return err
+	}
+	v.Events = make([]*VotableEvent, numEvents)
+	for i := range v.Events {
+		var eventTypeLen uint32
+		if err := binary.Read(buf, binary.LittleEndian, &eventTypeLen); err != nil {
+			return err
+		}
+		eventType := make([]byte, eventTypeLen)
+		if _, err := buf.Read(eventType); err != nil {
+			return err
+		}
+		var eventBodyLen uint32
+		if err := binary.Read(buf, binary.LittleEndian, &eventBodyLen); err != nil {
+			return err
+		}
+		eventBody := make([]byte, eventBodyLen)
+		if _, err := buf.Read(eventBody); err != nil {
+			return err
+		}
+		v.Events[i] = &VotableEvent{
+			Type: string(eventType),
+			Body: eventBody,
+		}
+	}
+	return nil
 }
 
 // CreateResolution is a payload for creating a new resolution.

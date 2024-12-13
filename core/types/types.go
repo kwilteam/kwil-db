@@ -40,7 +40,6 @@ type JoinRequest struct {
 }
 
 type Validator struct {
-	Role   string   `json:"role"`
 	PubKey HexBytes `json:"pubkey"`
 	Power  int64    `json:"power"`
 }

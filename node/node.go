@@ -359,7 +359,7 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 		defer n.wg.Done()
 		defer cancel()
 		// TODO: umm, should node bringup the consensus engine? or server?
-		nodeErr = n.ce.Start(ctx, n.announceBlkProp, n.announceBlk, n.sendACK, n.getBlkHeight, n.sendReset, n.sendDiscoveryRequest)
+		nodeErr = n.ce.Start(ctx, n.announceBlkProp, n.announceBlk, n.sendACK, n.getBlkHeight, n.sendReset, n.sendDiscoveryRequest, n.BroadcastTx)
 		if err != nil {
 			n.log.Errorf("Consensus engine failed: %v", nodeErr)
 			return // cancel context
@@ -475,10 +475,9 @@ func (n *Node) Status(ctx context.Context) (*adminTypes.Status, error) {
 			BestBlockHash:   blkHash[:],
 			BestBlockHeight: height,
 			// BestBlockTime: ,
-			Syncing: false, // n.ce.Status().Syncing ??? need a node/exec pkg for block_executor stuff?
+			Syncing: n.ce.InCatchup(),
 		},
 		Validator: &adminTypes.ValidatorInfo{
-			Role:   n.ce.Role().String(),
 			PubKey: pkBytes,
 			// Power: 1,
 		},
@@ -728,4 +727,8 @@ func ExpandPath(path string) (string, error) {
 		path = filepath.Join(home, path[2:])
 	}
 	return filepath.Abs(path)
+}
+
+func (n *Node) InCatchup() bool {
+	return n.ce.InCatchup()
 }

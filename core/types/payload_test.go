@@ -59,3 +59,35 @@ func TestMarshalUnmarshalPayload(t *testing.T) {
 
 	assert.Equal(t, tp.val, tp2.val)
 }
+
+func TestValidatorVoteBodyMarshalUnmarshal(t *testing.T) {
+	voteBody := &types.ValidatorVoteBodies{
+		Events: []*types.VotableEvent{
+			{
+				Type: "emptydata",
+				Body: []byte(""),
+			},
+			{
+				Type: "test",
+				Body: []byte("test"),
+			},
+			{
+				Type: "test2",
+				Body: []byte("random large data, random large data,random large data,random large data,random large data,random large data,random large data,random large data,random large data,random large data,random large data,random large data,random large data,"),
+			},
+		},
+	}
+
+	data, err := voteBody.MarshalBinary()
+	require.NoError(t, err)
+
+	voteBody2 := &types.ValidatorVoteBodies{}
+	err = voteBody2.UnmarshalBinary(data)
+	require.NoError(t, err)
+
+	require.NotNil(t, voteBody2)
+	require.NotNil(t, voteBody2.Events)
+	require.Len(t, voteBody2.Events, 3)
+
+	require.Equal(t, voteBody.Events, voteBody2.Events)
+}

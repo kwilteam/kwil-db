@@ -156,6 +156,7 @@ func DefaultConfig() *Config {
 			DiscoveryTimeout: Duration(30 * time.Second),
 			MaxRetries:       3,
 		},
+		Extensions: make(map[string]map[string]string),
 	}
 }
 
@@ -170,13 +171,14 @@ type Config struct {
 	// ProfileMode string `toml:"profile_mode"`
 	// ProfileFile string `toml:"profile_file"`
 
-	P2P       PeerConfig      `toml:"p2p" comment:"P2P related configuration"`
-	Consensus ConsensusConfig `toml:"consensus" comment:"Consensus related configuration"`
-	DB        DBConfig        `toml:"db" comment:"DB (PostgreSQL) related configuration"`
-	RPC       RPCConfig       `toml:"rpc" comment:"User RPC service configuration"`
-	Admin     AdminConfig     `toml:"admin" comment:"Admin RPC service configuration"`
-	Snapshots SnapshotConfig  `toml:"snapshots" comment:"Snapshot creation and provider configuration"`
-	StateSync StateSyncConfig `toml:"state_sync" comment:"Statesync configuration (vs block sync)"`
+	P2P        PeerConfig                   `toml:"p2p" comment:"P2P related configuration"`
+	Consensus  ConsensusConfig              `toml:"consensus" comment:"Consensus related configuration"`
+	DB         DBConfig                     `toml:"db" comment:"DB (PostgreSQL) related configuration"`
+	RPC        RPCConfig                    `toml:"rpc" comment:"User RPC service configuration"`
+	Admin      AdminConfig                  `toml:"admin" comment:"Admin RPC service configuration"`
+	Snapshots  SnapshotConfig               `toml:"snapshots" comment:"Snapshot creation and provider configuration"`
+	StateSync  StateSyncConfig              `toml:"state_sync" comment:"Statesync configuration (vs block sync)"`
+	Extensions map[string]map[string]string `toml:"extensions" comment:"extension configuration"`
 }
 
 // PeerConfig corresponds to the [peer] section of the config.

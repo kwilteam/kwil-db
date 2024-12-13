@@ -15,6 +15,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
+	blockprocessor "github.com/kwilteam/kwil-db/node/block_processor"
 	"github.com/kwilteam/kwil-db/node/meta"
 	"github.com/kwilteam/kwil-db/node/pg"
 	"github.com/kwilteam/kwil-db/node/types"
@@ -259,13 +260,15 @@ func New(cfg *Config) *ConsensusEngine {
 
 func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster ProposalBroadcaster,
 	blkAnnouncer BlkAnnouncer, ackBroadcaster AckBroadcaster, blkRequester BlkRequester, stateResetter ResetStateBroadcaster,
-	discoveryReqBroadcaster DiscoveryReqBroadcaster) error {
+	discoveryReqBroadcaster DiscoveryReqBroadcaster, txBroadcaster blockprocessor.BroadcastTxFn) error {
 	ce.proposalBroadcaster = proposerBroadcaster
 	ce.blkAnnouncer = blkAnnouncer
 	ce.ackBroadcaster = ackBroadcaster
 	ce.blkRequester = blkRequester
 	ce.rstStateBroadcaster = stateResetter
 	ce.discoveryReqBroadcaster = discoveryReqBroadcaster
+
+	ce.blockProcessor.SetBroadcastTxFn(txBroadcaster)
 
 	ce.log.Info("Starting the consensus engine")
 	ctx, cancel := context.WithCancel(ctx)
@@ -715,4 +718,8 @@ func (ce *ConsensusEngine) hasMajorityCeil(cnt int) bool {
 func (ce *ConsensusEngine) hasMajorityFloor(cnt int) bool {
 	threshold := len(ce.validatorSet) / 2
 	return cnt >= threshold
+}
+
+func (ce *ConsensusEngine) InCatchup() bool {
+	return ce.inSync.Load()
 }

@@ -45,7 +45,6 @@ type SyncInfo struct {
 type HealthResponse struct {
 	Version       string         `json:"version"`
 	Healthy       bool           `json:"healthy"`
-	Role          string         `json:"role"`
 	PubKey        types.HexBytes `json:"pubkey"`
 	NumValidators int            `json:"num_validators"`
 }

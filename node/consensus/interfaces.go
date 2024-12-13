@@ -3,6 +3,7 @@ package consensus
 import (
 	"context"
 
+	blockprocessor "github.com/kwilteam/kwil-db/node/block_processor"
 	"github.com/kwilteam/kwil-db/node/mempool"
 
 	ktypes "github.com/kwilteam/kwil-db/core/types"
@@ -40,6 +41,9 @@ type BlockStore interface {
 
 type BlockProcessor interface {
 	InitChain(ctx context.Context) (int64, []byte, error)
+	SetBroadcastTxFn(fn blockprocessor.BroadcastTxFn)
+
+	PrepareProposal(ctx context.Context, txs [][]byte) (finalTxs [][]byte, invalidTxs [][]byte, err error)
 	ExecuteBlock(ctx context.Context, req *ktypes.BlockExecRequest) (*ktypes.BlockExecResult, error)
 	Commit(ctx context.Context, req *ktypes.CommitRequest) error
 	Rollback(ctx context.Context, height int64, appHash ktypes.Hash) error

@@ -8,11 +8,9 @@ import (
 	"time"
 
 	common "github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/listeners"
-	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
-	"github.com/kwilteam/kwil-db/internal/voting"
+	"github.com/kwilteam/kwil-db/node/voting"
 )
 
 // ListenerManager listens for any Validator state changes and node catch up status
@@ -22,23 +20,26 @@ import (
 type ListenerManager struct {
 	eventStore *voting.EventStore
 	vstore     ValidatorGetter
-	cometNode  *cometbft.CometBftNode
+	node       Node
 	service    *common.Service
 	cancel     context.CancelFunc // cancels the context for the listener manager
 }
 
 // ValidatorGetter is able to read the current validator set.
 type ValidatorGetter interface {
-	GetValidators(ctx context.Context) ([]*types.Validator, error)
+	GetValidators() []*types.Validator
 	SubscribeValidators() <-chan []*types.Validator
 }
 
-func NewListenerManager(svc *common.Service, eventStore *voting.EventStore,
-	node *cometbft.CometBftNode, vstore ValidatorGetter) *ListenerManager {
+type Node interface {
+	InCatchup() bool
+}
+
+func NewListenerManager(svc *common.Service, eventStore *voting.EventStore, vstore ValidatorGetter, node Node) *ListenerManager {
 	return &ListenerManager{
 		eventStore: eventStore,
 		vstore:     vstore,
-		cometNode:  node,
+		node:       node,
 		service:    svc,
 	}
 }
@@ -77,14 +78,14 @@ func (omgr *ListenerManager) Start() (err error) {
 					})
 					if err != nil {
 						omgr.service.Logger.Error("==========================  Event listener stopped  ==========================",
-							log.String("listener", name), log.Error(err))
+							"listener", name, "error", err)
 						if !errors.Is(err, context.Canceled) {
 							errChan <- err
 						}
 						cancel2() // Stop other listeners
 					} else {
 						// Listener exited with nil, no need to stop other listeners in this case
-						omgr.service.Logger.Debug("Event listener stopped (cleanly)", log.String("listener", name))
+						omgr.service.Logger.Debug("Event listener stopped (cleanly)", "listener", name)
 					}
 				}(start, name)
 
@@ -98,7 +99,7 @@ func (omgr *ListenerManager) Start() (err error) {
 	}
 
 	defer func() {
-		omgr.service.Logger.Info("ListenerManager stopped.", log.Error(err))
+		omgr.service.Logger.Info("ListenerManager stopped.", "error", err)
 	}()
 
 	containsMe := func(validators []*types.Validator) bool {
@@ -127,7 +128,7 @@ func (omgr *ListenerManager) Start() (err error) {
 
 		case <-syncCheck.C:
 			// still in catch up mode, keep polling
-			if omgr.cometNode.IsCatchup() {
+			if omgr.node.InCatchup() {
 				continue
 			}
 
@@ -135,10 +136,7 @@ func (omgr *ListenerManager) Start() (err error) {
 			syncCheck.Stop()
 			valChan = omgr.vstore.SubscribeValidators() // creates a new channel in txApp
 
-			validators, err := omgr.vstore.GetValidators(ctx)
-			if err != nil {
-				return err
-			}
+			validators := omgr.vstore.GetValidators()
 			startStop(containsMe(validators))
 		}
 	}
