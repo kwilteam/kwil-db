@@ -62,6 +62,8 @@ type coreDependencies struct {
 	genesisCfg *config.GenesisConfig
 	privKey    crypto.PrivateKey
 
+	closers *closeFuncs // for clean close on failBuild
+
 	adminKey *tls.Certificate
 	// autogen  bool
 
