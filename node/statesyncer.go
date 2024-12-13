@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/klauspost/compress/gzip"
+	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/node/meta"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -328,17 +329,22 @@ func (s *StateSyncService) restoreDB(ctx context.Context, snapshot *snapshotMeta
 		return err
 	}
 
+	return RestoreDB(ctx, reader, s.dbConfig, snapshot.Hash, s.log)
+}
+
+func RestoreDB(ctx context.Context, reader io.Reader, db *config.DBConfig, snapshotHash []byte, logger log.Logger) error {
+
 	// unzip and stream the sql dump to psql
 	cmd := exec.CommandContext(ctx,
 		"psql",
-		"--username", s.dbConfig.User,
-		"--host", s.dbConfig.Host,
-		"--port", s.dbConfig.Port,
-		"--dbname", s.dbConfig.DBName,
+		"--username", db.User,
+		"--host", db.Host,
+		"--port", db.Port,
+		"--dbname", db.DBName,
 		"--no-password",
 	)
-	if s.dbConfig.Pass != "" {
-		cmd.Env = append(os.Environ(), "PGPASSWORD="+s.dbConfig.Pass)
+	if db.Pass != "" {
+		cmd.Env = append(os.Environ(), "PGPASSWORD="+db.Pass)
 	}
 
 	// cmd.Stdout = &stderr
@@ -348,23 +354,21 @@ func (s *StateSyncService) restoreDB(ctx context.Context, snapshot *snapshotMeta
 	}
 	defer stdinPipe.Close()
 
-	s.log.Info("Restore DB: ", "command", cmd.String())
+	logger.Info("Restore DB: ", "command", cmd.String())
 
 	if err := cmd.Start(); err != nil {
 		return err
 	}
 
 	// decompress the chunk streams and stream the sql dump to psql stdinPipe
-	if err := decompressAndValidateSnapshotHash(stdinPipe, reader, snapshot.Hash); err != nil {
+	if err := decompressAndValidateSnapshotHash(stdinPipe, reader, snapshotHash); err != nil {
 		return err
 	}
-
 	stdinPipe.Close() // signifies the end of the input stream to the psql command
 
 	if err := cmd.Wait(); err != nil {
 		return err
 	}
-
 	return nil
 }
 
