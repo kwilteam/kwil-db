@@ -12,4 +12,5 @@ var (
 	ErrActionOwnerOnly       = errors.New("action is owner-only")
 	ErrDoesNotHavePriv       = errors.New("does not have privilege")
 	ErrNamespaceNotFound     = errors.New("namespace not found")
+	ErrArithmetic            = errors.New("arithmetic error")
 )

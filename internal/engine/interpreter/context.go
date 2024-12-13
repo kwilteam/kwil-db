@@ -258,23 +258,23 @@ func (e *executionContext) getVariable(name string) (Value, bool) {
 	case '@':
 		switch name[1:] {
 		case "caller":
-			return &TextValue{Val: e.txCtx.Caller}, true
+			return newText(e.txCtx.Caller), true
 		case "txid":
-			return &TextValue{Val: e.txCtx.TxID}, true
+			return newText(e.txCtx.TxID), true
 		case "signer":
-			return &BlobValue{Val: e.txCtx.Signer}, true
+			return newBlob(e.txCtx.Signer), true
 		case "height":
-			return &IntValue{Val: e.txCtx.BlockContext.Height}, true
+			return newInt(e.txCtx.BlockContext.Height), true
 		case "foreign_caller":
 			if e.scope.parent != nil {
-				return &TextValue{Val: e.scope.parent.namespace}, true
+				return newText(e.scope.parent.namespace), true
 			} else {
-				return &TextValue{Val: ""}, true
+				return newText(""), true
 			}
 		case "block_timestamp":
-			return &IntValue{Val: e.txCtx.BlockContext.Timestamp}, true
+			return newInt(e.txCtx.BlockContext.Timestamp), true
 		case "authenticator":
-			return &TextValue{Val: e.txCtx.Authenticator}, true
+			return newText(e.txCtx.Authenticator), true
 		}
 	}
 

@@ -66,6 +66,15 @@ func NewFromString(s string) (*Decimal, error) {
 	return NewExplicit(s, inferredPrecision, inferredScale)
 }
 
+// NewNaN creates a new NaN Decimal.
+func NewNaN() *Decimal {
+	return &Decimal{
+		dec: apd.Decimal{
+			Form: apd.NaN,
+		},
+	}
+}
+
 // NewFromBigInt creates a new Decimal from a big.Int and an exponent.
 // The negative of the exponent is the scale of the decimal.
 func NewFromBigInt(i *big.Int, exp int32) (*Decimal, error) {

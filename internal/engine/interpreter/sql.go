@@ -409,18 +409,12 @@ func query(ctx context.Context, db sql.DB, query string, scanVals []Value, fn fu
 	argVals := make([]any, len(args))
 	var err error
 	for i, v := range args {
-		argVals[i], err = v.DBValue()
-		if err != nil {
-			return err
-		}
+		argVals[i] = v
 	}
 
 	recVals := make([]any, len(scanVals))
 	for i := range scanVals {
-		recVals[i], err = scanVals[i].DBValue()
-		if err != nil {
-			return err
-		}
+		recVals[i] = scanVals[i]
 	}
 
 	err = pg.QueryRowFunc(ctx, db, query, recVals, fn, argVals...)

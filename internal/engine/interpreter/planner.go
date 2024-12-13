@@ -274,7 +274,7 @@ type stmtFunc func(exec *executionContext, fn func([]Value) error) error
 
 func (i *interpreterPlanner) VisitActionStmtDeclaration(p0 *parse.ActionStmtDeclaration) any {
 	return stmtFunc(func(exec *executionContext, fn func([]Value) error) error {
-		return exec.allocateVariable(p0.Variable.Name, NewNullValue(p0.Type))
+		return exec.allocateVariable(p0.Variable.Name, newNull(p0.Type))
 	})
 }
 
@@ -536,9 +536,7 @@ func (i *interpreterPlanner) VisitLoopTermRange(p0 *parse.LoopTermRange) any {
 		}
 
 		for i := start.RawValue().(int64); i <= end.RawValue().(int64); i++ {
-			err = fn(&IntValue{
-				Val: i,
-			})
+			err = fn(newInt(i))
 			if err != nil {
 				return err
 			}
@@ -631,15 +629,15 @@ func (i *interpreterPlanner) VisitActionStmtIf(p0 *parse.ActionStmtIf) any {
 				return err
 			}
 
-			switch c := cond.(type) {
-			case *BoolValue:
-				if !c.Val {
+			if boolVal, ok := cond.(*BoolValue); ok {
+				if boolVal.Null() {
 					continue
 				}
-			case *NullValue:
-				continue
-			default:
-				return fmt.Errorf("expected bool, got %s", c.Type())
+				if !boolVal.Bool.Bool {
+					continue
+				}
+			} else {
+				return fmt.Errorf("expected bool, got %s", cond.Type())
 			}
 
 			branchRun = true
@@ -995,23 +993,19 @@ func makeLogicalFunc(left, right exprFunc, and bool) exprFunc {
 			return nil, fmt.Errorf("expected bools, got %s and %s", leftVal.Type(), rightVal.Type())
 		}
 
-		if _, ok := leftVal.(*NullValue); ok {
+		if leftVal.Null() {
 			return leftVal, nil
 		}
 
-		if _, ok := rightVal.(*NullValue); ok {
+		if rightVal.Null() {
 			return rightVal, nil
 		}
 
 		if and {
-			return &BoolValue{
-				Val: leftVal.RawValue().(bool) && rightVal.RawValue().(bool),
-			}, nil
+			return newBool(leftVal.RawValue().(bool) && rightVal.RawValue().(bool)), nil
 		}
 
-		return &BoolValue{
-			Val: leftVal.RawValue().(bool) || rightVal.RawValue().(bool),
-		}, nil
+		return newBool(leftVal.RawValue().(bool) || rightVal.RawValue().(bool)), nil
 	}
 }
 
