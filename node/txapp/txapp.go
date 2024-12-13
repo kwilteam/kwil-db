@@ -15,6 +15,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/utils/order"
+	"github.com/kwilteam/kwil-db/extensions/hooks"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/node/accounts"
 	"github.com/kwilteam/kwil-db/node/types/sql"
@@ -83,7 +84,7 @@ func NewTxApp(ctx context.Context, db sql.Executor, engine common.Engine, signer
 // It can assign the initial validator set and initial account balances.
 // It is only called once for a new chain.
 func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.Validator, genesisAccounts []*types.Account,
-	initialHeight int64, chain *common.ChainContext) error {
+	initialHeight int64, chainCtx *common.ChainContext) error {
 
 	// Add Genesis Validators
 	for _, validator := range validators {
@@ -102,16 +103,16 @@ func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.
 	}
 
 	// genesis hooks
-	// for _, hook := range hooks.ListGenesisHooks() {
-	// 	err := hook.Hook(ctx, &types.App{
-	// 		Service: r.service.NamedLogger(hook.Name),
-	// 		DB:      db,
-	// 		Engine:  r.Engine,
-	// 	}, chain)
-	// 	if err != nil {
-	// 		return fmt.Errorf("error running genesis hook: %w", err)
-	// 	}
-	// }
+	for _, hook := range hooks.ListGenesisHooks() {
+		err := hook.Hook(ctx, &common.App{
+			Service: r.service.NamedLogger(hook.Name),
+			DB:      db,
+			Engine:  r.Engine,
+		}, chainCtx)
+		if err != nil {
+			return fmt.Errorf("error running genesis hook %s: %w", hook.Name, err)
+		}
+	}
 
 	return nil
 }
