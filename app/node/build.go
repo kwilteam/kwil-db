@@ -48,6 +48,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 		closers: []func() error{}, // logger.Close is not in here; do it in a defer in Start
 		logger:  d.logger,
 	}
+	d.closers = closers
 
 	valSet := make(map[string]ktypes.Validator)
 	for _, v := range d.genesisCfg.Validators {

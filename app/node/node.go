@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -41,7 +42,7 @@ type server struct {
 	jsonRPCAdminServer *rpcserver.Server
 }
 
-func runNode(ctx context.Context, rootDir string, cfg *config.Config) error {
+func runNode(ctx context.Context, rootDir string, cfg *config.Config) (err error) {
 	// Writing to stdout and a log file.  TODO: config outputs
 	rot, err := log.NewRotatorWriter(filepath.Join(rootDir, "kwild.log"), 10_000, 0)
 	if err != nil {
@@ -105,10 +106,30 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config) error {
 		poolOpener: newPoolBOpener(host, port, user, pass),
 	}
 
+	// Catch any panic from buildServer. We use a panic based build failure
+	// system, which is detectable with panicErr. Spewing out a stack is sloppy
+	// and a bad look; just return a meaningful error message. If the message is
+	// ambiguous regarding its source, the errors needs more context.
+	defer func() {
+		if r := recover(); r != nil {
+			if pe, ok := r.(panicErr); ok { // error on bringup, not a bug
+				if errors.Is(pe.err, context.Canceled) {
+					logger.Warnf("Shutdown signaled: %v", pe.msg)
+					err = context.Canceled
+				} else {
+					err = pe
+				}
+			} else { // actual panic (bug)
+				stack := make([]byte, 8192)
+				length := runtime.Stack(stack, false)
+				err = fmt.Errorf("panic while building kwild: %v\n\nstack:\n\n%v", r, string(stack[:length]))
+			}
+			d.closers.closeAll()
+		}
+	}()
+
 	server := buildServer(ctx, d)
 
-	// start the server
-	// Start is blocking, for now.
 	return server.Start(ctx)
 }
 
