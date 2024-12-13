@@ -213,6 +213,21 @@ CREATE TABLE posts (
 				{"Alice", int64(30)},
 			},
 		},
+		{
+			name:        "drop default namespace",
+			execSQL:     "DROP NAMESPACE main;",
+			errContains: "cannot drop built-in namespace",
+		},
+		{
+			name:        "drop info namespace",
+			execSQL:     "DROP NAMESPACE info;",
+			errContains: "cannot drop built-in namespace",
+		},
+		{
+			name:    "drop non-existent namespace",
+			execSQL: "DROP NAMESPACE some_ns;",
+			err:     interpreter.ErrNamespaceNotFound,
+		},
 	}
 
 	// we can set up the interpreter and db here and just create and rollback a tx for each test case.
@@ -238,7 +253,6 @@ CREATE TABLE posts (
 			defer tx.Rollback(ctx)
 			var values [][]any
 
-			// I wrap this in a function so that I can
 			for _, sql := range test.sql {
 				err = interp.Execute(newTxCtx(), tx, sql, func(v []interpreter.Value) error {
 					row := make([]any, len(v))

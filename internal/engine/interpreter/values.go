@@ -114,7 +114,7 @@ func init() {
 			KwilType: types.BlobArrayType,
 			ZeroValue: func() (Value, error) {
 				return &BlobArrayValue{
-					Array: pgtype.Array[pgtype.PreallocBytes]{},
+					Array: pgtype.Array[*BlobValue]{},
 				}, nil
 			},
 		},
@@ -158,6 +158,7 @@ type Value interface {
 	// []*int64, []*string, []*bool, [][]byte, []*decimal.Decimal, []*types.UUID
 	RawValue() any
 	// Cast casts the variable to the given type.
+	// It is meant to mirror Postgres's type casting behavior.
 	Cast(t *types.DataType) (Value, error)
 	// Null returns true if the variable is null.
 	Null() bool
@@ -178,27 +179,16 @@ type ScalarValue interface {
 type ArrayValue interface {
 	Value
 	// Len returns the length of the array.
-	Len() int
+	Len() int32
 	// Index returns the value at the given index.
 	// If the index is out of bounds, an error is returned.
 	// All indexing is 1-based.
-	Index(i int64) (ScalarValue, error)
+	Index(i int32) (ScalarValue, error)
 	// Set sets the value at the given index.
 	// If the index is out of bounds, enough space is allocated to set the value.
 	// This matches the behavior of Postgres.
 	// All indexing is 1-based.
-	Set(i int64, v ScalarValue) error
-}
-
-// safePtrArr makes a pointer array avoiding closure issues.
-func safePtrArr[T any](a []T) []*T {
-	res := make([]*T, len(a))
-	for i, val := range a {
-		val2 := val // create a new variable to avoid closure issues
-		res[i] = &val2
-	}
-
-	return res
+	Set(i int32, v ScalarValue) error
 }
 
 func newValidArr[T any](a []T) pgtype.Array[T] {
@@ -302,21 +292,21 @@ func NewValue(v any) (Value, error) {
 			Array: newValidArr(pgBools),
 		}, nil
 	case [][]byte:
-		pgBlobs := make([]pgtype.PreallocBytes, len(v))
+		pgBlobs := make([]*BlobValue, len(v))
 		for i, val := range v {
-			pgBlobs[i] = val
+			pgBlobs[i] = newBlob(val)
 		}
 
 		return &BlobArrayValue{
 			Array: newValidArr(pgBlobs),
 		}, nil
 	case []*[]byte:
-		pgBlobs := make([]pgtype.PreallocBytes, len(v))
+		pgBlobs := make([]*BlobValue, len(v))
 		for i, val := range v {
 			if val == nil {
-				pgBlobs[i] = nil
+				pgBlobs[i] = &BlobValue{}
 			} else {
-				pgBlobs[i] = *val
+				pgBlobs[i] = newBlob(*val)
 			}
 		}
 
@@ -346,6 +336,12 @@ func NewValue(v any) (Value, error) {
 		return &UuidArrayValue{
 			Array: newValidArr(pgUUIDs),
 		}, nil
+	case nil:
+		return &TextValue{
+			Text: pgtype.Text{
+				Valid: false,
+			},
+		}, nil
 	default:
 		return nil, fmt.Errorf("unexpected type %T", v)
 	}
@@ -353,6 +349,11 @@ func NewValue(v any) (Value, error) {
 
 func makeTypeErr(left, right Value) error {
 	return fmt.Errorf("%w: left: %s right: %s", ErrTypeMismatch, left.Type(), right.Type())
+}
+
+// makeArrTypeErr returns an error for when an array operation is performed on a non-array type.
+func makeArrTypeErr(arrVal Value, newVal Value) error {
+	return fmt.Errorf("%w: cannot create an array of different types %s and %s", ErrArrayMixedTypes, arrVal.Type(), newVal.Type())
 }
 
 func newInt(i int64) *IntValue {
@@ -393,7 +394,7 @@ func (v *IntValue) Compare(v2 Value, op ComparisonOp) (*BoolValue, error) {
 	case isDistinctFrom:
 		b = v.Int64 != val2.Int64
 	default:
-		return nil, fmt.Errorf("cannot compare int with operator id %d", op)
+		return nil, fmt.Errorf("%w: cannot compare int with operator %s", ErrComparison, op)
 	}
 
 	return newBool(b), nil
@@ -469,16 +470,16 @@ func (i *IntValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, erro
 		r = i.Int64 * val2.Int64
 	case div:
 		if val2.Int64 == 0 {
-			return nil, fmt.Errorf("cannot divide by zero")
+			return nil, fmt.Errorf("%w: cannot divide by zero", ErrArithmetic)
 		}
 		r = i.Int64 / val2.Int64
 	case mod:
 		if val2.Int64 == 0 {
-			return nil, fmt.Errorf("cannot modulo by zero")
+			return nil, fmt.Errorf("%w: cannot modulo by zero", ErrArithmetic)
 		}
 		r = i.Int64 % val2.Int64
 	default:
-		return nil, fmt.Errorf("cannot perform arithmetic operation id %d on type int", op)
+		return nil, fmt.Errorf("%w: cannot perform arithmetic operation %s on type int", ErrArithmetic, op)
 	}
 
 	return &IntValue{
@@ -498,11 +499,11 @@ func (i *IntValue) Unary(op UnaryOp) (ScalarValue, error) {
 	case neg:
 		return &IntValue{Int8: pgtype.Int8{Int64: -i.Int64, Valid: true}}, nil
 	case not:
-		return nil, fmt.Errorf("cannot apply logical NOT to an integer")
+		return nil, fmt.Errorf("%w: cannot apply logical NOT to an integer", ErrUnary)
 	case pos:
 		return i, nil
 	default:
-		return nil, fmt.Errorf("unknown unary operator: %d", op)
+		return nil, fmt.Errorf("%w: unknown unary operator: %s", ErrUnary, op)
 	}
 }
 
@@ -523,7 +524,7 @@ func (i *IntValue) Array(v ...ScalarValue) (ArrayValue, error) {
 	pgtArr[0] = i.Int8
 	for j, val := range v {
 		if intVal, ok := val.(*IntValue); !ok {
-			return nil, makeTypeErr(i, val)
+			return nil, makeArrTypeErr(i, val)
 		} else {
 			pgtArr[j+1] = intVal.Int8
 		}
@@ -544,9 +545,13 @@ func (i *IntValue) Cast(t *types.DataType) (Value, error) {
 	// we check for decimal first since type switching on it
 	// doesn't work, since it has precision and scale
 	if t.Name == types.DecimalStr {
+		if t.IsArray {
+			return nil, fmt.Errorf("%w: cannot cast int to decimal array", ErrCast)
+		}
+
 		dec, err := decimal.NewFromString(fmt.Sprint(i.Int64))
 		if err != nil {
-			return nil, err
+			return nil, castErr(err)
 		}
 
 		return newDec(dec), nil
@@ -560,12 +565,20 @@ func (i *IntValue) Cast(t *types.DataType) (Value, error) {
 	case types.BoolType:
 		return newBool(i.Int64 != 0), nil
 	default:
-		return nil, fmt.Errorf("cannot cast int to %s", t)
+		return nil, fmt.Errorf("%w: cannot cast int to %s", ErrCast, t)
 	}
 }
 
 // newNull creates a new null value of the given type.
 func newNull(t *types.DataType) Value {
+	if t.Name == types.DecimalStr {
+		if t.IsArray {
+			return newNullDecArr()
+		}
+
+		return newDec(nil)
+	}
+
 	switch t {
 	case types.IntType:
 		return &IntValue{
@@ -586,9 +599,7 @@ func newNull(t *types.DataType) Value {
 			},
 		}
 	case types.BlobType:
-		return &BlobValue{
-			PreallocBytes: nil,
-		}
+		return &BlobValue{}
 	case types.UUIDType:
 		return &UUIDValue{
 			UUID: pgtype.UUID{
@@ -611,7 +622,7 @@ func newNull(t *types.DataType) Value {
 		}
 	case types.BlobArrayType:
 		return &BlobArrayValue{
-			Array: pgtype.Array[pgtype.PreallocBytes]{Valid: false},
+			Array: pgtype.Array[*BlobValue]{Valid: false},
 		}
 	case types.DecimalArrayType:
 		return &DecimalArrayValue{
@@ -622,7 +633,7 @@ func newNull(t *types.DataType) Value {
 			Array: pgtype.Array[pgtype.UUID]{Valid: false},
 		}
 	default:
-		panic("unknown type")
+		panic(fmt.Sprintf("tried to create null with unexpected type %s", t.Name))
 	}
 }
 
@@ -664,7 +675,7 @@ func (s *TextValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	case isDistinctFrom:
 		b = s.String != val2.String
 	default:
-		return nil, fmt.Errorf("unknown comparison operator: %d", op)
+		return nil, fmt.Errorf("%w: cannot use comparison operator %s with type %s", ErrComparison, s.Type(), op)
 	}
 
 	return newBool(b), nil
@@ -684,11 +695,11 @@ func (s *TextValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, err
 		return newText(s.String + val2.String), nil
 	}
 
-	return nil, fmt.Errorf("cannot perform arithmetic operation id %d on type string", op)
+	return nil, fmt.Errorf("%w: cannot perform arithmetic operation %s on type string", ErrArithmetic, op)
 }
 
 func (s *TextValue) Unary(op UnaryOp) (ScalarValue, error) {
-	return nil, fmt.Errorf("cannot perform unary operation on string")
+	return nil, fmt.Errorf("%w: cannot perform unary operation on string", ErrUnary)
 }
 
 func (s *TextValue) Type() *types.DataType {
@@ -708,7 +719,7 @@ func (s *TextValue) Array(v ...ScalarValue) (ArrayValue, error) {
 	pgtArr[0] = s.Text
 	for j, val := range v {
 		if textVal, ok := val.(*TextValue); !ok {
-			return nil, makeTypeErr(s, val)
+			return nil, makeArrTypeErr(s, val)
 		} else {
 			pgtArr[j+1] = textVal.Text
 		}
@@ -727,9 +738,13 @@ func (s *TextValue) Cast(t *types.DataType) (Value, error) {
 	}
 
 	if t.Name == types.DecimalStr {
+		if t.IsArray {
+			return nil, fmt.Errorf("%w: cannot cast string to decimal array", ErrCast)
+		}
+
 		dec, err := decimal.NewFromString(s.String)
 		if err != nil {
-			return nil, err
+			return nil, castErr(err)
 		}
 
 		return newDec(dec), nil
@@ -739,7 +754,7 @@ func (s *TextValue) Cast(t *types.DataType) (Value, error) {
 	case types.IntType:
 		i, err := strconv.ParseInt(s.String, 10, 64)
 		if err != nil {
-			return nil, err
+			return nil, castErr(err)
 		}
 
 		return newInt(int64(i)), nil
@@ -748,19 +763,21 @@ func (s *TextValue) Cast(t *types.DataType) (Value, error) {
 	case types.BoolType:
 		b, err := strconv.ParseBool(s.String)
 		if err != nil {
-			return nil, err
+			return nil, castErr(err)
 		}
 
 		return newBool(b), nil
 	case types.UUIDType:
 		u, err := types.ParseUUID(s.String)
 		if err != nil {
-			return nil, err
+			return nil, castErr(err)
 		}
 
 		return newUUID(u), nil
+	case types.BlobType:
+		return newBlob([]byte(s.String)), nil
 	default:
-		return nil, fmt.Errorf("cannot cast string to %s", t)
+		return nil, fmt.Errorf("%w: cannot cast string to %s", ErrCast, t)
 	}
 }
 
@@ -797,8 +814,14 @@ func (b *BoolValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 		b2 = b.Bool.Bool == val2.Bool.Bool
 	case isDistinctFrom:
 		b2 = b.Bool.Bool != val2.Bool.Bool
+	case lessThan:
+		b2 = !b.Bool.Bool && val2.Bool.Bool
+	case greaterThan:
+		b2 = b.Bool.Bool && !val2.Bool.Bool
+	case is:
+		b2 = b.Bool.Bool == val2.Bool.Bool
 	default:
-		return nil, fmt.Errorf("unknown comparison operator: %d", op)
+		return nil, fmt.Errorf("%w: cannot use comparison operator %s with type %s", ErrComparison, b.Type(), op)
 	}
 
 	return newBool(b2), nil
@@ -816,8 +839,10 @@ func (b *BoolValue) Unary(op UnaryOp) (ScalarValue, error) {
 	switch op {
 	case not:
 		return newBool(!b.Bool.Bool), nil
+	case neg, pos:
+		return nil, fmt.Errorf("%w: cannot perform unary operation %s on bool", ErrUnary, op)
 	default:
-		return nil, fmt.Errorf("unexpected operator id %d for bool", op)
+		return nil, fmt.Errorf("%w: unexpected operator id %s for bool", ErrUnary, op)
 	}
 }
 
@@ -826,6 +851,10 @@ func (b *BoolValue) Type() *types.DataType {
 }
 
 func (b *BoolValue) RawValue() any {
+	if !b.Valid {
+		return nil
+	}
+
 	return b.Bool.Bool
 }
 
@@ -834,7 +863,7 @@ func (b *BoolValue) Array(v ...ScalarValue) (ArrayValue, error) {
 	pgtArr[0] = b.Bool
 	for j, val := range v {
 		if boolVal, ok := val.(*BoolValue); !ok {
-			return nil, makeTypeErr(b, val)
+			return nil, makeArrTypeErr(b, val)
 		} else {
 			pgtArr[j+1] = boolVal.Bool
 		}
@@ -864,22 +893,22 @@ func (b *BoolValue) Cast(t *types.DataType) (Value, error) {
 	case types.BoolType:
 		return b, nil
 	default:
-		return nil, fmt.Errorf("cannot cast bool to %s", t)
+		return nil, fmt.Errorf("%w: cannot cast bool to %s", ErrCast, t)
 	}
 }
 
 func newBlob(b []byte) *BlobValue {
 	return &BlobValue{
-		PreallocBytes: b,
+		bts: b,
 	}
 }
 
 type BlobValue struct {
-	pgtype.PreallocBytes
+	bts []byte
 }
 
 func (b *BlobValue) Null() bool {
-	return b.PreallocBytes == nil
+	return b.bts == nil
 }
 
 func (b *BlobValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
@@ -895,22 +924,35 @@ func (b *BlobValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	var b2 bool
 	switch op {
 	case equal:
-		b2 = string(b.PreallocBytes) == string(val2.PreallocBytes)
+		b2 = string(b.bts) == string(val2.bts)
 	case isDistinctFrom:
-		b2 = string(b.PreallocBytes) != string(val2.PreallocBytes)
+		b2 = string(b.bts) != string(val2.bts)
 	default:
-		return nil, fmt.Errorf("unknown comparison operator: %d", op)
+		return nil, fmt.Errorf("%w: cannot use comparison operator %s with type %s", ErrComparison, b.Type(), op)
 	}
 
 	return newBool(b2), nil
 }
 
 func (b *BlobValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error) {
-	return nil, fmt.Errorf("%w: cannot perform arithmetic operation on blob", ErrArithmetic)
+	if res, early := checkScalarNulls(b, v); early {
+		return res, nil
+	}
+
+	val2, ok := v.(*BlobValue)
+	if !ok {
+		return nil, makeTypeErr(b, v)
+	}
+
+	if op == concat {
+		return newBlob(append(b.bts, val2.bts...)), nil
+	}
+
+	return nil, fmt.Errorf("%w: cannot perform arithmetic operation %s on blob", ErrArithmetic, op)
 }
 
 func (b *BlobValue) Unary(op UnaryOp) (ScalarValue, error) {
-	return nil, fmt.Errorf("cannot perform unary operation on blob")
+	return nil, fmt.Errorf("%w: cannot perform unary operation on blob", ErrUnary)
 }
 
 func (b *BlobValue) Type() *types.DataType {
@@ -918,17 +960,17 @@ func (b *BlobValue) Type() *types.DataType {
 }
 
 func (b *BlobValue) RawValue() any {
-	return b.PreallocBytes
+	return b.bts
 }
 
 func (b *BlobValue) Array(v ...ScalarValue) (ArrayValue, error) {
-	pgtArr := make([]pgtype.PreallocBytes, len(v)+1)
-	pgtArr[0] = b.PreallocBytes
+	pgtArr := make([]*BlobValue, len(v)+1)
+	pgtArr[0] = b
 	for j, val := range v {
 		if blobVal, ok := val.(*BlobValue); !ok {
-			return nil, makeTypeErr(b, val)
+			return nil, makeArrTypeErr(b, val)
 		} else {
-			pgtArr[j+1] = blobVal.PreallocBytes
+			pgtArr[j+1] = blobVal
 		}
 	}
 
@@ -942,17 +984,44 @@ func (b *BlobValue) Array(v ...ScalarValue) (ArrayValue, error) {
 func (b *BlobValue) Cast(t *types.DataType) (Value, error) {
 	switch t {
 	case types.IntType:
-		i, err := strconv.ParseInt(string(b.PreallocBytes), 10, 64)
+		i, err := strconv.ParseInt(string(b.bts), 10, 64)
 		if err != nil {
-			return nil, err
+			return nil, castErr(err)
 		}
 
 		return newInt(i), nil
 	case types.TextType:
-		return newText(string(b.PreallocBytes)), nil
+		return newText(string(b.bts)), nil
+	case types.BlobType:
+		return b, nil
 	default:
-		return nil, fmt.Errorf("cannot cast blob to %s", t)
+		return nil, fmt.Errorf("%w: cannot cast blob to %s", ErrCast, t)
 	}
+}
+
+var _ pgtype.BytesScanner = (*BlobValue)(nil)
+var _ pgtype.BytesValuer = (*BlobValue)(nil)
+
+// ScanBytes implements the pgtype.BytesScanner interface.
+func (b *BlobValue) ScanBytes(src []byte) error {
+	if src == nil {
+		b.bts = nil
+		return nil
+	}
+
+	// copy the src bytes into the prealloc bytes
+	b.bts = make([]byte, len(src))
+	copy(b.bts, src)
+	return nil
+}
+
+// BytesValue implements the pgtype.BytesValuer interface.
+func (b *BlobValue) BytesValue() ([]byte, error) {
+	if b.Null() {
+		return nil, nil
+	}
+
+	return b.bts, nil
 }
 
 func newUUID(u *types.UUID) *UUIDValue {
@@ -996,7 +1065,7 @@ func (u *UUIDValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	case isDistinctFrom:
 		b = u.Bytes != val2.Bytes
 	default:
-		return nil, fmt.Errorf("unknown comparison operator: %d", op)
+		return nil, fmt.Errorf("%w: cannot use comparison operator %s with type %s", ErrComparison, u.Type(), op)
 	}
 
 	return newBool(b), nil
@@ -1007,7 +1076,7 @@ func (u *UUIDValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, err
 }
 
 func (u *UUIDValue) Unary(op UnaryOp) (ScalarValue, error) {
-	return nil, fmt.Errorf("cannot perform unary operation on uuid")
+	return nil, fmt.Errorf("%w: cannot perform unary operation on uuid", ErrUnary)
 }
 
 func (u *UUIDValue) Type() *types.DataType {
@@ -1029,7 +1098,7 @@ func (u *UUIDValue) Array(v ...ScalarValue) (ArrayValue, error) {
 	pgtArr[0] = u.UUID
 	for j, val := range v {
 		if uuidVal, ok := val.(*UUIDValue); !ok {
-			return nil, makeTypeErr(u, val)
+			return nil, makeArrTypeErr(u, val)
 		} else {
 			pgtArr[j+1] = uuidVal.UUID
 		}
@@ -1052,8 +1121,10 @@ func (u *UUIDValue) Cast(t *types.DataType) (Value, error) {
 		return newText(types.UUID(u.Bytes).String()), nil
 	case types.BlobType:
 		return newBlob(u.Bytes[:]), nil
+	case types.UUIDType:
+		return u, nil
 	default:
-		return nil, fmt.Errorf("cannot cast uuid to %s", t)
+		return nil, fmt.Errorf("%w: cannot cast uuid to %s", ErrCast, t)
 	}
 }
 
@@ -1233,25 +1304,30 @@ func (d *DecimalValue) Unary(op UnaryOp) (ScalarValue, error) {
 	case pos:
 		return d, nil
 	default:
-		return nil, fmt.Errorf("unexpected operator id %d for decimal", op)
+		return nil, fmt.Errorf("%w: unexpected operator id %s for decimal", ErrUnary, op)
 	}
 }
 
 func (d *DecimalValue) Type() *types.DataType {
+	// we will try to get the precision and scale from the decimal,
+	// but if we can't, we will return the default.
 	dec, err := d.dec()
 	if err != nil {
-		panic(err)
+		return types.DecimalType
 	}
 
 	res, err := types.NewDecimalType(dec.Precision(), dec.Scale())
 	if err != nil {
-		panic(err)
+		return types.DecimalType
 	}
 
 	return res
 }
 
 func (d *DecimalValue) RawValue() any {
+	if !d.Valid {
+		return nil
+	}
 	dec, err := d.dec()
 	if err != nil {
 		return nil
@@ -1265,7 +1341,7 @@ func (d *DecimalValue) Array(v ...ScalarValue) (ArrayValue, error) {
 	pgtArr[0] = d.Numeric
 	for j, val := range v {
 		if decVal, ok := val.(*DecimalValue); !ok {
-			return nil, makeTypeErr(d, val)
+			return nil, makeArrTypeErr(d, val)
 		} else {
 			pgtArr[j+1] = decVal.Numeric
 		}
@@ -1279,28 +1355,54 @@ func (d *DecimalValue) Array(v ...ScalarValue) (ArrayValue, error) {
 }
 
 func (d *DecimalValue) Cast(t *types.DataType) (Value, error) {
+	if t.Name == types.DecimalStr {
+		if t.IsArray {
+			return nil, fmt.Errorf("%w: cannot cast decimal to decimal array", ErrCast)
+		}
+
+		// if no metadata, then its a noop
+
+		if t.Metadata == nil {
+			return d, nil
+		}
+
+		// otherwise, we need to alter the precision and scale
+
+		dec, err := d.dec()
+		if err != nil {
+			return nil, castErr(err)
+		}
+
+		err = dec.SetPrecisionAndScale(t.Metadata[0], t.Metadata[1])
+		if err != nil {
+			return nil, castErr(err)
+		}
+
+		return newDec(dec), nil
+	}
+
 	switch t {
 	case types.IntType:
 		dec, err := d.dec()
 		if err != nil {
-			return nil, err
+			return nil, castErr(err)
 		}
 
 		i, err := dec.Int64()
 		if err != nil {
-			return nil, err
+			return nil, castErr(err)
 		}
 
 		return newInt(i), nil
 	case types.TextType:
 		dec, err := d.dec()
 		if err != nil {
-			return nil, err
+			return nil, castErr(err)
 		}
 
 		return newText(dec.String()), nil
 	default:
-		return nil, fmt.Errorf("cannot cast decimal to %s", t)
+		return nil, fmt.Errorf("%w: cannot cast decimal to %s", ErrCast, t)
 	}
 }
 
@@ -1332,12 +1434,12 @@ func (a *IntArrayValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
-func (a *IntArrayValue) Len() int {
-	return len(a.Elements)
+func (a *IntArrayValue) Len() int32 {
+	return int32(len(a.Elements))
 }
 
-func (a *IntArrayValue) Index(i int64) (ScalarValue, error) {
-	if i < 1 || i > int64(a.Len()) {
+func (a *IntArrayValue) Index(i int32) (ScalarValue, error) {
+	if i < 1 || i > a.Len() {
 		return nil, fmt.Errorf("index out of bounds")
 	}
 
@@ -1345,12 +1447,12 @@ func (a *IntArrayValue) Index(i int64) (ScalarValue, error) {
 }
 
 // allocArr checks that the array has index i, and if not, it allocates enough space to set the value.
-func allocArr[T any](p *pgtype.Array[T], i int64) error {
+func allocArr[T any](p *pgtype.Array[T], i int32) error {
 	if i < 1 {
 		return fmt.Errorf("index out of bounds")
 	}
 
-	if i > int64(len(p.Elements)) {
+	if i > int32(len(p.Elements)) {
 		// Allocate enough space to set the value.
 		// This matches the behavior of Postgres.
 		newVal := make([]T, i)
@@ -1365,7 +1467,7 @@ func allocArr[T any](p *pgtype.Array[T], i int64) error {
 	return nil
 }
 
-func (a *IntArrayValue) Set(i int64, v ScalarValue) error {
+func (a *IntArrayValue) Set(i int32, v ScalarValue) error {
 	// we do not need to worry about nulls here. Postgres will automatically make an array
 	// not null if we set a value in it.
 	// to test it:
@@ -1412,15 +1514,29 @@ func (a *IntArrayValue) Cast(t *types.DataType) (Value, error) {
 		return newNull(t), nil
 	}
 
+	if t.Name == types.DecimalStr {
+		if !t.IsArray {
+			return nil, fmt.Errorf("%w: cannot cast int array to decimal", ErrCast)
+		}
+
+		return castArrWithPtr(a, func(i int64) (*decimal.Decimal, error) {
+			if t.Metadata == nil {
+				return decimal.NewFromString(strconv.FormatInt(i, 10))
+			}
+
+			return decimal.NewExplicit(strconv.FormatInt(i, 10), t.Metadata[0], t.Metadata[1])
+		}, newDecimalArrayValue)
+	}
+
 	switch t {
+	case types.IntArrayType:
+		return a, nil
 	case types.TextArrayType:
 		return castArr(a, func(i int64) (string, error) { return strconv.FormatInt(i, 10), nil }, newTextArrayValue)
 	case types.BoolArrayType:
 		return castArr(a, func(i int64) (bool, error) { return i != 0, nil }, newBoolArrayValue)
-	case types.DecimalArrayType:
-		return castArrWithPtr(a, func(i int64) (*decimal.Decimal, error) { return decimal.NewFromString(strconv.FormatInt(i, 10)) }, newDecimalArrayValue)
 	default:
-		return nil, fmt.Errorf("cannot cast int array to %s", t)
+		return nil, fmt.Errorf("%w: cannot cast int array to %s", ErrCast, t)
 	}
 }
 
@@ -1451,19 +1567,19 @@ func (a *TextArrayValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
-func (a *TextArrayValue) Len() int {
-	return len(a.Elements)
+func (a *TextArrayValue) Len() int32 {
+	return int32(len(a.Elements))
 }
 
-func (a *TextArrayValue) Index(i int64) (ScalarValue, error) {
-	if i < 1 || i > int64(a.Len()) {
+func (a *TextArrayValue) Index(i int32) (ScalarValue, error) {
+	if i < 1 || i > a.Len() {
 		return nil, fmt.Errorf("index out of bounds")
 	}
 
 	return &TextValue{a.Elements[i-1]}, nil
 }
 
-func (a *TextArrayValue) Set(i int64, v ScalarValue) error {
+func (a *TextArrayValue) Set(i int32, v ScalarValue) error {
 	err := allocArr(&a.Array, i)
 	if err != nil {
 		return err
@@ -1498,17 +1614,33 @@ func (a *TextArrayValue) RawValue() any {
 }
 
 func (a *TextArrayValue) Cast(t *types.DataType) (Value, error) {
+	if t.Name == types.DecimalStr {
+		if !t.IsArray {
+			return nil, fmt.Errorf("%w: cannot cast text array to decimal", ErrCast)
+		}
+
+		return castArrWithPtr(a, func(s string) (*decimal.Decimal, error) {
+			if t.Metadata == nil {
+				return decimal.NewFromString(s)
+			}
+
+			return decimal.NewExplicit(s, t.Metadata[0], t.Metadata[1])
+		}, newDecimalArrayValue)
+	}
+
 	switch t {
 	case types.IntArrayType:
 		return castArr(a, func(s string) (int64, error) { return strconv.ParseInt(s, 10, 64) }, newIntArr)
 	case types.BoolArrayType:
 		return castArr(a, strconv.ParseBool, newBoolArrayValue)
-	case types.DecimalArrayType:
-		return castArrWithPtr(a, decimal.NewFromString, newDecimalArrayValue)
 	case types.UUIDArrayType:
 		return castArrWithPtr(a, types.ParseUUID, newUUIDArrayValue)
+	case types.TextArrayType:
+		return a, nil
+	case types.BlobArrayType:
+		return castArr(a, func(s string) ([]byte, error) { return []byte(s), nil }, newBlobArrayValue)
 	default:
-		return nil, fmt.Errorf("cannot cast text array to %s", t)
+		return nil, fmt.Errorf("%w: cannot cast text array to %s", ErrCast, t)
 	}
 }
 
@@ -1538,22 +1670,24 @@ func castArr[A any, B any, C ArrayValue, D ArrayValue](c C, get func(a A) (B, er
 func castArrWithPtr[A any, B any, C ArrayValue, D ArrayValue](c C, get func(a A) (*B, error), newArr func([]*B) D) (D, error) {
 	res := make([]*B, c.Len())
 	for i := range c.Len() {
-		v, err := c.Index(int64(i + 1)) // Index is 1-based
+		v, err := c.Index(i + 1) // SQL Indexes are 1-based
 		if err != nil {
-			return *new(D), err
+			return *new(D), castErr(err)
 		}
 
-		// if the value is nil, we dont need to do anything
+		// if the value is nil, we dont need to do anything; a nil value is already
+		// in the array
 		if !v.Null() {
 			raw, ok := v.RawValue().(A)
 			if !ok {
-				// should never happen unless I messed up the types
-				return *new(D), fmt.Errorf("internal bug: unexpected type %T", v.RawValue())
+				// should never happen unless I messed up the usage of generics or implementation
+				// of RawValue
+				return *new(D), castErr(fmt.Errorf("internal bug: unexpected type %T", v.RawValue()))
 			}
 
 			res[i], err = get(raw)
 			if err != nil {
-				return *new(D), err
+				return *new(D), castErr(err)
 			}
 		}
 	}
@@ -1588,19 +1722,19 @@ func (a *BoolArrayValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
-func (a *BoolArrayValue) Len() int {
-	return len(a.Elements)
+func (a *BoolArrayValue) Len() int32 {
+	return int32(len(a.Elements))
 }
 
-func (a *BoolArrayValue) Index(i int64) (ScalarValue, error) {
-	if i < 1 || i > int64(a.Len()) {
+func (a *BoolArrayValue) Index(i int32) (ScalarValue, error) {
+	if i < 1 || i > a.Len() {
 		return nil, fmt.Errorf("index out of bounds")
 	}
 
 	return &BoolValue{a.Elements[i-1]}, nil
 }
 
-func (a *BoolArrayValue) Set(i int64, v ScalarValue) error {
+func (a *BoolArrayValue) Set(i int32, v ScalarValue) error {
 	err := allocArr(&a.Array, i)
 	if err != nil {
 		return err
@@ -1646,8 +1780,16 @@ func (a *BoolArrayValue) Cast(t *types.DataType) (Value, error) {
 				return 0, nil
 			}
 		}, newIntArr)
+	case types.BoolArrayType:
+		return a, nil
 	default:
-		return nil, fmt.Errorf("cannot cast bool array to %s", t)
+		return nil, fmt.Errorf("%w: cannot cast bool array to %s", ErrCast, t)
+	}
+}
+
+func newNullDecArr() *DecimalArrayValue {
+	return &DecimalArrayValue{
+		Array: pgtype.Array[pgtype.Numeric]{Valid: false},
 	}
 }
 
@@ -1674,47 +1816,6 @@ func (a *DecimalArrayValue) Null() bool {
 	return !a.Valid
 }
 
-// detectDecArrType detects the type of a decimal array.
-// It returns the type, and a boolean indicating if the array does
-// not have any non-null values.
-func detectDecArrType(arr *DecimalArrayValue) (typ *types.DataType, containsOnlyNulls bool) {
-	var firstFound *types.DataType
-	for _, v := range arr.Elements {
-		if v.Valid {
-
-			dec, err := decFromPgType(v)
-			if err != nil {
-				panic(err)
-			}
-
-			if firstFound == nil {
-				d, err := types.NewDecimalType(dec.Precision(), dec.Scale())
-				if err != nil {
-					panic(err)
-				}
-
-				firstFound = d
-			} else {
-				d2, err := types.NewDecimalType(dec.Precision(), dec.Scale())
-				if err != nil {
-					panic(err)
-				}
-
-				if !firstFound.EqualsStrict(d2) {
-					// should never reach here
-					panic("mixed types in decimal array")
-				}
-			}
-		}
-	}
-
-	if firstFound == nil {
-		return types.DecimalType, true
-	}
-
-	return firstFound, false
-}
-
 func (a *DecimalArrayValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
@@ -1735,13 +1836,13 @@ func cmpArrs[M ArrayValue](a M, b Value, op ComparisonOp) (*BoolValue, error) {
 			return false, nil
 		}
 
-		for i := 1; i <= a.Len(); i++ {
-			v1, err := a.Index(int64(i))
+		for i := int32(1); i <= a.Len(); i++ {
+			v1, err := a.Index(i)
 			if err != nil {
 				return false, err
 			}
 
-			v2, err := b.Index(int64(i))
+			v2, err := b.Index(i)
 			if err != nil {
 				return false, err
 			}
@@ -1778,23 +1879,23 @@ func cmpArrs[M ArrayValue](a M, b Value, op ComparisonOp) (*BoolValue, error) {
 	case isDistinctFrom:
 		return newBool(!eq), nil
 	default:
-		return nil, fmt.Errorf("only =, IS DISTINCT FROM are supported for array comparison")
+		return nil, fmt.Errorf("%w: only =, IS DISTINCT FROM are supported for array comparison", ErrComparison)
 	}
 }
 
-func (a *DecimalArrayValue) Len() int {
-	return len(a.Elements)
+func (a *DecimalArrayValue) Len() int32 {
+	return int32(len(a.Elements))
 }
 
-func (a *DecimalArrayValue) Index(i int64) (ScalarValue, error) {
-	if i < 1 || i > int64(len(a.Elements)) {
+func (a *DecimalArrayValue) Index(i int32) (ScalarValue, error) {
+	if i < 1 || i > a.Len() {
 		return nil, fmt.Errorf("index out of bounds")
 	}
 
 	return &DecimalValue{Numeric: a.Elements[i-1]}, nil
 }
 
-func (a *DecimalArrayValue) Set(i int64, v ScalarValue) error {
+func (a *DecimalArrayValue) Set(i int32, v ScalarValue) error {
 	err := allocArr(&a.Array, i)
 	if err != nil {
 		return err
@@ -1810,8 +1911,7 @@ func (a *DecimalArrayValue) Set(i int64, v ScalarValue) error {
 }
 
 func (a *DecimalArrayValue) Type() *types.DataType {
-	typ, _ := detectDecArrType(a)
-	return typ
+	return types.DecimalArrayType
 }
 
 func (a *DecimalArrayValue) RawValue() any {
@@ -1835,23 +1935,59 @@ func (a *DecimalArrayValue) RawValue() any {
 }
 
 func (a *DecimalArrayValue) Cast(t *types.DataType) (Value, error) {
+	if t.Name == types.DecimalStr {
+		if !t.IsArray {
+			return nil, fmt.Errorf("%w: cannot cast decimal array to decimal", ErrCast)
+		}
+
+		// if no metadata, then its a noop
+		if t.Metadata == nil {
+			return a, nil
+		}
+
+		// otherwise, we need to alter the precision and scale
+		res := make([]*decimal.Decimal, a.Len())
+		for i := int32(1); i <= a.Len(); i++ {
+			v, err := a.Index(i)
+			if err != nil {
+				return nil, err
+			}
+
+			dec, err := v.(*DecimalValue).dec()
+			if err != nil {
+				return nil, err
+			}
+
+			err = dec.SetPrecisionAndScale(t.Metadata[0], t.Metadata[1])
+			if err != nil {
+				return nil, err
+			}
+
+			res[i-1] = dec
+		}
+
+		return newDecimalArrayValue(res), nil
+	}
+
 	switch t {
 	case types.TextArrayType:
 		return castArr(a, func(d *decimal.Decimal) (string, error) { return d.String(), nil }, newTextArrayValue)
 	case types.IntArrayType:
 		return castArr(a, func(d *decimal.Decimal) (int64, error) { return d.Int64() }, newIntArr)
+	case types.DecimalArrayType:
+		return a, nil
 	default:
-		return nil, fmt.Errorf("cannot cast decimal array to %s", t)
+		return nil, fmt.Errorf("%w: cannot cast decimal array to %s", ErrCast, t)
 	}
 }
 
-func newBlobArrayValue(b [][]byte) *BlobArrayValue {
-	vals := make([]pgtype.PreallocBytes, len(b))
+func newBlobArrayValue(b []*[]byte) *BlobArrayValue {
+	vals := make([]*BlobValue, len(b))
 	for i, v := range b {
 		if v == nil {
-			vals[i] = nil
+			vals[i] = &BlobValue{bts: nil}
 		} else {
-			vals[i] = pgtype.PreallocBytes(v)
+			vals[i] = &BlobValue{bts: *v}
 		}
 	}
 
@@ -1861,7 +1997,9 @@ func newBlobArrayValue(b [][]byte) *BlobArrayValue {
 }
 
 type BlobArrayValue struct {
-	pgtype.Array[pgtype.PreallocBytes]
+	// we embed BlobValue because unlike other types, there is no native pgtype embedded within
+	// blob value that allows pgx to scan the value into the struct.
+	pgtype.Array[*BlobValue]
 }
 
 func (a *BlobArrayValue) Null() bool {
@@ -1872,19 +2010,19 @@ func (a *BlobArrayValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
-func (a *BlobArrayValue) Len() int {
-	return len(a.Elements)
+func (a *BlobArrayValue) Len() int32 {
+	return int32(len(a.Elements))
 }
 
-func (a *BlobArrayValue) Index(i int64) (ScalarValue, error) {
-	if i < 1 || i > int64(a.Len()) {
+func (a *BlobArrayValue) Index(i int32) (ScalarValue, error) {
+	if i < 1 || i > a.Len() {
 		return nil, fmt.Errorf("index out of bounds")
 	}
 
-	return &BlobValue{a.Elements[i-1]}, nil
+	return a.Elements[i-1], nil
 }
 
-func (a *BlobArrayValue) Set(i int64, v ScalarValue) error {
+func (a *BlobArrayValue) Set(i int32, v ScalarValue) error {
 	err := allocArr(&a.Array, i)
 	if err != nil {
 		return err
@@ -1895,11 +2033,7 @@ func (a *BlobArrayValue) Set(i int64, v ScalarValue) error {
 		return fmt.Errorf("cannot set non-blob value in blob array")
 	}
 
-	// copy the blob value to avoid mutation
-	valCopy := make([]byte, len(val.PreallocBytes))
-	copy(valCopy, val.PreallocBytes)
-
-	a.Elements[i-1] = valCopy
+	a.Elements[i-1] = val
 	return nil
 }
 
@@ -1915,8 +2049,8 @@ func (a *BlobArrayValue) RawValue() any {
 	res := make([][]byte, len(a.Elements))
 	for i, v := range a.Elements {
 		if v != nil {
-			res[i] = make([]byte, len(v))
-			copy(res[i], v)
+			res[i] = make([]byte, len(v.bts))
+			copy(res[i], v.bts)
 		}
 	}
 
@@ -1927,8 +2061,10 @@ func (a *BlobArrayValue) Cast(t *types.DataType) (Value, error) {
 	switch t {
 	case types.TextArrayType:
 		return castArr(a, func(b []byte) (string, error) { return string(b), nil }, newTextArrayValue)
+	case types.BlobArrayType:
+		return a, nil
 	default:
-		return nil, fmt.Errorf("cannot cast blob array to %s", t)
+		return nil, fmt.Errorf("%w: cannot cast blob array to %s", ErrCast, t)
 	}
 }
 
@@ -1959,19 +2095,19 @@ func (a *UuidArrayValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
-func (a *UuidArrayValue) Len() int {
-	return len(a.Elements)
+func (a *UuidArrayValue) Len() int32 {
+	return int32(len(a.Elements))
 }
 
-func (a *UuidArrayValue) Index(i int64) (ScalarValue, error) {
-	if i < 1 || i > int64(a.Len()) {
+func (a *UuidArrayValue) Index(i int32) (ScalarValue, error) {
+	if i < 1 || i > a.Len() {
 		return nil, fmt.Errorf("index out of bounds")
 	}
 
 	return &UUIDValue{a.Elements[i-1]}, nil
 }
 
-func (a *UuidArrayValue) Set(i int64, v ScalarValue) error {
+func (a *UuidArrayValue) Set(i int32, v ScalarValue) error {
 	err := allocArr(&a.Array, i)
 	if err != nil {
 		return err
@@ -2009,9 +2145,13 @@ func (a *UuidArrayValue) RawValue() any {
 func (a *UuidArrayValue) Cast(t *types.DataType) (Value, error) {
 	switch t {
 	case types.TextArrayType:
-		return castArr(a, func(u types.UUID) (string, error) { return u.String(), nil }, newTextArrayValue)
+		return castArr(a, func(u *types.UUID) (string, error) { return u.String(), nil }, newTextArrayValue)
+	case types.UUIDArrayType:
+		return a, nil
+	case types.BlobArrayType:
+		return castArr(a, func(u *types.UUID) ([]byte, error) { return u.Bytes(), nil }, newBlobArrayValue)
 	default:
-		return nil, fmt.Errorf("cannot cast uuid array to %s", t)
+		return nil, fmt.Errorf("%w: cannot cast uuid array to %s", ErrCast, t)
 	}
 }
 
@@ -2089,7 +2229,7 @@ func (o *RecordValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	case equal:
 		return newBool(isSame), nil
 	default:
-		return nil, fmt.Errorf("unknown comparison operator: %d", op)
+		return nil, fmt.Errorf("%w: cannot use comparison operator %s with record type", ErrComparison, op)
 	}
 }
 
@@ -2102,7 +2242,7 @@ func (o *RecordValue) RawValue() any {
 }
 
 func (o *RecordValue) Cast(t *types.DataType) (Value, error) {
-	return nil, fmt.Errorf("cannot cast record to %s", t)
+	return nil, fmt.Errorf("%w: cannot cast record to %s", ErrCast, t)
 }
 
 func cmpIntegers(a, b int, op ComparisonOp) (*BoolValue, error) {
@@ -2116,6 +2256,6 @@ func cmpIntegers(a, b int, op ComparisonOp) (*BoolValue, error) {
 	case isDistinctFrom:
 		return newBool(a != b), nil
 	default:
-		return nil, fmt.Errorf("unknown comparison operator: %d", op)
+		return nil, fmt.Errorf("%w: cannot use comparison operator %s with numeric types", ErrComparison, op)
 	}
 }

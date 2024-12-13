@@ -40,9 +40,27 @@ type namespace struct {
 	availableFunctions map[string]*executable
 	tables             map[string]*engine.Table
 	actions            map[string]*Action
-	// builtin is true if the namespace is a built-in namespace.
-	// Built-in namespaces are not allowed to be dropped.
-	builtin bool
+
+	// namespaceType is the type of namespace.
+	// It can be user-created, built-in, or extension.
+	namespaceType namespaceType
+}
+
+type namespaceType string
+
+const (
+	namespaceTypeUser      namespaceType = "USER"
+	namespaceTypeSystem    namespaceType = "SYSTEM"
+	namespaceTypeExtension namespaceType = "EXTENSION"
+)
+
+func (n namespaceType) valid() bool {
+	switch n {
+	case namespaceTypeUser, namespaceTypeSystem, namespaceTypeExtension:
+		return true
+	default:
+		return false
+	}
 }
 
 // NewInterpreter creates a new interpreter.
@@ -86,8 +104,8 @@ func NewInterpreter(ctx context.Context, db sql.DB, log log.Logger) (*Interprete
 		availableFunctions: availableFuncs,
 		namespaces:         make(map[string]*namespace),
 	}
-	for _, name := range namespaces {
-		tables, err := listTablesInNamespace(ctx, db, name)
+	for _, ns := range namespaces {
+		tables, err := listTablesInNamespace(ctx, db, ns.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -97,7 +115,7 @@ func NewInterpreter(ctx context.Context, db sql.DB, log log.Logger) (*Interprete
 			tblMap[tbl.Name] = tbl
 		}
 
-		actions, err := listActionsInNamespace(ctx, db, name)
+		actions, err := listActionsInNamespace(ctx, db, ns.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -111,11 +129,11 @@ func NewInterpreter(ctx context.Context, db sql.DB, log log.Logger) (*Interprete
 			actionsMap[action.Name] = action
 		}
 
-		interpreter.namespaces[name] = &namespace{
+		interpreter.namespaces[ns.Name] = &namespace{
 			tables:             tblMap,
 			availableFunctions: namespaceFunctions,
 			actions:            actionsMap,
-			builtin:            isBuiltInNamespace(name),
+			namespaceType:      ns.Type,
 		}
 	}
 
@@ -307,9 +325,4 @@ func (i *Interpreter) SetOwner(ctx context.Context, db sql.DB, owner string) err
 
 const (
 	defaultNamespace = "main"
-	infoNamespace    = "info"
 )
-
-func isBuiltInNamespace(namespace string) bool {
-	return namespace == defaultNamespace || namespace == infoNamespace
-}

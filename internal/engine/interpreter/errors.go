@@ -1,6 +1,9 @@
 package interpreter
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 var (
 	ErrUnaryOnNonScalar      = errors.New("cannot perform unary operation on a non-scalar value")
@@ -13,4 +16,12 @@ var (
 	ErrDoesNotHavePriv       = errors.New("does not have privilege")
 	ErrNamespaceNotFound     = errors.New("namespace not found")
 	ErrArithmetic            = errors.New("arithmetic error")
+	ErrComparison            = errors.New("comparison error")
+	ErrCast                  = errors.New("type cast error")
+	ErrUnary                 = errors.New("unary operation error")
+	ErrArrayMixedTypes       = errors.New("array contains mixed types")
 )
+
+func castErr(e error) error {
+	return fmt.Errorf("%w: %s", ErrCast, e)
+}

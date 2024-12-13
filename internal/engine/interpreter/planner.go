@@ -321,7 +321,7 @@ func (i *interpreterPlanner) VisitActionStmtAssignment(p0 *parse.ActionStmtAssig
 				return fmt.Errorf("array index must be integer, got %s", index.Type())
 			}
 
-			err = arr.Set(index.RawValue().(int64), scalarVal)
+			err = arr.Set(int32(index.RawValue().(int64)), scalarVal)
 			if err != nil {
 				return err
 			}
@@ -572,8 +572,8 @@ func (i *interpreterPlanner) VisitLoopTermVariable(p0 *parse.LoopTermVariable) a
 			return fmt.Errorf("expected array, got %T", val)
 		}
 
-		for i := 0; i < arr.Len(); i++ {
-			scalar, err := arr.Index(int64(i) + 1) // all arrays are 1-indexed
+		for i := int32(0); i < arr.Len(); i++ {
+			scalar, err := arr.Index(i + 1) // all arrays are 1-indexed
 			if err != nil {
 				return err
 			}
@@ -856,7 +856,7 @@ func (i *interpreterPlanner) VisitExpressionArrayAccess(p0 *parse.ExpressionArra
 			return nil, fmt.Errorf("array index must be integer, got %s", index.Type())
 		}
 
-		return arr.Index(index.RawValue().(int64))
+		return arr.Index(int32(index.RawValue().(int64)))
 	})
 }
 
@@ -1423,13 +1423,17 @@ func (i *interpreterPlanner) VisitUnuseExtensionStatement(p0 *parse.UnuseExtensi
 			return err
 		}
 
-		_, exists := exec.namespaces[p0.Alias]
+		ns, exists := exec.namespaces[p0.Alias]
 		if !exists {
 			if p0.IfExists {
 				return nil
 			}
 
 			return fmt.Errorf(`extension initialized with alias "%s" does not exist`, p0.Alias)
+		}
+
+		if ns.namespaceType != namespaceTypeExtension {
+			return fmt.Errorf(`namespace "%s" is not an extension`, p0.Alias)
 		}
 
 		delete(exec.namespaces, p0.Alias)
@@ -1533,7 +1537,7 @@ func (i *interpreterPlanner) VisitCreateNamespaceStatement(p0 *parse.CreateNames
 			return fmt.Errorf(`namespace "%s" already exists`, p0.Namespace)
 		}
 
-		if err := createNamespace(exec.txCtx.Ctx, exec.db, p0.Namespace); err != nil {
+		if err := createNamespace(exec.txCtx.Ctx, exec.db, p0.Namespace, namespaceTypeUser); err != nil {
 			return err
 		}
 
@@ -1559,11 +1563,14 @@ func (i *interpreterPlanner) VisitDropNamespaceStatement(p0 *parse.DropNamespace
 				return nil
 			}
 
-			return fmt.Errorf(`namespace "%s" does not exist`, p0.Namespace)
+			return fmt.Errorf(`%w: namespace "%s" does not exist`, ErrNamespaceNotFound, p0.Namespace)
 		}
 
-		if ns.builtin {
-			return fmt.Errorf(`cannot drop builtin namespace "%s"`, p0.Namespace)
+		if ns.namespaceType == namespaceTypeSystem {
+			return fmt.Errorf(`cannot drop built-in namespace "%s"`, p0.Namespace)
+		}
+		if ns.namespaceType == namespaceTypeExtension {
+			return fmt.Errorf(`cannot drop extension namespace using DROP "%s"`, p0.Namespace)
 		}
 
 		if err := dropNamespace(exec.txCtx.Ctx, exec.db, p0.Namespace); err != nil {

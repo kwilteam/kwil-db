@@ -43,13 +43,13 @@ func returnsExactlyOneInt64(rows *sql.ResultSet) (int64, error) {
 }
 
 // createNamespace creates a new schema for a user.
-func createNamespace(ctx context.Context, db sql.DB, name string) error {
+func createNamespace(ctx context.Context, db sql.DB, name string, nsType namespaceType) error {
 	_, err := db.Execute(ctx, `CREATE SCHEMA `+name)
 	if err != nil {
 		return err
 	}
 
-	_, err = db.Execute(ctx, `INSERT INTO kwild_engine.namespaces (name) VALUES ($1)`, name)
+	_, err = db.Execute(ctx, `INSERT INTO kwild_engine.namespaces (name, type) VALUES ($1, $2)`, name, nsType)
 	return err
 }
 
@@ -121,62 +121,28 @@ func storeAction(ctx context.Context, db sql.DB, namespace string, action *Actio
 	return nil
 }
 
-// // loadActions loads all actions from the database.
-// // it maps: schema -> action name -> action
-// func loadActions(ctx context.Context, db sql.DB) (map[string]map[string]*Action, error) {
-// 	schemas := make(map[string]map[string]*Action)
-
-// 	var schemaName, rawStmt string
-// 	scans := []any{
-// 		&schemaName,
-// 		&rawStmt,
-// 	}
-
-// 	err := pg.QueryRowFunc(ctx, db, `SELECT schema_name, raw_statement FROM kwild_engine.actions`,
-// 		scans, func() error {
-// 			schema, ok := schemas[schemaName]
-// 			if !ok {
-// 				schema = make(map[string]*Action)
-// 				schemas[schemaName] = schema
-// 			}
-
-// 			res, err := parse.Parse(rawStmt)
-// 			if err != nil {
-// 				return err
-// 			}
-
-// 			if len(res) != 1 {
-// 				return fmt.Errorf("expected exactly 1 statement, got %d", len(res))
-// 			}
-
-// 			createActionStmt, ok := res[0].(*parse.CreateActionStatement)
-// 			if !ok {
-// 				return fmt.Errorf("expected CreateActionStatement, got %T", res[0])
-// 			}
-
-// 			act := &Action{}
-// 			err = act.FromAST(createActionStmt)
-// 			if err != nil {
-// 				return err
-// 			}
-
-// 			schema[act.Name] = act
-// 			return nil
-// 		})
-// 	if err != nil {
-// 		return nil, err
-// 	}
-
-// 	return schemas, nil
-// }
-
 // listNamespaces lists all namespaces that are created.
-func listNamespaces(ctx context.Context, db sql.DB) ([]string, error) {
-	var namespaces []string
+func listNamespaces(ctx context.Context, db sql.DB) ([]struct {
+	Name string
+	Type namespaceType
+}, error) {
+	var namespaces []struct {
+		Name string
+		Type namespaceType
+	}
 	var namespace string
-	err := pg.QueryRowFunc(ctx, db, `SELECT name FROM kwild_engine.namespaces`, []any{&namespace},
+	var nsType string
+	err := pg.QueryRowFunc(ctx, db, `SELECT name, type::TEXT FROM kwild_engine.namespaces`, []any{&namespace, &nsType},
 		func() error {
-			namespaces = append(namespaces, namespace)
+			nsT := namespaceType(nsType)
+			if !nsT.valid() {
+				return fmt.Errorf("unknown namespace type %s", nsType)
+			}
+
+			namespaces = append(namespaces, struct {
+				Name string
+				Type namespaceType
+			}{Name: namespace, Type: nsT})
 			return nil
 		},
 	)

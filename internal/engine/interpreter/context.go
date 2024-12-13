@@ -39,11 +39,6 @@ func (e *executionContext) checkPrivilege(priv privilege) error {
 	return nil
 }
 
-// currentNamespace gets the current namespace.
-func (e *executionContext) currentNamespace() *namespace {
-	return e.namespaces[e.scope.namespace]
-}
-
 // getNamespace gets the specified namespace.
 // If the namespace does not exist, it will return an error.
 // If the namespace is empty, it will return the current namespace.

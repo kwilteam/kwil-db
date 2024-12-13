@@ -32,6 +32,14 @@ BEGIN
     EXCEPTION
         WHEN duplicate_object THEN NULL;
     END;
+
+    BEGIN
+        CREATE TYPE kwild_engine.namespace_type AS ENUM (
+            'USER', 'SYSTEM', 'EXTENSION'
+        );
+    EXCEPTION
+        WHEN duplicate_object THEN NULL;
+    END;
 END $$;
 
 -- metadata stores all metadata for the engine
@@ -44,7 +52,8 @@ CREATE TABLE IF NOT EXISTS kwild_engine.metadata (
 -- namespaces is a table that stores all user schemas in the engine
 CREATE TABLE IF NOT EXISTS kwild_engine.namespaces (
     id BIGSERIAL PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE
+    name TEXT NOT NULL UNIQUE,
+    type kwild_engine.namespace_type NOT NULL DEFAULT 'USER'
 );
 
 
@@ -154,7 +163,17 @@ $$ LANGUAGE plpgsql;
     All views are ordered to ensure that they are deterministic when queried.
 */
 CREATE SCHEMA IF NOT EXISTS info;
-INSERT INTO kwild_engine.namespaces (name) VALUES ('info') ON CONFLICT DO NOTHING;
+INSERT INTO kwild_engine.namespaces (name, type) VALUES ('info', 'SYSTEM') ON CONFLICT DO NOTHING;
+
+-- info.namespaces is a public view that provides a list of all namespaces in the database
+CREATE VIEW info.namespaces AS
+SELECT 
+    name,
+    type::TEXT
+FROM
+    kwild_engine.namespaces
+ORDER BY
+    name;
 
 -- info.tables is a public view that provides a list of all tables in the database
 CREATE VIEW info.tables AS
@@ -377,4 +396,4 @@ ORDER BY
 
 -- lastly, we need to create a default namespace for the user
 CREATE SCHEMA IF NOT EXISTS main;
-INSERT INTO kwild_engine.namespaces (name) VALUES ('main') ON CONFLICT DO NOTHING;
+INSERT INTO kwild_engine.namespaces (name, type) VALUES ('main', 'SYSTEM') ON CONFLICT DO NOTHING;

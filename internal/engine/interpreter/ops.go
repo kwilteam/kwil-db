@@ -24,6 +24,19 @@ const (
 	pos
 )
 
+func (op UnaryOp) String() string {
+	switch op {
+	case not:
+		return "NOT"
+	case neg:
+		return "-"
+	case pos:
+		return "+"
+	}
+
+	panic(fmt.Sprintf("unknown unary operator: %d", op))
+}
+
 type ArithmeticOp uint8
 
 const (
@@ -34,6 +47,42 @@ const (
 	mod
 	concat
 )
+
+func (op ArithmeticOp) String() string {
+	switch op {
+	case add:
+		return "+"
+	case sub:
+		return "-"
+	case mul:
+		return "*"
+	case div:
+		return "/"
+	case mod:
+		return "%"
+	case concat:
+		return "||"
+	}
+
+	panic(fmt.Sprintf("unknown arithmetic operator: %d", op))
+}
+
+func (op ComparisonOp) String() string {
+	switch op {
+	case equal:
+		return "="
+	case lessThan:
+		return "<"
+	case greaterThan:
+		return ">"
+	case is:
+		return "IS"
+	case isDistinctFrom:
+		return "IS DISTINCT FROM"
+	}
+
+	panic(fmt.Sprintf("unknown comparison operator: %d", op))
+}
 
 // GetComparisonOps gets the comparison operators for the given operator.
 // Since the interpreter has a restricted subset of comparison operators compared to the parser,

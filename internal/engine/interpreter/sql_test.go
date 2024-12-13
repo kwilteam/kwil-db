@@ -84,7 +84,7 @@ func Test_built_in_sql(t *testing.T) {
 				_, err = db.Execute(ctx, `CREATE INDEX user_ages ON main.users (age);`)
 				require.NoError(t, err)
 
-				err = createNamespace(ctx, db, "other")
+				err = createNamespace(ctx, db, "other", namespaceTypeUser)
 				require.NoError(t, err)
 
 				_, err = db.Execute(ctx, `CREATE TABLE other.my_table (id UUID PRIMARY KEY);`)
