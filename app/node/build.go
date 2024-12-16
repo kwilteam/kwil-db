@@ -93,7 +93,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	node := buildNode(d, mp, bs, ce, ss, db)
 
 	// listeners
-	lm := buildListenerManager(d, es, txApp, node)
+	lm := buildListenerManager(d, es, bp, node)
 
 	// RPC Services
 	rpcSvcLogger := d.logger.New("USER")
@@ -476,8 +476,8 @@ func buildSnapshotStore(d *coreDependencies) *snapshotter.SnapshotStore {
 	return ss
 }
 
-func buildListenerManager(d *coreDependencies, ev *voting.EventStore, txapp *txapp.TxApp, node *node.Node) *listeners.ListenerManager {
-	return listeners.NewListenerManager(d.service("ListenerManager"), ev, txapp, node)
+func buildListenerManager(d *coreDependencies, ev *voting.EventStore, bp *blockprocessor.BlockProcessor, node *node.Node) *listeners.ListenerManager {
+	return listeners.NewListenerManager(d.service("ListenerManager"), ev, bp, node)
 }
 
 func buildJRPCAdminServer(d *coreDependencies) *rpcserver.Server {

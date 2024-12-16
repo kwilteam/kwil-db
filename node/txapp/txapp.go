@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"math/big"
 	"slices"
-	"sync"
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
@@ -38,11 +37,6 @@ type TxApp struct {
 	signer auth.Signer
 
 	mempool *mempool
-
-	// channels to notify the subscriber about validator updates
-	// TODO: ListenerMgr is the only subscriber for now. Potentially ConsensusEngine could be another subscriber? or not as it can decide to update the validators based on the updates.
-	valChans []chan []*types.Validator
-	valMtx   sync.RWMutex
 
 	// list of resolution types
 	resTypes []string // How do these get updated runtime?
@@ -161,7 +155,6 @@ func (r *TxApp) Commit() error {
 	r.Accounts.Commit()
 	r.Validators.Commit()
 
-	r.announceValidators()
 	r.mempool.reset()
 
 	r.spends = nil // reset spends for the next block
@@ -559,46 +552,6 @@ func (r *TxApp) AccountInfo(ctx context.Context, db sql.DB, acctID []byte, getUn
 // The value passed as power will simply replace the current power.
 func (r *TxApp) UpdateValidator(ctx context.Context, db sql.DB, validator []byte, power int64) error {
 	return r.Validators.SetValidatorPower(ctx, db, validator, power)
-}
-
-// SubscribeValidators creates and returns a new channel on which the current
-// validator set will be sent for each block Commit. The receiver will miss
-// updates if they are unable to receive fast enough. This should generally
-// be used after catch-up is complete, and only called once by the receiving
-// goroutine rather than repeatedly in a loop, for instance. The slice should
-// not be modified by the receiver.
-func (r *TxApp) SubscribeValidators() <-chan []*types.Validator {
-	// There's only supposed to be one user of this method, and they should
-	// only get one channel and listen, but play it safe and use a slice.
-	r.valMtx.Lock()
-	defer r.valMtx.Unlock()
-
-	c := make(chan []*types.Validator, 1)
-	r.valChans = append(r.valChans, c)
-	return c
-}
-
-// announceValidators sends the current validator list to subscribers from
-// ReceiveValidators.
-func (r *TxApp) announceValidators() {
-	// dev note: this method should not be blocked by receivers. Keep a default
-	// case and create buffered channels.
-	r.valMtx.RLock()
-	defer r.valMtx.RUnlock()
-
-	if len(r.valChans) == 0 {
-		return // no subscribers, skip the slice clone
-	}
-
-	vals := r.Validators.GetValidators()
-
-	for _, c := range r.valChans {
-		select {
-		case c <- vals:
-		default: // they'll get the next one... this is just supposed to be better than polling
-			r.service.Logger.Warn("Validator update channel is blocking")
-		}
-	}
 }
 
 func (r *TxApp) GetValidators() []*types.Validator {
