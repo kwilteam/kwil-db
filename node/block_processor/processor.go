@@ -60,6 +60,10 @@ type BlockProcessor struct {
 	log         log.Logger
 
 	broadcastTxFn BroadcastTxFn
+
+	// Subscribers for the validator updates
+	subChans []chan []*ktypes.Validator
+	subMtx   sync.RWMutex
 }
 
 type BroadcastTxFn func(ctx context.Context, tx *ktypes.Transaction, sync uint8) (*ktypes.ResultBroadcastTx, error)
@@ -470,6 +474,9 @@ func (bp *BlockProcessor) Commit(ctx context.Context, req *ktypes.CommitRequest)
 	bp.height.Store(req.Height)
 	copy(bp.appHash[:], req.AppHash[:])
 
+	// Announce final validators to subscribers
+	bp.announceValidators()
+
 	bp.log.Info("Committed Block", "height", req.Height, "appHash", req.AppHash.String())
 	return nil
 }
@@ -574,6 +581,46 @@ func validatorUpdatesHash(updates map[string]*ktypes.Validator) types.Hash {
 	}
 
 	return hash.Sum(nil)
+}
+
+// SubscribeValidators creates and returns a new channel on which the current
+// validator set will be sent for each block Commit. The receiver will miss
+// updates if they are unable to receive fast enough. This should generally
+// be used after catch-up is complete, and only called once by the receiving
+// goroutine rather than repeatedly in a loop, for instance. The slice should
+// not be modified by the receiver.
+func (bp *BlockProcessor) SubscribeValidators() <-chan []*ktypes.Validator {
+	// There's only supposed to be one user of this method, and they should
+	// only get one channel and listen, but play it safe and use a slice.
+	bp.subMtx.Lock()
+	defer bp.subMtx.Unlock()
+
+	c := make(chan []*ktypes.Validator, 1)
+	bp.subChans = append(bp.subChans, c)
+	return c
+}
+
+// announceValidators sends the current validator list to subscribers from
+// ReceiveValidators.
+func (bp *BlockProcessor) announceValidators() {
+	// dev note: this method should not be blocked by receivers. Keep a default
+	// case and create buffered channels.
+	bp.subMtx.RLock()
+	defer bp.subMtx.RUnlock()
+
+	if len(bp.subChans) == 0 {
+		return // no subscribers, skip the slice clone
+	}
+
+	vals := bp.GetValidators()
+
+	for _, c := range bp.subChans {
+		select {
+		case c <- vals:
+		default: // they'll get the next one... this is just supposed to be better than polling
+			bp.log.Warn("Validator update channel is blocking")
+		}
+	}
 }
 
 func (bp *BlockProcessor) Price(ctx context.Context, dbTx sql.DB, tx *ktypes.Transaction) (*big.Int, error) {
