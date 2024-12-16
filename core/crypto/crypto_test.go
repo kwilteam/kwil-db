@@ -444,3 +444,116 @@ func TestHandlePanic(t *testing.T) {
 		})
 	}
 }
+
+func TestKeyTypeString(t *testing.T) {
+	tests := []struct {
+		name string
+		kt   KeyType
+		want string
+	}{
+		{
+			name: "secp256k1 key type",
+			kt:   KeyTypeSecp256k1,
+			want: "secp256k1",
+		},
+		{
+			name: "ed25519 key type",
+			kt:   KeyTypeEd25519,
+			want: "ed25519",
+		},
+		{
+			name: "unknown key type",
+			kt:   KeyType(999),
+			want: "unknown key type 999",
+		},
+		{
+			name: "zero/default key type",
+			kt:   KeyType(0),
+			want: "secp256k1",
+		},
+		{
+			name: "negative key type",
+			kt:   KeyType(-1),
+			want: "unknown key type -1",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.kt.String(); got != tt.want {
+				t.Errorf("KeyType.String() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestParseKeyType(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    KeyType
+		wantErr bool
+	}{
+		{
+			name:    "valid secp256k1",
+			input:   "secp256k1",
+			want:    KeyTypeSecp256k1,
+			wantErr: false,
+		},
+		{
+			name:    "valid ed25519",
+			input:   "ed25519",
+			want:    KeyTypeEd25519,
+			wantErr: false,
+		},
+		{
+			name:    "empty string",
+			input:   "",
+			want:    0,
+			wantErr: true,
+		},
+		{
+			name:    "mixed case secp256k1",
+			input:   "SECP256K1",
+			want:    0,
+			wantErr: true,
+		},
+		{
+			name:    "mixed case ed25519",
+			input:   "Ed25519",
+			want:    0,
+			wantErr: true,
+		},
+		{
+			name:    "invalid key type",
+			input:   "invalid",
+			want:    0,
+			wantErr: true,
+		},
+		{
+			name:    "numeric string",
+			input:   "123",
+			want:    0,
+			wantErr: true,
+		},
+		{
+			name:    "special characters",
+			input:   "secp256k1!",
+			want:    0,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := ParseKeyType(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("ParseKeyType() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if got != tt.want {
+				t.Errorf("ParseKeyType() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

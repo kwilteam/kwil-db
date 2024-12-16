@@ -46,6 +46,47 @@ const (
 	// KeyTypeRSA       KeyType = 2
 )
 
+func (kt KeyType) String() string {
+	switch kt {
+	case KeyTypeSecp256k1:
+		return "secp256k1"
+	case KeyTypeEd25519:
+		return "ed25519"
+	default:
+		return fmt.Sprintf("unknown key type %d", kt)
+	}
+}
+
+func ParseKeyType(s string) (KeyType, error) {
+	switch s {
+	case "secp256k1":
+		return KeyTypeSecp256k1, nil
+	case "ed25519":
+		return KeyTypeEd25519, nil
+	default:
+		return 0, fmt.Errorf("unknown key type: %s", s)
+	}
+}
+
+/*func (kt KeyType) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + kt.String() + `"`), nil
+}
+
+func (kt *KeyType) UnmarshalJSON(data []byte) error {
+	var str string
+	if err := json.Unmarshal(data, &str); err != nil {
+		return err
+	}
+
+	keyType, err := ParseKeyType(str)
+	if err != nil {
+		return err
+	}
+	*kt = keyType
+
+	return nil
+}*/
+
 // PrivateKey represents a private key that can be used to sign data.
 type PrivateKey interface {
 	Key

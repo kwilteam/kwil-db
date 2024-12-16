@@ -35,10 +35,9 @@ test/stress/stress
 **/debug.test*
 # local golangci-lint config
 .golangci.json
+nodekey.json
 
 gen/
-# helm charts deps
-deployments/helm/*/charts/
 
 dist/*
 
