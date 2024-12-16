@@ -57,6 +57,7 @@ func (kt KeyType) String() string {
 	}
 }
 
+// ParseKeyType parses a string into a KeyType.
 func ParseKeyType(s string) (KeyType, error) {
 	switch s {
 	case "secp256k1":
@@ -67,25 +68,6 @@ func ParseKeyType(s string) (KeyType, error) {
 		return 0, fmt.Errorf("unknown key type: %s", s)
 	}
 }
-
-/*func (kt KeyType) MarshalJSON() ([]byte, error) {
-	return []byte(`"` + kt.String() + `"`), nil
-}
-
-func (kt *KeyType) UnmarshalJSON(data []byte) error {
-	var str string
-	if err := json.Unmarshal(data, &str); err != nil {
-		return err
-	}
-
-	keyType, err := ParseKeyType(str)
-	if err != nil {
-		return err
-	}
-	*kt = keyType
-
-	return nil
-}*/
 
 // PrivateKey represents a private key that can be used to sign data.
 type PrivateKey interface {
