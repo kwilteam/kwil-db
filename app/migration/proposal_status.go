@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"math"
 
-	"github.com/kwilteam/kwil-db/cmd/common/display"
-	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
+	"github.com/kwilteam/kwil-db/app/rpc"
+	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/spf13/cobra"
 )
@@ -26,7 +26,7 @@ func proposalStatusCmd() *cobra.Command {
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			clt, err := common.GetAdminSvcClient(ctx, cmd)
+			clt, err := rpc.AdminSvcClient(ctx, cmd)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}

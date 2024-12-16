@@ -33,6 +33,15 @@ type Accounts struct {
 	// lru "github.com/hashicorp/golang-lru/v2"
 	// cache   *lru.Cache[string, *types.Account]
 
+	// spends is a list of spends that occurred in the block, used to track spends during migration.
+	// Updates are different from spends, as they capture the effects of the spends rather than spends itself.
+	spends []*Spend
+}
+
+type Spend struct {
+	Account []byte
+	Amount  *big.Int
+	Nonce   uint64
 }
 
 func InitializeAccountStore(ctx context.Context, db sql.DB, logger log.Logger) (*Accounts, error) {
@@ -165,7 +174,41 @@ func (a *Accounts) Spend(ctx context.Context, tx sql.Executor, account []byte, a
 		return errInsufficientFunds(account, amount, acct.Balance)
 	}
 
+	// track valid spends for migration
+	// transfers, credits etc need not be tracked as theya re not allowed during migration
+	a.recordSpend(account, amount, nonce)
+
 	return a.updateAccount(ctx, tx, account, newBal, nonce)
+}
+
+func (a *Accounts) recordSpend(account []byte, amount *big.Int, nonce int64) {
+	a.mtx.Lock()
+	defer a.mtx.Unlock()
+
+	a.spends = append(a.spends, &Spend{
+		Account: account,
+		Amount:  amount,
+		Nonce:   uint64(nonce),
+	})
+
+	a.log.Debug("Recorded spend", "account", hex.EncodeToString(account), "amount", amount, "nonce", nonce)
+}
+
+// GetBlockSpends returns all the spends that occurred in the block.
+func (a *Accounts) GetBlockSpends() []*Spend {
+	a.mtx.RLock()
+	defer a.mtx.RUnlock()
+
+	spends := make([]*Spend, len(a.spends))
+	for i, spend := range a.spends {
+		spends[i] = &Spend{
+			Account: spend.Account,
+			Amount:  new(big.Int).Set(spend.Amount),
+			Nonce:   spend.Nonce,
+		}
+	}
+
+	return spends
 }
 
 // ApplySpend spends an amount from an account. It blocks until the spend is written to the database.
@@ -255,6 +298,7 @@ func (a *Accounts) Commit() error {
 	}
 
 	a.updates = make(map[string]*types.Account)
+	a.spends = nil
 	return nil
 }
 
@@ -268,6 +312,14 @@ func (a *Accounts) Updates() []*types.Account {
 	}
 
 	return updates
+}
+
+func (a *Accounts) Rollback() {
+	a.mtx.Lock()
+	defer a.mtx.Unlock()
+
+	a.updates = make(map[string]*types.Account)
+	a.spends = nil
 }
 
 func (a *Accounts) createAccount(ctx context.Context, tx sql.Executor, account []byte, amt *big.Int, nonce int64) error {
@@ -302,11 +354,4 @@ func (a *Accounts) updateAccount(ctx context.Context, tx sql.Executor, account [
 		Nonce:      nonce,
 	}
 	return nil
-}
-
-func (a *Accounts) Rollback() {
-	a.mtx.Lock()
-	defer a.mtx.Unlock()
-
-	a.updates = make(map[string]*types.Account)
 }

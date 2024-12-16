@@ -23,11 +23,10 @@ import (
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
-	"github.com/kwilteam/kwil-db/internal/voting"
+	"github.com/kwilteam/kwil-db/node/voting"
 )
 
 // migrator instance responsible for managing zero downtime migrations.
@@ -123,7 +122,7 @@ func (m *Migrator) startMigration(ctx context.Context, app *common.App, resoluti
 
 	block.ChainContext.NetworkParameters.MigrationStatus = types.ActivationPeriod
 	m.activeMigration = active
-	app.Service.Logger.Info("migration started", log.Int("start_height", active.StartHeight), log.Int("end_height", active.EndHeight))
+	app.Service.Logger.Info("migration started", "start_height", active.StartHeight, "end_height", active.EndHeight)
 
 	// Delete the pending migration resolutions from the resolutions table
 	if err = voting.DeleteResolutionsByType(ctx, app.DB, []string{voting.StartMigrationEventType}); err != nil {
