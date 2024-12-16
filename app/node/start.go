@@ -40,6 +40,13 @@ func StartCmd() *cobra.Command {
 				return string(rawToml)
 			}))
 
+			stopProfiler, err := startProfilers(profMode(cfg.ProfileMode), cfg.ProfileFile)
+			if err != nil {
+				cmd.Usage()
+				return err
+			}
+			defer stopProfiler()
+
 			return runNode(cmd.Context(), rootDir, cfg)
 		},
 	}

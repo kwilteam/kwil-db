@@ -208,8 +208,8 @@ type Config struct {
 	LogFormat log.Format `toml:"log_format" comment:"log format\npossible values: 'json', 'text' (kv), and 'plain' (fmt-style)"`
 	// LogOutput []string   `toml:"log_output" comment:"output paths for the log"`
 
-	// ProfileMode string `toml:"profile_mode"`
-	// ProfileFile string `toml:"profile_file"`
+	ProfileMode string `toml:"profile_mode,commented" comment:"profile mode (http, cpu, mem, mutex, or block)"`
+	ProfileFile string `toml:"profile_file,commented" comment:"profile output file path (e.g. cpu.pprof)"`
 
 	P2P          PeerConfig                   `toml:"p2p" comment:"P2P related configuration"`
 	Consensus    ConsensusConfig              `toml:"consensus" comment:"Consensus related configuration"`
