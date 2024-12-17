@@ -11,8 +11,8 @@ import (
 	"path/filepath"
 	"runtime"
 
+	"github.com/kwilteam/kwil-db/app/key"
 	"github.com/kwilteam/kwil-db/config"
-	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/node"
 	"github.com/kwilteam/kwil-db/node/consensus"
@@ -71,13 +71,13 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config) (err error
 		return fmt.Errorf("failed to load genesis config: %w", err)
 	}
 
-	privKey, err := crypto.UnmarshalSecp256k1PrivateKey(cfg.PrivateKey)
+	keyFilePath := filepath.Join(rootDir, "nodekey.json")
+	privKey, err := key.LoadNodeKey(keyFilePath)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to load node key: %w", err)
 	}
 	pubKey := privKey.Public().Bytes()
-
-	logger.Info("Parsing the pubkey", "key", hex.EncodeToString(pubKey))
+	logger.Infoln("Node public key:", hex.EncodeToString(pubKey))
 
 	var tlsKeyPair *tls.Certificate
 	logger.Info("loading TLS key pair for the admin server", "key_file", cfg.Admin.TLSKeyFile,

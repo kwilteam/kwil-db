@@ -11,6 +11,7 @@ import (
 	"strconv"
 
 	"github.com/kwilteam/kwil-db/app/custom"
+	"github.com/kwilteam/kwil-db/app/key"
 	"github.com/kwilteam/kwil-db/app/shared/bind"
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -109,8 +110,6 @@ func generateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, start
 
 		cfg := custom.DefaultConfig() // not config.DefaultConfig(), so custom command config is used
 
-		cfg.PrivateKey = keys[i].Bytes()
-
 		// P2P
 		cfg.P2P.Port = startingPort + uint64(i)
 		cfg.P2P.IP = "127.0.0.1"
@@ -137,6 +136,11 @@ func generateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, start
 		// save the genesis configuration to the root directory
 		genFile := filepath.Join(nodeDir, config.GenesisFileName)
 		if err := genConfig.SaveAs(genFile); err != nil {
+			return err
+		}
+
+		err = key.SaveNodeKey(filepath.Join(nodeDir, "nodekey.json"), keys[i])
+		if err != nil {
 			return err
 		}
 	}

@@ -1,14 +1,14 @@
 package key
 
 import (
-	"crypto/rand"
 	"encoding/hex"
-	"os"
+	"fmt"
+	"strconv"
+
+	"github.com/spf13/cobra"
 
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/core/crypto"
-
-	"github.com/spf13/cobra"
 )
 
 var (
@@ -24,13 +24,26 @@ func GenCmd() *cobra.Command {
 	var out string
 
 	cmd := &cobra.Command{
-		Use:     "gen",
+		Use:     "gen [<keytype>]",
 		Short:   "Generate private keys for usage in validators.",
 		Long:    "Generate private keys for usage in validators.",
 		Example: genExample,
-		Args:    cobra.NoArgs,
+		Args:    cobra.RangeArgs(0, 1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			privKey, err := generatePrivateKey()
+			keyType := crypto.KeyTypeSecp256k1 // default with 0 args
+			if len(args) > 0 {
+				var err error
+				keyType, err = crypto.ParseKeyType(args[0])
+				if err != nil {
+					keyTypeInt, err := strconv.ParseUint(args[0], 10, 16)
+					if err != nil {
+						return display.PrintErr(cmd, fmt.Errorf("invalid key type (%s): %w", args[0], err))
+					}
+					keyType = crypto.KeyType(keyTypeInt)
+				}
+			}
+
+			privKey, err := generatePrivateKey(keyType)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
@@ -38,17 +51,15 @@ func GenCmd() *cobra.Command {
 			if out == "" {
 				if raw {
 					return display.PrintCmd(cmd, display.RespString(hex.EncodeToString(privKey.Bytes())))
-				} else {
-					pki := &PrivateKeyInfo{
-						PrivateKeyHex: hex.EncodeToString(privKey.Bytes()),
-						PublicKeyHex:  hex.EncodeToString(privKey.Public().Bytes()),
-					}
-					return display.PrintCmd(cmd, pki)
 				}
+				return display.PrintCmd(cmd, &PrivateKeyInfo{
+					KeyType:       keyType.String(),
+					PrivateKeyHex: hex.EncodeToString(privKey.Bytes()),
+					PublicKeyHex:  hex.EncodeToString(privKey.Public().Bytes()),
+				})
 			}
 
-			err = os.WriteFile(out, []byte(hex.EncodeToString(privKey.Bytes())), 0600)
-			if err != nil {
+			if err := SaveNodeKey(out, privKey); err != nil {
 				return display.PrintErr(cmd, err)
 			}
 
@@ -62,7 +73,15 @@ func GenCmd() *cobra.Command {
 	return cmd
 }
 
-func generatePrivateKey( /* TODO: key type */ ) (crypto.PrivateKey, error) {
-	privKey, _, err := crypto.GenerateSecp256k1Key(rand.Reader)
-	return privKey, err
+func generatePrivateKey(keyType crypto.KeyType) (crypto.PrivateKey, error) {
+	switch keyType {
+	case crypto.KeyTypeSecp256k1:
+		priv, _, err := crypto.GenerateSecp256k1Key(nil)
+		return priv, err
+	case crypto.KeyTypeEd25519:
+		priv, _, err := crypto.GenerateEd25519Key(nil)
+		return priv, err
+	default:
+		return nil, fmt.Errorf("unsupported key type: %s", keyType)
+	}
 }

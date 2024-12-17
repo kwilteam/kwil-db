@@ -152,8 +152,6 @@ func DefaultConfig() *Config {
 	return &Config{
 		LogLevel:  log.LevelInfo,
 		LogFormat: log.FormatUnstructured,
-		// Private key is empty by default. This should probably be moved back
-		// to a key file again to avoid accidentally leaking the key.
 		P2P: PeerConfig{
 			IP:        "0.0.0.0",
 			Port:      6600,
@@ -209,8 +207,6 @@ type Config struct {
 	LogLevel  log.Level  `toml:"log_level" comment:"log level\npossible values: 'debug', 'info', 'warn', and 'error'"`
 	LogFormat log.Format `toml:"log_format" comment:"log format\npossible values: 'json', 'text' (kv), and 'plain' (fmt-style)"`
 	// LogOutput []string   `toml:"log_output" comment:"output paths for the log"`
-
-	PrivateKey types.HexBytes `toml:"privkey" comment:"private key to use for node"`
 
 	// ProfileMode string `toml:"profile_mode"`
 	// ProfileFile string `toml:"profile_file"`

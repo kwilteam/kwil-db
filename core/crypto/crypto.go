@@ -46,6 +46,29 @@ const (
 	// KeyTypeRSA       KeyType = 2
 )
 
+func (kt KeyType) String() string {
+	switch kt {
+	case KeyTypeSecp256k1:
+		return "secp256k1"
+	case KeyTypeEd25519:
+		return "ed25519"
+	default:
+		return fmt.Sprintf("unknown key type %d", kt)
+	}
+}
+
+// ParseKeyType parses a string into a KeyType.
+func ParseKeyType(s string) (KeyType, error) {
+	switch s {
+	case "secp256k1":
+		return KeyTypeSecp256k1, nil
+	case "ed25519":
+		return KeyTypeEd25519, nil
+	default:
+		return 0, fmt.Errorf("unknown key type: %s", s)
+	}
+}
+
 // PrivateKey represents a private key that can be used to sign data.
 type PrivateKey interface {
 	Key

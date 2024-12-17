@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/hex"
 	"fmt"
 	"slices"
 	"testing"
@@ -10,16 +9,7 @@ import (
 	gotoml "github.com/pelletier/go-toml/v2"
 
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/node/types"
 )
-
-func mustDecodeHex(s string) types.HexBytes {
-	dec, err := hex.DecodeString(s)
-	if err != nil {
-		panic(err)
-	}
-	return dec
-}
 
 // TestMarshalDuration ensures that a time.Duration can be marshaled and
 // unmarshaled with the pelletier/go-toml/v2 library. This wasn't always the
@@ -57,9 +47,8 @@ func TestConfigSaveAndLoad(t *testing.T) {
 		{
 			name: "valid config",
 			config: Config{
-				LogLevel:   log.LevelDebug,
-				LogFormat:  log.FormatJSON,
-				PrivateKey: mustDecodeHex("1234567890"),
+				LogLevel:  log.LevelDebug,
+				LogFormat: log.FormatJSON,
 				P2P: PeerConfig{
 					IP:        "192.168.1.1",
 					Port:      8080,
@@ -108,9 +97,6 @@ func TestConfigSaveAndLoad(t *testing.T) {
 				}
 				if loaded.LogFormat != tt.config.LogFormat {
 					t.Errorf("LogFormat mismatch: got %v, want %v", loaded.LogFormat, tt.config.LogFormat)
-				}
-				if !loaded.PrivateKey.Equals(tt.config.PrivateKey) {
-					t.Errorf("PrivateKey mismatch: got %x, want %x", loaded.PrivateKey, tt.config.PrivateKey)
 				}
 				if loaded.P2P.IP != tt.config.P2P.IP {
 					t.Errorf("P2P.IP mismatch: got %v, want %v", loaded.P2P.IP, tt.config.P2P.IP)

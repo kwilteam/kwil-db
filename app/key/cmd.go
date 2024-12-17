@@ -26,20 +26,16 @@ func KeyCmd() *cobra.Command {
 	return keyCmd
 }
 
-func privKeyInfo(privateKey []byte, keyType crypto.KeyType) *PrivateKeyInfo {
-	priv, err := crypto.UnmarshalPrivateKey(privateKey, keyType)
-	if err != nil {
-		return &PrivateKeyInfo{PrivateKeyHex: "<invalid>"}
-	}
-	pub := priv.Public()
-
+func privKeyInfo(priv crypto.PrivateKey) *PrivateKeyInfo {
 	return &PrivateKeyInfo{
+		KeyType:       priv.Type().String(),
 		PrivateKeyHex: hex.EncodeToString(priv.Bytes()),
-		PublicKeyHex:  hex.EncodeToString(pub.Bytes()),
+		PublicKeyHex:  hex.EncodeToString(priv.Public().Bytes()),
 	}
 }
 
 type PrivateKeyInfo struct {
+	KeyType       string `json:"key_type"`
 	PrivateKeyHex string `json:"private_key_hex"`
 	PublicKeyHex  string `json:"public_key_hex"`
 }
@@ -50,8 +46,10 @@ func (p *PrivateKeyInfo) MarshalJSON() ([]byte, error) {
 }
 
 func (p *PrivateKeyInfo) MarshalText() ([]byte, error) {
-	return []byte(fmt.Sprintf(`Private key (hex): %s
+	return []byte(fmt.Sprintf(`Key type: %s
+Private key (hex): %s
 Public key (plain hex): %v`,
+		p.KeyType,
 		p.PrivateKeyHex,
 		p.PublicKeyHex,
 	)), nil

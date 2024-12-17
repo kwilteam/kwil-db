@@ -1,11 +1,11 @@
 package key
 
 import (
-	"bytes"
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"os"
+	"strconv"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -38,17 +38,38 @@ func InfoCmd() *cobra.Command {
 			// if len(args) == 1, then the private key is passed as a hex string
 			// otherwise, it is passed as a file path
 			if len(args) == 1 {
-				key, err := hex.DecodeString(args[0])
+				keyHex, keyTypeStr, _ := strings.Cut(args[0], "#")
+				keyBts, err := hex.DecodeString(keyHex)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("private key not valid hex: %w", err))
 				}
-				return display.PrintCmd(cmd, privKeyInfo(key, crypto.KeyTypeSecp256k1))
+				keyType := crypto.KeyTypeSecp256k1 // default
+				if keyTypeStr != "" {
+					keyTypeInt, err := strconv.ParseUint(keyTypeStr, 10, 16)
+					if err != nil { // maybe it's a string like "secp256k1"
+						keyType, err = crypto.ParseKeyType(keyTypeStr)
+						if err != nil {
+							return display.PrintErr(cmd, fmt.Errorf("invalid key type (%s): %w", keyTypeStr, err))
+						}
+					} else {
+						keyType = crypto.KeyType(keyTypeInt)
+					}
+				}
+				priv, err := crypto.UnmarshalPrivateKey(keyBts, keyType)
+				if err != nil {
+					return display.PrintErr(cmd, fmt.Errorf("invalid key: %w", err))
+				}
+				return display.PrintCmd(cmd, privKeyInfo(priv))
 			} else if privkeyFile != "" {
-				key, err := readKeyFile(privkeyFile)
+				key, err := LoadNodeKey(privkeyFile)
 				if err != nil {
 					return display.PrintErr(cmd, err)
 				}
-				return display.PrintCmd(cmd, privKeyInfo(key, crypto.KeyTypeSecp256k1))
+				return display.PrintCmd(cmd, &PrivateKeyInfo{
+					KeyType:       key.Type().String(),
+					PrivateKeyHex: hex.EncodeToString(key.Bytes()),
+					PublicKeyHex:  hex.EncodeToString(key.Public().Bytes()),
+				})
 			}
 
 			cmd.Usage()
@@ -59,19 +80,4 @@ func InfoCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&privkeyFile, "key-file", "o", "", "file containing the private key to display")
 
 	return cmd
-}
-
-// readKeyFile reads a private key from a text file containing the hexadecimal
-// encoding of the private key bytes.
-func readKeyFile(keyFile string) ([]byte, error) {
-	privKeyHexB, err := os.ReadFile(keyFile)
-	if err != nil {
-		return nil, fmt.Errorf("error reading private key file: %v", err)
-	}
-	privKeyHex := string(bytes.TrimSpace(privKeyHexB))
-	privB, err := hex.DecodeString(privKeyHex)
-	if err != nil {
-		return nil, fmt.Errorf("error decoding private key: %v", err)
-	}
-	return privB, nil
 }
