@@ -1701,7 +1701,7 @@ func Test_Listen(t *testing.T) {
 	}()
 
 	// notify 10 times to each
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		_, err = tx.Execute(ctx, "SELECT NOTICE($1);", fmt.Sprint(i))
 		require.NoError(t, err)
 
@@ -1719,7 +1719,7 @@ func Test_Listen(t *testing.T) {
 	require.Len(t, received, 10)
 	require.Len(t, received2, 10)
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		require.Equal(t, strconv.Itoa(i), received[i])
 		require.Equal(t, strconv.Itoa(-i), received2[i])
 	}
@@ -1748,7 +1748,7 @@ func Test_CancelListen(t *testing.T) {
 		}
 	}()
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		_, err = tx.Execute(ctx, "SELECT NOTICE($1);", fmt.Sprint(i))
 		require.NoError(t, err)
 	}
@@ -1758,7 +1758,7 @@ func Test_CancelListen(t *testing.T) {
 	err = done(ctx)
 	require.NoError(t, err)
 
-	for i := 0; i < 10; i++ {
+	for i := range 10 {
 		_, err = tx.Execute(ctx, "SELECT NOTICE($1);", fmt.Sprint(-(i + 1)))
 		require.NoError(t, err)
 	}

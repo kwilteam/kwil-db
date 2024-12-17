@@ -132,6 +132,7 @@ func TestChangesetMigration(t *testing.T) {
 		Engine:     nil,
 	}
 	err = applyChangeset(ctx, app, tx, int64(height), int64(totalChunks))
+	require.NoError(t, err)
 
 	res, err := tx.Execute(ctx, "select * from ds_test.test", pg.QueryModeExec)
 	require.NoError(t, err)

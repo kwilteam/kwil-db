@@ -150,7 +150,7 @@ func Test_EventStore(t *testing.T) {
 				ctx := context.Background()
 
 				// create 3 events
-				for i := 0; i < 3; i++ {
+				for i := range 3 {
 					data := fmt.Sprintf("test%d", i)
 					err := e.Store(ctx, []byte(data), "test")
 					require.NoError(t, err)
