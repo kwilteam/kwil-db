@@ -47,10 +47,7 @@ func TestSingleNodeMocknet(t *testing.T) {
 	}
 	mn := mock.New()
 
-	pk1, h1, err := newTestHost(t, mn)
-	if err != nil {
-		t.Fatalf("Failed to add peer to mocknet: %v", err)
-	}
+	pk1, h1 := newTestHost(t, mn)
 	bs1 := memstore.NewMemBS()
 	mp1 := mempool.New()
 
@@ -166,26 +163,20 @@ func TestDualNodeMocknet(t *testing.T) {
 	}
 	mn := mock.New()
 
-	pk1, h1, err := newTestHost(t, mn)
-	if err != nil {
-		t.Fatalf("Failed to add peer to mocknet: %v", err)
-	}
+	pk1, h1 := newTestHost(t, mn)
 	bs1 := memstore.NewMemBS()
 	mp1 := mempool.New()
 
 	db1 := initDB(t, "5432", "kwil_test_db")
 	func() {
 		ctx := context.Background()
-		_, err = db1.Pool().Execute(ctx, `DROP DATABASE IF EXISTS kwil_test_db2;`)
+		_, err := db1.Pool().Execute(ctx, `DROP DATABASE IF EXISTS kwil_test_db2;`)
 		require.NoError(t, err)
 		_, err = db1.Pool().Execute(ctx, `CREATE DATABASE kwil_test_db2 OWNER kwild;`)
 		require.NoError(t, err)
 	}()
 
-	pk2, h2, err := newTestHost(t, mn)
-	if err != nil {
-		t.Fatalf("Failed to add peer to mocknet: %v", err)
-	}
+	pk2, h2 := newTestHost(t, mn)
 	bs2 := memstore.NewMemBS()
 	mp2 := mempool.New()
 	db2 := initDB(t, "5432", "kwil_test_db2") // NOTE: using the same postgres host is a little wild

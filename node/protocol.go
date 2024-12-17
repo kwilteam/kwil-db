@@ -35,8 +35,6 @@ const (
 	ProtocolIDSnapshotMeta    protocol.ID = "/kwil/snapmeta/1.0.0"
 
 	getMsg = "get" // context dependent, in open stream convo
-
-	discoverPeersMsg = "discover_peers" // ProtocolIDDiscover
 )
 
 func requestFrom(ctx context.Context, host host.Host, peer peer.ID, resID []byte,
