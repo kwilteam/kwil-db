@@ -219,10 +219,16 @@ func restoreDB(d *coreDependencies) bool {
 	}
 
 	// Snapshot file exists
-	snapFile, err := os.Open(appCfg.GenesisState)
+	genFileName, err := node.ExpandPath(appCfg.GenesisState)
+	if err != nil {
+		failBuild(err, "failed to expand genesis state path")
+	}
+
+	snapFile, err := os.Open(genFileName)
 	if err != nil {
 		failBuild(err, "failed to open genesis state file")
 	}
+	defer snapFile.Close()
 
 	// Check if the snapshot file is compressed, if yes decompress it
 	var reader io.Reader

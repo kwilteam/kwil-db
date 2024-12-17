@@ -611,6 +611,7 @@ func (m *Migrator) loadChangeset(height int64, index int64) ([]byte, error) {
 		// we should check that prior to calling this function.
 		return nil, err
 	}
+	defer file.Close()
 
 	bts, err := io.ReadAll(file)
 	if err != nil {
