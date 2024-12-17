@@ -137,7 +137,7 @@ type GenesisInfo struct {
 	// AppHash is the application hash of the old network at the StartHeight
 	AppHash HexBytes `json:"app_hash"`
 	// Validators is the list of validators that the new network should start with
-	Validators []*NamedValidator `json:"validators"`
+	Validators []*Validator `json:"validators"`
 }
 
 // NamedValidator is a validator with a name.

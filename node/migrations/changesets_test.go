@@ -5,13 +5,17 @@ package migrations
 import (
 	"bytes"
 	"context"
+	"math/big"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/common/chain"
-	"github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/internal/sql/pg"
-	dbtest "github.com/kwilteam/kwil-db/internal/sql/pg/test"
+	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/node/accounts"
+	"github.com/kwilteam/kwil-db/node/pg"
+	dbtest "github.com/kwilteam/kwil-db/node/pg/test"
+	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -19,41 +23,39 @@ import (
 func TestChangesetMigration(t *testing.T) {
 	ctx := context.Background()
 
-	db, err := dbtest.NewTestDB(t)
-	require.NoError(t, err)
-	t.Cleanup(func() {
+	db := dbtest.NewTestDB(t, func(db *pg.DB) {
 		db.Close()
 	})
 
 	cleanup := func() {
 		db.AutoCommit(true)
-		_, err = db.Execute(ctx, "drop table if exists ds_test.test")
-		require.NoError(t, err)
-		_, err = db.Execute(ctx, "drop schema if exists ds_test")
-		require.NoError(t, err)
-		_, err = db.Execute(ctx, `DROP SCHEMA IF EXISTS `+migrationsSchemaName+` CASCADE;`)
-		require.NoError(t, err)
+		db.Execute(ctx, "DROP SCHEMA IF EXISTS ds_test CASCADE;")
+		db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_migrations CASCADE;`)
+		db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_chain CASCADE;`)
+		db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_voting CASCADE;`)
+		db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_internal CASCADE;`)
 		db.AutoCommit(false)
 	}
 	// attempt to clean up any old failed tests
-	cleanup()
 	t.Cleanup(func() {
 		cleanup()
 	})
 
-	err = createTestSchema(ctx, db, t)
+	err := createTestSchema(ctx, db, t)
 	require.NoError(t, err)
 
 	bts, err := sampleChangeset(ctx, db, t)
 	require.NoError(t, err)
 
 	// Split the changeset into chunks of 100 bytes each
-	logger := log.NewStdOut(log.InfoLevel)
+	logger := log.DiscardLogger
 
-	migrator, err = SetupMigrator(ctx, db, nil, nil, "migration_test", chain.MigrationParams{
+	vstore := newValidatorStore(nil)
+
+	migrator, err = SetupMigrator(ctx, db, nil, nil, "migration_test", config.MigrationParams{
 		StartHeight: 0,
 		EndHeight:   0,
-	}, logger)
+	}, vstore, logger)
 	require.NoError(t, err)
 
 	// Create a changeset migration
@@ -120,7 +122,16 @@ func TestChangesetMigration(t *testing.T) {
 	assert.Equal(t, total, rcvd, "total chunks should be equal")
 
 	// Apply the changesets
-	err = applyChangeset(ctx, tx, int64(height), int64(totalChunks))
+	app := &common.App{
+		DB: db,
+		Service: &common.Service{
+			Logger: log.DiscardLogger,
+		},
+		Accounts:   &mockAccounts{},
+		Validators: vstore,
+		Engine:     nil,
+	}
+	err = applyChangeset(ctx, app, tx, int64(height), int64(totalChunks))
 
 	res, err := tx.Execute(ctx, "select * from ds_test.test", pg.QueryModeExec)
 	require.NoError(t, err)
@@ -130,8 +141,8 @@ func TestChangesetMigration(t *testing.T) {
 	require.Equal(t, "hello", res.Rows[0][1])
 }
 
-func createTestSchema(ctx context.Context, db sql.PreparedTxMaker, t *testing.T) error {
-	regularTx, err := db.BeginPreparedTx(ctx)
+func createTestSchema(ctx context.Context, db sql.TxMaker, t *testing.T) error {
+	regularTx, err := db.BeginTx(ctx)
 	require.NoError(t, err)
 	defer regularTx.Rollback(ctx)
 
@@ -198,4 +209,48 @@ func sampleChangeset(ctx context.Context, db sql.PreparedTxMaker, t *testing.T) 
 	require.NoError(t, err)
 
 	return csbts.Bytes(), nil
+}
+
+type validatorStore struct {
+	valSet []*types.Validator
+}
+
+func newValidatorStore(valSet []*types.Validator) *validatorStore {
+	return &validatorStore{
+		valSet: valSet,
+	}
+}
+
+func (v *validatorStore) GetValidators() []*types.Validator {
+	return v.valSet
+}
+
+func (v *validatorStore) GetValidatorPower(ctx context.Context, validator []byte) (int64, error) {
+	return 0, nil
+}
+
+func (v *validatorStore) SetValidatorPower(ctx context.Context, tx sql.Executor, validator []byte, power int64) error {
+	return nil
+}
+
+type mockAccounts struct{}
+
+func (m *mockAccounts) GetBlockSpends() []*accounts.Spend {
+	return nil
+}
+
+func (m *mockAccounts) Credit(ctx context.Context, tx sql.Executor, address []byte, balance *big.Int) error {
+	return nil
+}
+
+func (m *mockAccounts) Transfer(ctx context.Context, tx sql.TxMaker, from, to []byte, amt *big.Int) error {
+	return nil
+}
+
+func (m *mockAccounts) GetAccount(ctx context.Context, tx sql.Executor, account []byte) (*types.Account, error) {
+	return nil, nil
+}
+
+func (m *mockAccounts) ApplySpend(ctx context.Context, tx sql.Executor, account []byte, amount *big.Int, nonce int64) error {
+	return nil
 }

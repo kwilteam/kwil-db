@@ -23,19 +23,16 @@ import (
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
-	"github.com/kwilteam/kwil-db/internal/voting"
+	"github.com/kwilteam/kwil-db/node/voting"
 )
 
 // migrator instance responsible for managing zero downtime migrations.
 var migrator *Migrator
 
 func init() {
-	migrator = &Migrator{}
-
 	err := resolutions.RegisterResolution(voting.StartMigrationEventType, resolutions.ModAdd, MigrationResolution)
 	if err != nil {
 		panic(err)
@@ -75,14 +72,11 @@ var MigrationResolution = resolutions.ResolutionConfig{
 	ConfirmationThreshold: big.NewRat(2, 3),
 	ExpirationPeriod:      100800, // 1 week
 	ResolveFunc: func(ctx context.Context, app *common.App, resolution *resolutions.Resolution, block *common.BlockContext) error {
-		if migrator == nil || !migrator.initialized {
-			return fmt.Errorf("migrator not initialized")
-		}
-		return migrator.startMigration(ctx, app, resolution, block)
+		return startMigration(ctx, app, resolution, block)
 	},
 }
 
-func (m *Migrator) startMigration(ctx context.Context, app *common.App, resolution *resolutions.Resolution, block *common.BlockContext) error {
+func startMigration(ctx context.Context, app *common.App, resolution *resolutions.Resolution, block *common.BlockContext) error {
 	// check if the node is in migration mode already
 	if block.ChainContext.MigrationParams != nil {
 		app.Service.Logger.Warn("node is currently migrating from the old chain. Resubmit the migration proposal after the current migration is complete")
@@ -122,8 +116,7 @@ func (m *Migrator) startMigration(ctx context.Context, app *common.App, resoluti
 	}
 
 	block.ChainContext.NetworkParameters.MigrationStatus = types.ActivationPeriod
-	m.activeMigration = active
-	app.Service.Logger.Info("migration started", log.Int("start_height", active.StartHeight), log.Int("end_height", active.EndHeight))
+	app.Service.Logger.Info("migration started", "start_height", active.StartHeight, "end_height", active.EndHeight)
 
 	// Delete the pending migration resolutions from the resolutions table
 	if err = voting.DeleteResolutionsByType(ctx, app.DB, []string{voting.StartMigrationEventType}); err != nil {

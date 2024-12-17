@@ -14,7 +14,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/extensions/listeners"
-	"github.com/kwilteam/kwil-db/internal/voting"
+	"github.com/kwilteam/kwil-db/node/voting"
 )
 
 // Changeset Extension polls the changesets from the old chain  during migration.
@@ -61,25 +61,25 @@ type migrationListener struct {
 	changesetSize int64
 
 	// logger
-	logger log.SugaredLogger
+	logger log.Logger
 }
 
 func Start(ctx context.Context, service *common.Service, eventStore listeners.EventStore) error {
 	// Get the migration config from the service
 	cfg := &MigrationConfig{}
 
-	if service.LocalConfig.MigrationConfig == nil || !service.LocalConfig.MigrationConfig.Enable {
+	if !service.LocalConfig.Migrations.Enable {
 		service.Logger.Warn("no migration config provided, skipping migration listener")
 		return nil // no migration config provided
 	}
 
-	if service.LocalConfig.MigrationConfig.MigrateFrom == "" {
+	if service.LocalConfig.Migrations.MigrateFrom == "" {
 		return errors.New("migrate_from is mandatory for migration")
 	}
 
-	cfg.ListenAddress = service.LocalConfig.MigrationConfig.MigrateFrom
-	cfg.StartHeight = uint64(service.GenesisConfig.ConsensusParams.Migration.StartHeight)
-	cfg.EndHeight = uint64(service.GenesisConfig.ConsensusParams.Migration.EndHeight)
+	cfg.ListenAddress = service.LocalConfig.Migrations.MigrateFrom
+	cfg.StartHeight = uint64(service.GenesisConfig.Migration.StartHeight)
+	cfg.EndHeight = uint64(service.GenesisConfig.Migration.EndHeight)
 
 	// Kwild RPC client connection to the old chain
 	clt, err := client.NewClient(ctx, cfg.ListenAddress, nil)
@@ -99,13 +99,13 @@ func Start(ctx context.Context, service *common.Service, eventStore listeners.Ev
 	if lastHeight == 0 {
 		currentHeight = cfg.StartHeight
 	} else if lastHeight >= cfg.EndHeight {
-		service.Logger.Info("all the changesets have been synced, closing the migrations listener.", log.Int("height", int64(lastHeight)))
+		service.Logger.Info("all the changesets have been synced, closing the migrations listener.", "height", lastHeight)
 		return nil
 	} else {
 		currentHeight = lastHeight + 1
 	}
 
-	blockSize := service.GenesisConfig.ConsensusParams.Block.MaxBytes
+	blockSize := service.GenesisConfig.MaxBlockSize
 
 	// Create the migration listener
 	listener := &migrationListener{
@@ -118,7 +118,7 @@ func Start(ctx context.Context, service *common.Service, eventStore listeners.Ev
 	}
 
 	// Start polling the admin server for changesets
-	service.Logger.Info("start syncing changesets from old chain", log.Int("startHeight", int64(cfg.StartHeight)))
+	service.Logger.Info("start syncing changesets from old chain", "startHeight", cfg.StartHeight)
 	return listener.retrieveChangesets(ctx)
 }
 
@@ -126,7 +126,7 @@ func (ml *migrationListener) retrieveChangesets(ctx context.Context) error {
 	for {
 		if ml.currentHeight > ml.config.EndHeight {
 			// Synced up with the old chain, no more changesets to pull. Close the listener
-			ml.logger.Info("changesets have been synchronized with the old chain", log.Int("height", int64(ml.currentHeight)))
+			ml.logger.Info("changesets have been synchronized with the old chain", "height", ml.currentHeight)
 			return nil
 		}
 
@@ -139,11 +139,11 @@ func (ml *migrationListener) retrieveChangesets(ctx context.Context) error {
 		}
 		btsReceived := int64(0)
 
-		ml.logger.Info("received changeset metadata", log.Int("height", int64(ml.currentHeight)), log.Int("numChunks", numChunks), log.Any("chunkSizes", chunkSizes))
+		ml.logger.Info("received changeset metadata", "height", ml.currentHeight, "numChunks", numChunks, "chunkSizes", chunkSizes)
 
 		wg := sync.WaitGroup{}
 		errChan := make(chan error, numChunks)
-		for i := int64(0); i < numChunks; i++ {
+		for i := range numChunks {
 			wg.Add(1)
 			go func(chunkIdx int64) {
 				defer wg.Done()
@@ -155,7 +155,7 @@ func (ml *migrationListener) retrieveChangesets(ctx context.Context) error {
 				}
 
 				if len(cs) > 0 {
-					ml.logger.Debug("changeset chunk already received", log.Int("height", int64(ml.currentHeight)), log.Int("chunk", int(chunkIdx)))
+					ml.logger.Debug("changeset chunk already received", "height", ml.currentHeight, "chunk", chunkIdx)
 					// Chunk already received, skip
 					if int64(len(cs)) != chunkSizes[chunkIdx] {
 						errChan <- fmt.Errorf("changeset size mismatch: expected %d, got %d", chunkSizes[chunkIdx], len(cs))
@@ -233,7 +233,7 @@ func (ml *migrationListener) addChangesetEvent(ctx context.Context, height uint6
 	// Check if the changeset is empty and skip it if it is not at the end height
 	// Add the changeset for the end height even if it is empty to signal the end of the migration
 	if height != ml.config.EndHeight && numChunks == 0 {
-		ml.logger.Debug("empty changesets for height", log.Int("height", int64(height)))
+		ml.logger.Debug("empty changesets for height", "height", height)
 		return nil
 	}
 
@@ -259,7 +259,7 @@ func (ml *migrationListener) addChangesetEvent(ctx context.Context, height uint6
 			return err
 		}
 	} else {
-		for i := int64(0); i < totalChunks; i++ {
+		for i := range totalChunks {
 			// Read as many bytes as the changeset size
 			cs, err := reader.Read(ctx, ml.eventStore, int(ml.changesetSize))
 			if err != nil {
@@ -278,7 +278,7 @@ func (ml *migrationListener) addChangesetEvent(ctx context.Context, height uint6
 	}
 
 	// delete the changeset chunks from the event store
-	for i := int64(0); i < totalChunks; i++ {
+	for i := range totalChunks {
 		if err = deleteChangesetChunk(ctx, ml.eventStore, height, uint64(i)); err != nil {
 			return err
 		}
@@ -302,7 +302,7 @@ func (ml *migrationListener) addEvent(height, prevHeight, totalChunks, chunkIdx 
 		return err
 	}
 
-	ml.logger.Info("adding changeset migration event", log.Int("height", int64(height)), log.Int("size", len(csData)), log.Int("prevHeight", int(prevHeight)))
+	ml.logger.Info("adding changeset migration event", "height", height, "size", csData, "prevHeight", int(prevHeight))
 
 	// Broadcast the changeset migration event to the event store for voting
 	err = ml.eventStore.Broadcast(context.Background(), voting.ChangesetMigrationEventType, csEvt)

@@ -18,30 +18,6 @@ const (
 
 var ErrNotFound = errors.New("not found")
 
-func NewBlock(height int64, prevHash, appHash, valSetHash Hash, stamp time.Time, txns [][]byte) *Block {
-	numTxns := len(txns)
-	txHashes := make([]Hash, numTxns)
-	for i := range txns {
-		txHashes[i] = HashBytes(txns[i])
-	}
-	merkelRoot := CalcMerkleRoot(txHashes)
-	hdr := &BlockHeader{
-		Version:     BlockVersion,
-		Height:      height,
-		PrevHash:    prevHash,
-		PrevAppHash: appHash,
-		NumTxns:     uint32(numTxns),
-		Timestamp:   stamp.UTC(),
-		MerkleRoot:  merkelRoot,
-
-		ValidatorSetHash: valSetHash,
-	}
-	return &Block{
-		Header: hdr,
-		Txns:   txns,
-	}
-}
-
 type BlockHeader struct {
 	Version     uint16
 	Height      int64
@@ -64,6 +40,30 @@ type Block struct {
 	Header    *BlockHeader
 	Txns      [][]byte // TODO: convert to []*Transaction
 	Signature []byte   // Signature is the block producer's signature (leader in our model)
+}
+
+func NewBlock(height int64, prevHash, appHash, valSetHash Hash, stamp time.Time, txns [][]byte) *Block {
+	numTxns := len(txns)
+	txHashes := make([]Hash, numTxns)
+	for i := range txns {
+		txHashes[i] = HashBytes(txns[i])
+	}
+	merkelRoot := CalcMerkleRoot(txHashes)
+	hdr := &BlockHeader{
+		Version:     BlockVersion,
+		Height:      height,
+		PrevHash:    prevHash,
+		PrevAppHash: appHash,
+		NumTxns:     uint32(numTxns),
+		Timestamp:   stamp.UTC(),
+		MerkleRoot:  merkelRoot,
+
+		ValidatorSetHash: valSetHash,
+	}
+	return &Block{
+		Header: hdr,
+		Txns:   txns,
+	}
 }
 
 func (b *Block) Hash() Hash {

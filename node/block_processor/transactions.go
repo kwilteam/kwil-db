@@ -170,7 +170,7 @@ func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs [][]
 	}
 
 	var voteBodyTx []byte // TODO: check proposerNonce value again
-	voteBodyTx, err = bp.prepareValidatorVoteBodyTx(ctx, int64(proposerNonce)+1, maxTxBytes)
+	voteBodyTx, err = bp.prepareValidatorVoteBodyTx(ctx, int64(proposerNonce), maxTxBytes)
 	if err != nil {
 		bp.log.Error("Failed to prepare validator vote body transaction", "error", err)
 		return nil, nil, err
@@ -221,6 +221,10 @@ func (bp *BlockProcessor) prepareValidatorVoteBodyTx(ctx context.Context, nonce 
 	bal, n, err := bp.AccountInfo(ctx, readTx, bp.signer.Identity(), false)
 	if err != nil {
 		return nil, err
+	}
+
+	if nonce == 0 {
+		nonce = n
 	}
 
 	events, err := getEvents(ctx, readTx)
@@ -293,7 +297,7 @@ func (bp *BlockProcessor) prepareValidatorVoteBodyTx(ctx context.Context, nonce 
 
 	tx, err := types.CreateTransaction(&types.ValidatorVoteBodies{
 		Events: finalEvents,
-	}, bp.chainCtx.ChainID, uint64(nonce))
+	}, bp.chainCtx.ChainID, uint64(nonce)+1)
 	if err != nil {
 		return nil, err
 	}

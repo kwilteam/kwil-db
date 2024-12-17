@@ -8,11 +8,12 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/kwilteam/kwil-db/cmd/common/display"
-	"github.com/kwilteam/kwil-db/cmd/kwil-admin/cmds/common"
+	"github.com/kwilteam/kwil-db/app/rpc"
+	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/internal/migrations"
-	"github.com/kwilteam/kwil-db/internal/statesync"
+	"github.com/kwilteam/kwil-db/node"
+	"github.com/kwilteam/kwil-db/node/migrations"
+	"github.com/kwilteam/kwil-db/node/snapshotter"
 )
 
 var (
@@ -38,7 +39,7 @@ func genesisStateCmd() *cobra.Command {
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
-			clt, err := common.GetAdminSvcClient(ctx, cmd)
+			clt, err := rpc.AdminSvcClient(ctx, cmd)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
@@ -70,7 +71,7 @@ func genesisStateCmd() *cobra.Command {
 			}
 
 			// ensure the root directory exists
-			expandedDir, err := common.ExpandPath(rootDir)
+			expandedDir, err := node.ExpandPath(rootDir)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
@@ -80,7 +81,7 @@ func genesisStateCmd() *cobra.Command {
 			}
 
 			// retrieve the snapshot metadata
-			var snapshotMetadata statesync.Snapshot
+			var snapshotMetadata snapshotter.Snapshot
 			if err = json.Unmarshal(metadata.SnapshotMetadata, &snapshotMetadata); err != nil {
 				return display.PrintErr(cmd, err)
 			}
@@ -108,7 +109,7 @@ func genesisStateCmd() *cobra.Command {
 			defer snapshot.Close()
 
 			// retrieve all the snapshot chunks
-			for i := uint32(0); i < snapshotMetadata.ChunkCount; i++ {
+			for i := range snapshotMetadata.ChunkCount {
 				chunk, err := clt.GenesisSnapshotChunk(ctx, snapshotMetadata.Height, i)
 				if err != nil {
 					return display.PrintErr(cmd, err)
@@ -132,7 +133,7 @@ func genesisStateCmd() *cobra.Command {
 		},
 	}
 
-	common.BindRPCFlags(cmd)
+	rpc.BindRPCFlags(cmd)
 	cmd.Flags().StringVarP(&rootDir, "out-dir", "o", "~/.genesis-state", "The target directory for downloading the genesis state files.")
 	return cmd
 }
@@ -141,7 +142,7 @@ type genesisInfo struct {
 	// AppHash is the application hash of the old network at the StartHeight
 	AppHash []byte `json:"app_hash"`
 	// Validators is the list of validators that the new network should start with
-	Validators []*types.NamedValidator `json:"validators"`
+	Validators []*types.Validator `json:"validators"`
 
 	StartHeight int64 `json:"start_height"`
 	EndHeight   int64 `json:"end_height"`

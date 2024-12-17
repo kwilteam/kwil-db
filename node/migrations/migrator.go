@@ -10,17 +10,16 @@ import (
 	"path/filepath"
 	"sync"
 
-	cmtTypes "github.com/cometbft/cometbft/types"
 	"github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/common/chain"
-	"github.com/kwilteam/kwil-db/common/sql"
+	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
-	"github.com/kwilteam/kwil-db/internal/sql/pg"
-	"github.com/kwilteam/kwil-db/internal/sql/versioning"
-	"github.com/kwilteam/kwil-db/internal/txapp"
-	"github.com/kwilteam/kwil-db/internal/voting"
+	"github.com/kwilteam/kwil-db/node/accounts"
+	"github.com/kwilteam/kwil-db/node/pg"
+	"github.com/kwilteam/kwil-db/node/types/sql"
+	"github.com/kwilteam/kwil-db/node/versioning"
+	"github.com/kwilteam/kwil-db/node/voting"
 )
 
 var (
@@ -57,43 +56,29 @@ const (
 // changesets from the external node and applying them to the local database.
 // The changesets are stored from the start height of the migration to the end height (both inclusive).
 type Migrator struct {
-	initialized bool // set to true after the migrator is initialized
+	// config
+	genesisMigrationParams config.MigrationParams
+	// dir is the directory where the migration data is stored.
+	// It is expected to be a full path.
+	dir string
 
-	// mu is the mutex for the migrator.
+	// mu protects activeMigration and lastChangeset fields.
 	mu sync.RWMutex
 
 	// activeMigration is the migration plan that is approved by the network.
 	// It is nil if there is no plan for a migration.
 	activeMigration *activeMigration
 
-	// snapshotter creates snapshots of the state.
-	snapshotter Snapshotter
-
-	// DB is a connection to the database.
-	// It should connect to the same Postgres database as kwild,
-	// but should be a different connection pool.
-	DB Database
-
-	// accounts tracks all the spends that have occurred in the block.
-	accounts SpendTracker
-
 	// lastChangeset is the height of the last changeset that was stored.
 	// If no changesets have been stored, it is -1.
 	lastChangeset int64
 
-	// Logger is the logger for the migrator.
-	Logger log.Logger
-
-	// dir is the directory where the migration data is stored.
-	// It is expected to be a full path.
-	dir string
-
-	// consensusParamsFn is a function that returns the consensus params for the chain.
-	consensusParamsFn ConsensusParamsGetter
-	// consensusParamsFnChan is a channel that is signals if the consensusParamsFn is set.
-	consensusParamsFnChan chan struct{}
-
-	genesisMigrationParams chain.MigrationParams
+	// interfaces
+	snapshotter Snapshotter
+	DB          Database
+	accounts    Accounts
+	validators  Validators
+	Logger      log.Logger
 }
 
 // activeMigration is an in-process migration.
@@ -105,20 +90,18 @@ type activeMigration struct {
 }
 
 // SetupMigrator initializes the migrator instance with the necessary dependencies.
-func SetupMigrator(ctx context.Context, db Database, snapshotter Snapshotter, accounts SpendTracker, dir string, migrationParams chain.MigrationParams, logger log.Logger) (*Migrator, error) {
-	if migrator.initialized {
-		return nil, fmt.Errorf("migrator already initialized")
+func SetupMigrator(ctx context.Context, db Database, snapshotter Snapshotter, accounts Accounts, dir string, migrationParams config.MigrationParams, validators Validators, logger log.Logger) (*Migrator, error) {
+	// Set the migrator declared in migrations.go
+	migrator = &Migrator{
+		genesisMigrationParams: migrationParams,
+		snapshotter:            snapshotter,
+		Logger:                 logger,
+		dir:                    dir,
+		DB:                     db,
+		accounts:               accounts,
+		validators:             validators,
 	}
 
-	// Set the migrator declared in migrations.go
-	migrator.genesisMigrationParams = migrationParams
-	migrator.snapshotter = snapshotter
-	migrator.Logger = logger
-	migrator.dir = dir
-	migrator.DB = db
-	migrator.accounts = accounts
-	migrator.initialized = true
-	migrator.consensusParamsFnChan = make(chan struct{})
 	// Initialize the DB
 	upgradeFns := map[int64]versioning.UpgradeFunc{
 		0: initializeMigrationSchema,
@@ -157,6 +140,23 @@ func SetupMigrator(ctx context.Context, db Database, snapshotter Snapshotter, ac
 func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext, db Database) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
+
+	if block.ChainContext.NetworkParameters.MigrationStatus == types.ActivationPeriod && m.activeMigration == nil {
+		// if the network is in activation period, but there is no active migration, then
+		// this is the block at which the migration is approved by the network.
+		tx, err := db.BeginReadTx(ctx)
+		if err != nil {
+			return fmt.Errorf("failed to begin read tx: %w", err)
+		}
+		defer tx.Rollback(ctx)
+
+		activeM, err := getMigrationState(ctx, tx)
+		if err != nil {
+			return fmt.Errorf("failed to get migration state: %w", err)
+		}
+
+		m.activeMigration = activeM
+	}
 
 	// if there is no active migration, there is nothing to do
 	if m.activeMigration == nil {
@@ -211,11 +211,6 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext,
 		}
 
 		// Generate a genesis file for the snapshot
-		vals, err := voting.GetValidators(ctx, tx)
-		if err != nil {
-			return err
-		}
-
 		// Retrieve snapshot hash
 		snapshots := m.snapshotter.ListSnapshots()
 		if len(snapshots) == 0 {
@@ -225,16 +220,8 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext,
 			return fmt.Errorf("migration is active, but more than one snapshot found. This should not happen, and is likely a bug")
 		}
 
-		genesisVals := make([]*chain.GenesisValidator, len(vals))
-		for i, v := range vals {
-			genesisVals[i] = &chain.GenesisValidator{
-				PubKey: v.PubKey,
-				Power:  v.Power,
-				Name:   fmt.Sprintf("validator-%d", i),
-			}
-		}
-
-		go m.generateGenesisConfig(ctx, snapshots[0].SnapshotHash, genesisVals, m.Logger)
+		// generate genesis config
+		m.generateGenesisConfig(snapshots[0].SnapshotHash, m.Logger)
 	}
 
 	if block.Height == m.activeMigration.EndHeight {
@@ -243,70 +230,37 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext,
 		m.Logger.Info("migration to chain completed, no new transactions will be accepted")
 	}
 
-	m.lastChangeset = block.Height
 	return nil
 }
 
-// generateGenesisConfig generates the genesis config for the new chain based on the snapshot and the current
-// chain's consensus params. It saves the genesis file to the migrations/snapshots directory.
-// This function is called only once at the start height of the migration.
-// It is run asynchronously as we don't have access to the cometbft's state during replay.
-// Therefore we need to wait for the consensus params fn to be set before we can generate the genesis file.
-func (m *Migrator) generateGenesisConfig(ctx context.Context, snapshotHash []byte, genesisValidators []*chain.GenesisValidator, logger log.Logger) {
-	// block until the m.consensusParamsFn is closed
-	<-m.consensusParamsFnChan
-
-	// sanity check
-	if m.consensusParamsFn == nil {
-		logger.Error("consensus params fn is nil, cannot generate genesis config")
-		return
-	}
-
-	logger.Info("generating genesis config for the new chain")
-
-	height := m.activeMigration.StartHeight - 1
-	consensusParmas := m.consensusParamsFn(ctx, &height)
-	if consensusParmas == nil {
-		logger.Error("consensus params not found, cannot generate genesis config")
-		return
-	}
-
-	var genVals []*types.NamedValidator
-
-	for _, v := range genesisValidators {
-		genVals = append(genVals, &types.NamedValidator{
-			Name: v.Name,
-			Validator: types.Validator{
-				PubKey: v.PubKey,
-				Power:  v.Power,
-			},
-		})
-	}
-
+// generateGenesisConfig generates the genesis config for the migration.
+// It saves the genesis_info.json to the migrations directory.
+// The file includes genesis app hash based on the snapshot hash, and
+// the validator set at the time of the migration.
+func (m *Migrator) generateGenesisConfig(snapshotHash []byte, logger log.Logger) error {
 	genInfo := &types.GenesisInfo{
 		AppHash:    snapshotHash,
-		Validators: genVals,
+		Validators: m.validators.GetValidators(),
 	}
 
 	bts, err := json.Marshal(genInfo)
 	if err != nil {
-		logger.Error("failed to marshal genesis info", log.Error(err))
-		return
+		return fmt.Errorf("failed to marshal genesis info: %w", err)
 	}
 
 	// Save the genesis info
 	err = os.WriteFile(formatGenesisInfoFileName(m.dir), bts, 0644)
 	if err != nil {
-		logger.Error("failed to save genesis info", log.Error(err))
-		return
+		return fmt.Errorf("failed to save genesis info: %w", err)
 	}
 
 	logger.Info("genesis config generated successfully")
+	return nil
 }
 
 func (m *Migrator) PersistLastChangesetHeight(ctx context.Context, tx sql.Executor) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	return setLastStoredChangeset(ctx, tx, m.lastChangeset)
 }
@@ -314,9 +268,6 @@ func (m *Migrator) PersistLastChangesetHeight(ctx context.Context, tx sql.Execut
 // GetMigrationMetadata gets the metadata for the genesis snapshot,
 // as well as the available changesets.
 func (m *Migrator) GetMigrationMetadata(ctx context.Context, status types.MigrationStatus) (*types.MigrationMetadata, error) {
-	m.mu.RLock()
-	defer m.mu.RUnlock()
-
 	metadata := &types.MigrationMetadata{
 		MigrationState: types.MigrationState{
 			Status: status,
@@ -452,9 +403,9 @@ func (m *Migrator) GetChangeset(height int64, index int64) ([]byte, error) {
 //		snapshot data.....
 
 type ChangesetMetadata struct {
-	Height     int64
-	Chunks     int64
-	ChunkSizes []int64
+	Height     int64   `json:"height"`
+	Chunks     int64   `json:"chunks"`
+	ChunkSizes []int64 `json:"chunk_sizes"`
 }
 
 // Serialize serializes the metadata to a file.
@@ -482,7 +433,7 @@ func loadChangesetMetadata(metadatafile string) (*ChangesetMetadata, error) {
 }
 
 type BlockSpends struct {
-	Spends []*txapp.Spend
+	Spends []*accounts.Spend
 }
 
 var _ pg.ChangeStreamer = (*BlockSpends)(nil)
@@ -645,6 +596,10 @@ func (m *Migrator) StoreChangesets(height int64, changes <-chan any) error {
 	}
 
 	// signals NotifyHeight that all changesets have been written to disk
+	m.mu.Lock()
+	m.lastChangeset = height
+	m.mu.Unlock()
+
 	return nil
 }
 
@@ -656,6 +611,7 @@ func (m *Migrator) loadChangeset(height int64, index int64) ([]byte, error) {
 		// we should check that prior to calling this function.
 		return nil, err
 	}
+	defer file.Close()
 
 	bts, err := io.ReadAll(file)
 	if err != nil {
@@ -667,12 +623,17 @@ func (m *Migrator) loadChangeset(height int64, index int64) ([]byte, error) {
 const (
 	changesetsDirName = "changesets"
 	chunksDirName     = "chunks"
+	snapshotsDirName  = "snapshots"
 )
 
 // ChangesetsDir returns the directory where changesets are stored,
 // relative to the migration directory.
 func ChangesetsDir(migrationDir string) string {
 	return filepath.Join(migrationDir, changesetsDirName)
+}
+
+func SnapshotDir(migrationDir string) string {
+	return filepath.Join(migrationDir, snapshotsDirName)
 }
 
 // ensureChangesetDir creates the directory structure for a changeset block
@@ -731,18 +692,4 @@ func CleanupResolutionsAfterMigration(ctx context.Context, db sql.DB, adjustExpi
 	}
 
 	return tx.Commit(ctx)
-}
-
-type ConsensusParamsGetter func(ctx context.Context, height *int64) *cmtTypes.ConsensusParams
-
-// SetConsensusParamsGetter sets the function that returns the consensus params for the chain.
-// This closes the consensusParamsFnChan to signal that the function is set.
-// This is required especially in the replay mode, where the cometbft state is not available
-// until the replay is done. Therefore, the genesis config cannot be generated until the
-// consensus params are available.
-// SeeAlso: NewCometBftNode() in internal/abci/cometbft/node.go for the function that
-// generate the node config and does the replay.
-func (m *Migrator) SetConsensusParamsGetter(fn ConsensusParamsGetter) {
-	m.consensusParamsFn = fn
-	close(m.consensusParamsFnChan)
 }

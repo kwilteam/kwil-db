@@ -65,6 +65,18 @@ func ResetCmd() *cobra.Command {
 					return err
 				}
 				fmt.Println("Snapshots directory removed", snapDir)
+
+				// remove the migrations directory
+				migrationsDir := filepath.Join(rootDir, "migrations")
+				if err := os.RemoveAll(migrationsDir); err != nil {
+					return err
+				}
+				fmt.Println("Migrations directory removed", migrationsDir)
+
+				// remove genesis state file if exists
+				genesisFile := filepath.Join(rootDir, "genesis-state.sql.gz")
+				os.Remove(genesisFile) // ignore error
+				fmt.Println("Genesis state file removed", genesisFile)
 			}
 
 			return nil

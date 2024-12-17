@@ -21,6 +21,7 @@ const (
 	localSnapshotsDirName = "local_snapshots"
 
 	genesisStateFileName = "genesis-state.sql.gz"
+	genesisFileName      = "genesis.json"
 )
 
 // GenesisStateFileName returns the genesis state file in the root directory.
@@ -61,4 +62,8 @@ func ConfigFilePath(rootDir string) string {
 // MigrationDir returns the directory where the node's migrations are stored
 func MigrationDir(rootDir string) string {
 	return filepath.Join(rootDir, migrationsDirName)
+}
+
+func GenesisFilePath(rootDir string) string {
+	return filepath.Join(rootDir, genesisFileName)
 }

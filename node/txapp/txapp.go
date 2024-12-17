@@ -40,9 +40,6 @@ type TxApp struct {
 
 	// list of resolution types
 	resTypes []string // How do these get updated runtime?
-
-	// Tracks spends during migration
-	spends []*Spend
 }
 
 // NewTxApp creates a new router.
@@ -98,9 +95,11 @@ func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.
 	// genesis hooks
 	for _, hook := range hooks.ListGenesisHooks() {
 		err := hook.Hook(ctx, &common.App{
-			Service: r.service.NamedLogger(hook.Name),
-			DB:      db,
-			Engine:  r.Engine,
+			Service:    r.service.NamedLogger(hook.Name),
+			DB:         db,
+			Engine:     r.Engine,
+			Accounts:   r.Accounts,
+			Validators: r.Validators,
 		}, chainCtx)
 		if err != nil {
 			return fmt.Errorf("error running genesis hook %s: %w", hook.Name, err)
@@ -147,6 +146,20 @@ func (r *TxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockCont
 		return nil, err
 	}
 
+	// end block hooks
+	for _, hook := range hooks.ListEndBlockHooks() {
+		err := hook.Hook(ctx, &common.App{
+			Service:    r.service.NamedLogger(hook.Name),
+			DB:         db,
+			Engine:     r.Engine,
+			Accounts:   r.Accounts,
+			Validators: r.Validators,
+		}, block)
+		if err != nil {
+			return nil, fmt.Errorf("error running end block hook: %w", err)
+		}
+	}
+
 	return r.Validators.GetValidators(), nil
 }
 
@@ -156,8 +169,6 @@ func (r *TxApp) Commit() error {
 	r.Validators.Commit()
 
 	r.mempool.reset()
-
-	r.spends = nil // reset spends for the next block
 
 	return nil
 }
@@ -402,21 +413,6 @@ func (r *TxApp) Price(ctx context.Context, dbTx sql.DB, tx *types.Transaction, c
 	return route.Price(ctx, r, dbTx, tx)
 }
 
-type Spend struct {
-	Account []byte
-	Amount  *big.Int
-	Nonce   uint64
-}
-
-// recordSpend records a spend occurred during the block execution.
-// This only records spends during migrations.
-func (r *TxApp) recordSpend(ctx *common.TxContext, spend *Spend) {
-	r.service.Logger.Info("record spend", "account", spend.Account, "amount", spend.Amount, "nonce", spend.Nonce)
-	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationInProgress {
-		r.spends = append(r.spends, spend)
-	}
-}
-
 // checkAndSpend checks the price of a transaction.
 // It requires a tx, so that spends can be made transactional with other database interactions.
 // it returns the price it will cost to execute the transaction.
@@ -467,8 +463,6 @@ func (r *TxApp) checkAndSpend(ctx *common.TxContext, tx *types.Transaction, pric
 			}
 
 			// Record spend here as a spend has occurred
-			r.recordSpend(ctx, &Spend{Account: tx.Sender, Amount: account.Balance, Nonce: tx.Body.Nonce})
-
 			return account.Balance, types.CodeInsufficientBalance, fmt.Errorf("transaction tries to spend %s tokens, but account only has %s tokens", amt.String(), tx.Body.Fee.String())
 		}
 		if err != nil {
@@ -477,9 +471,6 @@ func (r *TxApp) checkAndSpend(ctx *common.TxContext, tx *types.Transaction, pric
 			}
 			return nil, types.CodeUnknownError, err
 		}
-
-		// Record spend here if in a migration
-		r.recordSpend(ctx, &Spend{Account: tx.Sender, Amount: tx.Body.Fee, Nonce: tx.Body.Nonce})
 
 		return tx.Body.Fee, types.CodeInsufficientFee, fmt.Errorf("transaction does not consent to spending enough tokens. transaction fee: %s, required fee: %s", tx.Body.Fee.String(), amt.String())
 	}
@@ -498,9 +489,6 @@ func (r *TxApp) checkAndSpend(ctx *common.TxContext, tx *types.Transaction, pric
 			return nil, types.CodeUnknownError, err2
 		}
 
-		// Record spend here
-		r.recordSpend(ctx, &Spend{Account: tx.Sender, Amount: account.Balance, Nonce: tx.Body.Nonce})
-
 		return account.Balance, types.CodeInsufficientBalance, fmt.Errorf("transaction tries to spend %s tokens, but account has %s tokens", amt.String(), account.Balance.String())
 	}
 	if err != nil {
@@ -510,14 +498,7 @@ func (r *TxApp) checkAndSpend(ctx *common.TxContext, tx *types.Transaction, pric
 		return nil, types.CodeUnknownError, err
 	}
 
-	// Record spend here
-	r.recordSpend(ctx, &Spend{Account: tx.Sender, Amount: amt, Nonce: tx.Body.Nonce})
 	return amt, types.CodeOk, nil
-}
-
-// GetBlockSpends returns the spends that occurred during the block.
-func (r *TxApp) GetBlockSpends() []*Spend { // If we track spends in the account store, can we simplify this?
-	return r.spends
 }
 
 // ApplyMempool applies the transactions in the mempool.

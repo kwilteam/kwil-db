@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"time"
 
@@ -58,6 +59,49 @@ type GenesisConfig struct {
 	// StateHash is the hash of the initial state of the chain, used when bootstrapping
 	// the chain with a network snapshot during migration.
 	StateHash []byte `json:"state_hash"`
+	// Migration specifies the migration configuration required for zero downtime migration.
+	Migration MigrationParams `json:"migration"`
+}
+
+func (gc *GenesisConfig) SanityChecks() error {
+	// Vote expiry shouldn't be 0
+	if gc.VoteExpiry == 0 {
+		return errors.New("vote expiry should be greater than 0")
+	}
+
+	// MaxVotesPerTx shouldn't be 0
+	if gc.MaxVotesPerTx == 0 {
+		return errors.New("max votes per tx should be greater than 0")
+	}
+
+	// join expiry shouldn't be 0
+	if gc.JoinExpiry == 0 {
+		return errors.New("join expiry should be greater than 0")
+	}
+
+	// Block params
+	if gc.MaxBlockSize == 0 {
+		return errors.New("max bytes should be greater than 0")
+	}
+
+	// Migration params should be both set or both unset
+	if (gc.Migration.StartHeight == 0 && gc.Migration.EndHeight != 0) ||
+		(gc.Migration.StartHeight != 0 && gc.Migration.EndHeight == 0) {
+		return errors.New("both start and end height should be set or unset")
+	}
+
+	return nil
+}
+
+type MigrationParams struct {
+	// StartHeight is the height from which the state from the old chain is to be migrated.
+	StartHeight int64 `json:"start_height"`
+	// EndHeight is the height till which the state from the old chain is to be migrated.
+	EndHeight int64 `json:"end_height"`
+}
+
+func (m *MigrationParams) IsMigration() bool {
+	return m.StartHeight != 0 || m.EndHeight != 0
 }
 
 func (nc *GenesisConfig) SaveAs(filename string) error {
@@ -180,6 +224,7 @@ type Config struct {
 	StateSync    StateSyncConfig              `toml:"state_sync" comment:"Statesync configuration (vs block sync)"`
 	Extensions   map[string]map[string]string `toml:"extensions" comment:"extension configuration"`
 	GenesisState string                       `toml:"genesis_state" comment:"path to the genesis state file, relative to the root directory"`
+	Migrations   MigrationConfig              `toml:"migrations" comment:"zero downtime migration configuration"`
 }
 
 // PeerConfig corresponds to the [p2p] section of the config.
@@ -251,6 +296,11 @@ type StateSyncConfig struct {
 
 	DiscoveryTimeout Duration `toml:"discovery_time" comment:"how long to discover snapshots before selecting one to use"`
 	MaxRetries       uint64   `toml:"max_retries" comment:"how many times to try after failing to apply a snapshot before switching to blocksync"`
+}
+
+type MigrationConfig struct {
+	Enable      bool   `toml:"enable" comment:"enable zero downtime migrations"`
+	MigrateFrom string `toml:"migrate_from" comment:"JSON-RPC listening address of the node to replicate the state from"`
 }
 
 // ConfigToTOML marshals the config to TOML. The `toml` struct field tag

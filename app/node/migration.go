@@ -1,4 +1,4 @@
-package server
+package node
 
 import (
 	"bytes"
@@ -10,18 +10,14 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"time"
 
-	"github.com/kwilteam/kwil-db/cmd/kwild/config"
-	"github.com/kwilteam/kwil-db/common/chain"
-	commonCfg "github.com/kwilteam/kwil-db/common/config"
+	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/client"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
-	"github.com/kwilteam/kwil-db/internal/migrations"
-	"github.com/kwilteam/kwil-db/internal/statesync"
+	"github.com/kwilteam/kwil-db/node/migrations"
+	"github.com/kwilteam/kwil-db/node/snapshotter"
 )
 
 // The migrationClient type is responsible for:
@@ -37,13 +33,13 @@ const (
 
 type migrationClient struct {
 	// listenAddress is the old chain's listen address to retrieve the genesis state
-	listenAddress string
-
+	listenAddress    string
+	rootDir          string
 	snapshotFileName string
 
 	clt        *client.Client
-	kwildCfg   *commonCfg.KwildConfig
-	genesisCfg *chain.GenesisConfig
+	kwildCfg   *config.Config
+	genesisCfg *config.GenesisConfig
 
 	logger log.Logger
 }
@@ -52,21 +48,21 @@ type migrationClient struct {
 // the node periodically polls the old chain for the genesis state. This mode is used to prepare the node
 // for migration by downloading the genesis state from the old chain for the new chain to start from.
 // It also updates the genesis and kwild configurations required for the migration process.
-func PrepareForMigration(ctx context.Context, kwildCfg *commonCfg.KwildConfig, genesisCfg *chain.GenesisConfig, logger log.Logger) (*commonCfg.KwildConfig, *chain.GenesisConfig, error) {
-	if kwildCfg.MigrationConfig.MigrateFrom == "" {
+func prepareForMigration(ctx context.Context, kwildCfg *config.Config, genesisCfg *config.GenesisConfig, rootDir string, logger log.Logger) (*config.Config, *config.GenesisConfig, error) {
+	if kwildCfg.Migrations.MigrateFrom == "" {
 		return nil, nil, errors.New("migrate_from is mandatory for migration")
 	}
 
-	logger.Info("Entering migration mode", log.String("migrate_from", kwildCfg.MigrationConfig.MigrateFrom))
+	logger.Info("Entering migration mode", "migrate_from", kwildCfg.Migrations.MigrateFrom)
 
-	snapshotFileName := config.GenesisStateFileName(kwildCfg.RootDir)
+	snapshotFileName := config.GenesisStateFileName(rootDir)
 
 	// if the genesis state is already downloaded, then no need to poll for genesis state
 	_, err := os.Stat(snapshotFileName)
 	if err == nil {
-		logger.Info("Genesis state already downloaded", log.String("genesis snapshot", snapshotFileName))
+		logger.Info("Genesis state already downloaded", "genesis snapshot", snapshotFileName)
 
-		if err := validateGenesisState(snapshotFileName, genesisCfg.DataAppHash); err != nil {
+		if err := validateGenesisState(snapshotFileName, genesisCfg.StateHash); err != nil {
 			return nil, nil, err
 		}
 
@@ -78,26 +74,26 @@ func PrepareForMigration(ctx context.Context, kwildCfg *commonCfg.KwildConfig, g
 	// if we reach here, then we still need to download the genesis state
 	// Therefore, the genesis app hash, initial height, and migration info
 	// should not already be set in the genesis config.
-	if len(genesisCfg.DataAppHash) != 0 {
+	if len(genesisCfg.StateHash) != 0 {
 		return nil, nil, errors.New("migration genesis config should not have app hash set")
 	}
 	if genesisCfg.InitialHeight != 0 && genesisCfg.InitialHeight != 1 {
 		// we are forcing users to adopt the height provided by the old chain
 		return nil, nil, errors.New("migration genesis config should not have initial height set")
 	}
-	if genesisCfg.ConsensusParams.Migration.IsMigration() {
+	if genesisCfg.Migration.IsMigration() {
 		return nil, nil, errors.New("migration genesis config should not have migration info set")
 	}
 
-	// old chain client
-	clt, err := client.NewClient(ctx, kwildCfg.MigrationConfig.MigrateFrom, nil)
+	// old chain client'
+	clt, err := client.NewClient(ctx, kwildCfg.Migrations.MigrateFrom, nil)
 	if err != nil {
 		return nil, nil, err
 	}
 
 	// Get the genesis state from the old chain
 	m := &migrationClient{
-		listenAddress:    kwildCfg.MigrationConfig.MigrateFrom,
+		listenAddress:    kwildCfg.Migrations.MigrateFrom,
 		clt:              clt,
 		kwildCfg:         kwildCfg,
 		genesisCfg:       genesisCfg,
@@ -116,12 +112,12 @@ func PrepareForMigration(ctx context.Context, kwildCfg *commonCfg.KwildConfig, g
 // pollForGenesisState polls for the genesis state from the old chain at a regular interval until the genesis state is available.
 func (m *migrationClient) pollForGenesisState(ctx context.Context) (err error) {
 	// Poll for the genesis state from the old chain
-	m.logger.Info("Requesting genesis state from the old chain", log.String("listen_address", m.listenAddress))
+	m.logger.Info("Requesting genesis state from the old chain", "listen_address", m.listenAddress)
 	for {
 		if err = m.downloadGenesisState(ctx); err == nil {
 			return nil
 		}
-		m.logger.Info("Genesis state not available", log.Error(err), log.Duration("retry after(sec)", defaultPollFrequency))
+		m.logger.Info("Genesis state not available", "error", err, "retryAfter", defaultPollFrequency)
 
 		// retry after defaultPollFrequency
 		select {
@@ -161,7 +157,7 @@ func (m *migrationClient) downloadGenesisState(ctx context.Context) error {
 	}
 
 	// Save the genesis state
-	var snapshotMetadata statesync.Snapshot
+	var snapshotMetadata snapshotter.Snapshot
 	if err := json.Unmarshal(metadata.SnapshotMetadata, &snapshotMetadata); err != nil {
 		return fmt.Errorf("failed to unmarshal snapshot metadata: %w", err)
 	}
@@ -175,7 +171,7 @@ func (m *migrationClient) downloadGenesisState(ctx context.Context) error {
 	}
 
 	// retrieve all the snapshot chunks
-	for i := uint32(0); i < snapshotMetadata.ChunkCount; i++ {
+	for i := range snapshotMetadata.ChunkCount {
 		chunk, err := m.clt.GenesisSnapshotChunk(ctx, snapshotMetadata.Height, i)
 		if err != nil {
 			return fmt.Errorf("failed to download genesis snapshot chunk: %d  error: %w", i, err)
@@ -190,8 +186,8 @@ func (m *migrationClient) downloadGenesisState(ctx context.Context) error {
 	}
 
 	// Update the genesis config
-	m.genesisCfg.DataAppHash = metadata.GenesisInfo.AppHash
-	m.genesisCfg.ConsensusParams.Migration = chain.MigrationParams{
+	m.genesisCfg.StateHash = metadata.GenesisInfo.AppHash
+	m.genesisCfg.Migration = config.MigrationParams{
 		StartHeight: metadata.MigrationState.StartHeight,
 		EndHeight:   metadata.MigrationState.EndHeight,
 	}
@@ -201,8 +197,7 @@ func (m *migrationClient) downloadGenesisState(ctx context.Context) error {
 	// Otherwise, ignore the validators from the old chain.
 	if len(m.genesisCfg.Validators) == 0 {
 		for _, v := range metadata.GenesisInfo.Validators {
-			m.genesisCfg.Validators = append(m.genesisCfg.Validators, &chain.GenesisValidator{
-				Name:   v.Name,
+			m.genesisCfg.Validators = append(m.genesisCfg.Validators, &types.Validator{
 				PubKey: v.PubKey,
 				Power:  v.Power,
 			})
@@ -212,14 +207,14 @@ func (m *migrationClient) downloadGenesisState(ctx context.Context) error {
 	}
 
 	// persist the genesis config
-	if err := m.genesisCfg.SaveAs(filepath.Join(m.kwildCfg.RootDir, cometbft.GenesisJSONName)); err != nil {
+	if err := m.genesisCfg.SaveAs(config.GenesisFilePath(m.rootDir)); err != nil {
 		return fmt.Errorf("failed to save genesis config: %w", err)
 	}
 
 	// Update the kwild config
-	m.kwildCfg.AppConfig.GenesisState = m.snapshotFileName
+	m.kwildCfg.GenesisState = m.snapshotFileName
 
-	m.logger.Info("Genesis state downloaded successfully", log.String("genesis snapshot", m.snapshotFileName))
+	m.logger.Info("Genesis state downloaded successfully", "genesis snapshot", m.snapshotFileName)
 	return nil
 }
 

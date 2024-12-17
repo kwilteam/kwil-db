@@ -26,6 +26,14 @@ var testConfig = &pg.DBConfig{
 	},
 }
 
+func cleanupDB(ctx context.Context, db *pg.DB) {
+	defer db.Close()
+	db.AutoCommit(true)
+	db.Execute(ctx, `DROP SCHEMA IF EXISTS `+schemaName+` CASCADE;`)
+	db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_internal CASCADE`)
+	db.AutoCommit(false)
+}
+
 func Test_AccountsLive(t *testing.T) {
 	for _, tc := range acctsTestCases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -33,13 +41,12 @@ func Test_AccountsLive(t *testing.T) {
 
 			db, err := pg.NewDB(ctx, testConfig)
 			require.NoError(t, err)
-			defer db.Close()
+			defer cleanupDB(ctx, db)
+
 			tx, err := db.BeginTx(ctx)
 
 			require.NoError(t, err)
 			defer tx.Rollback(ctx) // always rollback to avoid cleanup
-
-			defer db.Execute(ctx, `DROP SCHEMA IF EXISTS `+schemaName+` CASCADE;`)
 
 			accounts, err := InitializeAccountStore(ctx, tx, log.DiscardLogger)
 			require.NoError(t, err)
@@ -53,7 +60,7 @@ func TestGetAccount(t *testing.T) {
 	ctx := context.Background()
 	db, err := pg.NewDB(ctx, testConfig)
 	require.NoError(t, err)
-	defer db.Close()
+	defer cleanupDB(ctx, db)
 
 	tx1, err := db.BeginTx(ctx)
 	require.NoError(t, err)

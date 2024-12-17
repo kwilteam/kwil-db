@@ -6,14 +6,13 @@ import (
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/common/sql"
-	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/extensions/hooks"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
-	"github.com/kwilteam/kwil-db/internal/sql/pg"
-	"github.com/kwilteam/kwil-db/internal/voting"
+	"github.com/kwilteam/kwil-db/node/pg"
+	"github.com/kwilteam/kwil-db/node/types/sql"
+	"github.com/kwilteam/kwil-db/node/voting"
 )
 
 const (
@@ -90,7 +89,7 @@ var changesetMigrationResolution = resolutions.ResolutionConfig{
 		}
 
 		// insert the changeset into the database
-		app.Service.Logger.Debug("insert changeset chunk", log.Int("height", int64(migration.Height)), log.Int("chunkIndex", int64(migration.ChunkIdx)))
+		app.Service.Logger.Debug("insert changeset chunk", "height", migration.Height, "chunk_idx", migration.ChunkIdx)
 		tx, err := app.DB.BeginTx(ctx)
 		if err != nil {
 			return err
@@ -132,7 +131,7 @@ func applyChangesets(ctx context.Context, app *common.App, blockCtx *common.Bloc
 	if lastChangeset == endHeight {
 		// migration completed
 		blockCtx.ChainContext.MigrationParams = nil
-		app.Service.Logger.Info(migrationCompleted, log.Int("height", lastChangeset))
+		app.Service.Logger.Info(migrationCompleted, "height", lastChangeset)
 		blockCtx.ChainContext.NetworkParameters.MigrationStatus = types.NoActiveMigration
 		return nil
 	}
@@ -163,11 +162,11 @@ func applyChangesets(ctx context.Context, app *common.App, blockCtx *common.Bloc
 		}
 
 		// Apply the changeset if all chunks have been received
-		if err = applyChangeset(ctx, tx, height, totalChunks); err != nil {
+		if err = applyChangeset(ctx, app, tx, height, totalChunks); err != nil {
 			return err
 		}
 
-		app.Service.Logger.Info("Applied changesets", log.Int("height", height))
+		app.Service.Logger.Info("Applied changesets", "height", height)
 
 		// Delete the changeset after it has been applied
 		if err = deleteChangesets(ctx, tx, height); err != nil {
@@ -184,7 +183,7 @@ func applyChangesets(ctx context.Context, app *common.App, blockCtx *common.Bloc
 			// migration completed
 			blockCtx.ChainContext.MigrationParams = nil
 			blockCtx.ChainContext.NetworkParameters.MigrationStatus = types.NoActiveMigration
-			app.Service.Logger.Info(migrationCompleted, log.Int("height", height))
+			app.Service.Logger.Info(migrationCompleted, "height", height)
 			break
 		}
 	}
@@ -192,7 +191,7 @@ func applyChangesets(ctx context.Context, app *common.App, blockCtx *common.Bloc
 	return tx.Commit(ctx)
 }
 
-func applyChangeset(ctx context.Context, db sql.TxMaker, height int64, totalChunks int64) error {
+func applyChangeset(ctx context.Context, app *common.App, db sql.TxMaker, height int64, totalChunks int64) error {
 	tx, err := db.BeginTx(ctx)
 	if err != nil {
 		return err
@@ -247,7 +246,7 @@ func applyChangeset(ctx context.Context, db sql.TxMaker, height int64, totalChun
 
 			// apply the block spends
 			for _, spend := range bs.Spends {
-				if err = spend.ApplySpend(ctx, tx); err != nil {
+				if err = app.Accounts.ApplySpend(ctx, tx, spend.Account, spend.Amount, int64(spend.Nonce)); err != nil {
 					return err
 				}
 			}

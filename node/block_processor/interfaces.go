@@ -7,6 +7,7 @@ import (
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/node/migrations"
 	"github.com/kwilteam/kwil-db/node/snapshotter"
 	"github.com/kwilteam/kwil-db/node/txapp"
 	"github.com/kwilteam/kwil-db/node/types/sql"
@@ -82,3 +83,10 @@ var (
 	// marked received
 	getEvents = voting.GetEvents
 )
+
+type MigratorModule interface {
+	NotifyHeight(ctx context.Context, block *common.BlockContext, db migrations.Database) error
+	StoreChangesets(height int64, changes <-chan any) error
+	PersistLastChangesetHeight(ctx context.Context, tx sql.Executor) error
+	GetMigrationMetadata(ctx context.Context, status types.MigrationStatus) (*types.MigrationMetadata, error)
+}

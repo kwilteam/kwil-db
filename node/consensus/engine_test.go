@@ -24,6 +24,7 @@ import (
 	blockprocessor "github.com/kwilteam/kwil-db/node/block_processor"
 	"github.com/kwilteam/kwil-db/node/mempool"
 	"github.com/kwilteam/kwil-db/node/meta"
+	"github.com/kwilteam/kwil-db/node/migrations"
 	"github.com/kwilteam/kwil-db/node/pg"
 	dbtest "github.com/kwilteam/kwil-db/node/pg/test"
 	"github.com/kwilteam/kwil-db/node/snapshotter"
@@ -31,6 +32,7 @@ import (
 	"github.com/kwilteam/kwil-db/node/txapp"
 	"github.com/kwilteam/kwil-db/node/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
+	"github.com/kwilteam/kwil-db/node/voting"
 
 	"github.com/kwilteam/kwil-db/core/log"
 
@@ -78,6 +80,7 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) []*Config {
 	accounts := &mockAccounts{}
 
 	v := newValidatorStore(valSet)
+
 	// txapp, err := txapp.NewTxApp(ctx, db, nil, signer, nil, service, accounts, v)
 	// assert.NoError(t, err)
 	txapp := newDummyTxApp(valSet)
@@ -86,8 +89,14 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) []*Config {
 		db.AutoCommit(true)
 		ctx := context.Background()
 		db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_chain CASCADE;`)
+		db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_voting CASCADE;`)
+		db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_events CASCADE;`)
 		db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_internal CASCADE;`)
+		db.AutoCommit(false)
 	})
+
+	_, _, err := voting.NewResolutionStore(ctx, db) // create the voting resolution store
+	require.NoError(t, err)
 
 	func() {
 		tx, err := db.BeginTx(ctx)
@@ -118,8 +127,9 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) []*Config {
 		signer := auth.GetNodeSigner(privKeys[i])
 
 		ev := &mockEventStore{}
+		m := &mockMigrator{}
 
-		bp, err := blockprocessor.NewBlockProcessor(ctx, db, txapp, accounts, v, ss, ev, genCfg, signer, log.New(log.WithName("BP")))
+		bp, err := blockprocessor.NewBlockProcessor(ctx, db, txapp, accounts, v, ss, ev, m, genCfg, signer, log.New(log.WithName("BP")))
 		assert.NoError(t, err)
 		bp.SetNetworkParameters(&common.NetworkParameters{
 			MaxBlockSize:     genCfg.MaxBlockSize,
@@ -892,4 +902,22 @@ func (m *mockEventStore) GetUnbroadcastedEvents(ctx context.Context) ([]*ktypes.
 		ids = append(ids, event.ID())
 	}
 	return ids, nil
+}
+
+type mockMigrator struct{}
+
+func (m *mockMigrator) NotifyHeight(ctx context.Context, block *common.BlockContext, db migrations.Database) error {
+	return nil
+}
+
+func (m *mockMigrator) StoreChangesets(height int64, changes <-chan any) error {
+	return nil
+}
+
+func (m *mockMigrator) PersistLastChangesetHeight(ctx context.Context, tx sql.Executor) error {
+	return nil
+}
+
+func (m *mockMigrator) GetMigrationMetadata(ctx context.Context, status ktypes.MigrationStatus) (*ktypes.MigrationMetadata, error) {
+	return nil, nil
 }

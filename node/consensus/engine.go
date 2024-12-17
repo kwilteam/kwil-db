@@ -47,9 +47,9 @@ type ConsensusEngine struct {
 
 	proposeTimeout time.Duration
 
-	networkHeight  atomic.Int64
-	validatorSet   map[string]ktypes.Validator // key: hex encoded pubkey
-	genesisAppHash types.Hash
+	genesisHeight int64 // height of the genesis block
+	networkHeight atomic.Int64
+	validatorSet  map[string]ktypes.Validator // key: hex encoded pubkey
 
 	// stores state machine state for the consensus engine
 	state  state
@@ -68,7 +68,7 @@ type ConsensusEngine struct {
 	// Channels
 	newRound     chan struct{}
 	msgChan      chan consensusMessage
-	haltChan     chan struct{}      // can take a msg or reason for halting the network
+	haltChan     chan string        // can take a msg or reason for halting the network
 	resetChan    chan int64         // to reset the state of the consensus engine
 	bestHeightCh chan *discoveryMsg // to sync the leader with the network
 
@@ -102,7 +102,7 @@ type Config struct {
 	// Leader is the public key of the leader.
 	Leader crypto.PublicKey
 
-	GenesisHash types.Hash
+	GenesisHeight int64
 
 	DB *pg.DB
 	// Mempool is the mempool of the node.
@@ -238,18 +238,18 @@ func New(cfg *Config) *ConsensusEngine {
 			status:  Committed,
 			blkProp: nil,
 		},
-		validatorSet: maps.Clone(cfg.ValidatorSet),
-		msgChan:      make(chan consensusMessage, 1), // buffer size??
-		haltChan:     make(chan struct{}, 1),
-		resetChan:    make(chan int64, 1),
-		bestHeightCh: make(chan *discoveryMsg, 1),
-		newRound:     make(chan struct{}, 1),
+		validatorSet:  maps.Clone(cfg.ValidatorSet),
+		genesisHeight: cfg.GenesisHeight,
+		msgChan:       make(chan consensusMessage, 1), // buffer size??
+		haltChan:      make(chan string, 1),
+		resetChan:     make(chan int64, 1),
+		bestHeightCh:  make(chan *discoveryMsg, 1),
+		newRound:      make(chan struct{}, 1),
 		// interfaces
 		mempool:        cfg.Mempool,
 		blockStore:     cfg.BlockStore,
 		blockProcessor: cfg.BlockProcessor,
 		log:            logger,
-		genesisAppHash: cfg.GenesisHash,
 	}
 
 	ce.role.Store(role)
@@ -340,10 +340,8 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 			ce.log.Info("Shutting down the consensus engine")
 			return nil
 
-		case <-ce.haltChan:
-			// Halt the network
-			// ce.resetState(ctx) // rollback the current block execution and stop the node
-			ce.log.Error("Received halt signal, stopping the consensus engine")
+		case halt := <-ce.haltChan:
+			ce.log.Error("Received halt signal, stopping the consensus engine", "reason", halt)
 			return nil
 
 		case <-ce.newRound:
@@ -369,6 +367,13 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 
 		case <-blkPropTicker.C:
 			ce.rebroadcastBlkProposal(ctx)
+
+		default:
+			params := ce.blockProcessor.ConsensusParams() // status check, validators halt here
+			if params != nil && params.MigrationStatus == ktypes.MigrationCompleted {
+				ce.haltChan <- "Network halted due to migration"
+				return nil
+			}
 		}
 	}
 }
@@ -446,7 +451,7 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 
 	ce.log.Info("Initial Node state: ", "appHeight", appHeight, "storeHeight", storeHeight, "appHash", appHash, "storeAppHash", storeAppHash)
 
-	if appHeight > storeHeight {
+	if appHeight > storeHeight && appHeight != ce.genesisHeight {
 		// This is not possible, App can't be ahead of the store
 		return fmt.Errorf("app height %d is greater than the store height %d (did you forget to reset postgres?)", appHeight, storeHeight)
 	}
@@ -454,13 +459,12 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 	if appHeight == -1 {
 		// This is the first time the node is bootstrapping
 		// initialize the db with the genesis state
-		genHeight, genAppHash, err := ce.blockProcessor.InitChain(ctx)
+		appHeight, appHash, err = ce.blockProcessor.InitChain(ctx)
 		if err != nil {
 			return fmt.Errorf("error initializing the chain: %w", err)
 		}
 
-		ce.state.lc.height = genHeight
-		copy(ce.state.lc.appHash[:], genAppHash)
+		ce.setLastCommitInfo(appHeight, nil, appHash)
 
 	} else if appHeight > 0 {
 		if appHeight == storeHeight && !bytes.Equal(appHash, storeAppHash[:]) {
@@ -468,7 +472,7 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 			return fmt.Errorf("AppHash mismatch, appHash: %x, storeAppHash: %v", appHash, storeAppHash)
 		}
 
-		ce.setLastCommitInfo(appHeight, blkHash, types.Hash(appHash))
+		ce.setLastCommitInfo(appHeight, blkHash[:], appHash)
 	}
 
 	// Replay the blocks from the blockstore if the app hasn't played all the blocks yet.
@@ -528,10 +532,10 @@ func (ce *ConsensusEngine) updateValidatorSetAndRole() error {
 	return nil
 }
 
-func (ce *ConsensusEngine) setLastCommitInfo(height int64, blkHash types.Hash, appHash types.Hash) {
+func (ce *ConsensusEngine) setLastCommitInfo(height int64, blkHash []byte, appHash []byte) {
 	ce.state.lc.height = height
-	ce.state.lc.appHash = appHash
-	ce.state.lc.blkHash = blkHash
+	copy(ce.state.lc.appHash[:], appHash)
+	copy(ce.state.lc.blkHash[:], blkHash)
 
 	ce.stateInfo.height = height
 	ce.stateInfo.status = Committed
@@ -586,7 +590,7 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 	if ce.role.Load() == types.RoleValidator {
 		// reannounce the acks, if still waiting for the commit message
 		if ce.state.blkProp != nil && ce.state.blockRes != nil &&
-			!ce.state.blockRes.appHash.IsZero() && ce.networkHeight.Load() <= ce.state.lc.height && ce.state.lc.height != 0 {
+			!ce.state.blockRes.appHash.IsZero() {
 			ce.log.Info("Reannouncing ACK", "ack", ce.state.blockRes.ack, "height", ce.state.blkProp.height, "hash", ce.state.blkProp.blkHash)
 			go ce.ackBroadcaster(ce.state.blockRes.ack, ce.state.blkProp.height, ce.state.blkProp.blkHash, &ce.state.blockRes.appHash)
 		}
@@ -598,6 +602,7 @@ func (ce *ConsensusEngine) rebroadcastBlkProposal(ctx context.Context) {
 	defer ce.state.mtx.RUnlock()
 
 	if ce.role.Load() == types.RoleLeader && ce.state.blkProp != nil {
+		ce.log.Info("Rebroadcasting block proposal", "height", ce.state.blkProp.height)
 		go ce.proposalBroadcaster(ctx, ce.state.blkProp.blk)
 	}
 }
@@ -650,8 +655,8 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 					ce.nextState()
 				} else {
 					// halt the network
-					ce.log.Error("Incorrect AppHash, halting the node.", "received", appHash, "has", ce.state.blockRes.appHash)
-					close(ce.haltChan)
+					haltR := fmt.Sprintf("Incorrect AppHash, received: %v, has: %v", appHash, ce.state.blockRes.appHash)
+					ce.haltChan <- haltR
 				}
 			}
 		}
