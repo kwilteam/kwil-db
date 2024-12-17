@@ -6,6 +6,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/app/custom"
 	"github.com/kwilteam/kwil-db/app/key"
+	"github.com/kwilteam/kwil-db/app/migration"
 	"github.com/kwilteam/kwil-db/app/node"
 	"github.com/kwilteam/kwil-db/app/node/conf"
 	"github.com/kwilteam/kwil-db/app/rpc"
@@ -63,6 +64,7 @@ func RootCmd() *cobra.Command {
 	cmd.AddCommand(whitelist.WhitelistCmd())
 	cmd.AddCommand(key.KeyCmd())
 	cmd.AddCommand(snapshot.NewSnapshotCmd())
+	cmd.AddCommand(migration.NewMigrationCmd())
 
 	return cmd
 }

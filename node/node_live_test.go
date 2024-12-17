@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"math/big"
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -21,10 +22,12 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/node/accounts"
 	blockprocessor "github.com/kwilteam/kwil-db/node/block_processor"
 	"github.com/kwilteam/kwil-db/node/consensus"
 	"github.com/kwilteam/kwil-db/node/mempool"
 	"github.com/kwilteam/kwil-db/node/meta"
+	"github.com/kwilteam/kwil-db/node/migrations"
 	"github.com/kwilteam/kwil-db/node/pg"
 	pgtest "github.com/kwilteam/kwil-db/node/pg/test"
 	"github.com/kwilteam/kwil-db/node/store/memstore"
@@ -93,9 +96,16 @@ func TestSingleNodeMocknet(t *testing.T) {
 	signer1 := &auth.EthPersonalSigner{Key: *k}
 
 	es := &mockEventStore{}
+	accounts := &mockAccounts{}
+	mparams := config.MigrationParams{
+		StartHeight: 0, EndHeight: 0,
+	}
+
+	migrator, err := migrations.SetupMigrator(ctx, db1, newSnapshotStore(), accounts, filepath.Join(root1, "migrations"), mparams, vsReal, log.New(log.WithName("MIGRATOR")))
+	require.NoError(t, err)
 
 	bpl := log.New(log.WithName("BP1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
-	bp, err := blockprocessor.NewBlockProcessor(ctx, db1, newDummyTxApp(valSetList), &mockAccounts{}, vsReal, ss, es, genCfg, signer1, bpl)
+	bp, err := blockprocessor.NewBlockProcessor(ctx, db1, newDummyTxApp(valSetList), &mockAccounts{}, vsReal, ss, es, migrator, genCfg, signer1, bpl)
 	require.NoError(t, err)
 
 	ceCfg1 := &consensus.Config{
@@ -219,9 +229,19 @@ func TestDualNodeMocknet(t *testing.T) {
 
 	signer1 := &auth.EthPersonalSigner{Key: *k}
 	es1 := &mockEventStore{}
+	accounts1 := &mockAccounts{}
+	mparams := config.MigrationParams{
+		StartHeight: 0, EndHeight: 0,
+	}
+
+	_, vstore1, err := voting.NewResolutionStore(ctx, db1)
+	require.NoError(t, err)
+
+	migrator, err := migrations.SetupMigrator(ctx, db1, newSnapshotStore(), accounts1, filepath.Join(root1, "migrations"), mparams, vstore1, log.New(log.WithName("MIGRATOR")))
+	require.NoError(t, err)
 
 	bpl1 := log.New(log.WithName("BP1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
-	bp1, err := blockprocessor.NewBlockProcessor(ctx, db1, newDummyTxApp(valSetList), &mockAccounts{}, newValidatorStore(valSetList), ss, es1, genCfg, signer1, bpl1)
+	bp1, err := blockprocessor.NewBlockProcessor(ctx, db1, newDummyTxApp(valSetList), accounts1, vstore1, ss, es1, migrator, genCfg, signer1, bpl1)
 
 	ceCfg1 := &consensus.Config{
 		PrivateKey:     privKeys[0],
@@ -269,9 +289,14 @@ func TestDualNodeMocknet(t *testing.T) {
 
 	signer2 := &auth.EthPersonalSigner{Key: *k2}
 	es2 := &mockEventStore{}
-	// _, vsReal2, err := voting.NewResolutionStore(ctx, db2)
+	accounts2 := &mockAccounts{}
+	_, vstore2, err := voting.NewResolutionStore(ctx, db2)
+	require.NoError(t, err)
+
+	migrator2, err := migrations.SetupMigrator(ctx, db2, newSnapshotStore(), accounts2, filepath.Join(root2, "migrations"), mparams, vstore2, log.New(log.WithName("MIGRATOR")))
+
 	bpl2 := log.New(log.WithName("BP2"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
-	bp2, err := blockprocessor.NewBlockProcessor(ctx, db2, newDummyTxApp(valSetList), &mockAccounts{}, newValidatorStore(valSetList), ss, es2, genCfg, signer2, bpl2)
+	bp2, err := blockprocessor.NewBlockProcessor(ctx, db2, newDummyTxApp(valSetList), accounts2, vstore2, ss, es2, migrator2, genCfg, signer2, bpl2)
 	ceCfg2 := &consensus.Config{
 		PrivateKey:     privKeys[1],
 		ValidatorSet:   valSet,
@@ -358,6 +383,7 @@ func cleanupDB(db *pg.DB) {
 	ctx := context.Background()
 	db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_chain CASCADE;`)
 	db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_internal CASCADE;`)
+	db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_voting CASCADE;`)
 }
 
 type dummyTxApp struct {
@@ -427,6 +453,10 @@ func (m *mockAccounts) Updates() []*ktypes.Account {
 	return nil
 }
 
+func (m *mockAccounts) GetBlockSpends() []*accounts.Spend {
+	return nil
+}
+
 type mockEventStore struct {
 	events []*ktypes.VotableEvent
 }
@@ -441,4 +471,23 @@ func (m *mockEventStore) GetUnbroadcastedEvents(ctx context.Context) ([]*ktypes.
 		ids = append(ids, event.ID())
 	}
 	return ids, nil
+}
+
+// TODO: can test with real migrator
+type mockMigrator struct{}
+
+func (m *mockMigrator) NotifyHeight(ctx context.Context, block *common.BlockContext, db migrations.Database) error {
+	return nil
+}
+
+func (m *mockMigrator) StoreChangesets(height int64, changes <-chan any) error {
+	return nil
+}
+
+func (m *mockMigrator) PersistLastChangesetHeight(ctx context.Context, tx sql.Executor) error {
+	return nil
+}
+
+func (m *mockMigrator) GetMigrationMetadata(ctx context.Context, status ktypes.MigrationStatus) (*ktypes.MigrationMetadata, error) {
+	return nil, nil
 }

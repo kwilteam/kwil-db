@@ -15,6 +15,7 @@ import (
 // If we receive a new proposal for the same height, abort the execution of the current proposal and
 // start processing the new proposal.
 func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types.Hash, leaderSig []byte, timestamp int64) bool {
+	ce.log.Info("ENTER ACCEPT PROPOSAL", "height", height, "blkID", blkID, "prevBlockID", prevBlockID)
 	if ce.role.Load() != types.RoleValidator { // TODO: Should sentry nodes download the proposal and forward it to the validators?
 		return false
 	}
@@ -23,10 +24,10 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 	ce.stateInfo.mtx.RLock()
 	defer ce.stateInfo.mtx.RUnlock()
 
-	ce.log.Debug("Accept proposal?", "height", height, "blkID", blkID, "prevHash", prevBlockID)
+	ce.log.Info("Accept proposal?", "height", height, "blkID", blkID, "prevHash", prevBlockID)
 
 	if height != ce.stateInfo.height+1 {
-		ce.log.Debug("Block proposal is not for the next height", "blkPropHeight", height, "expected", ce.stateInfo.height+1)
+		ce.log.Info("Block proposal is not for the next height", "blkPropHeight", height, "expected", ce.stateInfo.height+1)
 		return false
 	}
 
@@ -50,11 +51,12 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 			go ce.sendResetMsg(ce.stateInfo.height)
 			return true
 		}
-		ce.log.Debug("Already processing the block proposal", "height", height, "blkID", blkID)
+		ce.log.Info("Already processing the block proposal", "height", height, "blkID", blkID)
 		return false
 	}
 
 	// not processing any block, accept the proposal
+	ce.log.Info("Accepting block proposal: EXIT", "height", height, "blkID", blkID)
 	return true
 }
 
@@ -249,8 +251,8 @@ func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, a
 	}
 
 	if ce.state.blockRes.appHash != appHash {
-		ce.log.Error("Incorrect AppHash, halting the node.", "received", appHash, "has", ce.state.blockRes.appHash)
-		close(ce.haltChan)
+		haltR := fmt.Sprintf("Incorrect AppHash, halting the node. received: %s, computed: %s", appHash.String(), ce.state.blockRes.appHash.String())
+		ce.haltChan <- haltR
 		return nil
 	}
 
@@ -292,8 +294,8 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Blo
 	}
 
 	if ce.state.blockRes.appHash != appHash {
-		ce.log.Error("processAndCommit: Incorrect AppHash", "received", appHash, "have", ce.state.blockRes.appHash)
-		close(ce.haltChan)
+		haltR := fmt.Sprintf("processAndCommit: Incorrect AppHash, halting the node. received: %s, computed: %s", appHash.String(), ce.state.blockRes.appHash.String())
+		ce.haltChan <- haltR
 		return fmt.Errorf("appHash mismatch, expected: %s, received: %s", appHash, ce.state.blockRes.appHash)
 	}
 

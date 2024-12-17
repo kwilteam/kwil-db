@@ -38,7 +38,7 @@ type BlockProcessor struct {
 	genesisParams *config.GenesisConfig
 	signer        auth.Signer
 
-	mtx sync.Mutex // mutex to protect the consensus params
+	mtx sync.RWMutex // mutex to protect the consensus params
 	// consensus params
 	appHash  ktypes.Hash
 	height   atomic.Int64
@@ -57,6 +57,7 @@ type BlockProcessor struct {
 	validators  ValidatorModule
 	snapshotter SnapshotModule
 	events      EventStore
+	migrator    MigratorModule
 	log         log.Logger
 
 	broadcastTxFn BroadcastTxFn
@@ -68,7 +69,7 @@ type BlockProcessor struct {
 
 type BroadcastTxFn func(ctx context.Context, tx *ktypes.Transaction, sync uint8) (*ktypes.ResultBroadcastTx, error)
 
-func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Accounts, vs ValidatorModule, sp SnapshotModule, es EventStore, genesisCfg *config.GenesisConfig, signer auth.Signer, logger log.Logger) (*BlockProcessor, error) {
+func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Accounts, vs ValidatorModule, sp SnapshotModule, es EventStore, migrator MigratorModule, genesisCfg *config.GenesisConfig, signer auth.Signer, logger log.Logger) (*BlockProcessor, error) {
 	// get network parameters from the chain context
 	bp := &BlockProcessor{
 		db:          db,
@@ -78,6 +79,7 @@ func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Account
 		snapshotter: sp,
 		signer:      signer,
 		events:      es,
+		migrator:    migrator,
 		log:         logger,
 	}
 
@@ -100,15 +102,44 @@ func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Account
 	bp.height.Store(height)
 	copy(bp.appHash[:], appHash)
 
+	var migrationParams *common.MigrationContext
+	startHeight := genesisCfg.Migration.StartHeight
+	endHeight := genesisCfg.Migration.EndHeight
+
+	if startHeight != 0 && endHeight != 0 {
+		migrationParams = &common.MigrationContext{
+			StartHeight: startHeight,
+			EndHeight:   endHeight,
+		}
+	}
+
 	networkParams, err := meta.LoadParams(ctx, tx)
-	if err != nil && !errors.Is(err, meta.ErrParamsNotFound) {
+	if errors.Is(err, meta.ErrParamsNotFound) {
+		status := ktypes.NoActiveMigration
+		if migrationParams != nil {
+			status = ktypes.GenesisMigration
+		}
+
+		networkParams = &common.NetworkParameters{
+			MaxBlockSize:     genesisCfg.MaxBlockSize,
+			JoinExpiry:       genesisCfg.JoinExpiry,
+			VoteExpiry:       genesisCfg.VoteExpiry,
+			DisabledGasCosts: genesisCfg.DisabledGasCosts,
+			MigrationStatus:  status,
+			MaxVotesPerTx:    genesisCfg.MaxVotesPerTx,
+		}
+
+		if err := meta.StoreParams(ctx, tx, networkParams); err != nil {
+			return nil, fmt.Errorf("failed to store the network parameters: %w", err)
+		}
+	} else if err != nil {
 		return nil, fmt.Errorf("failed to load the network parameters: %w", err)
 	}
 
 	bp.chainCtx = &common.ChainContext{
 		ChainID:           genesisCfg.ChainID,
 		NetworkParameters: networkParams,
-		// MigrationParams:   genesisCfg.MigrationParams,
+		MigrationParams:   migrationParams,
 	}
 
 	if err := tx.Commit(ctx); err != nil {
@@ -163,7 +194,6 @@ func (bp *BlockProcessor) Rollback(ctx context.Context, height int64, appHash kt
 	}
 
 	bp.chainCtx.NetworkParameters = networkParams
-	// how about updates to the migration params? do we need to rollback them as well?
 
 	// Rollback internal state updates to the validators, accounts and mempool.
 	bp.txapp.Rollback()
@@ -177,6 +207,11 @@ func (bp *BlockProcessor) CheckTx(ctx context.Context, tx *ktypes.Transaction, r
 		return fmt.Errorf("invalid transaction: %v", err) // e.g. missing fields
 	}
 	txHash := types.HashBytes(rawTx)
+
+	// If the network is halted for migration, we reject all transactions.
+	if bp.chainCtx.NetworkParameters.MigrationStatus == ktypes.MigrationCompleted {
+		return fmt.Errorf("network is halted for migration")
+	}
 
 	bp.log.Info("Check transaction", "Recheck", recheck, "Hash", txHash, "Sender", hex.EncodeToString(tx.Sender),
 		"PayloadType", tx.Body.PayloadType.String(), "Nonce", tx.Body.Nonce, "TxFee", tx.Body.Fee.String())
@@ -256,19 +291,6 @@ func (bp *BlockProcessor) InitChain(ctx context.Context) (int64, []byte, error) 
 		return -1, nil, fmt.Errorf("error storing the genesis state: %w", err)
 	}
 
-	networkParams := &common.NetworkParameters{
-		MaxBlockSize:     genCfg.MaxBlockSize,
-		JoinExpiry:       genCfg.JoinExpiry,
-		VoteExpiry:       genCfg.VoteExpiry,
-		DisabledGasCosts: genCfg.DisabledGasCosts,
-		// MigrationStatus : genesisCfg.MigrationStatus,
-		MaxVotesPerTx: genCfg.MaxVotesPerTx,
-	}
-
-	if err := meta.StoreParams(ctx, genesisTx, networkParams); err != nil {
-		return -1, nil, fmt.Errorf("failed to store the network parameters: %w", err)
-	}
-
 	if err := bp.txapp.Commit(); err != nil {
 		return -1, nil, fmt.Errorf("txapp commit failed: %w", err)
 	}
@@ -281,7 +303,6 @@ func (bp *BlockProcessor) InitChain(ctx context.Context) (int64, []byte, error) 
 
 	bp.height.Store(genCfg.InitialHeight)
 	copy(bp.appHash[:], genCfg.StateHash)
-	bp.chainCtx.NetworkParameters = networkParams
 
 	bp.log.Infof("Initialized chain: height %d, appHash: %s", genCfg.InitialHeight, hex.EncodeToString(genCfg.StateHash))
 
@@ -303,12 +324,27 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 		return nil, fmt.Errorf("failed to begin the consensus transaction: %w", err)
 	}
 
+	// we copy the Kwil consensus params to ensure we persist any changes
+	// made during the block execution
+	networkParams := &common.NetworkParameters{
+		MaxBlockSize:     bp.chainCtx.NetworkParameters.MaxBlockSize,
+		JoinExpiry:       bp.chainCtx.NetworkParameters.JoinExpiry,
+		VoteExpiry:       bp.chainCtx.NetworkParameters.VoteExpiry,
+		DisabledGasCosts: bp.chainCtx.NetworkParameters.DisabledGasCosts,
+		MaxVotesPerTx:    bp.chainCtx.NetworkParameters.MaxVotesPerTx,
+		MigrationStatus:  bp.chainCtx.NetworkParameters.MigrationStatus,
+	}
+	oldNetworkParams := *networkParams
+
 	blockCtx := &common.BlockContext{
 		Height:       req.Height,
 		Timestamp:    req.Block.Header.Timestamp.Unix(),
 		ChainContext: bp.chainCtx,
 		Proposer:     req.Proposer,
 	}
+
+	inMigration := blockCtx.ChainContext.NetworkParameters.MigrationStatus == ktypes.MigrationInProgress
+	haltNetwork := blockCtx.ChainContext.NetworkParameters.MigrationStatus == ktypes.MigrationCompleted
 
 	txResults := make([]ktypes.TxResult, len(req.Block.Txns))
 
@@ -384,11 +420,20 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 		return nil, fmt.Errorf("failed to finalize the block execution: %w", err)
 	}
 
+	err = bp.migrator.NotifyHeight(ctx, blockCtx, bp.db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to notify the migrator about the block height: %w", err)
+	}
+
+	networkParams.MigrationStatus = bp.chainCtx.NetworkParameters.MigrationStatus
+
 	if err := meta.SetChainState(ctx, bp.consensusTx, req.Height, bp.appHash[:], true); err != nil {
 		return nil, fmt.Errorf("failed to set the chain state: %w", err)
 	}
 
-	// TODO: update the consensus params in the meta store
+	if err := meta.StoreDiff(ctx, bp.consensusTx, &oldNetworkParams, bp.chainCtx.NetworkParameters); err != nil {
+		return nil, fmt.Errorf("failed to store the network parameters: %w", err)
+	}
 
 	// Create a new changeset processor
 	csp := newChangesetProcessor()
@@ -396,7 +441,18 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 	csErrChan := make(chan error, 1)
 	defer close(csErrChan)
 
-	// TODO: Subscribe to the changesets
+	if inMigration && !haltNetwork {
+		csChanMigrator, err := csp.Subscribe(ctx, "migrator")
+		if err != nil {
+			return nil, fmt.Errorf("failed to subscribe to changeset processor: %w", err)
+		}
+		// migrator go routine will receive changesets from the changeset processor
+		// give the new channel to the migrator to store changesets
+		go func() {
+			csErrChan <- bp.migrator.StoreChangesets(req.Height, csChanMigrator)
+		}()
+	}
+
 	go csp.BroadcastChangesets(ctx)
 
 	appHash, err := bp.consensusTx.Precommit(ctx, csp.csChan)
@@ -415,6 +471,14 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 	txResultsHash := txResultsHash(txResults)
 
 	nextHash := bp.nextAppHash(bp.appHash, types.Hash(appHash), valUpdatesHash, accountsHash, txResultsHash)
+
+	if inMigration && !haltNetwork {
+		// wait for the migrator to finish storing the changesets
+		err = <-csErrChan
+		if err != nil {
+			return nil, fmt.Errorf("failed to store changesets during migration: %w", err)
+		}
+	}
 
 	bp.log.Info("Executed Block", "height", req.Height, "blkHash", req.BlockID, "appHash", nextHash)
 
@@ -450,6 +514,15 @@ func (bp *BlockProcessor) Commit(ctx context.Context, req *ktypes.CommitRequest)
 	}
 
 	if err := meta.SetChainState(ctxS, tx, req.Height, req.AppHash[:], false); err != nil {
+		err2 := tx.Rollback(ctxS)
+		if err2 != nil {
+			bp.log.Error("Failed to rollback the transaction", "err", err2)
+			return err2
+		}
+		return err
+	}
+
+	if err := bp.migrator.PersistLastChangesetHeight(ctxS, tx); err != nil {
 		err2 := tx.Rollback(ctxS)
 		if err2 != nil {
 			bp.log.Error("Failed to rollback the transaction", "err", err2)
@@ -638,8 +711,8 @@ func (bp *BlockProcessor) GetValidators() []*ktypes.Validator {
 }
 
 func (bp *BlockProcessor) ConsensusParams() *ktypes.ConsensusParams {
-	bp.mtx.Lock()
-	defer bp.mtx.Unlock()
+	bp.mtx.RLock()
+	defer bp.mtx.RUnlock()
 
 	return &ktypes.ConsensusParams{
 		MaxBlockSize:     bp.chainCtx.NetworkParameters.MaxBlockSize,
@@ -663,4 +736,12 @@ func (bp *BlockProcessor) SetNetworkParameters(params *common.NetworkParameters)
 		MaxVotesPerTx:    params.MaxVotesPerTx,
 		MigrationStatus:  params.MigrationStatus,
 	}
+}
+
+func (bp *BlockProcessor) GetMigrationMetadata(ctx context.Context) (*ktypes.MigrationMetadata, error) {
+	bp.mtx.RLock()
+	defer bp.mtx.RUnlock()
+
+	status := bp.chainCtx.NetworkParameters.MigrationStatus
+	return bp.migrator.GetMigrationMetadata(ctx, status)
 }

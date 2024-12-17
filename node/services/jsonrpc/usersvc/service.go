@@ -17,7 +17,9 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	adminTypes "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/kwilteam/kwil-db/node/ident"
+	"github.com/kwilteam/kwil-db/node/migrations"
 	"github.com/kwilteam/kwil-db/node/types/sql"
+	"github.com/kwilteam/kwil-db/node/voting"
 
 	"github.com/kwilteam/kwil-db/node/engine/execution" // errors from engine
 	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
@@ -43,7 +45,7 @@ type BlockchainTransactor interface {
 type NodeApp interface {
 	AccountInfo(ctx context.Context, db sql.DB, identifier []byte, pending bool) (balance *big.Int, nonce int64, err error)
 	Price(ctx context.Context, dbTx sql.DB, tx *types.Transaction) (*big.Int, error)
-	// GetMigrationMetadata(ctx context.Context) (*types.MigrationMetadata, error)
+	GetMigrationMetadata(ctx context.Context) (*types.MigrationMetadata, error)
 }
 
 // type Accounts interface {
@@ -56,11 +58,11 @@ type Validators interface {
 	GetValidators() []*types.Validator
 }
 
-// type Migrator interface {
-// 	GetChangesetMetadata(height int64) (*migrations.ChangesetMetadata, error)
-// 	GetChangeset(height int64, index int64) ([]byte, error)
-// 	GetGenesisSnapshotChunk(chunkIdx uint32) ([]byte, error)
-// }
+type Migrator interface {
+	GetChangesetMetadata(height int64) (*migrations.ChangesetMetadata, error)
+	GetChangeset(height int64, index int64) ([]byte, error)
+	GetGenesisSnapshotChunk(chunkIdx uint32) ([]byte, error)
+}
 
 // Service is the "user" RPC service, also known as txsvc in other contexts.
 type Service struct {
@@ -75,7 +77,7 @@ type Service struct {
 	nodeApp     NodeApp
 	chainClient BlockchainTransactor
 	validators  Validators
-	// migrator    Migrator
+	migrator    Migrator
 
 	// challenges issued to the clients
 	challengeMtx     sync.Mutex
@@ -140,7 +142,7 @@ const (
 
 // NewService creates a new instance of the user RPC service.
 func NewService(db DB, engine EngineReader, chainClient BlockchainTransactor,
-	nodeApp NodeApp, vals Validators, logger log.Logger, opts ...Opt) *Service {
+	nodeApp NodeApp, vals Validators, migrator Migrator, logger log.Logger, opts ...Opt) *Service {
 	cfg := &serviceCfg{
 		readTxTimeout:      defaultReadTxTimeout,
 		challengeExpiry:    defaultChallengeExpiry,
@@ -151,14 +153,14 @@ func NewService(db DB, engine EngineReader, chainClient BlockchainTransactor,
 	}
 
 	svc := &Service{
-		log:           logger,
-		readTxTimeout: cfg.readTxTimeout,
-		engine:        engine,
-		nodeApp:       nodeApp,
-		chainClient:   chainClient,
-		validators:    vals,
-		db:            db,
-		// migrator:         migrator,
+		log:              logger,
+		readTxTimeout:    cfg.readTxTimeout,
+		engine:           engine,
+		nodeApp:          nodeApp,
+		chainClient:      chainClient,
+		validators:       vals,
+		db:               db,
+		migrator:         migrator,
 		privateMode:      cfg.privateMode,
 		challengeExpiry:  cfg.challengeExpiry,
 		challenges:       make(map[[32]byte]time.Time),
@@ -853,19 +855,18 @@ func (svc *Service) TxQuery(ctx context.Context, req *userjson.TxQueryRequest) (
 }
 
 func (svc *Service) LoadChangeset(ctx context.Context, req *userjson.ChangesetRequest) (*userjson.ChangesetsResponse, *jsonrpc.Error) {
-	/*bts, err := svc.migrator.GetChangeset(req.Height, req.Index)
+	bts, err := svc.migrator.GetChangeset(req.Height, req.Index)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to load changesets", nil)
 	}
 
 	return &userjson.ChangesetsResponse{
 		Changesets: bts,
-	}, nil*/
-	return nil, nil
+	}, nil
 }
 
 func (svc *Service) LoadChangesetMetadata(ctx context.Context, req *userjson.ChangesetMetadataRequest) (*userjson.ChangesetMetadataResponse, *jsonrpc.Error) {
-	/*metadata, err := svc.migrator.GetChangesetMetadata(req.Height)
+	metadata, err := svc.migrator.GetChangesetMetadata(req.Height)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to load changeset metadata", nil)
 	}
@@ -874,36 +875,33 @@ func (svc *Service) LoadChangesetMetadata(ctx context.Context, req *userjson.Cha
 		Height:     metadata.Height,
 		Changesets: metadata.Chunks,
 		ChunkSizes: metadata.ChunkSizes,
-	}, nil*/
-	return nil, nil
+	}, nil
 }
 
 func (svc *Service) MigrationMetadata(ctx context.Context, req *userjson.MigrationMetadataRequest) (*userjson.MigrationMetadataResponse, *jsonrpc.Error) {
-	/*metadata, err := svc.abci.GetMigrationMetadata(ctx)
+	metadata, err := svc.nodeApp.GetMigrationMetadata(ctx)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, err.Error(), nil)
 	}
 
 	return &userjson.MigrationMetadataResponse{
 		Metadata: metadata,
-	}, nil*/
-	return nil, nil
+	}, nil
 }
 
 func (svc *Service) MigrationGenesisChunk(ctx context.Context, req *userjson.MigrationSnapshotChunkRequest) (*userjson.MigrationSnapshotChunkResponse, *jsonrpc.Error) {
-	/*bts, err := svc.migrator.GetGenesisSnapshotChunk(req.ChunkIndex)
+	bts, err := svc.migrator.GetGenesisSnapshotChunk(req.ChunkIndex)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to load genesis chunk", nil)
 	}
 
 	return &userjson.MigrationSnapshotChunkResponse{
 		Chunk: bts,
-	}, nil*/
-	return nil, nil
+	}, nil
 }
 
 func (svc *Service) ListPendingMigrations(ctx context.Context, req *userjson.ListMigrationsRequest) (*userjson.ListMigrationsResponse, *jsonrpc.Error) {
-	/*readTx := svc.db.BeginDelayedReadTx()
+	readTx := svc.db.BeginDelayedReadTx()
 	defer readTx.Rollback(ctx)
 
 	resolutions, err := voting.GetResolutionsByType(ctx, readTx, voting.StartMigrationEventType)
@@ -928,12 +926,11 @@ func (svc *Service) ListPendingMigrations(ctx context.Context, req *userjson.Lis
 
 	return &userjson.ListMigrationsResponse{
 		Migrations: pendingMigrations,
-	}, nil*/
-	return nil, nil
+	}, nil
 }
 
 func (svc *Service) MigrationStatus(ctx context.Context, req *userjson.MigrationStatusRequest) (*userjson.MigrationStatusResponse, *jsonrpc.Error) {
-	/*metadata, err := svc.abci.GetMigrationMetadata(ctx)
+	metadata, err := svc.nodeApp.GetMigrationMetadata(ctx)
 	if err != nil || metadata == nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "migration state unavailable", nil)
 	}
@@ -950,8 +947,7 @@ func (svc *Service) MigrationStatus(ctx context.Context, req *userjson.Migration
 			EndHeight:     metadata.MigrationState.EndHeight,
 			CurrentHeight: chainStatus.Sync.BestBlockHeight,
 		},
-	}, nil*/
-	return nil, nil
+	}, nil
 }
 
 func (svc *Service) expireChallenges() {

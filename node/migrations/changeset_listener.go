@@ -143,7 +143,7 @@ func (ml *migrationListener) retrieveChangesets(ctx context.Context) error {
 
 		wg := sync.WaitGroup{}
 		errChan := make(chan error, numChunks)
-		for i := range chunkSizes {
+		for i := range numChunks {
 			wg.Add(1)
 			go func(chunkIdx int64) {
 				defer wg.Done()

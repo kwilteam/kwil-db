@@ -95,9 +95,11 @@ func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.
 	// genesis hooks
 	for _, hook := range hooks.ListGenesisHooks() {
 		err := hook.Hook(ctx, &common.App{
-			Service: r.service.NamedLogger(hook.Name),
-			DB:      db,
-			Engine:  r.Engine,
+			Service:    r.service.NamedLogger(hook.Name),
+			DB:         db,
+			Engine:     r.Engine,
+			Accounts:   r.Accounts,
+			Validators: r.Validators,
 		}, chainCtx)
 		if err != nil {
 			return fmt.Errorf("error running genesis hook %s: %w", hook.Name, err)
@@ -142,6 +144,20 @@ func (r *TxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockCont
 	err = r.processVotes(ctx, db, block)
 	if err != nil {
 		return nil, err
+	}
+
+	// end block hooks
+	for _, hook := range hooks.ListEndBlockHooks() {
+		err := hook.Hook(ctx, &common.App{
+			Service:    r.service.NamedLogger(hook.Name),
+			DB:         db,
+			Engine:     r.Engine,
+			Accounts:   r.Accounts,
+			Validators: r.Validators,
+		}, block)
+		if err != nil {
+			return nil, fmt.Errorf("error running end block hook: %w", err)
+		}
 	}
 
 	return r.Validators.GetValidators(), nil

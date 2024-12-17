@@ -31,10 +31,10 @@ type Service struct {
 // Every other field is the same pointer as the original.
 func (s *Service) NamedLogger(name string) *Service {
 	return &Service{
-		Logger: s.Logger.New(name),
-		// GenesisConfig:    s.GenesisConfig,
-		// LocalConfig:      s.LocalConfig,
-		Identity: s.Identity,
+		Logger:        s.Logger.New(name),
+		GenesisConfig: s.GenesisConfig,
+		LocalConfig:   s.LocalConfig,
+		Identity:      s.Identity,
 	}
 }
 

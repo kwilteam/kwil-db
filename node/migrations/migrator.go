@@ -253,8 +253,8 @@ func (m *Migrator) generateGenesisConfig(snapshotHash []byte, logger log.Logger)
 }
 
 func (m *Migrator) PersistLastChangesetHeight(ctx context.Context, tx sql.Executor) error {
-	m.mu.Lock()
-	defer m.mu.Unlock()
+	m.mu.RLock()
+	defer m.mu.RUnlock()
 
 	return setLastStoredChangeset(ctx, tx, m.lastChangeset)
 }
@@ -615,12 +615,17 @@ func (m *Migrator) loadChangeset(height int64, index int64) ([]byte, error) {
 const (
 	changesetsDirName = "changesets"
 	chunksDirName     = "chunks"
+	snapshotsDirName  = "snapshots"
 )
 
 // ChangesetsDir returns the directory where changesets are stored,
 // relative to the migration directory.
 func ChangesetsDir(migrationDir string) string {
 	return filepath.Join(migrationDir, changesetsDirName)
+}
+
+func SnapshotDir(migrationDir string) string {
+	return filepath.Join(migrationDir, snapshotsDirName)
 }
 
 // ensureChangesetDir creates the directory structure for a changeset block

@@ -94,6 +94,21 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config) (err error
 
 	host, port, user, pass := cfg.DB.Host, cfg.DB.Port, cfg.DB.User, cfg.DB.Pass
 
+	// Prepare for migration if node is setup to use zero-downtime migrations
+	// This includes fetching the genesis state from the nodes in the old chain
+	if cfg.Migrations.Enable {
+		cfg, genConfig, err = prepareForMigration(ctx, cfg, genConfig, rootDir, logger)
+		if err != nil {
+			return fmt.Errorf("failed to prepare for migration: %w", err)
+		}
+	}
+
+	logger.Info("Entering startup mode")
+
+	if err := genConfig.SanityChecks(); err != nil {
+		return fmt.Errorf("genesis configuration failed sanity checks: %w", err)
+	}
+
 	d := &coreDependencies{
 		ctx:        ctx,
 		rootDir:    rootDir,

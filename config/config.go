@@ -2,6 +2,7 @@ package config
 
 import (
 	"encoding/json"
+	"errors"
 	"os"
 	"time"
 
@@ -60,6 +61,36 @@ type GenesisConfig struct {
 	StateHash []byte `json:"state_hash"`
 	// Migration specifies the migration configuration required for zero downtime migration.
 	Migration MigrationParams `json:"migration"`
+}
+
+func (gc *GenesisConfig) SanityChecks() error {
+	// Vote expiry shouldn't be 0
+	if gc.VoteExpiry == 0 {
+		return errors.New("vote expiry should be greater than 0")
+	}
+
+	// MaxVotesPerTx shouldn't be 0
+	if gc.MaxVotesPerTx == 0 {
+		return errors.New("max votes per tx should be greater than 0")
+	}
+
+	// join expiry shouldn't be 0
+	if gc.JoinExpiry == 0 {
+		return errors.New("join expiry should be greater than 0")
+	}
+
+	// Block params
+	if gc.MaxBlockSize == 0 {
+		return errors.New("max bytes should be greater than 0")
+	}
+
+	// Migration params should be both set or both unset
+	if (gc.Migration.StartHeight == 0 && gc.Migration.EndHeight != 0) ||
+		(gc.Migration.StartHeight != 0 && gc.Migration.EndHeight == 0) {
+		return errors.New("both start and end height should be set or unset")
+	}
+
+	return nil
 }
 
 type MigrationParams struct {
@@ -193,7 +224,7 @@ type Config struct {
 	StateSync    StateSyncConfig              `toml:"state_sync" comment:"Statesync configuration (vs block sync)"`
 	Extensions   map[string]map[string]string `toml:"extensions" comment:"extension configuration"`
 	GenesisState string                       `toml:"genesis_state" comment:"path to the genesis state file, relative to the root directory"`
-	Migrations   MigrationConfig              `toml:"migration" comment:"zero downtime migration configuration"`
+	Migrations   MigrationConfig              `toml:"migrations" comment:"zero downtime migration configuration"`
 }
 
 // PeerConfig corresponds to the [p2p] section of the config.

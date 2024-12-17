@@ -36,6 +36,15 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
+	// Check if the network is halted due to migration or other reasons
+	params := ce.blockProcessor.ConsensusParams()
+	if params.MigrationStatus == ktypes.MigrationCompleted {
+		haltReason := "Network is halted for migration, cannot start a new round"
+		ce.log.Warn(haltReason)
+		ce.haltChan <- haltReason // signal the network to halt
+		return nil
+	}
+
 	ce.log.Info("Starting a new consensus round", "height", ce.state.lc.height+1)
 
 	blkProp, err := ce.createBlockProposal(ctx)
@@ -119,6 +128,7 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	}
 
 	ce.processVotes(ctx)
+	ce.log.Info("Waiting for votes from the validators", "height", blkProp.height, "hash", blkProp.blkHash)
 	return nil
 }
 
@@ -256,9 +266,8 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 		}()
 
 	} else if ce.hasMajorityFloor(nacks) {
-		ce.log.Warnln("Majority of the validators have rejected the block, halting the network",
-			ce.state.blkProp.blk.Header.Height, acks, nacks)
-		ce.haltChan <- struct{}{}
+		haltReason := fmt.Sprintf("Majority of the validators have rejected the block, halting the network: %d acks, %d nacks", acks, nacks)
+		ce.haltChan <- haltReason
 		return nil
 	}
 

@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
@@ -29,6 +30,7 @@ import (
 	"github.com/kwilteam/kwil-db/node/listeners"
 	"github.com/kwilteam/kwil-db/node/mempool"
 	"github.com/kwilteam/kwil-db/node/meta"
+	"github.com/kwilteam/kwil-db/node/migrations"
 	"github.com/kwilteam/kwil-db/node/pg"
 	"github.com/kwilteam/kwil-db/node/snapshotter"
 	"github.com/kwilteam/kwil-db/node/store"
@@ -84,8 +86,11 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	// Snapshot Store
 	ss := buildSnapshotStore(d)
 
+	// Migrator
+	migrator := buildMigrator(d, db, accounts, vs)
+
 	// BlockProcessor
-	bp := buildBlockProcessor(ctx, d, db, txApp, accounts, vs, ss, es)
+	bp := buildBlockProcessor(ctx, d, db, txApp, accounts, vs, ss, es, migrator)
 
 	// Consensus
 	ce := buildConsensusEngine(ctx, d, db, mp, bs, bp, valSet)
@@ -98,7 +103,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 
 	// RPC Services
 	rpcSvcLogger := d.logger.New("USER")
-	jsonRPCTxSvc := usersvc.NewService(db, e, node, bp, vs, rpcSvcLogger,
+	jsonRPCTxSvc := usersvc.NewService(db, e, node, bp, vs, migrator, rpcSvcLogger,
 		usersvc.WithReadTxTimeout(time.Duration(d.cfg.DB.ReadTxTimeout)),
 		usersvc.WithPrivateMode(d.cfg.RPC.Private),
 		usersvc.WithChallengeExpiry(time.Duration(d.cfg.RPC.ChallengeExpiry)),
@@ -125,7 +130,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 		// The admin service uses a client-style signer rather than just a private
 		// key because it is used to sign transactions and provide an Identity for
 		// account information (nonce and balance).
-		txSigner := &auth.EthPersonalSigner{Key: *d.privKey.(*crypto.Secp256k1PrivateKey)}
+		txSigner := auth.GetNodeSigner(d.privKey)
 		jsonAdminSvc := adminsvc.NewService(db, node, bp, vs, node.Whitelister(),
 			txSigner, d.cfg, d.genesisCfg.ChainID, adminServerLogger)
 		jsonRPCAdminServer = buildJRPCAdminServer(d)
@@ -214,8 +219,7 @@ func restoreDB(d *coreDependencies) bool {
 	}
 
 	// Snapshot file exists
-	filename := filepath.Join(d.rootDir, appCfg.GenesisState)
-	snapFile, err := os.Open(filename)
+	snapFile, err := os.Open(appCfg.GenesisState)
 	if err != nil {
 		failBuild(err, "failed to open genesis state file")
 	}
@@ -347,14 +351,48 @@ func buildTxApp(ctx context.Context, d *coreDependencies, db *pg.DB, accounts *a
 	return txapp
 }
 
-func buildBlockProcessor(ctx context.Context, d *coreDependencies, db *pg.DB, txapp *txapp.TxApp, accounts *accounts.Accounts, vs *voting.VoteStore, ss *snapshotter.SnapshotStore, es *voting.EventStore) *blockprocessor.BlockProcessor {
+func buildBlockProcessor(ctx context.Context, d *coreDependencies, db *pg.DB, txapp *txapp.TxApp, accounts *accounts.Accounts, vs *voting.VoteStore, ss *snapshotter.SnapshotStore, es *voting.EventStore, migrator *migrations.Migrator) *blockprocessor.BlockProcessor {
 	signer := auth.GetNodeSigner(d.privKey)
-	bp, err := blockprocessor.NewBlockProcessor(ctx, db, txapp, accounts, vs, ss, es, d.genesisCfg, signer, d.logger.New("BP"))
+
+	bp, err := blockprocessor.NewBlockProcessor(ctx, db, txapp, accounts, vs, ss, es, migrator, d.genesisCfg, signer, d.logger.New("BP"))
 	if err != nil {
 		failBuild(err, "failed to create block processor")
 	}
 
 	return bp
+}
+
+func buildMigrator(d *coreDependencies, db *pg.DB, accounts *accounts.Accounts, vs *voting.VoteStore) *migrations.Migrator {
+	migrationsDir := config.MigrationDir(d.rootDir)
+
+	err := os.MkdirAll(migrations.ChangesetsDir(migrationsDir), 0755)
+	if err != nil {
+		failBuild(err, "failed to create changesets directory")
+	}
+
+	snapshotDir := migrations.SnapshotDir(migrationsDir)
+	err = os.MkdirAll(snapshotDir, 0755)
+	if err != nil {
+		failBuild(err, "failed to create migrations snapshots directory")
+	}
+
+	ss, err := snapshotter.NewSnapshotStore(&snapshotter.SnapshotConfig{
+		SnapshotDir:     snapshotDir,
+		MaxSnapshots:    int(d.cfg.Snapshots.MaxSnapshots),
+		RecurringHeight: d.cfg.Snapshots.RecurringHeight,
+		Enable:          d.cfg.Snapshots.Enable,
+		DBConfig:        &d.cfg.DB,
+	}, d.logger.New("SNAP"))
+	if err != nil {
+		failBuild(err, "failed to create migration's snapshot store")
+	}
+
+	migrator, err := migrations.SetupMigrator(d.ctx, db, ss, accounts, migrationsDir, d.genesisCfg.Migration, vs, d.logger.New(`MIGRATOR`))
+	if err != nil {
+		failBuild(err, "failed to create migrator")
+	}
+
+	return migrator
 }
 
 func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB,
@@ -374,6 +412,7 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB,
 		ValidatorSet:   valSet,
 		Logger:         d.logger.New("CONS"),
 		ProposeTimeout: time.Duration(d.cfg.Consensus.ProposeTimeout),
+		GenesisHeight:  d.genesisCfg.InitialHeight,
 	}
 
 	ce := consensus.New(ceCfg)
