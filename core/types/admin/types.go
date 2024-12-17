@@ -23,10 +23,10 @@ type NodeInfo struct {
 
 // SyncInfo describes the sync state of a node.
 type SyncInfo struct {
-	AppHash         types.HexBytes `json:"app_hash"`
-	BestBlockHash   types.HexBytes `json:"best_block_hash"`
-	BestBlockHeight int64          `json:"best_block_height"`
-	BestBlockTime   time.Time      `json:"best_block_time"`
+	AppHash         types.Hash `json:"app_hash"`
+	BestBlockHash   types.Hash `json:"best_block_hash"`
+	BestBlockHeight int64      `json:"best_block_height"`
+	BestBlockTime   time.Time  `json:"best_block_time"`
 
 	Syncing bool `json:"syncing"`
 }

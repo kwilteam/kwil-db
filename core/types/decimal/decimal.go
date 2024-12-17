@@ -127,7 +127,7 @@ func inferPrecisionAndScale(s string) (precision, scale uint16) {
 
 	intPart := uint16(len(parts[0]))
 	if len(parts) == 1 {
-		return intPart, 0
+		return max(1, intPart), 0 // at least 1 for precision with 0 scale
 	}
 
 	scale = uint16(len(parts[1]))

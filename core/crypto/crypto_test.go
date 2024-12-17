@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/rand"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"strings"
 	"testing"
@@ -553,6 +554,146 @@ func TestParseKeyType(t *testing.T) {
 			}
 			if got != tt.want {
 				t.Errorf("ParseKeyType() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func mustDecodeHex(s string) []byte {
+	b, err := hex.DecodeString(s)
+	if err != nil {
+		panic(err)
+	}
+	return b
+}
+
+func TestUnmarshalPublicKey(t *testing.T) {
+	secK := mustDecodeHex("02ec1139961d355bf456e659c895a0baee7d214e9229516ee657bca48539971b33")
+	edK := mustDecodeHex("5301bc297f9125b6e9ecaea84256bd681da165e53d8fb52effbcda15afa8ee41")
+	tests := []struct {
+		name    string
+		data    []byte
+		keyType KeyType
+		wantErr bool
+	}{
+		{
+			name:    "valid ed25519",
+			data:    edK,
+			keyType: KeyTypeEd25519,
+			wantErr: false,
+		},
+		{
+			name:    "valid secp256k1",
+			data:    secK,
+			keyType: KeyTypeSecp256k1,
+			wantErr: false,
+		},
+		{
+			name:    "empty data secp256k1",
+			data:    []byte{},
+			keyType: KeyTypeSecp256k1,
+			wantErr: true,
+		},
+		{
+			name:    "empty data ed25519",
+			data:    []byte{},
+			keyType: KeyTypeEd25519,
+			wantErr: true,
+		},
+		{
+			name:    "invalid key type",
+			data:    []byte{1, 2, 3},
+			keyType: KeyType(999),
+			wantErr: true,
+		},
+		{
+			name:    "corrupted secp256k1 data",
+			data:    []byte{1, 2, 3, 4, 5},
+			keyType: KeyTypeSecp256k1,
+			wantErr: true,
+		},
+		{
+			name:    "corrupted ed25519 data",
+			data:    []byte{1, 2, 3, 4, 5},
+			keyType: KeyTypeEd25519,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := UnmarshalPublicKey(tt.data, tt.keyType)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("UnmarshalPublicKey() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && got == nil {
+				t.Error("UnmarshalPublicKey() returned nil without error")
+			}
+		})
+	}
+}
+
+func TestUnmarshalPrivateKey(t *testing.T) {
+	tests := []struct {
+		name    string
+		data    []byte
+		keyType KeyType
+		wantErr bool
+	}{
+		{
+			name:    "empty data secp256k1",
+			data:    []byte{},
+			keyType: KeyTypeSecp256k1,
+			wantErr: true,
+		},
+		{
+			name:    "empty data ed25519",
+			data:    []byte{},
+			keyType: KeyTypeEd25519,
+			wantErr: true,
+		},
+		{
+			name:    "invalid key type",
+			data:    []byte{1, 2, 3},
+			keyType: KeyType(999),
+			wantErr: true,
+		},
+		{
+			name:    "corrupted secp256k1 data",
+			data:    []byte{1, 2, 3, 4, 5},
+			keyType: KeyTypeSecp256k1,
+			wantErr: true,
+		},
+		{
+			name:    "corrupted ed25519 data",
+			data:    []byte{1, 2, 3, 4, 5},
+			keyType: KeyTypeEd25519,
+			wantErr: true,
+		},
+		{
+			name:    "invalid length secp256k1",
+			data:    make([]byte, 31),
+			keyType: KeyTypeSecp256k1,
+			wantErr: true,
+		},
+		{
+			name:    "invalid length ed25519",
+			data:    make([]byte, 63),
+			keyType: KeyTypeEd25519,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := UnmarshalPrivateKey(tt.data, tt.keyType)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("UnmarshalPrivateKey() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && got == nil {
+				t.Error("UnmarshalPrivateKey() returned nil without error")
 			}
 		})
 	}

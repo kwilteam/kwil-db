@@ -22,9 +22,9 @@ const (
 
 // ChainInfo describes the current status of a Kwil blockchain.
 type ChainInfo struct {
-	ChainID     string   `json:"chain_id"`
-	BlockHeight uint64   `json:"block_height"`
-	BlockHash   HexBytes `json:"block_hash"`
+	ChainID     string `json:"chain_id"`
+	BlockHeight uint64 `json:"block_height"`
+	BlockHash   Hash   `json:"block_hash"`
 }
 
 // The validator related types that identify validators by pubkey are still
@@ -32,11 +32,11 @@ type ChainInfo struct {
 // the account/owner fields in the user service.
 
 type JoinRequest struct {
-	Candidate []byte   `json:"candidate"`  // pubkey of the candidate validator
-	Power     int64    `json:"power"`      // the requested power
-	ExpiresAt int64    `json:"expires_at"` // the block height at which the join request expires
-	Board     [][]byte `json:"board"`      // slice of pubkeys of all the eligible voting validators
-	Approved  []bool   `json:"approved"`   // slice of bools indicating if the corresponding validator approved
+	Candidate HexBytes   `json:"candidate"`  // pubkey of the candidate validator
+	Power     int64      `json:"power"`      // the requested power
+	ExpiresAt int64      `json:"expires_at"` // the block height at which the join request expires
+	Board     []HexBytes `json:"board"`      // slice of pubkeys of all the eligible voting validators
+	Approved  []bool     `json:"approved"`   // slice of bools indicating if the corresponding validator approved
 }
 
 type Validator struct {
@@ -47,8 +47,8 @@ type Validator struct {
 // ValidatorRemoveProposal is a proposal from an existing validator (remover) to
 // remove a validator (the target) from the validator set.
 type ValidatorRemoveProposal struct {
-	Target  []byte `json:"target"`  // pubkey of the validator to remove
-	Remover []byte `json:"remover"` // pubkey of the validator proposing the removal
+	Target  HexBytes `json:"target"`  // pubkey of the validator to remove
+	Remover HexBytes `json:"remover"` // pubkey of the validator proposing the removal
 }
 
 func (v *Validator) String() string {
@@ -75,10 +75,10 @@ func (e *VotableEvent) ID() *UUID {
 }
 
 type PendingResolution struct {
-	ResolutionID *UUID    `json:"resolution_id"` // Resolution ID
-	ExpiresAt    int64    `json:"expires_at"`    // ExpiresAt is the block height at which the resolution expires
-	Board        [][]byte `json:"board"`         // Board is the list of validators who are eligible to vote on the resolution
-	Approved     []bool   `json:"approved"`      // Approved is the list of bools indicating if the corresponding validator approved the resolution
+	ResolutionID *UUID      `json:"resolution_id"` // Resolution ID
+	ExpiresAt    int64      `json:"expires_at"`    // ExpiresAt is the block height at which the resolution expires
+	Board        []HexBytes `json:"board"`         // Board is the list of validators who are eligible to vote on the resolution
+	Approved     []bool     `json:"approved"`      // Approved is the list of bools indicating if the corresponding validator approved the resolution
 }
 
 // Migration is a migration resolution that is proposed by a validator
@@ -172,12 +172,12 @@ type Health struct {
 	// Version is the service API version.
 	Version string `json:"version"`
 
-	BlockTimestamp int64    `json:"block_time"` // epoch millis
-	BlockAge       int64    `json:"block_age"`  // milliseconds
-	Syncing        bool     `json:"syncing"`
-	Height         int64    `json:"height"`
-	AppHash        HexBytes `json:"app_hash"`
-	PeerCount      int      `json:"peer_count"`
+	BlockTimestamp int64 `json:"block_time"` // epoch millis
+	BlockAge       int64 `json:"block_age"`  // milliseconds
+	Syncing        bool  `json:"syncing"`
+	Height         int64 `json:"height"`
+	AppHash        Hash  `json:"app_hash"`
+	PeerCount      int   `json:"peer_count"`
 
 	// Mode is an oddball field as it pertains to the service config rather than
 	// state of the node. It is provided here as a convenience so applications

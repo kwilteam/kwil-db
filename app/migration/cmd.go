@@ -1,8 +1,9 @@
 package migration
 
 import (
-	"github.com/kwilteam/kwil-db/app/rpc"
 	"github.com/spf13/cobra"
+
+	"github.com/kwilteam/kwil-db/app/rpc"
 )
 
 var migrationCmd = &cobra.Command{

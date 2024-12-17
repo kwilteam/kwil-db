@@ -454,7 +454,7 @@ func toPendingInfo(resolution *resolutions.Resolution, allVoters []*ktypes.Valid
 	// we will then remove any duplicates the second time we see them.
 	// this will result with all approvers at the start of the list, and all voters at the end.
 	// finally, the approvals will be true for the length of the approvers, and false for found.length - voters.length
-	board := make([][]byte, 0, len(allVoters))
+	board := make([]ktypes.HexBytes, 0, len(allVoters))
 	approvals := make([]bool, len(allVoters))
 	for i, v := range resolution.Voters {
 		board = append(board, v.PubKey)

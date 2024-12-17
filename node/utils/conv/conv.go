@@ -258,6 +258,7 @@ func Decimal(a any) (*decimal.Decimal, error) {
 	case fmt.Stringer:
 		return decimal.NewFromString(a.String())
 	case nil:
+		// return decimal.NewFromBigInt(big.NewInt(0), 0)
 		return decimal.NewFromString("0")
 	}
 

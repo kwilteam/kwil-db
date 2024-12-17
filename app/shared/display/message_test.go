@@ -14,6 +14,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 // NOTE: could do this for all the other tests,
@@ -232,4 +233,95 @@ func Test_TxHashAndExecResponse(t *testing.T) {
 	fmt.Println(string(outJSON))
 	assert.NoError(t, err, "MarshalJSON should not return error")
 	assert.Equal(t, expectJSON, string(outJSON), "MarshalJSON should return expected json")
+}
+
+func TestRespTxQuery_MarshalText(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    *RespTxQuery
+		expected string
+	}{
+		{
+			name: "success status",
+			input: &RespTxQuery{
+				Msg: &types.TxQueryResponse{
+					Hash:   types.Hash{0x1}, // simple hash for testing
+					Height: 100,
+					Result: &types.TxResult{
+						Code: uint32(types.CodeOk),
+						Log:  "transaction successful",
+					},
+				},
+			},
+			expected: "Transaction ID: 0100000000000000000000000000000000000000000000000000000000000000\nStatus: success\nHeight: 100\nLog: transaction successful",
+		},
+		{
+			name: "failed status",
+			input: &RespTxQuery{
+				Msg: &types.TxQueryResponse{
+					Hash:   types.Hash{0x2}, // different hash
+					Height: 50,
+					Result: &types.TxResult{
+						Code: 1, // non-zero code means failure
+						Log:  "transaction failed",
+					},
+				},
+			},
+			expected: "Transaction ID: 0200000000000000000000000000000000000000000000000000000000000000\nStatus: failed\nHeight: 50\nLog: transaction failed",
+		},
+		{
+			name: "pending status",
+			input: &RespTxQuery{
+				Msg: &types.TxQueryResponse{
+					Hash:   types.Hash{0x3},
+					Height: -1, // -1 height indicates pending
+					Result: &types.TxResult{
+						Code: 0,
+						Log:  "transaction pending",
+					},
+				},
+			},
+			expected: "Transaction ID: 0300000000000000000000000000000000000000000000000000000000000000\nStatus: pending\nHeight: -1\nLog: transaction pending",
+		},
+		{
+			name: "pending status",
+			input: &RespTxQuery{
+				Msg: &types.TxQueryResponse{
+					Hash:   mustUnmarshalHash("ff42fabfe6e73e0c566cb2462cc0bf69de0e050c7a90fa9d5a708ace51243589"),
+					Height: -1, // -1 height indicates pending
+					Tx: &types.Transaction{
+						Body: &types.TransactionBody{
+							PayloadType: types.PayloadTypeExecute,
+							Fee:         big.NewInt(100),
+							Nonce:       10,
+							ChainID:     "asdf",
+							Description: "This is a test transaction",
+						},
+						Serialization: types.SignedMsgConcat,
+					},
+					Result: &types.TxResult{
+						Code: 0,
+						Log:  "transaction pending",
+					},
+				},
+			},
+			expected: "Transaction ID: ff42fabfe6e73e0c566cb2462cc0bf69de0e050c7a90fa9d5a708ace51243589\nStatus: pending\nHeight: -1\nLog: transaction pending",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := tt.input.MarshalText()
+			require.NoError(t, err)
+			require.Equal(t, tt.expected, string(result))
+		})
+	}
+}
+
+func mustUnmarshalHash(s string) types.Hash {
+	h, err := types.NewHashFromString(s)
+	if err != nil {
+		panic(err)
+	}
+	return h
 }

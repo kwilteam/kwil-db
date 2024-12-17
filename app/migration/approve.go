@@ -1,10 +1,11 @@
 package migration
 
 import (
+	"github.com/spf13/cobra"
+
 	"github.com/kwilteam/kwil-db/app/rpc"
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/spf13/cobra"
 )
 
 func approveCmd() *cobra.Command {

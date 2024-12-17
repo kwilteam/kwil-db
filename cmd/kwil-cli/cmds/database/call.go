@@ -115,7 +115,7 @@ type respCall struct {
 
 func (r *respCall) MarshalJSON() ([]byte, error) {
 	if !r.PrintLogs {
-		return json.Marshal(r.Data.Records.ExportString()) // this is for backwards compatibility
+		return json.Marshal(r.Data.Records.ToStrings()) // this is for backwards compatibility
 	}
 
 	bts, err := json.Marshal(r.Data)

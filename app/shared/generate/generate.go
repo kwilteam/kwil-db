@@ -51,7 +51,7 @@ func writeCmd(cmd *cobra.Command, dir string, idx int, write writeFunc, first bo
 func createIndexFile(cmd *cobra.Command, dir string, write writeFunc, first bool) error {
 	dir = dir + "/" + cmd.Name()
 
-	header := docusaursHeader{
+	header := docusaurusHeader{
 		sidebar_position: 99, // we want these to always be at the bottom of the sidebar
 		sidebar_label:    cmd.Name(),
 		id:               strings.ReplaceAll(cmd.CommandPath(), " ", "-"),
@@ -67,26 +67,23 @@ func createIndexFile(cmd *cobra.Command, dir string, write writeFunc, first bool
 	if err != nil {
 		return err
 	}
+	defer file.Close()
 
 	file.WriteString(header.String() + "\n\n")
 
-	err = doc.GenMarkdownCustom(cmd, file, linkHandler(dir))
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return doc.GenMarkdownCustom(cmd, file, linkHandler(dir))
 }
 
 // createCmdFile creates a file for the command, and writes the command's documentation to it.
 // it does not call subcommands.
 func createCmdFile(cmd *cobra.Command, dir string, idx int, write writeFunc) error {
-	file, err := write(dir + "/" + cmd.Name() + ".mdx")
+	file, err := write(filepath.Join(dir, cmd.Name()+".mdx"))
 	if err != nil {
 		return err
 	}
+	defer file.Close()
 
-	header := docusaursHeader{
+	header := docusaurusHeader{
 		sidebar_position: idx,
 		sidebar_label:    cmd.Name(),
 		id:               strings.ReplaceAll(cmd.CommandPath(), " ", "-"),
@@ -97,15 +94,10 @@ func createCmdFile(cmd *cobra.Command, dir string, idx int, write writeFunc) err
 
 	file.WriteString(header.String() + "\n\n")
 
-	err = doc.GenMarkdownCustom(cmd, file, linkHandler(dir))
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return doc.GenMarkdownCustom(cmd, file, linkHandler(dir))
 }
 
-func linkHandler(dir string) func(string) string {
+func linkHandler(dir string) func(string) string { // dir string unused -- what is it?
 	return func(s string) string {
 		// trying just linking ids??
 		s = strings.TrimSuffix(s, ".md")
@@ -120,7 +112,7 @@ func getSlug(cmd *cobra.Command) string {
 }
 
 // docusaurusHeader is a page header for a doc page in a docusaurus site.
-type docusaursHeader struct {
+type docusaurusHeader struct {
 	sidebar_position int
 	sidebar_label    string
 	id               string
@@ -130,7 +122,7 @@ type docusaursHeader struct {
 }
 
 // String returns the header as a string.
-func (d *docusaursHeader) String() string {
+func (d *docusaurusHeader) String() string {
 	return fmt.Sprintf(headerString, d.sidebar_position, d.sidebar_label, d.id, d.title, d.description, d.slug)
 }
 

@@ -14,14 +14,14 @@ var Source source
 
 type source struct{}
 
-// Uint64 is part of the math/rand.Source64 interface.
+// Uint64 is part of the math/rand/v2.Source and math/rand.Source64 interfaces.
 func (source) Uint64() uint64 {
 	var b [8]byte
 	crand.Read(b[:])
 	return binary.LittleEndian.Uint64(b[:])
 }
 
-// Uint64 is part of the math/rand.Source64 interface.
+// Int63 is part of the math/rand.Source interface.
 func (cs source) Int63() int64 {
 	return int64(cs.Uint64() & ^uint64(1<<63)) // clear top bit, mask with (1<<63 - 1)
 }

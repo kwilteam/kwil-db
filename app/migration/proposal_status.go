@@ -6,10 +6,11 @@ import (
 	"fmt"
 	"math"
 
+	"github.com/spf13/cobra"
+
 	"github.com/kwilteam/kwil-db/app/rpc"
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/spf13/cobra"
 )
 
 var (
@@ -52,9 +53,9 @@ func proposalStatusCmd() *cobra.Command {
 
 type MigrationStatus struct {
 	ProposalID *types.UUID
-	ExpiresAt  int64    `json:"expires_at"` // ExpiresAt is the block height at which the migration proposal expires
-	Board      [][]byte `json:"board"`      // Board is the list of validators who are eligible to vote on the migration proposal
-	Approved   []bool   `json:"approved"`   // Approved is the list of bools indicating if the corresponding validator approved the migration proposal
+	ExpiresAt  int64            `json:"expires_at"` // ExpiresAt is the block height at which the migration proposal expires
+	Board      []types.HexBytes `json:"board"`      // Board is the list of validators who are eligible to vote on the migration proposal
+	Approved   []bool           `json:"approved"`   // Approved is the list of bools indicating if the corresponding validator approved the migration proposal
 }
 
 func (m *MigrationStatus) MarshalJSON() ([]byte, error) {

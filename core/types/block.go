@@ -251,9 +251,12 @@ func EncodeBlock(block *Block) []byte {
 // CalcMerkleRoot computes the merkel root for a slice of hashes. This is based
 // on the "inline" implementation from btcd / dcrd.
 func CalcMerkleRoot(leaves []Hash) Hash {
-	if len(leaves) == 0 {
-		// All zero.
+	switch len(leaves) {
+	case 0:
 		return Hash{}
+	case 1:
+		return leaves[0]
+	default:
 	}
 
 	// Do not modify the leaves slice from the caller.
@@ -311,7 +314,7 @@ func DecodeBlock(rawBlk []byte) (*Block, error) {
 		return nil, fmt.Errorf("failed to read signature length: %w", err)
 	}
 
-	if int(sigLen) > len(rawBlk) { // TODO: do better than this
+	if int(sigLen) > r.Len() { // more than remaining
 		return nil, fmt.Errorf("invalid signature length %d", sigLen)
 	}
 
@@ -328,7 +331,7 @@ func DecodeBlock(rawBlk []byte) (*Block, error) {
 			return nil, fmt.Errorf("failed to read tx length: %w", err)
 		}
 
-		if int(txLen) > len(rawBlk) { // TODO: do better than this
+		if int(txLen) > r.Len() { // more than remaining
 			return nil, fmt.Errorf("invalid transaction length %d", txLen)
 		}
 

@@ -1,20 +1,18 @@
 package utils
 
 import (
-	"encoding/hex"
-
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
-func mustDecodeHex(h string) []byte {
-	b, err := hex.DecodeString(h)
+func mustUnmarshalHash(s string) types.Hash {
+	h, err := types.NewHashFromString(s)
 	if err != nil {
 		panic(err)
 	}
-	return b
+	return h
 }
 
 func Example_respChainInfo_text() {
@@ -22,13 +20,13 @@ func Example_respChainInfo_text() {
 		&types.ChainInfo{
 			ChainID:     "kwil-chain",
 			BlockHeight: 100,
-			BlockHash:   mustDecodeHex("000000beefbeefbeef"),
+			BlockHash:   mustUnmarshalHash("0000beefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeef"),
 		},
 	}, nil, "text")
 	// Output:
 	// Chain ID: kwil-chain
 	// Height: 100
-	// Hash: 000000beefbeefbeef
+	// Hash: 0000beefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeef
 }
 
 func Example_respChainInfo_json() {
@@ -36,7 +34,7 @@ func Example_respChainInfo_json() {
 		&types.ChainInfo{
 			ChainID:     "kwil-chain",
 			BlockHeight: 100,
-			BlockHash:   mustDecodeHex("000000beefbeefbeef"),
+			BlockHash:   mustUnmarshalHash("0000beefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeef"),
 		},
 	}, nil, "json")
 	// Output:
@@ -44,7 +42,7 @@ func Example_respChainInfo_json() {
 	//   "result": {
 	//     "chain_id": "kwil-chain",
 	//     "block_height": 100,
-	//     "block_hash": "000000beefbeefbeef"
+	//     "block_hash": "0000beefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeef"
 	//   },
 	//   "error": ""
 	// }
