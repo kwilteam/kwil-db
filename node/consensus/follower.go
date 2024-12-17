@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	ktypes "github.com/kwilteam/kwil-db/core/types"
@@ -48,7 +49,7 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 		// check if we are processing a different block, if yes then reset the state.
 		if ce.stateInfo.blkProp.blkHash != blkID && ce.stateInfo.blkProp.blk.Header.Timestamp.UnixMilli() < timestamp {
 			ce.log.Info("Conflicting block proposals, abort block execution and requesting the latest block: ", "height", height)
-			go ce.sendResetMsg(ce.stateInfo.height)
+			// go ce.sendResetMsg(ce.stateInfo.height)
 			return true
 		}
 		ce.log.Info("Already processing the block proposal", "height", height, "blkID", blkID)
@@ -196,8 +197,12 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 	ce.cancelFnMtx.Unlock()
 
 	if err := ce.executeBlock(execCtx, blkPropMsg); err != nil {
-		ce.log.Error("Error executing block, sending NACK", "error", err)
-		go ce.ackBroadcaster(false, blkPropMsg.height, blkPropMsg.blkHash, nil)
+		if errors.Is(err, context.Canceled) {
+			ce.log.Info("Block execution cancelled", "height", blkPropMsg.height)
+			return nil
+		}
+
+		// go ce.ackBroadcaster(false, blkPropMsg.height, blkPropMsg.blkHash, nil)
 		return err
 	}
 

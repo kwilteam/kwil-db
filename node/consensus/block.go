@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	ktypes "github.com/kwilteam/kwil-db/core/types"
@@ -68,7 +69,7 @@ func (ce *ConsensusEngine) executeBlock(ctx context.Context, blkProp *blockPropo
 	results, err := ce.blockProcessor.ExecuteBlock(ctx, req)
 	if err != nil {
 		ce.log.Warn("Error executing block", "height", blkProp.height, "hash", blkProp.blkHash, "error", err)
-		return fmt.Errorf("error executing block: %v", err)
+		return errors.Join(fmt.Errorf("Error executing block: height %d, hash: %s", blkProp.height, blkProp.blkHash.String()), err)
 	}
 
 	ce.state.blockRes = &blockResult{

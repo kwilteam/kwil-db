@@ -33,4 +33,8 @@ type AdminClient interface {
 	ApproveResolution(ctx context.Context, resolutionID *types.UUID) (types.Hash, error)
 	// DeleteResolution(ctx context.Context, resolutionID *types.UUID) (types.Hash, error)
 	ResolutionStatus(ctx context.Context, resolutionID *types.UUID) (*types.PendingResolution, error)
+
+	// Block Execution
+	BlockExecStatus(ctx context.Context) (*adminTypes.BlockExecutionStatus, error)
+	RollbackBlock(ctx context.Context, height int64, discardTxs []string) error
 }

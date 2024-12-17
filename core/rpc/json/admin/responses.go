@@ -98,3 +98,5 @@ type ListPeersResponse struct {
 type ResolutionStatusResponse struct {
 	Status *types.PendingResolution `json:"status,omitempty"`
 }
+
+type RollbackBlockResponse struct{}

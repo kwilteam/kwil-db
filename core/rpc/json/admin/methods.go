@@ -24,4 +24,6 @@ const (
 	MethodApproveResolution jsonrpc.Method = "admin.approve_resolution"
 	MethodResolutionStatus  jsonrpc.Method = "admin.resolution_status"
 	// MethodDeleteResolution  jsonrpc.Method = "admin.delete_resolution"
+	MethodBlockExecStatus jsonrpc.Method = "admin.block_exec_status"
+	MethodRollbackBlock   jsonrpc.Method = "admin.rollback_block"
 )

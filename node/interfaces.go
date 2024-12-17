@@ -34,6 +34,7 @@ type ConsensusEngine interface {
 	CheckTx(ctx context.Context, tx *ktypes.Transaction) error
 
 	ConsensusParams() *ktypes.ConsensusParams
+	CancelBlockExecution(height int64, txIDs []types.Hash) error
 }
 
 type BlockProcessor interface {

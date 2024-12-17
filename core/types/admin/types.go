@@ -57,3 +57,15 @@ type MigrationInfo struct {
 	EndHeight     int64  `json:"end_height"`
 	CurrentHeight int64  `json:"current_height"`
 }
+
+type BlockExecutionStatus struct {
+	StartTime time.Time `json:"start_time"`
+	EndTime   time.Time `json:"end_time"`
+	Height    int64     `json:"height"`
+	TxInfo    []*TxInfo `json:"tx_info"`
+}
+
+type TxInfo struct {
+	ID     types.Hash `json:"id"`
+	Status bool       `json:"status"`
+}

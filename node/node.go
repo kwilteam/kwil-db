@@ -189,10 +189,6 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 		return nil, fmt.Errorf("failed to create peer manager: %w", err)
 	}
 
-	// mode := dht.ModeClient
-	// if cfg.Snapshots.Enable {
-	// 	mode = dht.ModeServer
-	// }
 	mode := dht.ModeServer
 	ctx := context.Background()
 	dht, err := makeDHT(ctx, host, nil, mode)
@@ -696,6 +692,10 @@ func (n *Node) BlockHeight() int64 {
 
 func (n *Node) ConsensusParams() *ktypes.ConsensusParams {
 	return n.ce.ConsensusParams()
+}
+
+func (n *Node) RollbackBlock(height int64, txIDs []types.Hash) error {
+	return n.ce.CancelBlockExecution(height, txIDs)
 }
 
 var RequiredStreamProtocols = []protocol.ID{

@@ -43,3 +43,10 @@ type ApproveResolutionRequest struct {
 type ResolutionStatusRequest struct {
 	ResolutionID *types.UUID `json:"resolution_id"` // Id is the resolution ID
 }
+
+type BlockExecStatusRequest struct{}
+
+type RollbackBlockRequest struct {
+	Height int64    `json:"height"`
+	Txs    []string `json:"txs"`
+}

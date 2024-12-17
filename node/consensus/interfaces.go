@@ -54,5 +54,5 @@ type BlockProcessor interface {
 	GetValidators() []*ktypes.Validator
 	ConsensusParams() *ktypes.ConsensusParams
 
-	BlockExecutionStatus() ktypes.BlockExecutionStatus
+	BlockExecutionStatus() *ktypes.BlockExecutionStatus
 }
