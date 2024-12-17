@@ -2,6 +2,7 @@ package openrpc
 
 import (
 	"cmp"
+	"fmt"
 	"math/big"
 	"reflect"
 	"slices"
@@ -251,7 +252,17 @@ func reflectTypeInfo(t reflect.Type, knownSchemas map[reflect.Type]Schema) Schem
 		schema.AdditionalProperties = true // Allow any properties since the exact structure is not known
 		return schema
 
+	case reflect.Map:
+		// We can treat a map as an object, but without an instance (value) of
+		// the map, we can't infer the properties names (the string keys).
+		if t.Key().Kind() != reflect.String {
+			panic(fmt.Sprintf("unsupported map key type %v", t.Key().Kind()))
+		}
+		schema.Type = "object"
+		schema.AdditionalProperties = true // the keys (fields) of the map are not known
+		return schema
+
 	default:
-		panic(t.Kind())
+		panic(fmt.Sprintf("unsupported type for OpenRPC spec generation: %v", t.Kind()))
 	}
 }
