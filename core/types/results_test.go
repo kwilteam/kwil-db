@@ -94,4 +94,36 @@ func TestTxResultMarshalUnmarshal(t *testing.T) {
 			t.Error("expected error for too many events")
 		}
 	})
+
+	// with events
+	t.Run("with events", func(t *testing.T) {
+		tr := TxResult{
+			Code: 1,
+			Log:  "test",
+			Events: []Event{
+				{},
+			},
+		}
+
+		data, err := tr.MarshalBinary()
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		var decoded TxResult
+		err = decoded.UnmarshalBinary(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		if decoded.Code != tr.Code {
+			t.Errorf("got code %d, want %d", decoded.Code, tr.Code)
+		}
+		if decoded.Log != tr.Log {
+			t.Errorf("got log %s, want %s", decoded.Log, tr.Log)
+		}
+		if len(decoded.Events) != len(tr.Events) {
+			t.Errorf("got %d events, want 0", len(decoded.Events))
+		}
+	})
 }

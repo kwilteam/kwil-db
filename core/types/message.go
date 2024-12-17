@@ -61,6 +61,9 @@ func CallSigText(dbid, action string, payload []byte, challenge []byte) string {
 // includes the challenge for replay protection. Thus, if a challenge is
 // provided, a signer must also be provided.
 func CreateCallMessage(ac *ActionCall, challenge []byte, signer auth.Signer) (*CallMessage, error) {
+	if ac.Action == "" || ac.DBID == "" {
+		return nil, fmt.Errorf("invalid action call")
+	}
 	bts, err := ac.MarshalBinary()
 	if err != nil {
 		return nil, err

@@ -10,7 +10,6 @@ import (
 	"io"
 	"math/big"
 
-	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/utils"
 )
@@ -106,6 +105,10 @@ func (t TransactionBody) MarshalJSON() ([]byte, error) {
 	// We could embed as "type txBodyAlias TransactionBody" instance in a struct
 	// with a Fee string field, but the order of fields in marshalled json would
 	// be different, so we clone the entire type with just Fee type changed.
+	feeStr := t.Fee.String()
+	if t.Fee == nil {
+		feeStr = "0"
+	}
 	return json.Marshal(&struct {
 		Description string      `json:"desc"`
 		Payload     []byte      `json:"payload"`
@@ -117,7 +120,7 @@ func (t TransactionBody) MarshalJSON() ([]byte, error) {
 		Description: t.Description,
 		Payload:     t.Payload,
 		PayloadType: t.PayloadType,
-		Fee:         t.Fee.String(), // *big.Int => string
+		Fee:         feeStr, // *big.Int => string
 		Nonce:       t.Nonce,
 		ChainID:     t.ChainID,
 	})
@@ -145,6 +148,8 @@ func (t *TransactionBody) UnmarshalJSON(data []byte) error {
 			return fmt.Errorf("could not parse fee: %q", aux.Fee)
 		}
 		t.Fee = feeBigInt
+	} else {
+		t.Fee = big.NewInt(0)
 	}
 	return nil
 }
@@ -269,7 +274,7 @@ func (t *TransactionBody) SerializeMsg(mst SignedMsgSerializationType) ([]byte, 
 		if err != nil {
 			return nil, fmt.Errorf("failed to serialize transaction body: %v", err)
 		}
-		sigHash := crypto.Sha256(msg) // could just be msg
+		sigHash := HashBytes(msg) // could just be msg
 		return sigHash[:], nil
 	case SignedMsgConcat:
 		// Make a human-readable message using a template(txMsgToSignTmplV0).
@@ -277,7 +282,8 @@ func (t *TransactionBody) SerializeMsg(mst SignedMsgSerializationType) ([]byte, 
 		// payload.
 		// NOTE: 'payload` is still in binary form(RLP encoded),
 		// we present its hash in the result message.
-		payloadDigest := crypto.Sha256(t.Payload)[:20]
+		payloadHash := HashBytes(t.Payload)
+		payloadDigest := payloadHash[:20]
 		msgStr := fmt.Sprintf(txMsgToSignTmplV0,
 			t.Description,
 			t.PayloadType.String(),
@@ -417,7 +423,7 @@ func (tb *TransactionBody) ReadFrom(r io.Reader) (int64, error) {
 	tb.PayloadType = PayloadType(payloadType)
 
 	// Fee (big.Int)
-	b, _, err := readBigInt(cr)
+	b, err := readBigInt(cr)
 	if err != nil {
 		return cr.ReadCount(), fmt.Errorf("failed to read transaction body fee: %w", err)
 	}
@@ -631,34 +637,33 @@ func writeBigInt(w io.Writer, b *big.Int) error {
 	return writeString(w, b.String())
 }
 
-func readBigInt(r io.Reader) (*big.Int, int, error) {
+func readBigInt(r io.Reader) (*big.Int, error) {
 	nilByte := []byte{0}
-	n, err := io.ReadFull(r, nilByte)
+	_, err := io.ReadFull(r, nilByte)
 	if err != nil {
-		return nil, n, err
+		return nil, err
 	}
 
 	switch nilByte[0] {
 	case 0:
-		return nil, n, nil
+		return nil, nil
 	case 1:
 	default:
-		return nil, n, errors.New("invalid nil int byte")
+		return nil, errors.New("invalid nil int byte")
 	}
 
 	intStr, err := readString(r)
 	if err != nil {
-		return nil, n, err
+		return nil, err
 	}
-	n += 4 + len(intStr)
 
 	b := new(big.Int)
 	b, ok := b.SetString(intStr, 10)
 	if !ok {
-		return nil, n, errors.New("bad big int string")
+		return nil, errors.New("bad big int string")
 	}
 	if b.String() != intStr {
-		return nil, n, errors.New("non-canonical big int encoding")
+		return nil, errors.New("non-canonical big int encoding")
 	}
 
 	// negByte := []byte{0}
@@ -673,5 +678,5 @@ func readBigInt(r io.Reader) (*big.Int, int, error) {
 	// if !bytes.Equal(b.Bytes(), intBts) {
 	// 	return nil, errors.New("non-canonical big int encoding")
 	// }
-	return b, n, nil
+	return b, nil
 }

@@ -95,7 +95,7 @@ func Example_respDBlist_json() {
 
 func Example_respRelations_text() {
 	display.Print(&respRelations{
-		Data: clientType.NewRecordsFromMaps([]map[string]any{{"a": "1", "b": "2"}, {"a": "3", "b": "4"}})},
+		Data: clientType.Records([]map[string]any{{"a": "1", "b": "2"}, {"a": "3", "b": "4"}})},
 		nil, "text")
 	// Output:
 	// | a | b |
@@ -106,7 +106,7 @@ func Example_respRelations_text() {
 
 func Example_respRelations_json() {
 	display.Print(&respRelations{
-		Data: clientType.NewRecordsFromMaps([]map[string]any{{"a": "1", "b": "2"}, {"a": "3", "b": "4"}})},
+		Data: clientType.Records([]map[string]any{{"a": "1", "b": "2"}, {"a": "3", "b": "4"}})},
 		nil, "json")
 	// Output:
 	// {

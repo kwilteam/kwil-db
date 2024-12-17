@@ -361,3 +361,122 @@ func TestPlainKVLoggerLogf(t *testing.T) {
 		}
 	}
 }
+
+func TestLevelMarshalText(t *testing.T) {
+	tests := []struct {
+		name    string
+		level   Level
+		want    []byte
+		wantErr bool
+	}{
+		{
+			name:    "marshal debug level",
+			level:   LevelDebug,
+			want:    []byte("debug"),
+			wantErr: false,
+		},
+		{
+			name:    "marshal info level",
+			level:   LevelInfo,
+			want:    []byte("info"),
+			wantErr: false,
+		},
+		{
+			name:    "marshal warn level",
+			level:   LevelWarn,
+			want:    []byte("warn"),
+			wantErr: false,
+		},
+		{
+			name:    "marshal error level",
+			level:   LevelError,
+			want:    []byte("error"),
+			wantErr: false,
+		},
+		{
+			name:    "marshal invalid level",
+			level:   Level(99),
+			want:    nil,
+			wantErr: true,
+		},
+		{
+			name:    "marshal negative level",
+			level:   Level(-5),
+			want:    nil,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := tt.level.MarshalText()
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Level.MarshalText() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && !bytes.Equal(got, tt.want) {
+				t.Errorf("Level.MarshalText() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLevelUnmarshalText(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   []byte
+		want    Level
+		wantErr bool
+	}{
+		{
+			name:    "unmarshal mixed case debug",
+			input:   []byte("DeBuG"),
+			want:    LevelDebug,
+			wantErr: false,
+		},
+		{
+			name:    "unmarshal mixed case warn",
+			input:   []byte("WaRn"),
+			want:    LevelWarn,
+			wantErr: false,
+		},
+		{
+			name:    "unmarshal empty bytes",
+			input:   []byte{},
+			want:    Level(0),
+			wantErr: true,
+		},
+		{
+			name:    "unmarshal invalid level string",
+			input:   []byte("critical"),
+			want:    Level(0),
+			wantErr: true,
+		},
+		{
+			name:    "unmarshal with whitespace",
+			input:   []byte(" info "),
+			want:    Level(0),
+			wantErr: true,
+		},
+		{
+			name:    "unmarshal non-ascii characters",
+			input:   []byte("débug"),
+			want:    Level(0),
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var got Level
+			err := got.UnmarshalText(tt.input)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Level.UnmarshalText() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && got != tt.want {
+				t.Errorf("Level.UnmarshalText() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}

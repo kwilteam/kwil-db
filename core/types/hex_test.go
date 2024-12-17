@@ -2,6 +2,8 @@ package types
 
 import (
 	"bytes"
+	"fmt"
+	"strings"
 	"testing"
 )
 
@@ -181,4 +183,126 @@ func TestHexBytes_JSON(t *testing.T) {
 			t.Errorf("roundtrip failed: got %v, want %v", decoded, original)
 		}
 	})
+}
+
+func TestHexBytes_Format(t *testing.T) {
+	tests := []struct {
+		name     string
+		hb       HexBytes
+		verb     rune
+		expected string
+	}{
+		{
+			name:     "format with p verb",
+			hb:       HexBytes{0x12, 0x34},
+			verb:     'p',
+			expected: fmt.Sprintf("%p", HexBytes{0x12, 0x34}),
+		},
+		{
+			name:     "format with X verb",
+			hb:       HexBytes{0x12, 0x34},
+			verb:     'X',
+			expected: "1234",
+		},
+		{
+			name:     "format with v verb",
+			hb:       HexBytes{0x12, 0x34},
+			verb:     'v',
+			expected: "1234",
+		},
+		{
+			name:     "format empty bytes with X verb",
+			hb:       HexBytes{},
+			verb:     'X',
+			expected: "",
+		},
+		{
+			name:     "format nil bytes with X verb",
+			hb:       nil,
+			verb:     'X',
+			expected: "",
+		},
+		{
+			name:     "format with s verb",
+			hb:       HexBytes{0xab, 0xcd},
+			verb:     's',
+			expected: "abcd",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var buf bytes.Buffer
+			fmt.Fprintf(&buf, fmt.Sprintf("%%%c", tt.verb), tt.hb)
+			if tt.verb == 'p' {
+				// For pointer comparison, we only check prefix since actual address varies
+				if !strings.HasPrefix(buf.String(), "0x") {
+					t.Errorf("Format() with %%p expected to start with '0x', got %v", buf.String())
+				}
+			} else if buf.String() != tt.expected {
+				t.Errorf("Format() = %v, want %v", buf.String(), tt.expected)
+			}
+		})
+	}
+}
+
+func TestHexBytes_Equals(t *testing.T) {
+	tests := []struct {
+		name     string
+		hb       HexBytes
+		other    HexBytes
+		expected bool
+	}{
+		{
+			name:     "identical bytes",
+			hb:       HexBytes{0x01, 0x02, 0x03},
+			other:    HexBytes{0x01, 0x02, 0x03},
+			expected: true,
+		},
+		{
+			name:     "different bytes",
+			hb:       HexBytes{0x01, 0x02, 0x03},
+			other:    HexBytes{0x03, 0x02, 0x01},
+			expected: false,
+		},
+		{
+			name:     "different lengths",
+			hb:       HexBytes{0x01, 0x02},
+			other:    HexBytes{0x01, 0x02, 0x03},
+			expected: false,
+		},
+		{
+			name:     "both empty",
+			hb:       HexBytes{},
+			other:    HexBytes{},
+			expected: true,
+		},
+		{
+			name:     "one empty one not",
+			hb:       HexBytes{},
+			other:    HexBytes{0x01},
+			expected: false,
+		},
+		{
+			name:     "nil vs empty",
+			hb:       nil,
+			other:    HexBytes{},
+			expected: true,
+		},
+		{
+			name:     "both nil",
+			hb:       nil,
+			other:    nil,
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.hb.Equals(tt.other)
+			if result != tt.expected {
+				t.Errorf("HexBytes.Equals() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
 }

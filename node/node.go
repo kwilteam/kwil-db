@@ -600,8 +600,8 @@ func (n *Node) Status(ctx context.Context) (*adminTypes.Status, error) {
 			ListenAddr: addr,
 		},
 		Sync: &adminTypes.SyncInfo{
-			AppHash:         appHash[:],
-			BestBlockHash:   blkHash[:],
+			AppHash:         appHash,
+			BestBlockHash:   blkHash,
 			BestBlockHeight: height,
 			// BestBlockTime: ,
 			Syncing: n.ce.InCatchup(),

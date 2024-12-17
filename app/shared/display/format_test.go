@@ -69,3 +69,80 @@ func Example_wrappedMsg_json_withError() {
 	//   "error": "an error"
 	// }
 }
+
+func TestOutputFormat_String(t *testing.T) {
+	tests := []struct {
+		name     string
+		format   OutputFormat
+		expected string
+	}{
+		{
+			name:     "text format",
+			format:   outputFormatText,
+			expected: "text",
+		},
+		{
+			name:     "json format",
+			format:   outputFormatJSON,
+			expected: "json",
+		},
+		{
+			name:     "empty format",
+			format:   "",
+			expected: "",
+		},
+		{
+			name:     "invalid format",
+			format:   "invalid",
+			expected: "invalid",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.format.string()
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestOutputFormat_Valid(t *testing.T) {
+	tests := []struct {
+		name     string
+		format   OutputFormat
+		expected bool
+	}{
+		{
+			name:     "text format",
+			format:   outputFormatText,
+			expected: true,
+		},
+		{
+			name:     "json format",
+			format:   outputFormatJSON,
+			expected: true,
+		},
+		{
+			name:     "empty format",
+			format:   "",
+			expected: false,
+		},
+		{
+			name:     "invalid format",
+			format:   "invalid",
+			expected: false,
+		},
+		{
+			name:     "case sensitive format",
+			format:   "TEXT",
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.format.valid()
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}

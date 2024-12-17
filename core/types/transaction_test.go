@@ -2,12 +2,14 @@ package types
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -77,8 +79,14 @@ func TestTransactionSerialization(t *testing.T) {
 			expectError: false,
 		},
 		{
+			name:        "direct",
+			serType:     SignedMsgDirect, // direct
+			desc:        defDesc,
+			expectError: false,
+		},
+		{
 			name:        "long description",
-			serType:     DefaultSignedMsgSerType, // concat
+			serType:     SignedMsgConcat, // concat
 			desc:        longDesc,
 			expectError: true,
 		},
@@ -597,7 +605,7 @@ func TestBigIntRoundTrip(t *testing.T) {
 			}
 			require.NoError(t, err)
 
-			result, _, err := readBigInt(buf)
+			result, err := readBigInt(buf)
 			require.NoError(t, err)
 
 			if tc.input == nil {
@@ -642,7 +650,7 @@ func TestBigIntReadErrors(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			buf := bytes.NewBuffer(tc.input)
-			_, _, err := readBigInt(buf)
+			_, err := readBigInt(buf)
 			if tc.expectError {
 				require.Error(t, err)
 			} else {
@@ -782,4 +790,111 @@ type customReader struct {
 
 func (cr *customReader) Read(b []byte) (int, error) {
 	return cr.r.Read(b)
+}
+
+func Test_TransactionBodyJSONEdgeCases(t *testing.T) {
+	t.Run("marshal with zero fee", func(t *testing.T) {
+		txB := TransactionBody{
+			Description: "test",
+			Payload:     []byte("test payload"),
+			PayloadType: PayloadTypeDeploySchema,
+			Fee:         big.NewInt(0),
+			Nonce:       1,
+			ChainID:     "test-chain",
+		}
+
+		b, err := json.Marshal(txB)
+		require.NoError(t, err)
+
+		var decoded TransactionBody
+		err = json.Unmarshal(b, &decoded)
+		require.NoError(t, err)
+		assert.Equal(t, "0", decoded.Fee.String())
+	})
+
+	t.Run("marshal with large fee", func(t *testing.T) {
+		largeFee := new(big.Int).Exp(big.NewInt(2), big.NewInt(100), nil)
+		txB := TransactionBody{
+			Description: "test",
+			Payload:     []byte("test payload"),
+			PayloadType: PayloadTypeDeploySchema,
+			Fee:         largeFee,
+			Nonce:       1,
+			ChainID:     "test-chain",
+		}
+
+		b, err := json.Marshal(txB)
+		require.NoError(t, err)
+
+		var decoded TransactionBody
+		err = json.Unmarshal(b, &decoded)
+		require.NoError(t, err)
+		assert.Equal(t, largeFee.String(), decoded.Fee.String())
+	})
+
+	t.Run("unmarshal with invalid fee string", func(t *testing.T) {
+		jsonData := []byte(`{
+			"desc": "test",
+			"payload": "dGVzdA==",
+			"type": "deploy_schema",
+			"fee": "not_a_number",
+			"nonce": 1,
+			"chain_id": "test-chain"
+		}`)
+
+		var txB TransactionBody
+		err := json.Unmarshal(jsonData, &txB)
+		assert.Error(t, err)
+	})
+
+	t.Run("unmarshal with empty fee string", func(t *testing.T) {
+		jsonData := []byte(`{
+			"desc": "test",
+			"payload": "dGVzdA==",
+			"type": "deploy_schema",
+			"fee": "",
+			"nonce": 1,
+			"chain_id": "test-chain"
+		}`)
+
+		var txB TransactionBody
+		err := json.Unmarshal(jsonData, &txB)
+		require.NoError(t, err)
+		assert.Equal(t, "0", txB.Fee.String())
+	})
+
+	t.Run("unmarshal with negative fee", func(t *testing.T) {
+		jsonData := []byte(`{
+			"desc": "test",
+			"payload": "dGVzdA==",
+			"type": "deploy_schema",
+			"fee": "-100",
+			"nonce": 1,
+			"chain_id": "test-chain"
+		}`)
+
+		var txB TransactionBody
+		err := json.Unmarshal(jsonData, &txB)
+		require.NoError(t, err)
+		assert.Equal(t, "-100", txB.Fee.String())
+	})
+
+	t.Run("marshal with nil fee", func(t *testing.T) {
+		txB := TransactionBody{
+			Description: "test",
+			Payload:     []byte("test payload"),
+			PayloadType: PayloadTypeDeploySchema,
+			Fee:         nil,
+			Nonce:       1,
+			ChainID:     "test-chain",
+		}
+
+		b, err := json.Marshal(txB)
+		require.NoError(t, err)
+
+		var decoded TransactionBody
+		err = json.Unmarshal(b, &decoded)
+		require.NoError(t, err)
+		assert.Equal(t, "0", decoded.Fee.String())
+	})
 }

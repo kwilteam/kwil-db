@@ -56,11 +56,11 @@ func (d *respDBList) MarshalText() ([]byte, error) {
 // of a database in cli
 type respRelations struct {
 	// to avoid recursive call of MarshalJSON
-	Data *clientType.Records
+	Data clientType.Records
 }
 
 func (r *respRelations) MarshalJSON() ([]byte, error) {
-	return json.Marshal(r.Data.Export())
+	return json.Marshal(r.Data)
 }
 
 func (r *respRelations) MarshalText() ([]byte, error) {
@@ -69,15 +69,15 @@ func (r *respRelations) MarshalText() ([]byte, error) {
 
 // recordsToTable converts records to a formatted table structure
 // that can be printed
-func recordsToTable(r *clientType.Records) []byte {
-	data := r.ExportString()
+func recordsToTable(r clientType.Records) []byte {
+	data := r.ToStrings()
 
 	if len(data) == 0 {
 		return []byte("No data to display.")
 	}
 
 	// collect headers
-	headers := make([]string, 0)
+	headers := make([]string, 0, len(data[0]))
 	for k := range data[0] {
 		headers = append(headers, k)
 	}
@@ -93,7 +93,7 @@ func recordsToTable(r *clientType.Records) []byte {
 		tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
 
 	for _, row := range data {
-		rs := make([]string, 0)
+		rs := make([]string, 0, len(headers))
 		for _, h := range headers {
 			rs = append(rs, row[h])
 		}

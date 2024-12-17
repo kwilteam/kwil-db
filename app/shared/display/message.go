@@ -77,7 +77,7 @@ func (h RespTxHash) MarshalText() ([]byte, error) {
 type RespString string
 
 func (s RespString) MarshalJSON() ([]byte, error) {
-	return json.Marshal(string(s)) // must convert to string to avoid infinite recursion
+	return []byte(`"` + string(s) + `"`), nil
 }
 
 func (s RespString) MarshalText() ([]byte, error) {

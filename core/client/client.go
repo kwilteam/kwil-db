@@ -314,16 +314,6 @@ func (c *Client) Execute(ctx context.Context, dbid string, procedure string, tup
 	return c.txClient.Broadcast(ctx, tx, syncBcastFlag(txOpts.SyncBcast))
 }
 
-// DEPRECATED: Use Call instead.
-func (c *Client) CallAction(ctx context.Context, dbid string, action string, inputs []any) (*clientType.Records, error) {
-	r, err := c.Call(ctx, dbid, action, inputs)
-	if err != nil {
-		return nil, err
-	}
-
-	return r.Records, nil
-}
-
 // Call calls a procedure or action. It returns the result records.
 func (c *Client) Call(ctx context.Context, dbid string, procedure string, inputs []any) (*clientType.CallResult, error) {
 	encoded, err := encodeTuple(inputs)
@@ -361,19 +351,19 @@ func (c *Client) Call(ctx context.Context, dbid string, procedure string, inputs
 	}
 
 	return &clientType.CallResult{
-		Records: clientType.NewRecordsFromMaps(res),
+		Records: clientType.Records(res),
 		Logs:    logs,
 	}, nil
 }
 
 // Query executes a query.
-func (c *Client) Query(ctx context.Context, dbid string, query string) (*clientType.Records, error) {
+func (c *Client) Query(ctx context.Context, dbid string, query string) (clientType.Records, error) {
 	res, err := c.txClient.Query(ctx, dbid, query)
 	if err != nil {
 		return nil, err
 	}
 
-	return clientType.NewRecordsFromMaps(res), nil
+	return clientType.Records(res), nil
 }
 
 // ListDatabases lists databases belonging to an owner.
