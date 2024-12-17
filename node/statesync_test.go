@@ -128,10 +128,7 @@ func (s *snapshotStore) CreateSnapshot(ctx context.Context, height uint64, snaps
 }
 
 func newTestStatesyncer(ctx context.Context, t *testing.T, mn mock.Mocknet, rootDir string, sCfg *config.StateSyncConfig) (host.Host, discovery.Discovery, *snapshotStore, *StateSyncService, error) {
-	_, h, err := newTestHost(t, mn)
-	if err != nil {
-		return nil, nil, nil, nil, err
-	}
+	_, h := newTestHost(t, mn)
 
 	dht, err := makeDHT(ctx, h, nil, dht.ModeServer)
 	if err != nil {

@@ -10,6 +10,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -32,11 +33,12 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	mock "github.com/libp2p/go-libp2p/p2p/net/mock"
 	ma "github.com/multiformats/go-multiaddr"
+	"github.com/stretchr/testify/require"
 )
 
 var blackholeIP6 = net.ParseIP("100::")
 
-func newTestHost(t *testing.T, mn mock.Mocknet) ([]byte, host.Host, error) {
+func newTestHost(t *testing.T, mn mock.Mocknet) ([]byte, host.Host) {
 	privKey, _, err := p2pcrypto.GenerateSecp256k1Key(rand.Reader)
 	if err != nil {
 		t.Fatalf("Failed to generate private key: %v", err)
@@ -65,7 +67,110 @@ func newTestHost(t *testing.T, mn mock.Mocknet) ([]byte, host.Host, error) {
 	if err != nil {
 		t.Fatalf("Failed to get private key bytes: %v", err)
 	}
-	return pkBytes, host, nil
+	return pkBytes, host
+}
+
+func makeTestHosts(t *testing.T, nNodes, nExtraHosts int, blockInterval time.Duration) ([]*Node, []host.Host, mock.Mocknet) {
+	mn := mock.New()
+	t.Cleanup(func() {
+		mn.Close()
+	})
+
+	defaultConfigSet := config.DefaultConfig()
+	defaultConfigSet.Consensus.ProposeTimeout = config.Duration(blockInterval)
+
+	var nodes []*Node
+	var hosts []host.Host
+	// var privKeys []*crypto.Secp256k1PrivateKey
+
+	for range nNodes {
+		pk, h := newTestHost(t, mn)
+		t.Logf("node host is %v", h.ID())
+
+		priv, err := crypto.UnmarshalSecp256k1PrivateKey(pk)
+		if err != nil {
+			t.Fatalf("Failed to unmarshal private key: %v", err)
+		}
+
+		// memory block store
+		bs := memstore.NewMemBS()
+		// dummy CE
+		ce := &dummyCE{}
+
+		rootDir := t.TempDir()
+		t.Logf("node root dir: %s", rootDir)
+
+		cfg := &Config{
+			RootDir: rootDir,
+			PrivKey: priv,
+			Logger:  log.DiscardLogger,
+			P2P:     &defaultConfigSet.P2P,
+			// DB unused
+			DBConfig:    &defaultConfigSet.DB,
+			Statesync:   &defaultConfigSet.StateSync,
+			Mempool:     mempool.New(),
+			BlockStore:  bs,
+			Snapshotter: newSnapshotStore(),
+			Consensus:   ce,
+			BlockProc:   &dummyBP{},
+		}
+		node, err := NewNode(cfg, WithHost(h))
+		if err != nil {
+			t.Fatalf("Failed to create Node 1: %v", err)
+		}
+
+		// privKeys = append(privKeys, priv)
+		nodes = append(nodes, node)
+	}
+
+	for range nExtraHosts {
+		_, h := newTestHost(t, mn)
+		setupStreamHandlers(t, h)
+		hosts = append(hosts, h)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+
+	return nodes, hosts, mn
+}
+
+func linkAll(t *testing.T, mn mock.Mocknet) {
+	if err := mn.LinkAll(); err != nil {
+		t.Fatalf("Failed to link hosts: %v", err)
+	}
+	if err := mn.ConnectAllButSelf(); err != nil {
+		t.Fatalf("Failed to connect hosts: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+}
+
+func linkPeers(t *testing.T, mn mock.Mocknet, p1, p2 peer.ID) {
+	if _, err := mn.LinkPeers(p1, p2); err != nil {
+		t.Fatalf("Failed to link hosts: %v", err)
+	}
+	if _, err := mn.ConnectPeers(p1, p2); err != nil {
+		t.Fatalf("Failed to connect hosts: %v", err)
+	}
+	time.Sleep(100 * time.Millisecond)
+}
+
+func startNodes(t *testing.T, nodes []*Node) {
+	ctx, cancel := context.WithCancel(context.Background())
+	var wg sync.WaitGroup
+
+	t.Cleanup(func() {
+		cancel()
+		wg.Wait()
+	})
+
+	for _, n := range nodes {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			defer os.RemoveAll(n.Dir())
+			n.Start(ctx)
+		}()
+	}
 }
 
 func fakeAppHash(height int64) types.Hash {
@@ -133,6 +238,7 @@ var _ ConsensusEngine = &dummyCE{}
 type dummyCE struct {
 	rejectProp   bool
 	rejectCommit bool
+	rejectACK    bool
 
 	ackHandler         func(validatorPK []byte, ack types.AckRes)
 	blockCommitHandler func(blk *ktypes.Block, appHash types.Hash)
@@ -176,7 +282,7 @@ func (ce *dummyCE) NotifyACK(validatorPK []byte, ack types.AckRes) {
 }
 
 func (ce *dummyCE) AcceptACK() bool {
-	return true
+	return !ce.rejectACK
 }
 
 func (ce *dummyCE) NotifyResetState(height int64, txIDs []types.Hash) {
@@ -279,254 +385,247 @@ func (f *faker) SetResetStateHandler(resetStateHandler func(height int64, txIDs 
 	f.resetStateHandler = resetStateHandler
 }
 
-func TestStreamsBlockFetch(t *testing.T) {
-	mn := mock.New()
+func TestPeerDiscoverStream(t *testing.T) {
+	nodes, testHosts, mn := makeTestHosts(t, 2, 1, 5*time.Hour)
+	// linkAll(t, mn)
 
-	pk1, h1, err := newTestHost(t, mn)
-	if err != nil {
-		t.Fatalf("Failed to add peer to mocknet: %v", err)
-	}
+	n1, n2 := nodes[0], nodes[1]
+	h1, h2 := n1.host, n2.host
+	pid1, pid2 := h1.ID(), h2.ID()
 
-	// t.Logf("node host is %v", h1.ID())
+	// no need to startNodes to test this stream
 
-	ctx, cancel := context.WithCancel(context.Background())
-	var wg sync.WaitGroup
+	// pm1 := n1.pm
 
-	rootDir := t.TempDir()
-	// t.Logf("node root dir: %s", rootDir)
+	th1 := testHosts[0]
 
-	// memory block store
-	bs := memstore.NewMemBS()
-	// one block at height 1 with 2 txns
-	blk1, appHash1 := createTestBlock(1, 2)
-	bs.Store(blk1, appHash1)
+	// connect h1 and test host (not h2)
+	linkPeers(t, mn, pid1, th1.ID())
 
-	// dummy CE
-	ce := &dummyCE{}
+	ctx := context.Background()
 
-	t.Cleanup(func() {
-		cancel()
-		wg.Wait()
-		mn.Close()
+	t.Run("discover myself w/ requestPeersProto", func(t *testing.T) {
+		s, err := th1.NewStream(ctx, pid1, ProtocolIDDiscover)
+		if err != nil {
+			t.Fatalf("Failed create new stream: %v", err)
+		}
+
+		addrs, err := requestPeersProto(s)
+		if err != nil {
+			t.Fatalf("failed to read peer discover response: %v", err)
+		}
+
+		// They know me and only me
+		if len(addrs) != 1 {
+			t.Fatalf("expected one address, got %d", len(addrs))
+		}
+
+		require.Equal(t, addrs[0].ID, th1.ID())
 	})
 
-	privKeys, _ := newGenesis(t, [][]byte{pk1})
+	t.Run("discover myself w/ requestPeers", func(t *testing.T) {
+		addrs, err := requestPeers(ctx, pid1, th1, log.DiscardLogger)
+		if err != nil {
+			t.Fatalf("failed to read peer discover response: %v", err)
+		}
 
-	defaultConfigSet := config.DefaultConfig()
-	defaultConfigSet.Consensus.ProposeTimeout = config.Duration(5 * time.Minute)
+		// They know me and only me
+		if len(addrs) != 1 {
+			t.Fatalf("expected one address, got %d", len(addrs))
+		}
 
-	ss := newSnapshotStore()
+		require.Equal(t, addrs[0].ID, th1.ID())
+	})
 
-	// log1 := log.New(log.WithName("NODE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
-	cfg1 := &Config{
-		RootDir: rootDir,
-		PrivKey: privKeys[0],
-		Logger:  log.DiscardLogger,
-		P2P:     &defaultConfigSet.P2P,
-		// DB unused
-		DBConfig:    &defaultConfigSet.DB,
-		Statesync:   &defaultConfigSet.StateSync,
-		Mempool:     mempool.New(),
-		BlockStore:  bs,
-		Snapshotter: ss,
-		Consensus:   ce,
-		BlockProc:   &dummyBP{},
-	}
-	node1, err := NewNode(cfg1, WithHost(h1))
-	if err != nil {
-		t.Fatalf("Failed to create Node 1: %v", err)
-	}
+	t.Run("discover myself and h2 w/ requestPeers", func(t *testing.T) {
+		// Connect h1 to h2
+		linkPeers(t, mn, pid1, pid2)
+		defer mn.UnlinkPeers(pid1, pid2)
+		defer mn.DisconnectPeers(pid1, pid2)
 
-	// now the test host.Host
-	_, h2, err := newTestHost(t, mn)
-	if err != nil {
-		t.Fatalf("Failed to add peer to mocknet: %v", err)
-	}
-	setupStreamHandlers(t, h2)
-	// t.Logf("test host is %v", h2.ID())
+		addrs, err := requestPeers(ctx, h1.ID(), th1, log.DiscardLogger)
+		if err != nil {
+			t.Fatalf("failed to read peer discover response: %v", err)
+		}
 
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer os.RemoveAll(node1.Dir())
-		node1.Start(ctx)
-	}()
+		// They know me *and* h2 now
+		if len(addrs) != 2 {
+			t.Fatalf("expected 2 addresses, got %d", len(addrs))
+		}
+
+		if !slices.ContainsFunc(addrs, func(addr peer.AddrInfo) bool {
+			return addr.ID == th1.ID()
+		}) {
+			t.Errorf("self was not included in returned addresses")
+		}
+
+		if !slices.ContainsFunc(addrs, func(addr peer.AddrInfo) bool {
+			return addr.ID == pid2
+		}) {
+			t.Errorf("h2 was not included in returned addresses")
+		}
+	})
+}
+
+func TestStreamsBlockFetch(t *testing.T) {
+	nodes, extraHosts, mn := makeTestHosts(t, 1, 1, 5*time.Hour)
+	linkAll(t, mn)
+
+	n1 := nodes[0]
+	h1 := n1.host
+
+	// to n1's block store, one block at height 1 with 2 txns
+	blk1, appHash1 := createTestBlock(1, 2)
+	n1.bki.Store(blk1, appHash1)
+
+	startNodes(t, nodes)
+
+	h2 := extraHosts[0]
 
 	time.Sleep(100 * time.Millisecond)
 
-	// Link and connect the hosts
-	if err := mn.LinkAll(); err != nil {
-		t.Fatalf("Failed to link hosts: %v", err)
-	}
-	if err := mn.ConnectAllButSelf(); err != nil {
-		t.Fatalf("Failed to connect hosts: %v", err)
-	}
+	// Link and connect the hosts (was here)
+	// time.Sleep(100 * time.Millisecond)
 
-	time.Sleep(100 * time.Millisecond)
+	ctx := context.Background()
 
-	testCases := []struct {
-		name string
-		fn   func(t *testing.T)
-	}{
-		{
-			name: "request unknown hash manually",
-			fn: func(t *testing.T) {
-				// t.Parallel()
-				s, err := h2.NewStream(ctx, h1.ID(), ProtocolIDBlock)
-				if err != nil {
-					t.Fatalf("Failed create new stream: %v", err)
-				}
-				defer s.Close()
+	t.Run("request unknown hash manually", func(t *testing.T) {
+		// t.Parallel()
+		s, err := h2.NewStream(ctx, h1.ID(), ProtocolIDBlock)
+		if err != nil {
+			t.Fatalf("Failed create new stream: %v", err)
+		}
+		defer s.Close()
 
-				unknownHash := types.Hash{1}
-				_, err = s.Write(unknownHash[:])
-				if err != nil {
-					t.Fatalf("Failed write to stream: %v", err)
-				}
+		unknownHash := types.Hash{1}
+		_, err = s.Write(unknownHash[:])
+		if err != nil {
+			t.Fatalf("Failed write to stream: %v", err)
+		}
 
-				// (*blockHashReq).ReadFrom should not hang, but should timeout (and error), and close stream on us
+		// (*blockHashReq).ReadFrom should not hang, but should timeout (and error), and close stream on us
 
-				b, err := io.ReadAll(s) // expect EOF (no error)
-				if err != nil {
-					t.Errorf("ReadAll: %v", err)
-				} else if !bytes.Equal(b, noData) {
-					t.Error("expected a no-data response, got", b)
-				}
-			},
-		},
-		{
-			name: "request by hash using requestFrom, unknown block",
-			fn: func(t *testing.T) {
-				// t.Parallel()
-				unknownHash := types.Hash{1}
-				req, _ := blockHashReq{unknownHash}.MarshalBinary() // knownHash[:]
-				_, err := requestFrom(ctx, h2, h1.ID(), req, ProtocolIDBlock, 1e4)
-				if err == nil {
-					t.Errorf("expected error but got none")
-				} else if !errors.Is(err, ErrNotFound) {
-					t.Errorf("unexpected error: %v", err)
-				}
-			},
-		},
-		{
-			name: "request by hash manually, known",
-			fn: func(t *testing.T) {
-				// t.Parallel()
-				s, err := h2.NewStream(ctx, h1.ID(), ProtocolIDBlock)
-				if err != nil {
-					t.Fatalf("Failed create new stream: %v", err)
-				}
-				defer s.Close()
+		b, err := io.ReadAll(s) // expect EOF (no error)
+		if err != nil {
+			t.Errorf("ReadAll: %v", err)
+		} else if !bytes.Equal(b, noData) {
+			t.Error("expected a no-data response, got", b)
+		}
+	})
 
-				knownHash := blk1.Hash()
-				_, err = s.Write(knownHash[:])
-				if err != nil {
-					t.Fatalf("Failed write to stream: %v", err)
-				}
+	t.Run("request by hash using requestFrom, unknown block", func(t *testing.T) {
+		// t.Parallel()
+		unknownHash := types.Hash{1}
+		req, _ := blockHashReq{unknownHash}.MarshalBinary() // knownHash[:]
+		_, err := requestFrom(ctx, h2, h1.ID(), req, ProtocolIDBlock, 1e4)
+		if err == nil {
+			t.Errorf("expected error but got none")
+		} else if !errors.Is(err, ErrNotFound) {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
 
-				// (*blockHashReq).ReadFrom should not hang, but should timeout (and error), and close stream on us
+	t.Run("request by hash manually, known", func(t *testing.T) {
+		// t.Parallel()
+		s, err := h2.NewStream(ctx, h1.ID(), ProtocolIDBlock)
+		if err != nil {
+			t.Fatalf("Failed create new stream: %v", err)
+		}
+		defer s.Close()
 
-				b, err := io.ReadAll(s) // expect EOF (no error)
-				if err != nil {
-					t.Errorf("ReadAll: %v", err)
-				} else if bytes.Equal(b, noData) {
-					t.Error("expected data, got", b)
-				}
-			},
-		},
-		{
-			name: "request by hash using requestFrom, known block",
-			fn: func(t *testing.T) {
-				// t.Parallel()
-				knownHash := blk1.Hash()
-				req, _ := blockHashReq{knownHash}.MarshalBinary() // knownHash[:]
-				resp, err := requestFrom(ctx, h2, h1.ID(), req, ProtocolIDBlock, 1e4)
-				if err != nil {
-					t.Errorf("ReadAll: %v", err)
-				} else if bytes.Equal(resp, noData) {
-					t.Error("expected data, got", resp)
-				}
-			},
-		},
-		{
-			name: "request by height manually, unknown",
-			fn: func(t *testing.T) {
-				// t.Parallel()
-				s, err := h2.NewStream(ctx, h1.ID(), ProtocolIDBlockHeight)
-				if err != nil {
-					t.Fatalf("Failed create new stream: %v", err)
-				}
-				defer s.Close()
+		knownHash := blk1.Hash()
+		_, err = s.Write(knownHash[:])
+		if err != nil {
+			t.Fatalf("Failed write to stream: %v", err)
+		}
 
-				var height int64
-				err = binary.Write(s, binary.LittleEndian, height)
-				if err != nil {
-					t.Fatalf("Failed write to stream: %v", err)
-				}
+		// (*blockHashReq).ReadFrom should not hang, but should timeout (and error), and close stream on us
 
-				b, err := io.ReadAll(s)
-				if err != nil {
-					t.Errorf("ReadAll: %v", err)
-				} else if !bytes.Equal(b, noData) {
-					t.Error("expected a no-data response, got", b)
-				}
-			},
-		},
-		{
-			name: "request by height using requestFrom, unknown",
-			fn: func(t *testing.T) {
-				// t.Parallel()
-				var height int64
-				req, _ := blockHeightReq{height}.MarshalBinary()
-				_, err := requestFrom(ctx, h2, h1.ID(), req, ProtocolIDBlockHeight, 1e4)
-				if err == nil {
-					t.Errorf("expected error but got none")
-				} else if !errors.Is(err, ErrNotFound) {
-					t.Errorf("unexpected error: %v", err)
-				}
-			},
-		},
-		{
-			name: "request by height manually, known",
-			fn: func(t *testing.T) {
-				// t.Parallel()
-				s, err := h2.NewStream(ctx, h1.ID(), ProtocolIDBlockHeight)
-				if err != nil {
-					t.Fatalf("Failed create new stream: %v", err)
-				}
-				defer s.Close()
+		b, err := io.ReadAll(s) // expect EOF (no error)
+		if err != nil {
+			t.Errorf("ReadAll: %v", err)
+		} else if bytes.Equal(b, noData) {
+			t.Error("expected data, got", b)
+		}
+	})
 
-				var height int64 = 1
-				err = binary.Write(s, binary.LittleEndian, height)
-				if err != nil {
-					t.Fatalf("Failed write to stream: %v", err)
-				}
+	t.Run("request by hash using requestFrom, known block", func(t *testing.T) {
+		// t.Parallel()
+		knownHash := blk1.Hash()
+		req, _ := blockHashReq{knownHash}.MarshalBinary() // knownHash[:]
+		resp, err := requestFrom(ctx, h2, h1.ID(), req, ProtocolIDBlock, 1e4)
+		if err != nil {
+			t.Errorf("ReadAll: %v", err)
+		} else if bytes.Equal(resp, noData) {
+			t.Error("expected data, got", resp)
+		}
+	})
 
-				b, err := io.ReadAll(s)
-				if err != nil {
-					t.Errorf("ReadAll: %v", err)
-				} else if bytes.Equal(b, noData) {
-					t.Error("expected a no-data response, got", b)
-				} // else { t.Log(len(b)) }
-			},
-		},
-		{
-			name: "request by height using requestFrom, known",
-			fn: func(t *testing.T) {
-				// t.Parallel()
-				var height int64 = 1
-				req, _ := blockHeightReq{height}.MarshalBinary()
-				resp, err := requestFrom(ctx, h2, h1.ID(), req, ProtocolIDBlockHeight, 1e4)
-				if err != nil {
-					t.Errorf("ReadAll: %v", err)
-				} else if bytes.Equal(resp, noData) {
-					t.Error("expected data, got", resp)
-				}
-			},
-		},
-	}
+	t.Run("request by height manually, unknown", func(t *testing.T) {
+		// t.Parallel()
+		s, err := h2.NewStream(ctx, h1.ID(), ProtocolIDBlockHeight)
+		if err != nil {
+			t.Fatalf("Failed create new stream: %v", err)
+		}
+		defer s.Close()
 
-	for _, tt := range testCases {
-		t.Run(tt.name, tt.fn)
-	}
+		var height int64
+		err = binary.Write(s, binary.LittleEndian, height)
+		if err != nil {
+			t.Fatalf("Failed write to stream: %v", err)
+		}
+
+		b, err := io.ReadAll(s)
+		if err != nil {
+			t.Errorf("ReadAll: %v", err)
+		} else if !bytes.Equal(b, noData) {
+			t.Error("expected a no-data response, got", b)
+		}
+	})
+
+	t.Run("request by height using requestFrom, unknown", func(t *testing.T) {
+		// t.Parallel()
+		var height int64
+		req, _ := blockHeightReq{height}.MarshalBinary()
+		_, err := requestFrom(ctx, h2, h1.ID(), req, ProtocolIDBlockHeight, 1e4)
+		if err == nil {
+			t.Errorf("expected error but got none")
+		} else if !errors.Is(err, ErrNotFound) {
+			t.Errorf("unexpected error: %v", err)
+		}
+	})
+
+	t.Run("request by height manually, known", func(t *testing.T) {
+		// t.Parallel()
+		s, err := h2.NewStream(ctx, h1.ID(), ProtocolIDBlockHeight)
+		if err != nil {
+			t.Fatalf("Failed create new stream: %v", err)
+		}
+		defer s.Close()
+
+		var height int64 = 1
+		err = binary.Write(s, binary.LittleEndian, height)
+		if err != nil {
+			t.Fatalf("Failed write to stream: %v", err)
+		}
+
+		b, err := io.ReadAll(s)
+		if err != nil {
+			t.Errorf("ReadAll: %v", err)
+		} else if bytes.Equal(b, noData) {
+			t.Error("expected a no-data response, got", b)
+		} // else { t.Log(len(b)) }
+	})
+
+	t.Run("request by height using requestFrom, known", func(t *testing.T) {
+		// t.Parallel()
+		var height int64 = 1
+		req, _ := blockHeightReq{height}.MarshalBinary()
+		resp, err := requestFrom(ctx, h2, h1.ID(), req, ProtocolIDBlockHeight, 1e4)
+		if err != nil {
+			t.Errorf("ReadAll: %v", err)
+		} else if bytes.Equal(resp, noData) {
+			t.Error("expected data, got", resp)
+		}
+	})
 }

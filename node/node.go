@@ -183,7 +183,7 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 	pm, err := peers.NewPeerMan(cfg.P2P.Pex, addrBookPath,
 		logger.New("PEERS"), cg, host,
 		func(ctx context.Context, peerID peer.ID) ([]peer.AddrInfo, error) {
-			return RequestPeers(ctx, host.ID(), host, logger)
+			return requestPeers(ctx, host.ID(), host, logger)
 		}, RequiredStreamProtocols)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create peer manager: %w", err)
