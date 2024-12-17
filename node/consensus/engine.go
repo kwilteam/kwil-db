@@ -367,13 +367,6 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 
 		case <-blkPropTicker.C:
 			ce.rebroadcastBlkProposal(ctx)
-
-		default:
-			params := ce.blockProcessor.ConsensusParams() // status check, validators halt here
-			if params != nil && params.MigrationStatus == ktypes.MigrationCompleted {
-				ce.haltChan <- "Network halted due to migration"
-				return nil
-			}
 		}
 	}
 }
@@ -608,6 +601,13 @@ func (ce *ConsensusEngine) rebroadcastBlkProposal(ctx context.Context) {
 }
 
 func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
+	// status check, nodes halt here if the migration is completed
+	params := ce.blockProcessor.ConsensusParams()
+	if params != nil && params.MigrationStatus == ktypes.MigrationCompleted {
+		ce.haltChan <- "Network halted due to migration"
+		return nil
+	}
+
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
