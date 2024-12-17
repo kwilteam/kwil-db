@@ -8,18 +8,17 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )
 
-// Initializer initializes a new instance of a precompile.
-// It is called when a Kuneiform schema is deployed that calls
-// "use <precompile> {key: "value"} as <name>". It is also called
-// when the node starts up, if a database is already deployed that
-// uses the precompile. The key/value pairs are passed as the
-// metadata parameter. When initialize is called, the dataset is not
-// yet accessible.
-type Initializer func(ctx *DeploymentContext, service *common.Service, metadata map[string]string) (Instance, error)
+// Initializer is a function that creates a new instance of an extension.
+// It is called:
+// - Each time an extension is instantiated using `USE ... AS ...`
+// - Once for every instantiated extension on node startup
+// It should be used for reading values into memory, creating
+// connections, and other setup that should only be done once per
+// extension instance.
+type Initializer func(ctx context.Context, service *common.Service, db sql.DB, metadata map[string]any) (Instance, error)
 
 // Instance is a named initialized instance of a precompile. It is
 // returned from the precompile initialization, as specified by the
@@ -27,96 +26,150 @@ type Initializer func(ctx *DeploymentContext, service *common.Service, metadata 
 // dataset, and a single dataset can have multiple instances of the
 // same precompile.
 type Instance interface {
-	// Call executes the requested method of the precompile. It is up
-	// to the instance implementation to determine if a method is
-	// valid, and to subsequently decode the arguments. The arguments
-	// passed in as args, as well as returned, are scalar values.
-	Call(scoper *ProcedureContext, app *common.App, method string, inputs []any) ([]any, error)
+	// OnUse is called when a `USE ... AS ...` statement is executed.
+	// It is only called once per "USE" function, and is called after the
+	// initializer.
+	// It should be used for setting up state such as tables, indexes,
+	// and other data structures that are part of the application state.
+	OnUse(ctx *common.TxContext, app *common.App) error
+	// Methods returns the methods that are available on the instance.
+	Methods() []*ExportedMethod
+	// OnUnuse is called when a `UNUSE ...` statement is executed.
+	OnUnuse(ctx *common.TxContext, app *common.App) error
 }
 
-// DeploymentContext is the context for a dataset deployment
-// transaction.
-type DeploymentContext struct {
-	Ctx    context.Context
-	Schema *types.Schema
+// ConcreteInstance is a concrete implementation of an extension instance.
+type PrecompileExtension[T any] struct {
+	// Initialize is the function that creates a new instance of the extension.
+	Initialize func(ctx context.Context, service *common.Service, db sql.DB, metadata map[string]any) (*T, error)
+	// OnUse is called when a `USE ... AS ...` statement is executed
+	OnUse func(ctx *common.TxContext, app *common.App, t *T) error
+	// Methods is a map of method names to method implementations.
+	Methods []*Method[T]
+	// OnUnuse is called when a `UNUSE ...` statement is executed
+	OnUnuse func(ctx *common.TxContext, app *common.App, t *T) error
 }
 
-// ProcedureContext is the context for a procedure and action execution.
-type ProcedureContext struct {
-	// TxCtx is the transaction context of the current execution.
-	TxCtx *common.TxContext
-	// Signer is the address or public key of the caller.
+// Export exports the extension to a form that does not rely on generics, allowing the extension to be consumed by callers without forcing
+// the callers to know the generic type.
+func (p *PrecompileExtension[T]) Export() Initializer {
+	return func(ctx context.Context, service *common.Service, db sql.DB, metadata map[string]any) (Instance, error) {
+		var t *T
+		if p.Initialize == nil {
+			t = new(T)
+		} else {
+			t2, err := p.Initialize(ctx, service, db, metadata)
+			if err != nil {
+				return nil, err
+			}
 
-	// values are the variables that are available to the execution.
-	values map[string]any // note: bind $args or @caller
+			t = t2
+		}
 
-	// DBID is the database identifier for the current scope.
-	// if calling a precompile instance instead of a procedure, it
-	// will be the last used DBID.
-	DBID string
+		methods := make([]*ExportedMethod, len(p.Methods))
+		for i, method := range p.Methods {
+			methods[i] = method.export(t)
+		}
 
-	// Procedure is the Procedure identifier for the current scope.
-	// if calling a precompile instance instead of a Procedure, it
-	// will be the last used Procedure.
-	Procedure string
-	// Result is the result of the most recent SQL query.
-	Result *sql.ResultSet
-
-	// StackDepth tracks the current depth of the procedure call stack. It is
-	// incremented each time a procedure calls another procedure.
-	StackDepth int
-	// UsedGas is the amount of gas used in the current execution.
-	UsedGas uint64
-}
-
-// SetValue sets a value in the scope.
-// Values are case-insensitive.
-// If a value for the key already exists, it will be overwritten.
-func (p *ProcedureContext) SetValue(key string, value any) {
-	if p.values == nil {
-		p.values = make(map[string]any)
+		return &ExportedExtension{
+			onUse: func(ctx *common.TxContext, app *common.App) error {
+				if p.OnUse == nil {
+					return nil
+				}
+				return p.OnUse(ctx, app, t)
+			},
+			methods: methods,
+			onUnuse: func(ctx *common.TxContext, app *common.App) error {
+				if p.OnUnuse == nil {
+					return nil
+				}
+				return p.OnUnuse(ctx, app, t)
+			},
+		}, nil
 	}
-	p.values[strings.ToLower(key)] = value
 }
 
-// Values copies the values from the scope into a map. It will also
-// include contextual variables, such as the caller. If a context
-// variable has the same name as a scope variable, the scope variable
-// will be overwritten.
-func (p *ProcedureContext) Values() map[string]any {
-	if p.values == nil {
-		p.values = make(map[string]any)
-	}
-
-	values := make(map[string]any)
-	for k, v := range p.values {
-		values[strings.ToLower(k)] = v
-	}
-
-	// set environment variables
-	values["@caller"] = p.TxCtx.Caller
-	values["@txid"] = p.TxCtx.TxID
-	values["@signer"] = p.TxCtx.Signer
-	values["@height"] = p.TxCtx.BlockContext.Height
-	values["@foreign_caller"] = p.DBID
-	values["@block_timestamp"] = p.TxCtx.BlockContext.Timestamp
-	values["@authenticator"] = p.TxCtx.Authenticator
-
-	return values
+type ExportedExtension struct {
+	methods []*ExportedMethod
+	onUse   func(ctx *common.TxContext, app *common.App) error
+	onUnuse func(ctx *common.TxContext, app *common.App) error
 }
 
-// NewScope creates a new procedure context for a child procedure.
-// It will not inherit the values or last result from the parent.
-// It will inherit the dbid, procedure, and stack depth from the parent.
-func (p *ProcedureContext) NewScope() *ProcedureContext {
-	return &ProcedureContext{
-		TxCtx:      p.TxCtx,
-		values:     make(map[string]any),
-		DBID:       p.DBID,
-		Procedure:  p.Procedure,
-		StackDepth: p.StackDepth,
-		UsedGas:    p.UsedGas,
+func (e *ExportedExtension) OnUse(ctx *common.TxContext, app *common.App) error {
+	return e.onUse(ctx, app)
+}
+
+func (e *ExportedExtension) Methods() []*ExportedMethod {
+	return e.methods
+}
+
+func (e *ExportedExtension) OnUnuse(ctx *common.TxContext, app *common.App) error {
+	return e.onUnuse(ctx, app)
+}
+
+type Method[T any] struct {
+	// Name is the name of the method.
+	// It is case-insensitive, and should be unique within the extension.
+	Name string
+	// AccessModifiers is a list of access modifiers for the method.
+	// It must have exactly one of PUBLIC, PRIVATE, or SYSTEM,
+	// and can have any number of other modifiers.
+	AccessModifiers []Modifier
+	// Call is the function that is called when the method is invoked.
+	Call func(ctx *common.TxContext, app *common.App, inputs []any, resultFn func([]any) error, t *T) error
+	// ReturnColumns is a list of the returned column names. It is optional. If it is set, its length must be
+	// equal to the length of the returned values passed to the resultFn. If it is not set, the returned column
+	// names will be generated based on their position in the returned values.
+	ReturnColumns []string
+}
+
+// Modifier modifies the access to a procedure.
+type Modifier string
+
+const (
+	// PUBLIC means that the action is public.
+	PUBLIC Modifier = "PUBLIC"
+	// PRIVATE means that the action is private.
+	PRIVATE Modifier = "PRIVATE"
+	// SYSTEM means that the action can only be called by the system.
+	SYSTEM Modifier = "SYSTEM"
+	// View means that an action does not modify the database.
+	VIEW Modifier = "VIEW"
+
+	// Owner requires that the caller is the owner of the database.
+	OWNER Modifier = "OWNER"
+)
+
+type Modifiers []Modifier
+
+func (m Modifiers) Has(mod Modifier) bool {
+	for _, mod2 := range m {
+		if mod2 == mod {
+			return true
+		}
 	}
+	return false
+}
+
+// export exports the method to a form that does not rely on generics, allowing the method to be consumed by callers without forcing
+// the callers to know the generic type.
+func (m *Method[T]) export(t *T) *ExportedMethod {
+	return &ExportedMethod{
+		Name:            m.Name,
+		AccessModifiers: m.AccessModifiers,
+		Call: func(ctx *common.TxContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+			return m.Call(ctx, app, inputs, resultFn, t)
+		},
+	}
+}
+
+type ExportedMethod struct {
+	Name            string
+	AccessModifiers []Modifier
+	Call            func(ctx *common.TxContext, app *common.App, inputs []any, resultFn func([]any) error) error
+	// ReturnColumns is a list of the returned column names. It is optional. If it is set, its length must be
+	// equal to the length of the returned values passed to the resultFn.
+	ReturnColumns []string
 }
 
 var registeredPrecompiles = make(map[string]Initializer)
@@ -127,12 +180,37 @@ func RegisteredPrecompiles() map[string]Initializer {
 
 // RegisterPrecompile registers a precompile extension with the
 // engine.
-func RegisterPrecompile(name string, ext Initializer) error {
+func RegisterPrecompile[T any](name string, ext PrecompileExtension[T]) error {
 	name = strings.ToLower(name)
 	if _, ok := registeredPrecompiles[name]; ok {
 		return fmt.Errorf("precompile of same name already registered:%s ", name)
 	}
 
-	registeredPrecompiles[name] = ext
+	methodNames := make(map[string]struct{})
+	for _, method := range ext.Methods {
+		lowerName := strings.ToLower(method.Name)
+		if _, ok := methodNames[lowerName]; ok {
+			return fmt.Errorf("duplicate method %s", lowerName)
+		}
+
+		methodNames[lowerName] = struct{}{}
+
+		if len(method.AccessModifiers) == 0 {
+			return fmt.Errorf("method %s has no access modifiers", method.Name)
+		}
+
+		found := 0
+		for _, mod := range method.AccessModifiers {
+			if mod == PUBLIC || mod == PRIVATE || mod == SYSTEM {
+				found++
+			}
+		}
+
+		if found != 1 {
+			return fmt.Errorf("method %s must have exactly one of PUBLIC, PRIVATE, or SYSTEM", method.Name)
+		}
+	}
+
+	registeredPrecompiles[name] = ext.Export()
 	return nil
 }

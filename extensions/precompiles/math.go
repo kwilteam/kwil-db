@@ -3,149 +3,125 @@
 package precompiles
 
 import (
+	"context"
 	"fmt"
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/node/types/sql"
 )
 
 func init() {
-	err := RegisterPrecompile("math-precompile", InitializeMath)
+	err := RegisterPrecompile("math-precompile", PrecompileExtension[MathExtension]{
+		Initialize: func(ctx context.Context, service *common.Service, db sql.DB, metadata map[string]any) (*MathExtension, error) {
+			_, ok := metadata["round"]
+			if !ok {
+				metadata["round"] = "up"
+			}
+
+			roundVal := metadata["round"]
+			if roundVal != "up" && roundVal != "down" {
+				return nil, fmt.Errorf("round must be either 'up' or 'down'. default is 'up'")
+			}
+
+			roundUp := roundVal == "up"
+
+			return &MathExtension{roundUp: roundUp}, nil
+		},
+		Methods: []*Method[MathExtension]{
+			{
+				Name:            "add",
+				AccessModifiers: []Modifier{SYSTEM},
+				Call: func(ctx *common.TxContext, app *common.App, inputs []any, resultFn func([]any) error, t *MathExtension) error {
+					a, b, err := getArgs(inputs)
+					if err != nil {
+						return err
+					}
+
+					return resultFn([]any{a + b})
+				},
+			},
+			{
+				Name:            "subtract",
+				AccessModifiers: []Modifier{SYSTEM},
+				Call: func(ctx *common.TxContext, app *common.App, inputs []any, resultFn func([]any) error, t *MathExtension) error {
+					a, b, err := getArgs(inputs)
+					if err != nil {
+						return err
+					}
+
+					return resultFn([]any{a - b})
+				},
+			},
+			{
+				Name:            "multiply",
+				AccessModifiers: []Modifier{SYSTEM},
+				Call: func(ctx *common.TxContext, app *common.App, inputs []any, resultFn func([]any) error, t *MathExtension) error {
+					a, b, err := getArgs(inputs)
+					if err != nil {
+						return err
+					}
+
+					return resultFn([]any{a * b})
+				},
+			},
+			{
+				Name:            "divide",
+				AccessModifiers: []Modifier{SYSTEM},
+				Call: func(ctx *common.TxContext, app *common.App, inputs []any, resultFn func([]any) error, t *MathExtension) error {
+					a, b, err := getArgs(inputs)
+					if err != nil {
+						return err
+					}
+
+					bigVal1 := newBigFloat(float64(a))
+
+					bigVal2 := newBigFloat(float64(b))
+
+					result := new(big.Float).Quo(bigVal1, bigVal2)
+
+					var IntResult *big.Int
+					var results []any
+					if t.roundUp {
+						IntResult = roundUp(result)
+					} else {
+						IntResult = roundDown(result)
+					}
+					results = append(results, IntResult)
+					return resultFn(results)
+				},
+			},
+		},
+	})
 	if err != nil {
 		panic(err)
 	}
 }
 
+// getArgs is a helper function that takes a slice of any and returns two integers and an error
+func getArgs(args []any) (a, b int64, err error) {
+	if len(args) != 2 {
+		err = fmt.Errorf("expected 2 values, got %d", len(args))
+		return
+	}
+
+	a, ok := args[0].(int64)
+	if !ok {
+		err = fmt.Errorf("argument 1 is not an int")
+		return
+	}
+
+	b, ok = args[1].(int64)
+	if !ok {
+		err = fmt.Errorf("argument 2 is not an int")
+		return
+	}
+
+	return a, b, nil
+}
+
 type MathExtension struct {
 	roundUp bool // if true, round up.  If false, round down.
-}
-
-// this initialize function checks if round is set.  If not, it sets it to "up"
-func InitializeMath(ctx *DeploymentContext, service *common.Service, metadata map[string]string) (Instance, error) {
-	_, ok := metadata["round"]
-	if !ok {
-		metadata["round"] = "up"
-	}
-
-	roundVal := metadata["round"]
-	if roundVal != "up" && roundVal != "down" {
-		return nil, fmt.Errorf("round must be either 'up' or 'down'. default is 'up'")
-	}
-
-	roundUp := roundVal == "up"
-
-	return &MathExtension{roundUp: roundUp}, nil
-}
-
-func (e *MathExtension) Call(ctx *ProcedureContext, app *common.App, method string, inputs []any) ([]any, error) {
-	switch method {
-	case "add":
-		return e.add(inputs...)
-	case "subtract":
-		return e.subtract(inputs...)
-	case "multiply":
-		return e.multiply(inputs...)
-	case "divide":
-		return e.divide(inputs...)
-	default:
-		return nil, fmt.Errorf("method %s not found", method)
-	}
-}
-
-// add takes two integers and returns their sum
-func (e *MathExtension) add(values ...any) ([]any, error) {
-	if len(values) != 2 {
-		return nil, fmt.Errorf("expected 2 values for method Add, got %d", len(values))
-	}
-
-	val0Int, ok := values[0].(int)
-	if !ok {
-		return nil, fmt.Errorf("argument 1 is not an int")
-	}
-
-	val1Int, ok := values[1].(int)
-	if !ok {
-		return nil, fmt.Errorf("argument 2 is not an int")
-	}
-
-	var results []any
-	results = append(results, val0Int+val1Int)
-	return results, nil
-}
-
-// subtract takes two integers and returns their difference
-func (e *MathExtension) subtract(values ...any) ([]any, error) {
-	if len(values) != 2 {
-		return nil, fmt.Errorf("expected 2 values for method Add, got %d", len(values))
-	}
-
-	val0Int, ok := values[0].(int)
-	if !ok {
-		return nil, fmt.Errorf("argument 1 is not an int")
-	}
-
-	val1Int, ok := values[1].(int)
-	if !ok {
-		return nil, fmt.Errorf("argument 2 is not an int")
-	}
-
-	var results []any
-	results = append(results, val0Int-val1Int)
-	return results, nil
-}
-
-// multiply takes two integers and returns their product
-func (e *MathExtension) multiply(values ...any) ([]any, error) {
-	if len(values) != 2 {
-		return nil, fmt.Errorf("expected 2 values for method Add, got %d", len(values))
-	}
-
-	val0Int, ok := values[0].(int)
-	if !ok {
-		return nil, fmt.Errorf("argument 1 is not an int")
-	}
-
-	val1Int, ok := values[1].(int)
-	if !ok {
-		return nil, fmt.Errorf("argument 2 is not an int")
-	}
-
-	var results []any
-	results = append(results, val0Int*val1Int)
-	return results, nil
-}
-
-// divide takes two integers and returns their quotient rounded up or down depending on how the extension was initialized
-func (e *MathExtension) divide(values ...any) ([]any, error) {
-	if len(values) != 2 {
-		return nil, fmt.Errorf("expected 2 values for method Divide, got %d", len(values))
-	}
-
-	val0Int, ok := values[0].(int)
-	if !ok {
-		return nil, fmt.Errorf("argument 1 is not an int")
-	}
-
-	val1Int, ok := values[1].(int)
-	if !ok {
-		return nil, fmt.Errorf("argument 2 is not an int")
-	}
-
-	bigVal1 := newBigFloat(float64(val0Int))
-
-	bigVal2 := newBigFloat(float64(val1Int))
-
-	result := new(big.Float).Quo(bigVal1, bigVal2)
-
-	var IntResult *big.Int
-	var results []any
-	if e.roundUp {
-		IntResult = roundUp(result)
-	} else {
-		IntResult = roundDown(result)
-	}
-	results = append(results, IntResult)
-	return results, nil
 }
 
 // roundUp takes a big.Float and returns a new big.Float rounded up.

@@ -242,13 +242,13 @@ func expandHome(s *string) (changed bool, err error) {
 
 // makeSchemaPathsRelative makes all schema paths relative for a test.
 func makeSchemaPathsRelative(test *testing.SchemaTest, jsonFilepath string) error {
-	for i, path := range test.SchemaFiles {
+	for i, path := range test.SeedScripts {
 		adjusted, err := adjustPath(path, jsonFilepath)
 		if err != nil {
 			return err
 		}
 
-		test.SchemaFiles[i] = adjusted
+		test.SeedScripts[i] = adjusted
 	}
 
 	return nil

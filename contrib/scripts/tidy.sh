@@ -2,7 +2,7 @@
 
 set -e
 
-modules=("./core" "./parse" ".")
+modules=("./core" ".")
 
 for mod in "${modules[@]}"; do
     pushd "$mod" > /dev/null || {

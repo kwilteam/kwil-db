@@ -4,7 +4,6 @@ import (
 	"context"
 	"math/big"
 
-	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
@@ -42,8 +41,6 @@ type DB interface {
 	sql.ReadTxMaker
 	sql.SnapshotTxMaker
 }
-
-type Engine = common.Engine // ok? or can reduce this?
 
 var (
 	// getEvents gets all events, even if they have been

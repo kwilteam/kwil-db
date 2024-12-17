@@ -101,6 +101,15 @@ func NewFromBigInt(i *big.Int, exp int32) (*Decimal, error) {
 	return dec, nil
 }
 
+// NewNaN creates a new NaN Decimal.
+func NewNaN() *Decimal {
+	return &Decimal{
+		dec: apd.Decimal{
+			Form: apd.NaN,
+		},
+	}
+}
+
 // SetString sets the value of the decimal from a string.
 func (d *Decimal) SetString(s string) error {
 	res, _, err := d.context().NewFromString(s)

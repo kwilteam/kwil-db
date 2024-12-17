@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 
 	"github.com/kwilteam/kwil-db/app/shared/display"
-	clientType "github.com/kwilteam/kwil-db/core/client/types"
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
@@ -95,7 +94,12 @@ func Example_respDBlist_json() {
 
 func Example_respRelations_text() {
 	display.Print(&respRelations{
-		Data: clientType.Records([]map[string]any{{"a": "1", "b": "2"}, {"a": "3", "b": "4"}})},
+		Data: &types.QueryResult{
+			ColumnNames: []string{"a", "b"},
+			ColumnTypes: []*types.DataType{types.TextType, types.TextType},
+			Values:      [][]any{{"1", "2"}, {"3", "4"}},
+		},
+	},
 		nil, "text")
 	// Output:
 	// | a | b |
@@ -106,100 +110,49 @@ func Example_respRelations_text() {
 
 func Example_respRelations_json() {
 	display.Print(&respRelations{
-		Data: clientType.Records([]map[string]any{{"a": "1", "b": "2"}, {"a": "3", "b": "4"}})},
+		Data: &types.QueryResult{
+			ColumnNames: []string{"a", "b"},
+			ColumnTypes: []*types.DataType{types.TextType, types.TextType},
+			Values:      [][]any{{"1", "2"}, {"3", "4"}},
+		},
+	},
 		nil, "json")
 	// Output:
 	// {
-	//   "result": [
-	//     {
-	//       "a": "1",
-	//       "b": "2"
-	//     },
-	//     {
-	//       "a": "3",
-	//       "b": "4"
-	//     }
-	//   ],
+	//   "result": {
+	//     "column_names": [
+	//       "a",
+	//       "b"
+	//     ],
+	//     "column_types": [
+	//       {
+	//         "name": "text",
+	//         "is_array": false,
+	//         "metadata": [
+	//           0,
+	//           0
+	//         ]
+	//       },
+	//       {
+	//         "name": "text",
+	//         "is_array": false,
+	//         "metadata": [
+	//           0,
+	//           0
+	//         ]
+	//       }
+	//     ],
+	//     "values": [
+	//       [
+	//         "1",
+	//         "2"
+	//       ],
+	//       [
+	//         "3",
+	//         "4"
+	//       ]
+	//     ]
+	//   },
 	//   "error": ""
 	// }
-}
-
-var demoSchema = &respSchema{
-	Schema: &types.Schema{
-		Owner: []byte("user"),
-		Name:  "test_schema",
-		Tables: []*types.Table{
-			{
-				Name: "users",
-				Columns: []*types.Column{
-					{
-						Name: "id",
-						Type: types.IntType,
-						Attributes: []*types.Attribute{
-							{
-								Type:  "primary_key",
-								Value: "true",
-							},
-						},
-					},
-				},
-				ForeignKeys: []*types.ForeignKey{
-					{
-						ChildKeys:   []string{"child_id"},
-						ParentKeys:  []string{"parent_id"},
-						ParentTable: "parent_table",
-						Actions: []*types.ForeignKeyAction{
-							{
-								On: "delete",
-								Do: "cascade",
-							},
-						},
-					},
-				},
-				Indexes: []*types.Index{
-					{
-						Name:    "index_name",
-						Columns: []string{"id", "name"},
-						Type:    "btree",
-					},
-				},
-			},
-		},
-		Actions: []*types.Action{
-			{
-				Name:       "get_user",
-				Parameters: []string{"user_id"},
-				Public:     true,
-				Body:       "SELECT * FROM users WHERE id = $user_id",
-			},
-		},
-		Extensions: []*types.Extension{
-			{
-				Name: "auth",
-				Initialization: []*types.ExtensionConfig{
-					{
-						Key:   "token",
-						Value: "abc123",
-					},
-				},
-				Alias: "authentication",
-			},
-		},
-	},
-}
-
-func Example_respSchema_text() {
-	display.Print(demoSchema, nil, "text")
-	// Output:
-	// Tables:
-	//   users
-	//     Columns:
-	//     id
-	//       Type: int
-	//       primary_key
-	//         true
-	// Actions:
-	//   get_user (public)
-	//     Inputs: [user_id]
-	// Procedures:
 }
