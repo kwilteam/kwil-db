@@ -29,16 +29,14 @@ func TestChangesetMigration(t *testing.T) {
 
 	cleanup := func() {
 		db.AutoCommit(true)
-		_, err := db.Execute(ctx, "drop table if exists ds_test.test")
-		require.NoError(t, err)
-		_, err = db.Execute(ctx, "drop schema if exists ds_test")
-		require.NoError(t, err)
-		_, err = db.Execute(ctx, `DROP SCHEMA IF EXISTS `+migrationsSchemaName+` CASCADE;`)
-		require.NoError(t, err)
+		db.Execute(ctx, "DROP SCHEMA IF EXISTS ds_test CASCADE;")
+		db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_migrations CASCADE;`)
+		db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_chain CASCADE;`)
+		db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_voting CASCADE;`)
+		db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_internal CASCADE;`)
 		db.AutoCommit(false)
 	}
 	// attempt to clean up any old failed tests
-	cleanup()
 	t.Cleanup(func() {
 		cleanup()
 	})
@@ -143,8 +141,8 @@ func TestChangesetMigration(t *testing.T) {
 	require.Equal(t, "hello", res.Rows[0][1])
 }
 
-func createTestSchema(ctx context.Context, db sql.PreparedTxMaker, t *testing.T) error {
-	regularTx, err := db.BeginPreparedTx(ctx)
+func createTestSchema(ctx context.Context, db sql.TxMaker, t *testing.T) error {
+	regularTx, err := db.BeginTx(ctx)
 	require.NoError(t, err)
 	defer regularTx.Rollback(ctx)
 

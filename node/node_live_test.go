@@ -382,8 +382,11 @@ func cleanupDB(db *pg.DB) {
 	db.AutoCommit(true)
 	ctx := context.Background()
 	db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_chain CASCADE;`)
-	db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_internal CASCADE;`)
 	db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_voting CASCADE;`)
+	db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_events CASCADE;`)
+	db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_migrations CASCADE;`)
+	db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_internal CASCADE;`)
+	db.AutoCommit(false)
 }
 
 type dummyTxApp struct {

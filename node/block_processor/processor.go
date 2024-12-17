@@ -420,6 +420,7 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 		return nil, fmt.Errorf("failed to finalize the block execution: %w", err)
 	}
 
+	// migrator can be updated here within notify height
 	err = bp.migrator.NotifyHeight(ctx, blockCtx, bp.db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to notify the migrator about the block height: %w", err)
@@ -740,8 +741,8 @@ func (bp *BlockProcessor) SetNetworkParameters(params *common.NetworkParameters)
 
 func (bp *BlockProcessor) GetMigrationMetadata(ctx context.Context) (*ktypes.MigrationMetadata, error) {
 	bp.mtx.RLock()
-	defer bp.mtx.RUnlock()
-
 	status := bp.chainCtx.NetworkParameters.MigrationStatus
+	bp.mtx.RUnlock()
+
 	return bp.migrator.GetMigrationMetadata(ctx, status)
 }

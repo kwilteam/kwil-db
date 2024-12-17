@@ -32,6 +32,7 @@ import (
 	"github.com/kwilteam/kwil-db/node/txapp"
 	"github.com/kwilteam/kwil-db/node/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
+	"github.com/kwilteam/kwil-db/node/voting"
 
 	"github.com/kwilteam/kwil-db/core/log"
 
@@ -79,6 +80,7 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) []*Config {
 	accounts := &mockAccounts{}
 
 	v := newValidatorStore(valSet)
+
 	// txapp, err := txapp.NewTxApp(ctx, db, nil, signer, nil, service, accounts, v)
 	// assert.NoError(t, err)
 	txapp := newDummyTxApp(valSet)
@@ -87,8 +89,14 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) []*Config {
 		db.AutoCommit(true)
 		ctx := context.Background()
 		db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_chain CASCADE;`)
+		db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_voting CASCADE;`)
+		db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_events CASCADE;`)
 		db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_internal CASCADE;`)
+		db.AutoCommit(false)
 	})
+
+	_, _, err := voting.NewResolutionStore(ctx, db) // create the voting resolution store
+	require.NoError(t, err)
 
 	func() {
 		tx, err := db.BeginTx(ctx)

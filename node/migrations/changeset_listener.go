@@ -186,7 +186,7 @@ func (ml *migrationListener) retrieveChangesets(ctx context.Context) error {
 				}
 
 				btsReceived += int64(len(cs))
-			}(int64(i))
+			}(i)
 		}
 
 		// Wait for all chunks to be successfully received

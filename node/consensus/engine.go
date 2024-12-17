@@ -341,8 +341,6 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 			return nil
 
 		case halt := <-ce.haltChan:
-			// Halt the network
-			// ce.resetState(ctx) // rollback the current block execution and stop the node
 			ce.log.Error("Received halt signal, stopping the consensus engine", "reason", halt)
 			return nil
 
@@ -369,6 +367,13 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 
 		case <-blkPropTicker.C:
 			ce.rebroadcastBlkProposal(ctx)
+
+		default:
+			params := ce.blockProcessor.ConsensusParams() // status check, validators halt here
+			if params != nil && params.MigrationStatus == ktypes.MigrationCompleted {
+				ce.haltChan <- "Network halted due to migration"
+				return nil
+			}
 		}
 	}
 }

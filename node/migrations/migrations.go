@@ -33,8 +33,6 @@ import (
 var migrator *Migrator
 
 func init() {
-	migrator = &Migrator{}
-
 	err := resolutions.RegisterResolution(voting.StartMigrationEventType, resolutions.ModAdd, MigrationResolution)
 	if err != nil {
 		panic(err)
@@ -74,14 +72,11 @@ var MigrationResolution = resolutions.ResolutionConfig{
 	ConfirmationThreshold: big.NewRat(2, 3),
 	ExpirationPeriod:      100800, // 1 week
 	ResolveFunc: func(ctx context.Context, app *common.App, resolution *resolutions.Resolution, block *common.BlockContext) error {
-		if migrator == nil || !migrator.initialized {
-			return fmt.Errorf("migrator not initialized")
-		}
-		return migrator.startMigration(ctx, app, resolution, block)
+		return startMigration(ctx, app, resolution, block)
 	},
 }
 
-func (m *Migrator) startMigration(ctx context.Context, app *common.App, resolution *resolutions.Resolution, block *common.BlockContext) error {
+func startMigration(ctx context.Context, app *common.App, resolution *resolutions.Resolution, block *common.BlockContext) error {
 	// check if the node is in migration mode already
 	if block.ChainContext.MigrationParams != nil {
 		app.Service.Logger.Warn("node is currently migrating from the old chain. Resubmit the migration proposal after the current migration is complete")
@@ -121,7 +116,6 @@ func (m *Migrator) startMigration(ctx context.Context, app *common.App, resoluti
 	}
 
 	block.ChainContext.NetworkParameters.MigrationStatus = types.ActivationPeriod
-	m.activeMigration = active
 	app.Service.Logger.Info("migration started", "start_height", active.StartHeight, "end_height", active.EndHeight)
 
 	// Delete the pending migration resolutions from the resolutions table
