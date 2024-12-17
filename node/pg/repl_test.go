@@ -82,7 +82,7 @@ func Test_repl(t *testing.T) {
 		defer wg.Done()
 		defer quit()
 
-		for cid := range commitChan {
+		if cid, ok := <-commitChan; ok {
 			_, commitHash, err := decodeCommitPayload(cid)
 			if err != nil {
 				t.Errorf("invalid commit payload encoding: %v", err)
@@ -98,8 +98,6 @@ func Test_repl(t *testing.T) {
 
 		// commitChan was closed before receive (not expected in this test)
 		t.Error(<-errChan)
-
-		return
 	}()
 
 	tx, err := connQ.Begin(ctx)

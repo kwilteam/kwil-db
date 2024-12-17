@@ -247,7 +247,7 @@ func Test_Voting(t *testing.T) {
 
 				events := make([]*types.VotableEvent, 3)
 				ids := make([]*types.UUID, 3)
-				for i := 0; i < 3; i++ {
+				for i := range 3 {
 					events[i] = &types.VotableEvent{
 						Body: []byte("test" + fmt.Sprint(i)),
 						Type: testType,

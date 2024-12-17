@@ -233,6 +233,7 @@ func TestDualNodeMocknet(t *testing.T) {
 
 	bpl1 := log.New(log.WithName("BP1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
 	bp1, err := blockprocessor.NewBlockProcessor(ctx, db1, newDummyTxApp(valSetList), accounts1, vstore1, ss, es1, migrator, genCfg, signer1, bpl1)
+	require.NoError(t, err)
 
 	ceCfg1 := &consensus.Config{
 		PrivateKey:     privKeys[0],
@@ -285,9 +286,12 @@ func TestDualNodeMocknet(t *testing.T) {
 	require.NoError(t, err)
 
 	migrator2, err := migrations.SetupMigrator(ctx, db2, newSnapshotStore(), accounts2, filepath.Join(root2, "migrations"), mparams, vstore2, log.New(log.WithName("MIGRATOR")))
+	require.NoError(t, err)
 
 	bpl2 := log.New(log.WithName("BP2"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
 	bp2, err := blockprocessor.NewBlockProcessor(ctx, db2, newDummyTxApp(valSetList), accounts2, vstore2, ss, es2, migrator2, genCfg, signer2, bpl2)
+	require.NoError(t, err)
+
 	ceCfg2 := &consensus.Config{
 		PrivateKey:     privKeys[1],
 		ValidatorSet:   valSet,
@@ -423,7 +427,7 @@ func (d *dummyTxApp) ApplyMempool(ctx *common.TxContext, db sql.DB, tx *ktypes.T
 	return nil
 }
 
-type validatorStore struct {
+/*type validatorStore struct {
 	valSet []*ktypes.Validator
 }
 
@@ -439,7 +443,7 @@ func (v *validatorStore) GetValidators() []*ktypes.Validator {
 
 func (v *validatorStore) ValidatorUpdates() map[string]*ktypes.Validator {
 	return nil
-}
+}*/
 
 type mockAccounts struct{}
 
@@ -468,7 +472,7 @@ func (m *mockEventStore) GetUnbroadcastedEvents(ctx context.Context) ([]*ktypes.
 }
 
 // TODO: can test with real migrator
-type mockMigrator struct{}
+/*type mockMigrator struct{}
 
 func (m *mockMigrator) NotifyHeight(ctx context.Context, block *common.BlockContext, db migrations.Database) error {
 	return nil
@@ -484,4 +488,4 @@ func (m *mockMigrator) PersistLastChangesetHeight(ctx context.Context, tx sql.Ex
 
 func (m *mockMigrator) GetMigrationMetadata(ctx context.Context, status ktypes.MigrationStatus) (*ktypes.MigrationMetadata, error) {
 	return nil, nil
-}
+}*/
