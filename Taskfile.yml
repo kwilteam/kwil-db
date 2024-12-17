@@ -25,7 +25,7 @@ tasks:
       # so we have to list all the folders that are adjacent generated code.
       - |
         goimports -format-only -w ./app ./cmd ./common ./core ./node ./testing \
-          ./extensions ./parse/*.go ./parse/wasm ./parse/postgres
+          ./extensions
 
   tidy:
     desc: go mod tidy each module
@@ -76,13 +76,6 @@ tasks:
     cmds:
       - go run ./cmd/kwild/generate -out ./gen
       - go run ./cmd/kwil-cli/generate -out ./gen
-
-  kuneiform:wasm:
-    desc: Build the kuneiform wasm
-    cmds:
-      - rm -rf ./parse/wasm/*.{wasm,tar.gz}
-      - go generate ./parse/wasm/wasm.go
-      - tar -czvf ./parse/wasm/kuneiform_wasm.tar.gz ./parse/wasm/kuneiform.wasm
 
   kuneiform:grammar:
     desc: Generate kuneiform grammar go code.
@@ -230,14 +223,12 @@ tasks:
     desc: Run unit tests
     cmds:
       - go test ./core/... -tags=ext_test -count=1
-      - CGO_ENABLED=1 go test ./parse/... -tags=ext_test -count=1
       - CGO_ENABLED=1 go test ./... -tags=ext_test,pglive -count=1 -p=1 # no parallel for now because several try to use one pg database
 
   test:unit:race:
     desc: Run unit tests with the race detector
     cmds:
       - go test ./core/... -tags=ext_test -count=1 -race
-      - CGO_ENABLED=1 go test ./parse/... -tags=ext_test -count=1 -race
       - CGO_ENABLED=1 go test ./... -tags=ext_test,pglive -count=1 -race
 
   # test:it:

@@ -15,9 +15,9 @@ import (
 )
 
 var (
-	executeLong = `Execute a procedure or action against a database.
+	executeLong = `Execute an action against a database.
 
-The procedure or action name is specified as the first positional argument, and the procedure parameters as all subsequent arguments.
+The action name is specified as the first positional argument, and the procedure parameters as all subsequent arguments.
 In order to specify a procedure parameter, you first need to specify the parameter name, then the parameter value, delimited by a colon.
 
 For example, for procedure ` + "`" + `get_user($username)` + "`" + `, you would specify the procedure as follows:
@@ -36,8 +36,8 @@ kwil-cli database execute create_user username:satoshi age:32 --dbid 0x9228624C3
 
 func executeCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "execute <procedure_or_action> <parameter_1:value_1> <parameter_2:value_2> ...",
-		Short:   "Execute a procedure or action against a database.",
+		Use:     "execute <action> <parameter_1:value_1> <parameter_2:value_2> ...",
+		Short:   "Execute an action against a database.",
 		Long:    executeLong,
 		Example: executeExample,
 		RunE: func(cmd *cobra.Command, args []string) error {

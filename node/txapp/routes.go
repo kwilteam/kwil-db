@@ -13,16 +13,14 @@ import (
 	"github.com/kwilteam/kwil-db/extensions/consensus"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/node/accounts"
-	"github.com/kwilteam/kwil-db/node/engine/execution"
-	"github.com/kwilteam/kwil-db/node/ident"
+	"github.com/kwilteam/kwil-db/node/engine/interpreter"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
 )
 
 func init() {
 	err := errors.Join(
-		RegisterRoute(types.PayloadTypeDeploySchema, NewRoute(&deployDatasetRoute{})),
-		RegisterRoute(types.PayloadTypeDropSchema, NewRoute(&dropDatasetRoute{})),
+		RegisterRoute(types.PayloadTypeRawStatement, NewRoute(&rawStatementRoute{})),
 		RegisterRoute(types.PayloadTypeExecute, NewRoute(&executeActionRoute{})),
 		RegisterRoute(types.PayloadTypeTransfer, NewRoute(&transferRoute{})),
 		RegisterRoute(types.PayloadTypeValidatorJoin, NewRoute(&validatorJoinRoute{})),
@@ -204,99 +202,46 @@ func codeForEngineError(err error) types.TxCode {
 	if err == nil {
 		return types.CodeOk
 	}
-	if errors.Is(err, execution.ErrDatasetExists) {
+	if errors.Is(err, interpreter.ErrNamespaceExists) {
 		return types.CodeDatasetExists
 	}
-	if errors.Is(err, execution.ErrDatasetNotFound) {
+	if errors.Is(err, interpreter.ErrNamespaceNotFound) {
 		return types.CodeDatasetMissing
-	}
-	if errors.Is(err, execution.ErrInvalidSchema) {
-		return types.CodeInvalidSchema
 	}
 
 	return types.CodeUnknownError
 }
 
-type deployDatasetRoute struct {
-	schema     *types.Schema // set by PreTx
-	identifier string
-	authType   string
+type rawStatementRoute struct {
+	statement string
 }
 
-var _ consensus.Route = (*deployDatasetRoute)(nil)
+var _ consensus.Route = (*rawStatementRoute)(nil)
 
-func (d *deployDatasetRoute) Name() string {
-	return types.PayloadTypeDeploySchema.String()
+func (d *rawStatementRoute) Name() string {
+	return types.PayloadTypeRawStatement.String()
 }
 
-func (d *deployDatasetRoute) Price(ctx context.Context, app *common.App, tx *types.Transaction) (*big.Int, error) {
-	return big.NewInt(1000000000000000000), nil
-}
-
-func (d *deployDatasetRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *types.Transaction) (types.TxCode, error) {
-	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationInProgress ||
-		ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationCompleted {
-		return types.CodeNetworkInMigration, errors.New("cannot deploy dataset during migration")
-	}
-
-	schemaPayload := &types.Schema{}
-	err := schemaPayload.UnmarshalBinary(tx.Body.Payload)
-	if err != nil {
-		return types.CodeEncodingError, err
-	}
-
-	d.schema = schemaPayload
-
-	d.identifier, err = ident.Identifier(tx.Signature.Type, tx.Sender)
-	if err != nil {
-		return types.CodeUnknownError, err
-	}
-
-	d.authType = tx.Signature.Type
-
-	return 0, nil
-}
-
-func (d *deployDatasetRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
-	err := app.Engine.CreateDataset(ctx, app.DB, d.schema)
-	if err != nil {
-		return codeForEngineError(err), err
-	}
-	return 0, nil
-}
-
-type dropDatasetRoute struct {
-	dbid string
-}
-
-var _ consensus.Route = (*dropDatasetRoute)(nil)
-
-func (d *dropDatasetRoute) Name() string {
-	return types.PayloadTypeDropSchema.String()
-}
-
-func (d *dropDatasetRoute) Price(ctx context.Context, app *common.App, tx *types.Transaction) (*big.Int, error) {
+func (d *rawStatementRoute) Price(ctx context.Context, app *common.App, tx *types.Transaction) (*big.Int, error) {
 	return big.NewInt(10000000000000), nil
 }
 
-func (d *dropDatasetRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *types.Transaction) (types.TxCode, error) {
-	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationInProgress ||
-		ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus == types.MigrationCompleted {
-		return types.CodeNetworkInMigration, errors.New("cannot drop dataset during migration")
-	}
-
-	drop := &types.DropSchema{}
-	err := drop.UnmarshalBinary(tx.Body.Payload)
+func (d *rawStatementRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *types.Transaction) (types.TxCode, error) {
+	raw := &types.RawStatement{}
+	err := raw.UnmarshalBinary(tx.Body.Payload)
 	if err != nil {
 		return types.CodeEncodingError, err
 	}
 
-	d.dbid = drop.DBID
+	d.statement = raw.Statement
 	return 0, nil
 }
 
-func (d *dropDatasetRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
-	err := app.Engine.DeleteDataset(ctx, app.DB, d.dbid)
+func (d *rawStatementRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
+	err := app.Engine.Execute(ctx, app.DB, d.statement, nil, func(r *common.Row) error {
+		// we throw away all results for raw statements in a block
+		return nil
+	})
 	if err != nil {
 		return codeForEngineError(err), err
 	}
@@ -304,9 +249,9 @@ func (d *dropDatasetRoute) InTx(ctx *common.TxContext, app *common.App, tx *type
 }
 
 type executeActionRoute struct {
-	dbid   string
-	action string
-	args   [][]any
+	namespace string
+	action    string
+	args      [][]any
 }
 
 var _ consensus.Route = (*executeActionRoute)(nil)
@@ -327,7 +272,7 @@ func (d *executeActionRoute) PreTx(ctx *common.TxContext, svc *common.Service, t
 	}
 
 	d.action = action.Action
-	d.dbid = action.DBID
+	d.namespace = action.DBID
 
 	// here, we decode the [][]types.EncodedTypes into [][]any
 	args := make([][]any, len(action.Arguments))
@@ -355,10 +300,11 @@ func (d *executeActionRoute) PreTx(ctx *common.TxContext, svc *common.Service, t
 
 func (d *executeActionRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
 	for i := range d.args {
-		_, err := app.Engine.Procedure(ctx, app.DB, &common.ExecutionData{
-			Dataset:   d.dbid,
-			Procedure: d.action,
-			Args:      d.args[i],
+		// TODO: once we are able to store execution logs in the block store, we should propagate the discarded
+		// return value here.
+		_, err := app.Engine.Call(ctx, app.DB, d.namespace, d.action, d.args[i], func(r *common.Row) error {
+			// we throw away all results for execute actions
+			return nil
 		})
 		if err != nil {
 			return codeForEngineError(err), err

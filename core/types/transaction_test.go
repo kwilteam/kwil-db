@@ -786,7 +786,7 @@ func Test_TransactionBodyJSONEdgeCases(t *testing.T) {
 		txB := TransactionBody{
 			Description: "test",
 			Payload:     []byte("test payload"),
-			PayloadType: PayloadTypeDeploySchema,
+			PayloadType: PayloadTypeExecute,
 			Fee:         big.NewInt(0),
 			Nonce:       1,
 			ChainID:     "test-chain",
@@ -806,7 +806,7 @@ func Test_TransactionBodyJSONEdgeCases(t *testing.T) {
 		txB := TransactionBody{
 			Description: "test",
 			Payload:     []byte("test payload"),
-			PayloadType: PayloadTypeDeploySchema,
+			PayloadType: PayloadTypeExecute,
 			Fee:         largeFee,
 			Nonce:       1,
 			ChainID:     "test-chain",
@@ -872,7 +872,7 @@ func Test_TransactionBodyJSONEdgeCases(t *testing.T) {
 		txB := TransactionBody{
 			Description: "test",
 			Payload:     []byte("test payload"),
-			PayloadType: PayloadTypeDeploySchema,
+			PayloadType: PayloadTypeExecute,
 			Fee:         nil,
 			Nonce:       1,
 			ChainID:     "test-chain",

@@ -8,7 +8,6 @@ import (
 
 	"github.com/olekukonko/tablewriter"
 
-	clientType "github.com/kwilteam/kwil-db/core/client/types"
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
@@ -56,7 +55,7 @@ func (d *respDBList) MarshalText() ([]byte, error) {
 // of a database in cli
 type respRelations struct {
 	// to avoid recursive call of MarshalJSON
-	Data clientType.Records
+	Data *types.QueryResult
 }
 
 func (r *respRelations) MarshalJSON() ([]byte, error) {
@@ -64,14 +63,12 @@ func (r *respRelations) MarshalJSON() ([]byte, error) {
 }
 
 func (r *respRelations) MarshalText() ([]byte, error) {
-	return recordsToTable(r.Data), nil
+	return recordsToTable(r.Data.ExportToStringMap()), nil
 }
 
 // recordsToTable converts records to a formatted table structure
 // that can be printed
-func recordsToTable(r clientType.Records) []byte {
-	data := r.ToStrings()
-
+func recordsToTable(data []map[string]string) []byte {
 	if len(data) == 0 {
 		return []byte("No data to display.")
 	}
@@ -102,64 +99,4 @@ func recordsToTable(r clientType.Records) []byte {
 
 	table.Render()
 	return buf.Bytes()
-}
-
-// respSchema is used to represent a database schema in cli
-type respSchema struct {
-	Schema *types.Schema
-}
-
-func (s *respSchema) MarshalJSON() ([]byte, error) {
-	return json.Marshal(s.Schema)
-}
-
-func (s *respSchema) MarshalText() ([]byte, error) {
-	// TODO: make output more readable
-	var msg bytes.Buffer
-
-	// now we print the metadata
-	msg.WriteString("Tables:\n")
-	for _, t := range s.Schema.Tables {
-		msg.WriteString(fmt.Sprintf("  %s\n", t.Name))
-		msg.WriteString("    Columns:\n")
-		for _, c := range t.Columns {
-			msg.WriteString(fmt.Sprintf("    %s\n", c.Name))
-			msg.WriteString(fmt.Sprintf("      Type: %s\n", c.Type.String()))
-
-			for _, a := range c.Attributes {
-				msg.WriteString(fmt.Sprintf("      %s\n", a.Type))
-				if a.Value != "" {
-					msg.WriteString(fmt.Sprintf("        %s\n", a.Value))
-				}
-			}
-		}
-	}
-
-	// print queries
-	msg.WriteString("Actions:\n")
-	for _, q := range s.Schema.Actions {
-		public := "private"
-		if q.Public {
-			public = "public"
-		}
-
-		msg.WriteString(fmt.Sprintf("  %s (%s)\n", q.Name, public))
-		msg.WriteString(fmt.Sprintf("    Inputs: %s\n", q.Parameters))
-	}
-
-	// print procedures
-	msg.WriteString("Procedures:\n")
-	for _, p := range s.Schema.Procedures {
-		public := "private"
-		if p.Public {
-			public = "public"
-		}
-
-		msg.WriteString(fmt.Sprintf("  %s (%s)\n", p.Name, public))
-		for _, param := range p.Parameters {
-			msg.WriteString(fmt.Sprintf("    %s: %s\n", param.Name, param.Type.String()))
-		}
-	}
-
-	return msg.Bytes(), nil
 }

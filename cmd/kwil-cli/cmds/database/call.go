@@ -84,6 +84,9 @@ func callCmd() *cobra.Command {
 				if len(tuples) == 0 {
 					tuples = append(tuples, []any{})
 				}
+				if len(tuples) > 1 {
+					return display.PrintErr(cmd, errors.New("only one set of inputs can be provided to call"))
+				}
 
 				data, err := clnt.Call(ctx, dbid, action, tuples[0])
 				if err != nil {
@@ -91,7 +94,7 @@ func callCmd() *cobra.Command {
 				}
 
 				if data == nil {
-					data = &clientType.CallResult{}
+					data = &types.CallResult{}
 				}
 
 				return display.PrintCmd(cmd, &respCall{
@@ -109,13 +112,13 @@ func callCmd() *cobra.Command {
 }
 
 type respCall struct {
-	Data      *clientType.CallResult
+	Data      *types.CallResult
 	PrintLogs bool
 }
 
 func (r *respCall) MarshalJSON() ([]byte, error) {
 	if !r.PrintLogs {
-		return json.Marshal(r.Data.Records.ToStrings()) // this is for backwards compatibility
+		return json.Marshal(r.Data.QueryResult) // this is for backwards compatibility
 	}
 
 	bts, err := json.Marshal(r.Data)
@@ -128,10 +131,10 @@ func (r *respCall) MarshalJSON() ([]byte, error) {
 
 func (r *respCall) MarshalText() (text []byte, err error) {
 	if !r.PrintLogs {
-		return recordsToTable(r.Data.Records), nil
+		return recordsToTable(r.Data.QueryResult.ExportToStringMap()), nil
 	}
 
-	bts := recordsToTable(r.Data.Records)
+	bts := recordsToTable(r.Data.QueryResult.ExportToStringMap())
 
 	if len(r.Data.Logs) > 0 {
 		bts = append(bts, []byte("\n\nLogs:")...)
@@ -145,25 +148,90 @@ func (r *respCall) MarshalText() (text []byte, err error) {
 
 // buildProcedureInputs will build the inputs for either
 // an action or procedure executon/call.
-func buildExecutionInputs(ctx context.Context, client clientType.Client, dbid string, proc string, inputs []map[string]string) ([][]any, error) {
-	schema, err := client.GetSchema(ctx, dbid)
+func buildExecutionInputs(ctx context.Context, client clientType.Client, namespace string, action string, inputs []map[string]string) ([][]any, error) {
+	params, err := getParamList(ctx, client, namespace, action)
 	if err != nil {
-		return nil, fmt.Errorf("error getting schema: %w", err)
+		return nil, err
 	}
 
-	for _, a := range schema.Actions {
-		if strings.EqualFold(a.Name, proc) {
-			return buildActionInputs(a, inputs)
+	var results [][]any
+	for _, in := range inputs {
+		var tuple []any
+		for _, p := range params {
+			val, ok := in[p.Name]
+			if !ok {
+				tuple = append(tuple, nil)
+				continue
+			}
+
+			encoded, err := encodeBasedOnType(p.Type, val)
+			if err != nil {
+				return nil, err
+			}
+
+			tuple = append(tuple, encoded)
+		}
+
+		results = append(results, tuple)
+	}
+
+	return results, nil
+}
+
+func getParamList(ctx context.Context, client clientType.Client, namespace, action string) ([]paramList, error) {
+	res, err := client.Query(ctx, "{info}SELECT parameters FROM actions WHERE namespace = $namespace AND name = $action", map[string]any{
+		"namespace": namespace,
+		"action":    action,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	if len(res.Values) == 0 {
+		return nil, errors.New(`action "%s" not found in namespace "%s"`)
+	}
+	if len(res.Values) > 1 {
+		return nil, errors.New(`action "%s" is ambiguous in namespace "%s"`)
+	}
+
+	var strVal string
+	switch res.Values[0][0].(type) {
+	case nil:
+		return nil, nil // no inputs
+	case string:
+		strVal = res.Values[0][0].(string)
+	default:
+		return nil, errors.New("unexpected type for action parameters. this is a bug")
+	}
+
+	p := []struct {
+		Name     string `json:"name"`
+		DataType string `json:"data_type"`
+	}{}
+
+	if err := json.Unmarshal([]byte(strVal), &p); err != nil {
+		return nil, err
+	}
+
+	params := make([]paramList, len(p))
+	for i, param := range p {
+		dt, err := types.ParseDataType(param.DataType)
+		if err != nil {
+			return nil, err
+		}
+
+		params[i] = paramList{
+			Name: param.Name,
+			Type: dt,
 		}
 	}
 
-	for _, p := range schema.Procedures {
-		if strings.EqualFold(p.Name, proc) {
-			return buildProcedureInputs(p, inputs)
-		}
-	}
+	return params, nil
+}
 
-	return nil, errors.New("procedure/action not found")
+type paramList struct {
+	Name string
+	Type *types.DataType
 }
 
 // decodeMany attempts to parse command-line inputs as base64 encoded values.
@@ -190,97 +258,33 @@ func decodeMany(inputs []string) ([][]byte, bool) {
 	return b64Arr, b64Ok
 }
 
-func buildActionInputs(a *types.Action, inputs []map[string]string) ([][]any, error) {
-	tuples := [][]any{}
-	for _, input := range inputs {
-		newTuple := []any{}
-		for _, inputField := range a.Parameters {
-			// unlike procedures, actions do not have typed parameters,
-			// so we should try to always parse arrays.
-
-			val, ok := input[inputField]
-			if !ok {
-				fmt.Println(len(newTuple))
-				// if not found, we should just add nil
-				newTuple = append(newTuple, nil)
-				continue
-			}
-
-			split, err := splitIgnoringQuotedCommas(val)
-			if err != nil {
-				return nil, err
-			}
-
-			// attempt to decode base64 encoded values
-			b64Arr, b64Ok := decodeMany(split)
-			if b64Ok {
-				// additional check here in case user is sending a single base64 value, we don't
-				// want to encode it as an array.
-				if len(b64Arr) == 1 {
-					newTuple = append(newTuple, b64Arr[0])
-					continue
-				}
-
-				newTuple = append(newTuple, b64Arr)
-			} else {
-				// if nothing was split, then keep the original value, not the []string{}
-				if len(split) == 1 {
-					newTuple = append(newTuple, split[0])
-					continue
-				}
-
-				newTuple = append(newTuple, split)
-			}
-		}
-		tuples = append(tuples, newTuple)
-	}
-
-	return tuples, nil
-}
-
-func buildProcedureInputs(p *types.Procedure, inputs []map[string]string) ([][]any, error) {
-	tuples := [][]any{}
-	for _, input := range inputs {
-		newTuple := []any{}
-		for _, inputField := range p.Parameters {
-			v, ok := input[inputField.Name]
-			if !ok {
-				// if not found, we should just add nil
-				newTuple = append(newTuple, nil)
-				continue
-			}
-
-			// if the input is an array, split it by commas
-			if inputField.Type.IsArray {
-				split, err := splitIgnoringQuotedCommas(v)
-				if err != nil {
-					return nil, err
-				}
-
-				// attempt to decode base64 encoded values
-				b64Arr, b64Ok := decodeMany(split)
-				if b64Ok {
-					newTuple = append(newTuple, b64Arr)
-				} else {
-					newTuple = append(newTuple, split)
-				}
-				continue
-			}
-
-			// attempt to decode base64 encoded values
-
-			bts, ok := decodeMany([]string{v})
-			if ok {
-				newTuple = append(newTuple, bts[0])
-			} else {
-				newTuple = append(newTuple, input[inputField.Name])
-			}
+// encodeBasedOnType will encode the input value based on the type of the input.
+// If it is an array, it will properly split the input value by commas.
+// If the input value is base64 encoded, it will decode it.
+func encodeBasedOnType(t *types.DataType, v string) (any, error) {
+	if t.IsArray {
+		split, err := splitIgnoringQuotedCommas(v)
+		if err != nil {
+			return nil, err
 		}
 
-		tuples = append(tuples, newTuple)
+		// attempt to decode base64 encoded values
+		b64Arr, b64Ok := decodeMany(split)
+		if b64Ok {
+			return b64Arr, nil
+		}
+
+		return split, nil
 	}
 
-	return tuples, nil
+	// attempt to decode base64 encoded values
+	bts, ok := decodeMany([]string{v})
+	if ok {
+		return bts[0], nil
+	}
+
+	// otherwise, just keep it as string and let the server handle it
+	return v, nil
 }
 
 // splitIgnoringQuotedCommas splits a string by commas, but ignores commas that are inside single or double quotes.

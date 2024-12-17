@@ -21,18 +21,16 @@ import (
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
 
-	"github.com/kwilteam/kwil-db/node/engine/execution" // errors from engine
+	// errors from engine
+	"github.com/kwilteam/kwil-db/node/engine/interpreter"
 	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/node/services/jsonrpc/ratelimit"
-	"github.com/kwilteam/kwil-db/parse"
 	"github.com/kwilteam/kwil-db/version"
 )
 
 type EngineReader interface {
-	Procedure(ctx *common.TxContext, tx sql.DB, options *common.ExecutionData) (*sql.ResultSet, error)
-	GetSchema(dbid string) (*types.Schema, error)
-	ListDatasets(owner []byte) ([]*types.DatasetIdentifier, error)
-	Execute(ctx *common.TxContext, tx sql.DB, dbid string, query string, values map[string]any) (*sql.ResultSet, error)
+	Call(ctx *common.TxContext, tx sql.DB, namespace, action string, args []any, resultFn func(*common.Row) error) (*common.CallResult, error)
+	Execute(ctx *common.TxContext, tx sql.DB, query string, params map[string]any, resultFn func(*common.Row) error) error
 }
 
 type BlockchainTransactor interface {
@@ -307,11 +305,6 @@ func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 			"get current blockchain info",
 			"chain info including chain ID and best block",
 		),
-		userjson.MethodDatabases: rpcserver.MakeMethodDef(
-			svc.ListDatabases,
-			"list databases",
-			"an array of matching databases",
-		),
 		userjson.MethodPing: rpcserver.MakeMethodDef(
 			svc.Ping,
 			"ping the server",
@@ -326,11 +319,6 @@ func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 			svc.Query,
 			"perform an ad-hoc SQL query",
 			"the result of the query as a encoded records",
-		),
-		userjson.MethodSchema: rpcserver.MakeMethodDef(
-			svc.Schema,
-			"get a deployed database's kuneiform schema definition",
-			"the kuneiform schema",
 		),
 		userjson.MethodTxQuery: rpcserver.MakeMethodDef(
 			svc.TxQuery,
@@ -522,25 +510,22 @@ func (svc *Service) Query(ctx context.Context, req *userjson.QueryRequest) (*use
 	readTx := svc.db.BeginDelayedReadTx()
 	defer readTx.Rollback(ctx)
 
-	result, err := svc.engine.Execute(&common.TxContext{
+	r := &rowReader{}
+	err := svc.engine.Execute(&common.TxContext{
 		Ctx: ctxExec,
 		BlockContext: &common.BlockContext{
 			Height: -1, // cannot know the height here.
 		},
-	}, readTx, req.DBID, req.Query, nil)
+	}, readTx, req.Query, req.Params, r.read)
 	if err != nil {
 		// We don't know for sure that it's an invalid argument, but an invalid
 		// user-provided query isn't an internal server error.
 		return nil, engineError(err)
 	}
-
-	bts, err := json.Marshal(resultMap(result)) // marshalling the map is less efficient, but necessary for backwards compatibility
-	if err != nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorResultEncoding, "failed to marshal call result", nil)
-	}
-
 	return &userjson.QueryResponse{
-		Result: bts,
+		ColumnNames: r.qr.ColumnNames,
+		ColumnTypes: r.qr.ColumnTypes,
+		Values:      r.qr.Values,
 	}, nil
 }
 
@@ -579,27 +564,6 @@ func (svc *Service) Ping(ctx context.Context, req *userjson.PingRequest) (*userj
 	}, nil
 }
 
-func (svc *Service) ListDatabases(ctx context.Context, req *userjson.ListDatabasesRequest) (*userjson.ListDatabasesResponse, *jsonrpc.Error) {
-	dbs, err := svc.engine.ListDatasets(req.Owner)
-	if err != nil {
-		svc.log.Error("ListDatasets failed", "error", err)
-		return nil, engineError(err)
-	}
-
-	pbDatasets := make([]*userjson.DatasetInfo, len(dbs))
-	for i, db := range dbs {
-		pbDatasets[i] = &userjson.DatasetInfo{
-			DBID:  db.DBID,
-			Name:  db.Name,
-			Owner: db.Owner,
-		}
-	}
-
-	return &userjson.ListDatabasesResponse{
-		Databases: pbDatasets,
-	}, nil
-}
-
 func checkEngineError(err error) (jsonrpc.ErrorCode, string) {
 	if err == nil {
 		return 0, "" // would not be constructing a jsonrpc.Error
@@ -607,14 +571,11 @@ func checkEngineError(err error) (jsonrpc.ErrorCode, string) {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return jsonrpc.ErrorTimeout, "db timeout"
 	}
-	if errors.Is(err, execution.ErrDatasetExists) {
-		return jsonrpc.ErrorEngineDatasetExists, execution.ErrDatasetExists.Error()
+	if errors.Is(err, interpreter.ErrNamespaceExists) {
+		return jsonrpc.ErrorEngineDatasetExists, err.Error()
 	}
-	if errors.Is(err, execution.ErrDatasetNotFound) {
-		return jsonrpc.ErrorEngineDatasetNotFound, execution.ErrDatasetNotFound.Error()
-	}
-	if errors.Is(err, execution.ErrInvalidSchema) {
-		return jsonrpc.ErrorEngineInvalidSchema, execution.ErrInvalidSchema.Error()
+	if errors.Is(err, interpreter.ErrNamespaceNotFound) {
+		return jsonrpc.ErrorEngineDatasetNotFound, err.Error()
 	}
 
 	return jsonrpc.ErrorEngineInternal, err.Error()
@@ -631,20 +592,6 @@ func engineError(err error) *jsonrpc.Error {
 	}
 }
 
-func (svc *Service) Schema(ctx context.Context, req *userjson.SchemaRequest) (*userjson.SchemaResponse, *jsonrpc.Error) {
-	// logger := svc.log.With(log.String("rpc", "GetSchema"), log.String("dbid", req.DBID))
-	logger := svc.log
-	schema, err := svc.engine.GetSchema(req.DBID)
-	if err != nil {
-		logger.Debug("failed to get schema", "error", err)
-		return nil, engineError(err)
-	}
-
-	return &userjson.SchemaResponse{
-		Schema: schema,
-	}, nil
-}
-
 func unmarshalActionCall(req *userjson.CallRequest) (*types.ActionCall, *types.CallMessage, error) {
 	var actionPayload types.ActionCall
 	err := actionPayload.UnmarshalBinary(req.Body.Payload)
@@ -658,20 +605,6 @@ func unmarshalActionCall(req *userjson.CallRequest) (*types.ActionCall, *types.C
 	// 	req.Body.Payload, req.Body.Challenge)
 
 	return &actionPayload, &cm, nil
-}
-
-func resultMap(r *sql.ResultSet) []map[string]any {
-	m := make([]map[string]any, len(r.Rows))
-	for i, row := range r.Rows {
-		m2 := make(map[string]any)
-		for j, col := range row {
-			m2[r.Columns[j]] = col
-		}
-
-		m[i] = m2
-	}
-
-	return m
 }
 
 func (svc *Service) verifyCallChallenge(challenge [32]byte) *jsonrpc.Error {
@@ -701,31 +634,9 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "failed to convert action call: "+err.Error(), nil)
 	}
 
-	// Authenticate by validating the challenge was server-issued, and verify
-	// the signature on the serialized call message that include the challenge.
-	if svc.privateMode {
-		// The message must have a sig, sender, and challenge.
-		if msg.Signature == nil || len(msg.Sender) == 0 {
-			return nil, jsonrpc.NewError(jsonrpc.ErrorCallChallengeNotFound, "signed call message with challenge required", nil)
-		}
-		if len(msg.Body.Challenge) != 32 {
-			return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidCallChallenge, "incorrect challenge data length", nil)
-		}
-		// The call message sender must be interpreted consistently with
-		// signature verification, so ensure the auth types match.
-		if msg.AuthType != msg.Signature.Type {
-			return nil, jsonrpc.NewError(jsonrpc.ErrorMismatchCallAuthType, "different authentication schemes in signature and caller", nil)
-		}
-		// Ensure we issued the message's challenge.
-		if err := svc.verifyCallChallenge([32]byte(msg.Body.Challenge)); err != nil {
-			return nil, err
-		}
-		sigtxt := types.CallSigText(body.DBID, body.Action,
-			msg.Body.Payload, msg.Body.Challenge)
-		err = ident.VerifySignature(msg.Sender, []byte(sigtxt), msg.Signature)
-		if err != nil {
-			return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidCallSignature, "invalid signature on call message", nil)
-		}
+	if jsonRPCErr := svc.authenticate(msg, types.CallSigText(body.DBID, body.Action,
+		msg.Body.Payload, msg.Body.Challenge)); jsonRPCErr != nil {
+		return nil, jsonRPCErr
 	}
 
 	args := make([]any, len(body.Arguments))
@@ -736,9 +647,55 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 		}
 	}
 
+	ctxExec, cancel := context.WithTimeout(ctx, svc.readTxTimeout)
+	defer cancel()
+
+	txContext, jsonRPCErr := svc.txCtx(ctxExec, msg)
+	if err != nil {
+		return nil, jsonRPCErr
+	}
+
+	// we use a basic read tx since we are subscribing to notices,
+	// and it is therefore pointless to use a delayed tx
+	readTx, err := svc.db.BeginReadTx(ctx)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to start read tx", nil)
+	}
+	defer readTx.Rollback(ctx)
+
+	r := &rowReader{}
+	callRes, err := svc.engine.Call(txContext, readTx, body.DBID, body.Action, args, r.read)
+	if err != nil {
+		return nil, engineError(err)
+	}
+
+	return &userjson.CallResponse{
+		QueryResult: &r.qr,
+		Logs:        callRes.Logs,
+	}, nil
+}
+
+// rowReader is a helper struct that writes data for a query response
+type rowReader struct {
+	qr types.QueryResult
+}
+
+func (r *rowReader) read(row *common.Row) error {
+	if r.qr.ColumnNames == nil {
+		r.qr.ColumnNames = row.ColumnNames
+		r.qr.ColumnTypes = row.ColumnTypes
+	}
+	r.qr.Values = append(r.qr.Values, row.Values)
+	return nil
+}
+
+// txCtx creates a transaction context from the given context and call message.
+// It will do its best to determine the caller and signer, and the block context.
+func (svc *Service) txCtx(ctx context.Context, msg *types.CallMessage) (*common.TxContext, *jsonrpc.Error) {
 	signer := msg.Sender
 	caller := "" // string representation of sender, if signed.  Otherwise, empty string
 	if signer != nil && msg.AuthType != "" {
+		var err error
 		caller, err = ident.Identifier(msg.AuthType, signer)
 		if err != nil {
 			return nil, jsonrpc.NewError(jsonrpc.ErrorIdentInvalid, "failed to get caller: "+err.Error(), nil)
@@ -755,84 +712,50 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 		stamp = -1
 	}
 
-	ctxExec, cancel := context.WithTimeout(ctx, svc.readTxTimeout)
-	defer cancel()
-
-	// we use a basic read tx since we are subscribing to notices,
-	// and it is therefore pointless to use a delayed tx
-	readTx, err := svc.db.BeginReadTx(ctx)
-	if err != nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to start read tx", nil)
-	}
-	defer readTx.Rollback(ctx)
-
-	logCh, done, err := readTx.Subscribe(ctx)
-	if err != nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to subscribe to notices", nil)
-	}
-	defer done(ctx)
-
-	var logs []string
-	wg := sync.WaitGroup{}
-	wg.Add(1)
-	go func() {
-		for {
-			select {
-			case <-ctxExec.Done():
-				wg.Done()
-				return
-			case logMsg, ok := <-logCh:
-				if !ok {
-					wg.Done()
-					return
-				}
-
-				_, notc, err := parse.ParseNotice(logMsg)
-				if err != nil {
-					svc.log.Error("failed to parse notice", "error", err)
-					continue
-				}
-
-				logs = append(logs, notc)
-			}
-		}
-	}()
-
-	executeResult, err := svc.engine.Procedure(&common.TxContext{
-		Ctx:    ctxExec,
-		Signer: signer,
-		Caller: caller,
+	return &common.TxContext{
+		Ctx:           ctx,
+		Signer:        signer,
+		Caller:        caller,
+		Authenticator: msg.AuthType,
 		BlockContext: &common.BlockContext{
 			Height:    height,
 			Timestamp: stamp,
 		},
-		Authenticator: msg.AuthType,
-	}, readTx, &common.ExecutionData{
-		Dataset:   body.DBID,
-		Procedure: body.Action,
-		Args:      args,
-	})
-	if err != nil {
-		return nil, engineError(err)
-	}
-
-	err = done(ctx)
-	if err != nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to unsubscribe from notices", nil)
-	}
-
-	// marshalling the map is less efficient, but necessary for backwards compatibility
-	btsResult, err := json.Marshal(resultMap(executeResult))
-	if err != nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorResultEncoding, "failed to marshal call result", nil)
-	}
-
-	wg.Wait()
-
-	return &userjson.CallResponse{
-		Result: btsResult,
-		Logs:   logs,
 	}, nil
+}
+
+// authenticate enforces authentication for the given context and message
+// if private mode is enabled. It returns an error if authentication fails.
+func (svc *Service) authenticate(msg *types.CallMessage, sigTxt string) *jsonrpc.Error {
+	if !svc.privateMode {
+		return nil
+	}
+
+	// Authenticate by validating the challenge was server-issued, and verify
+	// the signature on the serialized call message that include the challenge.
+
+	// The message must have a sig, sender, and challenge.
+	if msg.Signature == nil || len(msg.Sender) == 0 {
+		return jsonrpc.NewError(jsonrpc.ErrorCallChallengeNotFound, "signed call message with challenge required", nil)
+	}
+	if len(msg.Body.Challenge) != 32 {
+		return jsonrpc.NewError(jsonrpc.ErrorInvalidCallChallenge, "incorrect challenge data length", nil)
+	}
+	// The call message sender must be interpreted consistently with
+	// signature verification, so ensure the auth types match.
+	if msg.AuthType != msg.Signature.Type {
+		return jsonrpc.NewError(jsonrpc.ErrorMismatchCallAuthType, "different authentication schemes in signature and caller", nil)
+	}
+	// Ensure we issued the message's challenge.
+	if err := svc.verifyCallChallenge([32]byte(msg.Body.Challenge)); err != nil {
+		return err
+	}
+	err := ident.VerifySignature(msg.Sender, []byte(sigTxt), msg.Signature)
+	if err != nil {
+		return jsonrpc.NewError(jsonrpc.ErrorInvalidCallSignature, "invalid signature on call message", nil)
+	}
+
+	return nil
 }
 
 func (svc *Service) TxQuery(ctx context.Context, req *userjson.TxQueryRequest) (*userjson.TxQueryResponse, *jsonrpc.Error) {

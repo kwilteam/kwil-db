@@ -32,14 +32,11 @@ type Result struct { // for other types, but embedding it is kinda annoying when
 	Result []byte `json:"result,omitempty"`
 }
 
-// CallResponse contains the response object for MethodCall.
-type CallResponse struct {
-	Result []byte   `json:"result,omitempty"`
-	Logs   []string `json:"logs,omitempty"`
-}
+// QueryResponse contains the response object for MethodCall and MethodQuery.
+type QueryResponse types.QueryResult
 
-// QueryResponse contains the response object for MethodQuery.
-type QueryResponse Result
+// CallResponse contains the response object for MethodCall.
+type CallResponse types.CallResult
 
 // ChainInfoResponse contains the response object for MethodChainInfo.
 type ChainInfoResponse = types.ChainInfo
@@ -48,19 +45,6 @@ type ChainInfoResponse = types.ChainInfo
 // serialized response for the Health method required by the rpcserver.Svc
 // interface. This is the response with which most health checks will be concerned.
 type HealthResponse = types.Health
-
-// SchemaResponse contains the response object for MethodSchema.
-type SchemaResponse struct {
-	Schema *types.Schema `json:"schema,omitempty"`
-}
-
-// SchemaResponse contains the response object for MethodSchema.
-type ListDatabasesResponse struct {
-	Databases []*DatasetInfo `json:"databases,omitempty"`
-}
-
-// SchemaResponse contains the response object for MethodSchema.
-type DatasetInfo = types.DatasetIdentifier
 
 // SchemaResponse contains the response object for MethodSchema.
 type PingResponse struct {

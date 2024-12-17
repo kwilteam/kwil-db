@@ -27,7 +27,6 @@ const (
 	ErrorEngineInternal        ErrorCode = -300
 	ErrorEngineDatasetNotFound ErrorCode = -301
 	ErrorEngineDatasetExists   ErrorCode = -302
-	ErrorEngineInvalidSchema   ErrorCode = -303
 
 	ErrorDBInternal ErrorCode = -400
 

@@ -1141,7 +1141,7 @@ func (c *DataType) PGString() (string, error) {
 		scalar = "UINT256"
 	case DecimalStr:
 		if c.Metadata == ZeroMetadata {
-			return "", fmt.Errorf("decimal type must have metadata")
+			return "NUMERIC", nil
 		}
 
 		scalar = fmt.Sprintf("NUMERIC(%d,%d)", c.Metadata[0], c.Metadata[1])
@@ -1171,7 +1171,7 @@ func (c *DataType) Clean() error {
 		return nil
 	case DecimalStr:
 		if c.Metadata == ZeroMetadata {
-			return fmt.Errorf("decimal type must have metadata")
+			return nil
 		}
 
 		err := decimal.CheckPrecisionAndScale(c.Metadata[0], c.Metadata[1])
