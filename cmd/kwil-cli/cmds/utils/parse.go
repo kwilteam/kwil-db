@@ -8,7 +8,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/common/display"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/internal/engine/generate"
-	"github.com/kwilteam/kwil-db/parse"
+	"github.com/kwilteam/kwil-db/internal/engine/parse"
 	"github.com/spf13/cobra"
 )
 

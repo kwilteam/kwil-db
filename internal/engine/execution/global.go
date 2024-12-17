@@ -14,9 +14,9 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/internal/engine/generate"
+	"github.com/kwilteam/kwil-db/internal/engine/parse"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
 	"github.com/kwilteam/kwil-db/internal/sql/versioning"
-	"github.com/kwilteam/kwil-db/parse"
 )
 
 // GlobalContext is the context for the entire execution.

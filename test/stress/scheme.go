@@ -15,7 +15,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/utils/random"
-	"github.com/kwilteam/kwil-db/parse"
+	"github.com/kwilteam/kwil-db/internal/engine/parse"
 )
 
 //go:embed actions.kf

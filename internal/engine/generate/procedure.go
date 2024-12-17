@@ -6,7 +6,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/utils/order"
-	"github.com/kwilteam/kwil-db/parse"
+	"github.com/kwilteam/kwil-db/internal/engine/parse"
 )
 
 // GenerateProcedure generates the plpgsql code for a procedure.

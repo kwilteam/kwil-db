@@ -25,8 +25,8 @@ import (
 	"github.com/kwilteam/kwil-db/core/utils"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/internal/engine/execution"
+	"github.com/kwilteam/kwil-db/internal/engine/parse"
 	"github.com/kwilteam/kwil-db/internal/sql/pg"
-	"github.com/kwilteam/kwil-db/parse"
 	"github.com/stretchr/testify/assert"
 )
 

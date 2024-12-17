@@ -24,12 +24,12 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/transactions"
 	"github.com/kwilteam/kwil-db/internal/abci"             // errors from chainClient
 	"github.com/kwilteam/kwil-db/internal/engine/execution" // errors from engine
+	"github.com/kwilteam/kwil-db/internal/engine/parse"
 	"github.com/kwilteam/kwil-db/internal/migrations"
 	rpcserver "github.com/kwilteam/kwil-db/internal/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/internal/services/jsonrpc/ratelimit"
 	"github.com/kwilteam/kwil-db/internal/version"
 	"github.com/kwilteam/kwil-db/internal/voting"
-	"github.com/kwilteam/kwil-db/parse"
 )
 
 // Service is the "user" RPC service, also known as txsvc in other contexts.

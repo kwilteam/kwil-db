@@ -13,7 +13,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/core/types"
 	clientType "github.com/kwilteam/kwil-db/core/types/client"
-	"github.com/kwilteam/kwil-db/parse"
+	"github.com/kwilteam/kwil-db/internal/engine/parse"
 	"github.com/spf13/cobra"
 )
 

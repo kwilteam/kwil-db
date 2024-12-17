@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/parse"
+	"github.com/kwilteam/kwil-db/internal/engine/parse"
 )
 
 //go:embed proc_social.kf

@@ -33,10 +33,10 @@ import (
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/internal/abci/cometbft"
 	"github.com/kwilteam/kwil-db/internal/abci/meta"
+	"github.com/kwilteam/kwil-db/internal/engine/parse"
 	"github.com/kwilteam/kwil-db/internal/statesync"
 	"github.com/kwilteam/kwil-db/internal/txapp"
 	"github.com/kwilteam/kwil-db/internal/version"
-	"github.com/kwilteam/kwil-db/parse"
 	"go.uber.org/zap"
 )
 

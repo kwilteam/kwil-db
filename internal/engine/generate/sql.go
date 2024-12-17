@@ -3,7 +3,7 @@ package generate
 import (
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/parse"
+	"github.com/kwilteam/kwil-db/internal/engine/parse"
 )
 
 // WriteSQL converts a SQL node to a string.

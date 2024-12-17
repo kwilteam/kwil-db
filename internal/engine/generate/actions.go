@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/parse"
+	"github.com/kwilteam/kwil-db/internal/engine/parse"
 )
 
 // this package handles generating code for actions.
