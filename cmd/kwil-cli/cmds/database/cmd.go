@@ -19,8 +19,6 @@ var (
 func NewCmdDatabase() *cobra.Command {
 	// readOnlyCmds do not create a transaction.
 	readOnlyCmds := []*cobra.Command{
-		listCmd(),
-		readSchemaCmd(),
 		queryCmd(),
 		callCmd(), // no tx, but may required key for signature, for now
 	}
@@ -28,8 +26,6 @@ func NewCmdDatabase() *cobra.Command {
 
 	// writeCmds create a transactions, requiring a private key for signing/
 	writeCmds := []*cobra.Command{
-		deployCmd(),
-		dropCmd(),
 		executeCmd(),
 		batchCmd(),
 	}

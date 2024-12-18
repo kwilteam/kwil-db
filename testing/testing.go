@@ -9,7 +9,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"maps"
 	"os"
 	"os/exec"
 	"reflect"
@@ -22,22 +21,26 @@ import (
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/utils"
-	"github.com/kwilteam/kwil-db/extensions/precompiles"
-	"github.com/kwilteam/kwil-db/node/engine/execution"
+	"github.com/kwilteam/kwil-db/node/engine/interpreter"
 	"github.com/kwilteam/kwil-db/node/pg"
 	"github.com/kwilteam/kwil-db/node/types/sql"
-	"github.com/kwilteam/kwil-db/parse"
 )
 
 // RunSchemaTest runs a SchemaTest.
 // It is meant to be used with Go's testing package.
-func RunSchemaTest(t *testing.T, s SchemaTest) {
-	err := s.Run(context.Background(), &Options{
-		UseTestContainer: true,
-		Logger:           t,
-	})
+func RunSchemaTest(t *testing.T, s SchemaTest, options *Options) {
+	if options == nil {
+		options = &Options{
+			UseTestContainer: true,
+			Logger:           t,
+		}
+	}
+
+	if s.Owner == "" {
+		s.Owner = string(deployer)
+	}
+
+	err := s.Run(context.Background(), options)
 	if err != nil {
 		t.Fatalf("test failed: %s", err.Error())
 	}
@@ -49,17 +52,16 @@ func RunSchemaTest(t *testing.T, s SchemaTest) {
 type SchemaTest struct {
 	// Name is the name of the test case.
 	Name string `json:"name"`
-	// Schemas are plain text schemas to deploy as
-	// part of the text.
-	Schemas []string `json:"-"`
-	// SchemaFiles are paths to the schema files to deploy.
-	SchemaFiles []string `json:"schema_files"`
+	// Owner is a public identifier of the user that owns the database.
+	// If empty, a pre-defined deployer will be used.
+	Owner string `json:"owner"`
+	// SeedScripts are paths to the files containing SQL
+	// scripts that are run before each test to seed the database
+	SeedScripts []string `json:"seed_scripts"`
 	// SeedStatements are SQL statements run before each test that are
-	// meant to seed the database with data. It maps the database name
-	// to the SQL statements to run. The name is the database name,
-	// defined using "database <name>;". The test case will derive the
-	// DBID from the name.
-	SeedStatements map[string][]string `json:"seed_statements"`
+	// meant to seed the database with data. They are run after the
+	// SeedScripts.
+	SeedStatements []string `json:"seed_statements"`
 	// TestCases execute actions or procedures against the database
 	// engine, taking certain inputs and expecting certain outputs or
 	// errors. These run separately from the functions, and separately
@@ -103,27 +105,20 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 		return fmt.Errorf("test configuration error: %w", err)
 	}
 
-	schemas := tc.Schemas
-	for _, schemaFile := range tc.SchemaFiles {
+	// we read in the scripts of seed statements
+	seedStmts := []string{}
+	for _, schemaFile := range tc.SeedScripts {
 		bts, err := os.ReadFile(schemaFile)
 		if err != nil {
 			return err
 		}
-		schemas = append(schemas, string(bts))
+
+		opts.Logger.Logf(`reading seed script "%s"`, schemaFile)
+
+		seedStmts = append(seedStmts, string(bts))
 	}
-
-	var parsedSchemas []*types.Schema
-	for _, schema := range schemas {
-		s, err := parse.Parse([]byte(schema))
-		if err != nil {
-			return fmt.Errorf(`error parsing schema: %w`, err)
-		}
-		parsedSchemas = append(parsedSchemas, s)
-
-		s.Owner = deployer
-
-		opts.Logger.Logf(`using schema "%s" (DBID: "%s")`, s.Name, s.DBID())
-	}
+	// once we read in the scripts, we need to add the adhoc seed statements
+	seedStmts = append(seedStmts, tc.SeedStatements...)
 
 	// connect to Postgres, and run each test case in its
 	// own transaction that is rolled back.
@@ -162,11 +157,6 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 				// always rollback the outer transaction to reset the database
 				defer outerTx.Rollback(ctx)
 
-				err = execution.InitializeEngine(ctx, outerTx)
-				if err != nil {
-					return err
-				}
-
 				var logger log.Logger
 				// if this is a kwil logger, we can keep using it.
 				// If it is from testing.T, we should make a Kwil logger.
@@ -176,26 +166,36 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 					logger = log.New(log.WithLevel(log.LevelInfo))
 				}
 
-				engine, err := execution.NewGlobalContext(ctx, outerTx, maps.Clone(precompiles.RegisteredPrecompiles()),
-					&common.Service{
-						Logger:      logger,
-						LocalConfig: &config.Config{},
-						Identity:    []byte("node"),
-					})
+				interp, err := interpreter.NewInterpreter(ctx, outerTx, &common.Service{
+					Logger:      logger,
+					LocalConfig: &config.Config{},
+					Identity:    []byte("node"),
+				})
 				if err != nil {
 					return err
 				}
 
+				err = interp.SetOwner(ctx, outerTx, tc.Owner)
+				if err != nil {
+					return err
+				}
+
+				tx2, err := outerTx.BeginTx(ctx)
+				if err != nil {
+					return err
+				}
+				defer tx2.Rollback(ctx)
+
 				platform := &Platform{
-					Engine:   engine,
-					DB:       outerTx,
+					Engine:   interp,
+					DB:       tx2,
 					Deployer: deployer,
 					Logger:   opts.Logger,
 				}
 
 				// deploy schemas
-				for _, schema := range parsedSchemas {
-					err := engine.CreateDataset(&common.TxContext{
+				for _, stmt := range seedStmts {
+					err = interp.Execute(&common.TxContext{
 						Ctx:    ctx,
 						Signer: deployer,
 						Caller: string(deployer),
@@ -203,33 +203,12 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 						BlockContext: &common.BlockContext{
 							Height: 0,
 						},
-					}, outerTx, schema)
+					}, tx2, stmt, nil, func(r *common.Row) error {
+						// do nothing
+						return nil
+					})
 					if err != nil {
 						return err
-					}
-				}
-
-				// seed data
-				for dbName, seed := range tc.SeedStatements {
-					if strings.HasSuffix(dbName, ".kf") {
-						// while I was testing this, I hit this twice by accident, so I
-						// figured I should add in a helpful error message
-						return fmt.Errorf(`seed statement target must be the schema name, not the file name. Received "%s"`, dbName)
-					}
-
-					for _, sql := range seed {
-						dbid := utils.GenerateDBID(dbName, deployer)
-						_, err = engine.Execute(&common.TxContext{
-							Signer: deployer,
-							Caller: string(deployer),
-							TxID:   platform.Txid(),
-							BlockContext: &common.BlockContext{
-								Height: 0,
-							},
-						}, outerTx, dbid, sql, nil)
-						if err != nil {
-							return fmt.Errorf(`error executing seed query "%s" on schema "%s": %s`, sql, dbName, err)
-						}
 					}
 				}
 
@@ -264,13 +243,11 @@ type TestFunc func(ctx context.Context, platform *Platform) error
 type TestCase struct {
 	// Name is a name that the test will be identified by if it fails.
 	Name string `json:"name"`
-	// Database is the name of the database schema to execute the
-	// action/procedure against. This is the database NAME,
-	// defined using "database <name>;". The test case will
-	// derive the DBID from the name.
-	Database string `json:"database"`
-	// Name is the name of the action/procedure.
-	Target string `json:"target"`
+	// Namespace is the name of the database schema to execute the
+	// action/procedure against.
+	Namespace string `json:"database"`
+	// Action is the name of the action/procedure.
+	Action string `json:"action"`
 	// Args are the inputs to the action/procedure.
 	// If the action/procedure takes no parameters, this should be nil.
 	Args []any `json:"args"`
@@ -300,12 +277,11 @@ func (e *TestCase) runExecution(ctx context.Context, platform *Platform) error {
 		caller = e.Caller
 	}
 
-	dbid := utils.GenerateDBID(e.Database, deployer)
-
 	// log to help users debug failed tests
-	platform.Logger.Logf(`executing action/procedure "%s" against schema "%s" (DBID: %s)`, e.Target, e.Database, dbid)
+	platform.Logger.Logf(`executing action/procedure "%s" against namespace "%s"`, e.Action, e.Namespace)
 
-	res, err := platform.Engine.Procedure(&common.TxContext{
+	var results [][]any
+	_, err := platform.Engine.Call(&common.TxContext{
 		Ctx:    ctx,
 		Signer: []byte(caller),
 		Caller: caller,
@@ -317,10 +293,9 @@ func (e *TestCase) runExecution(ctx context.Context, platform *Platform) error {
 				NetworkParameters: &common.NetworkParameters{},
 			},
 		},
-	}, platform.DB, &common.ExecutionData{
-		Dataset:   dbid,
-		Procedure: e.Target,
-		Args:      e.Args,
+	}, platform.DB, e.Namespace, e.Action, e.Args, func(r *common.Row) error {
+		results = append(results, r.Values)
+		return nil
 	})
 	if err != nil {
 		// if error is not nil, the test should only pass if either
@@ -347,11 +322,11 @@ func (e *TestCase) runExecution(ctx context.Context, platform *Platform) error {
 		return nil
 	}
 
-	if len(res.Rows) != len(e.Returns) {
-		return fmt.Errorf("expected %d rows to be returned, received %d", len(e.Returns), len(res.Rows))
+	if len(results) != len(e.Returns) {
+		return fmt.Errorf("expected %d rows to be returned, received %d", len(e.Returns), len(results))
 	}
 
-	for i, row := range res.Rows {
+	for i, row := range results {
 		if len(row) != len(e.Returns[i]) {
 			return fmt.Errorf("expected %d columns to be returned, received %d", len(e.Returns[i]), len(row))
 		}

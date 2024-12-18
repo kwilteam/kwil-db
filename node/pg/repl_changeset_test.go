@@ -6,10 +6,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/kwilteam/kwil-db/core/types"
 )
 
 func TestChangesetEntry_Serialize(t *testing.T) {
@@ -514,7 +513,7 @@ func TestRelation_SerializeSize(t *testing.T) {
 					{Name: "col3", Type: types.BoolType},
 				},
 			},
-			want: 2 + 4 + 4 + 4 + 5 + 4 + (2 + 4 + 4 + (2 + 4 + 3 + 1 + 4)) + 2*(2+4+4+(2+4+4+1+4)),
+			want: 2 + 4 + 4 + 4 + 5 + 4 + (2 + 4 + 5 + (2 + 4 + 3 + 1 + 4)) + 2*(2+4+4+(2+4+4+1+4)),
 		},
 	}
 

@@ -26,9 +26,9 @@ import (
 // maintaining a mempool for uncommitted accounts, pricing transactions,
 // managing atomicity of the database, and managing the validator set.
 type TxApp struct {
-	Engine     Engine     // tracks deployed schemas
-	Accounts   Accounts   // tracks account balances and nonces
-	Validators Validators // tracks validator power
+	Engine     common.Engine // tracks deployed schemas
+	Accounts   Accounts      // tracks account balances and nonces
+	Validators Validators    // tracks validator power
 
 	service *common.Service
 	// forks forks.Forks

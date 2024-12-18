@@ -19,7 +19,6 @@ func NewCmdUtils() *cobra.Command {
 		decodeTxCmd(),
 		chainInfoCmd(),
 		kgwAuthnCmd(),
-		newParseCmd(),
 		testCmd(),
 		dbidCmd(),
 		generateKeyCmd(),
