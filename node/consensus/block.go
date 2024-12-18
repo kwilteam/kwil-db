@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	ktypes "github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/node/types"
 )
 
 // TODO: should include consensus params hash
@@ -116,7 +115,7 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 
 	// remove transactions from the mempool
 	for _, txn := range blkProp.blk.Txns {
-		txHash := types.HashBytes(txn) // TODO: can this be saved instead of recalculating?
+		txHash := txn.Hash()
 		ce.mempool.Remove(txHash)
 	}
 

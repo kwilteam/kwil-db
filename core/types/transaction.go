@@ -57,12 +57,9 @@ func (t *Transaction) StrictUnmarshal() {
 
 // Hash gives the hash of the transaction that is the unique identifier for the
 // transaction.
-func (t *Transaction) Hash() (Hash, error) {
-	raw, err := t.MarshalBinary()
-	if err != nil {
-		return Hash{}, err
-	}
-	return HashBytes(raw), nil
+func (t *Transaction) Hash() Hash {
+	raw := t.Bytes()
+	return HashBytes(raw)
 }
 
 // TransactionBody is the body of a transaction that gets included in the
@@ -306,13 +303,17 @@ func (t *Transaction) WriteTo(w io.Writer) (int64, error) {
 
 var _ encoding.BinaryMarshaler = (*Transaction)(nil)
 
+// Bytes returns the serialized transaction.
+func (t *Transaction) Bytes() []byte {
+	bts, _ := t.MarshalBinary() // guaranteed not to error
+	return bts
+}
+
 // MarshalBinary produces the full binary serialization of the transaction,
 // which is the form used in p2p messaging and blockchain storage.
 func (t *Transaction) MarshalBinary() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	if err := t.serialize(buf); err != nil {
-		return nil, err
-	}
+	t.serialize(buf) // guaranteed not to error with bytes.Buffer
 	return buf.Bytes(), nil
 }
 
@@ -467,9 +468,12 @@ func (tb *TransactionBody) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
+const txVersion uint16 = 0
+
 func (t *Transaction) serialize(w io.Writer) (err error) {
-	if t.Body == nil {
-		return errors.New("missing transaction body")
+	// version
+	if err := binary.Write(w, binary.LittleEndian, txVersion); err != nil {
+		return fmt.Errorf("failed to write transaction version: %w", err)
 	}
 
 	// Tx Signature
@@ -482,19 +486,13 @@ func (t *Transaction) serialize(w io.Writer) (err error) {
 	}
 
 	// Tx Body
-	if _, err := t.Body.WriteTo(w); err != nil {
+	var bodyBytes []byte
+	if t.Body != nil {
+		bodyBytes = t.Body.Bytes()
+	}
+	if err := writeBytes(w, bodyBytes); err != nil {
 		return fmt.Errorf("failed to write transaction body: %w", err)
 	}
-	/*var txBodyBytes []byte
-	if t.Body != nil { // why support this?
-		txBodyBytes, err = t.Body.MarshalBinary()
-		if err != nil {
-			return fmt.Errorf("failed to marshal transaction body: %w", err)
-		}
-	}
-	if err := writeBytes(w, txBodyBytes); err != nil {
-		return fmt.Errorf("failed to write transaction body: %w", err)
-	}*/
 
 	// SerializationType
 	if err := writeString(w, string(t.Serialization)); err != nil {
@@ -512,6 +510,16 @@ func (t *Transaction) serialize(w io.Writer) (err error) {
 func (t *Transaction) deserialize(r io.Reader) (int64, error) {
 	cr := utils.NewCountingReader(r)
 
+	// version
+	var ver uint16
+	err := binary.Read(cr, binary.LittleEndian, &ver)
+	if err != nil {
+		return cr.ReadCount(), fmt.Errorf("failed to read transaction version: %w", err)
+	}
+	if ver != txVersion { // in the future we can have different transaction (sub)structs, switch to different handling, etc.
+		return cr.ReadCount(), fmt.Errorf("unsupported transaction version %d", ver)
+	}
+
 	// Signature
 	sigBytes, err := readBytes(cr)
 	if err != nil {
@@ -527,25 +535,20 @@ func (t *Transaction) deserialize(r io.Reader) (int64, error) {
 	}
 
 	// TxBody
-	var body TransactionBody
-	_, err = body.ReadFrom(cr)
-	if err != nil {
-		return cr.ReadCount(), fmt.Errorf("failed to read transaction body: %w", err)
-	}
-	t.Body = &body
-	/* if we need to support nil body...
 	bodyBytes, err := readBytes(cr)
 	if err != nil {
 		return 0, fmt.Errorf("failed to read transaction body: %w", err)
 	}
 	if len(bodyBytes) != 0 {
 		var body TransactionBody
-		body.StrictUnmarshal()
+		body.StrictUnmarshal() // not reading from a stream and we supposedly have the entire body here, so allow no trailing junk
 		if err := body.UnmarshalBinary(bodyBytes); err != nil {
 			return 0, fmt.Errorf("failed to unmarshal transaction body: %w", err)
 		}
 		t.Body = &body
-	}*/
+	} else {
+		t.Body = nil // in case Transaction is being reused
+	}
 
 	// SerializationType
 	serType, err := readString(cr)

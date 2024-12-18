@@ -11,7 +11,7 @@ type blockExecStatus struct {
 	startTime, endTime time.Time
 	height             int64
 	txIDs              []ktypes.Hash
-	txStatus           map[string]bool
+	txStatus           map[ktypes.Hash]bool
 }
 
 // Used by the rpc server to get the execution status of the block being processed.
@@ -29,7 +29,7 @@ func (bp *BlockProcessor) BlockExecutionStatus() *ktypes.BlockExecutionStatus {
 		EndTime:   bp.status.endTime,
 		Height:    bp.status.height,
 		TxIDs:     slices.Clone(bp.status.txIDs),
-		TxStatus:  make(map[string]bool),
+		TxStatus:  make(map[ktypes.Hash]bool, len(bp.status.txStatus)),
 	}
 
 	for k, v := range bp.status.txStatus {
@@ -39,24 +39,29 @@ func (bp *BlockProcessor) BlockExecutionStatus() *ktypes.BlockExecutionStatus {
 	return status
 }
 
-func (bp *BlockProcessor) initBlockExecutionStatus(blk *ktypes.Block) {
+func (bp *BlockProcessor) initBlockExecutionStatus(blk *ktypes.Block) []ktypes.Hash {
+	txIDs := make([]ktypes.Hash, len(blk.Txns))
+	for i, tx := range blk.Txns {
+		txID := tx.Hash()
+		txIDs[i] = txID
+	}
 	bp.statusMu.Lock()
 	defer bp.statusMu.Unlock()
 
 	status := &blockExecStatus{
 		startTime: time.Now(),
 		height:    blk.Header.Height,
-		txStatus:  make(map[string]bool),
-		txIDs:     make([]ktypes.Hash, len(blk.Txns)),
+		txStatus:  make(map[ktypes.Hash]bool, len(txIDs)),
+		txIDs:     txIDs,
 	}
 
-	for i, tx := range blk.Txns {
-		txID := ktypes.HashBytes(tx)
-		status.txIDs[i] = txID
-		status.txStatus[txID.String()] = false // not needed, just for clarity
+	for _, txID := range txIDs {
+		status.txStatus[txID] = false // not needed, just for clarity
 	}
 
 	bp.status = status
+
+	return txIDs
 }
 
 func (bp *BlockProcessor) clearBlockExecutionStatus() {
@@ -70,7 +75,7 @@ func (bp *BlockProcessor) updateBlockExecutionStatus(txID ktypes.Hash) {
 	bp.statusMu.Lock()
 	defer bp.statusMu.Unlock()
 
-	bp.status.txStatus[txID.String()] = true
+	bp.status.txStatus[txID] = true
 }
 
 func (bp *BlockProcessor) recordBlockExecEndTime() {

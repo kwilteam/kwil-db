@@ -172,7 +172,8 @@ func Example_respTxQuery_json() {
 	//       "gas": 10,
 	//       "log": "This is log",
 	//       "events": null
-	//     }
+	//     },
+	//     "warning": "HASH MISMATCH: requested 0102030400000000000000000000000000000000000000000000000000000000; received a9e1f559c5ec1246078f5b9f362ee59ee4113946305d41448f917cdd96a0c883"
 	//   },
 	//   "error": ""
 	// }
@@ -207,8 +208,8 @@ func Example_respTxQuery_WithRaw_json() {
 	//       "log": "This is log",
 	//       "events": null
 	//     },
-	//     "raw": "5500000041000000cb3fed7f6ff36e59054c04a831b215e514052753ee353e6fe31d4b4ef736acd6155127db555d3006ba14fcb4c79bbad56c8e63b81a9896319bb053a9e2534758000c000000736563703235366b315f6570220000005468697320697320612074657374207472616e73616374696f6e20666f7220636c695d0000000001f859b8397866363137616631636137373465626264366432336538666531326335366434316432356132326438316538386636376336633665653064348b6372656174655f75736572d1d0cfc9847465787480c28080c483666f6f070000006578656375746501030000003130300a00000000000000040000006173646606000000636f6e63617400000000",
-	//     "warning": "HASH MISMATCH: requested 0102030400000000000000000000000000000000000000000000000000000000; received ab8465bfd9a09828c348ea32801927598c1632ad37d248d7e945279f6d1b6480"
+	//     "raw": "00005500000041000000cb3fed7f6ff36e59054c04a831b215e514052753ee353e6fe31d4b4ef736acd6155127db555d3006ba14fcb4c79bbad56c8e63b81a9896319bb053a9e2534758000c000000736563703235366b315f6570aa000000220000005468697320697320612074657374207472616e73616374696f6e20666f7220636c695d0000000001f859b8397866363137616631636137373465626264366432336538666531326335366434316432356132326438316538386636376336633665653064348b6372656174655f75736572d1d0cfc9847465787480c28080c483666f6f070000006578656375746501030000003130300a00000000000000040000006173646606000000636f6e63617400000000",
+	//     "warning": "HASH MISMATCH: requested 0102030400000000000000000000000000000000000000000000000000000000; received a9e1f559c5ec1246078f5b9f362ee59ee4113946305d41448f917cdd96a0c883"
 	//   },
 	//   "error": ""
 	// }
@@ -222,7 +223,7 @@ func Test_TxHashAndExecResponse(t *testing.T) {
 		Hash:      RespTxHash(hash),
 		QueryResp: &RespTxQuery{Msg: qr},
 	}
-	expectJSON := `{"tx_hash":"0102030405000000000000000000000000000000000000000000000000000000","exec_result":{"hash":"0102030405000000000000000000000000000000000000000000000000000000","height":10,"tx":{"signature":{"sig":"yz/tf2/zblkFTASoMbIV5RQFJ1PuNT5v4x1LTvc2rNYVUSfbVV0wBroU/LTHm7rVbI5juBqYljGbsFOp4lNHWAA=","type":"secp256k1_ep"},"body":{"desc":"This is a test transaction for cli","payload":"AAH4Wbg5eGY2MTdhZjFjYTc3NGViYmQ2ZDIzZThmZTEyYzU2ZDQxZDI1YTIyZDgxZTg4ZjY3YzZjNmVlMGQ0i2NyZWF0ZV91c2Vy0dDPyYR0ZXh0gMKAgMSDZm9v","type":"execute","fee":"100","nonce":10,"chain_id":"asdf"},"serialization":"concat","sender":""},"result":{"code":0,"gas":10,"log":"This is log","events":null}}}`
+	expectJSON := `{"tx_hash":"0102030405000000000000000000000000000000000000000000000000000000","exec_result":{"hash":"0102030405000000000000000000000000000000000000000000000000000000","height":10,"tx":{"signature":{"sig":"yz/tf2/zblkFTASoMbIV5RQFJ1PuNT5v4x1LTvc2rNYVUSfbVV0wBroU/LTHm7rVbI5juBqYljGbsFOp4lNHWAA=","type":"secp256k1_ep"},"body":{"desc":"This is a test transaction for cli","payload":"AAH4Wbg5eGY2MTdhZjFjYTc3NGViYmQ2ZDIzZThmZTEyYzU2ZDQxZDI1YTIyZDgxZTg4ZjY3YzZjNmVlMGQ0i2NyZWF0ZV91c2Vy0dDPyYR0ZXh0gMKAgMSDZm9v","type":"execute","fee":"100","nonce":10,"chain_id":"asdf"},"serialization":"concat","sender":""},"result":{"code":0,"gas":10,"log":"This is log","events":null},"warning":"HASH MISMATCH: requested 0102030405000000000000000000000000000000000000000000000000000000; received a9e1f559c5ec1246078f5b9f362ee59ee4113946305d41448f917cdd96a0c883"}}`
 	expectText := "TxHash: 0102030405000000000000000000000000000000000000000000000000000000\nStatus: success\nHeight: 10\nLog: This is log"
 
 	outText, err := resp.MarshalText()
@@ -287,7 +288,7 @@ func TestRespTxQuery_MarshalText(t *testing.T) {
 			name: "pending status",
 			input: &RespTxQuery{
 				Msg: &types.TxQueryResponse{
-					Hash:   mustUnmarshalHash("ff42fabfe6e73e0c566cb2462cc0bf69de0e050c7a90fa9d5a708ace51243589"),
+					Hash:   mustUnmarshalHash("8d741508a6849f9d11c8f478584b5067a6bcfc1114300feff53454b0e064c0a0"),
 					Height: -1, // -1 height indicates pending
 					Tx: &types.Transaction{
 						Body: &types.TransactionBody{
@@ -305,7 +306,7 @@ func TestRespTxQuery_MarshalText(t *testing.T) {
 					},
 				},
 			},
-			expected: "Transaction ID: ff42fabfe6e73e0c566cb2462cc0bf69de0e050c7a90fa9d5a708ace51243589\nStatus: pending\nHeight: -1\nLog: transaction pending",
+			expected: "Transaction ID: 8d741508a6849f9d11c8f478584b5067a6bcfc1114300feff53454b0e064c0a0\nStatus: pending\nHeight: -1\nLog: transaction pending",
 		},
 	}
 

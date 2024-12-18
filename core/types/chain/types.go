@@ -41,11 +41,11 @@ func (b BlockHeader) MarshalJSON() ([]byte, error) {
 }
 
 type Block struct {
-	Header    *BlockHeader `json:"header"`
-	Txns      [][]byte     `json:"txns"`
-	Signature []byte       `json:"signature"`
-	Hash      types.Hash   `json:"hash"`
-	AppHash   types.Hash   `json:"app_hash"`
+	Header    *BlockHeader         `json:"header"`
+	Txns      []*types.Transaction `json:"txns"`
+	Signature []byte               `json:"signature"`
+	Hash      types.Hash           `json:"hash"`
+	AppHash   types.Hash           `json:"app_hash"`
 }
 
 type BlockResult struct {

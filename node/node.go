@@ -635,7 +635,7 @@ func (n *Node) TxQuery(ctx context.Context, hash types.Hash, prove bool) (*ktype
 }
 
 func (n *Node) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, _ /*sync TODO*/ uint8) (*ktypes.ResultBroadcastTx, error) {
-	rawTx, _ := tx.MarshalBinary()
+	rawTx := tx.Bytes()
 	txHash := types.HashBytes(rawTx)
 
 	if err := n.ce.CheckTx(ctx, tx); err != nil {

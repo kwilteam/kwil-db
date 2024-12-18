@@ -54,6 +54,8 @@ func (txl txSubList) Swap(i int, j int) {
 type indexedTxn struct {
 	i int // index in superset slice
 	*types.Transaction
+	sz   int
+	hash types.Hash
 
 	is int // not used for sorting, only referencing the marshalled txn slice
 }
@@ -63,20 +65,15 @@ type indexedTxn struct {
 // enforces block size limits, and applies the maxVotesPerTx limit for voteID transactions.
 // Additionally, it includes the ValidatorVoteBody transaction for unresolved events.
 // The final transaction order is: MempoolProposerTxns, ValidatorVoteBodyTx, Other MempoolTxns (Nonce ordered, stable sorted).
-func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs [][]byte) (finalTxs [][]byte, invalidTxs [][]byte, err error) {
+func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs []*ktypes.Transaction) (finalTxs []*ktypes.Transaction, invalidTxs []*ktypes.Transaction, err error) {
 	// Unmarshal and index the transactions.
 	var okTxns []*indexedTxn
-	invalidTxs = make([][]byte, 0, len(txs))
+	invalidTxs = make([]*ktypes.Transaction, 0, len(txs))
 	var i int
 
 	for is, tx := range txs {
-		txn := &types.Transaction{}
-		if err = txn.UnmarshalBinary(tx); err != nil {
-			invalidTxs = append(invalidTxs, tx)
-			bp.log.Error("Failed to unmarshal transaction that was previously accepted to mempool", "error", err)
-			continue
-		}
-		okTxns = append(okTxns, &indexedTxn{i, txn, is})
+		rawTx := tx.Bytes()
+		okTxns = append(okTxns, &indexedTxn{i, tx, len(rawTx), types.HashBytes(rawTx), is})
 		i++
 	}
 
@@ -98,8 +95,7 @@ func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs [][]
 
 	readTx, err := bp.db.BeginReadTx(ctx)
 	if err != nil {
-		bp.log.Error("Failed to begin read transaction", "error", err)
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to begin read transaction: %w", err)
 	}
 	defer readTx.Rollback(ctx)
 
@@ -114,14 +110,14 @@ func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs [][]
 		// Enforce maxVptesPerTx limit for voteID transactions
 		if tx.Body.PayloadType == types.PayloadTypeValidatorVoteIDs {
 			voteIDs := &types.ValidatorVoteIDs{}
-			if err = voteIDs.UnmarshalBinary(tx.Body.Payload); err != nil {
-				invalidTxs = append(invalidTxs, txs[tx.is])
+			if err := voteIDs.UnmarshalBinary(tx.Body.Payload); err != nil {
+				invalidTxs = append(invalidTxs, tx.Transaction)
 				bp.log.Warn("Dropping voteID tx: failed to unmarshal ValidatorVoteIDs transaction", "error", err)
 				continue
 			}
 
 			if len(voteIDs.ResolutionIDs) > int(bp.chainCtx.NetworkParameters.MaxVotesPerTx) {
-				invalidTxs = append(invalidTxs, txs[tx.is])
+				invalidTxs = append(invalidTxs, tx.Transaction)
 				bp.log.Warn("Dropping voteID tx: exceeds max votes per tx", "numVotes", len(voteIDs.ResolutionIDs),
 					"maxVotes", bp.chainCtx.NetworkParameters.MaxVotesPerTx)
 				continue
@@ -137,7 +133,7 @@ func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs [][]
 			}
 
 			if nonce == 0 && balance.Sign() == 0 {
-				invalidTxs = append(invalidTxs, txs[tx.is])
+				invalidTxs = append(invalidTxs, tx.Transaction)
 				bp.log.Warn("Dropping tx from unfunded account while preparing the block", "account", hex.EncodeToString(tx.Sender))
 				continue
 			}
@@ -156,28 +152,27 @@ func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs [][]
 	// Enforce block size limits
 	// Txs order: MempoolProposerTxns, ProposerInjectedTxns, MempoolTxns
 
-	finalTxs = make([][]byte, 0)
+	finalTxs = make([]*ktypes.Transaction, 0, len(otherTxns)+len(propTxs)+1)
 	maxTxBytes := bp.chainCtx.NetworkParameters.MaxBlockSize
 
 	for _, tx := range propTxs {
-		txBts := txs[tx.is]
-		txSize := int64(len(txBts))
+		txSize := int64(tx.sz)
 		if maxTxBytes < txSize {
 			break
 		}
 		maxTxBytes -= txSize
-		finalTxs = append(finalTxs, txBts)
+		finalTxs = append(finalTxs, tx.Transaction)
 	}
 
-	var voteBodyTx []byte // TODO: check proposerNonce value again
+	var voteBodyTx *ktypes.Transaction // TODO: check proposerNonce value again
 	voteBodyTx, err = bp.prepareValidatorVoteBodyTx(ctx, int64(proposerNonce), maxTxBytes)
 	if err != nil {
-		bp.log.Error("Failed to prepare validator vote body transaction", "error", err)
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to prepare validator vote body transaction: %w", err)
 	}
 	if voteBodyTx != nil {
 		finalTxs = append(finalTxs, voteBodyTx)
-		maxTxBytes -= int64(len(voteBodyTx))
+		voteBodyTxBts := voteBodyTx.Bytes()
+		maxTxBytes -= int64(len(voteBodyTxBts))
 	}
 
 	// senders tracks the sender of transactions that has pushed over the bytes limit for the block.
@@ -192,7 +187,7 @@ func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs [][]
 			continue
 		}
 
-		txSize := int64(len(txs[tx.is]))
+		txSize := int64(tx.sz)
 		if maxTxBytes < txSize {
 			// Ignore the transaction and all subsequent transactions from the sender
 			senders[sender] = true
@@ -200,10 +195,10 @@ func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs [][]
 		}
 
 		maxTxBytes -= txSize
-		finalTxs = append(finalTxs, txs[tx.is])
+		finalTxs = append(finalTxs, tx.Transaction)
 	}
 
-	return finalTxs, invalidTxs, err
+	return finalTxs, invalidTxs, nil
 }
 
 // prepareValidatorVoteBodyTx authors the ValidatorVoteBody transaction to be included by the leader in the block.
@@ -211,7 +206,7 @@ func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs [][]
 // The number of events to be included in a single transaction is limited either by MaxVotesPerTx or the maxTxSize
 // whichever is reached first. The estimated fee for validatorVOteBodies transaction is directly proportional to
 // the size of the event body. The transaction is signed by the leader and returned.
-func (bp *BlockProcessor) prepareValidatorVoteBodyTx(ctx context.Context, nonce int64, maxTxSize int64) ([]byte, error) {
+func (bp *BlockProcessor) prepareValidatorVoteBodyTx(ctx context.Context, nonce int64, maxTxSize int64) (*ktypes.Transaction, error) {
 	readTx, err := bp.db.BeginReadTx(ctx)
 	if err != nil {
 		return nil, err
@@ -313,14 +308,9 @@ func (bp *BlockProcessor) prepareValidatorVoteBodyTx(ctx context.Context, nonce 
 		return nil, err
 	}
 
-	bts, err := tx.MarshalBinary()
-	if err != nil {
-		return nil, err
-	}
-
 	bp.log.Info("Created a ValidatorVoteBody transaction", "events", len(finalEvents), "nonce", n, "GasPrice", fee.String())
 
-	return bts, nil
+	return tx, nil
 }
 
 // emptyVodeBodyTxSize returns the size of an empty validator vote body transaction.
@@ -340,10 +330,7 @@ func (bp *BlockProcessor) emptyVoteBodyTxSize() (int64, error) {
 		return -1, err
 	}
 
-	bts, err := tx.MarshalBinary()
-	if err != nil {
-		return -1, err
-	}
+	bts := tx.Bytes()
 
 	return int64(len(bts)), nil
 }
