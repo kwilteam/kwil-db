@@ -1,0 +1,63 @@
+version: "3"
+
+services:
+  kwild:
+    image: kwild:latest
+    ports:
+      - "8484"
+      - "6600"
+      - "40000" # debugger, if build with debug dockerfile
+    #env_file:
+      # NOTE: docker compose by default will use `.env` file if presented
+    environment:
+      GORACE: "halt_on_error=1 log_path=/app/kwil/datarace"
+    volumes:
+      - type: bind
+        source: ${KWIL_HOME:-./.testnode}
+        target: /app/kwil
+      - /tmp:/var/run/kwil:rw
+    depends_on:
+      ext:
+        condition: service_started
+      pg:
+        condition: service_healthy
+    networks:
+      - kwil-act-testnet
+    command: |
+      --root-dir=/app/kwil
+      --log.level=${LOG_LEVEL:-info}
+      --log.format=plain
+      --log.time-format=rfc3339milli
+      --app.extension-endpoints=ext:50051
+      --app.admin-listen-addr=/tmp/admin.socket
+      --chain.p2p.external-address=tcp://0.0.0.0:26656
+      --chain.rpc.listen-addr=tcp://0.0.0.0:26657
+      --app.pg-db-host=pg
+      --app.pg-db-port=5432
+      --app.pg-db-user=kwild
+      --app.pg-db-pass=kwild
+    healthcheck:
+      test: ["CMD", "curl", "--fail-with-body", "-s", "http://127.0.0.1:8484/api/v1/health/user"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
+  pg:
+    image: kwildb/postgres:16.5-1
+    ports:
+      - "5432"
+    restart: always
+    user: postgres
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: --data-checksums
+    networks:
+      - kwil-act-testnet
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 1s
+      timeout: 6s
+      retries: 20
+
+networks:
+  kwil-act-testnet:

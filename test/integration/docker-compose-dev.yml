@@ -1,0 +1,349 @@
+version: "3"
+
+services:
+  # TODO: generate correspond number of nodes and exts by configuration
+  node0:
+    image: kwild:latest
+    ports:
+      - "8484"
+      - "6600"
+    #env_file:
+      # NOTE: docker compose by default will use `.env` file if presented
+    volumes:
+      - type: bind
+        source: ${KWIL_HOME:-./.testnet}/node0
+        target: /app/kwil
+    networks:
+      - ${KWIL_NETWORK:-kwil-int-testnet}
+    depends_on:
+      ext1:
+        condition: service_started
+      pg0:
+        condition: service_healthy
+    command: |
+      --root-dir=/app/kwil
+      --log.format=plain
+      --log.time-format=rfc3339milli
+      --log.level=${LOG_LEVEL:-info}
+      --app.extension-endpoints=ext1:50051
+      --app.admin-listen-addr=/tmp/admin.socket
+      --chain.p2p.listen-addr=tcp://0.0.0.0:26656
+      --chain.rpc.listen-addr=tcp://0.0.0.0:26657
+      --app.pg-db-host=pg0
+      --app.pg-db-port=5432
+      --app.pg-db-user=kwild
+      --app.pg-db-pass=kwild
+    healthcheck:
+      test: ["CMD", "curl", "--fail-with-body", "-s", "http://127.0.0.1:8484/api/v1/health/user"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
+  pg0:
+    image: kwildb/postgres:16.5-1
+    ports:
+      - "5432"
+    restart: always
+    user: postgres
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: --data-checksums
+    networks:
+      - ${KWIL_NETWORK:-kwil-int-testnet}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
+  node1:
+    image: kwild:latest
+    ports:
+      - "8484"
+      - "6600"
+    volumes:
+      - type: bind
+        source: ${KWIL_HOME:-./.testnet}/node1
+        target: /app/kwil
+    networks:
+      - ${KWIL_NETWORK:-kwil-int-testnet}
+    depends_on:
+      ext1:
+        condition: service_started
+      pg1:
+        condition: service_healthy
+    command: |
+      --root-dir=/app/kwil
+      --log.format=plain
+      --log.time-format=rfc3339milli
+      --log.level=${LOG_LEVEL:-info}
+      --app.extension-endpoints=ext1:50051
+      --app.admin-listen-addr=/tmp/admin.socket
+      --chain.p2p.listen-addr=tcp://0.0.0.0:26656
+      --chain.rpc.listen-addr=tcp://0.0.0.0:26657
+      --app.pg-db-host=pg1
+      --app.pg-db-port=5432
+      --app.pg-db-user=kwild
+      --app.pg-db-pass=kwild
+    healthcheck:
+      test: ["CMD", "curl", "--fail-with-body", "-s", "http://127.0.0.1:8484/api/v1/health/user"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
+  pg1:
+    image: kwildb/postgres:16.5-1
+    ports:
+      - "5432"
+    restart: always
+    user: postgres
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: --data-checksums
+    networks:
+      - ${KWIL_NETWORK:-kwil-int-testnet}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
+  node2:
+#    container_name: node2
+    image: kwild:latest
+    ports:
+      - "8484"
+      - "6600"
+    volumes:
+      - type: bind
+        source: ${KWIL_HOME:-./.testnet}/node2
+        target: /app/kwil
+    networks:
+      - ${KWIL_NETWORK:-kwil-int-testnet}
+    depends_on:
+      ext1:
+        condition: service_started
+      pg2:
+        condition: service_healthy
+    command: |
+      --root-dir=/app/kwil
+      --log.level=${LOG_LEVEL:-info}
+      --log.format=plain
+      --log.time-format=rfc3339milli
+      --app.extension-endpoints=ext1:50051
+      --app.admin-listen-addr=/tmp/admin.socket
+      --chain.p2p.listen-addr=tcp://0.0.0.0:26656
+      --chain.rpc.listen-addr=tcp://0.0.0.0:26657
+      --app.pg-db-host=pg2
+      --app.pg-db-port=5432
+      --app.pg-db-user=kwild
+      --app.pg-db-pass=kwild
+    healthcheck:
+      test: ["CMD", "curl", "--fail-with-body", "-s", "http://127.0.0.1:8484/api/v1/health/user"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
+  pg2:
+    image: kwildb/postgres:16.5-1
+    ports:
+      - "5432"
+    restart: always
+    user: postgres
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: --data-checksums
+    networks:
+      - ${KWIL_NETWORK:-kwil-int-testnet}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
+  # This node is used to test the scenario where new node join the network & sync the blocks
+  # Removing the ext dependency as test-container docker compose creates a new project everytime we run
+  # docker compose, and the ext is defined in a seperate project, so service lookup is hard.
+  node3:
+    image: kwild:latest
+    ports:
+      - "8484"
+      - "6600"
+    volumes:
+      - type: bind
+        source: ${KWIL_HOME:-./.testnet}/node3
+        target: /app/kwil
+    networks:
+      - ${KWIL_NETWORK:-kwil-int-testnet}
+    depends_on:
+      ext3:
+        condition: service_started
+      pg3:
+        condition: service_healthy
+    command: |
+      --root-dir=/app/kwil
+      --log.format=plain
+      --log.time-format=rfc3339milli
+      --log.level=${LOG_LEVEL:-info}
+      --app.extension-endpoints=ext3:50051
+      --chain.p2p.listen-addr=tcp://0.0.0.0:26656
+      --app.admin-listen-addr=/tmp/admin.socket
+      --chain.rpc.listen-addr=tcp://0.0.0.0:26657
+      --app.pg-db-host=pg3
+      --app.pg-db-port=5432
+      --app.pg-db-user=kwild
+      --app.pg-db-pass=kwild
+    healthcheck:
+      test: ["CMD", "curl", "--fail-with-body", "-s", "http://127.0.0.1:8484/api/v1/health/user"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
+  pg3:
+    image: kwildb/postgres:16.5-1
+    ports:
+      - "5432"
+    restart: always
+    user: postgres
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: --data-checksums
+    networks:
+      - ${KWIL_NETWORK:-kwil-int-testnet}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
+  node4:
+    image: kwild:latest
+    ports:
+      - "8484"
+      - "6600"
+    volumes:
+      - type: bind
+        source: ${KWIL_HOME:-./.testnet}/node4
+        target: /app/kwil
+    networks:
+      - ${KWIL_NETWORK:-kwil-int-testnet}
+    depends_on:
+      ext1:
+        condition: service_started
+      pg4:
+        condition: service_healthy
+    command: |
+      --root-dir=/app/kwil
+      --log.format=plain
+      --log.time-format=rfc3339milli
+      --log.level=${LOG_LEVEL:-info}
+      --app.extension-endpoints=ext1:50051
+      --app.admin-listen-addr=/tmp/admin.socket
+      --chain.p2p.listen-addr=tcp://0.0.0.0:26656
+      --chain.rpc.listen-addr=tcp://0.0.0.0:26657
+      --app.pg-db-host=pg4
+      --app.pg-db-port=5432
+      --app.pg-db-user=kwild
+      --app.pg-db-pass=kwild
+    healthcheck:
+      test: ["CMD", "curl", "--fail-with-body", "-s", "http://127.0.0.1:8484/api/v1/health/user"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
+  pg4:
+    image: kwildb/postgres:16.5-1
+    ports:
+      - "5432"
+    restart: always
+    user: postgres
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: --data-checksums
+    networks:
+      - ${KWIL_NETWORK:-kwil-int-testnet}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
+  node5:
+    image: kwild:latest
+    ports:
+      - "8484"
+      - "6600"
+    volumes:
+      - type: bind
+        source: ${KWIL_HOME:-./.testnet}/node5
+        target: /app/kwil
+    networks:
+      - ${KWIL_NETWORK:-kwil-int-testnet}
+    depends_on:
+        ext1:
+          condition: service_started
+        pg4:
+          condition: service_healthy
+    command: |
+      --root-dir=/app/kwil
+      --log.format=plain
+      --log.time-format=rfc3339milli
+      --log.level=${LOG_LEVEL:-info}
+      --app.extension-endpoints=ext1:50051
+      --app.admin-listen-addr=/tmp/admin.socket
+      --chain.p2p.listen-addr=tcp://0.0.0.0:26656
+      --chain.rpc.listen-addr=tcp://0.0.0.0:26657
+      --app.pg-db-host=pg5
+      --app.pg-db-port=5432
+      --app.pg-db-user=kwild
+      --app.pg-db-pass=kwild
+    healthcheck:
+      test: ["CMD", "curl", "--fail-with-body", "-s", "http://127.0.0.1:8484/api/v1/health/user"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
+  pg5:
+    image: kwildb/postgres:16.5-1
+    ports:
+      - "5432"
+    restart: always
+    user: postgres
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: --data-checksums
+    networks:
+      - ${KWIL_NETWORK:-kwil-int-testnet}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
+  # for kgw tests, to run locally, you need to build this image in kgw repo
+  kgw:
+    image: kgw:latest
+    ports:
+      - "8090:8090" # this is required for the test to pass, as the `domain` value is set to `http://localhost:8090`
+    networks:
+      - ${KWIL_NETWORK:-kwil-int-testnet}
+    volumes:
+      - ${KWIL_HOME:-/tmp}:/app/kgwlog
+    command: |
+      --log-level ${LOG_LEVEL:-info}
+      --log-outputs stdout /app/kgwlog/kgw.log
+      --cors-allow-origins *
+      --backends node0:8484 node1:8484 node2:8484 node3:8484
+      --domain http://localhost:8090
+      --statement "Trust me ok?"
+      --session-secret "kgwtest"
+      --chain-id ${CHAIN_ID:-kwil-test-chain}
+      --allow-deploy-db
+      --allow-adhoc-query
+      --devmode
+      --schema-sync-interval 2
+    # domain should not be changed, and client should use 'domain' value as the provider, otherwise the test will fail
+
+networks:
+  ${KWIL_NETWORK:-kwil-int-testnet}:
+    external: true

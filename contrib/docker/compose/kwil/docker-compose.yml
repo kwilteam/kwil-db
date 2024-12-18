@@ -7,7 +7,7 @@ volumes:
 services:
   pg:
     container_name: postgres-kwild-single
-    image: kwildb/postgres:16.4-1
+    image: kwildb/postgres:16.5-1
     ports:
       - "15432:5432"
     restart: always
@@ -38,8 +38,7 @@ services:
       dockerfile: ./build/package/docker/kwild.dockerfile
     ports:
       - "8484:8484"
-      - "26656:26656"
-      - "26657:26657"
+      - "6600:6600"
     environment:
       - LOG=${LOG:-cometbft.log}
       - KWILD_HOME=/app/.kwild

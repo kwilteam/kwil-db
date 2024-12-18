@@ -33,7 +33,7 @@ func TestnetCmd() *cobra.Command {
 		Use:   "testnet",
 		Short: "Generate configuration for multiple nodes",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return generateNodeConfig(outDir, numVals, numNVals, noPex, startingPort)
+			return GenerateNodeConfig(outDir, numVals, numNVals, noPex, startingPort)
 		},
 	}
 
@@ -54,7 +54,7 @@ func TestnetCmd() *cobra.Command {
 	return cmd
 }
 
-func generateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, startingPort uint64) error {
+func GenerateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, startingPort uint64) error {
 	// ensure that the directory exists
 	// expand the directory path
 	rootDir, err := node.ExpandPath(rootDir)
