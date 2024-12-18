@@ -43,7 +43,7 @@ type BlockProcessor interface {
 	InitChain(ctx context.Context) (int64, []byte, error)
 	SetBroadcastTxFn(fn blockprocessor.BroadcastTxFn)
 
-	PrepareProposal(ctx context.Context, txs [][]byte) (finalTxs [][]byte, invalidTxs [][]byte, err error)
+	PrepareProposal(ctx context.Context, txs []*ktypes.Transaction) (finalTxs []*ktypes.Transaction, invalidTxs []*ktypes.Transaction, err error)
 	ExecuteBlock(ctx context.Context, req *ktypes.BlockExecRequest) (*ktypes.BlockExecResult, error)
 	Commit(ctx context.Context, req *ktypes.CommitRequest) error
 	Rollback(ctx context.Context, height int64, appHash ktypes.Hash) error

@@ -38,15 +38,19 @@ type BlockHeader struct {
 
 type Block struct {
 	Header    *BlockHeader
-	Txns      [][]byte // TODO: convert to []*Transaction
-	Signature []byte   // Signature is the block producer's signature (leader in our model)
+	Txns      []*Transaction
+	Signature []byte // Signature is the block producer's signature (leader in our model)
 }
 
-func NewBlock(height int64, prevHash, appHash, valSetHash Hash, stamp time.Time, txns [][]byte) *Block {
+func NewBlock(height int64, prevHash, appHash, valSetHash Hash, stamp time.Time, txns []*Transaction) (*Block, error) {
 	numTxns := len(txns)
 	txHashes := make([]Hash, numTxns)
-	for i := range txns {
-		txHashes[i] = HashBytes(txns[i])
+	for i, tx := range txns {
+		txHash, err := tx.Hash()
+		if err != nil {
+			return nil, fmt.Errorf("invalid transaction, fails to serialize: %v", err)
+		}
+		txHashes[i] = txHash
 	}
 	merkelRoot := CalcMerkleRoot(txHashes)
 	hdr := &BlockHeader{
@@ -63,19 +67,23 @@ func NewBlock(height int64, prevHash, appHash, valSetHash Hash, stamp time.Time,
 	return &Block{
 		Header: hdr,
 		Txns:   txns,
-	}
+	}, nil
 }
 
 func (b *Block) Hash() Hash {
 	return b.Header.Hash()
 }
 
-func (b *Block) MerkleRoot() Hash {
+func (b *Block) MerkleRoot() (Hash, error) {
 	txHashes := make([]Hash, len(b.Txns))
-	for i := range b.Txns {
-		txHashes[i] = HashBytes(b.Txns[i])
+	for i, tx := range b.Txns {
+		txHash, err := tx.Hash()
+		if err != nil {
+			return Hash{}, nil
+		}
+		txHashes[i] = txHash
 	}
-	return CalcMerkleRoot(txHashes)
+	return CalcMerkleRoot(txHashes), nil
 }
 
 func (b *Block) Sign(signer crypto.PrivateKey) error {
@@ -223,17 +231,10 @@ func (bh *BlockHeader) Hash() Hash {
 	return buf
 }*/
 
-func EncodeBlock(block *Block) []byte {
+func EncodeBlock(block *Block) ([]byte, error) {
 	headerBytes := EncodeBlockHeader(block.Header)
 
-	totalSize := len(headerBytes)
-	for _, tx := range block.Txns {
-		totalSize += 4 + len(tx) // 4 bytes for transaction length
-	}
-
-	totalSize += 4 + len(block.Signature) // 4 bytes for signature length
-
-	buf := make([]byte, 0, totalSize)
+	buf := make([]byte, 0, len(headerBytes)+4+len(block.Signature)) // it's a lot more depending on txns, but we don't have size functions yet
 
 	buf = append(buf, headerBytes...)
 
@@ -241,11 +242,15 @@ func EncodeBlock(block *Block) []byte {
 	buf = append(buf, block.Signature...)
 
 	for _, tx := range block.Txns {
-		buf = binary.LittleEndian.AppendUint32(buf, uint32(len(tx)))
-		buf = append(buf, tx...)
+		rawTx, err := tx.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		buf = binary.LittleEndian.AppendUint32(buf, uint32(len(rawTx)))
+		buf = append(buf, rawTx...)
 	}
 
-	return buf
+	return buf, nil
 }
 
 // CalcMerkleRoot computes the merkel root for a slice of hashes. This is based
@@ -323,7 +328,7 @@ func DecodeBlock(rawBlk []byte) (*Block, error) {
 		return nil, fmt.Errorf("failed to read signature: %w", err)
 	}
 
-	txns := make([][]byte, hdr.NumTxns)
+	txns := make([]*Transaction, hdr.NumTxns)
 
 	for i := range txns {
 		var txLen uint32
@@ -335,11 +340,15 @@ func DecodeBlock(rawBlk []byte) (*Block, error) {
 			return nil, fmt.Errorf("invalid transaction length %d", txLen)
 		}
 
-		tx := make([]byte, txLen)
-		if _, err := io.ReadFull(r, tx); err != nil {
+		rawTx := make([]byte, txLen)
+		if _, err := io.ReadFull(r, rawTx); err != nil {
 			return nil, fmt.Errorf("failed to read tx data: %w", err)
 		}
-		txns[i] = tx
+		var tx Transaction
+		if err = tx.UnmarshalBinary(rawTx); err != nil {
+			return nil, fmt.Errorf("invalid transaction (%d): %w", i, err)
+		}
+		txns[i] = &tx
 	}
 
 	return &Block{

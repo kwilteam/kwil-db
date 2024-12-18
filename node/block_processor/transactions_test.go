@@ -1,7 +1,6 @@
 package blockprocessor
 
 import (
-	"bytes"
 	"context"
 	"math/big"
 	"testing"
@@ -18,13 +17,13 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func marshalTx(t *testing.T, tx *types.Transaction) []byte {
+/*func marshalTx(t *testing.T, tx *types.Transaction) []byte {
 	b, err := tx.MarshalBinary()
 	if err != nil {
 		t.Fatalf("could not marshal transaction! %v", err)
 	}
 	return b
-}
+}*/
 
 func cloneTx(tx *types.Transaction) *types.Transaction {
 	sig := make([]byte, len(tx.Signature.Data))
@@ -94,12 +93,12 @@ func TestPrepareMempoolTxns(t *testing.T) {
 		},
 		Sender: []byte(`guy`),
 	}
-	tAb := marshalTx(t, tA)
+	// tAb := marshalTx(t, tA)
 
 	// same sender, incremented nonce
 	tB := cloneTx(tA)
 	tB.Body.Nonce++
-	tBb := marshalTx(t, tB)
+	// tBb := marshalTx(t, tB)
 
 	nextTx := func(tx *types.Transaction) *types.Transaction {
 		tx2 := cloneTx(tx)
@@ -110,100 +109,100 @@ func TestPrepareMempoolTxns(t *testing.T) {
 	// second party
 	tOtherSenderA := cloneTx(tA)
 	tOtherSenderA.Sender = []byte(`otherguy`)
-	tOtherSenderAb := marshalTx(t, tOtherSenderA)
+	// tOtherSenderAb := marshalTx(t, tOtherSenderA)
 
 	// Same nonce tx, different body (diff bytes)
 	tOtherSenderAbDup := cloneTx(tOtherSenderA)
 	tOtherSenderAbDup.Body.Description = "dup" // not "t"
-	tOtherSenderAbDupb := marshalTx(t, tOtherSenderAbDup)
+	// tOtherSenderAbDupb := marshalTx(t, tOtherSenderAbDup)
 
 	tOtherSenderB := nextTx(tOtherSenderA)
-	tOtherSenderBb := marshalTx(t, tOtherSenderB)
+	// tOtherSenderBb := marshalTx(t, tOtherSenderB)
 
 	tOtherSenderC := nextTx(tOtherSenderB)
-	tOtherSenderCb := marshalTx(t, tOtherSenderC)
+	// tOtherSenderCb := marshalTx(t, tOtherSenderC)
 
 	// proposer party
 	tProposer := cloneTx(tA)
 	tProposer.Sender = bp.signer.Identity()
-	tProposerb := marshalTx(t, tProposer)
+	// tProposerb := marshalTx(t, tProposer)
 
-	invalid := []byte{9, 90, 22}
+	invalid := &ktypes.Transaction{} // invalid without Body set
 
 	tests := []struct {
 		name string
-		txs  [][]byte
-		want [][]byte
+		txs  []*ktypes.Transaction
+		want []*ktypes.Transaction
 	}{
 		{
 			"empty",
-			[][]byte{},
-			[][]byte{},
+			[]*ktypes.Transaction{},
+			[]*ktypes.Transaction{},
 		},
 		{
 			"one and only invalid",
-			[][]byte{invalid},
-			[][]byte{},
+			[]*ktypes.Transaction{invalid},
+			[]*ktypes.Transaction{},
 		},
 		{
 			"one of two invalid",
-			[][]byte{invalid, tBb},
-			[][]byte{tBb},
+			[]*ktypes.Transaction{invalid, tB},
+			[]*ktypes.Transaction{tB},
 		},
 		{
 			"one valid",
-			[][]byte{tAb},
-			[][]byte{tAb},
+			[]*ktypes.Transaction{tA},
+			[]*ktypes.Transaction{tA},
 		},
 		{
 			"two valid",
-			[][]byte{tAb, tBb},
-			[][]byte{tAb, tBb},
+			[]*ktypes.Transaction{tA, tB},
+			[]*ktypes.Transaction{tA, tB},
 		},
 		{
 			"two valid misordered",
-			[][]byte{tBb, tAb},
-			[][]byte{tAb, tBb},
+			[]*ktypes.Transaction{tB, tA},
+			[]*ktypes.Transaction{tA, tB},
 		},
 		{
 			"multi-party, one misordered, stable",
-			[][]byte{tOtherSenderAb, tBb, tOtherSenderBb, tAb},
-			[][]byte{tOtherSenderAb, tAb, tOtherSenderBb, tBb},
+			[]*ktypes.Transaction{tOtherSenderA, tB, tOtherSenderB, tA},
+			[]*ktypes.Transaction{tOtherSenderA, tA, tOtherSenderB, tB},
 		},
 		{
 			"multi-party, one misordered, one dup nonce, stable",
-			[][]byte{tOtherSenderAb, tOtherSenderAbDupb, tBb, tAb},
-			[][]byte{tOtherSenderAb, tAb, tBb},
+			[]*ktypes.Transaction{tOtherSenderA, tOtherSenderAbDup, tB, tA},
+			[]*ktypes.Transaction{tOtherSenderA, tA, tB},
 		},
 		{
 			"multi-party, both misordered, stable",
-			[][]byte{tOtherSenderBb, tBb, tOtherSenderAb, tAb},
-			[][]byte{tOtherSenderAb, tAb, tOtherSenderBb, tBb},
+			[]*ktypes.Transaction{tOtherSenderB, tB, tOtherSenderA, tA},
+			[]*ktypes.Transaction{tOtherSenderA, tA, tOtherSenderB, tB},
 		},
 		{
 			"multi-party, both misordered, alt. stable",
-			[][]byte{tBb, tOtherSenderBb, tOtherSenderAb, tAb},
-			[][]byte{tAb, tOtherSenderAb, tOtherSenderBb, tBb},
+			[]*ktypes.Transaction{tB, tOtherSenderB, tOtherSenderA, tA},
+			[]*ktypes.Transaction{tA, tOtherSenderA, tOtherSenderB, tB},
 		},
 		{
 			"multi-party, big, with invalid in middle",
-			[][]byte{tOtherSenderCb, tBb, invalid, tOtherSenderBb, tOtherSenderAb, tAb},
-			[][]byte{tOtherSenderAb, tAb, tOtherSenderBb, tOtherSenderCb, tBb},
+			[]*ktypes.Transaction{tOtherSenderC, tB, invalid, tOtherSenderB, tOtherSenderA, tA},
+			[]*ktypes.Transaction{tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB},
 		},
 		{
 			"multi-party, big, already correct",
-			[][]byte{tOtherSenderAb, tAb, tOtherSenderBb, tOtherSenderCb, tBb},
-			[][]byte{tOtherSenderAb, tAb, tOtherSenderBb, tOtherSenderCb, tBb},
+			[]*ktypes.Transaction{tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB},
+			[]*ktypes.Transaction{tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB},
 		},
 		{
 			"multi-party,proposer in the last, reorder",
-			[][]byte{tOtherSenderAb, tAb, tOtherSenderBb, tOtherSenderCb, tBb, tProposerb},
-			[][]byte{tProposerb, tOtherSenderAb, tAb, tOtherSenderBb, tOtherSenderCb, tBb},
+			[]*ktypes.Transaction{tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB, tProposer},
+			[]*ktypes.Transaction{tProposer, tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB},
 		},
 		{
 			"multi-party,proposer in the middle, reorder",
-			[][]byte{tOtherSenderAb, tAb, tOtherSenderBb, tProposerb, tOtherSenderCb, tBb},
-			[][]byte{tProposerb, tOtherSenderAb, tAb, tOtherSenderBb, tOtherSenderCb, tBb},
+			[]*ktypes.Transaction{tOtherSenderA, tA, tOtherSenderB, tProposer, tOtherSenderC, tB},
+			[]*ktypes.Transaction{tProposer, tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB},
 		},
 	}
 
@@ -214,15 +213,23 @@ func TestPrepareMempoolTxns(t *testing.T) {
 				return nil, nil
 			}
 
-			got, _, err := bp.prepareBlockTransactions(ctx, tt.txs)
+			got, invalids, err := bp.prepareBlockTransactions(ctx, tt.txs)
 			require.NoError(t, err)
+
 			if len(got) != len(tt.want) {
 				t.Errorf("got %d txns, expected %d", len(got), len(tt.want))
 			}
+
+			require.Equal(t, len(invalids), len(tt.txs)-len(got))
+
 			for i, txi := range got {
-				if !bytes.Equal(txi, tt.want[i]) {
-					t.Errorf("mismatched tx %d", i)
-				}
+				gotHash, err := txi.Hash()
+				require.NoError(t, err)
+
+				wantHash, err := tt.want[i].Hash()
+				require.NoError(t, err)
+
+				require.Equal(t, gotHash, wantHash)
 			}
 		})
 	}
@@ -492,12 +499,8 @@ func TestPrepareVoteBodyTx(t *testing.T) {
 				require.NoError(t, err)
 				require.NotNil(t, tx)
 
-				txn := &types.Transaction{}
-				err = txn.UnmarshalBinary(tx)
-				require.NoError(t, err)
-
 				var payload = &ktypes.ValidatorVoteBodies{}
-				err = payload.UnmarshalBinary(txn.Body.Payload)
+				err = payload.UnmarshalBinary(tx.Body.Payload)
 				require.NoError(t, err)
 
 				require.Len(t, payload.Events, 2)
@@ -514,12 +517,8 @@ func TestPrepareVoteBodyTx(t *testing.T) {
 				require.NoError(t, err)
 				require.NotNil(t, tx)
 
-				txn := &types.Transaction{}
-				err = txn.UnmarshalBinary(tx)
-				require.NoError(t, err)
-
 				var payload = &ktypes.ValidatorVoteBodies{}
-				err = payload.UnmarshalBinary(txn.Body.Payload)
+				err = payload.UnmarshalBinary(tx.Body.Payload)
 				require.NoError(t, err)
 
 				require.Len(t, payload.Events, 1)
@@ -545,12 +544,8 @@ func TestPrepareVoteBodyTx(t *testing.T) {
 				require.NoError(t, err)
 				require.NotNil(t, tx)
 
-				txn := &types.Transaction{}
-				err = txn.UnmarshalBinary(tx)
-				require.NoError(t, err)
-
 				var payload = &ktypes.ValidatorVoteBodies{}
-				err = payload.UnmarshalBinary(txn.Body.Payload)
+				err = payload.UnmarshalBinary(tx.Body.Payload)
 				require.NoError(t, err)
 
 				require.Len(t, payload.Events, 1)
@@ -591,12 +586,8 @@ func TestPrepareVoteBodyTx(t *testing.T) {
 				require.NoError(t, err)
 				require.NotNil(t, tx)
 
-				txn := &types.Transaction{}
-				err = txn.UnmarshalBinary(tx)
-				require.NoError(t, err)
-
 				var payload = &ktypes.ValidatorVoteBodies{}
-				err = payload.UnmarshalBinary(txn.Body.Payload)
+				err = payload.UnmarshalBinary(tx.Body.Payload)
 				require.NoError(t, err)
 
 				require.Len(t, payload.Events, 2)
@@ -673,7 +664,7 @@ func (m *mockTxApp) GetValidators(ctx context.Context, db sql.DB) ([]*types.Vali
 	return nil, nil
 }
 
-func (m *mockTxApp) ProposerTxs(ctx context.Context, db sql.DB, txNonce uint64, maxTxSz int64, block *common.BlockContext) ([][]byte, error) {
+func (m *mockTxApp) ProposerTxs(ctx context.Context, db sql.DB, txNonce uint64, maxTxSz int64, block *common.BlockContext) ([]*ktypes.Transaction, error) {
 	return nil, nil
 }
 

@@ -3,28 +3,54 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
+	"math/big"
 	"testing"
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 
 	"github.com/stretchr/testify/require"
 )
+
+func newTx(nonce uint64, sender, payload string) *Transaction {
+	return &Transaction{
+		Signature: &auth.Signature{},
+		Body: &TransactionBody{
+			Description: "test",
+			Payload:     []byte(payload),
+			Fee:         big.NewInt(0),
+			Nonce:       nonce,
+		},
+		Sender: []byte(sender),
+	}
+}
 
 func TestGetRawBlockTx(t *testing.T) {
 	privKey, pubKey, err := crypto.GenerateSecp256k1Key(nil)
 	require.NoError(t, err)
 
-	makeRawBlock := func(txns [][]byte) []byte {
-		blk := NewBlock(1, Hash{1, 2, 3}, Hash{6, 7, 8}, Hash{}, time.Unix(1729890593, 0), txns)
-		err := blk.Sign(privKey)
+	makeRawBlock := func(txnPayloads [][]byte) ([]byte, *Block) {
+		txns := make([]*Transaction, len(txnPayloads))
+		for i, pl := range txnPayloads {
+			txns[i] = newTx(uint64(i), "bob", string(pl))
+		}
+		blk, err := NewBlock(1, Hash{1, 2, 3}, Hash{6, 7, 8}, Hash{}, time.Unix(1729890593, 0), txns)
+		if err != nil {
+			t.Fatalf("invalid block: %v", err)
+		}
+		err = blk.Sign(privKey)
 		require.NoError(t, err)
-		return EncodeBlock(blk)
+		rawBlk, err := EncodeBlock(blk)
+		if err != nil {
+			t.Fatalf("invalid block: %v", err)
+		}
+		return rawBlk, blk
 	}
 
 	t.Run("valid block signature", func(t *testing.T) {
 		txns := [][]byte{[]byte("tx1")}
-		rawBlock := makeRawBlock(txns)
+		rawBlock, _ := makeRawBlock(txns)
 		blk, err := DecodeBlock(rawBlock)
 		require.NoError(t, err)
 
@@ -39,13 +65,17 @@ func TestGetRawBlockTx(t *testing.T) {
 			[]byte("transaction2"),
 			[]byte("tx3"),
 		}
-		rawBlock := makeRawBlock(txns)
-		tx, err := GetRawBlockTx(rawBlock, 1)
+		rawBlock, blk := makeRawBlock(txns)
+		const idx = 1
+		rawTx, err := GetRawBlockTx(rawBlock, idx)
 		if err != nil {
 			t.Fatal(err)
 		}
-		if !bytes.Equal(tx, txns[1]) {
-			t.Errorf("got tx %x, want %x", tx, txns[1])
+		txOut1 := blk.Txns[idx]
+		rawTxOut1, err := txOut1.MarshalBinary()
+		require.NoError(t, err)
+		if !bytes.Equal(rawTx, rawTxOut1) {
+			t.Errorf("got tx %x, want %x", rawTx, rawTxOut1)
 		}
 	})
 
@@ -63,7 +93,7 @@ func TestGetRawBlockTx(t *testing.T) {
 
 	t.Run("index out of range", func(t *testing.T) {
 		txns := [][]byte{[]byte("tx1")}
-		rawBlock := makeRawBlock(txns)
+		rawBlock, _ := makeRawBlock(txns)
 
 		_, err := GetRawBlockTx(rawBlock, 1)
 		if err != ErrNotFound {
@@ -73,7 +103,7 @@ func TestGetRawBlockTx(t *testing.T) {
 
 	t.Run("corrupted block data", func(t *testing.T) {
 		txns := [][]byte{[]byte("tx1")}
-		rawBlock := makeRawBlock(txns)
+		rawBlock, _ := makeRawBlock(txns)
 		blk, err := DecodeBlock(rawBlock)
 		require.NoError(t, err)
 
@@ -87,7 +117,7 @@ func TestGetRawBlockTx(t *testing.T) {
 	})
 
 	t.Run("empty block", func(t *testing.T) {
-		rawBlock := makeRawBlock([][]byte{})
+		rawBlock, _ := makeRawBlock([][]byte{})
 
 		_, err := GetRawBlockTx(rawBlock, 0)
 		if err != ErrNotFound {
@@ -190,11 +220,12 @@ func TestBlock_EncodeDecode(t *testing.T) {
 				Timestamp:        time.Now().UTC().Truncate(time.Millisecond),
 				MerkleRoot:       Hash{10, 11, 12},
 			},
-			Txns:      [][]byte{},
+			Txns:      []*Transaction{},
 			Signature: []byte("test-signature"),
 		}
 
-		encoded := EncodeBlock(original)
+		encoded, err := EncodeBlock(original)
+		require.NoError(t, err)
 		decoded, err := DecodeBlock(encoded)
 		require.NoError(t, err)
 		require.Equal(t, original.Header, decoded.Header)
@@ -203,10 +234,10 @@ func TestBlock_EncodeDecode(t *testing.T) {
 	})
 
 	t.Run("encode and decode block with multiple transactions", func(t *testing.T) {
-		txns := [][]byte{
-			[]byte("tx1"),
-			[]byte("transaction2"),
-			make([]byte, 1000),
+		txns := []*Transaction{
+			newTx(0, "bob", "tx1"),
+			newTx(1, "bob", "transaction 2"),
+			newTx(0, "alice", string(make([]byte, 1000))),
 		}
 		original := &Block{
 			Header: &BlockHeader{
@@ -223,7 +254,8 @@ func TestBlock_EncodeDecode(t *testing.T) {
 			Signature: []byte("test-signature-long"),
 		}
 
-		encoded := EncodeBlock(original)
+		encoded, err := EncodeBlock(original)
+		require.NoError(t, err)
 		decoded, err := DecodeBlock(encoded)
 		require.NoError(t, err)
 		require.Equal(t, original.Header, decoded.Header)
@@ -266,13 +298,14 @@ func TestBlock_EncodeDecode(t *testing.T) {
 				NumTxns:   1,
 				Timestamp: time.Now(),
 			},
-			Txns:      [][]byte{[]byte("tx1")},
+			Txns:      []*Transaction{newTx(0, "bob", "a")},
 			Signature: []byte("sig"),
 		}
-		encoded := EncodeBlock(original)
+		encoded, err := EncodeBlock(original)
+		require.NoError(t, err)
 		truncated := encoded[:len(encoded)-10]
 
-		_, err := DecodeBlock(truncated)
+		_, err = DecodeBlock(truncated)
 		require.Error(t, err)
 	})
 }

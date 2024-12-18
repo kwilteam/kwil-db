@@ -25,7 +25,7 @@ func (n *Node) blkGetStreamHandler(s network.Stream) {
 
 	var req blockHashReq
 	if _, err := req.ReadFrom(s); err != nil {
-		n.log.Warn("Bad get block (hash) request", "error", err) // Debug when we ship
+		n.log.Debug("Bad get block (hash) request", "error", err)
 		return
 	}
 	n.log.Debug("Peer requested block", "hash", req.Hash)
@@ -35,7 +35,11 @@ func (n *Node) blkGetStreamHandler(s network.Stream) {
 		s.SetWriteDeadline(time.Now().Add(reqRWTimeout))
 		s.Write(noData) // don't have it
 	} else {
-		rawBlk := ktypes.EncodeBlock(blk)
+		rawBlk, err := ktypes.EncodeBlock(blk)
+		if err != nil {
+			n.log.Warn("Failed to serialize block from block store", "error", err) // should not happen
+			return
+		}
 		s.SetWriteDeadline(time.Now().Add(blkSendTimeout))
 		binary.Write(s, binary.LittleEndian, blk.Header.Height)
 		s.Write(appHash[:])
@@ -60,7 +64,11 @@ func (n *Node) blkGetHeightStreamHandler(s network.Stream) {
 		s.SetWriteDeadline(time.Now().Add(reqRWTimeout))
 		s.Write(noData) // don't have it
 	} else {
-		rawBlk := ktypes.EncodeBlock(blk) // blkHash := blk.Hash()
+		rawBlk, err := ktypes.EncodeBlock(blk) // blkHash := blk.Hash()
+		if err != nil {
+			n.log.Warn("Failed to serialize block from block store", "error", err) // should not happen
+			return
+		}
 		// maybe we remove hash from the protocol, was thinking receiver could
 		// hang up earlier depending...
 		s.SetWriteDeadline(time.Now().Add(blkSendTimeout))
@@ -166,7 +174,11 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 func (n *Node) announceBlk(ctx context.Context, blk *ktypes.Block, appHash types.Hash) {
 	blkHash := blk.Hash()
 	n.log.Debugln("announceBlk", blk.Header.Height, blkHash, appHash)
-	rawBlk := ktypes.EncodeBlock(blk)
+	rawBlk, err := ktypes.EncodeBlock(blk)
+	if err != nil {
+		n.log.Warn("Failed to serialize block to announce", "error", err, "height", blk.Header.Height) // should not happen
+		return
+	}
 	from := n.host.ID() // this announcement originates from us (not a reannouncement)
 	n.announceRawBlk(ctx, blkHash, blk.Header.Height, rawBlk, appHash, from, blk.Signature)
 }
