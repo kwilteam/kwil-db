@@ -23,6 +23,7 @@ import (
 	adminTypes "github.com/kwilteam/kwil-db/core/types/admin"
 	chainTypes "github.com/kwilteam/kwil-db/core/types/chain"
 	"github.com/kwilteam/kwil-db/node/peers"
+	"github.com/kwilteam/kwil-db/node/peers/sec"
 	"github.com/kwilteam/kwil-db/node/types"
 
 	"github.com/libp2p/go-libp2p"
@@ -35,7 +36,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
-	noise "github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/multiformats/go-multiaddr"
 )
@@ -153,7 +153,7 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 	// This connection gater is logically be part of PeerMan, but the libp2p
 	// Host constructor needs it, and PeerMan needs Host for its peerstore
 	// and connect method. For now we create it here and give it to both.
-	var cg *peers.WhitelistGater
+	var wcg *peers.WhitelistGater
 	if cfg.P2P.PrivateMode {
 		logger.Infof("Private P2P mode enabled")
 		var peerWhitelist []peer.ID
@@ -165,14 +165,16 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 			peerWhitelist = append(peerWhitelist, peerID)
 			logger.Infof("Adding peer to whitelist: %v", nodeID)
 		}
-		cg = peers.NewWhitelistGater(peerWhitelist, peers.WithLogger(logger.New("PEERFILT")))
+		wcg = peers.NewWhitelistGater(peerWhitelist, peers.WithLogger(logger.New("PEERFILT")))
 		// PeerMan adds more from address book.
 	}
+
+	cg := peers.ChainConnectionGaters(wcg) // pointless for one, but can be more
 
 	var err error
 	host := options.host
 	if host == nil {
-		host, err = newHost(cfg.P2P.IP, cfg.P2P.Port, cfg.PrivKey, cg)
+		host, err = newHost(cfg.P2P.IP, cfg.P2P.Port, cfg.ChainID, cfg.PrivKey, cg, logger)
 		if err != nil {
 			return nil, fmt.Errorf("cannot create host: %w", err)
 		}
@@ -180,11 +182,17 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 
 	addrBookPath := filepath.Join(cfg.RootDir, "addrbook.json")
 
-	pm, err := peers.NewPeerMan(cfg.P2P.Pex, addrBookPath,
-		logger.New("PEERS"), cg, host,
-		func(ctx context.Context, peerID peer.ID) ([]peer.AddrInfo, error) {
-			return requestPeers(ctx, host.ID(), host, logger)
-		}, RequiredStreamProtocols)
+	pmCfg := &peers.Config{
+		PEX:               cfg.P2P.Pex,
+		AddrBook:          addrBookPath,
+		Logger:            logger.New("PEERS"),
+		Host:              host,
+		ChainID:           cfg.ChainID,
+		TargetConnections: 20,
+		ConnGater:         wcg,
+		RequiredProtocols: RequiredStreamProtocols,
+	}
+	pm, err := peers.NewPeerMan(pmCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create peer manager: %w", err)
 	}
@@ -245,13 +253,17 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 
 	host.SetStreamHandler(ProtocolIDBlockPropose, node.blkPropStreamHandler)
 
-	if cfg.P2P.Pex {
-		host.SetStreamHandler(ProtocolIDDiscover, node.peerDiscoveryStreamHandler)
-	} else {
-		host.SetStreamHandler(ProtocolIDDiscover, func(s network.Stream) {
-			s.Close()
-		})
-	}
+	// host.SetStreamHandler(peers.ProtocolIDPrefixChainID+protocol.ID(cfg.ChainID), func(s network.Stream) {
+	// 	s.Close() // protocol handshake is all we need
+	// })
+
+	// if cfg.P2P.Pex {
+	// 	host.SetStreamHandler(ProtocolIDDiscover, pm.DiscoveryStreamHandler)
+	// } else {
+	// 	host.SetStreamHandler(ProtocolIDDiscover, func(s network.Stream) {
+	// 		s.Close()
+	// 	})
+	// }
 
 	return node, nil
 }
@@ -300,7 +312,7 @@ func (n *Node) Dir() string {
 }
 
 func (n *Node) ID() string {
-	return n.host.ID().String()
+	return peers.PeerIDStringer(n.host.ID()).String()
 }
 
 // Start begins tx and block gossip, connects to any bootstrap peers, and begins
@@ -337,7 +349,7 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 
 		err = n.pm.Connect(ctx, peers.AddrInfo(*peerInfo))
 		if err != nil {
-			n.log.Errorf("failed to connect to %v: %v", peer, err)
+			n.log.Errorf("failed to connect to %v: %v", bootpeers[i], err)
 			// Add it to the peer store anyway since this was specified as a
 			// bootnode, which is supposed to be persistent, so we should try to
 			// connect again later.
@@ -345,14 +357,14 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 			continue
 		}
 		if err = n.checkPeerProtos(ctx, peerInfo.ID); err != nil {
-			n.log.Warnf("WARNING: peer does not support required protocols %v: %v", peer, err)
+			n.log.Warnf("WARNING: peer does not support required protocols %v: %v", bootpeers[i], err)
 			if err = n.host.Network().ClosePeer(peerInfo.ID); err != nil {
 				n.log.Errorf("failed to disconnect from %v: %v", peer, err)
 			}
 			// n.host.Peerstore().RemovePeer()
 			continue
 		}
-		n.log.Infof("Connected to bootstrap peer %v", peer)
+		n.log.Infof("Connected to bootstrap peer %v", bootpeers[i])
 		// n.host.ConnManager().TagPeer(peerID, "validatorish", 1)
 	} // else would use persistent peer store (address book)
 
@@ -748,7 +760,7 @@ func NewKey(r io.Reader) crypto.PrivateKey {
 	return privKey
 }
 
-func newHost(ip string, port uint64, privKey crypto.PrivateKey, wl *peers.WhitelistGater) (host.Host, error) {
+func newHost(ip string, port uint64, chainID string, privKey crypto.PrivateKey, wl connmgr.ConnectionGater, logger log.Logger) (host.Host, error) {
 	// convert to the libp2p crypto key type
 	var privKeyP2P p2pcrypto.PrivKey
 	var err error
@@ -786,13 +798,16 @@ func newHost(ip string, port uint64, privKey crypto.PrivateKey, wl *peers.Whitel
 	// libp2p.New is fine with a nil interface (not an non-nil interface to a
 	// nil concrete instance).
 	var cg connmgr.ConnectionGater
-	if wl != nil { // cfg.P2P.PrivateMode
+	if wl != nil {
 		cg = wl
 	}
 
+	sec, secID := sec.NewScopedNoiseTransport(chainID, logger.New("SEC")) // noise.New plus chain ID check in handshake
+
 	h, err := libp2p.New(
 		libp2p.Transport(tcp.NewTCPTransport),
-		libp2p.Security(noise.ID, noise.New), // modified TLS based on node-ID
+		// libp2p.Security(noise.ID, noise.New), // modified TLS based on node-ID
+		libp2p.Security(secID, sec),
 		libp2p.ListenAddrs(sourceMultiAddr),
 		// listenAddrs,
 		libp2p.Identity(privKeyP2P),

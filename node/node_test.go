@@ -11,7 +11,6 @@ import (
 	"math/big"
 	"net"
 	"os"
-	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -35,7 +34,6 @@ import (
 	"github.com/libp2p/go-libp2p/core/peer"
 	mock "github.com/libp2p/go-libp2p/p2p/net/mock"
 	ma "github.com/multiformats/go-multiaddr"
-	"github.com/stretchr/testify/require"
 )
 
 var blackholeIP6 = net.ParseIP("100::")
@@ -103,6 +101,7 @@ func makeTestHosts(t *testing.T, nNodes, nExtraHosts int, blockInterval time.Dur
 		t.Logf("node root dir: %s", rootDir)
 
 		cfg := &Config{
+			ChainID: "test",
 			RootDir: rootDir,
 			PrivKey: priv,
 			Logger:  log.DiscardLogger,
@@ -146,7 +145,7 @@ func linkAll(t *testing.T, mn mock.Mocknet) {
 	time.Sleep(100 * time.Millisecond)
 }
 
-func linkPeers(t *testing.T, mn mock.Mocknet, p1, p2 peer.ID) {
+/*func linkPeers(t *testing.T, mn mock.Mocknet, p1, p2 peer.ID) {
 	if _, err := mn.LinkPeers(p1, p2); err != nil {
 		t.Fatalf("Failed to link hosts: %v", err)
 	}
@@ -154,7 +153,7 @@ func linkPeers(t *testing.T, mn mock.Mocknet, p1, p2 peer.ID) {
 		t.Fatalf("Failed to connect hosts: %v", err)
 	}
 	time.Sleep(100 * time.Millisecond)
-}
+}*/
 
 func startNodes(t *testing.T, nodes []*Node) {
 	ctx, cancel := context.WithCancel(context.Background())
@@ -192,7 +191,7 @@ func newTx(nonce uint64, sender, payload string) *ktypes.Transaction {
 	}
 }
 
-func createTestBlock(_ *testing.T, height int64, numTxns int) (*ktypes.Block, types.Hash) {
+func createTestBlock(height int64, numTxns int) (*ktypes.Block, types.Hash) {
 	txns := make([]*ktypes.Transaction, numTxns)
 	for i := range numTxns {
 		txns[i] = newTx(uint64(i), "bob", strconv.FormatInt(height, 10)+strconv.Itoa(i)+
@@ -401,88 +400,6 @@ func (f *faker) SetResetStateHandler(resetStateHandler func(height int64, txIDs 
 	f.resetStateHandler = resetStateHandler
 }
 
-func TestPeerDiscoverStream(t *testing.T) {
-	nodes, testHosts, mn := makeTestHosts(t, 2, 1, 5*time.Hour)
-	// linkAll(t, mn)
-
-	n1, n2 := nodes[0], nodes[1]
-	h1, h2 := n1.host, n2.host
-	pid1, pid2 := h1.ID(), h2.ID()
-
-	// no need to startNodes to test this stream
-
-	// pm1 := n1.pm
-
-	th1 := testHosts[0]
-
-	// connect h1 and test host (not h2)
-	linkPeers(t, mn, pid1, th1.ID())
-
-	ctx := context.Background()
-
-	t.Run("discover myself w/ requestPeersProto", func(t *testing.T) {
-		s, err := th1.NewStream(ctx, pid1, ProtocolIDDiscover)
-		if err != nil {
-			t.Fatalf("Failed create new stream: %v", err)
-		}
-
-		addrs, err := requestPeersProto(s)
-		if err != nil {
-			t.Fatalf("failed to read peer discover response: %v", err)
-		}
-
-		// They know me and only me
-		if len(addrs) != 1 {
-			t.Fatalf("expected one address, got %d", len(addrs))
-		}
-
-		require.Equal(t, addrs[0].ID, th1.ID())
-	})
-
-	t.Run("discover myself w/ requestPeers", func(t *testing.T) {
-		addrs, err := requestPeers(ctx, pid1, th1, log.DiscardLogger)
-		if err != nil {
-			t.Fatalf("failed to read peer discover response: %v", err)
-		}
-
-		// They know me and only me
-		if len(addrs) != 1 {
-			t.Fatalf("expected one address, got %d", len(addrs))
-		}
-
-		require.Equal(t, addrs[0].ID, th1.ID())
-	})
-
-	t.Run("discover myself and h2 w/ requestPeers", func(t *testing.T) {
-		// Connect h1 to h2
-		linkPeers(t, mn, pid1, pid2)
-		defer mn.UnlinkPeers(pid1, pid2)
-		defer mn.DisconnectPeers(pid1, pid2)
-
-		addrs, err := requestPeers(ctx, h1.ID(), th1, log.DiscardLogger)
-		if err != nil {
-			t.Fatalf("failed to read peer discover response: %v", err)
-		}
-
-		// They know me *and* h2 now
-		if len(addrs) != 2 {
-			t.Fatalf("expected 2 addresses, got %d", len(addrs))
-		}
-
-		if !slices.ContainsFunc(addrs, func(addr peer.AddrInfo) bool {
-			return addr.ID == th1.ID()
-		}) {
-			t.Errorf("self was not included in returned addresses")
-		}
-
-		if !slices.ContainsFunc(addrs, func(addr peer.AddrInfo) bool {
-			return addr.ID == pid2
-		}) {
-			t.Errorf("h2 was not included in returned addresses")
-		}
-	})
-}
-
 func TestStreamsBlockFetch(t *testing.T) {
 	nodes, extraHosts, mn := makeTestHosts(t, 1, 1, 5*time.Hour)
 	linkAll(t, mn)
@@ -491,7 +408,7 @@ func TestStreamsBlockFetch(t *testing.T) {
 	h1 := n1.host
 
 	// to n1's block store, one block at height 1 with 2 txns
-	blk1, appHash1 := createTestBlock(t, 1, 2)
+	blk1, appHash1 := createTestBlock(1, 2)
 	n1.bki.Store(blk1, &ktypes.CommitInfo{AppHash: appHash1})
 
 	startNodes(t, nodes)
