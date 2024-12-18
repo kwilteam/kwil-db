@@ -36,5 +36,5 @@ type AdminClient interface {
 
 	// Block Execution
 	BlockExecStatus(ctx context.Context) (*adminTypes.BlockExecutionStatus, error)
-	RollbackBlock(ctx context.Context, height int64, discardTxs []string) error
+	AbortBlockExecution(ctx context.Context, height int64, discardTxs []string) error
 }

@@ -14,7 +14,7 @@ var blockCmd = &cobra.Command{
 func NewBlockExecCmd() *cobra.Command {
 	blockCmd.AddCommand(
 		statusCmd(),
-		rollbackCmd(),
+		abortCmd(),
 	)
 
 	rpc.BindRPCFlags(blockCmd)

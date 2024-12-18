@@ -6,13 +6,13 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func rollbackCmd() *cobra.Command {
+func abortCmd() *cobra.Command {
 	var blockHeight int64
 	var txIDs []string
 
 	cmd := &cobra.Command{
-		Use:   "rollback <block_height> <tx_ids>",
-		Short: "Rollbacks the execution of the current block if it's at block_height and removes the tx_ids from the mempool.",
+		Use:   "abort <block_height> <tx_ids>",
+		Short: "Aborts the execution of the current block if it's at block_height and removes the tx_ids from the mempool.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()
@@ -22,7 +22,7 @@ func rollbackCmd() *cobra.Command {
 				return display.PrintErr(cmd, err)
 			}
 
-			err = clt.RollbackBlock(ctx, blockHeight, txIDs)
+			err = clt.AbortBlockExecution(ctx, blockHeight, txIDs)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}

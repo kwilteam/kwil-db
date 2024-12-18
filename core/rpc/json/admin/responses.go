@@ -99,4 +99,8 @@ type ResolutionStatusResponse struct {
 	Status *types.PendingResolution `json:"status,omitempty"`
 }
 
-type RollbackBlockResponse struct{}
+type BlockExecStatusResponse struct {
+	Status *adminTypes.BlockExecutionStatus `json:"status,omitempty"`
+}
+
+type AbortBlockExecResponse struct{}

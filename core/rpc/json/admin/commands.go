@@ -46,7 +46,7 @@ type ResolutionStatusRequest struct {
 
 type BlockExecStatusRequest struct{}
 
-type RollbackBlockRequest struct {
+type AbortBlockExecRequest struct {
 	Height int64    `json:"height"`
 	Txs    []string `json:"txs"`
 }

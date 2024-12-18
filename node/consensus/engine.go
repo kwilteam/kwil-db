@@ -341,7 +341,7 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 	ce.log.Info("Starting the consensus event loop...")
 	catchUpTicker := time.NewTicker(5 * time.Second)
 	reannounceTicker := time.NewTicker(3 * time.Second)
-	blkPropTicker := time.NewTicker(10 * time.Second)
+	blkPropTicker := time.NewTicker(1 * time.Second)
 
 	for {
 		select {

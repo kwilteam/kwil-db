@@ -45,7 +45,6 @@ func (r *respBlockExecStatus) MarshalJSON() ([]byte, error) {
 }
 
 func (r *respBlockExecStatus) MarshalText() ([]byte, error) {
-	fmt.Println("respBlockExecStatus.MarshalText", r.Status)
 	if r.Status == nil {
 		return []byte("No block execution in progress"), nil
 	}

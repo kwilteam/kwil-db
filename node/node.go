@@ -694,7 +694,7 @@ func (n *Node) ConsensusParams() *ktypes.ConsensusParams {
 	return n.ce.ConsensusParams()
 }
 
-func (n *Node) RollbackBlock(height int64, txIDs []types.Hash) error {
+func (n *Node) AbortBlockExecution(height int64, txIDs []types.Hash) error {
 	return n.ce.CancelBlockExecution(height, txIDs)
 }
 

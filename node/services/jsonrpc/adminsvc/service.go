@@ -27,7 +27,7 @@ type Node interface {
 	Status(context.Context) (*types.Status, error)
 	Peers(context.Context) ([]*types.PeerInfo, error)
 	BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (*ktypes.ResultBroadcastTx, error)
-	RollbackBlock(height int64, txIDs []ktypes.Hash) error
+	AbortBlockExecution(height int64, txIDs []ktypes.Hash) error
 }
 
 type Whitelister interface { // maybe merge with Node since it's same job
@@ -213,7 +213,7 @@ func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 			"get the status of the ongoing block execution",
 			"the status of the ongoing block execution",
 		),
-		adminjson.MethodRollbackBlock: rpcserver.MakeMethodDef(svc.RollbackBlock,
+		adminjson.MethodAbortBlockExecution: rpcserver.MakeMethodDef(svc.AbortBlockExecution,
 			"cancel the block execution at the given height and discard the specified transactions from the mempool",
 			"",
 		),
@@ -572,7 +572,7 @@ func (svc *Service) ResolutionStatus(ctx context.Context, req *adminjson.Resolut
 	}, nil
 }
 
-func (svc *Service) BlockExecStatus(ctx context.Context, req *adminjson.BlockExecStatusRequest) (*types.BlockExecutionStatus, *jsonrpc.Error) {
+func (svc *Service) BlockExecStatus(ctx context.Context, req *adminjson.BlockExecStatusRequest) (*adminjson.BlockExecStatusResponse, *jsonrpc.Error) {
 	status := svc.app.BlockExecutionStatus()
 
 	if status == nil {
@@ -592,10 +592,12 @@ func (svc *Service) BlockExecStatus(ctx context.Context, req *adminjson.BlockExe
 		}
 	}
 	resp.TxInfo = txInfo
-	return resp, nil
+	return &adminjson.BlockExecStatusResponse{
+		Status: resp,
+	}, nil
 }
 
-func (svc *Service) RollbackBlock(ctx context.Context, req *adminjson.RollbackBlockRequest) (*adminjson.RollbackBlockResponse, *jsonrpc.Error) {
+func (svc *Service) AbortBlockExecution(ctx context.Context, req *adminjson.AbortBlockExecRequest) (*adminjson.AbortBlockExecResponse, *jsonrpc.Error) {
 	txIds := make([]ktypes.Hash, len(req.Txs))
 	for i, tx := range req.Txs {
 		txId, err := ktypes.NewHashFromString(tx)
@@ -606,10 +608,10 @@ func (svc *Service) RollbackBlock(ctx context.Context, req *adminjson.RollbackBl
 		txIds[i] = txId
 	}
 
-	err := svc.blockchain.RollbackBlock(req.Height, txIds)
+	err := svc.blockchain.AbortBlockExecution(req.Height, txIds)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to rollback block", nil)
 	}
 
-	return &adminjson.RollbackBlockResponse{}, nil
+	return &adminjson.AbortBlockExecResponse{}, nil
 }
