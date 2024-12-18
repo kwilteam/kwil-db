@@ -280,3 +280,22 @@ func (cl *Client) ResolutionStatus(ctx context.Context, resolutionID *types.UUID
 	}
 	return res.Status, nil
 }
+
+func (cl *Client) BlockExecStatus(ctx context.Context) (*adminTypes.BlockExecutionStatus, error) {
+	cmd := &adminjson.BlockExecStatusRequest{}
+	res := &adminjson.BlockExecStatusResponse{}
+	err := cl.CallMethod(ctx, string(adminjson.MethodBlockExecStatus), cmd, res)
+	if err != nil {
+		return nil, err
+	}
+	return res.Status, nil
+}
+
+func (cl *Client) AbortBlockExecution(ctx context.Context, height int64, discardTxs []string) error {
+	cmd := &adminjson.AbortBlockExecRequest{
+		Height: height,
+		Txs:    discardTxs,
+	}
+	res := &adminjson.AbortBlockExecResponse{}
+	return cl.CallMethod(ctx, string(adminjson.MethodAbortBlockExecution), cmd, res)
+}

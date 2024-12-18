@@ -16,12 +16,12 @@ type blockExecStatus struct {
 
 // Used by the rpc server to get the execution status of the block being processed.
 // end_time is not set if the block is still being processed.
-func (bp *BlockProcessor) BlockExecutionStatus() ktypes.BlockExecutionStatus {
+func (bp *BlockProcessor) BlockExecutionStatus() *ktypes.BlockExecutionStatus {
 	bp.statusMu.RLock()
 	defer bp.statusMu.RUnlock()
 
 	if bp.status == nil {
-		return ktypes.BlockExecutionStatus{}
+		return nil
 	}
 
 	status := &ktypes.BlockExecutionStatus{
@@ -36,7 +36,7 @@ func (bp *BlockProcessor) BlockExecutionStatus() ktypes.BlockExecutionStatus {
 		status.TxStatus[k] = v
 	}
 
-	return *status
+	return status
 }
 
 func (bp *BlockProcessor) initBlockExecutionStatus(blk *ktypes.Block) {

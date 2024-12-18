@@ -137,7 +137,7 @@ type dummyCE struct {
 	ackHandler         func(validatorPK []byte, ack types.AckRes)
 	blockCommitHandler func(blk *ktypes.Block, appHash types.Hash)
 	blockPropHandler   func(blk *ktypes.Block)
-	resetStateHandler  func(height int64)
+	resetStateHandler  func(height int64, txIDs []types.Hash)
 
 	// mtx     sync.Mutex
 	// gotACKs map[string]types.AckRes // from NotifyACK: string(validatorPK) -> AckRes
@@ -179,9 +179,9 @@ func (ce *dummyCE) AcceptACK() bool {
 	return true
 }
 
-func (ce *dummyCE) NotifyResetState(height int64) {
+func (ce *dummyCE) NotifyResetState(height int64, txIDs []types.Hash) {
 	if ce.resetStateHandler != nil {
-		ce.resetStateHandler(height)
+		ce.resetStateHandler(height, txIDs)
 		return
 	}
 }
@@ -209,6 +209,10 @@ func (ce *dummyCE) ConsensusParams() *ktypes.ConsensusParams {
 
 func (ce *dummyCE) InCatchup() bool {
 	return false
+}
+
+func (ce *dummyCE) CancelBlockExecution(height int64, txIDs []types.Hash) error {
+	return nil
 }
 
 func (ce *dummyCE) Start(ctx context.Context, proposerBroadcaster consensus.ProposalBroadcaster,
@@ -239,8 +243,8 @@ func (f *faker) ACK(ack bool, height int64, blkID types.Hash, appHash *types.Has
 	return f.ackBroadcaster(ack, height, blkID, appHash)
 }
 
-func (f *faker) ResetState(height int64) {
-	f.stateResetter(height)
+func (f *faker) ResetState(height int64, txIDs []types.Hash) {
+	f.stateResetter(height, txIDs)
 }
 
 func (f *faker) RequestBlock(ctx context.Context, height int64) {
@@ -271,7 +275,7 @@ func (f *faker) SetBlockPropHandler(blockPropHandler func(blk *ktypes.Block)) {
 	f.blockPropHandler = blockPropHandler
 }
 
-func (f *faker) SetResetStateHandler(resetStateHandler func(height int64)) {
+func (f *faker) SetResetStateHandler(resetStateHandler func(height int64, txIDs []types.Hash)) {
 	f.resetStateHandler = resetStateHandler
 }
 

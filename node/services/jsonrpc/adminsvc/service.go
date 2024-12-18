@@ -16,6 +16,7 @@ import (
 	types "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
+	ntypes "github.com/kwilteam/kwil-db/node/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
 	"github.com/kwilteam/kwil-db/version"
@@ -27,6 +28,8 @@ type Node interface {
 	Status(context.Context) (*types.Status, error)
 	Peers(context.Context) ([]*types.PeerInfo, error)
 	BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (*ktypes.ResultBroadcastTx, error)
+	Role() ntypes.Role
+	AbortBlockExecution(height int64, txIDs []ktypes.Hash) error
 }
 
 type Whitelister interface { // maybe merge with Node since it's same job
@@ -46,6 +49,7 @@ type App interface {
 	// Otherwise, the account found in the blockchain is returned.
 	AccountInfo(ctx context.Context, db sql.DB, identifier []byte, unconfirmed bool) (balance *big.Int, nonce int64, err error)
 	Price(ctx context.Context, db sql.DB, tx *ktypes.Transaction) (*big.Int, error)
+	BlockExecutionStatus() *ktypes.BlockExecutionStatus
 }
 
 type Validators interface {
@@ -206,6 +210,14 @@ func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 		adminjson.MethodHealth: rpcserver.MakeMethodDef(svc.HealthMethod,
 			"check the admin service health",
 			"the health status and other relevant of the services health",
+		),
+		adminjson.MethodBlockExecStatus: rpcserver.MakeMethodDef(svc.BlockExecStatus,
+			"get the status of the ongoing block execution",
+			"the status of the ongoing block execution",
+		),
+		adminjson.MethodAbortBlockExecution: rpcserver.MakeMethodDef(svc.AbortBlockExecution,
+			"cancel the block execution at the given height and discard the specified transactions from the mempool",
+			"",
 		),
 	}
 }
@@ -560,4 +572,52 @@ func (svc *Service) ResolutionStatus(ctx context.Context, req *adminjson.Resolut
 			Approved:     nil, // ???
 		},
 	}, nil
+}
+
+func (svc *Service) BlockExecStatus(ctx context.Context, req *adminjson.BlockExecStatusRequest) (*adminjson.BlockExecStatusResponse, *jsonrpc.Error) {
+	status := svc.app.BlockExecutionStatus()
+
+	if status == nil {
+		return nil, nil
+	}
+
+	resp := &types.BlockExecutionStatus{
+		Height:    status.Height,
+		StartTime: status.StartTime,
+		EndTime:   status.EndTime,
+	}
+	txInfo := make([]*types.TxInfo, len(status.TxIDs))
+	for i, txID := range status.TxIDs {
+		txInfo[i] = &types.TxInfo{
+			ID:     txID,
+			Status: status.TxStatus[txID.String()],
+		}
+	}
+	resp.TxInfo = txInfo
+	return &adminjson.BlockExecStatusResponse{
+		Status: resp,
+	}, nil
+}
+
+func (svc *Service) AbortBlockExecution(ctx context.Context, req *adminjson.AbortBlockExecRequest) (*adminjson.AbortBlockExecResponse, *jsonrpc.Error) {
+	if svc.blockchain.Role() != ntypes.RoleLeader {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "only the leader can abort block execution", nil)
+	}
+
+	txIds := make([]ktypes.Hash, len(req.Txs))
+	for i, tx := range req.Txs {
+		txId, err := ktypes.NewHashFromString(tx)
+		if err != nil {
+			svc.log.Error("failed to parse tx hash", "error", err)
+			return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to parse hexadecimal string into a Hash", nil)
+		}
+		txIds[i] = txId
+	}
+
+	err := svc.blockchain.AbortBlockExecution(req.Height, txIds)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to rollback block", nil)
+	}
+
+	return &adminjson.AbortBlockExecResponse{}, nil
 }

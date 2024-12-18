@@ -4,6 +4,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/kwilteam/kwil-db/app/block"
 	"github.com/kwilteam/kwil-db/app/custom"
 	"github.com/kwilteam/kwil-db/app/key"
 	"github.com/kwilteam/kwil-db/app/migration"
@@ -65,6 +66,7 @@ func RootCmd() *cobra.Command {
 	cmd.AddCommand(key.KeyCmd())
 	cmd.AddCommand(snapshot.NewSnapshotCmd())
 	cmd.AddCommand(migration.NewMigrationCmd())
+	cmd.AddCommand(block.NewBlockExecCmd())
 
 	return cmd
 }
