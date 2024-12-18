@@ -7,7 +7,7 @@ tasks:
 
   work:
     cmds:
-      - cmd: go work init . ./core ./parse
+      - cmd: go work init . ./core ./parse ./test
         ignore_error: true
     generates:
       - go.work
