@@ -72,6 +72,7 @@ type PersistentPeerInfo struct {
 	Addrs       []multiaddr.Multiaddr `json:"addrs"`
 	Protos      []protocol.ID         `json:"protos"`
 	Whitelisted bool                  `json:"whitelisted"`
+	// We probably need a last connected time and/or ttl
 }
 
 func (p PersistentPeerInfo) MarshalJSON() ([]byte, error) {

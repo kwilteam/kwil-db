@@ -10,6 +10,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/node/peers"
 	"github.com/kwilteam/kwil-db/node/types"
 
 	"github.com/libp2p/go-libp2p/core/network"
@@ -110,7 +111,7 @@ func (n *Node) announceTx(ctx context.Context, txHash types.Hash, rawTx []byte, 
 func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txHash types.Hash, rawTx []byte) error {
 	s, err := n.host.NewStream(ctx, peerID, ProtocolIDTxAnn)
 	if err != nil {
-		return fmt.Errorf("failed to open stream to peer: %w", err)
+		return fmt.Errorf("failed to open stream to peer: %w", peers.CompressDialError(err))
 	}
 
 	roundTripDeadline := time.Now().Add(txAnnTimeout)

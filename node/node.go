@@ -180,11 +180,16 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 
 	addrBookPath := filepath.Join(cfg.RootDir, "addrbook.json")
 
-	pm, err := peers.NewPeerMan(cfg.P2P.Pex, addrBookPath,
-		logger.New("PEERS"), cg, host,
-		func(ctx context.Context, peerID peer.ID) ([]peer.AddrInfo, error) {
-			return requestPeers(ctx, host.ID(), host, logger)
-		}, RequiredStreamProtocols)
+	pmCfg := &peers.Config{
+		PEX:               cfg.P2P.Pex,
+		AddrBook:          addrBookPath,
+		Logger:            logger.New("PEERS"),
+		Host:              host,
+		TargetConnections: 20,
+		ConnGater:         cg,
+		RequiredProtocols: RequiredStreamProtocols,
+	}
+	pm, err := peers.NewPeerMan(pmCfg)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create peer manager: %w", err)
 	}
@@ -245,13 +250,13 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 
 	host.SetStreamHandler(ProtocolIDBlockPropose, node.blkPropStreamHandler)
 
-	if cfg.P2P.Pex {
-		host.SetStreamHandler(ProtocolIDDiscover, node.peerDiscoveryStreamHandler)
-	} else {
-		host.SetStreamHandler(ProtocolIDDiscover, func(s network.Stream) {
-			s.Close()
-		})
-	}
+	// if cfg.P2P.Pex {
+	// 	host.SetStreamHandler(ProtocolIDDiscover, pm.DiscoveryStreamHandler)
+	// } else {
+	// 	host.SetStreamHandler(ProtocolIDDiscover, func(s network.Stream) {
+	// 		s.Close()
+	// 	})
+	// }
 
 	return node, nil
 }
