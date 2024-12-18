@@ -16,6 +16,7 @@ import (
 	types "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
+	ntypes "github.com/kwilteam/kwil-db/node/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
 	"github.com/kwilteam/kwil-db/version"
@@ -27,6 +28,7 @@ type Node interface {
 	Status(context.Context) (*types.Status, error)
 	Peers(context.Context) ([]*types.PeerInfo, error)
 	BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (*ktypes.ResultBroadcastTx, error)
+	Role() ntypes.Role
 	AbortBlockExecution(height int64, txIDs []ktypes.Hash) error
 }
 
@@ -598,6 +600,10 @@ func (svc *Service) BlockExecStatus(ctx context.Context, req *adminjson.BlockExe
 }
 
 func (svc *Service) AbortBlockExecution(ctx context.Context, req *adminjson.AbortBlockExecRequest) (*adminjson.AbortBlockExecResponse, *jsonrpc.Error) {
+	if svc.blockchain.Role() != ntypes.RoleLeader {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "only the leader can abort block execution", nil)
+	}
+
 	txIds := make([]ktypes.Hash, len(req.Txs))
 	for i, tx := range req.Txs {
 		txId, err := ktypes.NewHashFromString(tx)

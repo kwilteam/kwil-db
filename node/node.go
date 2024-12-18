@@ -698,6 +698,10 @@ func (n *Node) AbortBlockExecution(height int64, txIDs []types.Hash) error {
 	return n.ce.CancelBlockExecution(height, txIDs)
 }
 
+func (n *Node) Role() types.Role {
+	return n.ce.Role()
+}
+
 var RequiredStreamProtocols = []protocol.ID{
 	ProtocolIDDiscover,
 	ProtocolIDTx,
