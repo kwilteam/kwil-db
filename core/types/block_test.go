@@ -35,17 +35,10 @@ func TestGetRawBlockTx(t *testing.T) {
 		for i, pl := range txnPayloads {
 			txns[i] = newTx(uint64(i), "bob", string(pl))
 		}
-		blk, err := NewBlock(1, Hash{1, 2, 3}, Hash{6, 7, 8}, Hash{}, time.Unix(1729890593, 0), txns)
-		if err != nil {
-			t.Fatalf("invalid block: %v", err)
-		}
-		err = blk.Sign(privKey)
+		blk := NewBlock(1, Hash{1, 2, 3}, Hash{6, 7, 8}, Hash{}, time.Unix(1729890593, 0), txns)
+		err := blk.Sign(privKey)
 		require.NoError(t, err)
-		rawBlk, err := EncodeBlock(blk)
-		if err != nil {
-			t.Fatalf("invalid block: %v", err)
-		}
-		return rawBlk, blk
+		return EncodeBlock(blk), blk
 	}
 
 	t.Run("valid block signature", func(t *testing.T) {
@@ -224,8 +217,7 @@ func TestBlock_EncodeDecode(t *testing.T) {
 			Signature: []byte("test-signature"),
 		}
 
-		encoded, err := EncodeBlock(original)
-		require.NoError(t, err)
+		encoded := EncodeBlock(original)
 		decoded, err := DecodeBlock(encoded)
 		require.NoError(t, err)
 		require.Equal(t, original.Header, decoded.Header)
@@ -254,13 +246,12 @@ func TestBlock_EncodeDecode(t *testing.T) {
 			Signature: []byte("test-signature-long"),
 		}
 
-		encoded, err := EncodeBlock(original)
-		require.NoError(t, err)
+		encoded := EncodeBlock(original)
 		decoded, err := DecodeBlock(encoded)
 		require.NoError(t, err)
 		require.Equal(t, original.Header, decoded.Header)
 		require.Equal(t, original.Signature, decoded.Signature)
-		require.Equal(t, original.Txns, decoded.Txns)
+		require.EqualExportedValues(t, original.Txns, decoded.Txns)
 	})
 
 	t.Run("decode with invalid signature length", func(t *testing.T) {
@@ -301,11 +292,10 @@ func TestBlock_EncodeDecode(t *testing.T) {
 			Txns:      []*Transaction{newTx(0, "bob", "a")},
 			Signature: []byte("sig"),
 		}
-		encoded, err := EncodeBlock(original)
-		require.NoError(t, err)
+		encoded := EncodeBlock(original)
 		truncated := encoded[:len(encoded)-10]
 
-		_, err = DecodeBlock(truncated)
+		_, err := DecodeBlock(truncated)
 		require.Error(t, err)
 	})
 }

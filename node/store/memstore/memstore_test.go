@@ -11,7 +11,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
-	"github.com/stretchr/testify/require"
 )
 
 func fakeAppHash(height int64) types.Hash {
@@ -44,9 +43,8 @@ func createTestBlock(t *testing.T, height int64, numTxns int) (*ktypes.Block, ty
 		txs[i] = tx
 		txns[i] = rawTx
 	}
-	blk, err := ktypes.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5},
+	blk := ktypes.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5},
 		time.Unix(1729723553+height, 0), txs)
-	require.NoError(t, err)
 	return blk, fakeAppHash(height)
 }
 
@@ -157,10 +155,7 @@ func TestMemBS_StoreAndGetTx(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	txHash, err := tx1.Hash()
-	if err != nil {
-		t.Fatal(err)
-	}
+	txHash := tx1.Hash()
 	gotTx, height, hash, idx, err := bs.GetTx(txHash)
 	if err != nil {
 		t.Fatal(err)

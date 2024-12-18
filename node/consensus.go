@@ -159,11 +159,7 @@ func (bp *blockProp) WriteTo(w io.Writer) (int64, error) {
 }
 
 func (n *Node) announceBlkProp(ctx context.Context, blk *ktypes.Block) {
-	rawBlk, err := ktypes.EncodeBlock(blk)
-	if err != nil {
-		n.log.Error("Failed to serialize block for proposal", "error", err) // should not happen
-		return
-	}
+	rawBlk := ktypes.EncodeBlock(blk)
 	blkHash := blk.Hash()
 	height := blk.Header.Height
 

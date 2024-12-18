@@ -65,19 +65,20 @@ func TestPrepareMempoolTxns(t *testing.T) {
 	// tA is the template transaction. Several fields may not be nil because of
 	// a legacy RLP issue where objects may be encoded that cannot be decoded.
 
-	bp := &BlockProcessor{
-		db:     &mockDB{},
-		log:    log.DiscardLogger,
-		signer: secp256k1Signer(t),
-		chainCtx: &common.ChainContext{
-			ChainID: "test",
-			NetworkParameters: &common.NetworkParameters{
-				MaxBlockSize:     6 * 1024 * 1024,
-				MaxVotesPerTx:    100,
-				DisabledGasCosts: true,
-			},
+	chainCtx := &common.ChainContext{
+		ChainID: "test",
+		NetworkParameters: &common.NetworkParameters{
+			MaxBlockSize:     6 * 1024 * 1024,
+			MaxVotesPerTx:    100,
+			DisabledGasCosts: true,
 		},
-		txapp: &mockTxApp{},
+	}
+	bp := &BlockProcessor{
+		db:       &mockDB{},
+		log:      log.DiscardLogger,
+		signer:   secp256k1Signer(t),
+		chainCtx: chainCtx,
+		txapp:    &mockTxApp{},
 	}
 
 	tA := &types.Transaction{
@@ -88,7 +89,7 @@ func TestPrepareMempoolTxns(t *testing.T) {
 		Body: &types.TransactionBody{
 			Description: "t",
 			Payload:     []byte(`x`),
-			Fee:         big.NewInt(0),
+			Fee:         big.NewInt(900),
 			Nonce:       0,
 		},
 		Sender: []byte(`guy`),
@@ -127,82 +128,92 @@ func TestPrepareMempoolTxns(t *testing.T) {
 	tProposer.Sender = bp.signer.Identity()
 	// tProposerb := marshalTx(t, tProposer)
 
-	invalid := &ktypes.Transaction{} // invalid without Body set
+	zeroFeeTx := cloneTx(tA)
+	zeroFeeTx.Body.Fee = &big.Int{}
 
 	tests := []struct {
 		name string
 		txs  []*ktypes.Transaction
 		want []*ktypes.Transaction
+		gas  bool
 	}{
 		{
 			"empty",
 			[]*ktypes.Transaction{},
 			[]*ktypes.Transaction{},
+			false,
 		},
 		{
-			"one and only invalid",
-			[]*ktypes.Transaction{invalid},
+			"one and only low gas",
+			[]*ktypes.Transaction{zeroFeeTx},
 			[]*ktypes.Transaction{},
-		},
-		{
-			"one of two invalid",
-			[]*ktypes.Transaction{invalid, tB},
-			[]*ktypes.Transaction{tB},
+			true,
 		},
 		{
 			"one valid",
 			[]*ktypes.Transaction{tA},
 			[]*ktypes.Transaction{tA},
+			false,
 		},
 		{
 			"two valid",
 			[]*ktypes.Transaction{tA, tB},
 			[]*ktypes.Transaction{tA, tB},
+			false,
 		},
 		{
 			"two valid misordered",
 			[]*ktypes.Transaction{tB, tA},
 			[]*ktypes.Transaction{tA, tB},
+			false,
 		},
 		{
 			"multi-party, one misordered, stable",
 			[]*ktypes.Transaction{tOtherSenderA, tB, tOtherSenderB, tA},
 			[]*ktypes.Transaction{tOtherSenderA, tA, tOtherSenderB, tB},
+			false,
 		},
 		{
 			"multi-party, one misordered, one dup nonce, stable",
 			[]*ktypes.Transaction{tOtherSenderA, tOtherSenderAbDup, tB, tA},
 			[]*ktypes.Transaction{tOtherSenderA, tA, tB},
+			false,
 		},
 		{
 			"multi-party, both misordered, stable",
 			[]*ktypes.Transaction{tOtherSenderB, tB, tOtherSenderA, tA},
 			[]*ktypes.Transaction{tOtherSenderA, tA, tOtherSenderB, tB},
+			false,
 		},
 		{
 			"multi-party, both misordered, alt. stable",
 			[]*ktypes.Transaction{tB, tOtherSenderB, tOtherSenderA, tA},
 			[]*ktypes.Transaction{tA, tOtherSenderA, tOtherSenderB, tB},
+			false,
 		},
-		{
-			"multi-party, big, with invalid in middle",
-			[]*ktypes.Transaction{tOtherSenderC, tB, invalid, tOtherSenderB, tOtherSenderA, tA},
-			[]*ktypes.Transaction{tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB},
-		},
+		// { // can't mix fee...
+		// 	"multi-party, big, with invalid in middle",
+		// 	[]*ktypes.Transaction{tOtherSenderC, tB, zeroFeeTx, tOtherSenderB, tOtherSenderA, tA},
+		// 	[]*ktypes.Transaction{tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB},
+		// 	true,
+		// },
 		{
 			"multi-party, big, already correct",
 			[]*ktypes.Transaction{tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB},
 			[]*ktypes.Transaction{tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB},
+			false,
 		},
 		{
 			"multi-party,proposer in the last, reorder",
 			[]*ktypes.Transaction{tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB, tProposer},
 			[]*ktypes.Transaction{tProposer, tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB},
+			false,
 		},
 		{
 			"multi-party,proposer in the middle, reorder",
 			[]*ktypes.Transaction{tOtherSenderA, tA, tOtherSenderB, tProposer, tOtherSenderC, tB},
 			[]*ktypes.Transaction{tProposer, tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB},
+			false,
 		},
 	}
 
@@ -212,6 +223,8 @@ func TestPrepareMempoolTxns(t *testing.T) {
 			getEvents = func(_ context.Context, _ sql.Executor) ([]*types.VotableEvent, error) {
 				return nil, nil
 			}
+
+			chainCtx.NetworkParameters.DisabledGasCosts = !tt.gas
 
 			got, invalids, err := bp.prepareBlockTransactions(ctx, tt.txs)
 			require.NoError(t, err)
@@ -223,12 +236,8 @@ func TestPrepareMempoolTxns(t *testing.T) {
 			require.Equal(t, len(invalids), len(tt.txs)-len(got))
 
 			for i, txi := range got {
-				gotHash, err := txi.Hash()
-				require.NoError(t, err)
-
-				wantHash, err := tt.want[i].Hash()
-				require.NoError(t, err)
-
+				gotHash := txi.Hash()
+				wantHash := tt.want[i].Hash()
 				require.Equal(t, gotHash, wantHash)
 			}
 		})

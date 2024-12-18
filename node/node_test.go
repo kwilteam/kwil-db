@@ -198,9 +198,8 @@ func createTestBlock(t *testing.T, height int64, numTxns int) (*ktypes.Block, ty
 		txns[i] = newTx(uint64(i), "bob", strconv.FormatInt(height, 10)+strconv.Itoa(i)+
 			strings.Repeat("data", 1000))
 	}
-	blk, err := ktypes.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5},
+	blk := ktypes.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5},
 		time.Unix(1729723553+height, 0), txns)
-	require.NoError(t, err)
 	return blk, fakeAppHash(height)
 }
 

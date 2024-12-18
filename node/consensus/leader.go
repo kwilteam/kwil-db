@@ -151,18 +151,12 @@ func (ce *ConsensusEngine) createBlockProposal(ctx context.Context) (*blockPropo
 
 	// remove invalid transactions from the mempool
 	for _, tx := range invalidTxs {
-		txid, err := tx.Hash()
-		if err != nil { // should be impossible if we pulled this from mempool
-			ce.log.Error("unable to remove transaction with no valid hash: %v")
-			continue
-		}
+		txid := tx.Hash()
 		ce.mempool.Remove(txid)
 	}
 
-	blk, err := ktypes.NewBlock(ce.state.lc.height+1, ce.state.lc.blkHash, ce.state.lc.appHash, ce.ValidatorSetHash(), time.Now(), finalTxs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create block for new proposal: %v", err)
-	}
+	blk := ktypes.NewBlock(ce.state.lc.height+1, ce.state.lc.blkHash, ce.state.lc.appHash,
+		ce.ValidatorSetHash(), time.Now(), finalTxs)
 
 	// ValSet + valUpdatesHash
 

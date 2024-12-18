@@ -72,11 +72,7 @@ func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs []*k
 	var i int
 
 	for is, tx := range txs {
-		rawTx, err := tx.MarshalBinary()
-		if err != nil {
-			invalidTxs = append(invalidTxs, tx)
-			continue
-		}
+		rawTx := tx.Bytes()
 		okTxns = append(okTxns, &indexedTxn{i, tx, len(rawTx), types.HashBytes(rawTx), is})
 		i++
 	}

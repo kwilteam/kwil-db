@@ -42,15 +42,11 @@ type Block struct {
 	Signature []byte // Signature is the block producer's signature (leader in our model)
 }
 
-func NewBlock(height int64, prevHash, appHash, valSetHash Hash, stamp time.Time, txns []*Transaction) (*Block, error) {
+func NewBlock(height int64, prevHash, appHash, valSetHash Hash, stamp time.Time, txns []*Transaction) *Block {
 	numTxns := len(txns)
 	txHashes := make([]Hash, numTxns)
 	for i, tx := range txns {
-		txHash, err := tx.Hash()
-		if err != nil {
-			return nil, fmt.Errorf("invalid transaction, fails to serialize: %v", err)
-		}
-		txHashes[i] = txHash
+		txHashes[i] = tx.Hash()
 	}
 	merkelRoot := CalcMerkleRoot(txHashes)
 	hdr := &BlockHeader{
@@ -67,23 +63,19 @@ func NewBlock(height int64, prevHash, appHash, valSetHash Hash, stamp time.Time,
 	return &Block{
 		Header: hdr,
 		Txns:   txns,
-	}, nil
+	}
 }
 
 func (b *Block) Hash() Hash {
 	return b.Header.Hash()
 }
 
-func (b *Block) MerkleRoot() (Hash, error) {
+func (b *Block) MerkleRoot() Hash {
 	txHashes := make([]Hash, len(b.Txns))
 	for i, tx := range b.Txns {
-		txHash, err := tx.Hash()
-		if err != nil {
-			return Hash{}, nil
-		}
-		txHashes[i] = txHash
+		txHashes[i] = tx.Hash()
 	}
-	return CalcMerkleRoot(txHashes), nil
+	return CalcMerkleRoot(txHashes)
 }
 
 func (b *Block) Sign(signer crypto.PrivateKey) error {
@@ -231,7 +223,7 @@ func (bh *BlockHeader) Hash() Hash {
 	return buf
 }*/
 
-func EncodeBlock(block *Block) ([]byte, error) {
+func EncodeBlock(block *Block) []byte {
 	headerBytes := EncodeBlockHeader(block.Header)
 
 	buf := make([]byte, 0, len(headerBytes)+4+len(block.Signature)) // it's a lot more depending on txns, but we don't have size functions yet
@@ -242,15 +234,12 @@ func EncodeBlock(block *Block) ([]byte, error) {
 	buf = append(buf, block.Signature...)
 
 	for _, tx := range block.Txns {
-		rawTx, err := tx.MarshalBinary()
-		if err != nil {
-			return nil, err
-		}
+		rawTx := tx.Bytes()
 		buf = binary.LittleEndian.AppendUint32(buf, uint32(len(rawTx)))
 		buf = append(buf, rawTx...)
 	}
 
-	return buf, nil
+	return buf
 }
 
 // CalcMerkleRoot computes the merkel root for a slice of hashes. This is based

@@ -82,9 +82,8 @@ func createTestBlock(t *testing.T, height int64, numTxns int) (*ktypes.Block, ty
 		txs[i] = tx
 		txns[i] = rawTx
 	}
-	blk, err := ktypes.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5},
+	blk := ktypes.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5},
 		time.Unix(1729723553+height, 0), txs)
-	require.NoError(t, err)
 	return blk, fakeAppHash(height), txns
 }
 
@@ -104,8 +103,7 @@ func TestBlockStore_StoreAndGet(t *testing.T) {
 		t.Fatal(err)
 	}
 	height := blk.Header.Height
-	data, err := ktypes.EncodeBlock(blk)
-	require.NoError(t, err)
+	data := ktypes.EncodeBlock(blk)
 
 	if height != block.Header.Height {
 		t.Errorf("Expected height %d, got %d", block.Header.Height, height)
@@ -184,8 +182,7 @@ func TestBlockStore_GetTx(t *testing.T) {
 	bs.Store(block, appHash)
 
 	for _, tx := range block.Txns {
-		txHash, err := tx.Hash()
-		require.NoError(t, err)
+		txHash := tx.Hash()
 		tx, height, _, _, err := bs.GetTx(txHash)
 		if err != nil {
 			t.Fatal(err)
@@ -212,8 +209,7 @@ func TestBlockStore_HaveTx(t *testing.T) {
 	bs, dir := setupTestBlockStore(t)
 
 	block, appHash, _ := createTestBlock(t, 1, 6)
-	txHash, err := block.Txns[0].Hash()
-	require.NoError(t, err)
+	txHash := block.Txns[0].Hash()
 
 	if bs.HaveTx(txHash) {
 		t.Error("Transaction should not exist before storing block")
@@ -227,7 +223,7 @@ func TestBlockStore_HaveTx(t *testing.T) {
 
 	bs.Close()
 
-	bs, err = NewBlockStore(dir)
+	bs, err := NewBlockStore(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -243,12 +239,11 @@ func TestBlockStore_HaveTx(t *testing.T) {
 
 func TestBlockStore_StoreWithNoTransactions(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
-	block, err := ktypes.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{},
+	block := ktypes.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{},
 		time.Unix(1729723553, 0), []*ktypes.Transaction{})
-	require.NoError(t, err)
 	appHash := fakeAppHash(1)
 
-	err = bs.Store(block, appHash)
+	err := bs.Store(block, appHash)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -351,9 +346,8 @@ func TestBlockStore_StoreWithLargeTransactions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	block, err := ktypes.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{},
+	block := ktypes.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{},
 		time.Unix(1729723553, 0), []*ktypes.Transaction{largeTx, otherTx})
-	require.NoError(t, err)
 	appHash := fakeAppHash(1)
 
 	err = bs.Store(block, appHash)
@@ -460,8 +454,7 @@ func TestLargeBlockStore(t *testing.T) {
 		}
 
 		// Create and store block
-		block, err := ktypes.NewBlock(height, prevHash, prevAppHash, types.Hash{}, time.Now(), txns)
-		require.NoError(t, err)
+		block := ktypes.NewBlock(height, prevHash, prevAppHash, types.Hash{}, time.Now(), txns)
 		appHash := types.HashBytes([]byte(fmt.Sprintf("app-%d", height)))
 		err = bs.Store(block, appHash)
 		if err != nil {
@@ -576,12 +569,11 @@ func TestBlockStore_StoreAndGetResults(t *testing.T) {
 func TestBlockStore_StoreResultsEmptyBlock(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
-	block, err := ktypes.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{},
+	block := ktypes.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{},
 		time.Unix(1729723553, 0), []*ktypes.Transaction{})
-	require.NoError(t, err)
 	appHash := fakeAppHash(1)
 
-	err = bs.Store(block, appHash)
+	err := bs.Store(block, appHash)
 	if err != nil {
 		t.Fatal(err)
 	}

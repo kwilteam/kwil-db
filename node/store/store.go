@@ -287,17 +287,11 @@ func (bki *BlockStore) Store(blk *ktypes.Block, appHash types.Hash) error {
 	blkHash := blk.Hash()
 	height := blk.Header.Height
 
-	rawBlk, err := ktypes.EncodeBlock(blk)
-	if err != nil {
-		return fmt.Errorf("failed to encode block: %v", err)
-	}
+	rawBlk := ktypes.EncodeBlock(blk)
 
 	txHashes := make([]ktypes.Hash, blk.Header.NumTxns)
 	for i, tx := range blk.Txns {
-		txHashes[i], err = tx.Hash()
-		if err != nil {
-			return fmt.Errorf("invalid transaction (%d): %v", i, err)
-		}
+		txHashes[i] = tx.Hash()
 	}
 
 	txn := bki.db.NewTransaction(true)
@@ -305,7 +299,7 @@ func (bki *BlockStore) Store(blk *ktypes.Block, appHash types.Hash) error {
 
 	// Store block metadata (header + signature)
 	key := slices.Concat(nsHeader, blkHash[:])
-	err = txn.Set(key, append(ktypes.EncodeBlockHeader(blk.Header), blk.Signature...))
+	err := txn.Set(key, append(ktypes.EncodeBlockHeader(blk.Header), blk.Signature...))
 	if err != nil {
 		return err
 	}

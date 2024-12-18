@@ -32,10 +32,7 @@ func (ce *ConsensusEngine) validateBlock(blk *ktypes.Block) error {
 	}
 
 	// Verify the merkle root of the block transactions
-	merkleRoot, err := blk.MerkleRoot()
-	if err != nil {
-		return fmt.Errorf("cannot compute merkle root for block %v: %w", blk.Header.Height, err)
-	}
+	merkleRoot := blk.MerkleRoot()
 	if merkleRoot != blk.Header.MerkleRoot {
 		return fmt.Errorf("merkleroot mismatch, expected %v, got %v", merkleRoot, blk.Header.MerkleRoot)
 	}
@@ -112,11 +109,8 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 	}
 
 	// remove transactions from the mempool
-	for idx, txn := range blkProp.blk.Txns {
-		txHash, err := txn.Hash()
-		if err != nil {
-			return fmt.Errorf("invalid transaction in block (%d): %v", idx, err)
-		}
+	for _, txn := range blkProp.blk.Txns {
+		txHash := txn.Hash()
 		ce.mempool.Remove(txHash)
 	}
 

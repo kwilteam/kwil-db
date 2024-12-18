@@ -1,7 +1,6 @@
 package blockprocessor
 
 import (
-	"fmt"
 	"slices"
 	"time"
 
@@ -43,10 +42,7 @@ func (bp *BlockProcessor) BlockExecutionStatus() *ktypes.BlockExecutionStatus {
 func (bp *BlockProcessor) initBlockExecutionStatus(blk *ktypes.Block) ([]ktypes.Hash, error) {
 	txIDs := make([]ktypes.Hash, len(blk.Txns))
 	for i, tx := range blk.Txns {
-		txID, err := tx.Hash()
-		if err != nil {
-			return nil, fmt.Errorf("invalid transaction in block (idx %d): %w", i, err)
-		}
+		txID := tx.Hash()
 		txIDs[i] = txID
 	}
 	bp.statusMu.Lock()

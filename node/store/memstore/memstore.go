@@ -85,10 +85,7 @@ func (bs *MemBS) Store(block *ktypes.Block, appHash types.Hash) error {
 		appHash: appHash,
 	}
 	for _, tx := range block.Txns {
-		txHash, err := tx.Hash()
-		if err != nil {
-			return fmt.Errorf("invalid transaction in provide block: %v", err)
-		}
+		txHash := tx.Hash()
 		bs.txIds[txHash] = blkHash
 	}
 	return nil
@@ -174,10 +171,7 @@ func (bs *MemBS) GetTx(txHash types.Hash) (tx *ktypes.Transaction, height int64,
 		return nil, 0, types.Hash{}, 0, types.ErrNotFound
 	}
 	for idx, tx := range blk.Txns {
-		txHashi, err := tx.Hash()
-		if err != nil {
-			return nil, 0, types.Hash{}, 0, fmt.Errorf("invalid transaction in block store (%d): %v", idx, err)
-		}
+		txHashi := tx.Hash()
 		if txHashi == txHash {
 			return tx, blk.Header.Height, blk.Hash(), uint32(idx), nil
 		}
