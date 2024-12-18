@@ -45,7 +45,17 @@ type ConsensusEngine struct {
 	leader  crypto.PublicKey
 	log     log.Logger
 
+	// proposeTimeout specifies the time duration to wait before proposing a new block for the next height.
+	// Default is 1 second.
 	proposeTimeout time.Duration
+
+	// blkProposalInterval specifies the time duration to wait before reannouncing the block proposal message.
+	// This is only applicable for the leader. This timeout influences how quickly the out-of-sync nodes can
+	// catchup with the consensus rounds, thereby influencing the block time. Default is 1 second.
+	blkProposalInterval time.Duration
+
+	// blkAnnReannounceTimeout specifies the time duration to wait before reannouncing the block announce message.
+	blkAnnInterval time.Duration
 
 	genesisHeight int64 // height of the genesis block
 	networkHeight atomic.Int64
@@ -101,24 +111,26 @@ type Config struct {
 	PrivateKey crypto.PrivateKey
 	// Leader is the public key of the leader.
 	Leader crypto.PublicKey
-
+	// GenesisHeight is the initial height of the network.
 	GenesisHeight int64
-
-	DB *pg.DB
-	// Mempool is the mempool of the node.
-	Mempool Mempool
-	// BlockStore is the blockstore of the node.
-	BlockStore BlockStore
-
-	BlockProcessor BlockProcessor
-
 	// ValidatorSet is the set of validators in the network.
 	ValidatorSet map[string]ktypes.Validator
-	// Logger is the logger of the node.
-	Logger log.Logger
-
 	// ProposeTimeout is the timeout for proposing a block.
 	ProposeTimeout time.Duration
+	// BlkPropReannounceInterval is the frequency at which block proposal messages are reannounced by the Leader.
+	BlockProposalInterval time.Duration
+	// BlkAnnReannounceInterval is the frequency at which block commit messages are reannounced by the Leader.
+	// This is also the frequency at which the validators reannounce the ack messages.
+	BlockAnnInterval time.Duration
+	// CatchUpInterval is the frequency at which the node attempts to catches up with the network if lagging.
+	// CatchUpInterval  time.Duration
+
+	// Interfaces
+	DB             *pg.DB
+	Mempool        Mempool
+	BlockStore     BlockStore
+	BlockProcessor BlockProcessor
+	Logger         log.Logger
 }
 
 // ProposalBroadcaster broadcasts the new block proposal message to the network
@@ -218,11 +230,13 @@ func New(cfg *Config) *ConsensusEngine {
 
 	// rethink how this state is initialized
 	ce := &ConsensusEngine{
-		pubKey:         pubKey,
-		privKey:        cfg.PrivateKey,
-		leader:         cfg.Leader,
-		proposeTimeout: cfg.ProposeTimeout,
-		db:             cfg.DB,
+		pubKey:              pubKey,
+		privKey:             cfg.PrivateKey,
+		leader:              cfg.Leader,
+		proposeTimeout:      cfg.ProposeTimeout,
+		blkProposalInterval: cfg.BlockProposalInterval,
+		blkAnnInterval:      cfg.BlockAnnInterval,
+		db:                  cfg.DB,
 		state: state{
 			blkProp:  nil,
 			blockRes: nil,
@@ -337,11 +351,10 @@ func (ce *ConsensusEngine) close() {
 // Apart from the above events, the node also periodically checks if it needs to
 // catchup with the network and reannounce the messages.
 func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
-	// TODO: make these configurable?
 	ce.log.Info("Starting the consensus event loop...")
-	catchUpTicker := time.NewTicker(5 * time.Second)
-	reannounceTicker := time.NewTicker(3 * time.Second)
-	blkPropTicker := time.NewTicker(1 * time.Second)
+	catchUpTicker := time.NewTicker(5 * time.Second)        // Should this be configurable??
+	reannounceTicker := time.NewTicker(ce.blkAnnInterval)   // 3 secs (default)
+	blkPropTicker := time.NewTicker(ce.blkProposalInterval) // 1 sec (default)
 
 	for {
 		select {
@@ -458,7 +471,7 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 	}
 
 	if dirty {
-		ce.log.Info("App state is dirty, partially committed??") // TODO: what to be done here??
+		return fmt.Errorf("app state is dirty, error in the blockprocessor initialization, height: %d, appHash: %x", appHeight, appHash)
 	}
 
 	ce.log.Info("Initial Node state: ", "appHeight", appHeight, "storeHeight", storeHeight, "appHash", appHash, "storeAppHash", storeAppHash)
@@ -594,7 +607,7 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 	if ce.role.Load() == types.RoleLeader && ce.state.lc.height > 0 {
 		// Announce block commit message for the last committed block
 		if ce.state.lc.blk != nil {
-			go ce.blkAnnouncer(ctx, ce.state.lc.blk, ce.state.lc.appHash) // TODO: can be made infrequent
+			go ce.blkAnnouncer(ctx, ce.state.lc.blk, ce.state.lc.appHash)
 		}
 		return
 	}
