@@ -25,7 +25,7 @@ func (n *Node) blkGetStreamHandler(s network.Stream) {
 
 	var req blockHashReq
 	if _, err := req.ReadFrom(s); err != nil {
-		n.log.Warn("Bad get block (hash) request", "error", err) // Debug when we ship
+		n.log.Debug("Bad get block (hash) request", "error", err)
 		return
 	}
 	n.log.Debug("Peer requested block", "hash", req.Hash)

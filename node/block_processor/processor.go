@@ -348,31 +348,29 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 
 	txResults := make([]ktypes.TxResult, len(req.Block.Txns))
 
-	bp.initBlockExecutionStatus(req.Block)
+	txHashes, err := bp.initBlockExecutionStatus(req.Block)
+	if err != nil {
+		return nil, fmt.Errorf("invalid block: %w", err)
+	}
 
 	for i, tx := range req.Block.Txns {
-		decodedTx := &ktypes.Transaction{}
-		if err := decodedTx.UnmarshalBinary(tx); err != nil {
-			// bp.log.Error("Failed to unmarshal the block tx", "err", err)
-			return nil, fmt.Errorf("failed to unmarshal the block tx: %w", err)
-		}
-		txHash := types.HashBytes(tx)
-
-		auth := auth.GetAuthenticator(decodedTx.Signature.Type)
+		auth := auth.GetAuthenticator(tx.Signature.Type)
 		if auth == nil {
-			return nil, fmt.Errorf("unsupported signature type: %v", decodedTx.Signature.Type)
+			return nil, fmt.Errorf("unsupported signature type: %v", tx.Signature.Type)
 		}
 
-		identifier, err := auth.Identifier(decodedTx.Sender)
+		identifier, err := auth.Identifier(tx.Sender)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get identifier for the block tx: %w", err)
 		}
 
+		txHash := txHashes[i]
+
 		txCtx := &common.TxContext{
 			Ctx:           ctx,
-			TxID:          hex.EncodeToString(txHash[:]),
-			Signer:        decodedTx.Sender,
-			Authenticator: decodedTx.Signature.Type,
+			TxID:          txHash.String(),
+			Signer:        tx.Sender,
+			Authenticator: tx.Signature.Type,
 			Caller:        identifier,
 			BlockContext:  blockCtx,
 		}
@@ -381,7 +379,7 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 		case <-ctx.Done():
 			return nil, ctx.Err() // notify the caller about the context cancellation or deadline exceeded error
 		default:
-			res := bp.txapp.Execute(txCtx, bp.consensusTx, decodedTx)
+			res := bp.txapp.Execute(txCtx, bp.consensusTx, tx)
 			txResult := ktypes.TxResult{
 				Code: uint32(res.ResponseCode),
 				Gas:  res.Spend,
@@ -561,7 +559,7 @@ func (bp *BlockProcessor) Commit(ctx context.Context, req *ktypes.CommitRequest)
 // that consensus limits such as the maximum block size, maxVotesPerTx are met. It also adds
 // validator vote transactions for events observed by the leader. This function is
 // used exclusively by the leader node to prepare the proposal block.
-func (bp *BlockProcessor) PrepareProposal(ctx context.Context, txs [][]byte) (finalTxs [][]byte, invalidTxs [][]byte, err error) {
+func (bp *BlockProcessor) PrepareProposal(ctx context.Context, txs []*ktypes.Transaction) (finalTxs []*ktypes.Transaction, invalidTxs []*ktypes.Transaction, err error) {
 	// unmarshal and index the transactions
 	return bp.prepareBlockTransactions(ctx, txs)
 }

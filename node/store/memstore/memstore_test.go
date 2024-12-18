@@ -30,7 +30,7 @@ func newTx(nonce uint64, sender string) *ktypes.Transaction {
 	}
 }
 
-func createTestBlock(height int64, numTxns int) (*ktypes.Block, types.Hash, []*ktypes.Transaction) {
+func createTestBlock(t *testing.T, height int64, numTxns int) (*ktypes.Block, types.Hash) {
 	txs := make([]*ktypes.Transaction, numTxns)
 	txns := make([][]byte, numTxns)
 	for i := range numTxns {
@@ -43,14 +43,15 @@ func createTestBlock(height int64, numTxns int) (*ktypes.Block, types.Hash, []*k
 		txs[i] = tx
 		txns[i] = rawTx
 	}
-	return ktypes.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5},
-		time.Unix(1729723553+height, 0), txns), fakeAppHash(height), txs
+	blk := ktypes.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5},
+		time.Unix(1729723553+height, 0), txs)
+	return blk, fakeAppHash(height)
 }
 
 func TestMemBS_StoreAndGet(t *testing.T) {
 	bs := NewMemBS()
 
-	block, appHash, _ := createTestBlock(1, 2)
+	block, appHash := createTestBlock(t, 1, 2)
 
 	err := bs.Store(block, appHash)
 	if err != nil {
@@ -147,14 +148,14 @@ func TestMemBS_StoreAndGetTx(t *testing.T) {
 	// tx2 := []byte("tx2")
 	// txns := [][]byte{tx1, tx2}
 	// block := types.NewBlock(1, prevHash, appHash, valSetHash, time.Unix(123456789, 0), txns)
-	block, _, _ := createTestBlock(1, 2)
+	block, _ := createTestBlock(t, 1, 2)
 	tx1 := block.Txns[0]
 
 	if err := bs.Store(block, types.Hash{1, 2, 3}); err != nil {
 		t.Fatal(err)
 	}
 
-	txHash := types.HashBytes(tx1)
+	txHash := tx1.Hash()
 	gotTx, height, hash, idx, err := bs.GetTx(txHash)
 	if err != nil {
 		t.Fatal(err)
@@ -164,12 +165,13 @@ func TestMemBS_StoreAndGetTx(t *testing.T) {
 		t.Errorf("got height %d, want 1", height)
 	}
 
+	rawTx1, _ := tx1.MarshalBinary()
 	gotRawTx, err := gotTx.MarshalBinary()
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(gotRawTx, tx1) {
-		t.Errorf("got tx %x, want %x", gotRawTx, tx1)
+	if !bytes.Equal(gotRawTx, rawTx1) {
+		t.Errorf("got tx %x, want %x", gotRawTx, rawTx1)
 	}
 
 	if blkHash := block.Hash(); hash != blkHash {
