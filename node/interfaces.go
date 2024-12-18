@@ -23,7 +23,7 @@ type ConsensusEngine interface {
 
 	NotifyACK(validatorPK []byte, ack types.AckRes)
 
-	NotifyResetState(height int64)
+	NotifyResetState(height int64, txIDs []types.Hash)
 
 	NotifyDiscoveryMessage(validatorPK []byte, height int64)
 

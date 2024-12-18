@@ -91,8 +91,8 @@ func (bam *blockAnnounce) String() string {
 // due to amnesia after leader restart.
 // 3. Nodes receive a blockAnn message from the leader for a different blk
 // than the one the node is currently processing or waiting on.
-func (ce *ConsensusEngine) sendResetMsg(height int64) {
-	ce.resetChan <- height
+func (ce *ConsensusEngine) sendResetMsg(msg *resetMsg) {
+	ce.resetChan <- msg
 }
 
 // NotifyBlockProposal is used by the p2p stream handler to notify the consensus engine of a block proposal.
@@ -154,14 +154,22 @@ func (ce *ConsensusEngine) NotifyACK(validatorPK []byte, ack types.AckRes) {
 	})
 }
 
+type resetMsg struct {
+	height int64
+	txIDs  []types.Hash
+}
+
 // NotifyResetState is used by the p2p stream handler to notify the consensus engine to reset the state to the specified height.
 // Only a validator should receive this message to abort the current block execution.
-func (ce *ConsensusEngine) NotifyResetState(height int64) {
+func (ce *ConsensusEngine) NotifyResetState(height int64, txIDs []types.Hash) {
 	if ce.role.Load() != types.RoleValidator {
 		return
 	}
 
-	go ce.sendResetMsg(height)
+	go ce.sendResetMsg(&resetMsg{
+		height: height,
+		txIDs:  txIDs,
+	})
 }
 
 type discoveryMsg struct {

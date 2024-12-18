@@ -69,7 +69,7 @@ type ConsensusEngine struct {
 	newRound     chan struct{}
 	msgChan      chan consensusMessage
 	haltChan     chan string        // can take a msg or reason for halting the network
-	resetChan    chan int64         // to reset the state of the consensus engine
+	resetChan    chan *resetMsg     // to reset the state of the consensus engine
 	bestHeightCh chan *discoveryMsg // to sync the leader with the network
 
 	// interfaces
@@ -133,7 +133,7 @@ type AckBroadcaster func(ack bool, height int64, blkID types.Hash, appHash *type
 // BlkRequester requests the block from the network based on the height
 type BlkRequester func(ctx context.Context, height int64) (types.Hash, types.Hash, []byte, error)
 
-type ResetStateBroadcaster func(height int64) error
+type ResetStateBroadcaster func(height int64, txIDs []ktypes.Hash) error
 
 type DiscoveryReqBroadcaster func()
 
@@ -242,7 +242,7 @@ func New(cfg *Config) *ConsensusEngine {
 		genesisHeight: cfg.GenesisHeight,
 		msgChan:       make(chan consensusMessage, 1), // buffer size??
 		haltChan:      make(chan string, 1),
-		resetChan:     make(chan int64, 1),
+		resetChan:     make(chan *resetMsg, 1),
 		bestHeightCh:  make(chan *discoveryMsg, 1),
 		newRound:      make(chan struct{}, 1),
 		// interfaces
@@ -384,8 +384,8 @@ func (ce *ConsensusEngine) resetEventLoop(ctx context.Context) error {
 		case <-ctx.Done():
 			ce.log.Info("Shutting down the reset event loop")
 			return nil
-		case height := <-ce.resetChan:
-			ce.resetBlockProp(ctx, height, nil)
+		case msg := <-ce.resetChan:
+			ce.resetBlockProp(ctx, msg.height, msg.txIDs)
 		}
 	}
 }

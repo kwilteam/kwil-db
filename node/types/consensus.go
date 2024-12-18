@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 
 type ConsensusReset struct {
 	ToHeight int64
+	TxIDs    []Hash
 }
 
 func (cr ConsensusReset) String() string {
@@ -15,7 +17,14 @@ func (cr ConsensusReset) String() string {
 }
 
 func (cr ConsensusReset) Bytes() []byte {
-	return binary.LittleEndian.AppendUint64(nil, uint64(cr.ToHeight))
+	buf := new(bytes.Buffer)
+	binary.Write(buf, binary.LittleEndian, uint64(cr.ToHeight))
+	binary.Write(buf, binary.LittleEndian, uint64(len(cr.TxIDs)))
+	for _, txID := range cr.TxIDs {
+		buf.Write(txID[:])
+	}
+
+	return buf.Bytes()
 }
 
 func (cr ConsensusReset) MarshalBinary() ([]byte, error) {
@@ -23,10 +32,30 @@ func (cr ConsensusReset) MarshalBinary() ([]byte, error) {
 }
 
 func (cr *ConsensusReset) UnmarshalBinary(data []byte) error {
-	if len(data) != 8 {
+	if len(data) < 16 {
 		return errors.New("invalid ConsensusReset data")
 	}
-	cr.ToHeight = int64(binary.LittleEndian.Uint64(data))
+
+	buf := bytes.NewBuffer(data)
+
+	var height uint64
+	if err := binary.Read(buf, binary.LittleEndian, &height); err != nil {
+		return err
+	}
+	cr.ToHeight = int64(height)
+
+	var numTxIDs uint64
+	if err := binary.Read(buf, binary.LittleEndian, &numTxIDs); err != nil {
+		return err
+	}
+	cr.TxIDs = make([]Hash, numTxIDs)
+
+	for i := range cr.TxIDs {
+		if _, err := buf.Read(cr.TxIDs[i][:]); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 

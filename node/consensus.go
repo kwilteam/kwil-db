@@ -514,9 +514,10 @@ func (n *Node) startDiscoveryResponseGossip(ctx context.Context, ps *pubsub.PubS
 	return nil
 }
 
-func (n *Node) sendReset(height int64) error {
+func (n *Node) sendReset(height int64, txIDs []ktypes.Hash) error {
 	n.resetMsg <- types.ConsensusReset{
 		ToHeight: height,
+		TxIDs:    txIDs,
 	}
 	return nil
 }
@@ -586,7 +587,7 @@ func (n *Node) startConsensusResetGossip(ctx context.Context, ps *pubsub.PubSub)
 				fromPeerID, resetMsg.ReceivedFrom, resetMsg.Message.Data)
 
 			// source of the reset message should be the leader
-			n.ce.NotifyResetState(reset.ToHeight)
+			n.ce.NotifyResetState(reset.ToHeight, reset.TxIDs)
 		}
 	}()
 

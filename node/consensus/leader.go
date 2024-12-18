@@ -87,11 +87,10 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 		ce.log.Errorf("Error executing the block: %v", err)
 		if execCtx.Err() != nil && errors.Is(err, context.Canceled) {
 			ce.log.Warn("Block execution cancelled by the leader", "height", blkProp.height, "hash", blkProp.blkHash)
-
-			// trigger a reset state message
-			go ce.rstStateBroadcaster(ce.state.lc.height)
-
 			ce.cancelFnMtx.Lock()
+			// trigger a reset state message to the network
+			go ce.rstStateBroadcaster(ce.state.lc.height, ce.longRunningTxs)
+
 			// Remove the long running transactions from the mempool
 			ce.log.Info("Removing long running transactions from the mempool as per leader's request", "txIDs", ce.longRunningTxs)
 			for _, txID := range ce.longRunningTxs {

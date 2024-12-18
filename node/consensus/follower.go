@@ -16,8 +16,7 @@ import (
 // If we receive a new proposal for the same height, abort the execution of the current proposal and
 // start processing the new proposal.
 func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types.Hash, leaderSig []byte, timestamp int64) bool {
-	ce.log.Info("ENTER ACCEPT PROPOSAL", "height", height, "blkID", blkID, "prevBlockID", prevBlockID)
-	if ce.role.Load() != types.RoleValidator { // TODO: Should sentry nodes download the proposal and forward it to the validators?
+	if ce.role.Load() != types.RoleValidator {
 		return false
 	}
 	ce.updateNetworkHeight(height - 1)
@@ -28,7 +27,7 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 	ce.log.Info("Accept proposal?", "height", height, "blkID", blkID, "prevHash", prevBlockID)
 
 	if height != ce.stateInfo.height+1 {
-		ce.log.Info("Block proposal is not for the next height", "blkPropHeight", height, "expected", ce.stateInfo.height+1)
+		ce.log.Debug("Block proposal is not for the next height", "blkPropHeight", height, "expected", ce.stateInfo.height+1)
 		return false
 	}
 
@@ -40,7 +39,7 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 	}
 
 	if !valid {
-		ce.log.Info("Invalid leader signature, ignoring the block proposal msg: ", "height", height)
+		ce.log.Debug("Invalid leader signature, ignoring the block proposal msg: ", "height", height)
 		return false
 	}
 
@@ -48,16 +47,15 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 	if ce.stateInfo.status != Committed {
 		// check if we are processing a different block, if yes then reset the state.
 		if ce.stateInfo.blkProp.blkHash != blkID && ce.stateInfo.blkProp.blk.Header.Timestamp.UnixMilli() < timestamp {
-			ce.log.Info("Conflicting block proposals, abort block execution and requesting the latest block: ", "height", height)
+			ce.log.Debug("Conflicting block proposals, abort block execution and requesting the latest block: ", "height", height)
 			// go ce.sendResetMsg(ce.stateInfo.height)
 			return true
 		}
-		ce.log.Info("Already processing the block proposal", "height", height, "blkID", blkID)
+		ce.log.Debug("Already processing the block proposal", "height", height, "blkID", blkID)
 		return false
 	}
 
 	// not processing any block, accept the proposal
-	ce.log.Info("Accepting block proposal: EXIT", "height", height, "blkID", blkID)
 	return true
 }
 
@@ -116,8 +114,8 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash 
 	// We are currently processing a block proposal, ensure that it's the correct block proposal.
 	if ce.stateInfo.blkProp.blkHash != blkID {
 		// Rollback and reprocess the block sent as part of the commit message.
-		ce.log.Info("Processing incorrect block, notify consensus engine to abort: ", "height", height)
-		go ce.sendResetMsg(ce.stateInfo.height)
+		ce.log.Debug("Processing incorrect block, notify consensus engine to abort: ", "height", height)
+		go ce.sendResetMsg(&resetMsg{height: height})
 		return true // fetch the correct block
 	}
 

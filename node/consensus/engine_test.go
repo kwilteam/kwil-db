@@ -407,7 +407,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "reset",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.sendResetMsg(0)
+						val.sendResetMsg(&resetMsg{height: 0})
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 0, zeroHash)
@@ -464,7 +464,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "reset",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.sendResetMsg(0)
+						val.sendResetMsg(&resetMsg{height: 0})
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 1, zeroHash)
@@ -490,7 +490,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "reset",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.sendResetMsg(0)
+						val.sendResetMsg(&resetMsg{height: 0})
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 0, zeroHash)
@@ -499,7 +499,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "reset",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.sendResetMsg(0)
+						val.sendResetMsg(&resetMsg{height: 0})
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 0, zeroHash)
@@ -536,7 +536,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "reset",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.sendResetMsg(1)
+						val.sendResetMsg(&resetMsg{height: 1})
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
@@ -545,7 +545,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "reset",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.sendResetMsg(2)
+						val.sendResetMsg(&resetMsg{height: 2})
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
@@ -765,7 +765,7 @@ func mockVoteBroadcaster(ack bool, height int64, blkID types.Hash, appHash *type
 func mockBlkAnnouncer(_ context.Context, blk *ktypes.Block, appHash types.Hash) {
 }
 
-func mockResetStateBroadcaster(_ int64) error {
+func mockResetStateBroadcaster(_ int64, _ []ktypes.Hash) error {
 	return nil
 }
 

@@ -105,17 +105,17 @@ func TestConsensusReset_Bytes(t *testing.T) {
 		{
 			name:   "standard height",
 			height: 1000,
-			want:   8,
+			want:   16,
 		},
 		{
 			name:   "zero height",
 			height: 0,
-			want:   8,
+			want:   16,
 		},
 		{
 			name:   "max height",
 			height: 1<<63 - 1,
-			want:   8,
+			want:   16,
 		},
 	}
 
