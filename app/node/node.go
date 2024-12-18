@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 
 	"github.com/kwilteam/kwil-db/app/key"
 	"github.com/kwilteam/kwil-db/config"
@@ -43,22 +44,38 @@ type server struct {
 }
 
 func runNode(ctx context.Context, rootDir string, cfg *config.Config) (err error) {
-	// Writing to stdout and a log file.  TODO: config outputs
-	rot, err := log.NewRotatorWriter(filepath.Join(rootDir, "kwild.log"), 10_000, 0)
-	if err != nil {
-		return fmt.Errorf("failed to create log rotator: %w", err)
+	var logWriters []io.Writer
+	if idx := slices.Index(cfg.LogOutput, "stdout"); idx != -1 {
+		logWriters = append(logWriters, os.Stdout)
+		cfg.LogOutput = slices.Delete(cfg.LogOutput, idx, idx+1)
 	}
-	defer func() {
-		if err := rot.Close(); err != nil {
-			fmt.Printf("failed to close log rotator: %v", err)
+	if idx := slices.Index(cfg.LogOutput, "stderr"); idx != -1 {
+		logWriters = append(logWriters, os.Stderr)
+		cfg.LogOutput = slices.Delete(cfg.LogOutput, idx, idx+1)
+	}
+
+	for _, logFile := range cfg.LogOutput {
+		rootedLogFile := rootedPath(logFile, rootDir)
+		rot, err := log.NewRotatorWriter(rootedLogFile, 10_000, 0)
+		if err != nil {
+			return fmt.Errorf("failed to create log rotator: %w", err)
 		}
-	}()
+		defer func() {
+			if err := rot.Close(); err != nil {
+				fmt.Printf("failed to close log rotator: %v", err)
+			}
+		}()
+		logWriters = append(logWriters, rot)
+	}
 
-	logWriter := io.MultiWriter(os.Stdout, rot) // tee to stdout and log file
+	logger := log.DiscardLogger
+	if len(logWriters) > 0 {
+		logWriter := io.MultiWriter(logWriters...)
 
-	logger := log.New(log.WithLevel(cfg.LogLevel), log.WithFormat(cfg.LogFormat),
-		log.WithName("KWILD"), log.WithWriter(logWriter))
-	// NOTE: level and name can be set independently for different systems
+		logger = log.New(log.WithLevel(cfg.LogLevel), log.WithFormat(cfg.LogFormat),
+			log.WithName("KWILD"), log.WithWriter(logWriter))
+		// NOTE: level and name can be set independently for different systems
+	}
 
 	logger.Infof("Starting kwild version %v", version.KwilVersion)
 
