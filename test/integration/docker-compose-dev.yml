@@ -21,10 +21,9 @@ services:
       pg0:
         condition: service_healthy
     command: |
-      --root-dir=/app/kwil
-      --log.format=plain
-      --log.time-format=rfc3339milli
-      --log.level=${LOG_LEVEL:-info}
+      --root=/app/kwil
+      --log-format=plain
+      --log-level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
       --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
@@ -73,10 +72,9 @@ services:
       pg1:
         condition: service_healthy
     command: |
-      --root-dir=/app/kwil
-      --log.format=plain
-      --log.time-format=rfc3339milli
-      --log.level=${LOG_LEVEL:-info}
+      --root=/app/kwil
+      --log-format=plain
+      --log-level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
       --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
@@ -126,10 +124,9 @@ services:
       pg2:
         condition: service_healthy
     command: |
-      --root-dir=/app/kwil
-      --log.level=${LOG_LEVEL:-info}
-      --log.format=plain
-      --log.time-format=rfc3339milli
+      --root=/app/kwil
+      --log-level=${LOG_LEVEL:-info}
+      --log-format=plain
       --app.extension-endpoints=ext1:50051
       --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
@@ -181,10 +178,9 @@ services:
       pg3:
         condition: service_healthy
     command: |
-      --root-dir=/app/kwil
-      --log.format=plain
-      --log.time-format=rfc3339milli
-      --log.level=${LOG_LEVEL:-info}
+      --root=/app/kwil
+      --log-format=plain
+      --log-level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext3:50051
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --app.admin-listen-addr=/tmp/admin.socket
@@ -233,10 +229,9 @@ services:
       pg4:
         condition: service_healthy
     command: |
-      --root-dir=/app/kwil
-      --log.format=plain
-      --log.time-format=rfc3339milli
-      --log.level=${LOG_LEVEL:-info}
+      --root=/app/kwil
+      --log-format=plain
+      --log-level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
       --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
@@ -285,10 +280,9 @@ services:
         pg4:
           condition: service_healthy
     command: |
-      --root-dir=/app/kwil
-      --log.format=plain
-      --log.time-format=rfc3339milli
-      --log.level=${LOG_LEVEL:-info}
+      --root=/app/kwil
+      --log-format=plain
+      --log-level=${LOG_LEVEL:-info}
       --app.extension-endpoints=ext1:50051
       --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656

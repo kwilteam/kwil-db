@@ -399,7 +399,7 @@ func (r *IntHelper) updateEnv(k, v string) {
 	r.envs[k] = v
 }
 
-func (r *IntHelper) generateNodeConfig(homeDir string) {
+func (r *IntHelper) GenerateTestnetConfigs(homeDir string) {
 	r.t.Logf("generate testnet config at %s", homeDir)
 
 	extensionConfigs := make([]map[string]map[string]string, r.cfg.NValidator)
@@ -449,7 +449,7 @@ func (r *IntHelper) generateNodeConfig(homeDir string) {
 		}
 	}*/
 
-	err := setup.GenerateNodeConfig(homeDir, r.cfg.NValidator, r.cfg.NNonValidator, false, 6600)
+	err := setup.GenerateTestnetConfigs(homeDir, r.cfg.NValidator, r.cfg.NNonValidator, false, 6600)
 
 	/*err := nodecfg.GenerateTestnetConfig(&nodecfg.TestnetGenerateConfig{
 		ChainID:       testChainID,
@@ -653,7 +653,7 @@ func (r *IntHelper) Setup(ctx context.Context, services []string) {
 		r.RunETHDevNet(ctx)
 	}
 
-	r.generateNodeConfig(tmpDir)
+	r.GenerateTestnetConfigs(tmpDir)
 
 	r.RunDockerComposeWithServices(ctx, services)
 }

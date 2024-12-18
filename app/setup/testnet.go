@@ -33,7 +33,7 @@ func TestnetCmd() *cobra.Command {
 		Use:   "testnet",
 		Short: "Generate configuration for multiple nodes",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return GenerateNodeConfig(outDir, numVals, numNVals, noPex, startingPort)
+			return GenerateTestnetConfigs(outDir, numVals, numNVals, noPex, startingPort)
 		},
 	}
 
@@ -54,15 +54,15 @@ func TestnetCmd() *cobra.Command {
 	return cmd
 }
 
-func GenerateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, startingPort uint64) error {
+func GenerateTestnetConfigs(outDir string, numVals, numNVals int, noPex bool, startingPort uint64) error {
 	// ensure that the directory exists
 	// expand the directory path
-	rootDir, err := node.ExpandPath(rootDir)
+	outDir, err := node.ExpandPath(outDir)
 	if err != nil {
 		return err
 	}
 
-	if err := os.MkdirAll(rootDir, 0755); err != nil {
+	if err := os.MkdirAll(outDir, 0755); err != nil {
 		return err
 	}
 
@@ -80,8 +80,6 @@ func GenerateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, start
 
 	// key 0 is leader
 	leaderPub := keys[0].Public()
-	// leaderPeerID, err := node.PeerIDFromPubKey(leaderPub)
-	leaderPubType := leaderPub.Type()
 
 	genConfig := &config.GenesisConfig{
 		ChainID:          "kwil-testnet",
@@ -103,49 +101,84 @@ func GenerateNodeConfig(rootDir string, numVals, numNVals int, noPex bool, start
 
 	// generate the configuration for the nodes
 	for i := range numVals + numNVals {
-		nodeDir := filepath.Join(rootDir, fmt.Sprintf("node%d", i))
-		if err := os.MkdirAll(nodeDir, 0755); err != nil {
-			return err
-		}
-
-		cfg := custom.DefaultConfig() // not config.DefaultConfig(), so custom command config is used
-
-		// P2P
-		cfg.P2P.Port = startingPort + uint64(i)
-		cfg.P2P.IP = "127.0.0.1"
-		cfg.P2P.Pex = !noPex
-
-		if i != 0 {
-			cfg.P2P.BootNodes = []string{node.FormatPeerString(
-				leaderPub.Bytes(), leaderPubType, cfg.P2P.IP, int(startingPort))}
-		}
-
-		// DB
-		cfg.DB.Port = strconv.Itoa(5432 + i)
-
-		// RPC
-		cfg.RPC.ListenAddress = net.JoinHostPort("0.0.0.0", strconv.FormatUint(uint64(8484+i), 10))
-
-		// Admin RPC
-		cfg.Admin.ListenAddress = net.JoinHostPort("127.0.0.1", strconv.FormatUint(uint64(8584+i), 10))
-
-		if err := cfg.SaveAs(filepath.Join(nodeDir, config.ConfigFileName)); err != nil {
-			return err
-		}
-
-		// save the genesis configuration to the root directory
-		genFile := filepath.Join(nodeDir, config.GenesisFileName)
-		if err := genConfig.SaveAs(genFile); err != nil {
-			return err
-		}
-
-		err = key.SaveNodeKey(filepath.Join(nodeDir, "nodekey.json"), keys[i])
+		err = GenerateNodeRoot(&NodeGenConfig{
+			PortOffset: i,
+			IP:         "127.0.0.1",
+			NoPEX:      noPex,
+			RootDir:    filepath.Join(outDir, fmt.Sprintf("node%d", i)),
+			NodeKey:    keys[i],
+			Genesis:    genConfig,
+		})
 		if err != nil {
 			return err
 		}
 	}
 
 	return nil
+}
+
+type NodeGenConfig struct {
+	RootDir    string
+	PortOffset int
+	DBPort     uint16 // leave zero for default plus any offset
+	IP         string
+	NoPEX      bool
+	NodeKey    crypto.PrivateKey
+	Genesis    *config.GenesisConfig
+
+	// TODO: gasEnabled, private p2p, auth RPC, join expiry, allocs, etc.
+}
+
+func GenerateNodeRoot(ncfg *NodeGenConfig) error {
+	if err := os.MkdirAll(ncfg.RootDir, 0755); err != nil {
+		return err
+	}
+
+	cfg := custom.DefaultConfig() // not config.DefaultConfig(), so custom command config is used
+
+	// P2P
+	cfg.P2P.Port = uint64(ncfg.PortOffset + 6600)
+	cfg.P2P.IP = "127.0.0.1"
+	if ncfg.IP != "" {
+		cfg.P2P.IP = ncfg.IP
+	}
+	cfg.P2P.Pex = !ncfg.NoPEX
+
+	leaderPub, err := crypto.UnmarshalPublicKey(ncfg.Genesis.Leader, crypto.KeyTypeSecp256k1)
+	if err != nil {
+		return err
+	}
+
+	if !ncfg.NodeKey.Public().Equals(leaderPub) {
+		// make everyone connect to leader
+		cfg.P2P.BootNodes = []string{node.FormatPeerString(
+			leaderPub.Bytes(), leaderPub.Type(), cfg.P2P.IP, 6600)}
+	}
+
+	// DB
+	dbPort := ncfg.DBPort
+	if dbPort == 0 {
+		dbPort = uint16(5432 + ncfg.PortOffset)
+	}
+	cfg.DB.Port = strconv.FormatUint(uint64(dbPort), 10)
+
+	// RPC
+	cfg.RPC.ListenAddress = net.JoinHostPort("0.0.0.0", strconv.FormatUint(uint64(8484+ncfg.PortOffset), 10))
+
+	// Admin RPC
+	cfg.Admin.ListenAddress = net.JoinHostPort("127.0.0.1", strconv.FormatUint(uint64(8584+ncfg.PortOffset), 10))
+
+	if err := cfg.SaveAs(filepath.Join(ncfg.RootDir, config.ConfigFileName)); err != nil {
+		return err
+	}
+
+	// save the genesis configuration to the root directory
+	genFile := filepath.Join(ncfg.RootDir, config.GenesisFileName)
+	if err := ncfg.Genesis.SaveAs(genFile); err != nil {
+		return err
+	}
+
+	return key.SaveNodeKey(filepath.Join(ncfg.RootDir, "nodekey.json"), ncfg.NodeKey)
 }
 
 type deterministicPRNG struct {

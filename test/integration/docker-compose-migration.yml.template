@@ -24,10 +24,9 @@ services:
       new-pg0:
         condition: service_healthy
     command: |
-      --root-dir=/app/kwil
-      --log.format=plain
-      --log.time-format=rfc3339milli
-      --log.level=${LOG_LEVEL:-info}
+      --root=/app/kwil
+      --log-format=plain
+      --log-level=${LOG_LEVEL:-info}
       --app.extension-endpoints=new-ext1:50051
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
@@ -78,10 +77,9 @@ services:
       new-pg1:
         condition: service_healthy
     command: |
-      --root-dir=/app/kwil
-      --log.format=plain
-      --log.time-format=rfc3339milli
-      --log.level=${LOG_LEVEL:-info}
+      --root=/app/kwil
+      --log-format=plain
+      --log-level=${LOG_LEVEL:-info}
       --app.extension-endpoints=new-ext1:50051
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
@@ -132,10 +130,9 @@ services:
       new-pg2:
         condition: service_healthy
     command: |
-      --root-dir=/app/kwil
-      --log.level=${LOG_LEVEL:-info}
-      --log.format=plain
-      --log.time-format=rfc3339milli
+      --root=/app/kwil
+      --log-level=${LOG_LEVEL:-info}
+      --log-format=plain
       --app.extension-endpoints=new-ext1:50051
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
@@ -189,10 +186,9 @@ services:
       new-pg3:
         condition: service_healthy
     command: |
-      --root-dir=/app/kwil
-      --log.format=plain
-      --log.time-format=rfc3339milli
-      --log.level=${LOG_LEVEL:-info}
+      --root=/app/kwil
+      --log-format=plain
+      --log-level=${LOG_LEVEL:-info}
       --app.extension-endpoints=new-ext3:50051
       --chain.p2p.listen-addr=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657

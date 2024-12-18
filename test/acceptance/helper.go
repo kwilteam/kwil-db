@@ -2,8 +2,11 @@ package acceptance
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
+	"math/rand/v2"
 	"os"
 	"os/signal"
 	"path"
@@ -19,11 +22,14 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 
 	"github.com/kwilteam/kwil-db/app/setup"
+	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/client"
 	clientType "github.com/kwilteam/kwil-db/core/client/types"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/node"
 
 	"github.com/kwilteam/kwil-db/test/driver"
 	"github.com/kwilteam/kwil-db/test/utils"
@@ -38,7 +44,7 @@ const TestChainID = "kwil-test-chain"
 // ActTestCfg is the config for acceptance test
 type ActTestCfg struct {
 	JSONRPCEndpoint string
-	P2PAddress      string // cometbft p2p address
+	P2PAddress      string // p2p address
 	AdminRPC        string // tcp or unix socket
 
 	SchemaFile                string
@@ -146,18 +152,18 @@ func (r *ActHelper) LoadConfig() *ActTestCfg {
 	cfg.WaitTimeout, err = time.ParseDuration(waitTimeout)
 	require.NoError(r.t, err, "invalid wait timeout")
 
-	creatorPrivKeyBts, err := hex.DecodeString(r.cfg.CreatorRawPk)
+	creatorPrivKeyBts, err := hex.DecodeString(cfg.CreatorRawPk)
 	require.NoError(r.t, err)
 	creatorPk, err := crypto.UnmarshalPrivateKey(creatorPrivKeyBts, crypto.KeyTypeSecp256k1) // require secp for now
 	require.NoError(r.t, err, "invalid creator private key")
 	// for "user" stuff not node (validator) tx signing.  Need different signer for admin svc signer
-	r.cfg.CreatorSigner = auth.GetUserSigner(creatorPk)
+	cfg.CreatorSigner = auth.GetUserSigner(creatorPk)
 
-	bobPrivKeyBts, err := hex.DecodeString(r.cfg.VisitorRawPK)
+	bobPrivKeyBts, err := hex.DecodeString(cfg.VisitorRawPK)
 	require.NoError(r.t, err)
 	bobPk, err := crypto.UnmarshalPrivateKey(bobPrivKeyBts, crypto.KeyTypeSecp256k1) // require secp for now
 	require.NoError(r.t, err, "invalid creator private key")
-	r.cfg.VisitorSigner = auth.GetUserSigner(bobPk)
+	cfg.VisitorSigner = auth.GetUserSigner(bobPk)
 
 	r.cfg = cfg
 	//cfg.DumpToEnv()
@@ -169,7 +175,7 @@ func (r *ActHelper) updateEnv(k, v string) {
 	r.envs[k] = v
 }
 
-func (r *ActHelper) generateNodeConfig() {
+func (r *ActHelper) GenerateTestnetConfigs() {
 	r.t.Logf("generate node config")
 	tmpPath, err := os.MkdirTemp("", "TestKwilAct")
 	if err != nil {
@@ -191,8 +197,18 @@ func (r *ActHelper) generateNodeConfig() {
 	}
 	creatorIdent := hex.EncodeToString(r.cfg.CreatorSigner.Identity())*/
 
-	setup.GenerateNodeConfig(tmpPath, 1, 0, true, 6600)
-	/*err = nodecfg.GenerateNodeConfig(&nodecfg.NodeGenerateConfig{
+	nodeKey, genesisCfg := makeSingleNodeNet(6600)
+
+	err = setup.GenerateNodeRoot(&setup.NodeGenConfig{
+		IP:         "0.0.0.0",
+		PortOffset: 0,
+		DBPort:     5454,  // test/acceptance/docker-compose-dev.yml
+		NoPEX:      false, // pointless for one node but run the goroutines
+		RootDir:    tmpPath,
+		NodeKey:    nodeKey,
+		Genesis:    genesisCfg,
+	})
+	/*err = nodecfg.GenerateTestnetConfigs(&nodecfg.NodeGenerateConfig{
 		ChainID:       TestChainID,
 		BlockInterval: time.Second,
 		// InitialHeight: 0,
@@ -214,6 +230,61 @@ func fileExists(path string) bool {
 	return err == nil
 }
 
+func makeSingleNodeNet(seed uint64) (crypto.PrivateKey, *config.GenesisConfig) {
+	// generate Keys, so that the connection strings and the validator set can be generated before the node config files are generated
+	var seedArr [32]byte
+	binary.LittleEndian.PutUint64(seedArr[:], seed)
+	seedArr = sha256.Sum256(seedArr[:])
+	rr := rand.NewChaCha8(seedArr)
+	priv := node.NewKey(&deterministicPRNG{ChaCha8: rr})
+
+	pubBts := priv.Public().Bytes()
+
+	genConfig := &config.GenesisConfig{
+		ChainID:          "kwil-testnet",
+		Leader:           pubBts,
+		DisabledGasCosts: true,
+		JoinExpiry:       14400,
+		VoteExpiry:       108000,
+		MaxBlockSize:     6 * 1024 * 1024,
+		MaxVotesPerTx:    200,
+		Validators: []*types.Validator{
+			{
+				PubKey: pubBts,
+				Power:  1,
+			},
+		},
+	}
+	return priv, genConfig
+}
+
+type deterministicPRNG struct {
+	readBuf [8]byte
+	readLen int // 0 <= readLen <= 8
+	*rand.ChaCha8
+}
+
+// Read is a bad replacement for the actual Read method added in Go 1.23
+func (dr *deterministicPRNG) Read(p []byte) (n int, err error) {
+	// fill p by calling Uint64 in a loop until we have enough bytes
+	if dr.readLen > 0 {
+		n = copy(p, dr.readBuf[len(dr.readBuf)-dr.readLen:])
+		dr.readLen -= n
+		p = p[n:]
+	}
+	for len(p) >= 8 {
+		binary.LittleEndian.PutUint64(p, dr.ChaCha8.Uint64())
+		p = p[8:]
+		n += 8
+	}
+	if len(p) > 0 {
+		binary.LittleEndian.PutUint64(dr.readBuf[:], dr.Uint64())
+		n += copy(p, dr.readBuf[:])
+		dr.readLen = 8 - len(p)
+	}
+	return n, nil
+}
+
 func (r *ActHelper) runDockerCompose(ctx context.Context) {
 	r.t.Logf("setup test environment")
 
@@ -228,8 +299,8 @@ func (r *ActHelper) runDockerCompose(ctx context.Context) {
 
 	r.t.Cleanup(func() {
 		r.t.Logf("teardown docker compose")
-		err := dc.Down(ctx)
-		require.NoErrorf(r.t, err, "failed to teardown %s", dc.Services())
+		// err := dc.Down(ctx)
+		// require.NoErrorf(r.t, err, "failed to teardown")
 	})
 
 	// NOTE: if you run with debugger image, you need to attach to the debugger
@@ -241,11 +312,8 @@ func (r *ActHelper) runDockerCompose(ctx context.Context) {
 			wait.NewLogStrategy(`listening on IPv4 address "0.0.0.0", port 5432`).
 				WithStartupTimeout(r.cfg.WaitTimeout)).
 		WaitForService(
-			"ext",
-			wait.NewLogStrategy("listening on").WithStartupTimeout(r.cfg.WaitTimeout)).
-		WaitForService(
 			"kwild",
-			wait.NewLogStrategy("finalized block").WithStartupTimeout(r.cfg.WaitTimeout)).
+			wait.NewLogStrategy("CONS: Committed Block").WithStartupTimeout(r.cfg.WaitTimeout)).
 		Up(ctx, compose.Wait(true))
 	r.t.Log("docker compose up")
 
@@ -259,7 +327,7 @@ func (r *ActHelper) runDockerCompose(ctx context.Context) {
 }
 
 func (r *ActHelper) Setup(ctx context.Context) {
-	r.generateNodeConfig()
+	r.GenerateTestnetConfigs()
 	r.runDockerCompose(ctx)
 
 	// update configured endpoints, so that we can still test against remote services

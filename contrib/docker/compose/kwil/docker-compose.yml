@@ -52,8 +52,8 @@ services:
         ipv4_address: 172.5.100.2
     command: |
       --autogen
-      --root-dir=/app/.kwild
-      --log.level=debug
+      --root=/app/.kwild
+      --log-level=debug
       --app.admin-listen-addr=/tmp/admin.socket
       --chain.p2p.external-address=tcp://0.0.0.0:26656
       --chain.rpc.listen-addr=tcp://0.0.0.0:26657
