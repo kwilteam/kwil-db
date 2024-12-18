@@ -38,7 +38,12 @@ func (ce *ConsensusEngine) validateBlock(blk *ktypes.Block) error {
 		return fmt.Errorf("merkleroot mismatch, expected %v, got %v", merkleRoot, blk.Header.MerkleRoot)
 	}
 
-	// Verify other stuff such as validatorsetHash, signature of the block etc.
+	// Verify the current validator set for the block
+	valSetHash := ce.validatorSetHash()
+	if valSetHash != blk.Header.ValidatorSetHash {
+		return fmt.Errorf("validator set hash mismatch, expected %s, got %s", valSetHash.String(), blk.Header.ValidatorSetHash.String())
+	}
+
 	return nil
 }
 
@@ -121,7 +126,7 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 	// update the role of the node based on the final validator set at the end of the commit.
 	ce.updateValidatorSetAndRole()
 
-	ce.log.Info("Committed Block", "height", height, "hash", blkProp.blkHash, "appHash", appHash.String())
+	ce.log.Info("Committed Block", "height", height, "hash", blkProp.blkHash.String(), "appHash", appHash.String())
 	return nil
 }
 
@@ -143,7 +148,6 @@ func (ce *ConsensusEngine) rollbackState(ctx context.Context) error {
 	}
 
 	ce.resetState()
-
 	return nil
 }
 

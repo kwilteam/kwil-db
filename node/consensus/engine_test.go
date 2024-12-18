@@ -129,7 +129,7 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) []*Config {
 		ev := &mockEventStore{}
 		m := &mockMigrator{}
 
-		bp, err := blockprocessor.NewBlockProcessor(ctx, db, txapp, accounts, v, ss, ev, m, genCfg, signer, log.New(log.WithName("BP")))
+		bp, err := blockprocessor.NewBlockProcessor(ctx, db, txapp, accounts, v, ss, ev, m, bs, genCfg, signer, log.New(log.WithName("BP")))
 		assert.NoError(t, err)
 		bp.SetNetworkParameters(&common.NetworkParameters{
 			MaxBlockSize:     genCfg.MaxBlockSize,
@@ -140,14 +140,16 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) []*Config {
 		})
 
 		ceConfigs[i] = &Config{
-			PrivateKey:     privKeys[i],
-			Leader:         pubKeys[0],
-			Mempool:        mempool.New(),
-			BlockStore:     bs,
-			BlockProcessor: bp,
-			ValidatorSet:   validatorSet,
-			Logger:         logger,
-			ProposeTimeout: 1 * time.Second,
+			PrivateKey:            privKeys[i],
+			Leader:                pubKeys[0],
+			Mempool:               mempool.New(),
+			BlockStore:            bs,
+			BlockProcessor:        bp,
+			ValidatorSet:          validatorSet,
+			Logger:                logger,
+			ProposeTimeout:        1 * time.Second,
+			BlockProposalInterval: 1 * time.Second,
+			BlockAnnInterval:      3 * time.Second,
 		}
 
 		closers = append(closers, func() {
@@ -914,7 +916,7 @@ func (m *mockMigrator) StoreChangesets(height int64, changes <-chan any) error {
 	return nil
 }
 
-func (m *mockMigrator) PersistLastChangesetHeight(ctx context.Context, tx sql.Executor) error {
+func (m *mockMigrator) PersistLastChangesetHeight(ctx context.Context, tx sql.Executor, height int64) error {
 	return nil
 }
 

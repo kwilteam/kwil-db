@@ -102,19 +102,21 @@ func TestSingleNodeMocknet(t *testing.T) {
 	require.NoError(t, err)
 
 	bpl := log.New(log.WithName("BP1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
-	bp, err := blockprocessor.NewBlockProcessor(ctx, db1, newDummyTxApp(valSetList), &mockAccounts{}, vsReal, ss, es, migrator, genCfg, signer1, bpl)
+	bp, err := blockprocessor.NewBlockProcessor(ctx, db1, newDummyTxApp(valSetList), &mockAccounts{}, vsReal, ss, es, migrator, bs1, genCfg, signer1, bpl)
 	require.NoError(t, err)
 
 	ceCfg1 := &consensus.Config{
-		PrivateKey:     privKeys[0],
-		ValidatorSet:   valSet,
-		Leader:         privKeys[0].Public(),
-		Mempool:        mp1,
-		BlockStore:     bs1,
-		BlockProcessor: bp,
-		Logger:         log.New(log.WithName("CE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
-		ProposeTimeout: 1 * time.Second,
-		DB:             db1,
+		PrivateKey:            privKeys[0],
+		ValidatorSet:          valSet,
+		Leader:                privKeys[0].Public(),
+		Mempool:               mp1,
+		BlockStore:            bs1,
+		BlockProcessor:        bp,
+		Logger:                log.New(log.WithName("CE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
+		ProposeTimeout:        1 * time.Second,
+		BlockProposalInterval: 1 * time.Second,
+		BlockAnnInterval:      3 * time.Second,
+		DB:                    db1,
 	}
 	ce1 := consensus.New(ceCfg1)
 	defaultConfigSet := config.DefaultConfig()
@@ -232,19 +234,21 @@ func TestDualNodeMocknet(t *testing.T) {
 	require.NoError(t, err)
 
 	bpl1 := log.New(log.WithName("BP1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
-	bp1, err := blockprocessor.NewBlockProcessor(ctx, db1, newDummyTxApp(valSetList), accounts1, vstore1, ss, es1, migrator, genCfg, signer1, bpl1)
+	bp1, err := blockprocessor.NewBlockProcessor(ctx, db1, newDummyTxApp(valSetList), accounts1, vstore1, ss, es1, migrator, bs1, genCfg, signer1, bpl1)
 	require.NoError(t, err)
 
 	ceCfg1 := &consensus.Config{
-		PrivateKey:     privKeys[0],
-		ValidatorSet:   valSet,
-		Leader:         privKeys[0].Public(),
-		Mempool:        mp1,
-		BlockStore:     bs1,
-		Logger:         log.New(log.WithName("CE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
-		ProposeTimeout: 1 * time.Second,
-		DB:             db1,
-		BlockProcessor: bp1,
+		PrivateKey:            privKeys[0],
+		ValidatorSet:          valSet,
+		Leader:                privKeys[0].Public(),
+		Mempool:               mp1,
+		BlockStore:            bs1,
+		Logger:                log.New(log.WithName("CE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
+		ProposeTimeout:        1 * time.Second,
+		BlockProposalInterval: 1 * time.Second,
+		BlockAnnInterval:      3 * time.Second,
+		DB:                    db1,
+		BlockProcessor:        bp1,
 	}
 	ce1 := consensus.New(ceCfg1)
 	defaultConfigSet := config.DefaultConfig()
@@ -289,19 +293,21 @@ func TestDualNodeMocknet(t *testing.T) {
 	require.NoError(t, err)
 
 	bpl2 := log.New(log.WithName("BP2"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
-	bp2, err := blockprocessor.NewBlockProcessor(ctx, db2, newDummyTxApp(valSetList), accounts2, vstore2, ss, es2, migrator2, genCfg, signer2, bpl2)
+	bp2, err := blockprocessor.NewBlockProcessor(ctx, db2, newDummyTxApp(valSetList), accounts2, vstore2, ss, es2, migrator2, bs2, genCfg, signer2, bpl2)
 	require.NoError(t, err)
 
 	ceCfg2 := &consensus.Config{
-		PrivateKey:     privKeys[1],
-		ValidatorSet:   valSet,
-		Leader:         privKeys[0].Public(),
-		Mempool:        mp2,
-		BlockStore:     bs2,
-		BlockProcessor: bp2,
-		Logger:         log.New(log.WithName("CE2"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
-		ProposeTimeout: 1 * time.Second,
-		DB:             db2,
+		PrivateKey:            privKeys[1],
+		ValidatorSet:          valSet,
+		Leader:                privKeys[0].Public(),
+		Mempool:               mp2,
+		BlockStore:            bs2,
+		BlockProcessor:        bp2,
+		Logger:                log.New(log.WithName("CE2"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
+		ProposeTimeout:        1 * time.Second,
+		BlockProposalInterval: 1 * time.Second,
+		BlockAnnInterval:      3 * time.Second,
+		DB:                    db2,
 	}
 	ce2 := consensus.New(ceCfg2)
 

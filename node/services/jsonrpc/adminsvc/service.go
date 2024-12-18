@@ -386,7 +386,7 @@ func (svc *Service) JoinStatus(ctx context.Context, req *adminjson.JoinStatusReq
 
 	voters := svc.voting.GetValidators()
 
-	pendingJoin, err := toPendingInfo(resolution, voters)
+	pendingJoin, err := svc.toPendingInfo(resolution, voters)
 	if err != nil {
 		svc.log.Error("failed to convert join request", "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorResultEncoding, "failed to convert join request", nil)
@@ -431,7 +431,7 @@ func (svc *Service) ListPendingJoins(ctx context.Context, req *adminjson.ListJoi
 
 	pbJoins := make([]*adminjson.PendingJoin, len(activeJoins))
 	for i, ji := range activeJoins {
-		pbJoins[i], err = toPendingInfo(ji, voters)
+		pbJoins[i], err = svc.toPendingInfo(ji, voters)
 		if err != nil {
 			svc.log.Error("failed to convert join request", "error", err)
 			return nil, jsonrpc.NewError(jsonrpc.ErrorResultEncoding, "failed to convert join request", nil)
@@ -444,12 +444,24 @@ func (svc *Service) ListPendingJoins(ctx context.Context, req *adminjson.ListJoi
 }
 
 // toPendingInfo gets the pending information for an active join from a resolution
-func toPendingInfo(resolution *resolutions.Resolution, allVoters []*ktypes.Validator) (*adminjson.PendingJoin, error) {
+func (svc *Service) toPendingInfo(resolution *resolutions.Resolution, allVoters []*ktypes.Validator) (*adminjson.PendingJoin, error) {
 	resolutionBody := &voting.UpdatePowerRequest{}
 	if err := resolutionBody.UnmarshalBinary(resolution.Body); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal join request")
 	}
 
+	board, approvals := svc.approvalsInfo(resolution, allVoters)
+
+	return &adminjson.PendingJoin{
+		Candidate: resolutionBody.PubKey,
+		Power:     resolutionBody.Power,
+		ExpiresAt: resolution.ExpirationHeight,
+		Board:     board,
+		Approved:  approvals,
+	}, nil
+}
+
+func (svc *Service) approvalsInfo(resolution *resolutions.Resolution, allVoters []*ktypes.Validator) ([]ktypes.HexBytes, []bool) {
 	// to create the board, we will take a list of all approvers and append the voters.
 	// we will then remove any duplicates the second time we see them.
 	// this will result with all approvers at the start of the list, and all voters at the end.
@@ -475,13 +487,7 @@ func toPendingInfo(resolution *resolutions.Resolution, allVoters []*ktypes.Valid
 		found[string(board[i])] = struct{}{}
 	}
 
-	return &adminjson.PendingJoin{
-		Candidate: resolutionBody.PubKey,
-		Power:     resolutionBody.Power,
-		ExpiresAt: resolution.ExpirationHeight,
-		Board:     board,
-		Approved:  approvals,
-	}, nil
+	return board, approvals
 }
 
 func (svc *Service) GetConfig(ctx context.Context, req *adminjson.GetConfigRequest) (*adminjson.GetConfigResponse, *jsonrpc.Error) {
@@ -558,18 +564,16 @@ func (svc *Service) ResolutionStatus(ctx context.Context, req *adminjson.Resolut
 		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to retrieve resolution", nil)
 	}
 
-	// get the status of the resolution
-	// expiresAt, board, approvals, err := voting.ResolutionStatus(ctx, readTx, resolution)
-	// if err != nil {
-	// 	return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to retrieve resolution status", nil)
-	// }
+	voters := svc.voting.GetValidators()
+
+	board, approvals := svc.approvalsInfo(resolution, voters)
 
 	return &adminjson.ResolutionStatusResponse{
 		Status: &ktypes.PendingResolution{
 			ResolutionID: req.ResolutionID,
 			ExpiresAt:    resolution.ExpirationHeight,
-			Board:        nil, // resolution.Voters ???
-			Approved:     nil, // ???
+			Board:        board,
+			Approved:     approvals,
 		},
 	}, nil
 }

@@ -90,7 +90,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	migrator := buildMigrator(d, db, accounts, vs)
 
 	// BlockProcessor
-	bp := buildBlockProcessor(ctx, d, db, txApp, accounts, vs, ss, es, migrator)
+	bp := buildBlockProcessor(ctx, d, db, txApp, accounts, vs, ss, es, migrator, bs)
 
 	// Consensus
 	ce := buildConsensusEngine(ctx, d, db, mp, bs, bp, valSet)
@@ -357,10 +357,10 @@ func buildTxApp(ctx context.Context, d *coreDependencies, db *pg.DB, accounts *a
 	return txapp
 }
 
-func buildBlockProcessor(ctx context.Context, d *coreDependencies, db *pg.DB, txapp *txapp.TxApp, accounts *accounts.Accounts, vs *voting.VoteStore, ss *snapshotter.SnapshotStore, es *voting.EventStore, migrator *migrations.Migrator) *blockprocessor.BlockProcessor {
+func buildBlockProcessor(ctx context.Context, d *coreDependencies, db *pg.DB, txapp *txapp.TxApp, accounts *accounts.Accounts, vs *voting.VoteStore, ss *snapshotter.SnapshotStore, es *voting.EventStore, migrator *migrations.Migrator, bs *store.BlockStore) *blockprocessor.BlockProcessor {
 	signer := auth.GetNodeSigner(d.privKey)
 
-	bp, err := blockprocessor.NewBlockProcessor(ctx, db, txapp, accounts, vs, ss, es, migrator, d.genesisCfg, signer, d.logger.New("BP"))
+	bp, err := blockprocessor.NewBlockProcessor(ctx, db, txapp, accounts, vs, ss, es, migrator, bs, d.genesisCfg, signer, d.logger.New("BP"))
 	if err != nil {
 		failBuild(err, "failed to create block processor")
 	}
@@ -409,16 +409,18 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB,
 	}
 
 	ceCfg := &consensus.Config{
-		PrivateKey:     d.privKey,
-		Leader:         leaderPubKey,
-		DB:             db,
-		BlockStore:     bs,
-		BlockProcessor: bp,
-		Mempool:        mempool,
-		ValidatorSet:   valSet,
-		Logger:         d.logger.New("CONS"),
-		ProposeTimeout: time.Duration(d.cfg.Consensus.ProposeTimeout),
-		GenesisHeight:  d.genesisCfg.InitialHeight,
+		PrivateKey:            d.privKey,
+		Leader:                leaderPubKey,
+		DB:                    db,
+		BlockStore:            bs,
+		BlockProcessor:        bp,
+		Mempool:               mempool,
+		ValidatorSet:          valSet,
+		Logger:                d.logger.New("CONS"),
+		ProposeTimeout:        time.Duration(d.cfg.Consensus.ProposeTimeout),
+		BlockProposalInterval: time.Duration(d.cfg.Consensus.BlockProposalInterval),
+		BlockAnnInterval:      time.Duration(d.cfg.Consensus.BlockAnnInterval),
+		GenesisHeight:         d.genesisCfg.InitialHeight,
 	}
 
 	ce := consensus.New(ceCfg)
