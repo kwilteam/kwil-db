@@ -69,7 +69,7 @@ type BlockProcessor struct {
 
 type BroadcastTxFn func(ctx context.Context, tx *ktypes.Transaction, sync uint8) (*ktypes.ResultBroadcastTx, error)
 
-func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Accounts, vs ValidatorModule, sp SnapshotModule, es EventStore, migrator MigratorModule, genesisCfg *config.GenesisConfig, signer auth.Signer, logger log.Logger) (*BlockProcessor, error) {
+func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Accounts, vs ValidatorModule, sp SnapshotModule, es EventStore, migrator MigratorModule, bs BlockStore, genesisCfg *config.GenesisConfig, signer auth.Signer, logger log.Logger) (*BlockProcessor, error) {
 	// get network parameters from the chain context
 	bp := &BlockProcessor{
 		db:          db,
@@ -95,10 +95,29 @@ func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Account
 	}
 	defer tx.Rollback(ctx)
 
-	height, appHash, _, err := meta.GetChainState(ctx, tx)
+	height, appHash, dirty, err := meta.GetChainState(ctx, tx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chain state: %w", err)
 	}
+	if dirty {
+		// app state is in a partially committed state, recover the chain state.
+		_, _, hash, err := bs.GetByHeight(height)
+		if err != nil {
+			return nil, err
+		}
+
+		if err := meta.SetChainState(ctx, tx, height, hash[:], false); err != nil {
+			return nil, err
+		}
+
+		copy(appHash, hash[:])
+
+		// also update the last changeset height in the migrator
+		if err := bp.migrator.PersistLastChangesetHeight(ctx, tx, height); err != nil {
+			return nil, err
+		}
+	}
+
 	bp.height.Store(height)
 	copy(bp.appHash[:], appHash)
 
@@ -523,7 +542,7 @@ func (bp *BlockProcessor) Commit(ctx context.Context, req *ktypes.CommitRequest)
 		return err
 	}
 
-	if err := bp.migrator.PersistLastChangesetHeight(ctxS, tx); err != nil {
+	if err := bp.migrator.PersistLastChangesetHeight(ctxS, tx, req.Height); err != nil {
 		err2 := tx.Rollback(ctxS)
 		if err2 != nil {
 			bp.log.Error("Failed to rollback the transaction", "err", err2)

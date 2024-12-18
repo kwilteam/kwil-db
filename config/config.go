@@ -160,9 +160,11 @@ func DefaultConfig() *Config {
 			BootNodes: []string{},
 		},
 		Consensus: ConsensusConfig{
-			ProposeTimeout: Duration(1000 * time.Millisecond),
-			MaxBlockSize:   50_000_000,
-			MaxTxsPerBlock: 20_000,
+			ProposeTimeout:        Duration(1000 * time.Millisecond),
+			MaxBlockSize:          50_000_000,
+			MaxTxsPerBlock:        20_000,
+			BlockProposalInterval: Duration(1 * time.Second),
+			BlockAnnInterval:      Duration(3 * time.Second),
 		},
 		DB: DBConfig{
 			Host:          "127.0.0.1",
@@ -260,7 +262,16 @@ type ConsensusConfig struct {
 	ProposeTimeout Duration `toml:"propose_timeout" comment:"timeout for proposing a block (applies to leader)"`
 	MaxBlockSize   uint64   `toml:"max_block_size" comment:"max size of a block in bytes"`
 	MaxTxsPerBlock uint64   `toml:"max_txs_per_block" comment:"max number of transactions per block"`
-	// ? reannounce intervals?
+	// reannounce intervals
+
+	// BlockProposalInterval is the interval between block proposal reannouncements by the leader.
+	// This impacts the time it takes for an out-of-sync validator to receive the current block proposal,
+	// thereby impacting the block times. Default is 1 second.
+	BlockProposalInterval Duration `toml:"block_proposal_interval" comment:"interval between block proposal reannouncements by the leader"`
+	// BlockAnnInterval is the frequency with which the block commit messages are reannouncements by the leader,
+	// and votes reannounced by validators. Default is 3 second. This impacts the time it takes for an
+	// out-of-sync nodes to catch up with the latest block.
+	BlockAnnInterval Duration `toml:"block_ann_interval" comment:"interval between block commit reannouncements by the leader, and votes reannouncements by validators"`
 }
 
 type RPCConfig struct {

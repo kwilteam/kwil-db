@@ -19,21 +19,21 @@ const (
 var ErrNotFound = errors.New("not found")
 
 type BlockHeader struct {
-	Version     uint16
-	Height      int64
-	NumTxns     uint32
-	PrevHash    Hash // previous block's hash
-	PrevAppHash Hash // app hash after last block
+	Version  uint16
+	Height   int64
+	NumTxns  uint32
+	PrevHash Hash // previous block's hash
+	// app hash after last block.
+	// calculated based on updates to the PG state, accounts, validators, chain state and txResults.
+	PrevAppHash Hash
 	Timestamp   time.Time
 	MerkleRoot  Hash // Merkle tree reference to hash of all transactions for the block
 
-	// Proposer []byte should be leader, so probably pointless here
-	ValidatorSetHash Hash // Hash of the validator set for the block
+	// Hash of the current validator set for the block
+	ValidatorSetHash Hash
 
-	// ConsensusUpdates []ConsensusUpdate
-
-	// ChainStateHash Hash // if we want to keep the "application" hash separate from state of consensus engine
-	// PrevExecResultHash Hash
+	// ConsensusParams updates for the block, empty if no updates, ignored for this release
+	// ConsensusParamsUpdates *ConsensusParams
 }
 
 type Block struct {

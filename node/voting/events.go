@@ -17,7 +17,6 @@ import (
 	"github.com/kwilteam/kwil-db/node/versioning"
 )
 
-// TODO: To implement EventBroadcaster-> broadcast VoteID Transactions, p2p service handlers has to be implemented
 // Life cycle of an event:
 // 1. Events received from an external source is stored in the event store.
 // 2. Block proposer will create resolutions for the events observed.
