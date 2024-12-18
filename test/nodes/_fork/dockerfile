@@ -1,0 +1,19 @@
+FROM golang:1.23 AS build
+
+WORKDIR /app
+RUN mkdir -p /var/run/kwil
+RUN chmod 777 /var/run/kwil
+
+COPY . .
+
+WORKDIR /app/test/nodes/fork
+RUN CGO_ENABLED=0 go build -v  -ldflags -extldflags=-static -o /app/dist/forkd
+RUN chmod +x /app/dist/forkd 
+RUN /app/dist/forkd -v
+
+FROM kwild:latest
+WORKDIR /app
+COPY --from=build /app/dist/forkd ./kwild
+RUN chmod +x ./kwild 
+EXPOSE 8484 6600
+ENTRYPOINT ["/app/kwild"]
