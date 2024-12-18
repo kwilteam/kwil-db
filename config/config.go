@@ -152,6 +152,7 @@ func DefaultConfig() *Config {
 	return &Config{
 		LogLevel:  log.LevelInfo,
 		LogFormat: log.FormatUnstructured,
+		LogOutput: []string{"stdout", "kwild.log"},
 		P2P: PeerConfig{
 			IP:        "0.0.0.0",
 			Port:      6600,
@@ -206,7 +207,7 @@ func DefaultConfig() *Config {
 type Config struct {
 	LogLevel  log.Level  `toml:"log_level" comment:"log level\npossible values: 'debug', 'info', 'warn', and 'error'"`
 	LogFormat log.Format `toml:"log_format" comment:"log format\npossible values: 'json', 'text' (kv), and 'plain' (fmt-style)"`
-	// LogOutput []string   `toml:"log_output" comment:"output paths for the log"`
+	LogOutput []string   `toml:"log_output" comment:"output paths for the log"`
 
 	ProfileMode string `toml:"profile_mode,commented" comment:"profile mode (http, cpu, mem, mutex, or block)"`
 	ProfileFile string `toml:"profile_file,commented" comment:"profile output file path (e.g. cpu.pprof)"`

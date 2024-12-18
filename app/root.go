@@ -29,7 +29,7 @@ func RootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               custom.BinaryConfig.NodeCmd,
 		Short:             custom.BinaryConfig.ProjectName + " daemon",
-		Long:              custom.BinaryConfig.ProjectName + " main application (node and utilities)",
+		Long:              custom.BinaryConfig.ProjectName + " node and utilities",
 		DisableAutoGenTag: true,
 		SilenceUsage:      true,
 		CompletionOptions: cobra.CompletionOptions{
