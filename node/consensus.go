@@ -11,6 +11,7 @@ import (
 	"io"
 
 	ktypes "github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/node/peers"
 	"github.com/kwilteam/kwil-db/node/types"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -378,7 +379,7 @@ func (n *Node) startDiscoveryRequestGossip(ctx context.Context, ps *pubsub.PubSu
 	}
 
 	subCanceled := make(chan struct{})
-	n.log.Info("starting Discovery request gossip")
+	n.log.Debug("starting Discovery request gossip")
 
 	n.wg.Add(1)
 	go func() {
@@ -420,7 +421,7 @@ func (n *Node) startDiscoveryRequestGossip(ctx context.Context, ps *pubsub.PubSu
 				continue
 			}
 
-			n.log.Infof("received Discovery request from %s", discMsg.ReceivedFrom.String())
+			n.log.Infof("received Discovery request from %s", peers.PeerIDStringer(discMsg.ReceivedFrom))
 
 			// Check the block store for the best height and respond
 			bestHeight, _, _ := n.bki.Best()
@@ -441,7 +442,7 @@ func (n *Node) startDiscoveryResponseGossip(ctx context.Context, ps *pubsub.PubS
 
 	subCanceled := make(chan struct{})
 
-	n.log.Info("starting Discovery response gossip")
+	n.log.Debug("starting Discovery response gossip")
 
 	n.wg.Add(1)
 	go func() {
@@ -498,8 +499,8 @@ func (n *Node) startDiscoveryResponseGossip(ctx context.Context, ps *pubsub.PubS
 			}
 			fromPeerID := discMsg.GetFrom()
 
-			n.log.Infof("received Discovery response msg from %s (rcvd from %s), data = %d",
-				fromPeerID.String(), discMsg.ReceivedFrom.String(), dm.BestHeight)
+			n.log.Debugf("received Discovery response msg from %s (relayed from %s), data = %d",
+				peers.PeerIDStringer(fromPeerID), peers.PeerIDStringer(discMsg.ReceivedFrom), dm.BestHeight)
 
 			peerPubKey, err := fromPeerID.ExtractPublicKey()
 			if err != nil {
@@ -584,7 +585,7 @@ func (n *Node) startConsensusResetGossip(ctx context.Context, ps *pubsub.PubSub)
 			fromPeerID := resetMsg.GetFrom()
 
 			n.log.Infof("received Consensus Reset msg from %s (rcvd from %s), data = %x",
-				fromPeerID, resetMsg.ReceivedFrom, resetMsg.Message.Data)
+				peers.PeerIDStringer(fromPeerID), peers.PeerIDStringer(resetMsg.ReceivedFrom), resetMsg.Message.Data)
 
 			// source of the reset message should be the leader
 			n.ce.NotifyResetState(reset.ToHeight, reset.TxIDs)

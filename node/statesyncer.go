@@ -22,6 +22,7 @@ import (
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/node/meta"
+	"github.com/kwilteam/kwil-db/node/peers"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
 )
@@ -192,7 +193,8 @@ func (s *StateSyncService) chunkFetcher(ctx context.Context, snapshot *snapshotM
 func (s *StateSyncService) requestSnapshotChunk(ctx context.Context, snap *snapshotMetadata, provider peer.AddrInfo, index uint32) error {
 	stream, err := s.host.NewStream(ctx, provider.ID, ProtocolIDSnapshotChunk)
 	if err != nil {
-		s.log.Warn("failed to create stream to provider", "provider", provider.ID.String(), "error", err)
+		s.log.Warn("failed to create stream to provider", "provider", provider.ID.String(),
+			"error", peers.CompressDialError(err))
 		return err
 	}
 	defer stream.Close()
@@ -250,7 +252,7 @@ func (s *StateSyncService) requestSnapshotCatalogs(ctx context.Context, peer pee
 	s.host.Peerstore().AddAddrs(peer.ID, peer.Addrs, peerstore.PermanentAddrTTL)
 	stream, err := s.host.NewStream(ctx, peer.ID, ProtocolIDSnapshotCatalog)
 	if err != nil {
-		return err
+		return peers.CompressDialError(err)
 	}
 	defer stream.Close()
 
