@@ -14,7 +14,7 @@ func assertPositionsAreSet(t *testing.T, v any) {
 	RecursivelyVisitPositions(v, func(gp GetPositioner) {
 		pos := gp.GetPosition()
 		// if not set, this will tell us the struct
-		assert.True(t, pos.IsSet, "position is not set. struct type: %T", gp)
+		assert.True(t, pos.isSet, "position is not set. struct type: %T", gp)
 	})
 }
 

@@ -9,16 +9,16 @@ import (
 type Position struct {
 	// Set is true if the position of the Position has been set.
 	// This is useful for testing parsers.
-	IsSet     bool `json:"-"`
-	StartLine int  `json:"start_line"`
-	StartCol  int  `json:"start_col"`
-	EndLine   int  `json:"end_line"`
-	EndCol    int  `json:"end_col"`
+	isSet     bool
+	StartLine int `json:"start_line"`
+	StartCol  int `json:"start_col"`
+	EndLine   int `json:"end_line"`
+	EndCol    int `json:"end_col"`
 }
 
 // Set sets the position of the Position based on the given parser rule context.
 func (n *Position) Set(r antlr.ParserRuleContext) {
-	n.IsSet = true
+	n.isSet = true
 	n.StartLine = r.GetStart().GetLine()
 	n.StartCol = r.GetStart().GetColumn()
 	n.EndLine = r.GetStop().GetLine()
@@ -27,7 +27,7 @@ func (n *Position) Set(r antlr.ParserRuleContext) {
 
 // SetToken sets the position of the Position based on the given token.
 func (n *Position) SetToken(t antlr.Token) {
-	n.IsSet = true
+	n.isSet = true
 	n.StartLine = t.GetLine()
 	n.StartCol = t.GetColumn()
 	n.EndLine = t.GetLine()
@@ -42,7 +42,7 @@ func (n *Position) GetPosition() *Position {
 
 // Clear clears the position of the Position.
 func (n *Position) Clear() {
-	n.IsSet = false
+	n.isSet = false
 	n.StartLine = 0
 	n.StartCol = 0
 	n.EndLine = 0
