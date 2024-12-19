@@ -88,8 +88,8 @@ type EstimatePriceRequest struct {
 
 // QueryRequest contains the request parameters for MethodQuery.
 type QueryRequest struct {
-	DBID  string `json:"dbid"`
-	Query string `json:"query"`
+	Query  string                 `json:"query"`
+	Params map[string]interface{} `json:"params"`
 }
 
 // TxQueryRequest contains the request parameters for MethodTxQuery.

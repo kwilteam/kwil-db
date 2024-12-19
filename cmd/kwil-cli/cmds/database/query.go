@@ -38,12 +38,7 @@ func queryCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return client.DialClient(cmd.Context(), cmd, client.WithoutPrivateKey,
 				func(ctx context.Context, client clientType.Client, conf *config.KwilCliConfig) error {
-					dbid, err := getSelectedDbid(cmd, conf)
-					if err != nil {
-						return display.PrintErr(cmd, fmt.Errorf("target database not properly specified: %w", err))
-					}
-
-					data, err := client.Query(ctx, dbid, args[0])
+					data, err := client.Query(ctx, args[0], nil)
 					if err != nil {
 						return display.PrintErr(cmd, fmt.Errorf("error querying database: %w", err))
 					}
@@ -52,7 +47,5 @@ func queryCmd() *cobra.Command {
 				})
 		},
 	}
-
-	bindFlagsTargetingDatabase(cmd)
 	return cmd
 }

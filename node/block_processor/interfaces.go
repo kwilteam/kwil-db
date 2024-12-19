@@ -39,7 +39,7 @@ type TxApp interface {
 	Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) (finalValidators []*ktypes.Validator, err error)
 	Commit() error
 	Rollback()
-	GenesisInit(ctx context.Context, db sql.DB, validators []*ktypes.Validator, genesisAccounts []*ktypes.Account, initialHeight int64, chain *common.ChainContext) error
+	GenesisInit(ctx context.Context, db sql.DB, validators []*ktypes.Validator, genesisAccounts []*ktypes.Account, initialHeight int64, initialDBOwner string, chain *common.ChainContext) error
 	ApplyMempool(ctx *common.TxContext, db sql.DB, tx *types.Transaction) error
 
 	Price(ctx context.Context, dbTx sql.DB, tx *ktypes.Transaction, chainContext *common.ChainContext) (*big.Int, error)

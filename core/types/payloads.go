@@ -30,8 +30,7 @@ type Payload interface {
 }
 
 const (
-	PayloadTypeDeploySchema        PayloadType = "deploy_schema"
-	PayloadTypeDropSchema          PayloadType = "drop_schema"
+	PayloadTypeRawStatement        PayloadType = "raw_statement"
 	PayloadTypeExecute             PayloadType = "execute"
 	PayloadTypeTransfer            PayloadType = "transfer"
 	PayloadTypeValidatorJoin       PayloadType = "validator_join"
@@ -50,6 +49,7 @@ const (
 var payloadConcreteTypes = map[PayloadType]Payload{
 	// PayloadTypeDropSchema:          &DropSchema{},
 	// PayloadTypeDeploySchema:        &Schema{},
+	PayloadTypeRawStatement:        &RawStatement{},
 	PayloadTypeExecute:             &ActionExecution{},
 	PayloadTypeValidatorJoin:       &ValidatorJoin{},
 	PayloadTypeValidatorApprove:    &ValidatorApprove{},
@@ -90,8 +90,7 @@ func UnmarshalPayload(payloadType PayloadType, payload []byte) (Payload, error) 
 
 // payloadTypes includes native types and types registered from extensions.
 var payloadTypes = map[PayloadType]bool{
-	PayloadTypeDeploySchema:        true,
-	PayloadTypeDropSchema:          true,
+	PayloadTypeRawStatement:        true,
 	PayloadTypeExecute:             true,
 	PayloadTypeTransfer:            true,
 	PayloadTypeValidatorJoin:       true,
@@ -118,8 +117,7 @@ func (p PayloadType) Valid() bool {
 		PayloadTypeCreateResolution,
 		PayloadTypeApproveResolution,
 		PayloadTypeDeleteResolution,
-		PayloadTypeDeploySchema,
-		PayloadTypeDropSchema,
+		PayloadTypeRawStatement,
 		PayloadTypeExecute,
 		// These should not come in user transactions, but they are not invalid
 		// payload types in general.
@@ -143,23 +141,27 @@ func RegisterPayload(pType PayloadType) {
 	payloadTypes[pType] = true
 }
 
-// DropSchema is the payload that is used to drop a schema
-type DropSchema struct {
-	DBID string
+// RawStatement is a raw SQL statement that is executed as a transaction
+type RawStatement struct {
+	Statement  string
+	Parameters []*struct {
+		Name  string
+		Value *EncodedValue
+	}
 }
 
-var _ Payload = (*DropSchema)(nil)
+var _ Payload = (*RawStatement)(nil)
 
-func (s *DropSchema) MarshalBinary() ([]byte, error) {
-	return serialize.Encode(s)
+func (r *RawStatement) MarshalBinary() ([]byte, error) {
+	return serialize.Encode(r)
 }
 
-func (s *DropSchema) UnmarshalBinary(b []byte) error {
-	return serialize.Decode(b, s)
+func (r *RawStatement) UnmarshalBinary(b []byte) error {
+	return serialize.Decode(b, r)
 }
 
-func (s *DropSchema) Type() PayloadType {
-	return PayloadTypeDropSchema
+func (r *RawStatement) Type() PayloadType {
+	return PayloadTypeRawStatement
 }
 
 // ActionExecution is the payload that is used to execute an action

@@ -55,6 +55,17 @@ func CallSigText(dbid, action string, payload []byte, challenge []byte) string {
 	return fmt.Sprintf(callMsgToSignTmplV0, dbid, action, digest[:20], challenge)
 }
 
+const stmtMsgToSignTmplV0 = `Kwil SQL statement.
+
+Statement: %s
+Digest: %x
+Challenge: %x
+`
+
+func StmtSigText(stmt string, digest []byte, challenge []byte) string {
+	return fmt.Sprintf(stmtMsgToSignTmplV0, stmt, digest[:20], challenge)
+}
+
 // CreateCallMessage creates a new call message from a ActionCall payload. If a
 // signer is provided, the sender and authenticator type are set. If a challenge
 // is also provided, it will also sign a serialization of the request that

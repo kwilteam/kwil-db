@@ -15,7 +15,6 @@ import (
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	userjson "github.com/kwilteam/kwil-db/core/rpc/json/user"
 	"github.com/kwilteam/kwil-db/core/types"
-	jsonUtil "github.com/kwilteam/kwil-db/core/utils/json"
 )
 
 // Client is a JSON-RPC client for the Kwil user service. It use the JSONRPCClient
@@ -79,19 +78,15 @@ func (cl *Client) Broadcast(ctx context.Context, tx *types.Transaction, sync rpc
 	return res.TxHash, nil
 }
 
-func (cl *Client) Call(ctx context.Context, msg *types.CallMessage, opts ...rpcclient.ActionCallOption) ([]map[string]any, []string, error) {
+func (cl *Client) Call(ctx context.Context, msg *types.CallMessage, opts ...rpcclient.ActionCallOption) (*types.CallResult, error) {
 	cmd := msg // same underlying type presently
-	res := &userjson.CallResponse{}
-	err := cl.CallMethod(ctx, string(userjson.MethodCall), cmd, res)
+	res := userjson.CallResponse{}
+	err := cl.CallMethod(ctx, string(userjson.MethodCall), cmd, &res)
 	if err != nil {
-		return nil, nil, err
-	}
-	records, err := jsonUtil.UnmarshalMapWithoutFloat[[]map[string]any](res.Result)
-	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	return records, res.Logs, nil
+	return (*types.CallResult)(&res), nil
 }
 
 func (cl *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
@@ -154,45 +149,18 @@ func (cl *Client) GetAccount(ctx context.Context, pubKey []byte, status types.Ac
 	}, nil
 }
 
-func (cl *Client) GetSchema(ctx context.Context, dbid string) (*types.Schema, error) {
-	cmd := &userjson.SchemaRequest{
-		DBID: dbid,
-	}
-	res := &userjson.SchemaResponse{}
-	err := cl.CallMethod(ctx, string(userjson.MethodSchema), cmd, res)
-	if err != nil {
-		return nil, err
-	}
-	return res.Schema, nil
-}
-
-func (cl *Client) ListDatabases(ctx context.Context, ownerPubKey []byte) ([]*types.DatasetIdentifier, error) {
-	cmd := &userjson.ListDatabasesRequest{
-		Owner: ownerPubKey,
-	}
-	res := &userjson.ListDatabasesResponse{}
-	err := cl.CallMethod(ctx, string(userjson.MethodDatabases), cmd, res)
-	if err != nil {
-		return nil, err
-	}
-	if res.Databases == nil {
-		return nil, err
-	}
-	// A type alias makes a slice copy and conversions unnecessary.
-	return res.Databases, nil
-}
-
-func (cl *Client) Query(ctx context.Context, dbid, query string) ([]map[string]any, error) {
+func (cl *Client) Query(ctx context.Context, query string, params map[string]any) (*types.QueryResult, error) {
 	cmd := &userjson.QueryRequest{
-		DBID:  dbid,
-		Query: query,
+		Query:  query,
+		Params: params,
 	}
 	res := &userjson.QueryResponse{}
 	err := cl.CallMethod(ctx, string(userjson.MethodQuery), cmd, res)
 	if err != nil {
 		return nil, err
 	}
-	return jsonUtil.UnmarshalMapWithoutFloat[[]map[string]any](res.Result)
+
+	return (*types.QueryResult)(res), nil
 }
 
 func (cl *Client) TxQuery(ctx context.Context, txHash types.Hash) (*types.TxQueryResponse, error) {

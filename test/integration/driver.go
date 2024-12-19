@@ -5,8 +5,6 @@ import (
 )
 
 type KwilIntDriver interface {
-	specifications.DatabaseDeployDsl
-	specifications.DatabaseDropDsl
 	specifications.ExecuteQueryDsl
 	specifications.ExecuteCallDsl
 	specifications.TransferAmountDsl

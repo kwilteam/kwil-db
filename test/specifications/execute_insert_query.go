@@ -1,179 +1,170 @@
 package specifications
 
-import (
-	"context"
-	"testing"
-	"time"
+// const (
+// 	createUserActionName = "create_user"
+// 	listUsersActionName  = "list_users"
+// )
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-)
+// type userTable struct {
+// 	ID       int32  `json:"id"`
+// 	UserName string `json:"username"`
+// 	Age      int32  `json:"age"`
+// }
 
-const (
-	createUserActionName = "create_user"
-	listUsersActionName  = "list_users"
-)
+// func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {
+// 	if execute.SupportBatch() {
+// 		ExecuteDBBatchInsertSpecification(ctx, t, execute)
+// 	} else {
+// 		ExecuteDBSingleInsertSpecification(ctx, t, execute)
+// 	}
+// }
 
-type userTable struct {
-	ID       int32  `json:"id"`
-	UserName string `json:"username"`
-	Age      int32  `json:"age"`
-}
+// // ExecuteDBSingleInsertSpecification is a specification for database insert, it test
+// // related table inserts, it will insert 1 user and 1 post
+// func ExecuteDBSingleInsertSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {
+// 	t.Logf("Executing insert action specification")
+// 	// Given a valid database schema
+// 	db := SchemaLoader.Load(t, SchemaTestDB)
+// 	dbID := execute.DBID(db.Name)
 
-func ExecuteDBInsertSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {
-	if execute.SupportBatch() {
-		ExecuteDBBatchInsertSpecification(ctx, t, execute)
-	} else {
-		ExecuteDBSingleInsertSpecification(ctx, t, execute)
-	}
-}
+// 	// When i execute action to database
+// 	user1 := userTable{
+// 		ID:       1111,
+// 		UserName: "test_user",
+// 		Age:      22,
+// 	}
 
-// ExecuteDBSingleInsertSpecification is a specification for database insert, it test
-// related table inserts, it will insert 1 user and 1 post
-func ExecuteDBSingleInsertSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {
-	t.Logf("Executing insert action specification")
-	// Given a valid database schema
-	db := SchemaLoader.Load(t, SchemaTestDB)
-	dbID := execute.DBID(db.Name)
+// 	createUserActionInput := []any{user1.ID, user1.UserName, user1.Age}
 
-	// When i execute action to database
-	user1 := userTable{
-		ID:       1111,
-		UserName: "test_user",
-		Age:      22,
-	}
+// 	txHash, err := execute.Execute(ctx, dbID, createUserActionName, createUserActionInput)
+// 	assert.NoError(t, err)
 
-	createUserActionInput := []any{user1.ID, user1.UserName, user1.Age}
+// 	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
 
-	txHash, err := execute.Execute(ctx, dbID, createUserActionName, createUserActionInput)
-	assert.NoError(t, err)
+// 	// testing query database
+// 	records, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM users")
+// 	assert.NoError(t, err)
+// 	assert.NotNil(t, records)
 
-	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
+// 	// create post
+// 	const createPostQueryName = "create_post"
+// 	post1 := [][]any{
+// 		{1111, "test_post", "test_body"},
+// 	}
 
-	// testing query database
-	records, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM users")
-	assert.NoError(t, err)
-	assert.NotNil(t, records)
+// 	txHash, err = execute.Execute(ctx, dbID, createPostQueryName, post1...)
+// 	assert.NoError(t, err)
 
-	// create post
-	const createPostQueryName = "create_post"
-	post1 := [][]any{
-		{1111, "test_post", "test_body"},
-	}
+// 	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
 
-	txHash, err = execute.Execute(ctx, dbID, createPostQueryName, post1...)
-	assert.NoError(t, err)
+// 	records, err = execute.QueryDatabase(ctx, dbID, "SELECT * FROM posts")
+// 	assert.NoError(t, err)
+// 	assert.NotNil(t, records)
 
-	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
+// 	counter := len(records.Export())
 
-	records, err = execute.QueryDatabase(ctx, dbID, "SELECT * FROM posts")
-	assert.NoError(t, err)
-	assert.NotNil(t, records)
+// 	assert.EqualValues(t, 1, counter)
 
-	counter := len(records.Export())
+// 	// TODO: move to a new specification
+// 	//multiStmtActionName := "multi_select"
+// 	//// execute multi statement action
+// 	//txHash, err = execute.Execute(ctx, dbID, multiStmtActionName, nil)
+// 	//assert.NoError(t, err)
+// 	//
+// 	//expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
+// }
 
-	assert.EqualValues(t, 1, counter)
+// // ExecuteDBBatchInsertSpecification is a specification for database batch insert,
+// // it will insert 1 user and 2 posts
+// func ExecuteDBBatchInsertSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {
+// 	t.Logf("Executing batch insert action specification")
+// 	// Given a valid database schema
+// 	db := SchemaLoader.Load(t, SchemaTestDB)
+// 	dbID := execute.DBID(db.Name)
 
-	// TODO: move to a new specification
-	//multiStmtActionName := "multi_select"
-	//// execute multi statement action
-	//txHash, err = execute.Execute(ctx, dbID, multiStmtActionName, nil)
-	//assert.NoError(t, err)
-	//
-	//expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
-}
+// 	// When i execute action to database
 
-// ExecuteDBBatchInsertSpecification is a specification for database batch insert,
-// it will insert 1 user and 2 posts
-func ExecuteDBBatchInsertSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {
-	t.Logf("Executing batch insert action specification")
-	// Given a valid database schema
-	db := SchemaLoader.Load(t, SchemaTestDB)
-	dbID := execute.DBID(db.Name)
+// 	user1 := userTable{
+// 		ID:       1111,
+// 		UserName: "test_user",
+// 		Age:      22,
+// 	}
 
-	// When i execute action to database
+// 	createUserActionInput := []any{user1.ID, user1.UserName, user1.Age}
 
-	user1 := userTable{
-		ID:       1111,
-		UserName: "test_user",
-		Age:      22,
-	}
+// 	txHash, err := execute.Execute(ctx, dbID, createUserActionName, createUserActionInput)
+// 	assert.NoError(t, err)
 
-	createUserActionInput := []any{user1.ID, user1.UserName, user1.Age}
+// 	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
 
-	txHash, err := execute.Execute(ctx, dbID, createUserActionName, createUserActionInput)
-	assert.NoError(t, err)
+// 	// testing query database
+// 	records, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM users")
+// 	assert.NoError(t, err)
+// 	assert.NotNil(t, records)
 
-	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
+// 	// create post
+// 	const createPostQueryName = "create_post"
+// 	post1 := [][]any{
+// 		{1111, "test_post", "test_body"},
+// 		{2222, "test_post2", "test_body2"},
+// 	}
 
-	// testing query database
-	records, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM users")
-	assert.NoError(t, err)
-	assert.NotNil(t, records)
+// 	txHash, err = execute.Execute(ctx, dbID, createPostQueryName, post1...)
+// 	assert.NoError(t, err)
 
-	// create post
-	const createPostQueryName = "create_post"
-	post1 := [][]any{
-		{1111, "test_post", "test_body"},
-		{2222, "test_post2", "test_body2"},
-	}
+// 	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
 
-	txHash, err = execute.Execute(ctx, dbID, createPostQueryName, post1...)
-	assert.NoError(t, err)
+// 	records, err = execute.QueryDatabase(ctx, dbID, "SELECT * FROM posts")
+// 	assert.NoError(t, err)
+// 	require.NotNil(t, records)
 
-	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
+// 	counter := len(records.Export())
 
-	records, err = execute.QueryDatabase(ctx, dbID, "SELECT * FROM posts")
-	assert.NoError(t, err)
-	require.NotNil(t, records)
+// 	assert.EqualValues(t, 2, counter)
+// }
 
-	counter := len(records.Export())
+// func ExecuteDBRecordsVerifySpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl, numRecords int) {
+// 	t.Logf("Executing verify db records specification")
+// 	// Given a valid database schema
+// 	db := SchemaLoader.Load(t, SchemaTestDB)
+// 	dbID := execute.DBID(db.Name)
 
-	assert.EqualValues(t, 2, counter)
-}
+// 	if execute.SupportBatch() {
+// 		numRecords = numRecords * 2
+// 	}
 
-func ExecuteDBRecordsVerifySpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl, numRecords int) {
-	t.Logf("Executing verify db records specification")
-	// Given a valid database schema
-	db := SchemaLoader.Load(t, SchemaTestDB)
-	dbID := execute.DBID(db.Name)
+// 	records, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM posts")
+// 	assert.NoError(t, err)
+// 	require.NotNil(t, records)
 
-	if execute.SupportBatch() {
-		numRecords = numRecords * 2
-	}
+// 	counter := 0
+// 	for records.Next() {
+// 		_ = records.Record()
+// 		counter++
+// 	}
+// 	assert.EqualValues(t, numRecords, counter)
+// }
 
-	records, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM posts")
-	assert.NoError(t, err)
-	require.NotNil(t, records)
+// func ExecuteDBRecordsVerifySpecificationEventually(ctx context.Context, t *testing.T, execute ExecuteQueryDsl, numRecords int) {
+// 	t.Logf("Executing verify db records eventually specification")
+// 	// Given a valid database schema
+// 	db := SchemaLoader.Load(t, SchemaTestDB)
+// 	dbID := execute.DBID(db.Name)
 
-	counter := 0
-	for records.Next() {
-		_ = records.Record()
-		counter++
-	}
-	assert.EqualValues(t, numRecords, counter)
-}
+// 	if execute.SupportBatch() {
+// 		numRecords = numRecords * 2
+// 	}
 
-func ExecuteDBRecordsVerifySpecificationEventually(ctx context.Context, t *testing.T, execute ExecuteQueryDsl, numRecords int) {
-	t.Logf("Executing verify db records eventually specification")
-	// Given a valid database schema
-	db := SchemaLoader.Load(t, SchemaTestDB)
-	dbID := execute.DBID(db.Name)
+// 	require.Eventually(t, func() bool {
+// 		records, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM posts")
+// 		assert.NoError(t, err)
+// 		require.NotNil(t, records)
 
-	if execute.SupportBatch() {
-		numRecords = numRecords * 2
-	}
-
-	require.Eventually(t, func() bool {
-		records, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM posts")
-		assert.NoError(t, err)
-		require.NotNil(t, records)
-
-		counter := 0
-		for records.Next() {
-			_ = records.Record()
-			counter++
-		}
-		return counter == numRecords
-	}, 1*time.Minute, 500*time.Millisecond)
-}
+// 		counter := 0
+// 		for records.Next() {
+// 			_ = records.Record()
+// 			counter++
+// 		}
+// 		return counter == numRecords
+// 	}, 1*time.Minute, 500*time.Millisecond)
+// }

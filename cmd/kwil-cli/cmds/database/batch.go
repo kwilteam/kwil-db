@@ -58,12 +58,12 @@ func batchCmd() *cobra.Command {
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return client.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
-				dbid, err := getSelectedDbid(cmd, conf)
+				dbid, err := getSelectedNamespace(cmd)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error getting selected dbid from CLI flags: %w", err))
 				}
 
-				action, _, err := getSelectedActionOrProcedure(cmd, args)
+				action, _, err := getSelectedAction(cmd, args)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error getting selected action or procedure: %w", err))
 				}
@@ -111,7 +111,7 @@ func batchCmd() *cobra.Command {
 		},
 	}
 
-	bindFlagsTargetingProcedureOrAction(cmd)
+	bindFlagsTargetingAction(cmd)
 	cmd.Flags().StringSliceVarP(&csvColumnMappings, "map-inputs", "m", []string{}, "csv column to action parameter mappings (e.g. csv_id:user_id, csv_name:user_name)")
 	cmd.Flags().StringSliceVarP(&inputValueMappings, "values", "v", []string{}, "action parameter mappings applied to all executions (e.g. id:123, name:john)")
 	cmd.Flags().StringVarP(&filePath, "path", "p", "", "path to the CSV file to use")

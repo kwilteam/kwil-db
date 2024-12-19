@@ -42,6 +42,9 @@ type GenesisConfig struct {
 	Leader types.HexBytes `json:"leader"`
 	// Validators is the list of genesis validators (including the leader).
 	Validators []*types.Validator `json:"validators"`
+	// DBOwner is the owner of the database.
+	// This should be either a public key or address.
+	DBOwner string `json:"db_owner"`
 
 	// MaxBlockSize is the maximum size of a block in bytes.
 	MaxBlockSize int64 `json:"max_block_size"`

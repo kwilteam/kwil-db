@@ -6,6 +6,7 @@ require (
 	github.com/dgraph-io/badger/v4 v4.5.0
 	github.com/ethereum/go-ethereum v1.14.12
 	github.com/go-chi/chi/v5 v5.2.0
+	github.com/google/go-cmp v0.6.0
 	github.com/jackc/pglogrepl v0.0.0-20240307033717-828fbfe908e9
 	github.com/jackc/pgx/v5 v5.7.1
 	github.com/jpillora/backoff v1.0.0
@@ -18,7 +19,6 @@ require (
 	github.com/knadh/koanf/providers/structs v0.1.0
 	github.com/knadh/koanf/v2 v2.1.2
 	github.com/kwilteam/kwil-db/core v0.3.1-0.20241212163115-7353f2761884
-	github.com/kwilteam/kwil-db/parse v0.3.1-0.20241212163115-7353f2761884
 	github.com/libp2p/go-libp2p v0.37.2
 	github.com/libp2p/go-libp2p-kad-dht v0.28.1
 	github.com/libp2p/go-libp2p-pubsub v0.12.0
@@ -38,7 +38,7 @@ require (
 require (
 	github.com/Microsoft/go-winio v0.6.2 // indirect
 	github.com/StackExchange/wmi v1.2.1 // indirect
-	github.com/antlr4-go/antlr/v4 v4.13.1 // indirect
+	github.com/antlr4-go/antlr/v4 v4.13.1
 	github.com/bits-and-blooms/bitset v1.13.0 // indirect
 	github.com/chzyer/readline v1.5.1 // indirect
 	github.com/cockroachdb/apd/v3 v3.2.1 // indirect

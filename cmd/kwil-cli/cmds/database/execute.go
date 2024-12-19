@@ -15,59 +15,116 @@ import (
 )
 
 var (
-	executeLong = `Execute a procedure or action against a database.
+	executeLong = `Execute SQL or an action against a database.
 
-The procedure or action name is specified as the first positional argument, and the procedure parameters as all subsequent arguments.
-In order to specify a procedure parameter, you first need to specify the parameter name, then the parameter value, delimited by a colon.
+To execute a SQL statement against the database, use the --sql flag.  The SQL statement will be executed with the
+arguments passed as parameters.  The arguments are specified as $name:value.  For example, to execute the SQL
+statement "SELECT * FROM users WHERE age > 25", you would specify the following:
+` + "`" + `kwil-cli database execute --sql "INSERT INTO ids (id) VALUES ($age);" age:25` + "`" + `
 
-For example, for procedure ` + "`" + `get_user($username)` + "`" + `, you would specify the procedure as follows:
-` + "`" + `execute get_user username:satoshi` + "`" + `
+To specify an action to execute, you can pass the action name as the first positional argument, or as the --action flag.
+The action name is specified as the first positional argument, and the action parameters as all subsequent arguments.`
 
-You can either specify the database to execute this against with the ` + "`" + `--name` + "`" + ` and ` + "`" + `--owner` + "`" + `
-flags, or you can specify the database by passing the database id with the ` + "`" + `--dbid` + "`" + ` flag.  If a ` + "`" + `--name` + "`" + `
-flag is passed and no ` + "`" + `--owner` + "`" + ` flag is passed, the owner will be inferred from your configured wallet.`
-
-	executeExample = `# Executing the ` + "`" + `create_user($username, $age)` + "`" + ` procedure on the "mydb" database
-kwil-cli database execute create_user username:satoshi age:32 --name mydb --owner 0x9228624C3185FCBcf24c1c9dB76D8Bef5f5DAd64
-
-# Executing the ` + "`" + `create_user($username, $age)` + "`" + ` procedure on a database using a dbid
-kwil-cli database execute create_user username:satoshi age:32 --dbid 0x9228624C3185FCBcf24c1c9dB76D8Bef5f5DAd64`
+	executeExample = `# Executing a CREATE TABLE statement on the "mydb" database
+kwil-cli database execute --sql "CREATE TABLE users (id UUID, name TEXT, age INT8);" --namespace mydb
+	
+# Executing the ` + "`" + `create_user($username, $age)` + "`" + ` procedure on the "mydb" database
+kwil-cli database execute --action create_user username:satoshi age:32 --namespace mydb
+`
 )
 
 func executeCmd() *cobra.Command {
+	var sqlStmt *string
+
 	cmd := &cobra.Command{
-		Use:     "execute <procedure_or_action> <parameter_1:value_1> <parameter_2:value_2> ...",
-		Short:   "Execute a procedure or action against a database.",
+		Use:     "execute --sql <sql_stmt> <parameter_1:value_1> <parameter_2:value_2> ...",
+		Short:   "Execute SQL or an action against a database.",
 		Long:    executeLong,
 		Example: executeExample,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return client.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
-				dbid, err := getSelectedDbid(cmd, conf)
+				/*
+					There is a bit of awkward history here required to make things backwards compatible.
+					Prior to v0.10, the execute command was _only_ to execute actions, as it was not possible to give
+					direct SQL statements. In v0.9 this was done by specifying the action name as the first argument.
+					Prior to v0.9, the action name was specified as a flag. This was changed to a positional argument
+					in v0.9 to make it more user-friendly. However, most users never actually upgraded to v0.9.
+
+					To support all of these, the command has two flags: --sql and --action. If --sql is specified, it
+					will take a string, and execute that SQL statement with all arguments as parameters. If --action
+					is specified, it will take a string and execute that action with all args as parameters. If neither
+					is specified, it will assume that the first argument is the action name, and all subsequent arguments
+					are the parameters.
+				*/
+
+				namespace, err := getSelectedNamespace(cmd)
 				if err != nil {
-					return display.PrintErr(cmd, fmt.Errorf("error getting selected dbid from CLI flags: %w", err))
+					return display.PrintErr(cmd, fmt.Errorf("error getting selected namespace from CLI flags: %w", err))
 				}
 
-				action, args, err := getSelectedActionOrProcedure(cmd, args)
-				if err != nil {
-					return display.PrintErr(cmd, fmt.Errorf("error getting selected action or procedure: %w", err))
+				if sqlStmt == nil {
+					action, args, err := getSelectedAction(cmd, args)
+					if err != nil {
+						return display.PrintErr(cmd, fmt.Errorf("error getting selected action or procedure: %w", err))
+					}
+
+					parsedArgs, err := parseInputs(args)
+					if err != nil {
+						return display.PrintErr(cmd, fmt.Errorf("error parsing inputs: %w", err))
+					}
+
+					inputs, err := buildExecutionInputs(ctx, cl, namespace, action, []map[string]string{parsedArgs})
+					if err != nil {
+						return display.PrintErr(cmd, fmt.Errorf("error getting inputs: %w", err))
+					}
+
+					// Could actually just directly pass nonce to the client method,
+					// but those methods don't need tx details in the inputs.
+					txHash, err := cl.Execute(ctx, namespace, action, inputs,
+						clientType.WithNonce(nonceOverride), clientType.WithSyncBroadcast(syncBcast))
+					if err != nil {
+						return display.PrintErr(cmd, fmt.Errorf("error executing database: %w", err))
+					}
+					// If sycnBcast, and we have a txHash (error or not), do a query-tx.
+					if len(txHash) != 0 && syncBcast {
+						time.Sleep(500 * time.Millisecond) // otherwise it says not found at first
+						resp, err := cl.TxQuery(ctx, txHash)
+						if err != nil {
+							return display.PrintErr(cmd, fmt.Errorf("tx query failed: %w", err))
+						}
+						return display.PrintCmd(cmd, display.NewTxHashAndExecResponse(resp))
+					}
+					return display.PrintCmd(cmd, display.RespTxHash(txHash))
 				}
 
-				parsedArgs, err := parseInputs(args)
+				if actionFlagSet(cmd) {
+					return display.PrintErr(cmd, fmt.Errorf("cannot specify both --sql and --action"))
+				}
+
+				stmt := strings.TrimSpace(*sqlStmt)
+
+				// if the namespace is set, we should prepend it to the statement
+				if namespace != "" {
+					if strings.HasPrefix(stmt, "{") {
+						return display.PrintErr(cmd, fmt.Errorf("cannot specify both --namespace and a statement with a {namespace} prefix"))
+					}
+					stmt = fmt.Sprintf("{%s}%s", namespace, stmt)
+				}
+
+				parsed, err := parseInputs(args)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error parsing inputs: %w", err))
 				}
 
-				inputs, err := buildExecutionInputs(ctx, cl, dbid, action, parsedArgs)
-				if err != nil {
-					return display.PrintErr(cmd, fmt.Errorf("error getting inputs: %w", err))
+				args := make(map[string]interface{}, len(parsed))
+				for k, v := range parsed {
+					args[k] = v
 				}
 
-				// Could actually just directly pass nonce to the client method,
-				// but those methods don't need tx details in the inputs.
-				txHash, err := cl.Execute(ctx, dbid, action, inputs,
-					clientType.WithNonce(nonceOverride), clientType.WithSyncBroadcast(syncBcast))
+				// If we're here, we're executing a SQL statement.
+				txHash, err := cl.ExecuteSQL(ctx, stmt, args, clientType.WithNonce(nonceOverride), clientType.WithSyncBroadcast(syncBcast))
 				if err != nil {
-					return display.PrintErr(cmd, fmt.Errorf("error executing database: %w", err))
+					return display.PrintErr(cmd, fmt.Errorf("error executing SQL statement: %w", err))
 				}
 				// If sycnBcast, and we have a txHash (error or not), do a query-tx.
 				if len(txHash) != 0 && syncBcast {
@@ -83,13 +140,14 @@ func executeCmd() *cobra.Command {
 		},
 	}
 
-	bindFlagsTargetingProcedureOrAction(cmd)
+	bindFlagsTargetingAction(cmd)
+	cmd.Flags().StringVarP(sqlStmt, "sql", "s", "", "the SQL statement to execute")
 	return cmd
 }
 
 // inputs will be received as args.  The args will be in the form of
 // $argname:value.  Example $username:satoshi $age:32
-func parseInputs(args []string) ([]map[string]string, error) {
+func parseInputs(args []string) (map[string]string, error) {
 	inputs := make(map[string]string, len(args))
 
 	for _, arg := range args {
@@ -104,5 +162,5 @@ func parseInputs(args []string) ([]map[string]string, error) {
 		inputs[split[0]] = split[1]
 	}
 
-	return []map[string]string{inputs}, nil
+	return inputs, nil
 }

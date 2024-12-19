@@ -83,7 +83,7 @@ jobs:
 
       - name: Init workspace
         run: |
-          go work init . ./test ./parse ./core
+          go work init . ./test ./core
 
       - name: Generate go vendor
         run: |

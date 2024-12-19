@@ -3,7 +3,6 @@ package driver
 import (
 	"context"
 	"crypto/ecdsa"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -101,49 +100,6 @@ func (d *KwildClientDriver) DBID(name string) string {
 	return utils.GenerateDBID(name, d.signer.Identity())
 }
 
-func (d *KwildClientDriver) DeployDatabase(ctx context.Context, db *types.Schema) (types.Hash, error) {
-	rec, err := d.clt.DeployDatabase(ctx, db)
-	if err != nil {
-		return types.Hash{}, fmt.Errorf("error deploying database: %w", err)
-	}
-
-	d.logger.Debug("deployed database", "name", db.Name,
-		"owner", hex.EncodeToString(d.signer.Identity()), "TxHash", rec)
-	return rec, nil
-}
-
-func (d *KwildClientDriver) DatabaseExists(ctx context.Context, dbid string) error {
-	// check GetSchema
-	dbSchema, err := d.clt.GetSchema(ctx, dbid)
-	if err != nil {
-		return fmt.Errorf("failed to get database schema: %w", err)
-	}
-
-	if dbSchema == nil {
-		return fmt.Errorf("database schema is nil")
-	}
-
-	// check ListDatabases
-	dbs, err := d.clt.ListDatabases(ctx, dbSchema.Owner)
-	if err != nil {
-		return fmt.Errorf("failed to get database list: %w", err)
-	}
-
-	found := false
-	for _, db := range dbs {
-		if db.DBID == dbid {
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		return fmt.Errorf("ListDatabase: database not found: %s", dbid)
-	}
-
-	return nil
-}
-
 func (d *KwildClientDriver) Execute(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) (types.Hash, error) {
 	rec, err := d.clt.Execute(ctx, dbid, actionName, actionInputs)
 	if err != nil {
@@ -152,22 +108,11 @@ func (d *KwildClientDriver) Execute(ctx context.Context, dbid string, actionName
 	return rec, nil
 }
 
-func (d *KwildClientDriver) DropDatabase(ctx context.Context, dbName string) (types.Hash, error) {
-	rec, err := d.clt.DropDatabase(ctx, dbName)
-	if err != nil {
-		return types.Hash{}, fmt.Errorf("error dropping database: %w", err)
-	}
-
-	d.logger.Info("drop database", "name", dbName, "owner", hex.EncodeToString(d.GetUserPublicKey()),
-		"TxHash", rec)
-	return rec, nil
+func (d *KwildClientDriver) QueryDatabase(ctx context.Context, query string) (*types.QueryResult, error) {
+	return d.clt.Query(ctx, query, nil)
 }
 
-func (d *KwildClientDriver) QueryDatabase(ctx context.Context, dbid, query string) (*clientType.Records, error) {
-	return d.clt.Query(ctx, dbid, query)
-}
-
-func (d *KwildClientDriver) Call(ctx context.Context, dbid, action string, inputs []any) (*clientType.CallResult, error) {
+func (d *KwildClientDriver) Call(ctx context.Context, dbid, action string, inputs []any) (*types.CallResult, error) {
 	return d.clt.Call(ctx, dbid, action, inputs)
 }
 

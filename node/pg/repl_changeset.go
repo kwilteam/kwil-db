@@ -14,7 +14,6 @@ import (
 	"strings"
 
 	"github.com/jackc/pglogrepl"
-
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )

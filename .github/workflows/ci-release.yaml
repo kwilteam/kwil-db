@@ -95,14 +95,14 @@ jobs:
 
       - name: Compile packages, apps, and specs
         run: |
-          go build -mod=readonly ./... ./core/... ./parse/... ./test/specifications/
+          go build -mod=readonly ./... ./core/... ./test/specifications/
 
       - name: Lint
         uses: golangci/golangci-lint-action@v6.1.0
         with:
           install-mode: "binary"
           version: "latest"
-          args: ./... ./core/... ./parse/... ./test/... --timeout=10m --config=.golangci.yml
+          args: ./... ./core/... ./test/... --timeout=10m --config=.golangci.yml
 
       # unit test
       - name: Run unit test

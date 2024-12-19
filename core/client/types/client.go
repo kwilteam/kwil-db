@@ -15,25 +15,15 @@ import (
 
 // Client defines methods are used to talk to a Kwil provider.
 type Client interface {
-	Call(ctx context.Context, dbid string, procedure string, inputs []any) (*CallResult, error)
+	Call(ctx context.Context, dbid string, procedure string, inputs []any) (*types.CallResult, error)
 	ChainID() string
 	ChainInfo(ctx context.Context) (*types.ChainInfo, error)
-	DeployDatabase(ctx context.Context, payload *types.Schema, opts ...TxOpt) (types.Hash, error)
-	DropDatabase(ctx context.Context, name string, opts ...TxOpt) (types.Hash, error)
-	DropDatabaseID(ctx context.Context, dbid string, opts ...TxOpt) (types.Hash, error)
 	Execute(ctx context.Context, dbid string, action string, tuples [][]any, opts ...TxOpt) (types.Hash, error)
+	ExecuteSQL(ctx context.Context, sql string, params map[string]any, opts ...TxOpt) (types.Hash, error)
 	GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error)
-	GetSchema(ctx context.Context, dbid string) (*types.Schema, error)
-	ListDatabases(ctx context.Context, owner []byte) ([]*types.DatasetIdentifier, error)
 	Ping(ctx context.Context) (string, error)
-	Query(ctx context.Context, dbid string, query string) (Records, error)
+	Query(ctx context.Context, query string, params map[string]any) (*types.QueryResult, error)
 	TxQuery(ctx context.Context, txHash types.Hash) (*types.TxQueryResponse, error)
 	WaitTx(ctx context.Context, txHash types.Hash, interval time.Duration) (*types.TxQueryResponse, error)
 	Transfer(ctx context.Context, to []byte, amount *big.Int, opts ...TxOpt) (types.Hash, error)
-}
-
-// CallResult is the result of a call to a procedure.
-type CallResult struct {
-	Records Records  `json:"records"`
-	Logs    []string `json:"logs,omitempty"`
 }

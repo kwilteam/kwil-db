@@ -19,7 +19,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/rpc/client/user"
 	userClient "github.com/kwilteam/kwil-db/core/rpc/client/user/jsonrpc"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/utils"
 )
 
 // Client is a client that interacts with a public Kwil provider.
@@ -222,63 +221,6 @@ func (c *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
 	return c.txClient.ChainInfo(ctx)
 }
 
-// GetSchema gets a schema by dbid.
-func (c *Client) GetSchema(ctx context.Context, dbid string) (*types.Schema, error) {
-	ds, err := c.txClient.GetSchema(ctx, dbid)
-	if err != nil {
-		return nil, err
-	}
-
-	return ds, nil
-}
-
-// DeployDatabase deploys a database. TODO: remove
-func (c *Client) DeployDatabase(ctx context.Context, schema *types.Schema, opts ...clientType.TxOpt) (types.Hash, error) {
-	txOpts := clientType.GetTxOpts(opts)
-	tx, err := c.newTx(ctx, schema, txOpts)
-	if err != nil {
-		return types.Hash{}, err
-	}
-
-	c.logger.Debug("deploying database",
-		"signature_type", tx.Signature.Type,
-		"signature", base64.StdEncoding.EncodeToString(tx.Signature.Data),
-		"fee", tx.Body.Fee.String(), "nonce", tx.Body.Nonce)
-	return c.txClient.Broadcast(ctx, tx, syncBcastFlag(txOpts.SyncBcast))
-}
-
-// DropDatabase drops a database by name, using the configured signer to derive
-// the DB ID. TODO: remove
-func (c *Client) DropDatabase(ctx context.Context, name string, opts ...clientType.TxOpt) (types.Hash, error) {
-	dbid := utils.GenerateDBID(name, c.Signer.Identity())
-	return c.DropDatabaseID(ctx, dbid, opts...)
-}
-
-// DropDatabaseID drops a database by ID. TODO: remove
-func (c *Client) DropDatabaseID(ctx context.Context, dbid string, opts ...clientType.TxOpt) (types.Hash, error) {
-	identifier := &types.DropSchema{
-		DBID: dbid,
-	}
-
-	txOpts := clientType.GetTxOpts(opts)
-	tx, err := c.newTx(ctx, identifier, txOpts)
-	if err != nil {
-		return types.Hash{}, err
-	}
-
-	c.logger.Debug("deploying database",
-		"signature_type", tx.Signature.Type,
-		"signature", base64.StdEncoding.EncodeToString(tx.Signature.Data),
-		"fee", tx.Body.Fee.String(), "nonce", tx.Body.Nonce)
-
-	res, err := c.txClient.Broadcast(ctx, tx, syncBcastFlag(txOpts.SyncBcast))
-	if err != nil {
-		return types.Hash{}, err
-	}
-
-	return res, nil
-}
-
 // Execute executes a procedure or action.
 // It returns the receipt, as well as outputs which is the decoded body of the receipt.
 // It can take any number of inputs, and if multiple tuples of inputs are passed,
@@ -314,8 +256,43 @@ func (c *Client) Execute(ctx context.Context, dbid string, procedure string, tup
 	return c.txClient.Broadcast(ctx, tx, syncBcastFlag(txOpts.SyncBcast))
 }
 
+// ExecuteSQL executes a SQL statement.
+func (c *Client) ExecuteSQL(ctx context.Context, stmt string, params map[string]any, opts ...clientType.TxOpt) (types.Hash, error) {
+	execTx := &types.RawStatement{}
+	execTx.Statement = stmt
+
+	for k, v := range params {
+		encoded, err := types.EncodeValue(v)
+		if err != nil {
+			return types.Hash{}, err
+		}
+
+		execTx.Parameters = append(execTx.Parameters, &struct {
+			Name  string
+			Value *types.EncodedValue
+		}{
+			Name:  k,
+			Value: encoded,
+		})
+	}
+
+	txOpts := clientType.GetTxOpts(opts)
+	tx, err := c.newTx(ctx, execTx, txOpts)
+	if err != nil {
+		return types.Hash{}, err
+	}
+
+	c.logger.Debug("execute SQL",
+		"statement", stmt,
+		"signature_type", tx.Signature.Type,
+		"signature", base64.StdEncoding.EncodeToString(tx.Signature.Data),
+		"fee", tx.Body.Fee.String(), "nonce", tx.Body.Nonce)
+
+	return c.txClient.Broadcast(ctx, tx, syncBcastFlag(txOpts.SyncBcast))
+}
+
 // Call calls a procedure or action. It returns the result records.
-func (c *Client) Call(ctx context.Context, dbid string, procedure string, inputs []any) (*clientType.CallResult, error) {
+func (c *Client) Call(ctx context.Context, dbid string, procedure string, inputs []any) (*types.CallResult, error) {
 	encoded, err := encodeTuple(inputs)
 	if err != nil {
 		return nil, err
@@ -345,31 +322,25 @@ func (c *Client) Call(ctx context.Context, dbid string, procedure string, inputs
 		return nil, fmt.Errorf("create signed message: %w", err)
 	}
 
-	res, logs, err := c.txClient.Call(ctx, msg)
+	res, err := c.txClient.Call(ctx, msg)
 	if err != nil {
 		return nil, fmt.Errorf("call action: %w", err)
 	}
 
-	return &clientType.CallResult{
-		Records: clientType.Records(res),
-		Logs:    logs,
-	}, nil
+	return res, nil
 }
 
 // Query executes a query.
-func (c *Client) Query(ctx context.Context, dbid string, query string) (clientType.Records, error) {
-	res, err := c.txClient.Query(ctx, dbid, query)
+func (c *Client) Query(ctx context.Context, query string, params map[string]any) (*types.QueryResult, error) {
+	if params == nil {
+		params = make(map[string]any)
+	}
+	res, err := c.txClient.Query(ctx, query, params)
 	if err != nil {
 		return nil, err
 	}
 
-	return clientType.Records(res), nil
-}
-
-// ListDatabases lists databases belonging to an owner.
-// If no owner is passed, it will list all databases.
-func (c *Client) ListDatabases(ctx context.Context, owner []byte) ([]*types.DatasetIdentifier, error) {
-	return c.txClient.ListDatabases(ctx, owner)
+	return res, nil
 }
 
 // Ping pings the remote host.

@@ -665,7 +665,7 @@ func (m *mockTxApp) Finalize(ctx context.Context, db sql.DB, block *common.Block
 }
 
 func (m *mockTxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.Validator, accounts []*types.Account,
-	initialHeight int64, chain *common.ChainContext) error {
+	initialHeight int64, dbowner string, chain *common.ChainContext) error {
 	return nil
 }
 

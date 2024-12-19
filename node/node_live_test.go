@@ -421,7 +421,7 @@ func (d *dummyTxApp) Commit() error {
 
 func (d *dummyTxApp) Rollback() {}
 
-func (d *dummyTxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*ktypes.Validator, genesisAccounts []*ktypes.Account, initialHeight int64, chain *common.ChainContext) error {
+func (d *dummyTxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*ktypes.Validator, genesisAccounts []*ktypes.Account, initialHeight int64, dbOwner string, chain *common.ChainContext) error {
 	return nil
 }
 

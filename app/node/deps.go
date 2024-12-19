@@ -6,7 +6,6 @@ import (
 	"errors"
 	"slices"
 
-	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
@@ -70,16 +69,6 @@ type coreDependencies struct {
 	logger     log.Logger
 	dbOpener   dbOpener
 	poolOpener poolOpener
-}
-
-// newService returns a common.Service with the given logger name
-func (c *coreDependencies) newService(loggerName string) *common.Service {
-	return &common.Service{
-		Logger:        c.logger.New(loggerName),
-		GenesisConfig: c.genesisCfg,
-		LocalConfig:   c.cfg,
-		Identity:      c.privKey.Public().Bytes(),
-	}
 }
 
 // closeFuncs holds a list of closers

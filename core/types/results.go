@@ -22,7 +22,7 @@ const (
 	CodeInvalidSender       TxCode = 9
 
 	// engine-related error code
-	CodeInvalidSchema         TxCode = 100
+	CodeInvalidSchema         TxCode = 100 // TODO: remove, as this is not applicable to the engine
 	CodeDatasetMissing        TxCode = 110
 	CodeDatasetExists         TxCode = 120
 	CodeInvalidResolutionType TxCode = 130
@@ -146,4 +146,30 @@ func (e Event) MarshalBinary() ([]byte, error) {
 
 func (e *Event) UnmarshalBinary(data []byte) error {
 	return nil
+}
+
+// QueryResult is the result of a SQL query or action.
+type QueryResult struct {
+	ColumnNames []string    `json:"column_names"`
+	ColumnTypes []*DataType `json:"column_types"`
+	Values      [][]any     `json:"values"`
+}
+
+// ExportToStringMap converts the QueryResult to a slice of maps.
+func (qr *QueryResult) ExportToStringMap() []map[string]string {
+	var res []map[string]string
+	for _, row := range qr.Values {
+		m := make(map[string]string)
+		for i, val := range row {
+			m[qr.ColumnNames[i]] = fmt.Sprintf("%v", val)
+		}
+		res = append(res, m)
+	}
+	return res
+}
+
+// CallResult is the result of a procedure call.
+type CallResult struct {
+	QueryResult *QueryResult `json:"query_result"`
+	Logs        []string     `json:"logs"`
 }

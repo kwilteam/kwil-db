@@ -5,7 +5,6 @@ import (
 	"crypto/ecdsa"
 	"math/big"
 
-	clientType "github.com/kwilteam/kwil-db/core/client/types"
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
@@ -13,25 +12,10 @@ import (
 // Whoever writes a Dsl doesn't need to know what is the underlying implementation
 // When in testing, need to translate the DSL to driver protocol
 
-// DatabaseIdentifier
-// It's questionable whether this should be part of the DSL
-type DatabaseIdentifier interface {
-	DBID(name string) string
-}
-
 type DatabaseExister interface {
 	// DatabaseExists checks if a database exists, impl should check
 	// two APIs: ListDatabases and GetSchema
 	DatabaseExists(ctx context.Context, dbid string) error
-}
-
-// DatabaseDeployDsl is dsl for database deployment specification
-// This dsl could be used to deploy a database
-type DatabaseDeployDsl interface {
-	DatabaseIdentifier
-	DatabaseExister
-	TxQueryDsl
-	DeployDatabase(ctx context.Context, db *types.Schema) (txHash types.Hash, err error)
 }
 
 // AccountBalanceDsl is the dsl for checking an confirmed account balance. This
@@ -48,23 +32,13 @@ type TransferAmountDsl interface {
 	TransferAmt(ctx context.Context, to []byte, amt *big.Int) (txHash types.Hash, err error)
 }
 
-// DatabaseDropDsl is dsl for database drop specification
-type DatabaseDropDsl interface {
-	TxQueryDsl
-	DropDatabase(ctx context.Context, dbName string) (txHash types.Hash, err error)
-	DatabaseIdentifier
-	DatabaseExister
-}
-
 // ExecuteCallDsl is dsl for call specification
 type ExecuteCallDsl interface {
-	DatabaseIdentifier
-	Call(ctx context.Context, dbid, action string, inputs []any) (*clientType.CallResult, error)
+	Call(ctx context.Context, dbid, action string, inputs []any) (*types.CallResult, error)
 }
 
 // ExecuteExtensionDsl is dsl for extension specification
 type ExecuteExtensionDsl interface {
-	DatabaseIdentifier
 	TxQueryDsl
 	ExecuteCallDsl
 	Execute(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) (types.Hash, error)
@@ -72,11 +46,10 @@ type ExecuteExtensionDsl interface {
 
 // ExecuteQueryDsl is dsl for query specification
 type ExecuteQueryDsl interface {
-	DatabaseIdentifier
 	TxQueryDsl
 	// ExecuteAction executes QUERY to a database
 	Execute(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) (types.Hash, error)
-	QueryDatabase(ctx context.Context, dbid, query string) (*clientType.Records, error)
+	QueryDatabase(ctx context.Context, query string) (*types.QueryResult, error)
 	SupportBatch() bool
 }
 
@@ -127,7 +100,6 @@ type ValidatorOpsDsl interface {
 
 type DeployerDsl interface {
 	AccountBalanceDsl
-	DatabaseDeployDsl
 	TransferAmountDsl
 
 	Approve(ctx context.Context, sender *ecdsa.PrivateKey, amount *big.Int) error

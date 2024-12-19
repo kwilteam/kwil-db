@@ -26,7 +26,7 @@ import (
 	"github.com/kwilteam/kwil-db/node/accounts"
 	blockprocessor "github.com/kwilteam/kwil-db/node/block_processor"
 	"github.com/kwilteam/kwil-db/node/consensus"
-	"github.com/kwilteam/kwil-db/node/engine/execution"
+	"github.com/kwilteam/kwil-db/node/engine/interpreter"
 	"github.com/kwilteam/kwil-db/node/listeners"
 	"github.com/kwilteam/kwil-db/node/mempool"
 	"github.com/kwilteam/kwil-db/node/meta"
@@ -346,7 +346,7 @@ func (c *coreDependencies) service(loggerName string) *common.Service {
 }
 
 func buildTxApp(ctx context.Context, d *coreDependencies, db *pg.DB, accounts *accounts.Accounts,
-	votestore *voting.VoteStore, engine *execution.GlobalContext) *txapp.TxApp {
+	votestore *voting.VoteStore, engine common.Engine) *txapp.TxApp {
 	signer := auth.GetNodeSigner(d.privKey)
 
 	txapp, err := txapp.NewTxApp(ctx, db, engine, signer, nil, d.service("TxAPP"), accounts, votestore)
@@ -474,7 +474,7 @@ func failBuild(err error, msg string) {
 	})
 }
 
-func buildEngine(d *coreDependencies, db *pg.DB) *execution.GlobalContext {
+func buildEngine(d *coreDependencies, db *pg.DB) *interpreter.ThreadSafeInterpreter {
 	extensions := precompiles.RegisteredPrecompiles()
 	for name := range extensions {
 		d.logger.Info("registered extension", "name", name)
@@ -486,15 +486,9 @@ func buildEngine(d *coreDependencies, db *pg.DB) *execution.GlobalContext {
 	}
 	defer tx.Rollback(d.ctx)
 
-	err = execution.InitializeEngine(d.ctx, tx)
+	interp, err := interpreter.NewInterpreter(d.ctx, tx, d.service("engine"))
 	if err != nil {
 		failBuild(err, "failed to initialize engine")
-	}
-
-	eng, err := execution.NewGlobalContext(d.ctx, tx,
-		extensions, d.newService("engine"))
-	if err != nil {
-		failBuild(err, "failed to build engine")
 	}
 
 	err = tx.Commit(d.ctx)
@@ -502,7 +496,7 @@ func buildEngine(d *coreDependencies, db *pg.DB) *execution.GlobalContext {
 		failBuild(err, "failed to commit engine init db txn")
 	}
 
-	return eng
+	return interp
 }
 
 func buildSnapshotStore(d *coreDependencies) *snapshotter.SnapshotStore {

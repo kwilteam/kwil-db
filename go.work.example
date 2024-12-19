@@ -3,7 +3,6 @@ go 1.22.0
 use (
 	.
 	./core
-	./parse
 )
 
 // replace github.com/kwilteam/kuneiform => ../kuneiform

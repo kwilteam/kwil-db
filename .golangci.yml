@@ -6,10 +6,7 @@ run:
 
 issues:
   exclude-dirs:
-    - parse/sql/gen
-    - parse/procedures/gen
-    - parse/kuneiform/gen
-    - parse/actions/gen
+    - node/engine/parse/gen
 
 output:
   formats:
