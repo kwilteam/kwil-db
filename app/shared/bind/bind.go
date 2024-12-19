@@ -35,6 +35,8 @@ func BindRootDirVar(cmd *cobra.Command, rootDir *string, defaultVal, desc string
 // BindRootDir is like [BindRootDirVar] but the bound variable is internal and
 // returned as a *string, which may be ignored when using [RootDir].
 func BindRootDir(cmd *cobra.Command, defaultVal, desc string) *string {
+	// cmd.PersistentFlags().String("root-dir", defaultVal, desc) // legacy
+	// cmd.PersistentFlags().MarkHidden("root-dir")
 	return cmd.PersistentFlags().StringP(RootFlagName, rootShortName, defaultVal, desc)
 }
 

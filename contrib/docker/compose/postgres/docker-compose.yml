@@ -1,7 +1,7 @@
 services:
   pg:
     container_name: postgres
-    image: kwildb/postgres:16.4-1
+    image: kwildb/postgres:16.5-1
     ports:
       - "5432:5432"
     restart: always

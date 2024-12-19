@@ -23,7 +23,7 @@ import (
 
 var defaultRoot = func() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".kwil2")
+	return filepath.Join(home, ".kwild")
 }()
 
 func RootCmd() *cobra.Command {
@@ -37,7 +37,7 @@ func RootCmd() *cobra.Command {
 			DisableDefaultCmd: true,
 		},
 		Version: version.KwilVersion,
-		Example: custom.BinaryConfig.NodeCmd + " -r ~/.kwil2",
+		Example: custom.BinaryConfig.NodeCmd + " -r ~/.kwild",
 		// PersistentPreRunE so k has all the settings in all (sub)command's RunE funcs
 		PersistentPreRunE: bind.ChainPreRuns(bind.MaybeEnableCLIDebug, conf.PreRunBindConfigFile,
 			conf.PreRunBindFlags, conf.PreRunBindEnvMatching, conf.PreRunPrintEffectiveConfig),

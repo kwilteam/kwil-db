@@ -182,10 +182,6 @@ jobs:
         run: |
           task build:cli
 
-      - name: Pull math extension docker image
-        run: |
-          docker pull kwilbrennan/extensions-math:multi-arch --platform linux/amd64
-
       - name: Run kgw integration test
         run: |
           testUserID=$(id -u)

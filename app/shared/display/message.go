@@ -52,7 +52,7 @@ var _ MsgFormatter = (*TxHashAndExecResponse)(nil)
 var _ MsgFormatter = (*RespTxQuery)(nil)
 
 type TxHashResponse struct {
-	TxHash string `json:"tx_hash"`
+	TxHash types.Hash `json:"tx_hash"`
 }
 
 // RespTxHash is used to represent a transaction hash in cli
@@ -65,7 +65,7 @@ func (h RespTxHash) Hex() string {
 }
 
 func (h RespTxHash) MarshalJSON() ([]byte, error) {
-	return json.Marshal(TxHashResponse{TxHash: h.Hex()})
+	return json.Marshal(TxHashResponse{TxHash: types.Hash(h)})
 }
 
 func (h RespTxHash) MarshalText() ([]byte, error) {
