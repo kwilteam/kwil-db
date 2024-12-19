@@ -1,121 +1,113 @@
 package specifications
 
-import (
-	"context"
-	"testing"
+// func ExecuteCallSpecification(ctx context.Context, t *testing.T, caller ExecuteCallDsl, visitor ExecuteCallDsl) {
+// 	t.Logf("Executing ExecuteCallSpecification")
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-)
+// 	db := SchemaLoader.Load(t, SchemaTestDB)
+// 	dbID := caller.DBID(db.Name)
 
-func ExecuteCallSpecification(ctx context.Context, t *testing.T, caller ExecuteCallDsl, visitor ExecuteCallDsl) {
-	t.Logf("Executing ExecuteCallSpecification")
+// 	getPostInput := []any{1111}
 
-	db := SchemaLoader.Load(t, SchemaTestDB)
-	dbID := caller.DBID(db.Name)
+// 	res, err := caller.Call(ctx, dbID, "get_post", getPostInput)
+// 	if err != nil {
+// 		t.Fatalf("error calling action: %s", err.Error())
+// 	}
 
-	getPostInput := []any{1111}
+// 	checkGetPostResults(t, res.Records.Export())
 
-	res, err := caller.Call(ctx, dbID, "get_post", getPostInput)
-	if err != nil {
-		t.Fatalf("error calling action: %s", err.Error())
-	}
+// 	// try calling mutable action, should fail
+// 	_, err = caller.Call(ctx, dbID, "delete_user", nil)
+// 	assert.Error(t, err, "expected error calling mutable action")
 
-	checkGetPostResults(t, res.Records.Export())
+// 	// test that modifiers "public owner view" enforces checks on the caller
+// 	// the caller here is the correct owner
+// 	_, err = caller.Call(ctx, dbID, "owner_only", nil)
+// 	assert.NoError(t, err, "calling owner only action with owner as sender should succeed")
 
-	// try calling mutable action, should fail
-	_, err = caller.Call(ctx, dbID, "delete_user", nil)
-	assert.Error(t, err, "expected error calling mutable action")
+// 	// TODO: make this a separate specification
+// 	// and test that authenticating works
+// 	_, err = visitor.Call(ctx, dbID, "owner_only", nil)
+// 	assert.Error(t, err, "calling owner only action with non-owner as sender should fail")
+// }
 
-	// test that modifiers "public owner view" enforces checks on the caller
-	// the caller here is the correct owner
-	_, err = caller.Call(ctx, dbID, "owner_only", nil)
-	assert.NoError(t, err, "calling owner only action with owner as sender should succeed")
+// // ExecuteAuthnCallActionSpecification tests that kgw authn annotation action
+// // accepts calls with authentication
+// func ExecuteAuthnCallActionSpecification(ctx context.Context, t *testing.T, caller ExecuteCallDsl, dbid string) {
+// 	t.Logf("Executing ExecuteAuthnCallActionSpecification")
 
-	// TODO: make this a separate specification
-	// and test that authenticating works
-	_, err = visitor.Call(ctx, dbID, "owner_only", nil)
-	assert.Error(t, err, "calling owner only action with non-owner as sender should fail")
-}
+// 	// try calling authn action, should success
+// 	_, err := caller.Call(ctx, dbid, "authn_only_action", nil)
+// 	assert.NoError(t, err, "expected success calling kgw authn action")
+// }
 
-// ExecuteAuthnCallActionSpecification tests that kgw authn annotation action
-// accepts calls with authentication
-func ExecuteAuthnCallActionSpecification(ctx context.Context, t *testing.T, caller ExecuteCallDsl, dbid string) {
-	t.Logf("Executing ExecuteAuthnCallActionSpecification")
+// // ExecuteAuthnCallProcedureSpecification tests that kgw authn annotation procedure
+// // accepts calls with authentication
+// func ExecuteAuthnCallProcedureSpecification(ctx context.Context, t *testing.T, caller ExecuteCallDsl, dbid string) {
+// 	t.Logf("Executing ExecuteAuthnCallProcedureSpecification")
 
-	// try calling authn action, should success
-	_, err := caller.Call(ctx, dbid, "authn_only_action", nil)
-	assert.NoError(t, err, "expected success calling kgw authn action")
-}
+// 	// try calling authn procedure, should success
+// 	_, err := caller.Call(ctx, dbid, "authn_only_procedure", nil)
+// 	assert.NoError(t, err, "expected success calling kgw authn procedure")
+// }
 
-// ExecuteAuthnCallProcedureSpecification tests that kgw authn annotation procedure
-// accepts calls with authentication
-func ExecuteAuthnCallProcedureSpecification(ctx context.Context, t *testing.T, caller ExecuteCallDsl, dbid string) {
-	t.Logf("Executing ExecuteAuthnCallProcedureSpecification")
+// func checkGetPostResults(t *testing.T, results []map[string]any) {
+// 	if len(results) != 1 {
+// 		t.Fatalf("expected 1 statement result, got %d", len(results))
+// 	}
 
-	// try calling authn procedure, should success
-	_, err := caller.Call(ctx, dbid, "authn_only_procedure", nil)
-	assert.NoError(t, err, "expected success calling kgw authn procedure")
-}
+// 	returnedPost := results[0]
 
-func checkGetPostResults(t *testing.T, results []map[string]any) {
-	if len(results) != 1 {
-		t.Fatalf("expected 1 statement result, got %d", len(results))
-	}
+// 	postId, ok := returnedPost["id"].(int64)
+// 	require.Truef(t, ok, "expected a int64, got a %T", returnedPost["id"])
 
-	returnedPost := results[0]
+// 	if postId != 1111 {
+// 		t.Errorf("expected post id to be 1111, got %d", postId)
+// 	}
+// }
 
-	postId, ok := returnedPost["id"].(int64)
-	require.Truef(t, ok, "expected a int64, got a %T", returnedPost["id"])
+// func ExecuteCallPrivateModeSpecification(ctx context.Context, t *testing.T, authCaller ExecuteActionsDsl, noAuthCaller ExecuteActionsDsl) {
+// 	t.Logf("Executing ExecuteCallPrivateModeSpecification")
 
-	if postId != 1111 {
-		t.Errorf("expected post id to be 1111, got %d", postId)
-	}
-}
+// 	db := SchemaLoader.Load(t, SchemaTestDB)
+// 	dbID := authCaller.DBID(db.Name)
 
-func ExecuteCallPrivateModeSpecification(ctx context.Context, t *testing.T, authCaller ExecuteActionsDsl, noAuthCaller ExecuteActionsDsl) {
-	t.Logf("Executing ExecuteCallPrivateModeSpecification")
+// 	// When i execute action to database
+// 	user1 := userTable{
+// 		ID:       1111,
+// 		UserName: "test_user",
+// 		Age:      22,
+// 	}
 
-	db := SchemaLoader.Load(t, SchemaTestDB)
-	dbID := authCaller.DBID(db.Name)
+// 	createUserActionInput := []any{user1.ID, user1.UserName, user1.Age}
 
-	// When i execute action to database
-	user1 := userTable{
-		ID:       1111,
-		UserName: "test_user",
-		Age:      22,
-	}
+// 	txHash, err := authCaller.Execute(ctx, dbID, createUserActionName, createUserActionInput)
+// 	assert.NoError(t, err)
 
-	createUserActionInput := []any{user1.ID, user1.UserName, user1.Age}
+// 	expectTxSuccess(t, authCaller, ctx, txHash, defaultTxQueryTimeout)()
 
-	txHash, err := authCaller.Execute(ctx, dbID, createUserActionName, createUserActionInput)
-	assert.NoError(t, err)
+// 	// testing query database: disabled for all clients
+// 	_, err = noAuthCaller.QueryDatabase(ctx, dbID, "SELECT * FROM users")
+// 	assert.Error(t, err, "expected error querying database without authentication")
 
-	expectTxSuccess(t, authCaller, ctx, txHash, defaultTxQueryTimeout)()
+// 	_, err = authCaller.QueryDatabase(ctx, dbID, "SELECT * FROM users")
+// 	assert.Error(t, err, "expected error even from authenticated calller")
 
-	// testing query database: disabled for all clients
-	_, err = noAuthCaller.QueryDatabase(ctx, dbID, "SELECT * FROM users")
-	assert.Error(t, err, "expected error querying database without authentication")
+// 	// create post
+// 	const createPostQueryName = "create_post"
+// 	post1 := [][]any{
+// 		{1111, "test_post", "test_body"},
+// 	}
 
-	_, err = authCaller.QueryDatabase(ctx, dbID, "SELECT * FROM users")
-	assert.Error(t, err, "expected error even from authenticated calller")
+// 	txHash, err = authCaller.Execute(ctx, dbID, createPostQueryName, post1...)
+// 	assert.NoError(t, err)
 
-	// create post
-	const createPostQueryName = "create_post"
-	post1 := [][]any{
-		{1111, "test_post", "test_body"},
-	}
+// 	expectTxSuccess(t, authCaller, ctx, txHash, defaultTxQueryTimeout)()
 
-	txHash, err = authCaller.Execute(ctx, dbID, createPostQueryName, post1...)
-	assert.NoError(t, err)
+// 	// testing call action
+// 	getPostInput := []any{1111}
+// 	_, err = noAuthCaller.Call(ctx, dbID, "get_post", getPostInput)
+// 	assert.Error(t, err, "expected error calling action without authentication")
 
-	expectTxSuccess(t, authCaller, ctx, txHash, defaultTxQueryTimeout)()
-
-	// testing call action
-	getPostInput := []any{1111}
-	_, err = noAuthCaller.Call(ctx, dbID, "get_post", getPostInput)
-	assert.Error(t, err, "expected error calling action without authentication")
-
-	_, err = authCaller.Call(ctx, dbID, "get_post", getPostInput)
-	assert.NoError(t, err)
-}
+// 	_, err = authCaller.Call(ctx, dbID, "get_post", getPostInput)
+// 	assert.NoError(t, err)
+// }

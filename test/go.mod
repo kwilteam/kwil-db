@@ -5,7 +5,6 @@ go 1.22.7
 replace (
 	github.com/kwilteam/kwil-db => ../
 	github.com/kwilteam/kwil-db/core => ../core
-	github.com/kwilteam/kwil-db/parse => ../parse
 )
 
 require (
@@ -14,7 +13,6 @@ require (
 	github.com/ethereum/go-ethereum v1.14.12
 	github.com/kwilteam/kwil-db v0.0.0-00010101000000-000000000000
 	github.com/kwilteam/kwil-db/core v0.3.1-0.20241212163115-7353f2761884
-	github.com/kwilteam/kwil-db/parse v0.3.1-0.20241212163115-7353f2761884
 	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go v0.34.0
 	github.com/testcontainers/testcontainers-go/modules/compose v0.34.0
@@ -78,8 +76,8 @@ require (
 	github.com/decred/dcrd/crypto/rand v1.0.0 // indirect
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0 // indirect
 	github.com/decred/slog v1.2.0 // indirect
-	github.com/dgraph-io/badger/v4 v4.3.1 // indirect
-	github.com/dgraph-io/ristretto v1.0.0 // indirect
+	github.com/dgraph-io/badger/v4 v4.5.0 // indirect
+	github.com/dgraph-io/ristretto/v2 v2.0.0 // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/buildx v0.19.3 // indirect
 	github.com/docker/cli v27.4.1+incompatible // indirect

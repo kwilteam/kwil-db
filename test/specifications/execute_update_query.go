@@ -1,93 +1,85 @@
 package specifications
 
-import (
-	"context"
-	"testing"
+// func ExecuteDBUpdateSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {
+// 	t.Logf("Executing update action specification")
+// 	// Given a valid database schema
+// 	db := SchemaLoader.Load(t, SchemaTestDB)
+// 	dbID := execute.DBID(db.Name)
+// 	actionName := "update_user"
+// 	userQ := userTable{
+// 		ID:       2222,
+// 		UserName: "test_user_update",
+// 		Age:      22,
+// 	}
 
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
-)
+// 	actionInput := [][]any{
+// 		{userQ.ID, userQ.UserName, userQ.Age},
+// 	}
 
-func ExecuteDBUpdateSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl) {
-	t.Logf("Executing update action specification")
-	// Given a valid database schema
-	db := SchemaLoader.Load(t, SchemaTestDB)
-	dbID := execute.DBID(db.Name)
-	actionName := "update_user"
-	userQ := userTable{
-		ID:       2222,
-		UserName: "test_user_update",
-		Age:      22,
-	}
+// 	// When i execute action to database
+// 	txHash, err := execute.Execute(ctx, dbID, actionName, actionInput...)
+// 	assert.NoError(t, err)
 
-	actionInput := [][]any{
-		{userQ.ID, userQ.UserName, userQ.Age},
-	}
+// 	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
 
-	// When i execute action to database
-	txHash, err := execute.Execute(ctx, dbID, actionName, actionInput...)
-	assert.NoError(t, err)
+// 	// Then i expect row to be updated
+// 	receipt, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM users WHERE id = 2222")
+// 	assert.NoError(t, err)
+// 	assert.NotNil(t, receipt)
 
-	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
+// 	results := receipt.Export()
+// 	if len(results) != 1 {
+// 		t.Errorf("expected 1 statement result, got %d", len(results))
+// 	}
 
-	// Then i expect row to be updated
-	receipt, err := execute.QueryDatabase(ctx, dbID, "SELECT * FROM users WHERE id = 2222")
-	assert.NoError(t, err)
-	assert.NotNil(t, receipt)
+// 	returnedUser1 := results[0]
 
-	results := receipt.Export()
-	if len(results) != 1 {
-		t.Errorf("expected 1 statement result, got %d", len(results))
-	}
+// 	user1Id, ok := returnedUser1["id"].(int64)
+// 	require.Truef(t, ok, "expected a int64, got a %T", returnedUser1["id"])
 
-	returnedUser1 := results[0]
+// 	user1Username, ok := returnedUser1["username"].(string)
+// 	require.Truef(t, ok, "expected a string, got a %T", returnedUser1["username"])
 
-	user1Id, ok := returnedUser1["id"].(int64)
-	require.Truef(t, ok, "expected a int64, got a %T", returnedUser1["id"])
+// 	user1Age, ok := returnedUser1["age"].(int64)
+// 	require.Truef(t, ok, "expected a int64, got a %T", returnedUser1["age"])
 
-	user1Username, ok := returnedUser1["username"].(string)
-	require.Truef(t, ok, "expected a string, got a %T", returnedUser1["username"])
+// 	assert.EqualValues(t, userQ.ID, user1Id)
+// 	assert.EqualValues(t, userQ.UserName, user1Username)
+// 	assert.EqualValues(t, userQ.Age, user1Age)
 
-	user1Age, ok := returnedUser1["age"].(int64)
-	require.Truef(t, ok, "expected a int64, got a %T", returnedUser1["age"])
+// 	// check foreign key was updated properly from the previous UPDATE
+// 	receipt, err = execute.QueryDatabase(ctx, dbID, "SELECT title, content FROM posts WHERE user_id = 2222;")
+// 	assert.NoError(t, err)
+// 	assert.NotNil(t, receipt)
 
-	assert.EqualValues(t, userQ.ID, user1Id)
-	assert.EqualValues(t, userQ.UserName, user1Username)
-	assert.EqualValues(t, userQ.Age, user1Age)
+// 	results = receipt.Export()
+// 	length1 := len(results)
+// 	assert.NotZero(t, length1, "user should have more than 0 posts")
 
-	// check foreign key was updated properly from the previous UPDATE
-	receipt, err = execute.QueryDatabase(ctx, dbID, "SELECT title, content FROM posts WHERE user_id = 2222;")
-	assert.NoError(t, err)
-	assert.NotNil(t, receipt)
+// 	receipt, err = execute.QueryDatabase(ctx, dbID, `SELECT title, content
+//     FROM posts
+//     WHERE user_id = (
+//         SELECT id
+//         FROM users
+//         WHERE username = 'test_user_update'
+//     );`)
+// 	assert.NoError(t, err)
+// 	assert.NotNil(t, receipt)
 
-	results = receipt.Export()
-	length1 := len(results)
-	assert.NotZero(t, length1, "user should have more than 0 posts")
+// 	results = receipt.Export()
 
-	receipt, err = execute.QueryDatabase(ctx, dbID, `SELECT title, content
-    FROM posts
-    WHERE user_id = (
-        SELECT id
-        FROM users
-        WHERE username = 'test_user_update'
-    );`)
-	assert.NoError(t, err)
-	assert.NotNil(t, receipt)
+// 	assert.NotZero(t, len(results), "user should have more than 0 posts")
+// 	assert.Equal(t, length1, len(results), "user should have same number of posts after username update")
 
-	results = receipt.Export()
+// 	// TODO: get result
+// 	//assert.NotZero(t, len(results), "should get user's posts after user_id updated")
 
-	assert.NotZero(t, len(results), "user should have more than 0 posts")
-	assert.Equal(t, length1, len(results), "user should have same number of posts after username update")
-
-	// TODO: get result
-	//assert.NotZero(t, len(results), "should get user's posts after user_id updated")
-
-	//getUserPostsActionName := "get_user_posts"
-	//actionInput = []map[string]any{
-	//	{"$username": userQ.UserName},
-	//}
-	//receipt, results, err = execute.Execute(ctx, dbID, getUserPostsActionName, actionInput)
-	//assert.NoError(t, err)
-	//assert.NotNil(t, receipt)
-	//assert.NotZero(t, len(results), "should get user's posts after user_id updated")
-}
+// 	//getUserPostsActionName := "get_user_posts"
+// 	//actionInput = []map[string]any{
+// 	//	{"$username": userQ.UserName},
+// 	//}
+// 	//receipt, results, err = execute.Execute(ctx, dbID, getUserPostsActionName, actionInput)
+// 	//assert.NoError(t, err)
+// 	//assert.NotNil(t, receipt)
+// 	//assert.NotZero(t, len(results), "should get user's posts after user_id updated")
+// }

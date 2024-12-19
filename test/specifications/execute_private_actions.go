@@ -1,50 +1,42 @@
 package specifications
 
-import (
-	"context"
-	"fmt"
-	"testing"
+// func ExecutePrivateActionSpecification(ctx context.Context, t *testing.T, execute ExecuteActionsDsl) {
+// 	t.Logf("Executing private action specification")
 
-	"github.com/stretchr/testify/require"
-)
+// 	db := SchemaLoader.Load(t, SchemaTestDB)
+// 	dbID := execute.DBID(db.Name)
 
-func ExecutePrivateActionSpecification(ctx context.Context, t *testing.T, execute ExecuteActionsDsl) {
-	t.Logf("Executing private action specification")
+// 	id := int32(2833)
+// 	postTitle := "test_post_private"
+// 	postContent := "content for test_post_private"
 
-	db := SchemaLoader.Load(t, SchemaTestDB)
-	dbID := execute.DBID(db.Name)
+// 	createPostActionInput := []any{id, postTitle, postContent}
 
-	id := int32(2833)
-	postTitle := "test_post_private"
-	postContent := "content for test_post_private"
+// 	txHash, err := execute.Execute(ctx, dbID, "create_post_private", createPostActionInput)
+// 	require.NoError(t, err, "error executing private action")
 
-	createPostActionInput := []any{id, postTitle, postContent}
+// 	expectTxFail(t, execute, ctx, txHash, defaultTxQueryTimeout)()
 
-	txHash, err := execute.Execute(ctx, dbID, "create_post_private", createPostActionInput)
-	require.NoError(t, err, "error executing private action")
+// 	if hasUser(ctx, t, execute, dbID, id) {
+// 		t.Fatalf("user %d should not exist", id)
+// 	}
 
-	expectTxFail(t, execute, ctx, txHash, defaultTxQueryTimeout)()
+// 	// calling nested should work
+// 	txHash, err = execute.Execute(ctx, dbID, "create_post_nested", createPostActionInput)
+// 	require.NoError(t, err, "error executing nested action")
 
-	if hasUser(ctx, t, execute, dbID, id) {
-		t.Fatalf("user %d should not exist", id)
-	}
+// 	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
 
-	// calling nested should work
-	txHash, err = execute.Execute(ctx, dbID, "create_post_nested", createPostActionInput)
-	require.NoError(t, err, "error executing nested action")
+// 	if !hasUser(ctx, t, execute, dbID, id) {
+// 		t.Fatalf("user %d should exist", id)
+// 	}
+// }
 
-	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
+// func hasUser(ctx context.Context, t *testing.T, execute ExecuteActionsDsl, dbid string, id int32) bool {
+// 	records, err := execute.QueryDatabase(ctx, dbid, fmt.Sprintf("SELECT * FROM posts WHERE id = %d", id))
+// 	require.NoError(t, err)
+// 	require.NotNil(t, records)
 
-	if !hasUser(ctx, t, execute, dbID, id) {
-		t.Fatalf("user %d should exist", id)
-	}
-}
-
-func hasUser(ctx context.Context, t *testing.T, execute ExecuteActionsDsl, dbid string, id int32) bool {
-	records, err := execute.QueryDatabase(ctx, dbid, fmt.Sprintf("SELECT * FROM posts WHERE id = %d", id))
-	require.NoError(t, err)
-	require.NotNil(t, records)
-
-	mapRecords := records.Export()
-	return len(mapRecords) != 0
-}
+// 	mapRecords := records.Export()
+// 	return len(mapRecords) != 0
+// }

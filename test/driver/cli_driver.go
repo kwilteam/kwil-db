@@ -12,7 +12,6 @@ import (
 	"math/big"
 	"os"
 	"os/exec"
-	"path"
 	"reflect"
 	"strings"
 	"time"
@@ -20,12 +19,11 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	ec "github.com/ethereum/go-ethereum/crypto"
 
-	clientType "github.com/kwilteam/kwil-db/core/client/types"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/database"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/utils"
 
 	ethdeployer "github.com/kwilteam/kwil-db/test/integration/eth-deployer"
 )
@@ -129,71 +127,6 @@ func (d *KwilCliDriver) TransferAmt(ctx context.Context, to []byte, amt *big.Int
 	return out.TxHash, nil
 }
 
-func (d *KwilCliDriver) DBID(name string) string {
-	return utils.GenerateDBID(name, d.identity)
-}
-
-func (d *KwilCliDriver) listDatabase() ([]*types.DatasetIdentifier, error) {
-	cmd := d.newKwilCliCmd("database", "list", "--owner", hex.EncodeToString(d.identity))
-	out, err := mustRun[[]*types.DatasetIdentifier](cmd, d.logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to list databases: %w", err)
-	}
-
-	d.logger.Debug("list database result", "result", out)
-	return out, nil
-}
-
-func (d *KwilCliDriver) DatabaseExists(_ context.Context, dbid string) error {
-	// check GetSchema
-	_, err := d.getSchema(dbid)
-	if err != nil {
-		return err
-	}
-
-	// check ListDatabases
-	dbs, err := d.listDatabase()
-	if err != nil {
-		return err
-	}
-
-	found := false
-	for _, db := range dbs {
-		if db.DBID == dbid {
-			found = true
-			break
-		}
-	}
-
-	if !found {
-		return fmt.Errorf("ListDatabase: database not found: %s", dbid)
-	}
-
-	return nil
-}
-
-func (d *KwilCliDriver) DeployDatabase(_ context.Context, db *types.Schema) (types.Hash, error) {
-	schemaFile := path.Join(os.TempDir(), fmt.Sprintf("schema-%s.json", time.Now().Format("20060102150405")))
-
-	dbByte, err := json.MarshalIndent(db, "", "  ")
-	if err != nil {
-		return types.Hash{}, fmt.Errorf("failed to marshal database: %w", err)
-	}
-
-	err = os.WriteFile(schemaFile, dbByte, 0644)
-	if err != nil {
-		return types.Hash{}, fmt.Errorf("failed to write database schema: %w", err)
-	}
-
-	cmd := d.newKwilCliCmd("database", "deploy", schemaFile, "-t", "json")
-	out, err := mustRun[respTxHash](cmd, d.logger)
-	if err != nil {
-		return types.Hash{}, fmt.Errorf("failed to deploy database: %w", err)
-	}
-
-	return out.TxHash, nil
-}
-
 func (d *KwilCliDriver) TxSuccess(_ context.Context, txHash types.Hash) error {
 	cmd := d.newKwilCliCmd("utils", "query-tx", txHash.String())
 	out, err := mustRun[respTxQuery](cmd, d.logger)
@@ -231,29 +164,14 @@ func (d *KwilCliDriver) DropDatabase(_ context.Context, dbName string) (types.Ha
 	return out.TxHash, nil
 }
 
-func (d *KwilCliDriver) getSchema(dbid string) (*types.Schema, error) {
-	cmd := d.newKwilCliCmd("database", "read-schema", "--dbid", dbid)
-	out, err := mustRun[*types.Schema](cmd, d.logger)
-	if err != nil {
-		return nil, fmt.Errorf("failed to getSchema: %w", err)
-	}
-
-	d.logger.Debug("get schema result", "result", out)
-
-	return out, nil
-}
-
 // prepareCliActionParams returns the named action args for the given action name, in
 // the format of `name:value`
-func (d *KwilCliDriver) prepareCliActionParams(dbid string, actionName string, actionInputs []any) ([]string, error) {
-	schema, err := d.getSchema(dbid)
+func (d *KwilCliDriver) prepareCliActionParams(ctx context.Context, namespace string, actionName string, actionInputs []any) ([]string, error) {
+	params, err := database.GetParamList(ctx, func(ctx context.Context, query string, args map[string]any) (*types.QueryResult, error) {
+		return d.QueryDatabase(ctx, query)
+	}, namespace, actionName)
 	if err != nil {
-		return nil, err
-	}
-
-	params, err := getParamList(schema, actionName)
-	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to get action params: %w", err)
 	}
 
 	if len(params) != len(actionInputs) {
@@ -273,7 +191,7 @@ func (d *KwilCliDriver) prepareCliActionParams(dbid string, actionName string, a
 
 	args := []string{}
 	for i, input := range params {
-		input = input[1:] // remove the leading $
+		pName := input.Name[1:] // remove the leading $
 
 		// if the input is a slice, we need to delimit it with commas
 		typeOf := reflect.TypeOf(actionInputs[i])
@@ -282,44 +200,22 @@ func (d *KwilCliDriver) prepareCliActionParams(dbid string, actionName string, a
 			for _, v := range actionInputs[i].([]any) {
 				sliceArgs = append(sliceArgs, stringify(v))
 			}
-			args = append(args, fmt.Sprintf("%s:%s", input, strings.Join(sliceArgs, ",")))
+			args = append(args, fmt.Sprintf("%s:%s", pName, strings.Join(sliceArgs, ",")))
 			continue
 		}
 
-		args = append(args, fmt.Sprintf("%s:%s", input, stringify(actionInputs[i])))
+		args = append(args, fmt.Sprintf("%s:%s", pName, stringify(actionInputs[i])))
 	}
 	return args, nil
 }
 
-// getParamList gets the list of parameters needed by either an action or procedure
-// it will return an error if not found.
-func getParamList(schema *types.Schema, actionOrProcedure string) ([]string, error) {
-	for _, a := range schema.Actions {
-		if strings.EqualFold(a.Name, actionOrProcedure) {
-			return a.Parameters, nil
-		}
-	}
-
-	for _, p := range schema.Procedures {
-		if strings.EqualFold(p.Name, actionOrProcedure) {
-			params := []string{}
-			for _, param := range p.Parameters {
-				params = append(params, param.Name)
-			}
-			return params, nil
-		}
-	}
-
-	return nil, fmt.Errorf("action/procedure not found: %s", actionOrProcedure)
-}
-
-func (d *KwilCliDriver) Execute(_ context.Context, dbid string, action string, inputs ...[]any) (types.Hash, error) {
+func (d *KwilCliDriver) Execute(ctx context.Context, dbid string, action string, inputs ...[]any) (types.Hash, error) {
 	if len(inputs) > 1 {
 		return types.Hash{}, fmt.Errorf("kwil-cli does not support batched inputs")
 	}
 
 	// NOTE: kwil-cli does not support batched inputs
-	actionInputs, err := d.prepareCliActionParams(dbid, action, inputs[0])
+	actionInputs, err := d.prepareCliActionParams(ctx, dbid, action, inputs[0])
 	if err != nil {
 		return types.Hash{}, fmt.Errorf("failed to get action params: %w", err)
 	}
@@ -335,11 +231,11 @@ func (d *KwilCliDriver) Execute(_ context.Context, dbid string, action string, i
 	return out.TxHash, nil
 }
 
-func (d *KwilCliDriver) QueryDatabase(_ context.Context, dbid, query string) (*clientType.Records, error) {
-	args := []string{"database", "query", "--dbid", dbid, query}
+func (d *KwilCliDriver) QueryDatabase(_ context.Context, query string) (*types.QueryResult, error) {
+	args := []string{"database", "query", query}
 
 	cmd := d.newKwilCliCmd(args...)
-	out, err := mustRun[*clientType.Records](cmd, d.logger)
+	out, err := mustRun[*types.QueryResult](cmd, d.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query database: %w", err)
 	}
@@ -348,9 +244,9 @@ func (d *KwilCliDriver) QueryDatabase(_ context.Context, dbid, query string) (*c
 	return out, nil
 }
 
-func (d *KwilCliDriver) Call(_ context.Context, dbid, action string, inputs []any) (*clientType.CallResult, error) {
+func (d *KwilCliDriver) Call(ctx context.Context, dbid, action string, inputs []any) (*types.CallResult, error) {
 	// NOTE: kwil-cli does not support batched inputs
-	actionInputs, err := d.prepareCliActionParams(dbid, action, inputs)
+	actionInputs, err := d.prepareCliActionParams(ctx, dbid, action, inputs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare action params: %w", err)
 	}
@@ -364,7 +260,7 @@ func (d *KwilCliDriver) Call(_ context.Context, dbid, action string, inputs []an
 
 	cmd := d.newKwilCliCmdWithYes(args...)
 
-	out, err := mustRunCallIgnorePrompt[*clientType.CallResult](cmd, d.logger)
+	out, err := mustRunCallIgnorePrompt[*types.CallResult](cmd, d.logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to call action: %w", err)
 	}
