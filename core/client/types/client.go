@@ -19,6 +19,7 @@ type Client interface {
 	ChainID() string
 	ChainInfo(ctx context.Context) (*types.ChainInfo, error)
 	Execute(ctx context.Context, dbid string, action string, tuples [][]any, opts ...TxOpt) (types.Hash, error)
+	ExecuteSQL(ctx context.Context, sql string, params map[string]any, opts ...TxOpt) (types.Hash, error)
 	GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error)
 	Ping(ctx context.Context) (string, error)
 	Query(ctx context.Context, query string, params map[string]any) (*types.QueryResult, error)

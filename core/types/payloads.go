@@ -143,7 +143,11 @@ func RegisterPayload(pType PayloadType) {
 
 // RawStatement is a raw SQL statement that is executed as a transaction
 type RawStatement struct {
-	Statement string
+	Statement  string
+	Parameters []*struct {
+		Name  string
+		Value *EncodedValue
+	}
 }
 
 var _ Payload = (*RawStatement)(nil)

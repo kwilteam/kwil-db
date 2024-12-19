@@ -61,12 +61,12 @@ func callCmd() *cobra.Command {
 			}
 
 			return client.DialClient(cmd.Context(), cmd, dialFlags, func(ctx context.Context, clnt clientType.Client, conf *config.KwilCliConfig) error {
-				dbid, err := getSelectedDbid(cmd, conf)
+				dbid, err := getSelectedNamespace(cmd)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error getting selected dbid from CLI flags: %w", err))
 				}
 
-				action, args, err := getSelectedActionOrProcedure(cmd, args)
+				action, args, err := getSelectedAction(cmd, args)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error getting selected action or procedure: %w", err))
 				}
@@ -76,7 +76,7 @@ func callCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("error getting inputs: %w", err))
 				}
 
-				tuples, err := buildExecutionInputs(ctx, clnt, dbid, action, inputs)
+				tuples, err := buildExecutionInputs(ctx, clnt, dbid, action, []map[string]string{inputs})
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error creating action/procedure inputs: %w", err))
 				}
@@ -105,7 +105,7 @@ func callCmd() *cobra.Command {
 		},
 	}
 
-	bindFlagsTargetingProcedureOrAction(cmd)
+	bindFlagsTargetingAction(cmd)
 	cmd.Flags().BoolVar(&gwAuth, "authenticate", false, "authenticate signals that the call is being made to a gateway and should be authenticated with the private key")
 	cmd.Flags().BoolVar(&logs, "logs", false, "result will include logs from notices raised during the call")
 	return cmd

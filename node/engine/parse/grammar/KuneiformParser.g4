@@ -424,8 +424,8 @@ action_expr_list:
 action_statement:
     VARIABLE type SCOL                                                                                  # stmt_variable_declaration
     // stmt_action_call must go above stmt_variable_assignment due to lexer ambiguity
-    | ((variable_or_underscore) (COMMA (variable_or_underscore))* ASSIGN)? action_function_call SCOL # stmt_action_call
-    | action_expr type? ASSIGN action_expr SCOL                                                         # stmt_variable_assignment
+    | ((variable_or_underscore) (COMMA (variable_or_underscore))* (ASSIGN | EQUALS))? action_function_call SCOL # stmt_action_call
+    | action_expr type? (ASSIGN | EQUALS) action_expr SCOL                                                         # stmt_variable_assignment
     | FOR receiver=VARIABLE IN (range|target_variable=variable|sql_statement) LBRACE action_statement* RBRACE SCOL?  # stmt_for_loop
     | IF if_then_block (ELSEIF if_then_block)* (ELSE LBRACE action_statement* RBRACE)? SCOL?                        # stmt_if
     | sql_statement SCOL                                                                                # stmt_sql

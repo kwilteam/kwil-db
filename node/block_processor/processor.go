@@ -298,7 +298,7 @@ func (bp *BlockProcessor) InitChain(ctx context.Context) (int64, []byte, error) 
 
 	genCfg := bp.genesisParams
 
-	if err := bp.txapp.GenesisInit(ctx, genesisTx, genCfg.Validators, nil, genCfg.InitialHeight, bp.chainCtx); err != nil {
+	if err := bp.txapp.GenesisInit(ctx, genesisTx, genCfg.Validators, nil, genCfg.InitialHeight, genCfg.DBOwner, bp.chainCtx); err != nil {
 		return -1, nil, err
 	}
 

@@ -341,6 +341,38 @@ func Test_Actions(t *testing.T) {
 				{int64(1)},
 			},
 		},
+		{
+			name: "read values out of the db, perform arithmetic and conditionals",
+			stmt: []string{`INSERT INTO users(id, name, age) VALUES (1, 'satoshi', 42), (2, 'hal finney', 50), (3, 'craig wright', 45)`, `
+			CREATE ACTION do_something() public view returns (result int) {
+				$total int8;
+				$sum int8;
+				for $row in SELECT count(*) as count, sum(age) as sum FROM users WHERE age >= 45 {
+					$total := $row.count::int8;
+					$sum := $row.sum::int8;
+				}
+				if $total is null {
+					error('no users found');
+				}
+
+				-- random arithmetic
+				$result := ($total * 2 + $sum)/3; -- (2 * 2 + 95)/3 = 33
+
+				if $result < 33 {
+					error('result is less than 33');
+				}
+				if $result > 33 {
+					error('result is greater than 33');
+				}
+
+				RETURN $result;
+			}
+			`},
+			action: "do_something",
+			results: [][]any{
+				{int64(33)},
+			},
+		},
 	}
 
 	for _, test := range tests {

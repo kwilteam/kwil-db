@@ -80,12 +80,12 @@ tasks:
   kuneiform:grammar:
     desc: Generate kuneiform grammar go code.
     cmds:
-      - rm -rf parse/gen/*
-      - cd parse/grammar/ && ./generate.sh
+      - rm -rf node/engine/parse/gen/*
+      - cd node/engine/parse/grammar/ && ./generate.sh
     sources:
-      - parse/grammar/*.g4
+      - node/engine/parse/grammar/*.g4
     generates:
-      - parse/gen/*.{go,interp,tokens}
+      - node/engine/parse/gen/*.{go,interp,tokens}
 
   # ************ docker ************
   vendor:

@@ -191,3 +191,4 @@ HASH_IDENTIFIER:
 WS:            [ \u000B\t\r\n]        -> channel(HIDDEN);
 BLOCK_COMMENT: '/*' .*? '*/' -> channel(HIDDEN);
 LINE_COMMENT:  '//' ~[\r\n]* -> channel(HIDDEN);
+SQL_COMMENT:   '--' ~[\r\n]* -> channel(HIDDEN);

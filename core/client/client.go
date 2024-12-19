@@ -256,6 +256,41 @@ func (c *Client) Execute(ctx context.Context, dbid string, procedure string, tup
 	return c.txClient.Broadcast(ctx, tx, syncBcastFlag(txOpts.SyncBcast))
 }
 
+// ExecuteSQL executes a SQL statement.
+func (c *Client) ExecuteSQL(ctx context.Context, stmt string, params map[string]any, opts ...clientType.TxOpt) (types.Hash, error) {
+	execTx := &types.RawStatement{}
+	execTx.Statement = stmt
+
+	for k, v := range params {
+		encoded, err := types.EncodeValue(v)
+		if err != nil {
+			return types.Hash{}, err
+		}
+
+		execTx.Parameters = append(execTx.Parameters, &struct {
+			Name  string
+			Value *types.EncodedValue
+		}{
+			Name:  k,
+			Value: encoded,
+		})
+	}
+
+	txOpts := clientType.GetTxOpts(opts)
+	tx, err := c.newTx(ctx, execTx, txOpts)
+	if err != nil {
+		return types.Hash{}, err
+	}
+
+	c.logger.Debug("execute SQL",
+		"statement", stmt,
+		"signature_type", tx.Signature.Type,
+		"signature", base64.StdEncoding.EncodeToString(tx.Signature.Data),
+		"fee", tx.Body.Fee.String(), "nonce", tx.Body.Nonce)
+
+	return c.txClient.Broadcast(ctx, tx, syncBcastFlag(txOpts.SyncBcast))
+}
+
 // Call calls a procedure or action. It returns the result records.
 func (c *Client) Call(ctx context.Context, dbid string, procedure string, inputs []any) (*types.CallResult, error) {
 	encoded, err := encodeTuple(inputs)

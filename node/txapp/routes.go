@@ -214,6 +214,7 @@ func codeForEngineError(err error) types.TxCode {
 
 type rawStatementRoute struct {
 	statement string
+	params    map[string]any
 }
 
 var _ consensus.Route = (*rawStatementRoute)(nil)
@@ -234,11 +235,21 @@ func (d *rawStatementRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx
 	}
 
 	d.statement = raw.Statement
+	d.params = make(map[string]any, len(raw.Parameters))
+	for _, p := range raw.Parameters {
+		decoded, err := p.Value.Decode()
+		if err != nil {
+			return types.CodeEncodingError, err
+		}
+
+		d.params[p.Name] = decoded
+	}
+
 	return 0, nil
 }
 
 func (d *rawStatementRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
-	err := app.Engine.Execute(ctx, app.DB, d.statement, nil, func(r *common.Row) error {
+	err := app.Engine.Execute(ctx, app.DB, d.statement, d.params, func(r *common.Row) error {
 		// we throw away all results for raw statements in a block
 		return nil
 	})

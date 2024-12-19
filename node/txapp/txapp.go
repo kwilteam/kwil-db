@@ -74,7 +74,7 @@ func NewTxApp(ctx context.Context, db sql.Executor, engine common.Engine, signer
 // It can assign the initial validator set and initial account balances.
 // It is only called once for a new chain.
 func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.Validator, genesisAccounts []*types.Account,
-	initialHeight int64, chainCtx *common.ChainContext) error {
+	initialHeight int64, dbOwner string, chainCtx *common.ChainContext) error {
 
 	// Add Genesis Validators
 	for _, validator := range validators {
@@ -90,6 +90,12 @@ func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.
 		if err != nil {
 			return err
 		}
+	}
+
+	// set db owner
+	err := r.Engine.SetOwner(ctx, db, dbOwner)
+	if err != nil {
+		return err
 	}
 
 	// genesis hooks
