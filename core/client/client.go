@@ -332,6 +332,9 @@ func (c *Client) Call(ctx context.Context, dbid string, procedure string, inputs
 
 // Query executes a query.
 func (c *Client) Query(ctx context.Context, query string, params map[string]any) (*types.QueryResult, error) {
+	if params == nil {
+		params = make(map[string]any)
+	}
 	res, err := c.txClient.Query(ctx, query, params)
 	if err != nil {
 		return nil, err

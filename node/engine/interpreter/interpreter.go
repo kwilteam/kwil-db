@@ -307,7 +307,7 @@ func (i *BaseInterpreter) Execute(ctx *common.TxContext, db sql.DB, statement st
 		return fmt.Errorf("no valid statements provided: %s", statement)
 	}
 
-	execCtx, err := i.newExecCtx(ctx, db, defaultNamespace)
+	execCtx, err := i.newExecCtx(ctx, db, DefaultNamespace)
 	if err != nil {
 		return err
 	}
@@ -374,7 +374,7 @@ func (i *BaseInterpreter) Call(ctx *common.TxContext, db sql.DB, namespace, acti
 	}
 
 	if namespace == "" {
-		namespace = defaultNamespace
+		namespace = DefaultNamespace
 	}
 
 	ns, ok := i.namespaces[namespace]
@@ -469,7 +469,7 @@ func (i *BaseInterpreter) SetOwner(ctx context.Context, db sql.DB, owner string)
 }
 
 const (
-	defaultNamespace = "main"
+	DefaultNamespace = "main"
 )
 
 var builtInExecutables = func() map[string]*executable {

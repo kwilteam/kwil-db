@@ -13,6 +13,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	clientType "github.com/kwilteam/kwil-db/core/client/types"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/node/engine/interpreter"
 
 	"github.com/spf13/cobra"
 )
@@ -149,7 +150,7 @@ func (r *respCall) MarshalText() (text []byte, err error) {
 // buildProcedureInputs will build the inputs for either
 // an action or procedure executon/call.
 func buildExecutionInputs(ctx context.Context, client clientType.Client, namespace string, action string, inputs []map[string]string) ([][]any, error) {
-	params, err := getParamList(ctx, client, namespace, action)
+	params, err := GetParamList(ctx, client.Query, namespace, action)
 	if err != nil {
 		return nil, err
 	}
@@ -178,8 +179,14 @@ func buildExecutionInputs(ctx context.Context, client clientType.Client, namespa
 	return results, nil
 }
 
-func getParamList(ctx context.Context, client clientType.Client, namespace, action string) ([]paramList, error) {
-	res, err := client.Query(ctx, "{info}SELECT parameters FROM actions WHERE namespace = $namespace AND name = $action", map[string]any{
+func GetParamList(ctx context.Context,
+	query func(ctx context.Context, query string, args map[string]any) (*types.QueryResult, error),
+	namespace, action string) ([]ParamList, error) {
+	if namespace == "" {
+		namespace = interpreter.DefaultNamespace
+	}
+
+	res, err := query(ctx, "{info}SELECT parameters FROM actions WHERE namespace = $namespace AND name = $action", map[string]any{
 		"namespace": namespace,
 		"action":    action,
 	})
@@ -213,14 +220,14 @@ func getParamList(ctx context.Context, client clientType.Client, namespace, acti
 		return nil, err
 	}
 
-	params := make([]paramList, len(p))
+	params := make([]ParamList, len(p))
 	for i, param := range p {
 		dt, err := types.ParseDataType(param.DataType)
 		if err != nil {
 			return nil, err
 		}
 
-		params[i] = paramList{
+		params[i] = ParamList{
 			Name: param.Name,
 			Type: dt,
 		}
@@ -229,7 +236,7 @@ func getParamList(ctx context.Context, client clientType.Client, namespace, acti
 	return params, nil
 }
 
-type paramList struct {
+type ParamList struct {
 	Name string
 	Type *types.DataType
 }
