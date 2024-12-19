@@ -7,7 +7,7 @@ tasks:
 
   work:
     cmds:
-      - cmd: go work init . ./core ./parse ./test
+      - cmd: go work init . ./core ./test
         ignore_error: true
     generates:
       - go.work
@@ -34,7 +34,6 @@ tasks:
       # and from bottom to top in terms of dependencies.
       - |
         (cd core; go mod tidy)
-        (cd parse; go mod tidy)
         go mod tidy
       #  (cd test; go mod tidy)
       #  (cd core/client/example; go mod tidy)
