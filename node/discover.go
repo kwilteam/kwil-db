@@ -28,7 +28,7 @@ func (n *Node) peerDiscoveryStreamHandler(s network.Stream) {
 		return
 	}
 
-	n.log.Info("sent peer list to remote peer", "num_peers", len(peers),
+	n.log.Debug("sent peer list to remote peer", "num_peers", len(peers),
 		"to_peer", s.Conn().RemotePeer())
 }
 

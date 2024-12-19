@@ -764,7 +764,12 @@ func newHost(ip string, port uint64, privKey crypto.PrivateKey, wl *peers.Whitel
 		return nil, err
 	}
 
-	sourceMultiAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/ip4/%s/tcp/%d", ip, port))
+	ip, ipv, err := peers.ResolveHost(ip)
+	if err != nil {
+		return nil, fmt.Errorf("unable to resolve %v: %w", ip, err)
+	}
+
+	sourceMultiAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/%s/%s/tcp/%d", ipv, ip, port))
 
 	// listenAddrs := libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0", "/ip4/0.0.0.0/tcp/0/ws")
 

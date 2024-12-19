@@ -180,7 +180,12 @@ func ConvertPeersToMultiAddr(peers []string) ([]string, error) {
 			return nil, err
 		}
 
-		maStr := fmt.Sprintf("/ip4/%s/tcp/%d/p2p/%s", host, port, peerID)
+		ip, ipv, err := ResolveHost(host)
+		if err != nil {
+			return nil, fmt.Errorf("unable to resolve %v: %w", ip, err)
+		}
+
+		maStr := fmt.Sprintf("/%s/%s/tcp/%d/p2p/%s", ipv, ip, port, peerID)
 		// ensure the multiaddress string is parsable
 		_, err = multiaddr.NewMultiaddr(maStr)
 		if err != nil {
@@ -189,6 +194,28 @@ func ConvertPeersToMultiAddr(peers []string) ([]string, error) {
 		addrs[i] = maStr
 	}
 	return addrs, nil
+}
+
+func ResolveHost(addr string) (ip, ipv string, err error) {
+	// fast path with no lookup
+	// if netIP, err := netip.ParseAddr(addr); err != nil {
+	// 	ip = netIP.String()
+	// 	if netIP.Is4() {
+	// 		return ip, "ip4", nil
+	// 	}
+	// 	return ip, "ip4", nil
+	// }
+
+	ipAddr, err := net.ResolveIPAddr("ip", addr)
+	if err != nil {
+		return
+	}
+	ip = ipAddr.IP.String()
+	ipv = "ip4"
+	if ipAddr.IP.To4() == nil {
+		ipv = "ip6"
+	}
+	return
 }
 
 func CompressDialError(err error) error {
