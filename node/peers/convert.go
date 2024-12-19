@@ -185,7 +185,7 @@ func ConvertPeersToMultiAddr(peers []string) ([]string, error) {
 			return nil, fmt.Errorf("unable to resolve %v: %w", ip, err)
 		}
 
-		maStr := fmt.Sprintf("/%s/%s/tcp/%d/p2p/%s", ip, ipv, port, peerID)
+		maStr := fmt.Sprintf("/%s/%s/tcp/%d/p2p/%s", ipv, ip, port, peerID)
 		// ensure the multiaddress string is parsable
 		_, err = multiaddr.NewMultiaddr(maStr)
 		if err != nil {
