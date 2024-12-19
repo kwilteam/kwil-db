@@ -319,15 +319,13 @@ func TestTransactionMarshalUnmarshal(t *testing.T) {
 	require.NoError(t, err)
 
 	testcases := []struct {
-		name        string
-		signer      auth.Signer
-		expectError bool
-		fn          func(t *testing.T) *Transaction
+		name   string
+		signer auth.Signer
+		fn     func(t *testing.T) *Transaction
 	}{
 		{
-			name:        "valid transaction",
-			signer:      secp256k1Signer(t),
-			expectError: false,
+			name:   "valid transaction",
+			signer: secp256k1Signer(t),
 			fn: func(t *testing.T) *Transaction {
 				// sign tx
 				tx := &Transaction{
@@ -368,7 +366,6 @@ func TestTransactionMarshalUnmarshal(t *testing.T) {
 
 				return tx
 			},
-			expectError: false,
 		},
 		{
 			name:   "empty signature type",
@@ -392,7 +389,6 @@ func TestTransactionMarshalUnmarshal(t *testing.T) {
 
 				return tx
 			},
-			expectError: false,
 		},
 		{
 			name: "empty signature data",
@@ -415,10 +411,9 @@ func TestTransactionMarshalUnmarshal(t *testing.T) {
 
 				return tx
 			},
-			expectError: false,
 		},
 		{
-			name: "empty body",
+			name: "empty body (allowed now)",
 			fn: func(t *testing.T) *Transaction {
 				return &Transaction{
 					Body: nil,
@@ -430,7 +425,6 @@ func TestTransactionMarshalUnmarshal(t *testing.T) {
 					Serialization: DefaultSignedMsgSerType,
 				}
 			},
-			expectError: true,
 		},
 		{
 			name: "empty sender",
@@ -480,18 +474,13 @@ func TestTransactionMarshalUnmarshal(t *testing.T) {
 			tx := tt.fn(t)
 
 			data, err := tx.MarshalBinary()
-			if tt.expectError {
-				require.Error(t, err)
-				return
-			} else {
-				require.NoError(t, err)
-			}
+			require.NoError(t, err)
 
 			newTx := &Transaction{}
 			err = newTx.UnmarshalBinary(data)
 			require.NoError(t, err)
 
-			require.Equal(t, tx, newTx)
+			require.EqualExportedValues(t, tx, newTx)
 
 			newData, err := newTx.MarshalBinary()
 			require.NoError(t, err)

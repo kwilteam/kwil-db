@@ -106,16 +106,14 @@ func (r *RespTxQuery) MarshalJSON() ([]byte, error) {
 	}
 	// Always try to serialize to verify hash, but only show raw if requested.
 	if r.Msg.Tx != nil {
-		raw, err := r.Msg.Tx.MarshalBinary()
-		if err != nil {
-			out.Warn = "ERROR encoding transaction: " + err.Error()
-		} else if r.WithRaw {
+		raw := r.Msg.Tx.Bytes()
+		if r.WithRaw {
 			out.Raw = hex.EncodeToString(raw)
-			hash := types.HashBytes(raw)
-			if hash != r.Msg.Hash {
-				out.Warn = fmt.Sprintf("HASH MISMATCH: requested %s; received %s",
-					r.Msg.Hash, hash)
-			}
+		}
+		hash := types.HashBytes(raw)
+		if hash != r.Msg.Hash {
+			out.Warn = fmt.Sprintf("HASH MISMATCH: requested %s; received %s",
+				r.Msg.Hash, hash)
 		}
 	}
 	return json.Marshal(out)
@@ -147,18 +145,15 @@ Log: %s`,
 		return []byte(msg), nil
 	}
 
-	raw, err := r.Msg.Tx.MarshalBinary()
-	if err != nil {
-		msg += "\nERROR encoding transaction: " + err.Error()
-	} else {
-		if r.WithRaw {
-			msg += "\nRaw: " + hex.EncodeToString(raw)
-		}
-		hash := types.HashBytes(raw)
-		if hash != r.Msg.Hash {
-			msg += fmt.Sprintf("\nWARNING! HASH MISMATCH:\n\tRequested %s\n\tReceived  %s",
-				r.Msg.Hash, hash)
-		}
+	raw := r.Msg.Tx.Bytes()
+
+	if r.WithRaw {
+		msg += "\nRaw: " + hex.EncodeToString(raw)
+	}
+	hash := types.HashBytes(raw)
+	if hash != r.Msg.Hash {
+		msg += fmt.Sprintf("\nWARNING! HASH MISMATCH:\n\tRequested %s\n\tReceived  %s",
+			r.Msg.Hash, hash)
 	}
 
 	return []byte(msg), nil

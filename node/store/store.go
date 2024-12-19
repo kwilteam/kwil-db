@@ -287,6 +287,13 @@ func (bki *BlockStore) Store(blk *ktypes.Block, appHash types.Hash) error {
 	blkHash := blk.Hash()
 	height := blk.Header.Height
 
+	rawBlk := ktypes.EncodeBlock(blk)
+
+	txHashes := make([]ktypes.Hash, blk.Header.NumTxns)
+	for i, tx := range blk.Txns {
+		txHashes[i] = tx.Hash()
+	}
+
 	txn := bki.db.NewTransaction(true)
 	defer txn.Discard()
 
@@ -299,7 +306,7 @@ func (bki *BlockStore) Store(blk *ktypes.Block, appHash types.Hash) error {
 
 	// Store the block contents with the nsBlock prefix
 	key = slices.Concat(nsBlock, blkHash[:])
-	err = txn.Set(key, ktypes.EncodeBlock(blk))
+	err = txn.Set(key, rawBlk)
 	if err != nil {
 		return err
 	}
@@ -314,8 +321,7 @@ func (bki *BlockStore) Store(blk *ktypes.Block, appHash types.Hash) error {
 	// this is possibly a suboptimal design.
 
 	// Store the txn index
-	for idx, tx := range blk.Txns {
-		txHash := types.HashBytes(tx)
+	for idx, txHash := range txHashes {
 		key = slices.Concat(nsTxn, txHash[:]) // "t:txHash" => height + blkHash + blkIdx
 		val := makeTxVal(height, blkHash, uint32(idx))
 		err := txn.Set(key, val)

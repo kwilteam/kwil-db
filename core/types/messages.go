@@ -48,5 +48,5 @@ type BlockExecutionStatus struct {
 	EndTime   time.Time
 	Height    int64
 	TxIDs     []Hash
-	TxStatus  map[string]bool
+	TxStatus  map[Hash]bool
 }

@@ -227,11 +227,7 @@ func (n *Node) startTxAnns(ctx context.Context, reannouncePeriod time.Duration) 
 				n.log.Infof("re-announcing %d unconfirmed txns", len(txns))
 
 				for _, nt := range txns {
-					rawTx, err := nt.Tx.MarshalBinary()
-					if err != nil {
-						n.log.Errorf("Failed to marshal transaction %v: %v", nt.Hash, err)
-						continue
-					}
+					rawTx := nt.Tx.Bytes()
 					n.announceTx(ctx, nt.Hash, rawTx, n.host.ID()) // response handling is async
 					if ctx.Err() != nil {
 						n.log.Warn("interrupting long re-broadcast")

@@ -138,17 +138,9 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 // does basic gas and balance checks and enforces the block size limits.
 func (ce *ConsensusEngine) createBlockProposal(ctx context.Context) (*blockProposal, error) {
 	nTxs := ce.mempool.PeekN(blockTxCount)
-	var txns [][]byte
-	for _, namedTx := range nTxs {
-		rawTx, err := namedTx.Tx.MarshalBinary()
-		if err != nil { // this is a bug
-			ce.log.Errorf("invalid transaction from mempool rejected",
-				"hash", namedTx.Hash, "error", err)
-			ce.mempool.Remove(namedTx.Hash)
-			continue
-			// return nil, fmt.Errorf("invalid transaction: %v", err) // e.g. nil/missing body
-		}
-		txns = append(txns, rawTx)
+	txns := make([]*ktypes.Transaction, len(nTxs))
+	for i, ntx := range nTxs {
+		txns[i] = ntx.Tx
 	}
 
 	finalTxs, invalidTxs, err := ce.blockProcessor.PrepareProposal(ctx, txns)
@@ -159,7 +151,8 @@ func (ce *ConsensusEngine) createBlockProposal(ctx context.Context) (*blockPropo
 
 	// remove invalid transactions from the mempool
 	for _, tx := range invalidTxs {
-		ce.mempool.Remove(types.Hash(tx))
+		txid := tx.Hash()
+		ce.mempool.Remove(txid)
 	}
 
 	valSetHash := ce.validatorSetHash()

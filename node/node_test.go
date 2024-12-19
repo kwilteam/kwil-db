@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math/big"
 	"net"
 	"os"
 	"slices"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	blockprocessor "github.com/kwilteam/kwil-db/node/block_processor"
@@ -177,14 +179,28 @@ func fakeAppHash(height int64) types.Hash {
 	return types.HashBytes(binary.LittleEndian.AppendUint64(nil, uint64(height)))
 }
 
-func createTestBlock(height int64, numTxns int) (*ktypes.Block, types.Hash) {
-	txns := make([][]byte, numTxns)
+func newTx(nonce uint64, sender, payload string) *ktypes.Transaction {
+	return &ktypes.Transaction{
+		Signature: &auth.Signature{},
+		Body: &ktypes.TransactionBody{
+			Description: "test",
+			Payload:     []byte(payload),
+			Fee:         big.NewInt(0),
+			Nonce:       nonce,
+		},
+		Sender: []byte(sender),
+	}
+}
+
+func createTestBlock(t *testing.T, height int64, numTxns int) (*ktypes.Block, types.Hash) {
+	txns := make([]*ktypes.Transaction, numTxns)
 	for i := range numTxns {
-		txns[i] = []byte(strconv.FormatInt(height, 10) + strconv.Itoa(i) +
+		txns[i] = newTx(uint64(i), "bob", strconv.FormatInt(height, 10)+strconv.Itoa(i)+
 			strings.Repeat("data", 1000))
 	}
-	return ktypes.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5},
-		time.Unix(1729723553+height, 0), txns), fakeAppHash(height)
+	blk := ktypes.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5},
+		time.Unix(1729723553+height, 0), txns)
+	return blk, fakeAppHash(height)
 }
 
 func newGenesis(t *testing.T, nodekeys [][]byte) ([]crypto.PrivateKey, *config.GenesisConfig) {
@@ -475,7 +491,7 @@ func TestStreamsBlockFetch(t *testing.T) {
 	h1 := n1.host
 
 	// to n1's block store, one block at height 1 with 2 txns
-	blk1, appHash1 := createTestBlock(1, 2)
+	blk1, appHash1 := createTestBlock(t, 1, 2)
 	n1.bki.Store(blk1, appHash1)
 
 	startNodes(t, nodes)

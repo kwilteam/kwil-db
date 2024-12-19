@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"math"
 )
 
@@ -49,20 +50,26 @@ type TxResult struct {
 	Events []Event `json:"events"`
 }
 
+// txResultsVer is the results structure or serialization version known presently
+const txResultsVer uint16 = 0
+
 func (tr TxResult) MarshalBinary() ([]byte, error) {
-	data := make([]byte, 4+4, 4+4+2+2) // put 8 bytes, append the rest
+	data := make([]byte, 2+4+4, 2+4+4+2+2) // put 10 bytes, append the rest
+
+	// version
+	binary.BigEndian.PutUint16(data, txResultsVer)
 
 	// Encode code as 4 bytes
-	binary.BigEndian.PutUint32(data, tr.Code)
+	binary.BigEndian.PutUint32(data[2:], tr.Code)
 
 	// Encode log length as 4 bytes for length followed by log string
-	binary.BigEndian.PutUint32(data[4:], uint32(len(tr.Log)))
+	binary.BigEndian.PutUint32(data[6:], uint32(len(tr.Log)))
 	data = append(data, []byte(tr.Log)...)
 
 	// Events
 	numEvents := len(tr.Events)
 	if numEvents > math.MaxUint16 {
-		return nil, errors.New("to many events")
+		return nil, errors.New("too many events")
 	}
 	data = binary.BigEndian.AppendUint16(data, uint16(numEvents))
 	for _, event := range tr.Events {
@@ -78,14 +85,20 @@ func (tr TxResult) MarshalBinary() ([]byte, error) {
 }
 
 func (tr *TxResult) UnmarshalBinary(data []byte) error {
-	if len(data) < 8 { // Minimum length: 4 bytes code + 4 bytes log length
+	if len(data) < 10 { // Minimum length: 2 bytes version + 4 bytes code + 4 bytes log length
 		return errors.New("insufficient data")
 	}
 
 	var offset int
 
+	version := binary.BigEndian.Uint16(data)
+	if version != txResultsVer {
+		return fmt.Errorf("unsupported version %d", version)
+	}
+	offset += 2
+
 	// Decode code from first 4 bytes
-	tr.Code = binary.BigEndian.Uint32(data)
+	tr.Code = binary.BigEndian.Uint32(data[offset:])
 	offset += 4
 
 	// Decode log length and string

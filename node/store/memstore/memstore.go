@@ -85,7 +85,7 @@ func (bs *MemBS) Store(block *ktypes.Block, appHash types.Hash) error {
 		appHash: appHash,
 	}
 	for _, tx := range block.Txns {
-		txHash := types.HashBytes(tx)
+		txHash := tx.Hash()
 		bs.txIds[txHash] = blkHash
 	}
 	return nil
@@ -170,12 +170,9 @@ func (bs *MemBS) GetTx(txHash types.Hash) (tx *ktypes.Transaction, height int64,
 	if !have {
 		return nil, 0, types.Hash{}, 0, types.ErrNotFound
 	}
-	for idx, rawTx := range blk.Txns {
-		if types.HashBytes(rawTx) == txHash {
-			tx := new(ktypes.Transaction)
-			if err = tx.UnmarshalBinary(rawTx); err != nil {
-				return nil, 0, types.Hash{}, 0, err
-			}
+	for idx, tx := range blk.Txns {
+		txHashi := tx.Hash()
+		if txHashi == txHash {
 			return tx, blk.Header.Height, blk.Hash(), uint32(idx), nil
 		}
 	}

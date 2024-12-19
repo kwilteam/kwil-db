@@ -594,7 +594,7 @@ func (svc *Service) BlockExecStatus(ctx context.Context, req *adminjson.BlockExe
 	for i, txID := range status.TxIDs {
 		txInfo[i] = &types.TxInfo{
 			ID:     txID,
-			Status: status.TxStatus[txID.String()],
+			Status: status.TxStatus[txID],
 		}
 	}
 	resp.TxInfo = txInfo
