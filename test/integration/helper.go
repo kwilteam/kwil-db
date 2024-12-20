@@ -17,6 +17,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+
 	"slices"
 	"sort"
 	"strconv"
@@ -61,12 +62,12 @@ var (
 var logWaitStrategies = map[string]string{
 	ExtContainer:  "listening on",
 	Ext3Container: "listening on",
-	"node0":       "finalized block",
-	"node1":       "finalized block",
-	"node2":       "finalized block",
-	"node3":       "finalized block",
-	"node4":       "finalized block",
-	"node5":       "finalized block",
+	"node0":       "Committed Block",
+	"node1":       "Committed Block",
+	"node2":       "Committed Block",
+	"node3":       "Committed Block",
+	"node4":       "Committed Block",
+	"node5":       "Committed Block",
 	"kgw":         "KGW Server started",
 	"hardhat":     "Started HTTP and WebSocket JSON-RPC server",
 	"pg0":         `listening on IPv4 address "0.0.0.0", port 5432`,
@@ -82,6 +83,9 @@ const (
 	Ext3Container    = "ext3"
 	testChainID      = "kwil-test-chain"
 	MigrationChainID = "kwil-migration-chain"
+
+	OwnerPrivKey = "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"
+	OwnerAddress = "0xc89d42189f0450c2b2c3c61f58ec5d628176a1e7"
 )
 
 // IntTestConfig is the config for integration test
@@ -449,7 +453,20 @@ func (r *IntHelper) GenerateTestnetConfigs(homeDir string) {
 		}
 	}*/
 
-	err := setup.GenerateTestnetConfigs(homeDir, r.cfg.NValidator, r.cfg.NNonValidator, false, 6600)
+	testnetCfg := &setup.TestnetConfig{
+		RootDir:        homeDir,
+		NumVals:        r.cfg.NValidator,
+		NumNVals:       r.cfg.NNonValidator,
+		ChainID:        testChainID,
+		NoPex:          false,
+		StartingPort:   6600,
+		HostnamePrefix: "kwil-",
+		DnsNamePrefix:  "node",
+		Owner:          OwnerAddress,
+		// StartingIP:     "172.10.100.2",
+	}
+
+	err := setup.GenerateTestnetConfigs(testnetCfg, &setup.ConfigOpts{UniquePorts: false, DnsHost: true})
 
 	/*err := nodecfg.GenerateTestnetConfig(&nodecfg.TestnetGenerateConfig{
 		ChainID:       testChainID,

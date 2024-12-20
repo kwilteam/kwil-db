@@ -144,42 +144,42 @@ tasks:
         docker volume rm -f {{ .NAME }}
 
   # ************ dev ************
-  # dev:up:
-  #   desc: Start the dev environment
-  #   deps:
-  #     - task: build:docker
-  #   cmds:
-  #     - task: dev:up:nb
+  dev:up:
+    desc: Start the dev environment
+    deps:
+      - task: build:docker
+    cmds:
+      - task: dev:up:nb
 
-  # dev:up:debug:
-  #   desc: Start the dev environment
-  #   deps:
-  #     - task: build:docker
-  #       vars: { VARIANT: 'debug' }
-  #   cmds:
-  #     - task: dev:up:nb
+  dev:up:debug:
+    desc: Start the dev environment
+    deps:
+      - task: build:docker
+        vars: { VARIANT: 'debug' }
+    cmds:
+      - task: dev:up:nb
 
-  # dev:up:nb:
-  #   desc: Start the dev environment without rebuilding docker image
-  #   env:
-  #     # NOTE: this timeout should be long enough to attach to debugger
-  #     KACT_WAIT_TIMEOUT: 20s
-  #   dir: test # different module
-  #   cmds:
-  #     - go test ./acceptance -run ^TestLocalDevSetup -timeout 12h -dev -v {{.CLI_ARGS}}
+  dev:up:nb:
+    desc: Start the dev environment without rebuilding docker image
+    env:
+      # NOTE: this timeout should be long enough to attach to debugger
+      KACT_WAIT_TIMEOUT: 20s
+    dir: test # different module
+    cmds:
+      - go test ./acceptance -run ^TestLocalDevSetup -timeout 12h -dev -v {{.CLI_ARGS}}
 
-  # dev:testnet:up:
-  #   desc: Start the dev environment(with testnet)
-  #   deps:
-  #     - task: build:docker
-  #   cmds:
-  #     - task: dev:testnet:up:nb
+  dev:testnet:up:
+    desc: Start the dev environment(with testnet)
+    deps:
+      - task: build:docker
+    cmds:
+      - task: dev:testnet:up:nb
 
-  # dev:testnet:up:nb:
-  #   desc: Start the dev environment(with testnet) without rebuilding docker image
-  #   dir: test # different module
-  #   cmds:
-  #     - go test ./integration -run ^TestLocalDevSetup$ -timeout 12h -dev -v {{.CLI_ARGS}}
+  dev:testnet:up:nb:
+    desc: Start the dev environment(with testnet) without rebuilding docker image
+    dir: test # different module
+    cmds:
+      - go test ./integration -run ^TestLocalDevSetup$ -timeout 12h -dev -v {{.CLI_ARGS}}
 
   # ************ test ************
   # test with build:docker task support passing CLI_ARGS to go test, e.g. task test:act -- -debug
