@@ -231,6 +231,22 @@ func (d *KwilCliDriver) Execute(ctx context.Context, dbid string, action string,
 	return out.TxHash, nil
 }
 
+func (d *KwilCliDriver) ExecuteSQL(ctx context.Context, sql string, params map[string]any) (types.Hash, error) {
+	// actionInputs, err := d.prepareCliActionParams(ctx, dbid, action, inputs[0])
+	// if err != nil {
+	// 	return types.Hash{}, fmt.Errorf("failed to get action params: %w", err)
+	// }
+
+	args := []string{"database", "execute", "--sql", sql}
+
+	cmd := d.newKwilCliCmd(args...)
+	out, err := mustRun[respTxHash](cmd, d.logger)
+	if err != nil {
+		return types.Hash{}, fmt.Errorf("failed to execute action: %w", err)
+	}
+	return out.TxHash, nil
+}
+
 func (d *KwilCliDriver) QueryDatabase(_ context.Context, query string) (*types.QueryResult, error) {
 	args := []string{"database", "query", query}
 

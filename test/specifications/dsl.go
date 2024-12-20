@@ -49,6 +49,7 @@ type ExecuteQueryDsl interface {
 	TxQueryDsl
 	// ExecuteAction executes QUERY to a database
 	Execute(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) (types.Hash, error)
+	ExecuteSQL(ctx context.Context, sql string, params map[string]any) (types.Hash, error)
 	QueryDatabase(ctx context.Context, query string) (*types.QueryResult, error)
 	SupportBatch() bool
 }
