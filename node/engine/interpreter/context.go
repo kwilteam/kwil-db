@@ -30,6 +30,20 @@ type executionContext struct {
 	logs []string
 }
 
+// child creates a new child execution context.
+// A child allows for a new context to exist without
+// modifying the parent context.
+func (e *executionContext) child(namespace string) *executionContext {
+	return &executionContext{
+		txCtx:          e.txCtx,
+		scope:          newScope(namespace),
+		canMutateState: e.canMutateState,
+		db:             e.db,
+		interpreter:    e.interpreter,
+		logs:           e.logs,
+	}
+}
+
 // checkPrivilege checks that the current user has a privilege,
 // and returns an error if they do not.
 func (e *executionContext) checkPrivilege(priv privilege) error {
@@ -204,22 +218,6 @@ const (
 
 type execFunc func(exec *executionContext, args []Value, returnFn resultFunc) error
 
-// newScope creates a new scope.
-func newScope(namespace string) *scopeContext {
-	return &scopeContext{
-		variables: make(map[string]Value),
-		namespace: namespace,
-	}
-}
-
-// subScope creates a new sub-scope, which has access to the parent scope.
-func (s *scopeContext) subScope() *scopeContext {
-	return &scopeContext{
-		parent:    s,
-		variables: make(map[string]Value),
-	}
-}
-
 // setVariable sets a variable in the current scope.
 // It will allocate the variable if it does not exist.
 // if we are setting a variable that was defined in an outer scope,
@@ -357,4 +355,32 @@ type scopeContext struct {
 	variables map[string]Value
 	// namespace is the current namespace.
 	namespace string
+}
+
+// newScope creates a new scope.
+func newScope(namespace string) *scopeContext {
+	return &scopeContext{
+		variables: make(map[string]Value),
+		namespace: namespace,
+	}
+}
+
+// subScope creates a new sub-scope, which has access to the parent scope.
+func (s *scopeContext) subScope() {
+	s.parent = &scopeContext{
+		parent:    s.parent,
+		variables: s.variables,
+		namespace: s.namespace,
+	}
+	s.variables = make(map[string]Value)
+	s.namespace = s.parent.namespace
+}
+
+// popScope pops the current scope, returning the parent scope.
+func (s *scopeContext) popScope() {
+	if s.parent == nil {
+		panic("cannot pop root scope")
+	}
+
+	*s = *s.parent
 }

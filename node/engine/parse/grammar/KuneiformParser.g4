@@ -202,7 +202,7 @@ privilege:
 ;
 
 transfer_ownership_statement:
-    TRANSFER OWNERSHIP TO identifier
+    TRANSFER OWNERSHIP TO STRING_
 ;
 
 create_action_statement:
@@ -426,7 +426,7 @@ action_statement:
     // stmt_action_call must go above stmt_variable_assignment due to lexer ambiguity
     | ((variable_or_underscore) (COMMA (variable_or_underscore))* (ASSIGN | EQUALS))? action_function_call SCOL # stmt_action_call
     | action_expr type? (ASSIGN | EQUALS) action_expr SCOL                                                         # stmt_variable_assignment
-    | FOR receiver=VARIABLE IN (range|target_variable=variable|sql_statement) LBRACE action_statement* RBRACE SCOL?  # stmt_for_loop
+    | FOR receiver=VARIABLE IN (range|target_variable=variable|sql_statement|action_function_call) LBRACE action_statement* RBRACE SCOL?  # stmt_for_loop
     | IF if_then_block (ELSEIF if_then_block)* (ELSE LBRACE action_statement* RBRACE)? SCOL?                        # stmt_if
     | sql_statement SCOL                                                                                # stmt_sql
     | BREAK SCOL                                                                                        # stmt_break

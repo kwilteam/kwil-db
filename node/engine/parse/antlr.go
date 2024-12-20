@@ -1099,7 +1099,7 @@ func (s *schemaVisitor) VisitPrivilege(ctx *gen.PrivilegeContext) any {
 
 func (s *schemaVisitor) VisitTransfer_ownership_statement(ctx *gen.Transfer_ownership_statementContext) any {
 	stmt := &TransferOwnershipStatement{
-		To: s.getIdent(ctx.Identifier()),
+		To: ctx.STRING_().GetText(),
 	}
 
 	stmt.Set(ctx)
@@ -1489,7 +1489,8 @@ func (s *schemaVisitor) makeArray(e *ExpressionArrayAccess, single, left, right 
 		end = right.Accept(s).(Expression)
 	}
 
-	e.FromTo = [2]Expression{start, end}
+	ft := [2]Expression{start, end}
+	e.FromTo = &ft
 }
 
 func (s *schemaVisitor) VisitField_access_sql_expr(ctx *gen.Field_access_sql_exprContext) any {
@@ -2218,6 +2219,12 @@ func (s *schemaVisitor) VisitStmt_for_loop(ctx *gen.Stmt_for_loopContext) any {
 			Statement: sqlStmt,
 		}
 		stmt.LoopTerm.Set(ctx.Sql_statement())
+	case ctx.Action_function_call() != nil:
+		call := ctx.Action_function_call().Accept(s).(*ExpressionFunctionCall)
+		stmt.LoopTerm = &LoopTermFunctionCall{
+			Call: call,
+		}
+		stmt.LoopTerm.Set(ctx.Action_function_call())
 	default:
 		panic("unknown loop term")
 	}

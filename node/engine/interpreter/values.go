@@ -54,6 +54,12 @@ func init() {
 			},
 		},
 		ValueMapping{
+			KwilType: types.NullType,
+			ZeroValue: func() (Value, error) {
+				return newNull(types.TextType), nil
+			},
+		},
+		ValueMapping{
 			KwilType: types.TextType,
 			ZeroValue: func() (Value, error) {
 				return newText(""), nil
@@ -91,7 +97,7 @@ func init() {
 			KwilType: types.IntArrayType,
 			ZeroValue: func() (Value, error) {
 				return &IntArrayValue{
-					Array: pgtype.Array[pgtype.Int8]{},
+					Array: newValidArr([]pgtype.Int8{}),
 				}, nil
 			},
 		},
@@ -99,7 +105,7 @@ func init() {
 			KwilType: types.TextArrayType,
 			ZeroValue: func() (Value, error) {
 				return &TextArrayValue{
-					Array: pgtype.Array[pgtype.Text]{},
+					Array: newValidArr([]pgtype.Text{}),
 				}, nil
 			},
 		},
@@ -107,7 +113,7 @@ func init() {
 			KwilType: types.BoolArrayType,
 			ZeroValue: func() (Value, error) {
 				return &BoolArrayValue{
-					Array: pgtype.Array[pgtype.Bool]{},
+					Array: newValidArr([]pgtype.Bool{}),
 				}, nil
 			},
 		},
@@ -115,7 +121,7 @@ func init() {
 			KwilType: types.BlobArrayType,
 			ZeroValue: func() (Value, error) {
 				return &BlobArrayValue{
-					Array: pgtype.Array[*BlobValue]{},
+					Array: newValidArr([]*BlobValue{}),
 				}, nil
 			},
 		},
@@ -123,7 +129,7 @@ func init() {
 			KwilType: types.DecimalArrayType,
 			ZeroValue: func() (Value, error) {
 				return &DecimalArrayValue{
-					Array: pgtype.Array[pgtype.Numeric]{},
+					Array: newValidArr([]pgtype.Numeric{}),
 				}, nil
 			},
 		},
