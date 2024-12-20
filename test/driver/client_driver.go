@@ -108,6 +108,14 @@ func (d *KwildClientDriver) Execute(ctx context.Context, dbid string, actionName
 	return rec, nil
 }
 
+func (d *KwildClientDriver) ExecuteSQL(ctx context.Context, sql string, params map[string]any) (types.Hash, error) {
+	rec, err := d.clt.ExecuteSQL(ctx, sql, params)
+	if err != nil {
+		return types.Hash{}, fmt.Errorf("error executing sql statement %s: error: %w", sql, err)
+	}
+	return rec, nil
+}
+
 func (d *KwildClientDriver) QueryDatabase(ctx context.Context, query string) (*types.QueryResult, error) {
 	return d.clt.Query(ctx, query, nil)
 }

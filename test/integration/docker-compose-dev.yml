@@ -1,7 +1,7 @@
 version: "3"
 
 services:
-  # TODO: generate correspond number of nodes and exts by configuration
+  # TODO: generate corresponding number of nodes and exts by configuration
   node0:
     image: kwild:latest
     ports:
@@ -24,14 +24,13 @@ services:
       --root=/app/kwil
       --log-format=plain
       --log-level=${LOG_LEVEL:-info}
-      --app.extension-endpoints=ext1:50051
-      --app.admin-listen-addr=/tmp/admin.socket
-      --chain.p2p.listen-addr=tcp://0.0.0.0:26656
-      --chain.rpc.listen-addr=tcp://0.0.0.0:26657
-      --app.pg-db-host=pg0
-      --app.pg-db-port=5432
-      --app.pg-db-user=kwild
-      --app.pg-db-pass=kwild
+      --admin.listen=/tmp/admin.socket
+      --p2p.ip=tcp:0.0.0.0
+      --p2p.port=6600
+      --db.host=pg
+      --db.port=5432
+      --db.user=kwild
+      --db.pass=kwild
     healthcheck:
       test: ["CMD", "curl", "--fail-with-body", "-s", "http://127.0.0.1:8484/api/v1/health/user"]
       interval: 2s

@@ -25,7 +25,7 @@ import (
 
 func TestnetCmd() *cobra.Command {
 	var numVals, numNVals int
-	var noPex bool
+	var noPex, uniquePorts bool
 	var startingPort uint64
 	var outDir string
 
@@ -33,7 +33,16 @@ func TestnetCmd() *cobra.Command {
 		Use:   "testnet",
 		Short: "Generate configuration for multiple nodes",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return GenerateTestnetConfigs(outDir, numVals, numNVals, noPex, startingPort)
+			return GenerateTestnetConfigs(&TestnetConfig{
+				RootDir:      outDir,
+				NumVals:      numVals,
+				NumNVals:     numNVals,
+				NoPex:        noPex,
+				StartingPort: startingPort,
+			}, &ConfigOpts{
+				UniquePorts: uniquePorts,
+				DnsHost:     false,
+			})
 		},
 	}
 
@@ -50,14 +59,42 @@ func TestnetCmd() *cobra.Command {
 	cmd.Flags().BoolVar(&noPex, "no-pex", false, "disable peer exchange")
 	cmd.Flags().Uint64VarP(&startingPort, "port", "p", 6600, "starting P2P port for the nodes")
 	cmd.Flags().StringVarP(&outDir, "out-dir", "o", ".testnet", "output directory for generated node root directories")
-
+	cmd.Flags().BoolVarP(&uniquePorts, "unique-ports", "u", false, "use unique ports for each node")
 	return cmd
 }
 
-func GenerateTestnetConfigs(outDir string, numVals, numNVals int, noPex bool, startingPort uint64) error {
+type TestnetConfig struct {
+	RootDir        string
+	ChainID        string
+	NumVals        int
+	NumNVals       int
+	NoPex          bool
+	StartingPort   uint64
+	StartingIP     string
+	HostnamePrefix string
+	DnsNamePrefix  string // optional and only used if DnsHost is true (default: node)
+
+	Owner string
+}
+
+type ConfigOpts struct {
+	// UniquePorts is a flag to generate unique listening addresses
+	// (JSON-RPC, HTTP, Admin, P2P, node RPC) for each node.
+	// This is useful for testing multiple nodes on the same machine.
+	// If it is used for generating a single config, it has no effect.
+	UniquePorts bool
+
+	// DnsHost is a flag to use DNS hostname as host in the config
+	// instead of ip. It will be used together with DnsNamePrefix to generate
+	// hostnames.
+	// This is useful for testing nodes inside docker containers.
+	DnsHost bool
+}
+
+func GenerateTestnetConfigs(cfg *TestnetConfig, opts *ConfigOpts) error {
 	// ensure that the directory exists
 	// expand the directory path
-	outDir, err := node.ExpandPath(outDir)
+	outDir, err := node.ExpandPath(cfg.RootDir)
 	if err != nil {
 		return err
 	}
@@ -68,10 +105,10 @@ func GenerateTestnetConfigs(outDir string, numVals, numNVals int, noPex bool, st
 
 	var keys []crypto.PrivateKey
 	// generate the configuration for the nodes
-	for i := range numVals + numNVals {
+	for i := range cfg.NumVals + cfg.NumNVals {
 		// generate Keys, so that the connection strings and the validator set can be generated before the node config files are generated
 		var seed [32]byte
-		binary.LittleEndian.PutUint64(seed[:], startingPort+uint64(i))
+		binary.LittleEndian.PutUint64(seed[:], cfg.StartingPort+uint64(i))
 		seed = sha256.Sum256(seed[:])
 		rr := rand.NewChaCha8(seed)
 		priv := node.NewKey(&deterministicPRNG{ChaCha8: rr})
@@ -81,18 +118,44 @@ func GenerateTestnetConfigs(outDir string, numVals, numNVals int, noPex bool, st
 	// key 0 is leader
 	leaderPub := keys[0].Public()
 
+	var bootNodes []string
+	for i := range cfg.NumVals {
+		pubKey := keys[i].Public()
+
+		hostname := cfg.StartingIP
+		if cfg.StartingIP == "" {
+			hostname = "127.0.0.1"
+		}
+
+		if opts.DnsHost {
+			hostname = fmt.Sprintf("%s%d", cfg.DnsNamePrefix, i)
+		}
+
+		port := 6600
+		if opts.UniquePorts {
+			port = 6600 + i
+		}
+
+		bootNodes = append(bootNodes, node.FormatPeerString(pubKey.Bytes(), pubKey.Type(), hostname, port))
+	}
+
+	chainID := cfg.ChainID
+	if chainID == "" {
+		chainID = "kwil-testnet"
+	}
 	genConfig := &config.GenesisConfig{
-		ChainID:          "kwil-testnet",
+		ChainID:          chainID,
 		Leader:           leaderPub.Bytes(), // rethink this so it can be different key types?
-		Validators:       make([]*ktypes.Validator, numVals),
+		Validators:       make([]*ktypes.Validator, cfg.NumVals),
 		DisabledGasCosts: true,
 		JoinExpiry:       14400,
 		VoteExpiry:       108000,
 		MaxBlockSize:     6 * 1024 * 1024,
 		MaxVotesPerTx:    200,
+		DBOwner:          cfg.Owner,
 	}
 
-	for i := range numVals {
+	for i := range cfg.NumVals {
 		genConfig.Validators[i] = &ktypes.Validator{
 			PubKey: keys[i].Public().Bytes(),
 			Power:  1,
@@ -100,14 +163,19 @@ func GenerateTestnetConfigs(outDir string, numVals, numNVals int, noPex bool, st
 	}
 
 	// generate the configuration for the nodes
-	for i := range numVals + numNVals {
+	portOffset := 0
+	for i := range cfg.NumVals + cfg.NumNVals {
+		if opts.UniquePorts {
+			portOffset = i
+		}
 		err = GenerateNodeRoot(&NodeGenConfig{
-			PortOffset: i,
-			IP:         "127.0.0.1",
-			NoPEX:      noPex,
+			PortOffset: portOffset,
+			IP:         cfg.StartingIP,
+			NoPEX:      cfg.NoPex,
 			RootDir:    filepath.Join(outDir, fmt.Sprintf("node%d", i)),
 			NodeKey:    keys[i],
 			Genesis:    genConfig,
+			BootNodes:  bootNodes,
 		})
 		if err != nil {
 			return err
@@ -127,6 +195,7 @@ type NodeGenConfig struct {
 	Genesis    *config.GenesisConfig
 
 	// TODO: gasEnabled, private p2p, auth RPC, join expiry, allocs, etc.
+	BootNodes []string
 }
 
 func GenerateNodeRoot(ncfg *NodeGenConfig) error {
@@ -144,16 +213,7 @@ func GenerateNodeRoot(ncfg *NodeGenConfig) error {
 	}
 	cfg.P2P.Pex = !ncfg.NoPEX
 
-	leaderPub, err := crypto.UnmarshalPublicKey(ncfg.Genesis.Leader, crypto.KeyTypeSecp256k1)
-	if err != nil {
-		return err
-	}
-
-	if !ncfg.NodeKey.Public().Equals(leaderPub) {
-		// make everyone connect to leader
-		cfg.P2P.BootNodes = []string{node.FormatPeerString(
-			leaderPub.Bytes(), leaderPub.Type(), cfg.P2P.IP, 6600)}
-	}
+	cfg.P2P.BootNodes = ncfg.BootNodes
 
 	// DB
 	dbPort := ncfg.DBPort

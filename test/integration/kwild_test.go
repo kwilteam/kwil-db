@@ -4,11 +4,10 @@ import (
 	"context"
 	"flag"
 	"testing"
-	"time"
 
 	"github.com/kwilteam/kwil-db/core/types"
-
 	"github.com/kwilteam/kwil-db/test/integration"
+	"github.com/kwilteam/kwil-db/test/specifications"
 )
 
 var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
@@ -17,27 +16,26 @@ var spamTest = flag.Bool("spam", false, "run the spam test that requires a speci
 
 var forkTest = flag.Bool("fork", false, "run the fork test that requires a special docker image to be built")
 
-var drivers = flag.String("drivers", "jsonrpc,cli", "comma separated list of drivers to run")
+// TODO: test cli driver later
+var drivers = flag.String("drivers", "jsonrpc", "comma separated list of drivers to run")
 
 // NOTE: `-parallel` is a flag that is already used by `go test`
 var parallelMode = flag.Bool("parallel-mode", false, "run tests in parallel mode")
 
 // Here we make clear the services will be used in each stage
-var basicServices = []string{integration.ExtContainer, "pg0", "pg1", "pg2", "node0", "node1", "node2"}
-var newServices = []string{integration.Ext3Container, "pg3", "node3"}
+var basicServices = []string{"pg0", "pg1", "pg2", "node0", "node1", "node2"}
+var newServices = []string{"pg3", "node3"}
 
 // NOTE: allServices will be sorted by docker-compose(in setup), so the order is not reliable
-var allServices = []string{integration.ExtContainer, integration.Ext3Container,
-	"pg0", "pg1", "pg2", "pg3", "node0", "node1", "node2", "node3",
-}
+var allServices = []string{"pg0", "pg1", "pg2", "pg3", "node0", "node1", "node2", "node3"}
 
-var migrationServices = []string{"new-ext1", "new-pg0", "new-pg1", "new-pg2", "new-node0", "new-node1", "new-node2"}
+var migrationServices = []string{"new-pg0", "new-pg1", "new-pg2", "new-node0", "new-node1", "new-node2"}
 
-var migrationServices2 = []string{"new-ext3", "new-pg3", "new-node3"}
+var migrationServices2 = []string{"new-pg3", "new-node3"}
 
-var singleNodeServices = []string{integration.ExtContainer, "pg0", "node0"}
+var singleNodeServices = []string{"pg0", "node0"}
 
-var byzAllServices = []string{integration.ExtContainer, integration.Ext3Container, "pg0", "pg1", "pg2", "pg3", "pg4", "pg5", "node0", "node1", "node2", "node3", "node4", "node5"}
+var byzAllServices = []string{"pg0", "pg1", "pg2", "pg3", "pg4", "pg5", "node0", "node1", "node2", "node3", "node4", "node5"}
 
 func TestLocalDevSetup(t *testing.T) {
 	if !*dev {
@@ -49,7 +47,6 @@ func TestLocalDevSetup(t *testing.T) {
 	ctx := context.Background()
 
 	opts := []integration.HelperOpt{
-		integration.WithBlockInterval(time.Second),
 		integration.WithValidators(4),
 		integration.WithNonValidators(0),
 		integration.WithExposedRPCPorts(),
@@ -61,52 +58,38 @@ func TestLocalDevSetup(t *testing.T) {
 	helper.WaitForSignals(t)
 }
 
-// func TestKwildDatabaseIntegration(t *testing.T) {
-// 	if *parallelMode {
-// 		t.Parallel()
-// 	}
+func TestKwildDatabaseIntegration(t *testing.T) {
+	ctx := context.Background()
 
-// 	ctx := context.Background()
+	opts := []integration.HelperOpt{
+		integration.WithValidators(4),
+		integration.WithNonValidators(0),
+		integration.WithExposedRPCPorts(),
+	}
 
-// 	opts := []integration.HelperOpt{
-// 		integration.WithBlockInterval(time.Second),
-// 		integration.WithValidators(4),
-// 		integration.WithNonValidators(0),
-// 	}
+	helper := integration.NewIntHelper(t, opts...)
+	helper.Setup(ctx, allServices)
 
-// 	testDrivers := strings.Split(*drivers, ",")
-// 	for _, driverType := range testDrivers {
-// 		t.Run(driverType+"_driver", func(t *testing.T) {
-// 			helper := integration.NewIntHelper(t, opts...)
-// 			helper.Setup(ctx, basicServices)
+	driverType := "jsonrpc"
+	node0Driver := helper.GetUserDriver(ctx, "node0", driverType, nil)
+	// node1Driver := helper.GetUserDriver(ctx, "node1", driverType, nil)
+	// node2Driver := helper.GetUserDriver(ctx, "node2", driverType, nil)
 
-// 			node0Driver := helper.GetUserDriver(ctx, "node0", driverType, nil)
-// 			node1Driver := helper.GetUserDriver(ctx, "node1", driverType, nil)
-// 			node2Driver := helper.GetUserDriver(ctx, "node2", driverType, nil)
+	// create a new namespace
+	specifications.CreateNamespaceSpecification(ctx, t, node0Driver)
 
-// 			// Create a new database and verify that the database exists on other nodes
-// 			specifications.DatabaseDeploySpecification(ctx, t, node0Driver)
-// 			// TODO: wait for node 1 and 2 to hit whatever height 0 is at
-// 			time.Sleep(2 * time.Second)
-// 			specifications.DatabaseVerifySpecification(ctx, t, node1Driver, true)
-// 			specifications.DatabaseVerifySpecification(ctx, t, node2Driver, true)
+	// create tables
+	specifications.CreateTablesSpecification(ctx, t, node0Driver)
 
-// 			specifications.ExecuteDBInsertSpecification(ctx, t, node0Driver)
+	// create user using sql
+	specifications.CreateUserSQLSpecification(ctx, t, node0Driver)
 
-// 			// restart node1 and ensure that the app state is synced
-// 			helper.RestartNode(ctx, "node1", 15*time.Second)
-// 			node1Driver = helper.GetUserDriver(ctx, "node1", driverType, nil)
+	// create user using action
+	// specifications.CreateUserActionSpecification(ctx, t, node0Driver)
 
-// 			specifications.ExecuteDBUpdateSpecification(ctx, t, node1Driver)
-// 			specifications.ExecuteDBDeleteSpecification(ctx, t, node2Driver)
-
-// 			// specifications.ExecutePermissionedActionSpecification(ctx, t, invalidUserDriver)
-
-// 			specifications.DatabaseDropSpecification(ctx, t, node1Driver)
-
-// 		})
-// 	}
-// }
+	// list users
+	// specifications.ListUsersActionSpecification(ctx, t, node1Driver)
+}
 
 // func TestKwildValidatorRemoval(t *testing.T) {
 // 	if *parallelMode {
