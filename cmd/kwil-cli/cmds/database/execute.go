@@ -34,7 +34,7 @@ kwil-cli database execute --action create_user username:satoshi age:32 --namespa
 )
 
 func executeCmd() *cobra.Command {
-	var sqlStmt *string
+	var sqlStmt string
 
 	cmd := &cobra.Command{
 		Use:     "execute --sql <sql_stmt> <parameter_1:value_1> <parameter_2:value_2> ...",
@@ -62,10 +62,11 @@ func executeCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("error getting selected namespace from CLI flags: %w", err))
 				}
 
-				if sqlStmt == nil {
+				// if sql is not changed, then it is an action
+				if !cmd.Flags().Changed("sql") {
 					action, args, err := getSelectedAction(cmd, args)
 					if err != nil {
-						return display.PrintErr(cmd, fmt.Errorf("error getting selected action or procedure: %w", err))
+						return display.PrintErr(cmd, fmt.Errorf("error getting selected action: %w", err))
 					}
 
 					parsedArgs, err := parseInputs(args)
@@ -101,7 +102,7 @@ func executeCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("cannot specify both --sql and --action"))
 				}
 
-				stmt := strings.TrimSpace(*sqlStmt)
+				stmt := strings.TrimSpace(sqlStmt)
 
 				// if the namespace is set, we should prepend it to the statement
 				if namespace != "" {
@@ -141,7 +142,7 @@ func executeCmd() *cobra.Command {
 	}
 
 	bindFlagsTargetingAction(cmd)
-	cmd.Flags().StringVarP(sqlStmt, "sql", "s", "", "the SQL statement to execute")
+	cmd.Flags().StringVarP(&sqlStmt, "sql", "s", "", "the SQL statement to execute")
 	return cmd
 }
 
