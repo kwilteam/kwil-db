@@ -235,7 +235,7 @@ type ExpressionArrayAccess struct {
 	// If only From is set, then it is arr[FROM:].
 	// If only To is set, then it is arr[:TO].
 	// If neither are set and index is not set, then it is arr[:].
-	FromTo [2]Expression
+	FromTo *[2]Expression
 }
 
 func (e *ExpressionArrayAccess) Accept(v Visitor) any {
@@ -1564,11 +1564,21 @@ func (e *LoopTermSQL) Accept(v Visitor) interface{} {
 	return v.VisitLoopTermSQL(e)
 }
 
+type LoopTermFunctionCall struct {
+	baseLoopTerm
+	// Call is the function call to execute.
+	Call *ExpressionFunctionCall
+}
+
 type LoopTermVariable struct {
 	baseLoopTerm
 	// Variable is the variable to loop through.
 	// It must be an array.
 	Variable *ExpressionVariable
+}
+
+func (e *LoopTermFunctionCall) Accept(v Visitor) interface{} {
+	return v.VisitLoopTermFunctionCall(e)
 }
 
 func (e *LoopTermVariable) Accept(v Visitor) interface{} {
@@ -1705,6 +1715,7 @@ type ActionVisitor interface {
 	VisitActionStmtForLoop(*ActionStmtForLoop) any
 	VisitLoopTermRange(*LoopTermRange) any
 	VisitLoopTermSQL(*LoopTermSQL) any
+	VisitLoopTermFunctionCall(*LoopTermFunctionCall) any
 	VisitLoopTermVariable(*LoopTermVariable) any
 	VisitActionStmtIf(*ActionStmtIf) any
 	VisitIfThen(*IfThen) any

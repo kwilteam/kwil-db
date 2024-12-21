@@ -320,6 +320,16 @@ func Test_Actions(t *testing.T) {
 		err error
 	}
 
+	// rawTest is a helper that allows us to write test logic purely in Kuneiform.
+	rawTest := func(name string, body string) testcase {
+		return testcase{
+			name:   name,
+			stmt:   []string{`CREATE ACTION raw_test() public {` + body + `}`},
+			action: "raw_test",
+		}
+	}
+	_ = rawTest
+
 	tests := []testcase{
 		{
 			name: "insert and select",
@@ -373,6 +383,56 @@ func Test_Actions(t *testing.T) {
 				{int64(33)},
 			},
 		},
+		{
+			name: "return next from another action",
+			stmt: []string{
+				`INSERT INTO users(id, name, age) VALUES (1, 'satoshi', 42), (2, 'hal finney', 50), (3, 'craig wright', 45)`,
+				`CREATE NAMESPACE test;`,
+				`{test}CREATE ACTION get_users() public view returns table(name text, age int) {
+					return SELECT name, age FROM main.users ORDER BY id;
+				}`,
+				`CREATE ACTION get_next_user($d int) public view returns table(name text, age int) {
+					for $row in test.get_users() {
+						RETURN NEXT $row.name, $row.age/$d;
+					}
+				}`,
+			},
+			values: []any{int64(2)},
+			action: "get_next_user",
+			results: [][]any{
+				{"satoshi", int64(21)},
+				{"hal finney", int64(25)},
+				{"craig wright", int64(22)},
+			},
+		},
+		rawTest("loop over array", `
+		$arr := array[1,2,3];
+		$sum := 0;
+		for $i in $arr {
+			$sum := $sum + $i;
+		};
+
+		if $sum != 6{
+			error('sum is not 6');
+		};
+		`),
+		rawTest("loop over range", `
+		$sum := 0;
+		for $i in 1..4 {
+			$sum := $sum + $i;
+		}
+
+		if $sum != 10 {
+			error('sum is not 10');
+		}
+		`),
+		rawTest("slice", `
+		$arr := array[1,2,3,4,5];
+		$slice := $arr[2:3];
+		if $slice != array[2,3] {
+			error('slice is not [2,3]');
+		}
+		`),
 	}
 
 	for _, test := range tests {

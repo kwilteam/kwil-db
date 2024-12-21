@@ -53,24 +53,19 @@ func makeActionToExecutable(namespace string, act *Action) *executable {
 			// get the expected return col names
 			var returnColNames []string
 			if act.Returns != nil {
-				for i, f := range act.Returns.Fields {
+				for _, f := range act.Returns.Fields {
 					cName := f.Name
 					if cName == "" {
-						cName = fmt.Sprintf("column%d", i+1)
+						cName = unknownColName
 					}
 					returnColNames = append(returnColNames, cName)
 				}
 			}
 
-			// create a new scope for the action
-			oldScope := exec.scope
-			defer func() {
-				exec.scope = oldScope
-			}()
-			exec.scope = newScope(namespace)
+			exec2 := exec.child(namespace)
 
 			for j, param := range act.Parameters {
-				err = exec.allocateVariable(param.Name, args[j])
+				err = exec2.allocateVariable(param.Name, args[j])
 				if err != nil {
 					return err
 				}
@@ -78,7 +73,7 @@ func makeActionToExecutable(namespace string, act *Action) *executable {
 
 			// execute the statements
 			for _, stmt := range stmtFns {
-				err := stmt(exec, func(row *row) error {
+				err := stmt(exec2, func(row *row) error {
 					row.columns = returnColNames
 					err := fn(row)
 					if err != nil {
@@ -129,6 +124,22 @@ type row struct {
 	columns []string
 	// Values is a list of values.
 	Values []Value
+}
+
+func (r *row) record() (*RecordValue, error) {
+	rec := newRecordValue()
+	for i, name := range r.Columns() {
+		if name == unknownColName {
+			continue
+		}
+
+		err := rec.AddValue(name, r.Values[i])
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return rec, nil
 }
 
 const unknownColName = "?column?"
@@ -299,12 +310,8 @@ func (i *interpreterPlanner) VisitActionStmtCall(p0 *parse.ActionStmtCall) any {
 // It takes a list of statements, and a list of variable allocations that will be made in the sub-scope.
 func executeBlock(exec *executionContext, fn resultFunc,
 	stmtFuncs []stmtFunc) error {
-	oldScope := exec.scope
-	defer func() {
-		exec.scope = oldScope
-	}()
-
-	exec.scope = exec.scope.subScope()
+	exec.scope.subScope()
+	defer exec.scope.popScope()
 
 	for _, stmt := range stmtFuncs {
 		err := stmt(exec, fn)
@@ -325,13 +332,9 @@ func (i *interpreterPlanner) VisitActionStmtForLoop(p0 *parse.ActionStmtForLoop)
 	loopFn := p0.LoopTerm.Accept(i).(loopTermFunc)
 
 	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
-		oldScope := exec.scope
-		defer func() {
-			exec.scope = oldScope
-		}()
-
 		err := loopFn(exec, func(term Value) error {
-			exec.scope = oldScope.subScope()
+			exec.scope.subScope()
+			defer exec.scope.popScope()
 			err := exec.allocateVariable(p0.Receiver.Name, term)
 			if err != nil {
 				return err
@@ -403,18 +406,9 @@ func (i *interpreterPlanner) VisitLoopTermSQL(p0 *parse.LoopTermSQL) any {
 
 		// query executes a Kuneiform query and returns a cursor.
 		return exec.query(raw, func(r *row) error {
-			// we will add any named row to the scope.
-			// unnamed we will skip.
-			rec := newRecordValue()
-			for i, col := range r.Columns() {
-				if col == "" {
-					continue
-				}
-
-				err = rec.AddValue(col, r.Values[i])
-				if err != nil {
-					return err
-				}
+			rec, err := r.record()
+			if err != nil {
+				return err
 			}
 
 			return fn(rec)
@@ -444,6 +438,52 @@ func (i *interpreterPlanner) VisitLoopTermVariable(p0 *parse.LoopTermVariable) a
 			if err != nil {
 				return err
 			}
+		}
+
+		return nil
+	})
+}
+
+func (i *interpreterPlanner) VisitLoopTermFunctionCall(p0 *parse.LoopTermFunctionCall) any {
+	// we cannot simply use the expression function call because we enforce that expression function
+	// calls do not return tables. Here, we can return tables.
+
+	args := make([]exprFunc, len(p0.Call.Args))
+	for j, arg := range p0.Call.Args {
+		args[j] = arg.Accept(i).(exprFunc)
+	}
+	return loopTermFunc(func(exec *executionContext, fn func(Value) error) error {
+		// the function call here can either return a table or a single array value.
+		ns, err := exec.getNamespace(p0.Call.Namespace)
+		if err != nil {
+			return err
+		}
+
+		funcDef, ok := ns.availableFunctions[p0.Call.Name]
+		if !ok {
+			return fmt.Errorf(`unknown function "%s" in namespace "%s"`, p0.Call.Name, p0.Call.Namespace)
+		}
+
+		vals := make([]Value, len(args))
+		for j, valFn := range args {
+			val, err := valFn(exec)
+			if err != nil {
+				return err
+			}
+
+			vals[j] = val
+		}
+
+		err = funcDef.Func(exec, vals, func(row *row) error {
+			rec, err := row.record()
+			if err != nil {
+				return err
+			}
+
+			return fn(rec)
+		})
+		if err != nil {
+			return err
 		}
 
 		return nil
@@ -708,7 +748,21 @@ func (i *interpreterPlanner) VisitExpressionVariable(p0 *parse.ExpressionVariabl
 
 func (i *interpreterPlanner) VisitExpressionArrayAccess(p0 *parse.ExpressionArrayAccess) any {
 	arrFn := p0.Array.Accept(i).(exprFunc)
-	indexFn := p0.Index.Accept(i).(exprFunc)
+	var indexFn exprFunc
+	var fromFn exprFunc
+	var toFn exprFunc
+	if p0.Index != nil {
+		indexFn = p0.Index.Accept(i).(exprFunc)
+	} else if p0.FromTo != nil {
+		if p0.FromTo[0] != nil {
+			fromFn = p0.FromTo[0].Accept(i).(exprFunc)
+		}
+		if p0.FromTo[1] != nil {
+			toFn = p0.FromTo[1].Accept(i).(exprFunc)
+		}
+	} else {
+		panic("unexpected array access statement")
+	}
 
 	return cast(p0, func(exec *executionContext) (Value, error) {
 		arrVal, err := arrFn(exec)
@@ -721,16 +775,94 @@ func (i *interpreterPlanner) VisitExpressionArrayAccess(p0 *parse.ExpressionArra
 			return nil, fmt.Errorf("expected array, got %T", arrVal)
 		}
 
-		index, err := indexFn(exec)
+		checkArrIdx := func(v Value) error {
+			if !v.Type().EqualsStrict(types.IntType) {
+				return fmt.Errorf("array index must be integer, got %s", v.Type())
+			}
+
+			return nil
+		}
+
+		if indexFn != nil {
+			index, err := indexFn(exec)
+			if err != nil {
+				return nil, err
+			}
+
+			if err := checkArrIdx(index); err != nil {
+				return nil, err
+			}
+
+			return arr.Index(int32(index.RawValue().(int64)))
+		}
+
+		// 1-indexed
+		start := int32(1)
+		end := arr.Len()
+		if fromFn != nil {
+			fromVal, err := fromFn(exec)
+			if err != nil {
+				return nil, err
+			}
+
+			if err := checkArrIdx(fromVal); err != nil {
+				return nil, err
+			}
+
+			start = int32(fromVal.RawValue().(int64))
+		}
+		if toFn != nil {
+			toVal, err := toFn(exec)
+			if err != nil {
+				return nil, err
+			}
+
+			if err := checkArrIdx(toVal); err != nil {
+				return nil, err
+			}
+
+			end = int32(toVal.RawValue().(int64))
+		}
+
+		if start > end {
+			// in Postgres, if the start is greater than the end, it returns an empty array.
+			return NewZeroValue(arr.Type())
+		}
+		// in Postgres, if the start is less than 1, it is treated as 1.
+		if start < 1 {
+			start = 1
+		}
+		// in Postgres, if the end is greater than the length of the array, it is treated as the length of the array.
+		if end > arr.Len() {
+			end = arr.Len()
+		}
+
+		zv, err := NewZeroValue(arr.Type())
 		if err != nil {
 			return nil, err
 		}
 
-		if !index.Type().EqualsStrict(types.IntType) {
-			return nil, fmt.Errorf("array index must be integer, got %s", index.Type())
+		arrZv, ok := zv.(ArrayValue)
+		if !ok {
+			// should never happen
+			return nil, fmt.Errorf("expected array, got %T", zv)
 		}
 
-		return arr.Index(int32(index.RawValue().(int64)))
+		j := int32(1)
+		for i := start; i <= end; i++ {
+			idx, err := arr.Index(i)
+			if err != nil {
+				return nil, err
+			}
+			err = arrZv.Set(j, idx)
+			if err != nil {
+				return nil, err
+			}
+
+			j++
+		}
+
+		return arrZv, nil
 	})
 }
 
