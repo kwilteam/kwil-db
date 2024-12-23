@@ -135,5 +135,6 @@ func (g *WhitelistGater) InterceptSecured(dir network.Direction, p peer.ID, conn
 }
 
 func (g *WhitelistGater) InterceptUpgraded(conn network.Conn) (bool, control.DisconnectReason) {
+	// maybe signal back to creator that protocol checks can be done now
 	return true, 0
 }

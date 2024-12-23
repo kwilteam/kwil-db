@@ -280,7 +280,8 @@ func (ss *StateSyncService) VerifySnapshot(ctx context.Context, snap *snapshotMe
 		// request the snapshot from the provider and verify the contents of the snapshot
 		stream, err := ss.host.NewStream(ctx, provider.ID, ProtocolIDSnapshotMeta)
 		if err != nil {
-			ss.log.Warn("failed to request snapshot meta", "provider", provider.ID.String(), "error", err)
+			ss.log.Warn("failed to request snapshot meta", "provider", provider.ID.String(),
+				"error", peers.CompressDialError(err))
 			continue
 		}
 
