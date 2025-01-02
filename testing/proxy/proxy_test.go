@@ -110,26 +110,14 @@ func Test_Proxy(t *testing.T) {
 				impl2Dbid := utils.GenerateDBID("impl_2", platform.Deployer)
 
 				// register the owner
-				_, err := platform.Engine.Procedure(ctx, platform.DB, &common.ExecutionData{
-					TransactionData: common.TransactionData{
-						Signer: platform.Deployer,
-						Caller: string(platform.Deployer),
-						TxID:   platform.Txid(),
-						Height: 1,
-					},
+				_, err := platform.Engine.Procedure(newTxCtx(platform, 1), platform.DB, &common.ExecutionData{
 					Dataset:   proxyDbid,
 					Procedure: "register_owner",
 				})
 				require.NoError(t, err)
 
 				// set the proxy to schema 1
-				_, err = platform.Engine.Procedure(ctx, platform.DB, &common.ExecutionData{
-					TransactionData: common.TransactionData{
-						Signer: platform.Deployer,
-						Caller: string(platform.Deployer),
-						TxID:   platform.Txid(),
-						Height: 1,
-					},
+				_, err = platform.Engine.Procedure(newTxCtx(platform, 1), platform.DB, &common.ExecutionData{
 					Dataset:   proxyDbid,
 					Procedure: "set_target",
 					Args:      []any{impl1Dbid},
@@ -137,13 +125,7 @@ func Test_Proxy(t *testing.T) {
 				require.NoError(t, err)
 
 				// get the user from schema 1
-				res, err := platform.Engine.Procedure(ctx, platform.DB, &common.ExecutionData{
-					TransactionData: common.TransactionData{
-						Signer: platform.Deployer,
-						Caller: string(platform.Deployer),
-						TxID:   platform.Txid(),
-						Height: 1,
-					},
+				res, err := platform.Engine.Procedure(newTxCtx(platform, 1), platform.DB, &common.ExecutionData{
 					Dataset:   proxyDbid,
 					Procedure: "get_users",
 				})
@@ -154,13 +136,7 @@ func Test_Proxy(t *testing.T) {
 				}, res.Rows)
 
 				// set the proxy to schema 2
-				_, err = platform.Engine.Procedure(ctx, platform.DB, &common.ExecutionData{
-					TransactionData: common.TransactionData{
-						Signer: platform.Deployer,
-						Caller: string(platform.Deployer),
-						TxID:   platform.Txid(),
-						Height: 2,
-					},
+				_, err = platform.Engine.Procedure(newTxCtx(platform, 2), platform.DB, &common.ExecutionData{
 					Dataset:   proxyDbid,
 					Procedure: "set_target",
 					Args:      []any{impl2Dbid},
@@ -168,13 +144,7 @@ func Test_Proxy(t *testing.T) {
 				require.NoError(t, err)
 
 				// migrate schema 2 from schema 1
-				_, err = platform.Engine.Procedure(ctx, platform.DB, &common.ExecutionData{
-					TransactionData: common.TransactionData{
-						Signer: platform.Deployer,
-						Caller: string(platform.Deployer),
-						TxID:   platform.Txid(),
-						Height: 2,
-					},
+				_, err = platform.Engine.Procedure(newTxCtx(platform, 2), platform.DB, &common.ExecutionData{
 					Dataset:   impl2Dbid,
 					Procedure: "migrate",
 					Args:      []any{impl1Dbid, "get_users"},
@@ -182,23 +152,11 @@ func Test_Proxy(t *testing.T) {
 				require.NoError(t, err)
 
 				// drop the old schema
-				err = platform.Engine.DeleteDataset(ctx, platform.DB, impl1Dbid,
-					&common.TransactionData{
-						Signer: platform.Deployer,
-						Caller: string(platform.Deployer),
-						TxID:   platform.Txid(),
-						Height: 2,
-					})
+				err = platform.Engine.DeleteDataset(newTxCtx(platform, 2), platform.DB, impl1Dbid)
 				require.NoError(t, err)
 
 				// check that the users exist in schema 2
-				res, err = platform.Engine.Procedure(ctx, platform.DB, &common.ExecutionData{
-					TransactionData: common.TransactionData{
-						Signer: platform.Deployer,
-						Caller: string(platform.Deployer),
-						TxID:   platform.Txid(),
-						Height: 2,
-					},
+				res, err = platform.Engine.Procedure(newTxCtx(platform, 2), platform.DB, &common.ExecutionData{
 					Dataset:   proxyDbid,
 					Procedure: "get_users",
 				})
@@ -212,4 +170,19 @@ func Test_Proxy(t *testing.T) {
 			},
 		},
 	})
+}
+
+func newTxCtx(p *kwilTesting.Platform, height int64) *common.TxContext {
+	return &common.TxContext{
+		Ctx:    context.Background(),
+		TxID:   p.Txid(),
+		Caller: string(p.Deployer),
+		Signer: p.Deployer,
+		BlockContext: &common.BlockContext{
+			Height: height,
+			ChainContext: &common.ChainContext{
+				NetworkParameters: &common.NetworkParameters{},
+			},
+		},
+	}
 }
