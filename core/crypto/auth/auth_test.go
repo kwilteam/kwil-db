@@ -16,7 +16,7 @@ import (
 
 const (
 	secp256k1Key  = "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"
-	secp256k1Addr = "0xc89d42189f0450c2b2c3c61f58ec5d628176a1e7"
+	secp256k1Addr = "0xc89D42189f0450C2b2c3c61f58Ec5d628176A1E7"
 	ed25519Key    = "7c67e60fce0c403ff40193a3128e5f3d8c2139aed36d76d7b5f1e70ec19c43f00aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842"
 	ed25519Addr   = "0aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842"
 )
@@ -61,7 +61,7 @@ func Test_AuthSignAndVerify(t *testing.T) {
 			name:          "eth personal sign",
 			signer:        secp256k1Signer(t, [32]byte{1, 2, 3}),
 			authenticator: auth.EthSecp256k1Authenticator{},
-			ident:         "0x1b7c6c9938cd93c10910dbc4d4ac8c9275e96925", // 0x prefixed 20 byte address
+			ident:         "0x1b7C6c9938cD93C10910dbC4d4aC8c9275e96925", // 0x prefixed 20 byte address
 		},
 		{
 			name:          "ed25519",
