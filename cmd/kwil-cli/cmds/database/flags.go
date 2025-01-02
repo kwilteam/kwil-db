@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/node/engine/interpreter"
 	"github.com/spf13/cobra"
 )
 
@@ -13,21 +14,20 @@ const (
 	actionNameFlag = "action"
 )
 
-// getSelectedNamespace returns the Dbid selected by the user.
-// Since the user can pass either a name and owner, or a dbid, we need to
-// check which one they passed and return the appropriate dbid.
-// If only a name flag is passed, it will get the owner from the configuration file.
-func getSelectedNamespace(cmd *cobra.Command) (string, error) {
+// getSelectedNamespace returns the namespace selected by the user.
+// If none is provided, it returns the default namespace.
+// If the namespace flag is not set, returns wasSet as false.
+func getSelectedNamespace(cmd *cobra.Command) (namespace string, wasSet bool, err error) {
 	if !cmd.Flags().Changed(nameFlag) {
-		return "", errors.New("no namespace selected")
+		return interpreter.DefaultNamespace, false, nil
 	}
 
 	name, err := cmd.Flags().GetString(nameFlag)
 	if err != nil {
-		return "", fmt.Errorf("failed to get name from flag: %w", err)
+		return "", false, fmt.Errorf("failed to get name from flag: %w", err)
 	}
 
-	return name, nil
+	return name, true, nil
 }
 
 // bindFlagsTargetingAction binds the flags for any command that targets a procedure or action.

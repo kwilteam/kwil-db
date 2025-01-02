@@ -57,7 +57,7 @@ func executeCmd() *cobra.Command {
 					are the parameters.
 				*/
 
-				namespace, err := getSelectedNamespace(cmd)
+				namespace, wasSet, err := getSelectedNamespace(cmd)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error getting selected namespace from CLI flags: %w", err))
 				}
@@ -105,7 +105,7 @@ func executeCmd() *cobra.Command {
 				stmt := strings.TrimSpace(sqlStmt)
 
 				// if the namespace is set, we should prepend it to the statement
-				if namespace != "" {
+				if wasSet {
 					if strings.HasPrefix(stmt, "{") {
 						return display.PrintErr(cmd, fmt.Errorf("cannot specify both --namespace and a statement with a {namespace} prefix"))
 					}

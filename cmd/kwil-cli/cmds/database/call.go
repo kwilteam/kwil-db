@@ -62,7 +62,7 @@ func callCmd() *cobra.Command {
 			}
 
 			return client.DialClient(cmd.Context(), cmd, dialFlags, func(ctx context.Context, clnt clientType.Client, conf *config.KwilCliConfig) error {
-				dbid, err := getSelectedNamespace(cmd)
+				dbid, _, err := getSelectedNamespace(cmd)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error getting selected dbid from CLI flags: %w", err))
 				}
