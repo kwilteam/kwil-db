@@ -4,6 +4,7 @@
 package testing
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -11,12 +12,12 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"os/exec"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/cometbft/cometbft/test/e2e/pkg/exec"
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/sql"
 	"github.com/kwilteam/kwil-db/core/log"
@@ -416,25 +417,39 @@ func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context
 		return fn(ctx, db, opts.Logger)
 	}
 
-	// check if the user has docker
-	err = exec.Command(ctx, "docker")
-	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
-			return fmt.Errorf("docker not found. Please ensure Docker is installed and running")
-		}
-		return fmt.Errorf("error checking for Docker installation: %w", err)
-	}
-
 	port := "52853" // random port
 
 	// Run the container
-	bts, err := exec.CommandOutput(ctx, "docker", "run", "-d", "-p", fmt.Sprintf("%s:5432", port), "--name", "kwil-testing-postgres", "-e",
-		"POSTGRES_HOST_AUTH_METHOD=trust", "kwildb/postgres:latest")
+	cmd := exec.CommandContext(ctx, "docker", dockerStartArgs(port)...)
+	out, err := cmd.Output() // run and wait for completion
 	if err != nil {
 		return fmt.Errorf("error running test container: %w", err)
 	}
+
+	switch {
+	case err == nil:
+		// do nothing
+	case strings.Contains(err.Error(), "command not found"):
+		{
+			return fmt.Errorf("docker not found. Please ensure Docker is installed and running")
+		}
+	case strings.Contains(err.Error(), "Conflict. The container name"):
+		return fmt.Errorf(`cannot create test-container: conflicting container name: "%s"`, ContainerName)
+	default:
+		return fmt.Errorf("error running test container: %w", err)
+	}
+
+	// Postgres containers go through a weird startup where they start, shutdown, and then start again.
+	// We previously had some flakiness where the test would connect before the container executed its
+	// second start, which causes it to fail. We now wait for the logs to be received before continuing.
+	err = waitForLogs(ctx, ContainerName, "database system is ready to accept connections", "database system is shut down", "PostgreSQL init process complete; ready for start up")
+	if err != nil {
+		return fmt.Errorf("error waiting for logs: %w", err)
+	}
+
 	defer func() {
-		err2 := exec.Command(ctx, "docker", "rm", "-f", "kwil-testing-postgres")
+		cmdStop := exec.CommandContext(ctx, "docker", "rm", "-f", ContainerName)
+		err2 := cmdStop.Run()
 		if err2 != nil {
 			if err == nil {
 				err = err2
@@ -444,7 +459,7 @@ func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context
 		}
 	}()
 
-	opts.Logger.Logf("running test container: %s", string(bts))
+	opts.Logger.Logf("running test container: %s", string(out))
 
 	db, err := connectWithRetry(ctx, port, 10) // might take a while to start up on slower machines
 	if err != nil {
@@ -454,6 +469,70 @@ func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context
 	defer db.Close()
 
 	return fn(ctx, db, opts.Logger)
+}
+
+// waitForLogs waits for the logs to be received from the container.
+// The logs must be received in order.
+func waitForLogs(ctx context.Context, containerName string, logs ...string) error {
+	logsCmd := exec.CommandContext(ctx, "docker", "logs", "--follow", containerName)
+
+	stdout, err := logsCmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("failed to attach to logs: %w", err)
+	}
+
+	if err := logsCmd.Start(); err != nil {
+		return fmt.Errorf("failed to start logs command: %w", err)
+	}
+	defer logsCmd.Process.Kill() // Ensure the logs process is terminated
+
+	scanner := bufio.NewScanner(stdout)
+	logCh := make(chan string)
+	errCh := make(chan error, 1)
+	defer close(errCh)
+	defer stdout.Close()
+
+	// Goroutine to scan logs
+	go func() {
+		defer close(logCh)
+		for scanner.Scan() {
+			logCh <- scanner.Text()
+		}
+		if err := scanner.Err(); err != nil {
+			errCh <- fmt.Errorf("error reading logs: %w", err)
+		}
+	}()
+
+	i := 0
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case err := <-errCh:
+			return err
+		case line, ok := <-logCh:
+			if !ok {
+				return fmt.Errorf("log message not found")
+			}
+
+			if strings.Contains(line, logs[i]) {
+				i++
+			}
+
+			if i == len(logs) {
+				return nil
+			}
+		}
+	}
+}
+
+// ContainerName is the name of the test container
+const ContainerName = "kwil-testing-postgres"
+
+// dockerStartArgs returns the docker start command args
+func dockerStartArgs(port string) (args []string) {
+	return []string{"run", "-d", "-p", port + ":5432", "--name", ContainerName,
+		"-e", "POSTGRES_HOST_AUTH_METHOD=trust", "kwildb/postgres:16.5-1"}
 }
 
 // connectWithRetry tries to connect to Postgres, and will retry n times at
