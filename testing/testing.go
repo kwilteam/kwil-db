@@ -4,6 +4,7 @@
 package testing
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -411,7 +412,10 @@ func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context
 
 	// Run the container
 	cmd := exec.CommandContext(ctx, "docker", dockerStartArgs(port)...)
-	err = cmd.Run() // run and wait for completion
+	out, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to get output from container: %w", err)
+	}
 	switch {
 	case err == nil:
 		// do nothing
@@ -457,9 +461,9 @@ func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context
 		}
 	}()
 
-	out, err := cmd.Output()
+	err = waitForLogs(ctx, ContainerName, "database system is ready to accept connections", "database system is shut down", "PostgreSQL init process complete; ready for start up")
 	if err != nil {
-		return fmt.Errorf("failed to get output from container: %w", err)
+		return fmt.Errorf("error waiting for logs: %w", err)
 	}
 
 	opts.Logger.Logf("running test container: %s", string(out))
@@ -472,6 +476,61 @@ func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context
 	defer db.Close()
 
 	return fn(ctx, db, opts.Logger)
+}
+
+// waitForLogs waits for the logs to be received from the container.
+// The logs must be received in order.
+func waitForLogs(ctx context.Context, containerName string, logs ...string) error {
+	logsCmd := exec.CommandContext(ctx, "docker", "logs", "--follow", containerName)
+
+	stdout, err := logsCmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("failed to attach to logs: %w", err)
+	}
+
+	if err := logsCmd.Start(); err != nil {
+		return fmt.Errorf("failed to start logs command: %w", err)
+	}
+	defer logsCmd.Process.Kill() // Ensure the logs process is terminated
+
+	scanner := bufio.NewScanner(stdout)
+	logCh := make(chan string)
+	errCh := make(chan error, 1)
+	defer close(errCh)
+	defer stdout.Close()
+
+	// Goroutine to scan logs
+	go func() {
+		defer close(logCh)
+		for scanner.Scan() {
+			logCh <- scanner.Text()
+		}
+		if err := scanner.Err(); err != nil {
+			errCh <- fmt.Errorf("error reading logs: %w", err)
+		}
+	}()
+
+	i := 0
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case err := <-errCh:
+			return err
+		case line, ok := <-logCh:
+			if !ok {
+				return fmt.Errorf("log message not found")
+			}
+
+			if strings.Contains(line, logs[i]) {
+				i++
+			}
+
+			if i == len(logs) {
+				return nil
+			}
+		}
+	}
 }
 
 // ContainerName is the name of the test container
