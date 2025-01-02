@@ -445,6 +445,16 @@ func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context
 		return fmt.Errorf("error running test container: %w", err)
 	}
 
+	// this is a pretty stupid hack:
+	// For some reason, new Postgres containers, start, shutdown, and then start again.
+	// Some machines connect on the first start, which Postgres then hangs up. This sleep is to give Postgres time to
+	// start up again.
+	// I have tried to use the pg_isready utility, but it will tell us that everything is ok on the first start, so it
+	// is not very useful here. We should probably suggest that anybody using this tool should NOT use the --test-container
+	// flag in a CI pipeline, and instead use a local Postgres instance. The other option here is that we could maybe use
+	// Docker Compose, but our workaround using Docker Compose is more or less the same as this but with extra steps.
+	time.Sleep(2 * time.Second)
+
 	defer func() {
 		cmdStop := exec.CommandContext(ctx, "docker", "rm", "-f", ContainerName)
 		err2 := cmdStop.Run()
