@@ -58,7 +58,7 @@ func batchCmd() *cobra.Command {
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return client.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
-				dbid, err := getSelectedNamespace(cmd)
+				dbid, _, err := getSelectedNamespace(cmd)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error getting selected dbid from CLI flags: %w", err))
 				}
