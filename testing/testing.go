@@ -4,6 +4,7 @@
 package testing
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
@@ -11,12 +12,12 @@ import (
 	"fmt"
 	"maps"
 	"os"
+	"os/exec"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
-	"github.com/cometbft/cometbft/test/e2e/pkg/exec"
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/common/config"
 	"github.com/kwilteam/kwil-db/common/sql"
@@ -226,6 +227,7 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 					for _, sql := range seed {
 						dbid := utils.GenerateDBID(dbName, deployer)
 						_, err = engine.Execute(&common.TxContext{
+							Ctx:    ctx,
 							Signer: deployer,
 							Caller: string(deployer),
 							TxID:   platform.Txid(),
@@ -440,8 +442,13 @@ func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context
 
 	port := "52853" // random port
 
+	docker, startCmd := startCommand(port)
 	// Run the container
-	bts, err := exec.CommandOutput(ctx, startCommand(port)...)
+	cmd := exec.CommandContext(ctx, docker, startCmd...)
+	out, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to get output from container: %w", err)
+	}
 	switch {
 	case err == nil:
 		// do nothing
@@ -460,12 +467,12 @@ func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context
 			return fmt.Errorf(`cannot create test-container: conflicting container name: "%s"`, ContainerName)
 		}
 
-		err = exec.Command(ctx, "docker", "rm", "-f", ContainerName)
+		err = exec.CommandContext(ctx, "docker", "rm", "-f", ContainerName).Run()
 		if err != nil {
 			return fmt.Errorf("error removing conflicting container: %w", err)
 		}
 
-		bts, err = exec.CommandOutput(ctx, startCommand(port)...)
+		out, err = exec.CommandContext(ctx, docker, startCmd...).Output()
 		if err != nil {
 			return fmt.Errorf("error running test container: %w", err)
 		}
@@ -474,7 +481,7 @@ func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context
 	}
 
 	defer func() {
-		err2 := exec.Command(ctx, "docker", "rm", "-f", ContainerName)
+		err2 := exec.CommandContext(ctx, "docker", "rm", "-f", ContainerName).Run()
 		if err2 != nil {
 			if err == nil {
 				err = err2
@@ -484,7 +491,12 @@ func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context
 		}
 	}()
 
-	opts.Logger.Logf("running test container: %s", string(bts))
+	err = waitForLogs(ctx, ContainerName, "database system is ready to accept connections", "database system is shut down", "PostgreSQL init process complete; ready for start up")
+	if err != nil {
+		return fmt.Errorf("error waiting for logs: %w", err)
+	}
+
+	opts.Logger.Logf("running test container: %s", string(out))
 
 	db, err := connectWithRetry(ctx, port, 10) // might take a while to start up on slower machines
 	if err != nil {
@@ -496,12 +508,67 @@ func runWithPostgres(ctx context.Context, opts *Options, fn func(context.Context
 	return fn(ctx, db, opts.Logger)
 }
 
+// waitForLogs waits for the logs to be received from the container.
+// The logs must be received in order.
+func waitForLogs(ctx context.Context, containerName string, logs ...string) error {
+	logsCmd := exec.CommandContext(ctx, "docker", "logs", "--follow", containerName)
+
+	stdout, err := logsCmd.StdoutPipe()
+	if err != nil {
+		return fmt.Errorf("failed to attach to logs: %w", err)
+	}
+
+	if err := logsCmd.Start(); err != nil {
+		return fmt.Errorf("failed to start logs command: %w", err)
+	}
+	defer logsCmd.Process.Kill() // Ensure the logs process is terminated
+
+	scanner := bufio.NewScanner(stdout)
+	logCh := make(chan string)
+	errCh := make(chan error, 1)
+	defer close(errCh)
+	defer stdout.Close()
+
+	// Goroutine to scan logs
+	go func() {
+		defer close(logCh)
+		for scanner.Scan() {
+			logCh <- scanner.Text()
+		}
+		if err := scanner.Err(); err != nil {
+			errCh <- fmt.Errorf("error reading logs: %w", err)
+		}
+	}()
+
+	i := 0
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case err := <-errCh:
+			return err
+		case line, ok := <-logCh:
+			if !ok {
+				return fmt.Errorf("log message not found")
+			}
+
+			if strings.Contains(line, logs[i]) {
+				i++
+			}
+
+			if i == len(logs) {
+				return nil
+			}
+		}
+	}
+}
+
 // ContainerName is the name of the test container
 const ContainerName = "kwil-testing-postgres"
 
 // startCommand returns the docker start command
-func startCommand(port string) []string {
-	return []string{"docker", "run", "-d", "-p", fmt.Sprintf("%s:5432", port), "--name", ContainerName,
+func startCommand(port string) (string, []string) {
+	return "docker", []string{"run", "-d", "-p", fmt.Sprintf("%s:5432", port), "--name", ContainerName,
 		"-e", "POSTGRES_HOST_AUTH_METHOD=trust", "kwildb/postgres:16.4-1"}
 }
 
