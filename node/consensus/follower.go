@@ -107,7 +107,7 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, ci *ktyp
 		go ce.sendConsensusMessage(&consensusMessage{
 			MsgType: blkCommit.Type(),
 			Msg:     blkCommit,
-			Sender:  ce.pubKey.Bytes(),
+			Sender:  ce.leader.Bytes(),
 		})
 		return false
 	}
@@ -129,7 +129,7 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, ci *ktyp
 	go ce.sendConsensusMessage(&consensusMessage{
 		MsgType: blkCommit.Type(),
 		Msg:     blkCommit,
-		Sender:  ce.pubKey.Bytes(),
+		Sender:  ce.leader.Bytes(),
 	})
 
 	return false

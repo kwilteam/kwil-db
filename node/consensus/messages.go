@@ -1,6 +1,7 @@
 package consensus
 
 import (
+	"bytes"
 	"fmt"
 
 	ktypes "github.com/kwilteam/kwil-db/core/types"
@@ -113,7 +114,7 @@ func (ce *ConsensusEngine) NotifyBlockProposal(blk *ktypes.Block) {
 	go ce.sendConsensusMessage(&consensusMessage{
 		MsgType: blkProp.Type(),
 		Msg:     blkProp,
-		Sender:  ce.pubKey.Bytes(),
+		Sender:  ce.leader.Bytes(),
 	})
 }
 
@@ -132,7 +133,7 @@ func (ce *ConsensusEngine) NotifyBlockCommit(blk *ktypes.Block, ci *ktypes.Commi
 	go ce.sendConsensusMessage(&consensusMessage{
 		MsgType: blkCommit.Type(),
 		Msg:     blkCommit,
-		Sender:  ce.pubKey.Bytes(),
+		Sender:  ce.leader.Bytes(),
 	})
 }
 
@@ -164,12 +165,17 @@ type resetMsg struct {
 // NotifyResetState is used by the p2p stream handler to notify the consensus engine to reset the state to the specified height.
 // Only a validator should receive this message to abort the current block execution.
 // TODO: take sender and verify the validity of the message
-func (ce *ConsensusEngine) NotifyResetState(height int64, txIDs []types.Hash) {
+func (ce *ConsensusEngine) NotifyResetState(height int64, txIDs []types.Hash, leaderPubKey []byte) {
 	if ce.role.Load() != types.RoleValidator {
 		return
 	}
 
 	// check if the sender is the leader
+	if !bytes.Equal(leaderPubKey, ce.leader.Bytes()) {
+		ce.log.Warn("Received reset state message from non-leader", "sender", leaderPubKey)
+		return
+	}
+
 	go ce.sendResetMsg(&resetMsg{
 		height: height,
 		txIDs:  txIDs,
