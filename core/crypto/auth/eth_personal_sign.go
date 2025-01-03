@@ -2,9 +2,11 @@ package auth
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
+	"golang.org/x/crypto/sha3"
 )
 
 const (
@@ -29,7 +31,32 @@ func (EthSecp256k1Authenticator) Identifier(ident []byte) (string, error) {
 	if len(ident) != 20 {
 		return "", fmt.Errorf("invalid eth address with %d bytes", len(ident))
 	}
-	return fmt.Sprintf("0x%x", ident), nil
+	return eip55ChecksumAddr([20]byte(ident)), nil
+}
+
+// eip55ChecksumAddr converts an ethereum address to a EIP55-compliant hex
+// string representation of the address.
+func eip55ChecksumAddr(addr [20]byte) string {
+	var buf [42]byte
+	copy(buf[:2], "0x")
+	hex.Encode(buf[2:], addr[:])
+
+	// https://eips.ethereum.org/EIPS/eip-55
+	sha := sha3.NewLegacyKeccak256()
+	sha.Write(buf[2:])
+	hash := sha.Sum(nil)
+	for i := 2; i < len(buf); i++ {
+		hashByte := hash[(i-2)/2]
+		if i%2 == 0 {
+			hashByte = hashByte >> 4
+		} else {
+			hashByte &= 0x0f
+		}
+		if buf[i] > '9' && hashByte > 7 {
+			buf[i] -= 32
+		}
+	}
+	return string(buf[:])
 }
 
 // Verify verifies applies the Ethereum TextHash digest and verifies the signature
