@@ -60,10 +60,11 @@ func (cr *ConsensusReset) UnmarshalBinary(data []byte) error {
 }
 
 type AckRes struct {
-	Height  int64
-	ACK     bool
-	BlkHash Hash
-	AppHash *Hash
+	Height    int64
+	ACK       bool
+	BlkHash   Hash
+	AppHash   *Hash
+	Signature []byte // signature of (n)ack || blkHash || appHash
 }
 
 func (ar AckRes) ack() string {

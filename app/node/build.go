@@ -456,7 +456,7 @@ func buildNode(d *coreDependencies, mp *mempool.Mempool, bs *store.BlockStore,
 		failBuild(err, "failed to create node")
 	}
 
-	logger.Infof("This node is %s", node.Addrs())
+	logger.Infof("This node is %s @ %s", node.ID(), node.Addrs())
 	return node
 }
 

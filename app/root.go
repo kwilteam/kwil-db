@@ -11,6 +11,7 @@ import (
 	"github.com/kwilteam/kwil-db/app/node"
 	"github.com/kwilteam/kwil-db/app/node/conf"
 	"github.com/kwilteam/kwil-db/app/rpc"
+	"github.com/kwilteam/kwil-db/app/seed"
 	"github.com/kwilteam/kwil-db/app/setup"
 	"github.com/kwilteam/kwil-db/app/shared/bind"
 	"github.com/kwilteam/kwil-db/app/snapshot"
@@ -67,6 +68,7 @@ func RootCmd() *cobra.Command {
 	cmd.AddCommand(snapshot.NewSnapshotCmd())
 	cmd.AddCommand(migration.NewMigrationCmd())
 	cmd.AddCommand(block.NewBlockExecCmd())
+	cmd.AddCommand(seed.SeedCmd())
 
 	return cmd
 }

@@ -1,6 +1,8 @@
 package peers
 
 import (
+	"context"
+	"slices"
 	"sync"
 
 	"github.com/kwilteam/kwil-db/core/log"
@@ -8,7 +10,9 @@ import (
 	"github.com/libp2p/go-libp2p/core/control"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/multiformats/go-multiaddr"
+	msmux "github.com/multiformats/go-multistream"
 )
 
 // WhitelistGater is a libp2p connmgr.ConnectionGater implementation to enforce
@@ -135,5 +139,117 @@ func (g *WhitelistGater) InterceptSecured(dir network.Direction, p peer.ID, conn
 }
 
 func (g *WhitelistGater) InterceptUpgraded(conn network.Conn) (bool, control.DisconnectReason) {
+	// maybe signal back to creator that protocol checks can be done now
 	return true, 0
+}
+
+type ChainIDGater struct {
+	logger  log.Logger
+	chainID string
+}
+
+func NewChainIDGater(chainID string, opts ...GateOpt) *ChainIDGater {
+	options := &gateOpts{
+		logger: log.DiscardLogger,
+	}
+	for _, opt := range opts {
+		opt(options)
+	}
+	return &ChainIDGater{
+		logger:  options.logger,
+		chainID: chainID,
+	}
+}
+
+var _ connmgr.ConnectionGater = (*ChainIDGater)(nil)
+
+// OUTBOUND
+
+func (g *ChainIDGater) InterceptPeerDial(p peer.ID) bool { return true }
+
+func (g *ChainIDGater) InterceptAddrDial(p peer.ID, addr multiaddr.Multiaddr) bool { return true }
+
+// INBOUND
+
+func (g *ChainIDGater) InterceptAccept(connAddrs network.ConnMultiaddrs) bool { return true }
+
+func (g *ChainIDGater) InterceptSecured(dir network.Direction, p peer.ID, conn network.ConnMultiaddrs) bool {
+	return true
+}
+
+func (g *ChainIDGater) InterceptUpgraded(conn network.Conn) (bool, control.DisconnectReason) {
+	// I can't get this to work. What can you do with network.Conn here?
+	s, err := conn.NewStream(context.Background())
+	if err != nil {
+		g.logger.Warnf("cannot create stream: %v", err)
+		return false, 1
+	}
+	defer s.Close()
+	proto := ProtocolIDPrefixChainID + protocol.ID(g.chainID)
+	err = msmux.SelectProtoOrFail(proto, s)
+	if err != nil {
+		g.logger.Warnf("cannot handshake for protocol %v: %v", proto, err)
+		return false, 1
+	}
+
+	return true, 0
+}
+
+type chainedConnectionGater struct {
+	gaters []connmgr.ConnectionGater
+}
+
+func ChainConnectionGaters(gaters ...connmgr.ConnectionGater) connmgr.ConnectionGater {
+	return &chainedConnectionGater{
+		gaters: slices.DeleteFunc(gaters, func(g connmgr.ConnectionGater) bool {
+			return g == nil
+		}),
+	}
+}
+
+var _ connmgr.ConnectionGater = (*chainedConnectionGater)(nil)
+
+func (g *chainedConnectionGater) InterceptAccept(connAddrs network.ConnMultiaddrs) (allow bool) {
+	for _, gater := range g.gaters {
+		if !gater.InterceptAccept(connAddrs) {
+			return false
+		}
+	}
+	return true
+}
+
+func (g *chainedConnectionGater) InterceptSecured(dir network.Direction, p peer.ID, conn network.ConnMultiaddrs) (allow bool) {
+	for _, gater := range g.gaters {
+		if !gater.InterceptSecured(dir, p, conn) {
+			return false
+		}
+	}
+	return true
+}
+
+func (g *chainedConnectionGater) InterceptUpgraded(conn network.Conn) (bool, control.DisconnectReason) {
+	for _, gater := range g.gaters {
+		if ok, reason := gater.InterceptUpgraded(conn); !ok {
+			return false, reason
+		}
+	}
+	return true, 0
+}
+
+func (g *chainedConnectionGater) InterceptPeerDial(p peer.ID) bool {
+	for _, gater := range g.gaters {
+		if !gater.InterceptPeerDial(p) {
+			return false
+		}
+	}
+	return true
+}
+
+func (g *chainedConnectionGater) InterceptAddrDial(p peer.ID, addr multiaddr.Multiaddr) bool {
+	for _, gater := range g.gaters {
+		if !gater.InterceptAddrDial(p, addr) {
+			return false
+		}
+	}
+	return true
 }
