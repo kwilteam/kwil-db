@@ -591,7 +591,14 @@ func (n *Node) startConsensusResetGossip(ctx context.Context, ps *pubsub.PubSub)
 				fromPeerID, resetMsg.ReceivedFrom, resetMsg.Message.Data)
 
 			// source of the reset message should be the leader
-			n.ce.NotifyResetState(reset.ToHeight, reset.TxIDs)
+
+			peerPubKey, err := fromPeerID.ExtractPublicKey()
+			if err != nil {
+				n.log.Infof("failed to extract pubkey from peer ID %v: %v", fromPeerID, err)
+				continue
+			}
+			pubkeyBytes, _ := peerPubKey.Raw() // does not error for secp256k1 or ed25519
+			n.ce.NotifyResetState(reset.ToHeight, reset.TxIDs, pubkeyBytes)
 		}
 	}()
 

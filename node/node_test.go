@@ -301,7 +301,7 @@ func (ce *dummyCE) AcceptACK() bool {
 	return !ce.rejectACK
 }
 
-func (ce *dummyCE) NotifyResetState(height int64, txIDs []types.Hash) {
+func (ce *dummyCE) NotifyResetState(height int64, txIDs []types.Hash, sender []byte) {
 	if ce.resetStateHandler != nil {
 		ce.resetStateHandler(height, txIDs)
 		return

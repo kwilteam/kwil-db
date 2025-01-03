@@ -165,7 +165,6 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 	}
 
 	// re-announce
-
 	n.ce.NotifyBlockCommit(blk, ci)
 	go func() {
 		n.announceRawBlk(context.Background(), blkHash, height, rawBlk, ci, s.Conn().RemotePeer(), reqMsg.LeaderSig) // re-announce with the leader's signature
