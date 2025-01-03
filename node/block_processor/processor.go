@@ -101,16 +101,16 @@ func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Account
 	}
 	if dirty {
 		// app state is in a partially committed state, recover the chain state.
-		_, _, hash, err := bs.GetByHeight(height)
-		if err != nil {
+		_, _, ci, err := bs.GetByHeight(height)
+		if err != nil || ci == nil {
 			return nil, err
 		}
 
-		if err := meta.SetChainState(ctx, tx, height, hash[:], false); err != nil {
+		if err := meta.SetChainState(ctx, tx, height, ci.AppHash[:], false); err != nil {
 			return nil, err
 		}
 
-		copy(appHash, hash[:])
+		copy(appHash, ci.AppHash[:])
 
 		// also update the last changeset height in the migrator
 		if err := bp.migrator.PersistLastChangesetHeight(ctx, tx, height); err != nil {

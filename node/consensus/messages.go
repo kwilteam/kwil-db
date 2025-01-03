@@ -52,6 +52,8 @@ type vote struct {
 	blkHash types.Hash
 	appHash *types.Hash
 	height  int64
+
+	signature *ktypes.Signature
 }
 
 func (vm *vote) Type() consensusMsgType {
@@ -70,8 +72,8 @@ func (vm *vote) String() string {
 // that a new block has been committed to the blockchain.
 // Ensure that the source of the block announce is the leader.
 type blockAnnounce struct {
-	appHash types.Hash
-	blk     *ktypes.Block
+	blk *ktypes.Block
+	ci  *ktypes.CommitInfo
 }
 
 func (bam *blockAnnounce) Type() consensusMsgType {
@@ -79,7 +81,7 @@ func (bam *blockAnnounce) Type() consensusMsgType {
 }
 
 func (bam *blockAnnounce) String() string {
-	return fmt.Sprintf("BlockAnnounce {height: %d, blkHash: %s, appHash: %s}", bam.blk.Header.Height, bam.blk.Hash().String(), bam.appHash.String())
+	return fmt.Sprintf("BlockAnnounce {height: %d, blkHash: %s, appHash: %s}", bam.blk.Header.Height, bam.blk.Hash().String(), bam.ci.AppHash.String())
 }
 
 // resetState is a message that is sent to the consensus engine to
@@ -117,14 +119,14 @@ func (ce *ConsensusEngine) NotifyBlockProposal(blk *ktypes.Block) {
 
 // NotifyBlockCommit is used by the p2p stream handler to notify the consensus engine of a committed block.
 // Leader should ignore this message.
-func (ce *ConsensusEngine) NotifyBlockCommit(blk *ktypes.Block, appHash types.Hash) {
+func (ce *ConsensusEngine) NotifyBlockCommit(blk *ktypes.Block, ci *ktypes.CommitInfo) {
 	if ce.role.Load() == types.RoleLeader {
 		return
 	}
 
 	blkCommit := &blockAnnounce{
-		blk:     blk,
-		appHash: appHash,
+		blk: blk,
+		ci:  ci,
 	}
 
 	go ce.sendConsensusMessage(&consensusMessage{
@@ -161,11 +163,13 @@ type resetMsg struct {
 
 // NotifyResetState is used by the p2p stream handler to notify the consensus engine to reset the state to the specified height.
 // Only a validator should receive this message to abort the current block execution.
+// TODO: take sender and verify the validity of the message
 func (ce *ConsensusEngine) NotifyResetState(height int64, txIDs []types.Hash) {
 	if ce.role.Load() != types.RoleValidator {
 		return
 	}
 
+	// check if the sender is the leader
 	go ce.sendResetMsg(&resetMsg{
 		height: height,
 		txIDs:  txIDs,

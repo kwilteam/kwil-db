@@ -92,5 +92,5 @@ type MigratorModule interface {
 }
 
 type BlockStore interface {
-	GetByHeight(height int64) (types.Hash, *ktypes.Block, types.Hash, error)
+	GetByHeight(height int64) (types.Hash, *ktypes.Block, *ktypes.CommitInfo, error)
 }

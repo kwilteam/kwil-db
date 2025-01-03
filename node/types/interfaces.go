@@ -17,6 +17,7 @@ type BlockStore interface {
 	TxGetter
 	BlockResultsStorer
 
+	// TODO: Should this return commitInfo or AppHash?
 	Best() (int64, Hash, Hash)
 
 	PreFetch(Hash) (bool, func()) // should be app level instead (TODO: remove)
@@ -26,8 +27,8 @@ type BlockStore interface {
 
 type BlockGetter interface {
 	Have(Hash) bool
-	Get(Hash) (*types.Block, Hash, error)
-	GetByHeight(int64) (Hash, *types.Block, Hash, error) // note: we can impl GetBlockHeader easily too
+	Get(Hash) (*types.Block, *types.CommitInfo, error)
+	GetByHeight(int64) (Hash, *types.Block, *types.CommitInfo, error) // note: we can impl GetBlockHeader easily too
 }
 
 type RawGetter interface {
@@ -36,7 +37,7 @@ type RawGetter interface {
 }
 
 type BlockStorer interface {
-	Store(*types.Block, Hash) error
+	Store(*types.Block, *types.CommitInfo) error
 }
 
 type BlockResultsStorer interface {

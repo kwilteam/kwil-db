@@ -192,7 +192,7 @@ func newTx(nonce uint64, sender, payload string) *ktypes.Transaction {
 	}
 }
 
-func createTestBlock(t *testing.T, height int64, numTxns int) (*ktypes.Block, types.Hash) {
+func createTestBlock(_ *testing.T, height int64, numTxns int) (*ktypes.Block, types.Hash) {
 	txns := make([]*ktypes.Transaction, numTxns)
 	for i := range numTxns {
 		txns[i] = newTx(uint64(i), "bob", strconv.FormatInt(height, 10)+strconv.Itoa(i)+
@@ -257,7 +257,7 @@ type dummyCE struct {
 	rejectACK    bool
 
 	ackHandler         func(validatorPK []byte, ack types.AckRes)
-	blockCommitHandler func(blk *ktypes.Block, appHash types.Hash)
+	blockCommitHandler func(blk *ktypes.Block, ci *ktypes.CommitInfo)
 	blockPropHandler   func(blk *ktypes.Block)
 	resetStateHandler  func(height int64, txIDs []types.Hash)
 
@@ -276,13 +276,13 @@ func (ce *dummyCE) AcceptProposal(height int64, blkID, prevBlkID types.Hash, lea
 	return !ce.rejectProp
 }
 
-func (ce *dummyCE) AcceptCommit(height int64, blkID, appHash types.Hash, leaderSig []byte) bool {
+func (ce *dummyCE) AcceptCommit(height int64, blkID types.Hash, ci *ktypes.CommitInfo, leaderSig []byte) bool {
 	return !ce.rejectCommit
 }
 
-func (ce *dummyCE) NotifyBlockCommit(blk *ktypes.Block, appHash types.Hash) {
+func (ce *dummyCE) NotifyBlockCommit(blk *ktypes.Block, ci *ktypes.CommitInfo) {
 	if ce.blockCommitHandler != nil {
-		ce.blockCommitHandler(blk, appHash)
+		ce.blockCommitHandler(blk, ci)
 		return
 	}
 }
@@ -361,8 +361,8 @@ func (f *faker) Propose(ctx context.Context, blk *ktypes.Block) {
 	f.proposerBroadcaster(ctx, blk)
 }
 
-func (f *faker) ACK(ack bool, height int64, blkID types.Hash, appHash *types.Hash) error {
-	return f.ackBroadcaster(ack, height, blkID, appHash)
+func (f *faker) ACK(ack bool, height int64, blkID types.Hash, appHash *types.Hash, sig []byte) error {
+	return f.ackBroadcaster(ack, height, blkID, appHash, sig)
 }
 
 func (f *faker) ResetState(height int64, txIDs []types.Hash) {
@@ -373,8 +373,8 @@ func (f *faker) RequestBlock(ctx context.Context, height int64) {
 	f.blkRequester(ctx, height)
 }
 
-func (f *faker) AnnounceBlock(ctx context.Context, blk *ktypes.Block, appHash types.Hash) {
-	f.blkAnnouncer(ctx, blk, appHash)
+func (f *faker) AnnounceBlock(ctx context.Context, blk *ktypes.Block, ci *ktypes.CommitInfo) {
+	f.blkAnnouncer(ctx, blk, ci)
 }
 
 func (f *faker) RejectNextProposal() {
@@ -389,7 +389,7 @@ func (f *faker) SetACKHandler(ackHandler func(validatorPK []byte, ack types.AckR
 	f.ackHandler = ackHandler
 }
 
-func (f *faker) SetBlockCommitHandler(blockCommitHandler func(blk *ktypes.Block, appHash types.Hash)) {
+func (f *faker) SetBlockCommitHandler(blockCommitHandler func(blk *ktypes.Block, ci *ktypes.CommitInfo)) {
 	f.blockCommitHandler = blockCommitHandler
 }
 
@@ -492,7 +492,7 @@ func TestStreamsBlockFetch(t *testing.T) {
 
 	// to n1's block store, one block at height 1 with 2 txns
 	blk1, appHash1 := createTestBlock(t, 1, 2)
-	n1.bki.Store(blk1, appHash1)
+	n1.bki.Store(blk1, &ktypes.CommitInfo{AppHash: appHash1})
 
 	startNodes(t, nodes)
 

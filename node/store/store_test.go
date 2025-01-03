@@ -69,7 +69,7 @@ func fakeAppHash(height int64) types.Hash {
 	return types.HashBytes(binary.LittleEndian.AppendUint64(nil, uint64(height)))
 }
 
-func createTestBlock(t *testing.T, height int64, numTxns int) (*ktypes.Block, types.Hash, [][]byte) {
+func createTestBlock(_ *testing.T, height int64, numTxns int) (*ktypes.Block, types.Hash, [][]byte) {
 	txs := make([]*ktypes.Transaction, numTxns)
 	txns := make([][]byte, numTxns)
 	for i := range numTxns {
@@ -91,14 +91,14 @@ func TestBlockStore_StoreAndGet(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
 	block, appHash, _ := createTestBlock(t, 1, 2)
-	err := bs.Store(block, appHash)
+	err := bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Log(appHash)
 
 	hash := block.Hash()
-	blk, gotAppHash, err := bs.Get(hash)
+	blk, ci, err := bs.Get(hash)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,8 +113,8 @@ func TestBlockStore_StoreAndGet(t *testing.T) {
 		t.Fatal("Expected block data, got nil")
 	}
 
-	if appHash != gotAppHash {
-		t.Errorf("Expected app hash %v, got %v", appHash, gotAppHash)
+	if appHash != ci.AppHash {
+		t.Errorf("Expected app hash %v, got %v", appHash, ci.AppHash)
 	}
 
 	retrievedBlock, err := ktypes.DecodeBlock(data)
@@ -133,9 +133,9 @@ func TestBlockStore_GetByHeight(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
 	block, appHash, _ := createTestBlock(t, 1, 2)
-	bs.Store(block, appHash)
+	bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 
-	gotHash, blk, gotAppHash, err := bs.GetByHeight(1)
+	gotHash, blk, ci, err := bs.GetByHeight(1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,8 +147,8 @@ func TestBlockStore_GetByHeight(t *testing.T) {
 		t.Errorf("Expected hash %v, got %v", hash, gotHash)
 	}
 
-	if appHash != gotAppHash {
-		t.Errorf("Expected app hash %x, got %x", appHash, gotAppHash)
+	if appHash != ci.AppHash {
+		t.Errorf("Expected app hash %x, got %x", appHash, ci.AppHash)
 	}
 
 	// if data == nil {
@@ -166,7 +166,7 @@ func TestBlockStore_Have(t *testing.T) {
 		t.Error("Block should not exist before storing")
 	}
 
-	bs.Store(block, appHash)
+	bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 
 	if !bs.Have(hash) {
 		t.Error("Block should exist after storing")
@@ -179,7 +179,7 @@ func TestBlockStore_GetTx(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
 	block, appHash, _ := createTestBlock(t, 1, 3)
-	bs.Store(block, appHash)
+	bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 
 	for _, tx := range block.Txns {
 		txHash := tx.Hash()
@@ -215,7 +215,7 @@ func TestBlockStore_HaveTx(t *testing.T) {
 		t.Error("Transaction should not exist before storing block")
 	}
 
-	bs.Store(block, appHash)
+	bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 
 	if !bs.HaveTx(txHash) {
 		t.Error("Transaction should exist after storing block")
@@ -243,20 +243,20 @@ func TestBlockStore_StoreWithNoTransactions(t *testing.T) {
 		time.Unix(1729723553, 0), []*ktypes.Transaction{})
 	appHash := fakeAppHash(1)
 
-	err := bs.Store(block, appHash)
+	err := bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	blk, gotAppHash, err := bs.Get(block.Hash())
+	blk, ci, err := bs.Get(block.Hash())
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(blk.Txns) != 0 {
 		t.Error("Expected empty transactions")
 	}
-	if gotAppHash != appHash {
-		t.Errorf("Expected app hash %x, got %x", appHash, gotAppHash)
+	if ci.AppHash != appHash {
+		t.Errorf("Expected app hash %x, got %x", appHash, ci.AppHash)
 	}
 }
 
@@ -269,7 +269,7 @@ func TestBlockStore_StoreConcurrent(t *testing.T) {
 		go func(start int) {
 			for j := range blockCount {
 				block, appHash, _ := createTestBlock(t, int64(start*blockCount+j), 2)
-				err := bs.Store(block, appHash)
+				err := bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 				if err != nil {
 					t.Error(err)
 				}
@@ -285,15 +285,15 @@ func TestBlockStore_StoreConcurrent(t *testing.T) {
 	for i := range 3 {
 		for j := range blockCount {
 			height := int64(i*blockCount + j)
-			_, blk, appHash, err := bs.GetByHeight(height)
+			_, blk, ci, err := bs.GetByHeight(height)
 			if err != nil {
 				t.Errorf("Failed to get block at height %d: %v", height, err)
 			}
 			if blk.Header.Height != height {
 				t.Errorf("Expected height %d, got %d", height, blk.Header.Height)
 			}
-			if appHash != fakeAppHash(height) {
-				t.Errorf("Expected app hash %x, got %x", fakeAppHash(height), appHash)
+			if ci.AppHash != fakeAppHash(height) {
+				t.Errorf("Expected app hash %x, got %x", fakeAppHash(height), ci.AppHash)
 			}
 		}
 	}
@@ -303,12 +303,12 @@ func TestBlockStore_StoreDuplicateBlock(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 	block, appHash, _ := createTestBlock(t, 1, 2)
 
-	err := bs.Store(block, appHash)
+	err := bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = bs.Store(block, appHash)
+	err = bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -350,20 +350,20 @@ func TestBlockStore_StoreWithLargeTransactions(t *testing.T) {
 		time.Unix(1729723553, 0), []*ktypes.Transaction{largeTx, otherTx})
 	appHash := fakeAppHash(1)
 
-	err = bs.Store(block, appHash)
+	err = bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	blkHash := block.Hash()
-	bk, gotAppHash, err := bs.Get(blkHash)
+	bk, ci, err := bs.Get(blkHash)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if bk.Hash() != blkHash {
 		t.Fatal("hash mismatch")
 	}
-	if gotAppHash != appHash {
+	if ci.AppHash != appHash {
 		t.Fatal("apphash mismatch")
 	}
 
@@ -456,7 +456,7 @@ func TestLargeBlockStore(t *testing.T) {
 		// Create and store block
 		block := ktypes.NewBlock(height, prevHash, prevAppHash, types.Hash{}, time.Now(), txns)
 		appHash := types.HashBytes([]byte(fmt.Sprintf("app-%d", height)))
-		err = bs.Store(block, appHash)
+		err = bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -465,14 +465,14 @@ func TestLargeBlockStore(t *testing.T) {
 
 		// Verify block retrieval
 		if height%100 == 0 {
-			retrieved, gotAppHash, err := bs.Get(prevHash)
+			retrieved, ci, err := bs.Get(prevHash)
 			if err != nil {
 				t.Errorf("Failed to get block at height %d: %v", height, err)
 			}
 			if retrieved.Hash() != prevHash {
 				t.Errorf("Retrieved block hash mismatch at height %d", height)
 			}
-			if gotAppHash != appHash {
+			if ci.AppHash != appHash {
 				t.Errorf("Retrieved app hash mismatch at height %d", height)
 			}
 			if retrieved.Header.PrevAppHash != prevAppHash {
@@ -531,7 +531,7 @@ func TestBlockStore_StoreAndGetResults(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
 	block, appHash, _ := createTestBlock(t, 1, 3)
-	err := bs.Store(block, appHash)
+	err := bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -573,7 +573,7 @@ func TestBlockStore_StoreResultsEmptyBlock(t *testing.T) {
 		time.Unix(1729723553, 0), []*ktypes.Transaction{})
 	appHash := fakeAppHash(1)
 
-	err := bs.Store(block, appHash)
+	err := bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -608,7 +608,7 @@ func TestBlockStore_StoreResultsLargeData(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
 	block, appHash, _ := createTestBlock(t, 1, 2)
-	err := bs.Store(block, appHash)
+	err := bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -644,7 +644,7 @@ func TestBlockStore_StoreResultsMismatchedCount(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
 	block, appHash, _ := createTestBlock(t, 1, 2)
-	err := bs.Store(block, appHash)
+	err := bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -671,7 +671,7 @@ func TestBlockStore_Result(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
 	block, appHash, _ := createTestBlock(t, 1, 3)
-	err := bs.Store(block, appHash)
+	err := bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 	if err != nil {
 		t.Fatal(err)
 	}

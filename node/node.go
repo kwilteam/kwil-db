@@ -546,7 +546,7 @@ func (n *Node) doStatesync(ctx context.Context) error {
 	}
 
 	// request and commit the block to the blockstore
-	_, appHash, rawBlk, err := n.getBlkHeight(ctx, height)
+	_, rawBlk, ci, err := n.getBlkHeight(ctx, height)
 	if err != nil {
 		return fmt.Errorf("failed to get statesync block %d: %w", height, err)
 	}
@@ -555,7 +555,7 @@ func (n *Node) doStatesync(ctx context.Context) error {
 		return fmt.Errorf("failed to decode statesync block %d: %w", height, err)
 	}
 	// store block
-	if err := n.bki.Store(blk, appHash); err != nil {
+	if err := n.bki.Store(blk, ci); err != nil {
 		return fmt.Errorf("failed to store statesync block to the blockstore %d: %w", height, err)
 	}
 
