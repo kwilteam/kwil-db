@@ -38,11 +38,11 @@ type BlockStore struct {
 }
 
 var (
-	nsHeader  = []byte("h:") // block metadata (header + signature)
-	nsBlock   = []byte("b:") // full block
-	nsTxn     = []byte("t:") // transaction index by tx hash
-	nsAppHash = []byte("a:") // app hash by block hash
-	nsResults = []byte("r:") // block execution results by block hash
+	nsHeader     = []byte("h:") // block metadata (header + signature)
+	nsBlock      = []byte("b:") // full block
+	nsTxn        = []byte("t:") // transaction index by tx hash
+	nsResults    = []byte("r:") // block execution results by block hash
+	nsCommitInfo = []byte("c:") // commit info by block hash
 )
 
 var _ types.BlockStore = &BlockStore{}
@@ -88,7 +88,7 @@ func NewBlockStore(dir string, opts ...Option) (*BlockStore, error) {
 	pfxLen := len(nsHeader)
 
 	var hash types.Hash // reuse in loop
-	var appHash types.Hash
+	var ci ktypes.CommitInfo
 
 	err = db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(itOpts)
@@ -118,16 +118,16 @@ func NewBlockStore(dir string, opts ...Option) (*BlockStore, error) {
 			}
 			copy(hash[:], key[pfxLen:])
 
-			// get the app hash from nsAppHash
-			appHashKey := slices.Concat(nsAppHash, key[pfxLen:])
-			item, err = txn.Get(appHashKey)
+			// get the app hash from nsCommitInfo
+			commitInfoKey := slices.Concat(nsCommitInfo, key[pfxLen:])
+			item, err = txn.Get(commitInfoKey)
 			if err != nil {
 				return err
 			}
 
 			err = item.Value(func(val []byte) error {
-				appHash = types.Hash(val)
-				return nil
+				err = ci.UnmarshalBinary(val)
+				return err
 			})
 			if err != nil {
 				return err
@@ -136,7 +136,7 @@ func NewBlockStore(dir string, opts ...Option) (*BlockStore, error) {
 			bs.idx[hash] = height
 			bs.hashes[height] = blockHashes{
 				hash:    hash,
-				appHash: appHash,
+				appHash: ci.AppHash,
 			}
 			count++
 		}
@@ -283,7 +283,7 @@ func (bki *BlockStore) Result(hash types.Hash, idx uint32) (*ktypes.TxResult, er
 	return &res, err
 }
 
-func (bki *BlockStore) Store(blk *ktypes.Block, appHash types.Hash) error {
+func (bki *BlockStore) Store(blk *ktypes.Block, commitInfo *ktypes.CommitInfo) error {
 	blkHash := blk.Hash()
 	height := blk.Header.Height
 
@@ -311,9 +311,14 @@ func (bki *BlockStore) Store(blk *ktypes.Block, appHash types.Hash) error {
 		return err
 	}
 
-	// Store the appHash.
-	key = slices.Concat(nsAppHash, blkHash[:])
-	err = txn.Set(key, appHash[:])
+	// Store commitInfo.
+	bytes, err := commitInfo.MarshalBinary()
+	if err != nil {
+		return err
+	}
+
+	key = slices.Concat(nsCommitInfo, blkHash[:])
+	err = txn.Set(key, bytes)
 	if err != nil {
 		return err
 	}
@@ -342,7 +347,7 @@ func (bki *BlockStore) Store(blk *ktypes.Block, appHash types.Hash) error {
 	bki.idx[blkHash] = height
 	bki.hashes[height] = blockHashes{
 		hash:    blkHash,
-		appHash: appHash,
+		appHash: commitInfo.AppHash,
 	}
 
 	return nil
@@ -385,13 +390,13 @@ func (bki *BlockStore) Best() (int64, types.Hash, types.Hash) {
 	return bestHeight, bestHash, bestAppHash
 }
 
-func (bki *BlockStore) Get(blkHash types.Hash) (*ktypes.Block, types.Hash, error) {
+func (bki *BlockStore) Get(blkHash types.Hash) (*ktypes.Block, *ktypes.CommitInfo, error) {
 	if !bki.Have(blkHash) {
-		return nil, types.Hash{}, types.ErrNotFound
+		return nil, nil, types.ErrNotFound
 	}
 
 	var block *ktypes.Block
-	var appHash types.Hash
+	var ci ktypes.CommitInfo
 	err := bki.db.View(func(txn *badger.Txn) error {
 		// Load the block and get the tx
 		blockKey := slices.Concat(nsBlock, blkHash[:])
@@ -409,46 +414,46 @@ func (bki *BlockStore) Get(blkHash types.Hash) (*ktypes.Block, types.Hash, error
 		}
 
 		// Load the apphash
-		appHashKey := slices.Concat(nsAppHash, blkHash[:])
+		appHashKey := slices.Concat(nsCommitInfo, blkHash[:])
 		item, err = txn.Get(appHashKey)
 		if err != nil {
 			return err
 		}
 
 		return item.Value(func(val []byte) error {
-			appHash = types.Hash(val)
-			return nil
+			err = ci.UnmarshalBinary(val)
+			return err
 		})
 	})
 
 	if errors.Is(err, badger.ErrKeyNotFound) {
-		return nil, types.Hash{}, types.ErrNotFound
+		return nil, nil, types.ErrNotFound
 	}
 
-	return block, appHash, err
+	return block, &ci, err
 }
 
 // GetByHeight retrieves the full block based on the block height. The returned
 // hash is a convenience for the caller to spare computing it. The app hash,
 // which is encoded in the next block header, is also returned.
-func (bki *BlockStore) GetByHeight(height int64) (types.Hash, *ktypes.Block, types.Hash, error) {
+func (bki *BlockStore) GetByHeight(height int64) (types.Hash, *ktypes.Block, *ktypes.CommitInfo, error) {
 	bki.mtx.RLock()
 	defer bki.mtx.RUnlock()
 
 	hashes, have := bki.hashes[height]
 	if !have {
-		return types.Hash{}, nil, types.Hash{}, types.ErrNotFound
+		return types.Hash{}, nil, nil, types.ErrNotFound
 	}
-	blk, appHash, err := bki.Get(hashes.hash)
+	blk, ci, err := bki.Get(hashes.hash)
 	if err != nil {
-		return types.Hash{}, nil, types.Hash{}, err
+		return types.Hash{}, nil, nil, err
 	}
 	// NOTE: appHash should match hashes.appHash, so check it here.
-	if appHash != hashes.appHash {
-		return types.Hash{}, nil, types.Hash{}, fmt.Errorf("appHash mismatch: %s != %s", appHash, hashes.appHash)
+	if ci.AppHash != hashes.appHash {
+		return types.Hash{}, nil, nil, fmt.Errorf("appHash mismatch: %s != %s", ci.AppHash, hashes.appHash)
 	}
 
-	return hashes.hash, blk, appHash, err
+	return hashes.hash, blk, ci, err
 }
 
 func (bki *BlockStore) HaveTx(txHash types.Hash) bool {

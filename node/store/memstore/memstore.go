@@ -16,55 +16,61 @@ type blockHashes struct {
 }
 
 type MemBS struct {
-	mtx       sync.RWMutex
-	idx       map[types.Hash]int64
-	hashes    map[int64]blockHashes
-	blocks    map[types.Hash]*ktypes.Block
-	txResults map[types.Hash][]ktypes.TxResult
-	txIds     map[types.Hash]types.Hash // tx hash -> block hash
-	fetching  map[types.Hash]bool       // TODO: remove, app concern
+	mtx        sync.RWMutex
+	idx        map[types.Hash]int64
+	hashes     map[int64]blockHashes
+	blocks     map[types.Hash]*ktypes.Block
+	commitInfo map[types.Hash]*ktypes.CommitInfo
+	txResults  map[types.Hash][]ktypes.TxResult
+	txIds      map[types.Hash]types.Hash // tx hash -> block hash
+	fetching   map[types.Hash]bool       // TODO: remove, app concern
 }
 
 func NewMemBS() *MemBS {
 	return &MemBS{
-		idx:       make(map[types.Hash]int64),
-		hashes:    make(map[int64]blockHashes),
-		blocks:    make(map[types.Hash]*ktypes.Block),
-		txResults: make(map[types.Hash][]ktypes.TxResult),
-		txIds:     make(map[types.Hash]types.Hash),
-		fetching:  make(map[types.Hash]bool),
+		idx:        make(map[types.Hash]int64),
+		hashes:     make(map[int64]blockHashes),
+		blocks:     make(map[types.Hash]*ktypes.Block),
+		txResults:  make(map[types.Hash][]ktypes.TxResult),
+		txIds:      make(map[types.Hash]types.Hash),
+		fetching:   make(map[types.Hash]bool),
+		commitInfo: make(map[types.Hash]*ktypes.CommitInfo),
 	}
 }
 
 var _ types.BlockStore = &MemBS{}
 
-func (bs *MemBS) Get(hash types.Hash) (*ktypes.Block, types.Hash, error) {
+func (bs *MemBS) Get(hash types.Hash) (*ktypes.Block, *ktypes.CommitInfo, error) {
 	bs.mtx.RLock()
 	defer bs.mtx.RUnlock()
 	blk, have := bs.blocks[hash]
 	if !have {
-		return nil, types.Hash{}, types.ErrNotFound
+		return nil, nil, types.ErrNotFound
 	}
-	hashes, have := bs.hashes[blk.Header.Height]
+	ci, have := bs.commitInfo[hash]
 	if !have {
-		return nil, types.Hash{}, types.ErrNotFound
+		return nil, nil, types.ErrNotFound
 	}
-	return blk, hashes.appHash, nil
+	return blk, ci, nil
 }
 
-func (bs *MemBS) GetByHeight(height int64) (types.Hash, *ktypes.Block, types.Hash, error) {
+func (bs *MemBS) GetByHeight(height int64) (types.Hash, *ktypes.Block, *ktypes.CommitInfo, error) {
 	// time.Sleep(100 * time.Millisecond) // wtf where is there a logic race in CE?
 	bs.mtx.RLock()
 	defer bs.mtx.RUnlock()
 	blkHash, have := bs.hashes[height]
 	if !have {
-		return types.Hash{}, nil, types.Hash{}, types.ErrNotFound
+		return types.Hash{}, nil, nil, types.ErrNotFound
 	}
 	blk, have := bs.blocks[blkHash.hash]
 	if !have {
-		return types.Hash{}, nil, types.Hash{}, types.ErrNotFound
+		return types.Hash{}, nil, nil, types.ErrNotFound
 	}
-	return blkHash.hash, blk, blkHash.appHash, nil
+	ci, have := bs.commitInfo[blkHash.hash]
+	if !have {
+		return types.Hash{}, nil, nil, types.ErrNotFound
+	}
+	return blkHash.hash, blk, ci, nil
 }
 
 func (bs *MemBS) Have(blkid types.Hash) bool {
@@ -74,15 +80,20 @@ func (bs *MemBS) Have(blkid types.Hash) bool {
 	return have
 }
 
-func (bs *MemBS) Store(block *ktypes.Block, appHash types.Hash) error {
+func (bs *MemBS) Store(block *ktypes.Block, ci *ktypes.CommitInfo) error {
+	if ci == nil {
+		return fmt.Errorf("commit info is nil")
+	}
+
 	bs.mtx.Lock()
 	defer bs.mtx.Unlock()
 	blkHash := block.Hash()
 	bs.blocks[blkHash] = block
 	bs.idx[blkHash] = block.Header.Height
+	bs.commitInfo[blkHash] = ci
 	bs.hashes[block.Header.Height] = blockHashes{
 		hash:    blkHash,
-		appHash: appHash,
+		appHash: ci.AppHash,
 	}
 	for _, tx := range block.Txns {
 		txHash := tx.Hash()

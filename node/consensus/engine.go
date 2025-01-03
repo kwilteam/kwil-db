@@ -137,13 +137,13 @@ type Config struct {
 type ProposalBroadcaster func(ctx context.Context, blk *ktypes.Block)
 
 // BlkAnnouncer broadcasts the new committed block to the network using the blockAnn message
-type BlkAnnouncer func(ctx context.Context, blk *ktypes.Block, appHash types.Hash)
+type BlkAnnouncer func(ctx context.Context, blk *ktypes.Block, ci *ktypes.CommitInfo)
 
 // AckBroadcaster gossips the ack/nack messages to the network
-type AckBroadcaster func(ack bool, height int64, blkID types.Hash, appHash *types.Hash) error
+type AckBroadcaster func(ack bool, height int64, blkID types.Hash, appHash *types.Hash, Signature []byte) error
 
 // BlkRequester requests the block from the network based on the height
-type BlkRequester func(ctx context.Context, height int64) (types.Hash, types.Hash, []byte, error)
+type BlkRequester func(ctx context.Context, height int64) (types.Hash, []byte, *ktypes.CommitInfo, error)
 
 type ResetStateBroadcaster func(height int64, txIDs []ktypes.Hash) error
 
@@ -184,21 +184,25 @@ type state struct {
 
 	// Votes: Applicable only to the leader
 	// These are the Acks received from the validators.
-	votes map[string]*vote
+	votes map[string]*ktypes.VoteInfo
+
+	commitInfo *ktypes.CommitInfo
 }
 
 type blockResult struct {
 	ack       bool
-	appHash   types.Hash
+	appHash   ktypes.Hash
 	txResults []ktypes.TxResult
+	vote      *vote
 }
 
 type lastCommit struct {
 	height  int64
 	blkHash types.Hash
 
-	appHash types.Hash
-	blk     *ktypes.Block // why is this needed? can be fetched from the blockstore too.
+	appHash types.Hash // TODO: Do we need commitInfo here?
+
+	blk *ktypes.Block // why is this needed? can be fetched from the blockstore too.
 }
 
 // New creates a new consensus engine.
@@ -245,7 +249,7 @@ func New(cfg *Config) *ConsensusEngine {
 				blkHash: zeroHash,
 				appHash: zeroHash,
 			},
-			votes: make(map[string]*vote),
+			votes: make(map[string]*ktypes.VoteInfo),
 		},
 		stateInfo: StateInfo{
 			height:  0,
@@ -430,12 +434,12 @@ func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg cons
 			return
 		}
 		if err := ce.addVote(ctx, v, hex.EncodeToString(msg.Sender)); err != nil {
-			ce.log.Error("Error adding vote", "vote", v, "error", err)
+			ce.log.Warn("Error adding vote", "vote", v, "error", err)
 			return
 		}
 
 	case *blockAnnounce:
-		if err := ce.commitBlock(ctx, v.blk, v.appHash); err != nil {
+		if err := ce.commitBlock(ctx, v.blk, v.ci); err != nil {
 			ce.log.Error("Error processing committing block", "error", err)
 			return
 		}
@@ -577,7 +581,7 @@ func (ce *ConsensusEngine) replayFromBlockStore(ctx context.Context, startHeight
 	}
 
 	for height <= bestHeight {
-		_, blk, appHash, err := ce.blockStore.GetByHeight(height)
+		_, blk, ci, err := ce.blockStore.GetByHeight(height)
 		if err != nil {
 			if !errors.Is(err, types.ErrNotFound) {
 				return fmt.Errorf("unexpected blockstore error: %w", err)
@@ -585,7 +589,7 @@ func (ce *ConsensusEngine) replayFromBlockStore(ctx context.Context, startHeight
 			return nil // no more blocks to replay
 		}
 
-		err = ce.processAndCommit(ctx, blk, appHash)
+		err = ce.processAndCommit(ctx, blk, ci)
 		if err != nil {
 			return fmt.Errorf("failed replaying block: %w", err)
 		}
@@ -607,7 +611,7 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 	if ce.role.Load() == types.RoleLeader && ce.state.lc.height > 0 {
 		// Announce block commit message for the last committed block
 		if ce.state.lc.blk != nil {
-			go ce.blkAnnouncer(ctx, ce.state.lc.blk, ce.state.lc.appHash)
+			go ce.blkAnnouncer(ctx, ce.state.lc.blk, ce.state.commitInfo)
 		}
 		return
 	}
@@ -617,7 +621,8 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 		if ce.state.blkProp != nil && ce.state.blockRes != nil &&
 			!ce.state.blockRes.appHash.IsZero() {
 			ce.log.Info("Reannouncing ACK", "ack", ce.state.blockRes.ack, "height", ce.state.blkProp.height, "hash", ce.state.blkProp.blkHash)
-			go ce.ackBroadcaster(ce.state.blockRes.ack, ce.state.blkProp.height, ce.state.blkProp.blkHash, &ce.state.blockRes.appHash)
+			vote := ce.state.blockRes.vote
+			go ce.ackBroadcaster(vote.ack, vote.height, vote.blkHash, vote.appHash, vote.signature.Data)
 		}
 	}
 }
@@ -658,7 +663,7 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 		// If validator is in the middle of processing a block, finish it first
 
 		if ce.state.blkProp != nil && ce.state.blockRes != nil { // Waiting for the commit message
-			blkHash, appHash, rawBlk, err := ce.blkRequester(ctx, ce.state.blkProp.height)
+			blkHash, rawBlk, ci, err := ce.blkRequester(ctx, ce.state.blkProp.height)
 			if err != nil {
 				ce.log.Warn("Error requesting block from network", "height", ce.state.blkProp.height, "error", err)
 				return nil // not an error, just retry later
@@ -674,12 +679,16 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 					return fmt.Errorf("failed to decode the block, blkHeight: %d, blkID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
 				}
 
-				if err := ce.processAndCommit(ctx, blk, appHash); err != nil {
+				if err := ce.processAndCommit(ctx, blk, ci); err != nil {
 					return fmt.Errorf("failed to replay the block: blkHeight: %d, blkID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
 				}
 			} else {
-				if appHash == ce.state.blockRes.appHash {
+				if ci.AppHash == ce.state.blockRes.appHash {
 					// commit the block
+					if err := ce.validateCommitInfo(ci, blkHash); err != nil {
+						return fmt.Errorf("failed to validate the commit info: height: %d, error: %w", ce.state.blkProp.height, err)
+					}
+
 					if err := ce.commit(ctx); err != nil {
 						return fmt.Errorf("failed to commit the block: height: %d, error: %w", ce.state.blkProp.height, err)
 					}
@@ -687,7 +696,7 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 					ce.nextState()
 				} else {
 					// halt the network
-					haltR := fmt.Sprintf("Incorrect AppHash, received: %v, has: %v", appHash, ce.state.blockRes.appHash)
+					haltR := fmt.Sprintf("Incorrect AppHash, received: %v, has: %v", ci.AppHash, ce.state.blockRes.appHash)
 					ce.haltChan <- haltR
 				}
 			}

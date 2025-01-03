@@ -47,8 +47,8 @@ var (
 type mockBS struct {
 }
 
-func (m *mockBS) GetByHeight(height int64) (types.Hash, *ktypes.Block, types.Hash, error) {
-	return types.Hash{}, nil, types.Hash{}, nil
+func (m *mockBS) GetByHeight(height int64) (types.Hash, *ktypes.Block, *ktypes.CommitInfo, error) {
+	return types.Hash{}, nil, &ktypes.CommitInfo{AppHash: types.Hash{}}, nil
 }
 
 type snapshotStore struct {

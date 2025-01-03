@@ -208,6 +208,31 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
+func addVotes(t *testing.T, blkHash, appHash ktypes.Hash, n1, n2 *ConsensusEngine) *ktypes.CommitInfo {
+	ci := &ktypes.CommitInfo{
+		AppHash: appHash,
+		Votes:   make([]*ktypes.VoteInfo, 0),
+	}
+
+	sig1, err := ktypes.SignVote(blkHash, true, &appHash, n1.privKey)
+	require.NoError(t, err)
+
+	ci.Votes = append(ci.Votes, &ktypes.VoteInfo{
+		Signature: *sig1,
+		AckStatus: ktypes.AckStatusAgree,
+	})
+
+	sig2, err := ktypes.SignVote(blkHash, true, &appHash, n2.privKey)
+	require.NoError(t, err)
+
+	ci.Votes = append(ci.Votes, &ktypes.VoteInfo{
+		Signature: *sig2,
+		AckStatus: ktypes.AckStatusAgree,
+	})
+
+	return ci
+}
+
 func TestValidatorStateMachine(t *testing.T) {
 	// t.Parallel()
 	type action struct {
@@ -242,9 +267,8 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "commit",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						// appHash := val.blockResult().appHash
-						// val.NotifyBlockCommit(blkProp1.blk, appHash)
-						val.NotifyBlockCommit(blkProp1.blk, blockAppHash)
+						ci := addVotes(t, blkProp1.blkHash, blockAppHash, leader, val)
+						val.NotifyBlockCommit(blkProp1.blk, ci)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 1, zeroHash)
@@ -270,7 +294,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "commit(InvalidAppHash)",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.NotifyBlockCommit(blkProp1.blk, types.Hash{})
+						val.NotifyBlockCommit(blkProp1.blk, &ktypes.CommitInfo{AppHash: ktypes.Hash{}})
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						if val.lastCommitHeight() != 0 {
@@ -308,8 +332,8 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "commitNew",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						// appHash := val.blockResult().appHash
-						val.NotifyBlockCommit(blkProp2.blk, blockAppHash)
+						ci := addVotes(t, blkProp2.blkHash, blockAppHash, leader, val)
+						val.NotifyBlockCommit(blkProp2.blk, ci)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 1, zeroHash)
@@ -344,9 +368,8 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "commitNew",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						// appHash := val.blockResult().appHash
-						// val.NotifyBlockCommit(blkProp2.blk, appHash)
-						val.NotifyBlockCommit(blkProp2.blk, blockAppHash)
+						ci := addVotes(t, blkProp2.blkHash, blockAppHash, leader, val)
+						val.NotifyBlockCommit(blkProp2.blk, ci)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 1, zeroHash)
@@ -372,9 +395,8 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "commitNew",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						// appHash := val.blockResult().appHash
-						// val.NotifyBlockCommit(blkProp2.blk, appHash)
-						val.NotifyBlockCommit(blkProp2.blk, blockAppHash)
+						ci := addVotes(t, blkProp2.blkHash, blockAppHash, leader, val)
+						val.NotifyBlockCommit(blkProp2.blk, ci)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 1, zeroHash)
@@ -427,9 +449,8 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "commitNew",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						// appHash := val.blockResult().appHash
-						// val.NotifyBlockCommit(blkProp2.blk, appHash)
-						val.NotifyBlockCommit(blkProp2.blk, blockAppHash)
+						ci := addVotes(t, blkProp2.blkHash, blockAppHash, leader, val)
+						val.NotifyBlockCommit(blkProp2.blk, ci)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 1, zeroHash)
@@ -455,9 +476,8 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "commitNew",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						// appHash := val.blockResult().appHash
-						// val.NotifyBlockCommit(blkProp2.blk, appHash)
-						val.NotifyBlockCommit(blkProp2.blk, blockAppHash)
+						ci := addVotes(t, blkProp2.blkHash, blockAppHash, leader, val)
+						val.NotifyBlockCommit(blkProp2.blk, ci)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 1, zeroHash)
@@ -510,9 +530,8 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "commitNew",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						// appHash := val.blockResult().appHash
-						// val.NotifyBlockCommit(blkProp2.blk, appHash)
-						val.NotifyBlockCommit(blkProp2.blk, blockAppHash)
+						ci := addVotes(t, blkProp2.blkHash, blockAppHash, leader, val)
+						val.NotifyBlockCommit(blkProp2.blk, ci)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 1, zeroHash)
@@ -556,9 +575,8 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "commitNew",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						// appHash := val.blockResult().appHash
-						// val.NotifyBlockCommit(blkProp2.blk, appHash)
-						val.NotifyBlockCommit(blkProp2.blk, blockAppHash)
+						ci := addVotes(t, blkProp2.blkHash, blockAppHash, leader, val)
+						val.NotifyBlockCommit(blkProp2.blk, ci)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 1, zeroHash)
@@ -671,15 +689,19 @@ func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
 	require.NotNil(t, blProp)
 
 	// node2 should send a vote to node1
+	sig, err := ktypes.SignVote(blProp.blkHash, true, &blockAppHash, ceConfigs[1].PrivateKey)
+	assert.NoError(t, err)
+
 	vote := &vote{
-		height:  1,
-		ack:     true,
-		blkHash: blProp.blkHash,
-		appHash: &blockAppHash,
+		height:    1,
+		ack:       true,
+		blkHash:   blProp.blkHash,
+		appHash:   &blockAppHash,
+		signature: sig,
 	}
 
 	// Invalid sender
-	err := n1.addVote(ctx, vote, "invalid")
+	err = n1.addVote(ctx, vote, "invalid")
 	assert.Error(t, err)
 
 	// Valid sender
@@ -729,21 +751,30 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 	assert.NotNil(t, b)
 	nextAppHash := nextAppHash(nextAppHash(zeroHash))
 
+	sig1, err := ktypes.SignVote(b.blkHash, true, &nextAppHash, ceConfigs[1].PrivateKey)
+	assert.NoError(t, err)
+
+	sig2, err := ktypes.SignVote(b.blkHash, true, &nextAppHash, ceConfigs[2].PrivateKey)
+	assert.NoError(t, err)
+
 	// node2 should send a vote to node1
 	vote := &vote{
-		height:  1,
-		ack:     true,
-		blkHash: b.blkHash,
-		appHash: &nextAppHash,
+		height:    1,
+		ack:       true,
+		blkHash:   b.blkHash,
+		appHash:   &nextAppHash,
+		signature: sig1,
 	}
 
 	// Invalid sender -> vote ignored
-	err := n1.addVote(ctx, vote, "invalid")
+	err = n1.addVote(ctx, vote, "invalid")
 	assert.Error(t, err)
 
 	// Valid sender
 	err = n1.addVote(ctx, vote, hex.EncodeToString(ceConfigs[1].PrivateKey.Public().Bytes()))
 	assert.NoError(t, err)
+
+	vote.signature = sig2
 	err = n1.addVote(ctx, vote, hex.EncodeToString(ceConfigs[2].PrivateKey.Public().Bytes()))
 	assert.NoError(t, err)
 
@@ -753,18 +784,18 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 }
 
 // MockBroadcasters
-func mockBlockRequester(_ context.Context, height int64) (types.Hash, types.Hash, []byte, error) {
-	return types.Hash{}, types.Hash{}, nil, errors.New("not implemented")
+func mockBlockRequester(_ context.Context, height int64) (types.Hash, []byte, *ktypes.CommitInfo, error) {
+	return types.Hash{}, nil, nil, errors.New("not implemented")
 }
 
 func mockBlockPropBroadcaster(_ context.Context, blk *ktypes.Block) {
 }
 
-func mockVoteBroadcaster(ack bool, height int64, blkID types.Hash, appHash *types.Hash) error {
+func mockVoteBroadcaster(ack bool, height int64, blkID types.Hash, appHash *types.Hash, sig []byte) error {
 	return nil
 }
 
-func mockBlkAnnouncer(_ context.Context, blk *ktypes.Block, appHash types.Hash) {
+func mockBlkAnnouncer(_ context.Context, blk *ktypes.Block, ci *ktypes.CommitInfo) {
 }
 
 func mockResetStateBroadcaster(_ int64, _ []ktypes.Hash) error {

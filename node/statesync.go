@@ -34,7 +34,7 @@ const (
 )
 
 type blockStore interface {
-	GetByHeight(height int64) (types.Hash, *ktypes.Block, types.Hash, error)
+	GetByHeight(height int64) (types.Hash, *ktypes.Block, *ktypes.CommitInfo, error)
 }
 
 type statesyncConfig struct {
@@ -252,14 +252,14 @@ func (s *StateSyncService) snapshotMetadataRequestHandler(stream network.Stream)
 	}
 
 	// get the app hash from the db
-	_, _, appHash, err := s.blockStore.GetByHeight(int64(snap.Height))
-	if err != nil {
+	_, _, ci, err := s.blockStore.GetByHeight(int64(snap.Height))
+	if err != nil || ci == nil {
 		s.log.Warn("failed to get app hash", "height", snap.Height, "error", err)
 		stream.SetWriteDeadline(time.Now().Add(reqRWTimeout))
 		stream.Write(noData)
 		return
 	}
-	meta.AppHash = appHash[:]
+	meta.AppHash = ci.AppHash[:]
 
 	// send the snapshot data
 	encoder := json.NewEncoder(stream)
@@ -270,7 +270,7 @@ func (s *StateSyncService) snapshotMetadataRequestHandler(stream network.Stream)
 		return
 	}
 
-	s.log.Info("sent snapshot metadata to remote peer", "peer", stream.Conn().RemotePeer(), "height", req.Height, "format", req.Format, "appHash", appHash.String())
+	s.log.Info("sent snapshot metadata to remote peer", "peer", stream.Conn().RemotePeer(), "height", req.Height, "format", req.Format, "appHash", ci.AppHash.String())
 }
 
 // verifySnapshot verifies the snapshot with the trusted provider and returns the app hash if the snapshot is valid.

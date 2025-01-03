@@ -119,11 +119,16 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	}
 
 	// Add its own vote to the votes map
-	ce.state.votes[string(ce.pubKey.Bytes())] = &vote{
-		ack:     true,
-		appHash: &ce.state.blockRes.appHash,
-		blkHash: blkProp.blkHash,
-		height:  blkProp.height,
+	sig, err := ktypes.SignVote(blkProp.blkHash, true, &ce.state.blockRes.appHash, ce.privKey)
+	if err != nil {
+		ce.log.Errorf("Error signing the vote: %v", err)
+		return err
+	}
+
+	ce.state.votes[string(ce.pubKey.Bytes())] = &ktypes.VoteInfo{
+		AppHash:   &ce.state.blockRes.appHash,
+		AckStatus: ktypes.AckStatusAgree,
+		Signature: *sig,
 	}
 
 	ce.processVotes(ctx)
@@ -198,9 +203,41 @@ func (ce *ConsensusEngine) addVote(ctx context.Context, vote *vote, sender strin
 		return fmt.Errorf("vote received from an unknown validator %s", sender)
 	}
 
+	if vote.ack && vote.appHash == nil {
+		return errors.New("missing appHash in the vote")
+	}
+
+	if vote.signature == nil {
+		return errors.New("missing signature in the vote")
+	}
+
 	ce.log.Info("Adding vote", "height", vote.height, "blkHash", vote.blkHash, "appHash", vote.appHash, "sender", sender)
 	if _, ok := ce.state.votes[sender]; !ok {
-		ce.state.votes[sender] = vote
+		// verify the vote signature, before accepting the vote from the validator if ack is true
+		var ackStatus ktypes.AckStatus
+		var appHash *types.Hash
+
+		if vote.ack {
+			ackStatus = ktypes.AckStatusAgree
+			if *vote.appHash != ce.state.blockRes.appHash {
+				ackStatus = ktypes.AckStatusDiverge
+				appHash = vote.appHash
+			}
+		}
+
+		voteInfo := &ktypes.VoteInfo{
+			Signature: *vote.signature,
+			AckStatus: ackStatus,
+			AppHash:   appHash,
+		}
+
+		// verify signature
+		if err := voteInfo.Verify(vote.blkHash, ce.state.blockRes.appHash); err != nil {
+			ce.log.Errorf("Error verifying the vote signature: %v", err)
+			return fmt.Errorf("error verifying the vote signature: %v", err)
+		}
+
+		ce.state.votes[sender] = voteInfo
 	}
 
 	ce.processVotes(ctx)
@@ -222,9 +259,8 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 
 	// Count the votes
 	var acks, nacks int
-	expectedHash := ce.state.blockRes.appHash
 	for _, vote := range ce.state.votes {
-		if vote.ack && vote.appHash != nil && *vote.appHash == expectedHash {
+		if vote.AckStatus == ktypes.AckStatusAgree {
 			acks++
 		} else {
 			nacks++
@@ -234,6 +270,18 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 	if ce.hasMajorityCeil(acks) {
 		ce.log.Info("Majority of the validators have accepted the block, proceeding to commit the block",
 			"height", ce.state.blkProp.blk.Header.Height, "hash", ce.state.blkProp.blkHash, "acks", acks, "nacks", nacks)
+
+		votes := make([]*ktypes.VoteInfo, 0)
+		for _, v := range ce.state.votes {
+			votes = append(votes, v)
+		}
+
+		ci := &ktypes.CommitInfo{
+			AppHash: ce.state.blockRes.appHash,
+			Votes:   votes,
+		}
+		ce.state.commitInfo = ci
+
 		// Commit the block and broadcast the blockAnn message
 		if err := ce.commit(ctx); err != nil {
 			ce.log.Errorf("Error committing the block (process votes): %v", err)
@@ -242,7 +290,7 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 
 		ce.log.Infoln("Announce committed block", ce.state.blkProp.blk.Header.Height, ce.state.blkProp.blkHash)
 		// Broadcast the blockAnn message
-		go ce.blkAnnouncer(ctx, ce.state.blkProp.blk, ce.state.blockRes.appHash)
+		go ce.blkAnnouncer(ctx, ce.state.blkProp.blk, ce.state.commitInfo)
 
 		// start the next round
 		ce.nextState()
@@ -259,7 +307,7 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 			ce.newRound <- struct{}{}
 		}()
 
-	} else if ce.hasMajorityFloor(nacks) {
+	} else if ce.hasMajorityCeil(nacks) {
 		haltReason := fmt.Sprintf("Majority of the validators have rejected the block, halting the network: %d acks, %d nacks", acks, nacks)
 		ce.haltChan <- haltReason
 		return nil

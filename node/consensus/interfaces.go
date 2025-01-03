@@ -31,10 +31,11 @@ type Mempool interface {
 type BlockStore interface {
 	// GetBlockByHeight(height int64) (types.Block, error)
 	Best() (int64, types.Hash, types.Hash)
-	Store(block *ktypes.Block, appHash types.Hash) error
+	Store(block *ktypes.Block, commitInfo *ktypes.CommitInfo) error
 	// Have(blkid types.Hash) bool
-	Get(blkid types.Hash) (*ktypes.Block, types.Hash, error)
-	GetByHeight(height int64) (types.Hash, *ktypes.Block, types.Hash, error)
+	Get(blkid types.Hash) (*ktypes.Block, *ktypes.CommitInfo, error)
+	// TODO: should return commitInfo instead of appHash
+	GetByHeight(height int64) (types.Hash, *ktypes.Block, *ktypes.CommitInfo, error)
 	StoreResults(hash types.Hash, results []ktypes.TxResult) error
 	// Results(hash types.Hash) ([]types.TxResult, error)
 }

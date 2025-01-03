@@ -391,3 +391,106 @@ func TestCalcMerkleRoot_Extended(t *testing.T) {
 		require.Equal(t, root, root2)
 	})
 }
+
+func TestVoteInfo(t *testing.T) { // TODO: improve tests
+	t.Run("marshal and unmarshal", func(t *testing.T) {
+		vote := &VoteInfo{
+			Signature: Signature{
+				Data:       []byte("signature"),
+				PubKey:     []byte("public-key"),
+				PubKeyType: crypto.KeyTypeSecp256k1,
+			},
+			AckStatus: AckStatusDisagree,
+		}
+
+		data, err := vote.MarshalBinary()
+		require.NoError(t, err)
+
+		var unmarshaled VoteInfo
+		err = unmarshaled.UnmarshalBinary(data)
+		require.NoError(t, err)
+		require.Equal(t, vote, &unmarshaled)
+	})
+
+	// t.Run("empty vote info", func(t *testing.T) {
+	// 	vote := &VoteInfo{}
+
+	// 	data, err := vote.MarshalBinary()
+	// 	require.NoError(t, err)
+
+	// 	var unmarshaled VoteInfo
+	// 	err = unmarshaled.UnmarshalBinary(data)
+	// 	require.NoError(t, err)
+	// 	require.Equal(t, []byte{}, vote.Signature.Data)
+	// })
+
+	t.Run("invalid data length", func(t *testing.T) {
+		data := []byte{0, 0, 0, 1} // Invalid length for PubKey
+
+		var unmarshaled VoteInfo
+		err := unmarshaled.UnmarshalBinary(data)
+		require.Error(t, err)
+	})
+
+	t.Run("invalid signature length", func(t *testing.T) {
+		vote := &VoteInfo{
+			Signature: Signature{
+				Data:       []byte("signature"),
+				PubKey:     []byte("public-key"),
+				PubKeyType: crypto.KeyTypeSecp256k1,
+			},
+			AckStatus: AckStatusDisagree,
+		}
+
+		data, err := vote.MarshalBinary()
+		require.NoError(t, err)
+
+		// Corrupt the data by changing the signature length
+		data = data[:len(data)-1]
+
+		var unmarshaled VoteInfo
+		err = unmarshaled.UnmarshalBinary(data)
+		require.Error(t, err)
+	})
+
+	t.Run("AckStatus Agreed", func(t *testing.T) {
+		vote := &VoteInfo{
+			Signature: Signature{
+				Data:       []byte("signature"),
+				PubKey:     []byte("public-key"),
+				PubKeyType: crypto.KeyTypeSecp256k1,
+			},
+			AckStatus: AckStatusAgree,
+		}
+
+		data, err := vote.MarshalBinary()
+		require.NoError(t, err)
+
+		var unmarshaled VoteInfo
+		err = unmarshaled.UnmarshalBinary(data)
+		require.NoError(t, err)
+		require.Equal(t, vote, &unmarshaled)
+	})
+
+	t.Run("AckStatus Diverge", func(t *testing.T) {
+		hash := HashBytes([]byte("app-hash"))
+		vote := &VoteInfo{
+			Signature: Signature{
+				Data:       []byte("signature"),
+				PubKey:     []byte("public-key"),
+				PubKeyType: crypto.KeyTypeSecp256k1,
+			},
+			AckStatus: AckStatusDiverge,
+			AppHash:   &hash,
+		}
+
+		data, err := vote.MarshalBinary()
+		require.NoError(t, err)
+
+		var unmarshaled VoteInfo
+		err = unmarshaled.UnmarshalBinary(data)
+		require.NoError(t, err)
+		require.Equal(t, vote, &unmarshaled)
+	})
+
+}
