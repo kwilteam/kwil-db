@@ -1178,7 +1178,7 @@ func (s *sqlGenerator) VisitProcedureStmtSQL(p0 *parse.ActionStmtSQL) any {
 	return nil
 }
 
-func (s *sqlGenerator) VisitProcedureStmtBreak(p0 *parse.ActionStmtBreak) any {
+func (s *sqlGenerator) VisitProcedureStmtBreak(p0 *parse.ActionStmtLoopControl) any {
 	generateErr(s)
 	return nil
 }
@@ -1243,7 +1243,7 @@ func (s *sqlGenerator) VisitActionStmtSQL(p0 *parse.ActionStmtSQL) any {
 	return nil
 }
 
-func (s *sqlGenerator) VisitActionStmtBreak(p0 *parse.ActionStmtBreak) any {
+func (s *sqlGenerator) VisitActionStmtLoopControl(p0 *parse.ActionStmtLoopControl) any {
 	generateErr(s)
 	return nil
 }

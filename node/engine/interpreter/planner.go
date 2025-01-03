@@ -106,6 +106,8 @@ var (
 
 	// errBreak is an error returned when a break statement is encountered.
 	errBreak = errors.New("break")
+	// errContinue is an error returned when a continue statement is encountered.
+	errContinue = errors.New("continue")
 	// errReturn is an error returned when a return statement is encountered.
 	errReturn = errors.New("return")
 )
@@ -226,8 +228,6 @@ func (i *interpreterPlanner) VisitActionStmtAssignment(p0 *parse.ActionStmtAssig
 				return err
 			}
 
-			// TODO: do I need to re-set the array? I dont think so b/c the implementation is a pointer. Should make a unit test for this.
-
 			return nil
 		default:
 			panic(fmt.Errorf("unexpected assignable variable type: %T", p0.Variable))
@@ -240,9 +240,14 @@ func (i *interpreterPlanner) VisitActionStmtCall(p0 *parse.ActionStmtCall) any {
 	// we cannot simply use the same visitor as the expression function call, because expression function
 	// calls always return exactly one value. Here, we can return 0 values, many values, or a table.
 
-	receivers := make([]string, len(p0.Receivers))
+	receivers := make([]*string, len(p0.Receivers))
 	for j, r := range p0.Receivers {
-		receivers[j] = r.Name
+		// if r is nil, we can ignore the receiver.
+		if r == nil {
+			receivers[j] = nil
+			continue
+		}
+		receivers[j] = &r.Name
 	}
 
 	args := make([]exprFunc, len(p0.Call.Args))
@@ -282,7 +287,10 @@ func (i *interpreterPlanner) VisitActionStmtCall(p0 *parse.ActionStmtCall) any {
 			}
 
 			for j, r := range receivers {
-				err = exec.setVariable(r, row.Values[j])
+				if r == nil {
+					continue
+				}
+				err = exec.setVariable(*r, row.Values[j])
 				if err != nil {
 					return err
 				}
@@ -349,19 +357,26 @@ func (i *interpreterPlanner) VisitActionStmtForLoop(p0 *parse.ActionStmtForLoop)
 
 			return nil
 		})
-		switch err {
-		case nil, errBreak:
-			// swallow break errors since we are breaking out of the loop
-			return nil
-		default:
-			return err
+		if errors.Is(err, errBreak) {
+			return nil // swallow break errors and exit
 		}
+		return err
 	})
 }
 
 // loopTermFunc is a function that allows iterating over a loop term.
 // It calls the function passed to it with each value.
 type loopTermFunc func(exec *executionContext, fn func(Value) error) (err error)
+
+// handleLoopTermErr is a helper function that handles the error returned by a loop term.
+// If it is a continue, it will return nil. If it is a break, it will bubble it up.
+// Otherwise, it will return the error.
+func handleLoopTermErr(err error) error {
+	if errors.Is(err, errContinue) {
+		return nil
+	}
+	return err
+}
 
 func (i *interpreterPlanner) VisitLoopTermRange(p0 *parse.LoopTermRange) any {
 	startFn := p0.Start.Accept(i).(exprFunc)
@@ -387,7 +402,7 @@ func (i *interpreterPlanner) VisitLoopTermRange(p0 *parse.LoopTermRange) any {
 		}
 
 		for i := start.RawValue().(int64); i <= end.RawValue().(int64); i++ {
-			err = fn(newInt(i))
+			err = handleLoopTermErr(fn(newInt(i)))
 			if err != nil {
 				return err
 			}
@@ -411,7 +426,7 @@ func (i *interpreterPlanner) VisitLoopTermSQL(p0 *parse.LoopTermSQL) any {
 				return err
 			}
 
-			return fn(rec)
+			return handleLoopTermErr(fn(rec))
 		})
 	})
 }
@@ -434,7 +449,7 @@ func (i *interpreterPlanner) VisitLoopTermVariable(p0 *parse.LoopTermVariable) a
 				return err
 			}
 
-			err = fn(scalar)
+			err = handleLoopTermErr(fn(scalar))
 			if err != nil {
 				return err
 			}
@@ -480,7 +495,7 @@ func (i *interpreterPlanner) VisitLoopTermFunctionCall(p0 *parse.LoopTermFunctio
 				return err
 			}
 
-			return fn(rec)
+			return handleLoopTermErr(fn(rec))
 		})
 		if err != nil {
 			return err
@@ -581,9 +596,16 @@ func (i *interpreterPlanner) VisitActionStmtSQL(p0 *parse.ActionStmtSQL) any {
 	})
 }
 
-func (i *interpreterPlanner) VisitActionStmtBreak(p0 *parse.ActionStmtBreak) any {
+func (i *interpreterPlanner) VisitActionStmtLoopControl(p0 *parse.ActionStmtLoopControl) any {
 	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
-		return errBreak
+		switch p0.Type {
+		case parse.LoopControlTypeBreak:
+			return errBreak
+		case parse.LoopControlTypeContinue:
+			return errContinue
+		default:
+			panic(fmt.Errorf("unexpected loop control type: %s", p0.Type))
+		}
 	})
 }
 
@@ -995,16 +1017,16 @@ func makeLogicalFunc(left, right exprFunc, and bool) exprFunc {
 			return nil, err
 		}
 
-		if leftVal.Type() != types.BoolType || rightVal.Type() != types.BoolType {
-			return nil, fmt.Errorf("expected bools, got %s and %s", leftVal.Type(), rightVal.Type())
-		}
-
 		if leftVal.Null() {
-			return leftVal, nil
+			return newNull(types.BoolType), nil
 		}
 
 		if rightVal.Null() {
-			return rightVal, nil
+			return newNull(types.BoolType), nil
+		}
+
+		if leftVal.Type() != types.BoolType || rightVal.Type() != types.BoolType {
+			return nil, fmt.Errorf("expected bools, got %s and %s", leftVal.Type(), rightVal.Type())
 		}
 
 		if and {
@@ -1107,7 +1129,7 @@ func (i *interpreterPlanner) VisitGrantOrRevokeStatement(p0 *parse.GrantOrRevoke
 			if !p0.IsGrant {
 				fn = exec.interpreter.accessController.UnassignRole
 			}
-			return fn(exec.txCtx.Ctx, exec.db, p0.ToUser, p0.GrantRole)
+			return fn(exec.txCtx.Ctx, exec.db, p0.GrantRole, p0.ToUser)
 		default:
 			// failure to hit these cases should have been caught by the parser, where better error
 			// messages can be generated. This is a catch-all for any other invalid cases.
@@ -1442,6 +1464,7 @@ func (i *interpreterPlanner) VisitUseExtensionStatement(p0 *parse.UseExtensionSt
 		}
 
 		exec.interpreter.namespaces[p0.Alias] = extNamespace
+		exec.interpreter.accessController.registerNamespace(p0.Alias)
 
 		return nil
 	})
@@ -1478,6 +1501,7 @@ func (i *interpreterPlanner) VisitUnuseExtensionStatement(p0 *parse.UnuseExtensi
 		}
 
 		delete(exec.interpreter.namespaces, p0.Alias)
+		exec.interpreter.accessController.unregisterNamespace(p0.Alias)
 
 		return nil
 	})
@@ -1589,6 +1613,7 @@ func (i *interpreterPlanner) VisitCreateNamespaceStatement(p0 *parse.CreateNames
 			onDeploy:           func(*executionContext) error { return nil },
 			onUndeploy:         func(*executionContext) error { return nil },
 		}
+		exec.interpreter.accessController.registerNamespace(p0.Namespace)
 
 		return nil
 	})
@@ -1621,7 +1646,7 @@ func (i *interpreterPlanner) VisitDropNamespaceStatement(p0 *parse.DropNamespace
 		}
 
 		delete(exec.interpreter.namespaces, p0.Namespace)
-		exec.interpreter.accessController.DeleteNamespace(p0.Namespace)
+		exec.interpreter.accessController.unregisterNamespace(p0.Namespace)
 
 		return nil
 	})

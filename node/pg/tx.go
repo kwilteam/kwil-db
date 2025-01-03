@@ -186,10 +186,6 @@ func (d *delayedReadTx) Execute(ctx context.Context, stmt string, args ...any) (
 
 var _ conner = (*nestedTx)(nil)
 
-func (d *delayedReadTx) Conn() *pgx.Conn {
-	return d.tx.Conn()
-}
-
 func (d *delayedReadTx) Commit(ctx context.Context) error {
 	if d.tx == nil {
 		return nil

@@ -9,6 +9,7 @@ import (
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/node/engine/interpreter"
 	"github.com/kwilteam/kwil-db/node/pg"
+	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/stretchr/testify/require"
 )
 
@@ -28,8 +29,7 @@ CREATE TABLE posts (
 	owner_id INT NOT NULL REFERENCES users(id),
 	content TEXT,
 	created_at INT
-);
-	`
+);`
 )
 
 func Test_SQL(t *testing.T) {
@@ -42,6 +42,7 @@ func Test_SQL(t *testing.T) {
 		results     [][]any // table of results
 		err         error   // expected error, can be nil. Errors _MUST_ occur on the exec. This is a direct match
 		errContains string  // expected error message, can be empty. Errors _MUST_ occur on the exec. This is a substring match
+		caller      string  // caller to use for the action, will default to defaultCaller
 	}
 
 	tests := []testcase{
@@ -226,42 +227,168 @@ func Test_SQL(t *testing.T) {
 			execSQL: "DROP NAMESPACE some_ns;",
 			err:     interpreter.ErrNamespaceNotFound,
 		},
+		{
+			name: "global select permission - failure",
+			sql: []string{
+				// test_role starts with select b/c of default, but then loses it.
+				"CREATE ROLE test_role;",
+				"REVOKE select FROM default;",
+				"GRANT test_role TO 'user'",
+			},
+			execSQL:     "SELECT * FROM users;",
+			errContains: "permission denied for table users",
+			caller:      "user",
+			err:         interpreter.ErrDoesNotHavePriv,
+		},
+		{
+			name: "global select permission - success",
+			sql: []string{
+				"CREATE ROLE test_role;",
+				"REVOKE select FROM default;",
+				"GRANT test_role TO 'user'",
+				"GRANT select TO test_role;",
+			},
+			execSQL: "SELECT * FROM users;",
+			results: [][]any{},
+			caller:  "user",
+		},
+		{
+			name: "namespaced select permission - failure",
+			sql: []string{
+				"CREATE NAMESPACE test;",
+				"CREATE ROLE test_role;",
+				"REVOKE select FROM default;",
+				"GRANT test_role TO 'user'",
+				"GRANT select ON test TO test_role;",
+			},
+			// they do not have permission to select from the users table, which is in the main namespace
+			execSQL: "SELECT * FROM users;",
+			err:     interpreter.ErrDoesNotHavePriv,
+			caller:  "user",
+		},
+		{
+			name: "namespaced select permission - success",
+			sql: []string{
+				"CREATE NAMESPACE test;",
+				"CREATE ROLE test_role;",
+				"REVOKE select FROM default;",
+				"GRANT test_role TO 'user'",
+				"GRANT select ON test TO test_role;",
+				"{test}CREATE TABLE users (id INT PRIMARY KEY, name TEXT, age INT);",
+			},
+			execSQL: "{test}SELECT * FROM users;",
+			results: [][]any{},
+			caller:  "user",
+		},
+		{
+			name:    "global insert permission - failure",
+			execSQL: "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
+			err:     interpreter.ErrDoesNotHavePriv,
+			caller:  "user",
+		},
+		{
+			name: "global insert permission - success",
+			sql: []string{
+				"CREATE ROLE test_role;",
+				"GRANT test_role TO 'user'",
+				"GRANT insert TO test_role;",
+			},
+			execSQL: "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
+			results: [][]any{},
+			caller:  "user",
+		},
+		// I wont test other namespace-able perms because they use the same logic
+		{
+			name: "drop role",
+			sql: []string{
+				"CREATE ROLE test_role;",
+				"GRANT test_role TO 'user';",
+				"GRANT iNSert TO test_role;",
+				"DROP ROLE test_role;",
+			},
+			execSQL: "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
+			err:     interpreter.ErrDoesNotHavePriv,
+			caller:  "user",
+		},
+		{
+			name: "drop and recreate namespace",
+			sql: []string{
+				"CREATE NAMESPACE test;",
+				"CREATE ROLE test_role;",
+				"GRANT INSERT ON test TO test_role;",
+				"GRANT test_role TO 'user';",
+				"DROP NAMESPACE test;",
+				"CREATE NAMESPACE test;",
+			},
+			execSQL: "{test}INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
+			err:     interpreter.ErrDoesNotHavePriv,
+			caller:  "user",
+		},
+		{
+			name: "revoking global permission",
+			sql: []string{
+				"CREATE ROLE test_role;",
+				"GRANT test_role TO 'user';",
+				"GRANT insert TO test_role;",
+				"REVOKE insert FROM test_role;",
+			},
+			execSQL: "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
+			err:     interpreter.ErrDoesNotHavePriv,
+			caller:  "user",
+		},
+		{
+			name: "revoking namespaced permission",
+			sql: []string{
+				"CREATE NAMESPACE test;",
+				"CREATE ROLE test_role;",
+				"GRANT test_role TO 'user';",
+				"GRANT insert ON test TO test_role;",
+				"REVOKE insert ON test FROM test_role;",
+				"{test}CREATE TABLE users (id INT PRIMARY KEY, name TEXT, age INT);",
+			},
+			execSQL: "{test}INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
+			err:     interpreter.ErrDoesNotHavePriv,
+			caller:  "user",
+		},
+		{
+			name: "revoke role",
+			sql: []string{
+				"CREATE ROLE test_role;",
+				"GRANT test_role TO 'user';",
+				"GRANT insert TO test_role;",
+				"REVOKE test_role FROM 'user';",
+			},
+			execSQL: "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
+			err:     interpreter.ErrDoesNotHavePriv,
+			caller:  "user",
+		},
+		// testing info schema
+		{
+			name:    "read namespaces",
+			execSQL: "SELECT name, type FROM info.namespaces;",
+			results: [][]any{
+				{"info", "SYSTEM"},
+				{"main", "SYSTEM"},
+			},
+		},
 	}
+
+	db, err := newTestDB()
+	require.NoError(t, err)
+	defer db.Close()
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			db, err := newTestDB()
-			require.NoError(t, err)
-			defer db.Close()
-
 			ctx := context.Background()
 			tx, err := db.BeginTx(ctx)
 			require.NoError(t, err)
 			defer tx.Rollback(ctx) // always rollback
 
-			interp, err := interpreter.NewInterpreter(ctx, tx, &common.Service{})
-			require.NoError(t, err)
+			interp := newTestInterp(t, tx, test.sql)
 
-			err = interp.SetOwner(ctx, tx, defaultCaller)
-			require.NoError(t, err)
-
-			err = interp.Execute(newTxCtx(), tx, createUsersTable, nil, nil)
-			require.NoError(t, err)
-
-			err = interp.Execute(newTxCtx(), tx, createPostsTable, nil, nil)
-			require.NoError(t, err)
 			var values [][]any
-
-			for _, sql := range test.sql {
-				err = interp.Execute(newTxCtx(), tx, sql, nil, func(v *common.Row) error {
-					values = append(values, v.Values)
-					return nil
-				})
-				require.NoError(t, err)
-			}
-
 			if test.execSQL != "" {
-				err = interp.Execute(newTxCtx(), tx, test.execSQL, nil, func(v *common.Row) error {
+				err = interp.Execute(newTxCtx(test.caller), tx, test.execSQL, nil, func(v *common.Row) error {
 					values = append(values, v.Values)
 					return nil
 				})
@@ -286,7 +413,10 @@ func Test_SQL(t *testing.T) {
 	}
 }
 
-func newTxCtx() *common.TxContext {
+func newTxCtx(caller string) *common.TxContext {
+	if caller == "" {
+		caller = defaultCaller
+	}
 	return &common.TxContext{
 		Ctx: context.Background(),
 		BlockContext: &common.BlockContext{
@@ -296,8 +426,8 @@ func newTxCtx() *common.TxContext {
 				MigrationParams:   &common.MigrationContext{},
 			},
 		},
-		Caller:        defaultCaller,
-		Signer:        []byte(defaultCaller),
+		Caller:        caller,
+		Signer:        []byte(caller),
 		Authenticator: "test_authenticator",
 	}
 }
@@ -318,6 +448,8 @@ func Test_Actions(t *testing.T) {
 		results [][]any
 		// expected error
 		err error
+		// caller to use for the action, will default to defaultCaller
+		caller string
 	}
 
 	// rawTest is a helper that allows us to write test logic purely in Kuneiform.
@@ -328,7 +460,6 @@ func Test_Actions(t *testing.T) {
 			action: "raw_test",
 		}
 	}
-	_ = rawTest
 
 	tests := []testcase{
 		{
@@ -433,39 +564,183 @@ func Test_Actions(t *testing.T) {
 			error('slice is not [2,3]');
 		}
 		`),
+		rawTest("assign to array value", `
+		$arr := array[1,2,3];
+		$arr[2] := 5;
+		if $arr != array[1,5,3] {
+			error('array is not [1,5,3]');
+		}
+		if $arr[3] != 3 {
+			error('array[3] is not 3');
+		}
+		`),
+		{
+			name: "call another action",
+			stmt: []string{
+				`CREATE NAMESPACE other;`,
+				`{other}CREATE ACTION get_single_value() public view returns (value int) { return 1; }`,
+				`{other}CREATE ACTION get_several_values() public view returns (value1 int, value2 int) { return 2, 3; }`,
+				`{other}CREATE ACTION get_table($to int, $from int) public view returns table(value int) { 
+					for $i in $to..$from {
+						RETURN NEXT $i;
+					};
+				}`,
+				`CREATE ACTION call_other() public view {
+					$value1 := other.get_single_value();
+					if $value1 != 1 {
+						error('value1 is not 1');
+					}
+
+					$value2, $value3 := other.get_several_values();
+					if $value2 != 2 {
+						error('value2 is not 2');
+					}
+					if $value3 != 3 {
+						error('value3 is not 3');
+					}
+
+					_, $value3Again := other.get_several_values();
+					if $value3Again != 3 {
+						error('value3Again is not 3');
+					}
+
+					$iter := 0;
+					for $row in other.get_table(1, 4) {
+						$iter := $iter + 1;
+						if $row.value != $iter {
+							error('value is not equal to iter');
+						}
+					}
+					if $iter != 4 {
+						error('iter is not 4');
+					}
+				}`,
+			},
+			action: "call_other",
+		},
+		rawTest("testing if, else if, else", `
+		$a := 1;
+		$b := 2;
+		$total := 0;
+		if $a < $b {
+			$total := $total + 1;
+		} else {
+			error('a is not less than b'); 
+		}
+
+		if $a > $b {
+			error('a is not greater than b');
+		} else if $a == $b {
+			error('a is not equal to b'); 
+		} else {
+			$total := $total + 1; 
+		}
+
+		if $a + $b == 4 {
+			error('a + b is not 4');
+		} elseif $a + $b == 3 { -- supports else if and elseif
+			$total := $total + 1; 
+		} else {
+			error('a + b is not 3'); 
+		}
+
+		if $total != 3 {
+			error('total is not 3');
+		}
+		`),
+		rawTest("break", `
+		$sum := 0;
+		for $i in 1..10 {
+			$sum := $sum + $i;
+			if $i == 5 {
+				break;
+			}
+		}
+
+		if $sum != 15 {
+			error('sum is not 15, but ' || $sum::text);
+		}
+		`),
+		rawTest("continue", `
+		$sum := 0;
+		for $i in 1..10 {
+			if $i == 5 {
+				continue;
+			}
+			$sum := $sum + $i;
+		}
+
+		if $sum != 50 {
+			error('sum is not 50, but ' || $sum::text);
+		}
+		`),
+		rawTest("function call expression", `
+		if abs(-1) != 1 {
+			error('abs(-1) is not 1');
+		}
+		`),
+		rawTest("logical expression", `
+		if true and false {
+			error('true and false is not false');
+		}
+
+		if true or false {
+			-- pass
+		} else {
+			error('true or false is not true'); 
+		}
+
+		if (true or false) and true {
+			-- pass
+		} else {
+			error('(true or false) and true is not true');
+		}
+
+		if true and null {
+			error('true and null should be null');
+		}
+		if null and false {
+			error('null and false should be null');
+		}
+		`),
+		rawTest("arithmetic", `
+		if 1 + 2 != 3 {
+			error('1 + 2 is not 3');
+		}
+		if 1 - 2 != -1 {
+			error('1 - 2 is not -1');
+		}
+		if 2 * 2 != 4 {
+			error('2 * 2 is not 4');
+		}
+		if 4 / 2 != 2 {
+			error('4 / 2 is not 2');
+		}
+		if 5 % 2 != 1 {
+			error('5 % 2 is not 1');
+		}
+		if 5 + null is not null {
+			error('5 + null is not null');
+		}
+		`),
 	}
+
+	db, err := newTestDB()
+	require.NoError(t, err)
+	defer db.Close()
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			db, err := newTestDB()
-			require.NoError(t, err)
-			defer db.Close()
-
 			ctx := context.Background()
 			tx, err := db.BeginTx(ctx)
 			require.NoError(t, err)
 			defer tx.Rollback(ctx) // always rollback
 
-			interp, err := interpreter.NewInterpreter(ctx, tx, &common.Service{})
-			require.NoError(t, err)
-
-			err = interp.SetOwner(ctx, tx, defaultCaller)
-			require.NoError(t, err)
-
-			err = interp.Execute(newTxCtx(), tx, createUsersTable, nil, nil)
-			require.NoError(t, err)
-
-			err = interp.Execute(newTxCtx(), tx, createPostsTable, nil, nil)
-			require.NoError(t, err)
-
-			for _, stmt := range test.stmt {
-				err = interp.Execute(newTxCtx(), tx, stmt, nil, nil)
-				require.NoError(t, err)
-			}
+			interp := newTestInterp(t, tx, test.stmt)
 
 			var results [][]any
 			// TODO: add expected logs
-			_, err = interp.Call(newTxCtx(), tx, test.namespace, test.action, test.values, func(v *common.Row) error {
+			_, err = interp.Call(newTxCtx(test.caller), tx, test.namespace, test.action, test.values, func(v *common.Row) error {
 				results = append(results, v.Values)
 				return nil
 			})
@@ -504,4 +779,21 @@ func newTestDB() (*pg.DB, error) {
 	ctx := context.Background()
 
 	return pg.NewDB(ctx, cfg)
+}
+
+// newTestInterp creates a new interpreter for testing purposes.
+// It is seeded with the default tables.
+func newTestInterp(t *testing.T, tx sql.DB, seeds []string) *interpreter.ThreadSafeInterpreter {
+	interp, err := interpreter.NewInterpreter(context.Background(), tx, &common.Service{})
+	require.NoError(t, err)
+
+	err = interp.SetOwner(context.Background(), tx, defaultCaller)
+	require.NoError(t, err)
+
+	for _, stmt := range append([]string{createUsersTable, createPostsTable}, seeds...) {
+		err := interp.Execute(newTxCtx(defaultCaller), tx, stmt, nil, nil)
+		require.NoError(t, err)
+	}
+
+	return interp
 }

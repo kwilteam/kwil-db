@@ -130,6 +130,9 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#revoke_statement.
 	VisitRevoke_statement(ctx *Revoke_statementContext) interface{}
 
+	// Visit a parse tree produced by KuneiformParser#role_name.
+	VisitRole_name(ctx *Role_nameContext) interface{}
+
 	// Visit a parse tree produced by KuneiformParser#privilege_list.
 	VisitPrivilege_list(ctx *Privilege_listContext) interface{}
 
@@ -328,8 +331,8 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#stmt_sql.
 	VisitStmt_sql(ctx *Stmt_sqlContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#stmt_break.
-	VisitStmt_break(ctx *Stmt_breakContext) interface{}
+	// Visit a parse tree produced by KuneiformParser#stmt_loop_control.
+	VisitStmt_loop_control(ctx *Stmt_loop_controlContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#stmt_return.
 	VisitStmt_return(ctx *Stmt_returnContext) interface{}

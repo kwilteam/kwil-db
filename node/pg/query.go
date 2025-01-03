@@ -254,6 +254,19 @@ func QueryRowFunc(ctx context.Context, tx sql.Executor, stmt string,
 	switch ti := tx.(type) {
 	case sql.QueryScanner:
 		return ti.QueryScanFn(ctx, stmt, scans, fn, args...)
+	case *delayedReadTx:
+		// delayedReadTx does not implement conner because it has not yet begun
+		// its transaction. Beginning a transaction should depend on the current
+		// context, and may return connection errors, so it is a bit haphazard to
+		// have it implement conner (which does not usually contact the db).
+		// Therefore, we create the transaction here if it has not been created.
+		if ti.tx == nil {
+			err := ti.ensureTx(ctx)
+			if err != nil {
+				return err
+			}
+		}
+		return queryRowFunc(ctx, ti.tx.Conn(), stmt, scans, fn, args...)
 	case conner:
 		conn := ti.Conn()
 		return queryRowFunc(ctx, conn, stmt, scans, fn, args...)

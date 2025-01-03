@@ -17,7 +17,7 @@ var (
 	ErrSystemOnly            = errors.New("system-only action")
 	ErrCannotDrop            = errors.New("cannot drop")
 	ErrCannotCall            = errors.New("cannot call action")
-	ErrDoesNotHavePriv       = errors.New("does not have privilege")
+	ErrDoesNotHavePriv       = errors.New("user does not have privilege")
 	ErrNamespaceNotFound     = errors.New("namespace not found")
 	ErrNamespaceExists       = errors.New("namespace already exists")
 	ErrArithmetic            = errors.New("arithmetic error")

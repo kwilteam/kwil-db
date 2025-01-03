@@ -160,6 +160,11 @@ func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service) (*T
 		namespaces: make(map[string]*namespace),
 		service:    service,
 	}
+	interpreter.accessController, err = newAccessController(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, ns := range namespaces {
 		tables, err := listTablesInNamespace(ctx, db, ns.Name)
 		if err != nil {
@@ -190,13 +195,10 @@ func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service) (*T
 			onDeploy:           func(ctx *executionContext) error { return nil },
 			onUndeploy:         func(ctx *executionContext) error { return nil },
 		}
+		interpreter.accessController.registerNamespace(ns.Name)
 	}
 
-	accessController, err := newAccessController(ctx, db)
-	if err != nil {
-		return nil, err
-	}
-	interpreter.accessController = accessController
+	// we need to add the tables of the info schema manually, since they are not stored in the database
 
 	// get and initialize all used extensions
 	storedExts, err := getExtensionInitializationMetadata(ctx, db)
@@ -218,11 +220,12 @@ func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service) (*T
 
 		_, ok = interpreter.namespaces[ext.Alias]
 		if ok {
-			// should never happen, as this should have been caught during initialization
+			// should never happen, as this should have been caught during execution of the block.
 			return nil, fmt.Errorf("internal bug on startup: extension alias %s is already in use", ext.Alias)
 		}
 
 		interpreter.namespaces[ext.Alias] = namespace
+		interpreter.accessController.registerNamespace(ext.Alias)
 	}
 
 	return &ThreadSafeInterpreter{
@@ -230,7 +233,12 @@ func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service) (*T
 	}, nil
 }
 
-// funcDefToExecutable converts a function definition to an executable.
+// funcDefToExecutable converts a Postgres function definition to an executable.
+// This allows built-in Postgres functions to be used within the interpreter.
+// This inconveniently requires a roundtrip to the database, but it is necessary
+// to ensure that the function is executed correctly. In the future, we can replicate
+// the functionality of the function in Go to avoid the roundtrip. I initially tried
+// to do this, however it get's extroadinarily complex when getting to string formatting.
 func funcDefToExecutable(funcName string, funcDef *parse.ScalarFunctionDefinition) *executable {
 	return &executable{
 		Name: funcName,
@@ -249,17 +257,18 @@ func funcDefToExecutable(funcName string, funcDef *parse.ScalarFunctionDefinitio
 				return err
 			}
 
+			// if the function name is notice, then we need to get write the notice to our logs locally,
+			// instead of executing a query. This is the functional eqauivalent of Kwil's console.log().
+			if funcName == "notice" {
+				e.logs = append(e.logs, args[0].RawValue().(string))
+				return nil
+			}
+
 			zeroVal, err := NewZeroValue(retTyp)
 			if err != nil {
 				return err
 			}
 
-			if funcName == "notice" {
-				// if the function name is notice, then we need to get write the notice to our logs locally.
-				// This is a special case, as we don't want to execute the query.
-				e.logs = append(e.logs, args[0].RawValue().(string))
-				return nil
-			}
 			// format the function
 			pgFormat, err := funcDef.PGFormatFunc(params)
 			if err != nil {
@@ -426,6 +435,7 @@ func (i *BaseInterpreter) Call(ctx *common.TxContext, db sql.DB, namespace, acti
 	}, nil
 }
 
+// rowToCommonRow converts a row to a common.Row.
 func rowToCommonRow(row *row) *common.Row {
 	// convert the results to any
 	anyResults := make([]any, len(row.Values))

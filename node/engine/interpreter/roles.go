@@ -3,6 +3,7 @@ package interpreter
 import (
 	"context"
 	"fmt"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )
@@ -26,8 +27,9 @@ func isBuiltInRole(role string) bool {
 
 func newAccessController(ctx context.Context, db sql.DB) (*accessController, error) {
 	ac := &accessController{
-		roles:     make(map[string]*perms),
-		userRoles: make(map[string][]string),
+		roles:           make(map[string]*perms),
+		userRoles:       make(map[string][]string),
+		knownNamespaces: make(map[string]struct{}),
 	}
 
 	// get the owner
@@ -38,7 +40,7 @@ func newAccessController(ctx context.Context, db sql.DB) (*accessController, err
 		return nil, err
 	}
 
-	getRolesStmt := `SELECT r.name, array_agg(rp.privilege_type), array_agg(n.name)
+	getRolesStmt := `SELECT r.name, array_agg(rp.privilege_type::text), array_agg(n.name)
 	FROM kwild_engine.roles r
 	LEFT JOIN kwild_engine.role_privileges rp ON rp.role_id = r.id
 	LEFT JOIN kwild_engine.namespaces n ON rp.namespace_id = n.id
@@ -115,9 +117,10 @@ func newAccessController(ctx context.Context, db sql.DB) (*accessController, err
 
 // accessController enforces access control on the database.
 type accessController struct {
-	owner     string // the db owner
-	roles     map[string]*perms
-	userRoles map[string][]string // a map of user public keys to the roles they have. It does _not_ include the default role.
+	owner           string // the db owner
+	roles           map[string]*perms
+	userRoles       map[string][]string // a map of user public keys to the roles they have. It does _not_ include the default role.
+	knownNamespaces map[string]struct{} // a set of all known namespaces
 }
 
 // CreateRole adds a new role to the access controller.
@@ -136,10 +139,15 @@ func (a *accessController) CreateRole(ctx context.Context, db sql.DB, role strin
 		return err
 	}
 
-	a.roles[role] = &perms{
+	p := &perms{
 		namespacePrivileges: make(map[string]map[privilege]struct{}),
 		globalPrivileges:    make(map[privilege]struct{}),
 	}
+	for ns := range a.knownNamespaces {
+		p.namespacePrivileges[ns] = make(map[privilege]struct{})
+	}
+
+	a.roles[role] = p
 
 	return nil
 }
@@ -175,11 +183,22 @@ func (a *accessController) DeleteRole(ctx context.Context, db sql.DB, role strin
 	return nil
 }
 
-// DeleteNamespace deletes all roles and privileges associated with a namespace.
-func (a *accessController) DeleteNamespace(namespace string) {
+// registerNamespace creates a new namespace.
+// It does not modify any storage; it only updates the cache.
+func (a *accessController) registerNamespace(namespace string) {
+	for _, perm := range a.roles {
+		perm.namespacePrivileges[namespace] = make(map[privilege]struct{})
+	}
+	a.knownNamespaces[namespace] = struct{}{}
+}
+
+// unregisterNamespace deletes all roles and privileges associated with a namespace.
+// It does not modify any storage; it only updates the cache.
+func (a *accessController) unregisterNamespace(namespace string) {
 	for _, role := range a.roles {
 		delete(role.namespacePrivileges, namespace)
 	}
+	delete(a.knownNamespaces, namespace)
 }
 
 func (a *accessController) HasPrivilege(user string, namespace *string, privilege privilege) bool {
@@ -202,8 +221,7 @@ func (a *accessController) HasPrivilege(user string, namespace *string, privileg
 	for _, role := range roles {
 		perms, ok := a.roles[role]
 		if !ok {
-			fmt.Println("Unexpected cache error: role does not exist. This is a bug.")
-			continue
+			panic("Unexpected cache error: role does not exist. This is a bug.")
 		}
 
 		if perms.canDo(privilege, namespace) {
@@ -256,7 +274,7 @@ func (a *accessController) GrantPrivileges(ctx context.Context, db sql.DB, role 
 		}
 	}()
 
-	err = grantPrivileges(ctx, db, role, privs, namespace)
+	err = grantPrivileges(ctx, db, role, convPrivs, namespace)
 	if err != nil {
 		return err
 	}
@@ -427,17 +445,23 @@ func createRole(ctx context.Context, db sql.DB, roleName string) error {
 // grantPrivileges grants privileges to a role.
 // If the privileges do not exist, it will return an error.
 // It can optionally be applied to a specific namespace.
-func grantPrivileges(ctx context.Context, db sql.DB, roleName string, privileges []string, namespace *string) error {
+func grantPrivileges(ctx context.Context, db sql.DB, roleName string, privileges []privilege, namespace *string) error {
+	// we need to convert the privileges back to strings so that pgx can find an encode plan
+	privStrs := make([]string, len(privileges))
+	for i, p := range privileges {
+		privStrs[i] = string(p)
+	}
+
 	if namespace == nil {
 		err := execute(ctx, db, `INSERT INTO kwild_engine.role_privileges (role_id, privilege_type)
-		SELECT r.id, unnest($2::text[]) FROM kwild_engine.roles r WHERE r.name = $1`, roleName, privileges)
+		SELECT r.id, unnest($2::text[])::kwild_engine.privilege_type FROM kwild_engine.roles r WHERE r.name = $1`, roleName, privStrs)
 		return err
 	}
 
 	err := execute(ctx, db, `INSERT INTO kwild_engine.role_privileges (role_id, namespace_id, privilege_type)
-	SELECT r.id, n.id, unnest($3::text[]) FROM kwild_engine.roles r
+	SELECT r.id, n.id, unnest($3::text[])::kwild_engine.privilege_type FROM kwild_engine.roles r
 	JOIN kwild_engine.namespaces n ON n.name = $2
-	WHERE r.name = $1`, roleName, *namespace, privileges)
+	WHERE r.name = $1`, roleName, *namespace, privStrs)
 	return err
 }
 
@@ -447,21 +471,21 @@ func grantPrivileges(ctx context.Context, db sql.DB, roleName string, privileges
 func revokePrivileges(ctx context.Context, db sql.DB, roleName string, privileges []string, namespace *string) error {
 	if namespace == nil {
 		err := execute(ctx, db, `DELETE FROM kwild_engine.role_privileges
-	WHERE role_id = (SELECT id FROM kwild_engine.roles WHERE name = $1) AND privilege_type = ANY($2::text[])`, roleName, privileges)
+	WHERE role_id = (SELECT id FROM kwild_engine.roles WHERE name = $1) AND privilege_type::text = ANY($2::text[])`, roleName, privileges)
 		return err
 	}
 
 	err := execute(ctx, db, `DELETE FROM kwild_engine.role_privileges
 	WHERE role_id = (SELECT id FROM kwild_engine.roles WHERE name = $1)
 	AND namespace_id = (SELECT id FROM kwild_engine.namespaces WHERE name = $2)
-	AND privilege_type = ANY($3::text[])`, roleName, *namespace, privileges)
+	AND privilege_type::text = ANY($3::text[])`, roleName, *namespace, privileges)
 	return err
 }
 
 // assignRole assigns a role to a user.
 // If the role does not exist, it will return an error.
 func assignRole(ctx context.Context, db sql.DB, roleName, user string) error {
-	err := execute(ctx, db, `INSERT INTO kwild_engine.user_roles (user_id, role_id)
+	err := execute(ctx, db, `INSERT INTO kwild_engine.user_roles (user_identifier, role_id)
 	VALUES ($1, (SELECT id FROM kwild_engine.roles WHERE name = $2))`, user, roleName)
 	return err
 }
@@ -470,7 +494,7 @@ func assignRole(ctx context.Context, db sql.DB, roleName, user string) error {
 // If the role does not exist, it will return an error.
 func unassignRole(ctx context.Context, db sql.DB, roleName, user string) error {
 	err := execute(ctx, db, `DELETE FROM kwild_engine.user_roles
-	WHERE user_id = $1 AND role_id = (SELECT id FROM kwild_engine.roles WHERE name = $2)`, user, roleName)
+	WHERE user_identifier = $1 AND role_id = (SELECT id FROM kwild_engine.roles WHERE name = $2)`, user, roleName)
 	return err
 }
 
@@ -604,6 +628,7 @@ func canBeNamespaced(ps ...privilege) error {
 func validatePrivileges(ps ...string) ([]privilege, error) {
 	ps2 := make([]privilege, len(ps))
 	for i, p := range ps {
+		p = strings.ToUpper(p)
 		_, ok := privilegeNames[privilege(p)]
 		if !ok {
 			return nil, fmt.Errorf(`privilege "%s" does not exist`, p)

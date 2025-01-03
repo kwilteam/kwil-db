@@ -178,19 +178,24 @@ drop_index_statement:
 ;
 
 create_role_statement:
-    CREATE ROLE (IF NOT EXISTS)? identifier
+    CREATE ROLE (IF NOT EXISTS)? role_name
 ;
 
 drop_role_statement:
-    DROP ROLE (IF EXISTS)? identifier
+    DROP ROLE (IF EXISTS)? role_name
 ;
 
 grant_statement:
-    GRANT (privilege_list|grant_role=identifier) (ON namespace=identifier)? TO (role=identifier|user=STRING_)
+    GRANT (privilege_list|grant_role=role_name) (ON namespace=identifier)? TO (role=role_name|user=STRING_)
 ;
 
 revoke_statement:
-    REVOKE (privilege_list|grant_role=identifier) (ON namespace=identifier)? FROM (role=identifier|user=STRING_)
+    REVOKE (privilege_list|grant_role=role_name) (ON namespace=identifier)? FROM (role=role_name|user=STRING_)
+;
+
+// we need a separate role_name rule to allow usage of the DEFAULT keyword
+role_name:
+    identifier | DEFAULT
 ;
 
 privilege_list:
@@ -427,9 +432,9 @@ action_statement:
     | ((variable_or_underscore) (COMMA (variable_or_underscore))* (ASSIGN | EQUALS))? action_function_call SCOL # stmt_action_call
     | action_expr type? (ASSIGN | EQUALS) action_expr SCOL                                                         # stmt_variable_assignment
     | FOR receiver=VARIABLE IN (range|target_variable=variable|sql_statement|action_function_call) LBRACE action_statement* RBRACE SCOL?  # stmt_for_loop
-    | IF if_then_block (ELSEIF if_then_block)* (ELSE LBRACE action_statement* RBRACE)? SCOL?                        # stmt_if
+    | IF if_then_block ((ELSEIF| ELSE IF) if_then_block)* (ELSE LBRACE action_statement* RBRACE)? SCOL?                        # stmt_if
     | sql_statement SCOL                                                                                # stmt_sql
-    | BREAK SCOL                                                                                        # stmt_break
+    | (BREAK|CONTINUE) SCOL                                                                                        # stmt_loop_control
     | RETURN (action_expr_list|sql_statement)? SCOL                                                   # stmt_return
     | RETURN NEXT action_expr_list SCOL                                                              # stmt_return_next
 ;

@@ -1620,12 +1620,20 @@ func (p *ActionStmtSQL) Accept(v Visitor) any {
 	return v.VisitActionStmtSQL(p)
 }
 
-type ActionStmtBreak struct {
+type ActionStmtLoopControl struct {
 	baseActionStmt
+	Type LoopControlType
 }
 
-func (p *ActionStmtBreak) Accept(v Visitor) any {
-	return v.VisitActionStmtBreak(p)
+type LoopControlType string
+
+const (
+	LoopControlTypeBreak    LoopControlType = "BREAK"
+	LoopControlTypeContinue LoopControlType = "CONTINUE"
+)
+
+func (p *ActionStmtLoopControl) Accept(v Visitor) any {
+	return v.VisitActionStmtLoopControl(p)
 }
 
 type ActionStmtReturn struct {
@@ -1720,7 +1728,7 @@ type ActionVisitor interface {
 	VisitActionStmtIf(*ActionStmtIf) any
 	VisitIfThen(*IfThen) any
 	VisitActionStmtSQL(*ActionStmtSQL) any
-	VisitActionStmtBreak(*ActionStmtBreak) any
+	VisitActionStmtLoopControl(*ActionStmtLoopControl) any
 	VisitActionStmtReturn(*ActionStmtReturn) any
 	VisitActionStmtReturnNext(*ActionStmtReturnNext) any
 }
@@ -1812,7 +1820,7 @@ func (s *UnimplementedActionVisitor) VisitActionStmtSQL(p0 *ActionStmtSQL) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
 }
 
-func (s *UnimplementedActionVisitor) VisitActionStmtBreak(p0 *ActionStmtBreak) any {
+func (s *UnimplementedActionVisitor) VisitActionStmtBreak(p0 *ActionStmtLoopControl) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
 }
 
