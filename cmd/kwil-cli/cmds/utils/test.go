@@ -14,7 +14,6 @@ import (
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/helpers"
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/node/pg"
 	"github.com/kwilteam/kwil-db/testing"
 )
 
@@ -91,7 +90,7 @@ func testCmd() *cobra.Command {
 					return display.PrintErr(cmd, errors.New("must specify either postgres connection flags or --test-container"))
 				}
 
-				opts.Conn = &pg.ConnConfig{
+				opts.Conn = &testing.ConnConfig{
 					Host:   host,
 					Port:   port,
 					User:   user,
