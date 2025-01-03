@@ -128,6 +128,7 @@ IF:         'if';
 ELSEIF:     'elseif';
 ELSE:       'else';
 BREAK:      'break';
+CONTINUE:   'continue';
 RETURN:     'return';
 NEXT:       'next';
 OVER:       'over';

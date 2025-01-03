@@ -48,7 +48,7 @@ func (e *executionContext) child(namespace string) *executionContext {
 // and returns an error if they do not.
 func (e *executionContext) checkPrivilege(priv privilege) error {
 	if !e.interpreter.accessController.HasPrivilege(e.txCtx.Caller, &e.scope.namespace, priv) {
-		return fmt.Errorf("%w: %s", ErrDoesNotHavePriv, priv)
+		return fmt.Errorf(`%w %s on namespace "%s"`, ErrDoesNotHavePriv, priv, e.scope.namespace)
 	}
 
 	return nil
@@ -195,7 +195,7 @@ func (e *executionContext) query(sql string, fn func(*row) error) error {
 }
 
 // executable is the interface and function to call a built-in Postgres function,
-// a user-defined Postgres procedure, or a user-defined Kwil action.
+// a user-defined Kwil action, or a precompile method.
 type executable struct {
 	// Name is the name of the function.
 	Name string

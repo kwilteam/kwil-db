@@ -1196,7 +1196,7 @@ func cmpOpts() []cmp.Option {
 			ActionStmtForLoop{},
 			ActionStmtIf{},
 			ActionStmtSQL{},
-			ActionStmtBreak{},
+			ActionStmtLoopControl{},
 			ActionStmtReturn{},
 			ActionStmtReturnNext{},
 			LoopTermRange{},
@@ -1887,7 +1887,9 @@ func TestCreateActionStatements(t *testing.T) {
 											Right:    exprLit(int64(5)),
 										},
 										Then: []ActionStmt{
-											&ActionStmtBreak{},
+											&ActionStmtLoopControl{
+												Type: LoopControlTypeBreak,
+											},
 										},
 									},
 								},

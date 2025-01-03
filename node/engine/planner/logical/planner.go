@@ -2093,7 +2093,7 @@ func (s *scopeContext) table(node parse.Table) (*Scan, *Relation, error) {
 
 			physicalTbl, ok := s.plan.Tables(node.Namespace, node.Table)
 			if !ok {
-				return nil, nil, fmt.Errorf(`%w: "%s"`, ErrUnknownTable, node.Table)
+				return nil, nil, fmt.Errorf(`%w: "%s"`, ErrUnknownTable, formatTableRef(node.Namespace, node.Table))
 			}
 
 			scanTblType = TableSourcePhysical
@@ -2172,6 +2172,15 @@ func (s *scopeContext) join(child Plan, childRel *Relation, join *parse.Join) (P
 	}
 
 	return plan, newRel, nil
+}
+
+// formatTableRef formats a table reference.
+func formatTableRef(namespace, name string) string {
+	if namespace == "" {
+		return fmt.Sprintf(`"%s"`, name)
+	}
+
+	return fmt.Sprintf(`"%s"."%s"`, namespace, name)
 }
 
 // update builds a plan for an update

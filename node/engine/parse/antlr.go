@@ -218,13 +218,15 @@ func unknownExpression(ctx antlr.ParserRuleContext) *ExpressionLiteral {
 	return e
 }
 
-func (s *schemaVisitor) VisitString_literal(ctx *gen.String_literalContext) any {
-	str := ctx.STRING_().GetText()
-
-	if !strings.HasPrefix(str, "'") || !strings.HasSuffix(str, "'") || len(str) < 2 {
+func parseStringLiteral(s string) string {
+	if !strings.HasPrefix(s, "'") || !strings.HasSuffix(s, "'") || len(s) < 2 {
 		panic("invalid string literal")
 	}
-	str = str[1 : len(str)-1]
+	return s[1 : len(s)-1]
+}
+
+func (s *schemaVisitor) VisitString_literal(ctx *gen.String_literalContext) any {
+	str := parseStringLiteral(ctx.GetText())
 
 	n := &ExpressionLiteral{
 		Type:  types.TextType,
@@ -986,7 +988,7 @@ func (s *schemaVisitor) VisitDrop_index_statement(ctx *gen.Drop_index_statementC
 
 func (s *schemaVisitor) VisitCreate_role_statement(ctx *gen.Create_role_statementContext) any {
 	stmt := &CreateRoleStatement{
-		Role: s.getIdent(ctx.Identifier()),
+		Role: ctx.Role_name().Accept(s).(string),
 	}
 	if ctx.EXISTS() != nil {
 		stmt.IfNotExists = true
@@ -998,7 +1000,7 @@ func (s *schemaVisitor) VisitCreate_role_statement(ctx *gen.Create_role_statemen
 
 func (s *schemaVisitor) VisitDrop_role_statement(ctx *gen.Drop_role_statementContext) any {
 	stmt := &DropRoleStatement{
-		Role: s.getIdent(ctx.Identifier()),
+		Role: ctx.Role_name().Accept(s).(string),
 	}
 	if ctx.EXISTS() != nil {
 		stmt.IfExists = true
@@ -1025,8 +1027,8 @@ func (s *schemaVisitor) VisitRevoke_statement(ctx *gen.Revoke_statementContext) 
 func (s *schemaVisitor) parseGrantOrRevoke(ctx interface {
 	antlr.ParserRuleContext
 	Privilege_list() gen.IPrivilege_listContext
-	GetGrant_role() gen.IIdentifierContext
-	GetRole() gen.IIdentifierContext
+	GetGrant_role() gen.IRole_nameContext
+	GetRole() gen.IRole_nameContext
 	GetUser() antlr.Token
 	GetNamespace() gen.IIdentifierContext
 }) *GrantOrRevokeStatement {
@@ -1048,7 +1050,7 @@ func (s *schemaVisitor) parseGrantOrRevoke(ctx interface {
 	case ctx.GetRole() != nil:
 		c.ToRole = ctx.GetRole().Accept(s).(string)
 	case ctx.GetUser() != nil:
-		c.ToUser = ctx.GetUser().GetText()
+		c.ToUser = parseStringLiteral(ctx.GetUser().GetText())
 	default:
 		// should not happen, as this would suggest a bug in the parser
 		panic("invalid grant/revoke statement")
@@ -1081,6 +1083,13 @@ func (s *schemaVisitor) parseGrantOrRevoke(ctx interface {
 	}
 
 	return c
+}
+
+func (s *schemaVisitor) VisitRole_name(ctx *gen.Role_nameContext) any {
+	if ctx.DEFAULT() != nil {
+		return "default"
+	}
+	return s.getIdent(ctx.Identifier())
 }
 
 func (s *schemaVisitor) VisitPrivilege_list(ctx *gen.Privilege_listContext) any {
@@ -2279,8 +2288,16 @@ func (s *schemaVisitor) VisitStmt_sql(ctx *gen.Stmt_sqlContext) any {
 	return stmt
 }
 
-func (s *schemaVisitor) VisitStmt_break(ctx *gen.Stmt_breakContext) any {
-	stmt := &ActionStmtBreak{}
+func (s *schemaVisitor) VisitStmt_loop_control(ctx *gen.Stmt_loop_controlContext) any {
+	stmt := &ActionStmtLoopControl{}
+	switch {
+	case ctx.BREAK() != nil:
+		stmt.Type = LoopControlTypeBreak
+	case ctx.CONTINUE() != nil:
+		stmt.Type = LoopControlTypeContinue
+	default:
+		panic("unknown parsed loop control type")
+	}
 	stmt.Set(ctx)
 	return stmt
 }

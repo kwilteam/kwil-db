@@ -193,10 +193,22 @@ ORDER BY
 
 -- info.tables is a public view that provides a list of all tables in the database
 CREATE VIEW info.tables AS
-SELECT tablename::TEXT AS name, schemaname::TEXT AS schema
-FROM pg_tables
+SELECT
+    t.tablename::text   AS name,
+    t.schemaname::text  AS schema
+FROM pg_tables t
 JOIN kwild_engine.namespaces us
-    ON schemaname = us.name
+    ON t.schemaname = us.name
+
+UNION ALL
+
+SELECT
+    v.viewname::text    AS name,
+    v.schemaname::text  AS schema
+FROM pg_views v
+JOIN kwild_engine.namespaces us
+    ON v.schemaname = us.name
+
 ORDER BY 1, 2;
 
 -- info.columns is a public view that provides a list of all columns in the database
@@ -205,13 +217,13 @@ SELECT
     c.table_schema::TEXT AS schema_name,
     c.table_name::TEXT AS table_name,
     c.column_name::TEXT AS column_name,
-    CASE 
+    (CASE 
         WHEN t.typcategory = 'A'
             THEN (pg_catalog.format_type(a.atttypid, a.atttypmod))
         ELSE c.data_type
-    END AS data_type,
+    END)::TEXT AS data_type,
     c.is_nullable::bool AS is_nullable,
-    c.column_default AS default_value,
+    c.column_default::TEXT AS default_value,
     CASE
         WHEN tc.constraint_type = 'PRIMARY KEY'
             THEN true
@@ -239,7 +251,7 @@ LEFT JOIN information_schema.table_constraints tc
         AND tc.table_schema = c.table_schema
 JOIN 
     kwild_engine.namespaces us ON n.nspname::TEXT = us.name
-WHERE cl.relkind = 'r'  -- Only include regular tables
+WHERE cl.relkind IN ('r', 'v') -- only tables and views
 ORDER BY 
     c.table_name, 
     c.ordinal_position,
@@ -253,7 +265,7 @@ SELECT
     ic.relname::TEXT AS index_name,
     i.indisprimary AS is_pk,
     i.indisunique AS is_unique,
-    array_agg(a.attname ORDER BY x.ordinality) AS column_names
+    array_agg(a.attname ORDER BY x.ordinality)::TEXT[] AS column_names
 FROM pg_index i
 JOIN pg_class c ON c.oid = i.indrelid
 JOIN pg_class ic ON ic.oid = i.indexrelid
@@ -270,9 +282,9 @@ ORDER BY 1,2,3,4,5,6;
 CREATE VIEW info.constraints AS
 SELECT 
     pg_namespace.nspname::TEXT AS schema_name,
-    conname AS constraint_name,
+    conname::TEXT AS constraint_name,
     split_part(conrelid::regclass::text, '.', 2) AS table_name,
-    array_agg(attname) AS columns,
+    array_agg(attname)::TEXT[] AS columns,
     pg_get_constraintdef(pg_constraint.oid) AS expression,
     CASE contype
         WHEN 'c' THEN 'CHECK'
@@ -302,9 +314,9 @@ ORDER BY
 CREATE VIEW info.foreign_keys AS
 SELECT 
     pg_namespace.nspname::TEXT AS schema_name,
-    conname AS constraint_name,
+    conname::TEXT AS constraint_name,
     split_part(conrelid::regclass::text, '.', 2) AS table_name,
-    array_agg(attname) AS columns,
+    array_agg(attname)::TEXT[] AS columns,
     CASE confupdtype
         WHEN 'a' THEN 'NO ACTION'
         WHEN 'r' THEN 'RESTRICT'
@@ -351,14 +363,14 @@ SELECT
         json_build_object(
             'name', p.name,
             'data_type', kwild_engine.format_type(p.scalar_type, p.is_array, p.metadata)
-        )
+        )::TEXT
         ORDER BY p.position, p.name, kwild_engine.format_type(p.scalar_type, p.is_array, p.metadata)
     ) AS parameters,
     array_agg(
         json_build_object(
             'name', r.name,
             'data_type', kwild_engine.format_type(r.scalar_type, r.is_array, r.metadata)
-        )
+        )::TEXT
         ORDER BY r.position, r.name, kwild_engine.format_type(r.scalar_type, r.is_array, r.metadata)
     ) AS return_types
 FROM kwild_engine.actions a
@@ -396,7 +408,7 @@ ORDER BY
 CREATE VIEW info.role_privileges AS
 SELECT 
     r.name AS role,
-    p.privilege_type AS privilege,
+    p.privilege_type::text AS privilege,
     n.name AS namespace
 FROM
     kwild_engine.role_privileges p
@@ -417,7 +429,7 @@ SELECT
         json_build_object(
             'key', eip.key,
             'value', eip.value
-        )
+        )::TEXT
         ORDER BY eip.key, eip.value
     ) AS parameters
 FROM

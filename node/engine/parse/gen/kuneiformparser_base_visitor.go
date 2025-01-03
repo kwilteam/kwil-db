@@ -171,6 +171,10 @@ func (v *BaseKuneiformParserVisitor) VisitRevoke_statement(ctx *Revoke_statement
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseKuneiformParserVisitor) VisitRole_name(ctx *Role_nameContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseKuneiformParserVisitor) VisitPrivilege_list(ctx *Privilege_listContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -435,7 +439,7 @@ func (v *BaseKuneiformParserVisitor) VisitStmt_sql(ctx *Stmt_sqlContext) interfa
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitStmt_break(ctx *Stmt_breakContext) interface{} {
+func (v *BaseKuneiformParserVisitor) VisitStmt_loop_control(ctx *Stmt_loop_controlContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
