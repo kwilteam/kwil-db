@@ -148,6 +148,11 @@ func (ce *ConsensusEngine) NotifyACK(validatorPK []byte, ack types.AckRes) {
 		appHash: ack.AppHash,
 		blkHash: ack.BlkHash,
 		height:  ack.Height,
+		signature: &ktypes.Signature{
+			PubKey:     ack.PubKey,
+			PubKeyType: ack.PubKeyType,
+			Data:       ack.Signature,
+		},
 	}
 
 	ce.sendConsensusMessage(&consensusMessage{

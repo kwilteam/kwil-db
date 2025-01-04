@@ -263,7 +263,8 @@ func (n *Node) getBlk(ctx context.Context, blkHash types.Hash) (int64, []byte, *
 		n.log.Debug("Obtained content for block", "block", blkHash, "elapsed", time.Since(t0))
 
 		rd := bytes.NewReader(resp)
-		var height, ciLen, blkLen int64
+		var height int64
+		var ciLen, blkLen int32
 		binary.Read(rd, binary.LittleEndian, &height)
 		binary.Read(rd, binary.LittleEndian, &ciLen)
 		ciBts := make([]byte, ciLen)
@@ -311,7 +312,7 @@ func (n *Node) getBlkHeight(ctx context.Context, height int64) (types.Hash, []by
 		n.log.Info("obtained block contents", "height", height, "elapsed", time.Since(t0))
 
 		rd := bytes.NewReader(resp)
-		var ciLen, blkLen int64
+		var ciLen, blkLen int32
 		var hash types.Hash
 
 		io.ReadFull(rd, hash[:])

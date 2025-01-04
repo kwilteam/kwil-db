@@ -110,6 +110,7 @@ func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context) error {
 	t0 := time.Now()
 
 	for {
+		ce.log.Info("Requesting block from network(replay mode)", "height", ce.state.lc.height+1)
 		_, rawblk, ci, err := ce.blkRequester(ctx, ce.state.lc.height+1)
 		if err != nil { // all kinds of errors?
 			ce.log.Info("Error requesting block from network", "height", ce.state.lc.height+1, "error", err)
