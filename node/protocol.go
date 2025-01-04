@@ -11,6 +11,7 @@ import (
 	"io"
 	"time"
 
+	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
 
 	"github.com/libp2p/go-libp2p/core/host"
@@ -156,10 +157,11 @@ func (n *Node) advertiseToPeer(ctx context.Context, peerID peer.ID, proto protoc
 
 // blockAnnMsg is for ProtocolIDBlkAnn "/kwil/blkann/1.0.0"
 type blockAnnMsg struct {
-	Hash      types.Hash
-	Height    int64
-	AppHash   types.Hash // could be in the content/response
-	LeaderSig []byte     // to avoid having to get the block to realize if it is fake (spam)
+	Hash   types.Hash
+	Height int64
+	// AppHash   types.Hash // could be in the content/response
+	CommitInfo *ktypes.CommitInfo
+	LeaderSig  []byte // to avoid having to get the block to realize if it is fake (spam)
 }
 
 var _ encoding.BinaryMarshaler = blockAnnMsg{}
@@ -198,7 +200,22 @@ func (m *blockAnnMsg) WriteTo(w io.Writer) (int64, error) {
 	}
 	n += nw
 
-	nw, err = w.Write(m.AppHash[:])
+	if m.CommitInfo == nil {
+		return int64(n), errors.New("nil commit info")
+	}
+
+	ciBts, err := m.CommitInfo.MarshalBinary()
+	if err != nil {
+		return int64(n), err
+	}
+
+	// first write length of commit info (uint64 little endian)
+	err = binary.Write(w, binary.LittleEndian, uint64(len(ciBts)))
+	if err != nil {
+		return int64(n), err
+	}
+
+	nw, err = w.Write(ciBts)
 	if err != nil {
 		return int64(n), err
 	}
@@ -233,10 +250,24 @@ func (m *blockAnnMsg) ReadFrom(r io.Reader) (int64, error) {
 		return n, err
 	}
 	n += 8
-	if nr, err := io.ReadFull(r, m.AppHash[:]); err != nil {
+
+	var ciLen uint64
+	if err := binary.Read(r, binary.LittleEndian, &ciLen); err != nil {
+		return n, err
+	}
+	n += 8
+
+	ciBts := make([]byte, ciLen)
+	if nr, err := io.ReadFull(r, ciBts); err != nil {
 		return n + int64(nr), err
 	}
 	n += int64(nr)
+	var ci ktypes.CommitInfo
+	if err := ci.UnmarshalBinary(ciBts); err != nil {
+		return n, err
+	}
+	m.CommitInfo = &ci
+
 	var sigLen uint64
 	if err := binary.Read(r, binary.LittleEndian, &sigLen); err != nil {
 		return n, err
