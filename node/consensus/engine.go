@@ -202,7 +202,8 @@ type lastCommit struct {
 
 	appHash types.Hash // TODO: Do we need commitInfo here?
 
-	blk *ktypes.Block // why is this needed? can be fetched from the blockstore too.
+	blk        *ktypes.Block // why is this needed? can be fetched from the blockstore too.
+	commitInfo *ktypes.CommitInfo
 }
 
 // New creates a new consensus engine.
@@ -610,8 +611,8 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 
 	if ce.role.Load() == types.RoleLeader && ce.state.lc.height > 0 {
 		// Announce block commit message for the last committed block
-		if ce.state.lc.blk != nil {
-			go ce.blkAnnouncer(ctx, ce.state.lc.blk, ce.state.commitInfo)
+		if ce.state.lc.blk != nil && ce.state.commitInfo != nil {
+			go ce.blkAnnouncer(ctx, ce.state.lc.blk, ce.state.lc.commitInfo)
 		}
 		return
 	}

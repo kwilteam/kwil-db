@@ -131,10 +131,11 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 
 func (ce *ConsensusEngine) nextState() {
 	ce.state.lc = &lastCommit{
-		height:  ce.state.blkProp.height,
-		blkHash: ce.state.blkProp.blkHash,
-		appHash: ce.state.blockRes.appHash,
-		blk:     ce.state.blkProp.blk,
+		height:     ce.state.blkProp.height,
+		blkHash:    ce.state.blkProp.blkHash,
+		appHash:    ce.state.blockRes.appHash,
+		blk:        ce.state.blkProp.blk,
+		commitInfo: ce.state.commitInfo,
 	}
 
 	ce.resetState()
