@@ -613,7 +613,7 @@ type Options struct {
 	UseTestContainer bool
 	// Conn specifies a manually setup Postgres connection that the
 	// test can connect to.
-	Conn *pg.ConnConfig
+	Conn *ConnConfig
 	// Logger is a logger to be used in the test
 	Logger Logger
 	// ReplaceExistingContainer is a callback function that is called when
@@ -621,6 +621,17 @@ type Options struct {
 	// true, then the container will be removed and recreated. If it
 	// returns false, then the test will fail.
 	ReplaceExistingContainer func() (bool, error)
+}
+
+// ConnConfig groups the basic connection settings used to construct the DSN
+// "connection string" used to open a new connection to a postgres host.
+type ConnConfig struct {
+	// Host, Port, User, Pass, and DBName are used verbatim to create a
+	// connection string in DSN format.
+	// https://www.postgresql.org/docs/current/libpq-connect.html#LIBPQ-CONNSTRING
+	Host, Port string
+	User, Pass string
+	DBName     string
 }
 
 func (d *Options) valid() error {
