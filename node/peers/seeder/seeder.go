@@ -12,6 +12,7 @@ import (
 	p2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/multiformats/go-multiaddr"
 
@@ -19,7 +20,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/node"
 	"github.com/kwilteam/kwil-db/node/peers"
-	"github.com/kwilteam/kwil-db/node/peers/sec"
 )
 
 type Seeder struct {
@@ -139,12 +139,12 @@ func newHost(ip string, port uint64, chainID string, privKey crypto.PrivateKey, 
 	// 	return nil, nil, err
 	// }
 
-	sec, secID := sec.NewScopedNoiseTransport(chainID, logger.New("SEC")) // noise.New plus chain ID check in handshake
+	// sec, secID := sec.NewScopedNoiseTransport(chainID, logger.New("SEC")) // noise.New plus chain ID check in handshake
 
 	h, err := libp2p.New(
 		libp2p.Transport(tcp.NewTCPTransport),
-		// libp2p.Security(noise.ID, noise.New), // modified TLS based on node-ID
-		libp2p.Security(secID, sec),
+		libp2p.Security(noise.ID, noise.New), // modified TLS based on node-ID
+		// libp2p.Security(secID, sec),
 		libp2p.ListenAddrs(sourceMultiAddr),
 		libp2p.Identity(privKeyP2P),
 		// libp2p.ConnectionManager(cm),
