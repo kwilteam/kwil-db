@@ -25,6 +25,7 @@ type Mempool interface {
 	PeekN(maxSize int) []types.NamedTx
 	Remove(txid types.Hash)
 	RecheckTxs(ctx context.Context, checkFn mempool.CheckFn)
+	Store(types.Hash, *ktypes.Transaction)
 }
 
 // BlockStore includes both txns and blocks

@@ -46,10 +46,6 @@ type NodeApp interface {
 	GetMigrationMetadata(ctx context.Context) (*types.MigrationMetadata, error)
 }
 
-// type Accounts interface {
-// 	GetAccount(ctx context.Context, tx sql.Executor, acctID []byte) (*types.Account, error)
-// }
-
 type Validators interface {
 	SetValidatorPower(ctx context.Context, tx sql.Executor, pubKey []byte, power int64) error
 	GetValidatorPower(ctx context.Context, pubKey []byte) (int64, error)

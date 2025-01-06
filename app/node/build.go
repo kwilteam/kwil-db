@@ -420,6 +420,7 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB,
 		ProposeTimeout:        time.Duration(d.cfg.Consensus.ProposeTimeout),
 		BlockProposalInterval: time.Duration(d.cfg.Consensus.BlockProposalInterval),
 		BlockAnnInterval:      time.Duration(d.cfg.Consensus.BlockAnnInterval),
+		BroadcastTxTimeout:    time.Duration(d.cfg.RPC.BroadcastTxTimeout),
 		GenesisHeight:         d.genesisCfg.InitialHeight,
 	}
 

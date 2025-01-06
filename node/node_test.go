@@ -23,7 +23,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
-	blockprocessor "github.com/kwilteam/kwil-db/node/block_processor"
 	"github.com/kwilteam/kwil-db/node/consensus"
 	"github.com/kwilteam/kwil-db/node/mempool"
 	"github.com/kwilteam/kwil-db/node/store/memstore"
@@ -325,6 +324,10 @@ func (ce *dummyCE) CheckTx(ctx context.Context, tx *ktypes.Transaction) error {
 	return nil
 }
 
+func (ce *dummyCE) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (*ktypes.ResultBroadcastTx, error) {
+	return nil, nil
+}
+
 func (ce *dummyCE) ConsensusParams() *ktypes.ConsensusParams {
 	return nil
 }
@@ -337,15 +340,12 @@ func (ce *dummyCE) CancelBlockExecution(height int64, txIDs []types.Hash) error 
 	return nil
 }
 
-func (ce *dummyCE) Start(ctx context.Context, proposerBroadcaster consensus.ProposalBroadcaster,
-	blkAnnouncer consensus.BlkAnnouncer, ackBroadcaster consensus.AckBroadcaster,
-	blkRequester consensus.BlkRequester, stateResetter consensus.ResetStateBroadcaster,
-	discReqBroadcaster consensus.DiscoveryReqBroadcaster, txBroadcaster blockprocessor.BroadcastTxFn) error {
-	ce.proposerBroadcaster = proposerBroadcaster
-	ce.blkAnnouncer = blkAnnouncer
-	ce.ackBroadcaster = ackBroadcaster
-	ce.blkRequester = blkRequester
-	ce.stateResetter = stateResetter
+func (ce *dummyCE) Start(ctx context.Context, fns consensus.BroadcastFns) error {
+	ce.proposerBroadcaster = fns.ProposalBroadcaster
+	ce.blkAnnouncer = fns.BlkAnnouncer
+	ce.ackBroadcaster = fns.AckBroadcaster
+	ce.blkRequester = fns.BlkRequester
+	ce.stateResetter = fns.RstStateBroadcaster
 	return nil
 }
 

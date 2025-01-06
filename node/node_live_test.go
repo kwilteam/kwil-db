@@ -116,6 +116,7 @@ func TestSingleNodeMocknet(t *testing.T) {
 		ProposeTimeout:        1 * time.Second,
 		BlockProposalInterval: 1 * time.Second,
 		BlockAnnInterval:      3 * time.Second,
+		BroadcastTxTimeout:    15 * time.Second,
 		DB:                    db1,
 	}
 	ce1 := consensus.New(ceCfg1)

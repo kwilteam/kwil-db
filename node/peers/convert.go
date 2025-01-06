@@ -42,12 +42,12 @@ func NewPeerList(nodeIDs []string) (*PeerList, error) {
 }*/
 
 // PeerIDFromPubKey converts a pubkey to a peer ID string.
-func PeerIDFromPubKey(pubkey crypto.PublicKey) (string, error) {
+func PeerIDFromPubKey(pubkey crypto.PublicKey) (peer.ID, error) {
 	_, peerID, err := convertPubKey(pubkey)
 	if err != nil {
 		return "", err
 	}
-	return peerID.String(), nil // base58 encoding of identity multihash
+	return peerID, nil // base58 encoding of identity multihash
 }
 
 // PubKeyFromPeerID tries to decode the pubkey from a peer ID string.

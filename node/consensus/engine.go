@@ -17,8 +17,10 @@ import (
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	blockprocessor "github.com/kwilteam/kwil-db/node/block_processor"
 	"github.com/kwilteam/kwil-db/node/meta"
+	"github.com/kwilteam/kwil-db/node/peers"
 	"github.com/kwilteam/kwil-db/node/pg"
 	"github.com/kwilteam/kwil-db/node/types"
+	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 const (
@@ -42,6 +44,7 @@ type ConsensusEngine struct {
 	role    atomic.Value // types.Role, role can change over the lifetime of the node
 	privKey crypto.PrivateKey
 	pubKey  crypto.PublicKey
+	peerID  peer.ID
 	leader  crypto.PublicKey
 	log     log.Logger
 
@@ -56,6 +59,9 @@ type ConsensusEngine struct {
 
 	// blkAnnReannounceTimeout specifies the time duration to wait before reannouncing the block announce message.
 	blkAnnInterval time.Duration
+
+	// broadcastTxTimeout specifies the time duration to wait for a transaction to be included in the block.
+	broadcastTxTimeout time.Duration
 
 	genesisHeight int64 // height of the genesis block
 	networkHeight atomic.Int64
@@ -100,6 +106,10 @@ type ConsensusEngine struct {
 	blkRequester            BlkRequester
 	rstStateBroadcaster     ResetStateBroadcaster
 	discoveryReqBroadcaster DiscoveryReqBroadcaster
+	txAnnouncer             TxAnnouncer
+
+	// TxSubscriber
+	txSubscribers map[ktypes.Hash]chan ktypes.TxResult
 
 	// waitgroup to track all the consensus goroutines
 	wg sync.WaitGroup
@@ -124,6 +134,7 @@ type Config struct {
 	BlockAnnInterval time.Duration
 	// CatchUpInterval is the frequency at which the node attempts to catches up with the network if lagging.
 	// CatchUpInterval  time.Duration
+	BroadcastTxTimeout time.Duration
 
 	// Interfaces
 	DB             *pg.DB
@@ -133,11 +144,25 @@ type Config struct {
 	Logger         log.Logger
 }
 
+type BroadcastFns struct {
+	ProposalBroadcaster     ProposalBroadcaster
+	TxAnnouncer             TxAnnouncer
+	BlkAnnouncer            BlkAnnouncer
+	AckBroadcaster          AckBroadcaster
+	BlkRequester            BlkRequester
+	RstStateBroadcaster     ResetStateBroadcaster
+	DiscoveryReqBroadcaster DiscoveryReqBroadcaster
+	TxBroadcaster           blockprocessor.BroadcastTxFn
+}
+
 // ProposalBroadcaster broadcasts the new block proposal message to the network
 type ProposalBroadcaster func(ctx context.Context, blk *ktypes.Block)
 
 // BlkAnnouncer broadcasts the new committed block to the network using the blockAnn message
 type BlkAnnouncer func(ctx context.Context, blk *ktypes.Block, ci *ktypes.CommitInfo)
+
+// TxAnnouncer broadcasts the new transaction to the network
+type TxAnnouncer func(ctx context.Context, txHash types.Hash, rawTx []byte, from peer.ID)
 
 // AckBroadcaster gossips the ack/nack messages to the network
 type AckBroadcaster func(ack bool, height int64, blkID types.Hash, appHash *types.Hash, Signature []byte) error
@@ -200,7 +225,7 @@ type lastCommit struct {
 	height  int64
 	blkHash types.Hash
 
-	appHash types.Hash // TODO: Do we need commitInfo here?
+	appHash types.Hash
 
 	blk        *ktypes.Block // why is this needed? can be fetched from the blockstore too.
 	commitInfo *ktypes.CommitInfo
@@ -233,14 +258,20 @@ func New(cfg *Config) *ConsensusEngine {
 		}
 	}
 
+	peerID, err := peers.PeerIDFromPubKey(pubKey)
+	if err != nil {
+		logger.Error("Error getting peer ID from public key", "error", err)
+	}
 	// rethink how this state is initialized
 	ce := &ConsensusEngine{
 		pubKey:              pubKey,
 		privKey:             cfg.PrivateKey,
+		peerID:              peerID,
 		leader:              cfg.Leader,
 		proposeTimeout:      cfg.ProposeTimeout,
 		blkProposalInterval: cfg.BlockProposalInterval,
 		blkAnnInterval:      cfg.BlockAnnInterval,
+		broadcastTxTimeout:  cfg.BroadcastTxTimeout,
 		db:                  cfg.DB,
 		state: state{
 			blkProp:  nil,
@@ -269,6 +300,7 @@ func New(cfg *Config) *ConsensusEngine {
 		blockStore:     cfg.BlockStore,
 		blockProcessor: cfg.BlockProcessor,
 		log:            logger,
+		txSubscribers:  make(map[ktypes.Hash]chan ktypes.TxResult),
 	}
 
 	ce.role.Store(role)
@@ -277,17 +309,16 @@ func New(cfg *Config) *ConsensusEngine {
 	return ce
 }
 
-func (ce *ConsensusEngine) Start(ctx context.Context, proposerBroadcaster ProposalBroadcaster,
-	blkAnnouncer BlkAnnouncer, ackBroadcaster AckBroadcaster, blkRequester BlkRequester, stateResetter ResetStateBroadcaster,
-	discoveryReqBroadcaster DiscoveryReqBroadcaster, txBroadcaster blockprocessor.BroadcastTxFn) error {
-	ce.proposalBroadcaster = proposerBroadcaster
-	ce.blkAnnouncer = blkAnnouncer
-	ce.ackBroadcaster = ackBroadcaster
-	ce.blkRequester = blkRequester
-	ce.rstStateBroadcaster = stateResetter
-	ce.discoveryReqBroadcaster = discoveryReqBroadcaster
+func (ce *ConsensusEngine) Start(ctx context.Context, fns BroadcastFns) error {
+	ce.proposalBroadcaster = fns.ProposalBroadcaster
+	ce.blkAnnouncer = fns.BlkAnnouncer
+	ce.ackBroadcaster = fns.AckBroadcaster
+	ce.blkRequester = fns.BlkRequester
+	ce.rstStateBroadcaster = fns.RstStateBroadcaster
+	ce.discoveryReqBroadcaster = fns.DiscoveryReqBroadcaster
+	ce.txAnnouncer = fns.TxAnnouncer
 
-	ce.blockProcessor.SetBroadcastTxFn(txBroadcaster)
+	ce.blockProcessor.SetBroadcastTxFn(fns.TxBroadcaster)
 
 	ce.log.Info("Starting the consensus engine")
 	ctx, cancel := context.WithCancel(ctx)
@@ -796,4 +827,20 @@ func (ce *ConsensusEngine) hasMajorityFloor(cnt int) bool {
 
 func (ce *ConsensusEngine) InCatchup() bool {
 	return ce.inSync.Load()
+}
+
+func (ce *ConsensusEngine) SubscribeTx(txHash ktypes.Hash) (<-chan ktypes.TxResult, error) {
+	ch := make(chan ktypes.TxResult, 1)
+
+	_, ok := ce.txSubscribers[txHash]
+	if ok {
+		return nil, fmt.Errorf("tx already subscribed")
+	}
+
+	ce.txSubscribers[txHash] = ch
+	return ch, nil
+}
+
+func (ce *ConsensusEngine) UnsubscribeTx(txHash ktypes.Hash) {
+	delete(ce.txSubscribers, txHash)
 }
