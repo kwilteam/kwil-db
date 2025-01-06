@@ -11,6 +11,7 @@ import (
 	"io"
 
 	ktypes "github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/node/peers"
 	"github.com/kwilteam/kwil-db/node/types"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -352,12 +353,12 @@ func (n *Node) startAckGossip(ctx context.Context, ps *pubsub.PubSub) error {
 			n.log.Debugf("received ACK msg from %s (rcvd from %s), data = %x",
 				fromPeerID.String(), ackMsg.ReceivedFrom.String(), ackMsg.Message.Data)
 
-			peerPubKey, err := fromPeerID.ExtractPublicKey()
+			peerPubKey, err := peers.PubKeyFromPeerID(fromPeerID.String())
 			if err != nil {
 				n.log.Infof("failed to extract pubkey from peer ID %v: %v", fromPeerID, err)
 				continue
 			}
-			pubkeyBytes, _ := peerPubKey.Raw() // does not error for secp256k1 or ed25519
+			pubkeyBytes := peerPubKey.Bytes() // does not error for secp256k1 or ed25519
 			go n.ce.NotifyACK(pubkeyBytes, ack)
 		}
 	}()
@@ -505,12 +506,12 @@ func (n *Node) startDiscoveryResponseGossip(ctx context.Context, ps *pubsub.PubS
 			n.log.Infof("received Discovery response msg from %s (rcvd from %s), data = %d",
 				fromPeerID.String(), discMsg.ReceivedFrom.String(), dm.BestHeight)
 
-			peerPubKey, err := fromPeerID.ExtractPublicKey()
+			peerPubKey, err := peers.PubKeyFromPeerID(fromPeerID.String())
 			if err != nil {
 				n.log.Infof("failed to extract pubkey from peer ID %v: %v", fromPeerID, err)
 				continue
 			}
-			pubkeyBytes, _ := peerPubKey.Raw() // does not error for secp256k1 or ed25519
+			pubkeyBytes := peerPubKey.Bytes() // does not error for secp256k1 or ed25519
 			go n.ce.NotifyDiscoveryMessage(pubkeyBytes, dm.BestHeight)
 		}
 	}()
@@ -591,13 +592,13 @@ func (n *Node) startConsensusResetGossip(ctx context.Context, ps *pubsub.PubSub)
 				fromPeerID, resetMsg.ReceivedFrom, resetMsg.Message.Data)
 
 			// source of the reset message should be the leader
-
-			peerPubKey, err := fromPeerID.ExtractPublicKey()
+			peerPubKey, err := peers.PubKeyFromPeerID(fromPeerID.String())
 			if err != nil {
 				n.log.Infof("failed to extract pubkey from peer ID %v: %v", fromPeerID, err)
 				continue
 			}
-			pubkeyBytes, _ := peerPubKey.Raw() // does not error for secp256k1 or ed25519
+			pubkeyBytes := peerPubKey.Bytes()
+
 			n.ce.NotifyResetState(reset.ToHeight, reset.TxIDs, pubkeyBytes)
 		}
 	}()
