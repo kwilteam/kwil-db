@@ -467,20 +467,21 @@ func GetRawBlockTx(rawBlk []byte, idx uint32) ([]byte, error) {
 		return txns, nil
 	}
 */
+
 func (s *Signature) WriteTo(w io.Writer) (int64, error) {
 	cw := utils.NewCountingWriter(w)
 	// PubKeyType
-	if err := binary.Write(w, binary.LittleEndian, s.PubKeyType); err != nil {
+	if err := binary.Write(cw, binary.LittleEndian, s.PubKeyType); err != nil {
 		return cw.Written(), err
 	}
 
 	// PubKey Length
-	if err := writeBytes(cw, s.PubKey); err != nil {
+	if err := WriteBytes(cw, s.PubKey); err != nil {
 		return cw.Written(), err
 	}
 
 	// Signature Data Length
-	if err := writeBytes(cw, s.Data); err != nil {
+	if err := WriteBytes(cw, s.Data); err != nil {
 		return cw.Written(), err
 	}
 
@@ -494,13 +495,13 @@ func (s *Signature) ReadFrom(r io.Reader) (int64, error) {
 		return cr.ReadCount(), fmt.Errorf("failed to read public key type: %w", err)
 	}
 
-	pubKey, err := readBytes(cr)
+	pubKey, err := ReadBytes(cr)
 	if err != nil {
 		return cr.ReadCount(), fmt.Errorf("failed to read public key: %w", err)
 	}
 	s.PubKey = pubKey
 
-	sig, err := readBytes(cr)
+	sig, err := ReadBytes(cr)
 	if err != nil {
 		return cr.ReadCount(), fmt.Errorf("failed to read signature: %w", err)
 	}
@@ -595,6 +596,10 @@ func (v *VoteInfo) Verify(blkID Hash, appHash Hash) error {
 }
 
 func SignVote(blkID Hash, ack bool, appHash *Hash, privKey crypto.PrivateKey) (*Signature, error) {
+	if privKey == nil {
+		return nil, errors.New("nil private key")
+	}
+
 	var buf bytes.Buffer
 	buf.Write(blkID[:])
 	binary.Write(&buf, binary.LittleEndian, ack)
@@ -634,7 +639,7 @@ func (ci *CommitInfo) MarshalBinary() ([]byte, error) {
 			return nil, fmt.Errorf("failed to marshal vote: %w", err)
 		}
 
-		if err := writeBytes(&buf, voteBytes); err != nil {
+		if err := WriteBytes(&buf, voteBytes); err != nil {
 			return nil, fmt.Errorf("failed to write vote: %w", err)
 		}
 	}
@@ -656,7 +661,7 @@ func (ci *CommitInfo) UnmarshalBinary(data []byte) error {
 
 	ci.Votes = make([]*VoteInfo, voteCount)
 	for i := range ci.Votes {
-		voteBytes, err := readBytes(rd)
+		voteBytes, err := ReadBytes(rd)
 		if err != nil {
 			return fmt.Errorf("failed to read vote: %w", err)
 		}

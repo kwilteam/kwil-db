@@ -182,13 +182,13 @@ func (ce *ConsensusEngine) addVote(ctx context.Context, vote *vote, sender strin
 	defer ce.state.mtx.Unlock()
 
 	if ce.state.blkProp == nil {
-		ce.log.Warn("Error adding vote: not processing any block proposal at the moment")
+		ce.log.Debug("Error adding vote: not processing any block proposal at the moment")
 		return nil
 	}
 
 	// check if the vote is for the current height
 	if ce.state.blkProp.height != vote.height {
-		ce.log.Warn("Error adding vote: Vote received for a different block height, ignore it", "height", vote.height)
+		ce.log.Debug("Error adding vote: Vote received for a different block height, ignore it", "height", vote.height)
 		return nil
 	}
 

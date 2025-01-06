@@ -29,6 +29,16 @@ func TestBlockAnnMsg_MarshalUnmarshal(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			name: "empty commitInfo",
+			msg: &blockAnnMsg{
+				CommitInfo: nil,
+				Hash:       ktypes.HashBytes([]byte{1, 2, 3}),
+				Height:     100,
+				LeaderSig:  []byte{7, 8, 9},
+			},
+			wantErr: true, // commitInfo is nil
+		},
+		{
 			name: "message with data",
 			msg: &blockAnnMsg{
 				Height: 100,
@@ -39,6 +49,17 @@ func TestBlockAnnMsg_MarshalUnmarshal(t *testing.T) {
 				LeaderSig: []byte{7, 8, 9},
 			},
 			wantErr: false,
+		},
+		{
+			name: "empty leaderSig",
+			msg: &blockAnnMsg{
+				Height: 100,
+				Hash:   [32]byte{1, 2, 3},
+				CommitInfo: &ktypes.CommitInfo{
+					AppHash: ktypes.Hash{1, 2, 3},
+				},
+			},
+			wantErr: false, // leaderSig verified at higher level
 		},
 	}
 

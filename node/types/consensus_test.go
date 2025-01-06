@@ -144,6 +144,10 @@ func TestAckRes_MarshalUnmarshal(t *testing.T) {
 				Height:  123,
 				BlkHash: Hash{1, 2, 3},
 				AppHash: &Hash{4, 5, 6},
+
+				PubKeyType: 0,
+				PubKey:     []byte{1, 2, 3},
+				Signature:  []byte{4, 5, 6},
 			},
 			wantErr: false,
 		},
@@ -176,6 +180,16 @@ func TestAckRes_MarshalUnmarshal(t *testing.T) {
 				AppHash: &Hash{2},
 			},
 			wantErr: false,
+		},
+		{
+			name: "invalid nACK with AppHash",
+			ar: AckRes{
+				ACK:     false,
+				Height:  0,
+				BlkHash: Hash{},
+				AppHash: &Hash{1, 2, 3},
+			},
+			wantErr: true,
 		},
 	}
 
@@ -210,6 +224,15 @@ func TestAckRes_MarshalUnmarshal(t *testing.T) {
 				if decoded.AppHash == nil || *decoded.AppHash != *tt.ar.AppHash {
 					t.Errorf("AppHash mismatch: got %v, want %v", decoded.AppHash, tt.ar.AppHash)
 				}
+			}
+			if decoded.PubKeyType != tt.ar.PubKeyType {
+				t.Errorf("PubKeyType mismatch: got %v, want %v", decoded.PubKeyType, tt.ar.PubKeyType)
+			}
+			if !bytes.Equal(decoded.PubKey, tt.ar.PubKey) {
+				t.Errorf("PubKey mismatch: got %v, want %v", decoded.PubKey, tt.ar.PubKey)
+			}
+			if !bytes.Equal(decoded.Signature, tt.ar.Signature) {
+				t.Errorf("Signature mismatch: got %v, want %v", decoded.Signature, tt.ar.Signature)
 			}
 		})
 	}
