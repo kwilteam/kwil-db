@@ -1,9 +1,11 @@
 package node
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
+	"io"
 	"time"
 
 	ktypes "github.com/kwilteam/kwil-db/core/types"
@@ -30,16 +32,17 @@ func (n *Node) blkGetStreamHandler(s network.Stream) {
 	}
 	n.log.Debug("Peer requested block", "hash", req.Hash)
 
-	blk, appHash, err := n.bki.Get(req.Hash)
-	if err != nil {
+	blk, ci, err := n.bki.Get(req.Hash)
+	if err != nil || ci == nil {
 		s.SetWriteDeadline(time.Now().Add(reqRWTimeout))
 		s.Write(noData) // don't have it
 	} else {
 		rawBlk := ktypes.EncodeBlock(blk)
+		ciBytes, _ := ci.MarshalBinary()
 		s.SetWriteDeadline(time.Now().Add(blkSendTimeout))
 		binary.Write(s, binary.LittleEndian, blk.Header.Height)
-		s.Write(appHash[:])
-		s.Write(rawBlk)
+		ktypes.WriteBytes(s, ciBytes)
+		ktypes.WriteBytes(s, rawBlk)
 	}
 }
 
@@ -55,18 +58,19 @@ func (n *Node) blkGetHeightStreamHandler(s network.Stream) {
 	}
 	n.log.Debug("Peer requested block", "height", req.Height)
 
-	hash, blk, appHash, err := n.bki.GetByHeight(req.Height)
-	if err != nil {
+	hash, blk, ci, err := n.bki.GetByHeight(req.Height)
+	if err != nil || ci == nil {
 		s.SetWriteDeadline(time.Now().Add(reqRWTimeout))
 		s.Write(noData) // don't have it
 	} else {
 		rawBlk := ktypes.EncodeBlock(blk) // blkHash := blk.Hash()
+		ciBytes, _ := ci.MarshalBinary()
 		// maybe we remove hash from the protocol, was thinking receiver could
 		// hang up earlier depending...
 		s.SetWriteDeadline(time.Now().Add(blkSendTimeout))
 		s.Write(hash[:])
-		s.Write(appHash[:])
-		s.Write(rawBlk)
+		ktypes.WriteBytes(s, ciBytes)
+		ktypes.WriteBytes(s, rawBlk)
 	}
 }
 
@@ -83,7 +87,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 		return
 	}
 
-	height, blkHash, appHash, sig := reqMsg.Height, reqMsg.Hash, reqMsg.AppHash, reqMsg.LeaderSig
+	height, blkHash, ci, sig := reqMsg.Height, reqMsg.Hash, reqMsg.CommitInfo, reqMsg.LeaderSig
 	blkid := blkHash.String()
 
 	// TODO: also get and pass the signature to AcceptCommit to ensure it's
@@ -98,7 +102,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 
 	// If we are a validator and this is the commit ann for a proposed block
 	// that we already started executing, consensus engine will handle it.
-	if !n.ce.AcceptCommit(height, blkHash, appHash, sig) {
+	if !n.ce.AcceptCommit(height, blkHash, ci, sig) {
 		return
 	}
 
@@ -122,8 +126,9 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 		// Since we are aware, ask other peers. we could also put this in a goroutine
 		s.Close() // close the announcers stream first
 		var gotHeight int64
-		var gotAppHash types.Hash
-		gotHeight, rawBlk, gotAppHash, err = n.getBlkWithRetry(ctx, blkHash, 500*time.Millisecond, 10)
+		var gotCI *ktypes.CommitInfo
+
+		gotHeight, rawBlk, gotCI, err = n.getBlkWithRetry(ctx, blkHash, 500*time.Millisecond, 10)
 		if err != nil {
 			n.log.Errorf("unable to retrieve tx %v: %v", blkid, err)
 			return
@@ -132,8 +137,8 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 			n.log.Errorf("getblk response had unexpected height: wanted %d, got %d", height, gotHeight)
 			return
 		}
-		if gotAppHash != appHash {
-			n.log.Errorf("getblk response had unexpected appHash: wanted %v, got %v", appHash, gotAppHash)
+		if gotCI != nil && gotCI.AppHash != ci.AppHash {
+			n.log.Errorf("getblk response had unexpected appHash: wanted %v, got %v", ci.AppHash, gotCI.AppHash)
 			return
 		}
 	}
@@ -156,23 +161,22 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 	}
 
 	// re-announce
-
-	n.ce.NotifyBlockCommit(blk, appHash)
+	n.ce.NotifyBlockCommit(blk, ci)
 	go func() {
-		n.announceRawBlk(context.Background(), blkHash, height, rawBlk, appHash, s.Conn().RemotePeer(), reqMsg.LeaderSig) // re-announce with the leader's signature
+		n.announceRawBlk(context.Background(), blkHash, height, rawBlk, ci, s.Conn().RemotePeer(), reqMsg.LeaderSig) // re-announce with the leader's signature
 	}()
 }
 
-func (n *Node) announceBlk(ctx context.Context, blk *ktypes.Block, appHash types.Hash) {
+func (n *Node) announceBlk(ctx context.Context, blk *ktypes.Block, ci *ktypes.CommitInfo) {
 	blkHash := blk.Hash()
-	n.log.Debugln("announceBlk", blk.Header.Height, blkHash, appHash)
+	n.log.Debugln("announceBlk", blk.Header.Height, blkHash, ci.AppHash)
 	rawBlk := ktypes.EncodeBlock(blk)
 	from := n.host.ID() // this announcement originates from us (not a reannouncement)
-	n.announceRawBlk(ctx, blkHash, blk.Header.Height, rawBlk, appHash, from, blk.Signature)
+	n.announceRawBlk(ctx, blkHash, blk.Header.Height, rawBlk, ci, from, blk.Signature)
 }
 
 func (n *Node) announceRawBlk(ctx context.Context, blkHash types.Hash, height int64,
-	rawBlk []byte, appHash types.Hash, from peer.ID, blkSig []byte) {
+	rawBlk []byte, ci *ktypes.CommitInfo, from peer.ID, blkSig []byte) {
 	peers := n.peers()
 	if len(peers) == 0 {
 		n.log.Warn("No peers to advertise block to")
@@ -186,10 +190,10 @@ func (n *Node) announceRawBlk(ctx context.Context, blkHash types.Hash, height in
 		n.log.Debugf("advertising block %s (height %d / sz %d) to peer %v",
 			blkHash, height, len(rawBlk), peerID)
 		resID, err := blockAnnMsg{
-			Hash:      blkHash,
-			Height:    height,
-			AppHash:   appHash,
-			LeaderSig: blkSig,
+			Hash:       blkHash,
+			Height:     height,
+			CommitInfo: ci,
+			LeaderSig:  blkSig,
 		}.MarshalBinary()
 		if err != nil {
 			n.log.Error("Unable to marshal block announcement", "error", err)
@@ -206,12 +210,12 @@ func (n *Node) announceRawBlk(ctx context.Context, blkHash types.Hash, height in
 }
 
 func (n *Node) getBlkWithRetry(ctx context.Context, blkHash types.Hash, baseDelay time.Duration,
-	maxAttempts int) (int64, []byte, types.Hash, error) {
+	maxAttempts int) (int64, []byte, *ktypes.CommitInfo, error) {
 	var attempts int
 	for {
-		height, raw, appHash, err := n.getBlk(ctx, blkHash)
+		height, raw, ci, err := n.getBlk(ctx, blkHash)
 		if err == nil {
-			return height, raw, appHash, nil
+			return height, raw, ci, nil
 		}
 
 		n.log.Warnf("unable to retrieve block %v (%v), waiting to retry", blkHash, err)
@@ -223,12 +227,12 @@ func (n *Node) getBlkWithRetry(ctx context.Context, blkHash types.Hash, baseDela
 		baseDelay *= 2
 		attempts++
 		if attempts >= maxAttempts {
-			return 0, nil, types.Hash{}, ErrBlkNotFound
+			return 0, nil, nil, ErrBlkNotFound
 		}
 	}
 }
 
-func (n *Node) getBlk(ctx context.Context, blkHash types.Hash) (int64, []byte, types.Hash, error) {
+func (n *Node) getBlk(ctx context.Context, blkHash types.Hash) (int64, []byte, *ktypes.CommitInfo, error) {
 	for _, peer := range n.peers() {
 		n.log.Infof("requesting block %v from %v", blkHash, peer)
 		t0 := time.Now()
@@ -254,17 +258,37 @@ func (n *Node) getBlk(ctx context.Context, blkHash types.Hash) (int64, []byte, t
 
 		n.log.Debug("Obtained content for block", "block", blkHash, "elapsed", time.Since(t0))
 
-		height := binary.LittleEndian.Uint64(resp[:8])
-		var appHash types.Hash
-		copy(appHash[:], resp[8:8+types.HashLen])
-		rawBlk := resp[8+types.HashLen:]
+		rd := bytes.NewReader(resp)
+		var height int64
+		if err := binary.Read(rd, binary.LittleEndian, &height); err != nil {
+			n.log.Info("failed to read block height in the block response", "error", err)
+			continue
+		}
 
-		return int64(height), rawBlk, appHash, nil
+		ciBts, err := ktypes.ReadBytes(rd)
+		if err != nil {
+			n.log.Info("failed to read commit info in the block response", "error", err)
+			continue
+		}
+
+		var ci ktypes.CommitInfo
+		if err = ci.UnmarshalBinary(ciBts); err != nil {
+			n.log.Info("failed to unmarshal commit info", "error", err)
+			continue
+		}
+
+		rawBlk, err := ktypes.ReadBytes(rd)
+		if err != nil {
+			n.log.Info("failed to read block in the block response", "error", err)
+			continue
+		}
+
+		return height, rawBlk, &ci, nil
 	}
-	return 0, nil, types.Hash{}, ErrBlkNotFound
+	return 0, nil, nil, ErrBlkNotFound
 }
 
-func (n *Node) getBlkHeight(ctx context.Context, height int64) (types.Hash, types.Hash, []byte, error) {
+func (n *Node) getBlkHeight(ctx context.Context, height int64) (types.Hash, []byte, *ktypes.CommitInfo, error) {
 	for _, peer := range n.peers() {
 		n.log.Infof("requesting block number %d from %v", height, peer)
 		t0 := time.Now()
@@ -290,19 +314,39 @@ func (n *Node) getBlkHeight(ctx context.Context, height int64) (types.Hash, type
 
 		n.log.Info("obtained block contents", "height", height, "elapsed", time.Since(t0))
 
-		var hash, appHash types.Hash
-		copy(hash[:], resp[:types.HashLen])
-		copy(appHash[:], resp[types.HashLen:types.HashLen*2])
-		rawBlk := resp[types.HashLen*2:]
+		rd := bytes.NewReader(resp)
+		var hash types.Hash
 
-		return hash, appHash, rawBlk, nil
+		if _, err := io.ReadFull(rd, hash[:]); err != nil {
+			n.log.Warn("failed to read block hash in the block response", "error", err)
+			continue
+		}
+
+		ciBts, err := ktypes.ReadBytes(rd)
+		if err != nil {
+			n.log.Info("failed to read commit info in the block response", "error", err)
+			continue
+		}
+
+		var ci ktypes.CommitInfo
+		if err = ci.UnmarshalBinary(ciBts); err != nil {
+			n.log.Warn("failed to unmarshal commit info", "error", err)
+			continue
+		}
+
+		rawBlk, err := ktypes.ReadBytes(rd)
+		if err != nil {
+			n.log.Warn("failed to read block in the block response", "error", err)
+		}
+
+		return hash, rawBlk, &ci, nil
 	}
-	return types.Hash{}, types.Hash{}, nil, ErrBlkNotFound
+	return types.Hash{}, nil, nil, ErrBlkNotFound
 }
 
 // BlockByHeight returns the block by height. If height <= 0, the latest block
 // will be returned.
-func (n *Node) BlockByHeight(height int64) (types.Hash, *ktypes.Block, types.Hash, error) {
+func (n *Node) BlockByHeight(height int64) (types.Hash, *ktypes.Block, *ktypes.CommitInfo, error) {
 	if height <= 0 { // I think this is correct since block height starts from 1
 		height, _, _ = n.bki.Best()
 	}
@@ -310,7 +354,7 @@ func (n *Node) BlockByHeight(height int64) (types.Hash, *ktypes.Block, types.Has
 }
 
 // BlockByHash returns the block by block hash.
-func (n *Node) BlockByHash(hash types.Hash) (*ktypes.Block, types.Hash, error) {
+func (n *Node) BlockByHash(hash types.Hash) (*ktypes.Block, *ktypes.CommitInfo, error) {
 	return n.bki.Get(hash)
 }
 

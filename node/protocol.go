@@ -11,6 +11,8 @@ import (
 	"io"
 	"time"
 
+	ktypes "github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/utils"
 	"github.com/kwilteam/kwil-db/node/types"
 
 	"github.com/libp2p/go-libp2p/core/host"
@@ -156,10 +158,10 @@ func (n *Node) advertiseToPeer(ctx context.Context, peerID peer.ID, proto protoc
 
 // blockAnnMsg is for ProtocolIDBlkAnn "/kwil/blkann/1.0.0"
 type blockAnnMsg struct {
-	Hash      types.Hash
-	Height    int64
-	AppHash   types.Hash // could be in the content/response
-	LeaderSig []byte     // to avoid having to get the block to realize if it is fake (spam)
+	Hash       types.Hash
+	Height     int64
+	CommitInfo *ktypes.CommitInfo // commit sigs of validators attest to the block and app hash
+	LeaderSig  []byte             // to avoid having to get the block to realize if it is fake (spam)
 }
 
 var _ encoding.BinaryMarshaler = blockAnnMsg{}
@@ -184,73 +186,70 @@ func (m *blockAnnMsg) UnmarshalBinary(data []byte) error {
 var _ io.WriterTo = (*blockAnnMsg)(nil)
 
 func (m *blockAnnMsg) WriteTo(w io.Writer) (int64, error) {
-	var n int
-	nw, err := w.Write(m.Hash[:])
-	if err != nil {
-		return int64(nw), err
-	}
-	n += nw
+	cw := utils.NewCountingWriter(w)
 
-	hBts := binary.LittleEndian.AppendUint64(nil, uint64(m.Height))
-	nw, err = w.Write(hBts)
-	if err != nil {
-		return int64(n), err
+	if _, err := cw.Write(m.Hash[:]); err != nil {
+		return cw.Written(), err
 	}
-	n += nw
 
-	nw, err = w.Write(m.AppHash[:])
-	if err != nil {
-		return int64(n), err
+	if err := binary.Write(cw, binary.LittleEndian, uint64(m.Height)); err != nil {
+		return cw.Written(), err
 	}
-	n += nw
 
-	// first write length of leader sig (uint64 little endian)
-	err = binary.Write(w, binary.LittleEndian, uint64(len(m.LeaderSig)))
-	if err != nil {
-		return int64(n), err
+	// CommitInfo must be present in the block announcement messages
+	if m.CommitInfo == nil {
+		return cw.Written(), errors.New("nil commit info")
 	}
-	n += 8
 
-	// then write the leader sig
-	nw, err = w.Write(m.LeaderSig)
+	ciBts, err := m.CommitInfo.MarshalBinary()
 	if err != nil {
-		return int64(n), err
+		return cw.Written(), err
 	}
-	n += nw
 
-	return int64(n), nil
+	// write commit info length and bytes
+	if err := ktypes.WriteBytes(cw, ciBts); err != nil {
+		return cw.Written(), err
+	}
+
+	// write leader sig length and bytes
+	if err := ktypes.WriteBytes(cw, m.LeaderSig); err != nil {
+		return cw.Written(), err
+	}
+
+	return cw.Written(), nil
 }
 
 var _ io.ReaderFrom = (*blockAnnMsg)(nil)
 
 func (m *blockAnnMsg) ReadFrom(r io.Reader) (int64, error) {
-	nr, err := io.ReadFull(r, m.Hash[:])
+	cr := utils.NewCountingReader(r)
+
+	if _, err := io.ReadFull(cr, m.Hash[:]); err != nil {
+		return cr.ReadCount(), err
+	}
+
+	if err := binary.Read(cr, binary.LittleEndian, &m.Height); err != nil {
+		return cr.ReadCount(), err
+	}
+
+	ciBts, err := ktypes.ReadBytes(cr)
 	if err != nil {
-		return int64(nr), err
+		return cr.ReadCount(), err
 	}
-	n := int64(nr)
-	if err := binary.Read(r, binary.LittleEndian, &m.Height); err != nil {
-		return n, err
+
+	var ci ktypes.CommitInfo
+	if err := ci.UnmarshalBinary(ciBts); err != nil {
+		return cr.ReadCount(), err
 	}
-	n += 8
-	if nr, err := io.ReadFull(r, m.AppHash[:]); err != nil {
-		return n + int64(nr), err
+	m.CommitInfo = &ci
+
+	leaderSig, err := ktypes.ReadBytes(cr)
+	if err != nil {
+		return cr.ReadCount(), err
 	}
-	n += int64(nr)
-	var sigLen uint64
-	if err := binary.Read(r, binary.LittleEndian, &sigLen); err != nil {
-		return n, err
-	}
-	n += 8
-	if sigLen > 1000 {
-		return n, errors.New("unexpected leader sig length")
-	}
-	m.LeaderSig = make([]byte, sigLen)
-	if nr, err := io.ReadFull(r, m.LeaderSig); err != nil {
-		return n + int64(nr), err
-	}
-	n += int64(nr)
-	return n, nil
+	m.LeaderSig = leaderSig
+
+	return cr.ReadCount(), nil
 }
 
 // blockHeightReq is for ProtocolIDBlockHeight "/kwil/blkheight/1.0.0"

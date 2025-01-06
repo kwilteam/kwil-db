@@ -365,23 +365,23 @@ var _ io.WriterTo = TransactionBody{}
 func (tb TransactionBody) WriteTo(w io.Writer) (int64, error) {
 	cw := utils.NewCountingWriter(w)
 	// Description Length + Description
-	if err := writeString(cw, tb.Description); err != nil {
+	if err := WriteString(cw, tb.Description); err != nil {
 		return cw.Written(), fmt.Errorf("failed to write transaction body description: %w", err)
 	}
 
 	// serialized Payload
-	if err := writeBytes(cw, tb.Payload); err != nil {
+	if err := WriteBytes(cw, tb.Payload); err != nil {
 		return cw.Written(), fmt.Errorf("failed to write transaction body payload: %w", err)
 	}
 
 	// PayloadType
 	payloadType := tb.PayloadType.String()
-	if err := writeString(cw, payloadType); err != nil {
+	if err := WriteString(cw, payloadType); err != nil {
 		return cw.Written(), fmt.Errorf("failed to write transaction body payload type: %w", err)
 	}
 
 	// Fee (big.Int)
-	if err := writeBigInt(cw, tb.Fee); err != nil {
+	if err := WriteBigInt(cw, tb.Fee); err != nil {
 		return cw.Written(), fmt.Errorf("failed to write transaction fee: %w", err)
 	}
 
@@ -391,7 +391,7 @@ func (tb TransactionBody) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	// ChainID
-	if err := writeString(cw, tb.ChainID); err != nil {
+	if err := WriteString(cw, tb.ChainID); err != nil {
 		return cw.Written(), fmt.Errorf("failed to write transaction body chain ID: %w", err)
 	}
 	return cw.Written(), nil
@@ -403,28 +403,28 @@ func (tb *TransactionBody) ReadFrom(r io.Reader) (int64, error) {
 	cr := utils.NewCountingReader(r)
 
 	// Description Length + Description
-	desc, err := readString(cr)
+	desc, err := ReadString(cr)
 	if err != nil {
 		return cr.ReadCount(), fmt.Errorf("failed to read transaction body description: %w", err)
 	}
 	tb.Description = desc
 
 	// serialized Payload
-	payload, err := readBytes(cr)
+	payload, err := ReadBytes(cr)
 	if err != nil {
 		return cr.ReadCount(), fmt.Errorf("failed to read transaction body payload: %w", err)
 	}
 	tb.Payload = payload
 
 	// PayloadType
-	payloadType, err := readString(cr)
+	payloadType, err := ReadString(cr)
 	if err != nil {
 		return cr.ReadCount(), fmt.Errorf("failed to read transaction body payload type: %w", err)
 	}
 	tb.PayloadType = PayloadType(payloadType)
 
 	// Fee (big.Int)
-	b, err := readBigInt(cr)
+	b, err := ReadBigInt(cr)
 	if err != nil {
 		return cr.ReadCount(), fmt.Errorf("failed to read transaction body fee: %w", err)
 	}
@@ -436,7 +436,7 @@ func (tb *TransactionBody) ReadFrom(r io.Reader) (int64, error) {
 	}
 
 	// ChainID
-	chainID, err := readString(cr)
+	chainID, err := ReadString(cr)
 	if err != nil {
 		return cr.ReadCount(), fmt.Errorf("failed to read transaction body chain ID: %w", err)
 	}
@@ -481,7 +481,7 @@ func (t *Transaction) serialize(w io.Writer) (err error) {
 	if t.Signature != nil {
 		sigBytes = t.Signature.Bytes()
 	}
-	if err := writeBytes(w, sigBytes); err != nil {
+	if err := WriteBytes(w, sigBytes); err != nil {
 		return fmt.Errorf("failed to write transaction signature: %w", err)
 	}
 
@@ -490,17 +490,17 @@ func (t *Transaction) serialize(w io.Writer) (err error) {
 	if t.Body != nil {
 		bodyBytes = t.Body.Bytes()
 	}
-	if err := writeBytes(w, bodyBytes); err != nil {
+	if err := WriteBytes(w, bodyBytes); err != nil {
 		return fmt.Errorf("failed to write transaction body: %w", err)
 	}
 
 	// SerializationType
-	if err := writeString(w, string(t.Serialization)); err != nil {
+	if err := WriteString(w, string(t.Serialization)); err != nil {
 		return fmt.Errorf("failed to write transaction serialization type: %w", err)
 	}
 
 	// Sender
-	if err := writeBytes(w, t.Sender); err != nil {
+	if err := WriteBytes(w, t.Sender); err != nil {
 		return fmt.Errorf("failed to write transaction sender: %w", err)
 	}
 
@@ -521,7 +521,7 @@ func (t *Transaction) deserialize(r io.Reader) (int64, error) {
 	}
 
 	// Signature
-	sigBytes, err := readBytes(cr)
+	sigBytes, err := ReadBytes(cr)
 	if err != nil {
 		return cr.ReadCount(), fmt.Errorf("failed to read transaction signature: %w", err)
 	}
@@ -535,7 +535,7 @@ func (t *Transaction) deserialize(r io.Reader) (int64, error) {
 	}
 
 	// TxBody
-	bodyBytes, err := readBytes(cr)
+	bodyBytes, err := ReadBytes(cr)
 	if err != nil {
 		return 0, fmt.Errorf("failed to read transaction body: %w", err)
 	}
@@ -551,14 +551,14 @@ func (t *Transaction) deserialize(r io.Reader) (int64, error) {
 	}
 
 	// SerializationType
-	serType, err := readString(cr)
+	serType, err := ReadString(cr)
 	if err != nil {
 		return cr.ReadCount(), fmt.Errorf("failed to read transaction serialization type: %w", err)
 	}
 	t.Serialization = SignedMsgSerializationType(serType)
 
 	// Sender
-	senderBytes, err := readBytes(cr)
+	senderBytes, err := ReadBytes(cr)
 	if err != nil {
 		return cr.ReadCount(), fmt.Errorf("failed to read transaction sender: %w", err)
 	}
@@ -567,7 +567,7 @@ func (t *Transaction) deserialize(r io.Reader) (int64, error) {
 	return cr.ReadCount(), nil
 }
 
-func writeBytes(w io.Writer, data []byte) error {
+func WriteBytes(w io.Writer, data []byte) error {
 	if err := binary.Write(w, binary.LittleEndian, uint32(len(data))); err != nil {
 		return err
 	}
@@ -575,11 +575,11 @@ func writeBytes(w io.Writer, data []byte) error {
 	return err
 }
 
-func writeString(w io.Writer, s string) error {
-	return writeBytes(w, []byte(s))
+func WriteString(w io.Writer, s string) error {
+	return WriteBytes(w, []byte(s))
 }
 
-func readBytes(r io.Reader) ([]byte, error) {
+func ReadBytes(r io.Reader) ([]byte, error) {
 	var length uint32
 	if err := binary.Read(r, binary.LittleEndian, &length); err != nil {
 		return nil, err
@@ -610,12 +610,12 @@ func readBytes(r io.Reader) ([]byte, error) {
 	return data, nil
 }
 
-func readString(r io.Reader) (string, error) {
-	bts, err := readBytes(r)
+func ReadString(r io.Reader) (string, error) {
+	bts, err := ReadBytes(r)
 	return string(bts), err
 }
 
-func writeBigInt(w io.Writer, b *big.Int) error {
+func WriteBigInt(w io.Writer, b *big.Int) error {
 	if b == nil {
 		_, err := w.Write([]byte{0})
 		return err
@@ -635,12 +635,12 @@ func writeBigInt(w io.Writer, b *big.Int) error {
 	// if err != nil {
 	// 	return err
 	// }
-	// return writeBytes(w, b.Bytes())
+	// return WriteBytes(w, b.Bytes())
 
-	return writeString(w, b.String())
+	return WriteString(w, b.String())
 }
 
-func readBigInt(r io.Reader) (*big.Int, error) {
+func ReadBigInt(r io.Reader) (*big.Int, error) {
 	nilByte := []byte{0}
 	_, err := io.ReadFull(r, nilByte)
 	if err != nil {
@@ -655,7 +655,7 @@ func readBigInt(r io.Reader) (*big.Int, error) {
 		return nil, errors.New("invalid nil int byte")
 	}
 
-	intStr, err := readString(r)
+	intStr, err := ReadString(r)
 	if err != nil {
 		return nil, err
 	}

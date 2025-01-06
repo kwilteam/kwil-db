@@ -36,8 +36,8 @@ var (
 // Node specifies the methods required for chain service to interact with the blockchain.
 type Node interface {
 	// BlockByHeight returns block info at height. If height=0, the latest block will be returned.
-	BlockByHeight(height int64) (ktypes.Hash, *ktypes.Block, ktypes.Hash, error)
-	BlockByHash(hash ktypes.Hash) (*ktypes.Block, ktypes.Hash, error)
+	BlockByHeight(height int64) (ktypes.Hash, *ktypes.Block, *ktypes.CommitInfo, error)
+	BlockByHash(hash ktypes.Hash) (*ktypes.Block, *ktypes.CommitInfo, error)
 	BlockResultByHash(hash ktypes.Hash) ([]ktypes.TxResult, error)
 	ChainTx(hash ktypes.Hash) (*chaintypes.Tx, error)
 	BlockHeight() int64
@@ -145,10 +145,14 @@ func (svc *Service) Block(_ context.Context, req *chainjson.BlockRequest) (*chai
 
 	// prioritize req.Hash over req.Height
 	if !req.Hash.IsZero() {
-		block, appHash, err := svc.blockchain.BlockByHash(req.Hash)
+		block, commitInfo, err := svc.blockchain.BlockByHash(req.Hash)
 		if err != nil {
 			svc.log.Error("block by hash", "hash", req.Hash, "error", err)
 			return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to get block", nil)
+		}
+
+		if commitInfo == nil {
+			return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "commit info is empty", nil)
 		}
 
 		return &chainjson.BlockResponse{
@@ -156,11 +160,11 @@ func (svc *Service) Block(_ context.Context, req *chainjson.BlockRequest) (*chai
 			Txns:      block.Txns,
 			Signature: block.Signature,
 			Hash:      req.Hash,
-			AppHash:   appHash,
+			AppHash:   commitInfo.AppHash,
 		}, nil
 	}
 
-	blockHash, block, appHash, err := svc.blockchain.BlockByHeight(req.Height)
+	blockHash, block, commitInfo, err := svc.blockchain.BlockByHeight(req.Height)
 	svc.log.Error("block by height", "height", req.Height, "hash", req.Hash, "error", err)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to get block", nil)
@@ -171,7 +175,7 @@ func (svc *Service) Block(_ context.Context, req *chainjson.BlockRequest) (*chai
 		Txns:      block.Txns,
 		Signature: block.Signature,
 		Hash:      blockHash,
-		AppHash:   appHash,
+		AppHash:   commitInfo.AppHash,
 	}, nil
 }
 

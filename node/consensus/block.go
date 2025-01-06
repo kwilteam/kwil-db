@@ -95,7 +95,7 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 	blkProp := ce.state.blkProp
 	height, appHash := ce.state.blkProp.height, ce.state.blockRes.appHash
 
-	if err := ce.blockStore.Store(blkProp.blk, appHash); err != nil {
+	if err := ce.blockStore.Store(blkProp.blk, ce.state.commitInfo); err != nil {
 		return err
 	}
 
@@ -131,10 +131,11 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 
 func (ce *ConsensusEngine) nextState() {
 	ce.state.lc = &lastCommit{
-		height:  ce.state.blkProp.height,
-		blkHash: ce.state.blkProp.blkHash,
-		appHash: ce.state.blockRes.appHash,
-		blk:     ce.state.blkProp.blk,
+		height:     ce.state.blkProp.height,
+		blkHash:    ce.state.blkProp.blkHash,
+		appHash:    ce.state.blockRes.appHash,
+		blk:        ce.state.blkProp.blk,
+		commitInfo: ce.state.commitInfo,
 	}
 
 	ce.resetState()
@@ -153,7 +154,8 @@ func (ce *ConsensusEngine) rollbackState(ctx context.Context) error {
 func (ce *ConsensusEngine) resetState() {
 	ce.state.blkProp = nil
 	ce.state.blockRes = nil
-	ce.state.votes = make(map[string]*vote)
+	ce.state.votes = make(map[string]*ktypes.VoteInfo)
+	ce.state.commitInfo = nil
 
 	// update the stateInfo
 	ce.stateInfo.mtx.Lock()

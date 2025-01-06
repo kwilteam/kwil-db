@@ -5,6 +5,9 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+
+	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/types"
 )
 
 type ConsensusReset struct {
@@ -60,10 +63,15 @@ func (cr *ConsensusReset) UnmarshalBinary(data []byte) error {
 }
 
 type AckRes struct {
-	Height  int64
 	ACK     bool
+	Height  int64
 	BlkHash Hash
 	AppHash *Hash
+
+	// Signature
+	PubKeyType crypto.KeyType
+	PubKey     []byte
+	Signature  []byte
 }
 
 func (ar AckRes) ack() string {
@@ -81,41 +89,106 @@ func (ar AckRes) String() string {
 }
 
 func (ar AckRes) MarshalBinary() ([]byte, error) {
-	if !ar.ACK {
-		return []byte{0}, nil
+	if ar.ACK && ar.AppHash == nil {
+		return nil, errors.New("app hash is required for ACK")
+	} else if !ar.ACK && ar.AppHash != nil {
+		return nil, errors.New("app hash is not allowed for nACK")
 	}
-	if ar.AppHash == nil {
-		return nil, errors.New("missing apphash in ACK")
+
+	var buf bytes.Buffer
+	if err := binary.Write(&buf, binary.LittleEndian, ar.ACK); err != nil {
+		return nil, fmt.Errorf("failed to write ACK: %v", err)
 	}
-	buf := make([]byte, 1+2*HashLen+8)
-	buf[0] = 1
-	binary.LittleEndian.PutUint64(buf[1:], uint64(ar.Height))
-	copy(buf[1+8:], ar.BlkHash[:])
-	copy(buf[1+8+HashLen:], ar.AppHash[:])
-	return buf, nil
+
+	if err := binary.Write(&buf, binary.LittleEndian, uint64(ar.Height)); err != nil {
+		return nil, fmt.Errorf("failed to write height in AckRes: %v", err)
+	}
+
+	if err := binary.Write(&buf, binary.LittleEndian, ar.BlkHash[:]); err != nil {
+		return nil, fmt.Errorf("failed to write block hash in AckRes: %v", err)
+	}
+
+	if ar.ACK {
+		if err := binary.Write(&buf, binary.LittleEndian, true); err != nil {
+			return nil, fmt.Errorf("failed to write app hash flag in AckRes: %v", err)
+		}
+
+		if err := binary.Write(&buf, binary.LittleEndian, ar.AppHash[:]); err != nil {
+			return nil, fmt.Errorf("failed to write app hash in AckRes: %v", err)
+		}
+	} else {
+		if err := binary.Write(&buf, binary.LittleEndian, false); err != nil {
+			return nil, fmt.Errorf("failed to write app hash flag in AckRes: %v", err)
+		}
+	}
+
+	if err := binary.Write(&buf, binary.LittleEndian, ar.PubKeyType); err != nil {
+		return nil, fmt.Errorf("failed to write key type in AckRes: %v", err)
+	}
+
+	if err := types.WriteBytes(&buf, ar.PubKey); err != nil {
+		return nil, fmt.Errorf("failed to write key in AckRes: %v", err)
+	}
+
+	if err := types.WriteBytes(&buf, ar.Signature); err != nil {
+		return nil, fmt.Errorf("failed to write signature in AckRes: %v", err)
+	}
+
+	return buf.Bytes(), nil
 }
 
 func (ar *AckRes) UnmarshalBinary(data []byte) error {
-	if len(data) < 1 {
-		return errors.New("insufficient data")
+	buf := bytes.NewBuffer(data)
+
+	if err := binary.Read(buf, binary.LittleEndian, &ar.ACK); err != nil {
+		return fmt.Errorf("failed to read ACK: %v", err)
 	}
-	ar.ACK = data[0] == 1
-	if !ar.ACK {
-		if len(data) > 1 {
-			return errors.New("too much data for nACK")
+
+	var height uint64
+	if err := binary.Read(buf, binary.LittleEndian, &height); err != nil {
+		return fmt.Errorf("failed to read height in AckRes: %v", err)
+	}
+	ar.Height = int64(height)
+
+	if _, err := buf.Read(ar.BlkHash[:]); err != nil {
+		return fmt.Errorf("failed to read block hash in AckRes: %v", err)
+	}
+
+	var hasAppHash bool
+	if err := binary.Read(buf, binary.LittleEndian, &hasAppHash); err != nil {
+		return fmt.Errorf("failed to read app hash flag in AckRes: %v", err)
+	}
+
+	if ar.ACK && !hasAppHash {
+		return errors.New("app hash is required for ACK")
+	} else if !ar.ACK && hasAppHash {
+		return errors.New("app hash is not allowed for nACK")
+	}
+
+	if hasAppHash {
+		var appHash Hash
+		if _, err := buf.Read(appHash[:]); err != nil {
+			return fmt.Errorf("failed to read app hash in AckRes: %v", err)
 		}
-		ar.BlkHash = Hash{}
-		ar.AppHash = nil
-		return nil
+		ar.AppHash = &appHash
 	}
-	data = data[1:]
-	if len(data) < 2*HashLen+8 {
-		return errors.New("insufficient data for ACK")
+
+	if err := binary.Read(buf, binary.LittleEndian, &ar.PubKeyType); err != nil {
+		return fmt.Errorf("failed to read key type in AckRes: %v", err)
 	}
-	ar.Height = int64(binary.LittleEndian.Uint64(data[:8]))
-	ar.AppHash = new(Hash)
-	copy(ar.BlkHash[:], data[8:8+HashLen])
-	copy(ar.AppHash[:], data[8+HashLen:])
+
+	pubKeyBts, err := types.ReadBytes(buf)
+	if err != nil {
+		return fmt.Errorf("failed to read key in AckRes: %v", err)
+	}
+	ar.PubKey = pubKeyBts
+
+	sigBts, err := types.ReadBytes(buf)
+	if err != nil {
+		return fmt.Errorf("failed to read signature in AckRes: %v", err)
+	}
+	ar.Signature = sigBts
+
 	return nil
 }
 

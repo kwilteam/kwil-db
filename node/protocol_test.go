@@ -6,6 +6,7 @@ import (
 	"math"
 	"testing"
 
+	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
 )
 
@@ -18,17 +19,47 @@ func TestBlockAnnMsg_MarshalUnmarshal(t *testing.T) {
 		{
 			name:    "empty message",
 			msg:     &blockAnnMsg{},
+			wantErr: true,
+		},
+		{
+			name: "empty message with commitInfo",
+			msg: &blockAnnMsg{
+				CommitInfo: &ktypes.CommitInfo{},
+			},
 			wantErr: false,
+		},
+		{
+			name: "empty commitInfo",
+			msg: &blockAnnMsg{
+				CommitInfo: nil,
+				Hash:       ktypes.HashBytes([]byte{1, 2, 3}),
+				Height:     100,
+				LeaderSig:  []byte{7, 8, 9},
+			},
+			wantErr: true, // commitInfo is nil
 		},
 		{
 			name: "message with data",
 			msg: &blockAnnMsg{
-				Height:    100,
-				Hash:      [32]byte{1, 2, 3},
-				AppHash:   [32]byte{4, 5, 6},
+				Height: 100,
+				Hash:   [32]byte{1, 2, 3},
+				CommitInfo: &ktypes.CommitInfo{
+					AppHash: ktypes.Hash{1, 2, 3},
+				},
 				LeaderSig: []byte{7, 8, 9},
 			},
 			wantErr: false,
+		},
+		{
+			name: "empty leaderSig",
+			msg: &blockAnnMsg{
+				Height: 100,
+				Hash:   [32]byte{1, 2, 3},
+				CommitInfo: &ktypes.CommitInfo{
+					AppHash: ktypes.Hash{1, 2, 3},
+				},
+			},
+			wantErr: false, // leaderSig verified at higher level
 		},
 	}
 

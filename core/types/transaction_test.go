@@ -587,14 +587,14 @@ func TestBigIntRoundTrip(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			buf := new(bytes.Buffer)
-			err := writeBigInt(buf, tc.input)
+			err := WriteBigInt(buf, tc.input)
 			if tc.expectError {
 				require.Error(t, err)
 				return
 			}
 			require.NoError(t, err)
 
-			result, err := readBigInt(buf)
+			result, err := ReadBigInt(buf)
 			require.NoError(t, err)
 
 			if tc.input == nil {
@@ -639,7 +639,7 @@ func TestBigIntReadErrors(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			buf := bytes.NewBuffer(tc.input)
-			_, err := readBigInt(buf)
+			_, err := ReadBigInt(buf)
 			if tc.expectError {
 				require.Error(t, err)
 			} else {
@@ -678,7 +678,7 @@ func TestBigIntWriteErrors(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := writeBigInt(tc.writer, tc.input)
+			err := WriteBigInt(tc.writer, tc.input)
 			require.Error(t, err)
 		})
 	}
@@ -753,7 +753,7 @@ func TestReadBytes(t *testing.T) {
 				reader = bytes.NewReader(tc.input)
 			}
 
-			result, err := readBytes(reader)
+			result, err := ReadBytes(reader)
 			if tc.expectError {
 				require.Error(t, err)
 				return
@@ -763,9 +763,9 @@ func TestReadBytes(t *testing.T) {
 			require.Equal(t, tc.expected, result)
 
 			w := &bytes.Buffer{}
-			err = writeBytes(w, result)
+			err = WriteBytes(w, result)
 			require.NoError(t, err)
-			result2, err := readBytes(w)
+			result2, err := ReadBytes(w)
 			require.NoError(t, err)
 
 			require.Equal(t, result2, result)

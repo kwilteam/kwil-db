@@ -11,6 +11,7 @@ import (
 	"io"
 
 	ktypes "github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/node/peers"
 	"github.com/kwilteam/kwil-db/node/types"
 
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
@@ -268,13 +269,17 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 // sendACK is a callback for the result of validator block execution/precommit.
 // After then consensus engine executes the block, this is used to gossip the
 // result back to the leader.
-func (n *Node) sendACK(ack bool, height int64, blkID types.Hash, appHash *types.Hash) error {
+func (n *Node) sendACK(ack bool, height int64, blkID types.Hash, appHash *types.Hash, signature []byte) error {
 	// n.log.Debugln("sending ACK", height, ack, blkID, appHash)
 	n.ackChan <- types.AckRes{
 		ACK:     ack,
 		AppHash: appHash,
 		BlkHash: blkID,
 		Height:  height,
+
+		Signature:  signature,
+		PubKeyType: n.pubkey.Type(),
+		PubKey:     n.pubkey.Bytes(),
 	}
 	return nil // actually gossip the nack
 }
@@ -348,12 +353,12 @@ func (n *Node) startAckGossip(ctx context.Context, ps *pubsub.PubSub) error {
 			n.log.Debugf("received ACK msg from %s (rcvd from %s), data = %x",
 				fromPeerID.String(), ackMsg.ReceivedFrom.String(), ackMsg.Message.Data)
 
-			peerPubKey, err := fromPeerID.ExtractPublicKey()
+			peerPubKey, err := peers.PubKeyFromPeerID(fromPeerID.String())
 			if err != nil {
 				n.log.Infof("failed to extract pubkey from peer ID %v: %v", fromPeerID, err)
 				continue
 			}
-			pubkeyBytes, _ := peerPubKey.Raw() // does not error for secp256k1 or ed25519
+			pubkeyBytes := peerPubKey.Bytes() // does not error for secp256k1 or ed25519
 			go n.ce.NotifyACK(pubkeyBytes, ack)
 		}
 	}()
@@ -501,12 +506,12 @@ func (n *Node) startDiscoveryResponseGossip(ctx context.Context, ps *pubsub.PubS
 			n.log.Infof("received Discovery response msg from %s (rcvd from %s), data = %d",
 				fromPeerID.String(), discMsg.ReceivedFrom.String(), dm.BestHeight)
 
-			peerPubKey, err := fromPeerID.ExtractPublicKey()
+			peerPubKey, err := peers.PubKeyFromPeerID(fromPeerID.String())
 			if err != nil {
 				n.log.Infof("failed to extract pubkey from peer ID %v: %v", fromPeerID, err)
 				continue
 			}
-			pubkeyBytes, _ := peerPubKey.Raw() // does not error for secp256k1 or ed25519
+			pubkeyBytes := peerPubKey.Bytes() // does not error for secp256k1 or ed25519
 			go n.ce.NotifyDiscoveryMessage(pubkeyBytes, dm.BestHeight)
 		}
 	}()
@@ -587,7 +592,14 @@ func (n *Node) startConsensusResetGossip(ctx context.Context, ps *pubsub.PubSub)
 				fromPeerID, resetMsg.ReceivedFrom, resetMsg.Message.Data)
 
 			// source of the reset message should be the leader
-			n.ce.NotifyResetState(reset.ToHeight, reset.TxIDs)
+			peerPubKey, err := peers.PubKeyFromPeerID(fromPeerID.String())
+			if err != nil {
+				n.log.Infof("failed to extract pubkey from peer ID %v: %v", fromPeerID, err)
+				continue
+			}
+			pubkeyBytes := peerPubKey.Bytes()
+
+			n.ce.NotifyResetState(reset.ToHeight, reset.TxIDs, pubkeyBytes)
 		}
 	}()
 

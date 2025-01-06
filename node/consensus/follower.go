@@ -64,16 +64,17 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 // This also checks if the node should request the block from its peers. This can happen
 // 1. If the node is a sentry node and doesn't have the block.
 // 2. If the node is a validator and missed the block proposal message.
-func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash types.Hash, leaderSig []byte) bool {
+func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, ci *ktypes.CommitInfo, leaderSig []byte) bool {
 	if ce.role.Load() == types.RoleLeader {
 		return false
 	}
+
 	ce.updateNetworkHeight(height)
 
 	ce.stateInfo.mtx.RLock()
 	defer ce.stateInfo.mtx.RUnlock()
 
-	ce.log.Debugf("Accept commit? height: %d,  blockID: %s, appHash: %s, lastCommitHeight: %d", height, blkID, appHash, ce.stateInfo.height)
+	ce.log.Debugf("Accept commit? height: %d,  blockID: %s, appHash: %s, lastCommitHeight: %d", height, blkID, ci.AppHash, ce.stateInfo.height)
 
 	if ce.stateInfo.height+1 != height {
 		return false
@@ -92,7 +93,7 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash 
 	}
 
 	blkCommit := &blockAnnounce{
-		appHash: appHash,
+		ci: ci,
 	}
 	if ce.stateInfo.status == Committed {
 		// Sentry node or slow validator
@@ -106,7 +107,7 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash 
 		go ce.sendConsensusMessage(&consensusMessage{
 			MsgType: blkCommit.Type(),
 			Msg:     blkCommit,
-			Sender:  ce.pubKey.Bytes(),
+			Sender:  ce.leader.Bytes(),
 		})
 		return false
 	}
@@ -128,7 +129,7 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, appHash 
 	go ce.sendConsensusMessage(&consensusMessage{
 		MsgType: blkCommit.Type(),
 		Msg:     blkCommit,
-		Sender:  ce.pubKey.Bytes(),
+		Sender:  ce.leader.Bytes(),
 	})
 
 	return false
@@ -173,7 +174,7 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 
 	if err := ce.validateBlock(blkPropMsg.blk); err != nil {
 		ce.log.Error("Error validating block, sending NACK", "error", err)
-		go ce.ackBroadcaster(false, blkPropMsg.height, blkPropMsg.blkHash, nil)
+		go ce.ackBroadcaster(false, blkPropMsg.height, blkPropMsg.blkHash, nil, nil)
 		return err
 	}
 	ce.state.blkProp = blkPropMsg
@@ -207,7 +208,21 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 	// Broadcast the result back to the leader
 	ce.log.Info("Sending ack to the leader", "height", blkPropMsg.height,
 		"hash", blkPropMsg.blkHash, "appHash", ce.state.blockRes.appHash)
-	go ce.ackBroadcaster(true, blkPropMsg.height, blkPropMsg.blkHash, &ce.state.blockRes.appHash)
+
+	signature, err := ktypes.SignVote(blkPropMsg.blkHash, true, &ce.state.blockRes.appHash, ce.privKey)
+	if err != nil {
+		ce.log.Error("Error signing the voteInfo", "error", err)
+	}
+	voteInfo := &vote{
+		ack:       true,
+		blkHash:   blkPropMsg.blkHash,
+		height:    blkPropMsg.height,
+		appHash:   &ce.state.blockRes.appHash,
+		signature: signature,
+	}
+	ce.state.blockRes.vote = voteInfo
+
+	go ce.ackBroadcaster(true, blkPropMsg.height, blkPropMsg.blkHash, &ce.state.blockRes.appHash, signature.Data)
 
 	return nil
 }
@@ -217,7 +232,7 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 // If the validator node processed a different block, it should rollback and reprocess the block.
 // Validator nodes can skip the block execution and directly commit the block if they have already processed the block.
 // The nodes should only commit the block if the appHash is valid, else halt the node.
-func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, appHash types.Hash) error {
+func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, ci *ktypes.CommitInfo) error {
 	if ce.role.Load() == types.RoleLeader {
 		return nil
 	}
@@ -233,19 +248,19 @@ func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, a
 	// - Incorrect AppHash: Halt the node.
 
 	if ce.role.Load() == types.RoleSentry {
-		return ce.processAndCommit(ctx, blk, appHash)
+		return ce.processAndCommit(ctx, blk, ci)
 	}
 
 	// You are a validator
 	if ce.state.blkProp == nil {
-		return ce.processAndCommit(ctx, blk, appHash)
+		return ce.processAndCommit(ctx, blk, ci)
 	}
 
 	if ce.state.blkProp.blkHash != blk.Header.Hash() {
 		if err := ce.rollbackState(ctx); err != nil {
 			ce.log.Error("error aborting execution of incorrect block proposal", "height", blk.Header.Height, "blkID", blk.Header.Hash(), "error", err)
 		}
-		return ce.processAndCommit(ctx, blk, appHash)
+		return ce.processAndCommit(ctx, blk, ci)
 	}
 
 	if ce.state.blockRes == nil {
@@ -253,10 +268,15 @@ func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, a
 		return nil
 	}
 
-	if ce.state.blockRes.appHash != appHash {
-		haltR := fmt.Sprintf("Incorrect AppHash, halting the node. received: %s, computed: %s", appHash.String(), ce.state.blockRes.appHash.String())
+	if ce.state.blockRes.appHash != ci.AppHash {
+		haltR := fmt.Sprintf("Incorrect AppHash, halting the node. received: %s, computed: %s", ci.AppHash.String(), ce.state.blockRes.appHash.String())
 		ce.haltChan <- haltR
 		return nil
+	}
+
+	if err := ce.validateCommitInfo(ci, ce.state.blkProp.blkHash); err != nil {
+		ce.log.Error("Error validating commitInfo", "error", err)
+		return err
 	}
 
 	// Commit the block
@@ -272,9 +292,13 @@ func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, a
 
 // processAndCommit: used by the sentry nodes and slow validators to process and commit the block.
 // This is used when the acks are not required to be sent back to the leader, essentially in catchup mode.
-func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Block, appHash types.Hash) error {
+func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Block, ci *ktypes.CommitInfo) error {
 	blkID := blk.Header.Hash()
-	ce.log.Info("Processing committed block", "height", blk.Header.Height, "hash", blkID, "appHash", appHash)
+	if ci == nil {
+		return fmt.Errorf("commitInfo is nil")
+	}
+
+	ce.log.Info("Processing committed block", "height", blk.Header.Height, "hash", blkID, "appHash", ci.AppHash)
 	if err := ce.validateBlock(blk); err != nil {
 		ce.log.Errorf("Error validating block: %v", err)
 		return err // who gets this error?
@@ -296,17 +320,48 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Blo
 		return fmt.Errorf("error executing block: %v", err)
 	}
 
-	if ce.state.blockRes.appHash != appHash {
-		haltR := fmt.Sprintf("processAndCommit: Incorrect AppHash, halting the node. received: %s, computed: %s", appHash.String(), ce.state.blockRes.appHash.String())
+	if ce.state.blockRes.appHash != ci.AppHash {
+		haltR := fmt.Sprintf("processAndCommit: Incorrect AppHash, halting the node. received: %s, computed: %s", ci.AppHash.String(), ce.state.blockRes.appHash.String())
 		ce.haltChan <- haltR
-		return fmt.Errorf("appHash mismatch, expected: %s, received: %s", appHash, ce.state.blockRes.appHash)
+		return fmt.Errorf("appHash mismatch, expected: %s, received: %s", ci.AppHash, ce.state.blockRes.appHash)
 	}
 
-	// Commit the block if the appHash is valid
+	// Commit the block if the appHash and commitInfo is valid
+	if err := ce.validateCommitInfo(ci, blkID); err != nil {
+		return fmt.Errorf("error validating commitInfo: %v", err)
+	}
+
 	if err := ce.commit(ctx); err != nil {
 		return fmt.Errorf("error committing block: %v", err)
 	}
 
 	ce.nextState()
+	return nil
+}
+
+func (ce *ConsensusEngine) validateCommitInfo(ci *ktypes.CommitInfo, blkID ktypes.Hash) error {
+	if ci == nil {
+		return fmt.Errorf("commitInfo is nil")
+	}
+
+	// Validate CommitInfo
+	var acks int
+	for _, vote := range ci.Votes {
+		err := vote.Verify(blkID, ci.AppHash)
+		if err != nil {
+			return fmt.Errorf("error verifying vote: %v", err)
+		}
+
+		if vote.AckStatus == ktypes.AckStatusAgree {
+			acks++
+		}
+	}
+
+	if !ce.hasMajorityCeil(acks) {
+		return fmt.Errorf("invalid blkAnn message, not enough acks in the commitInfo, leader misbehavior: %d", acks)
+	}
+
+	ce.state.commitInfo = ci
+
 	return nil
 }

@@ -110,13 +110,14 @@ func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context) error {
 	t0 := time.Now()
 
 	for {
-		_, appHash, rawblk, err := ce.blkRequester(ctx, ce.state.lc.height+1)
+		ce.log.Info("Requesting block from network(replay mode)", "height", ce.state.lc.height+1)
+		_, rawblk, ci, err := ce.blkRequester(ctx, ce.state.lc.height+1)
 		if err != nil { // all kinds of errors?
 			ce.log.Info("Error requesting block from network", "height", ce.state.lc.height+1, "error", err)
 			break // no more blocks to sync from network.
 		}
 
-		if ce.state.lc.height != 0 && appHash.IsZero() {
+		if ce.state.lc.height != 0 && ci != nil && ci.AppHash.IsZero() {
 			return nil
 		}
 
@@ -125,7 +126,7 @@ func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context) error {
 			return fmt.Errorf("failed to decode block: %w", err)
 		}
 
-		if err := ce.processAndCommit(ctx, blk, appHash); err != nil {
+		if err := ce.processAndCommit(ctx, blk, ci); err != nil {
 			return err
 		}
 	}
@@ -143,13 +144,13 @@ func (ce *ConsensusEngine) syncBlocksUntilHeight(ctx context.Context, startHeigh
 
 	for height <= endHeight {
 		// TODO: This is used in blocksync for leader, failure of fetching the block after certain retries should fail the node
-		_, appHash, rawblk, err := ce.getBlock(ctx, height)
+		_, rawblk, ci, err := ce.getBlock(ctx, height)
 		if err != nil { // all kinds of errors?
 			ce.log.Info("Error requesting block from network", "height", ce.state.lc.height+1, "error", err)
 			return fmt.Errorf("error requesting block from network: height : %d, error: %w", ce.state.lc.height+1, err)
 		}
 
-		if ce.state.lc.height != 0 && appHash.IsZero() {
+		if ce.state.lc.height != 0 && ci != nil && ci.AppHash.IsZero() {
 			return nil
 		}
 
@@ -158,7 +159,7 @@ func (ce *ConsensusEngine) syncBlocksUntilHeight(ctx context.Context, startHeigh
 			return fmt.Errorf("failed to decode block: %w", err)
 		}
 
-		if err := ce.processAndCommit(ctx, blk, appHash); err != nil {
+		if err := ce.processAndCommit(ctx, blk, ci); err != nil {
 			return err
 		}
 
@@ -170,13 +171,13 @@ func (ce *ConsensusEngine) syncBlocksUntilHeight(ctx context.Context, startHeigh
 	return nil
 }
 
-func (ce *ConsensusEngine) getBlock(ctx context.Context, height int64) (blkID types.Hash, appHash types.Hash, rawBlk []byte, err error) {
+func (ce *ConsensusEngine) getBlock(ctx context.Context, height int64) (blkID types.Hash, rawBlk []byte, ci *ktypes.CommitInfo, err error) {
 	err = retry(ctx, 15, func() error {
-		blkID, appHash, rawBlk, err = ce.blkRequester(ctx, height)
+		blkID, rawBlk, ci, err = ce.blkRequester(ctx, height)
 		return err
 	})
 
-	return blkID, appHash, rawBlk, err
+	return blkID, rawBlk, ci, err
 }
 
 // retry will retry the function until it is successful, or reached the max retries
