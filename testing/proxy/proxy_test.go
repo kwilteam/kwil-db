@@ -10,7 +10,6 @@ import (
 	_ "embed"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/node/pg"
 	kwilTesting "github.com/kwilteam/kwil-db/testing"
 )
 
@@ -62,7 +61,7 @@ func Test_Impl_1(t *testing.T) {
 			},
 		},
 	}, &kwilTesting.Options{
-		Conn: &pg.ConnConfig{
+		Conn: &kwilTesting.ConnConfig{
 			Host:   "127.0.0.1",
 			Port:   "5432",
 			User:   "kwild",
