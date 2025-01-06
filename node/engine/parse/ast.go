@@ -1096,6 +1096,9 @@ func (s *DropIndexStatement) Accept(v Visitor) any {
 
 type GrantOrRevokeStatement struct {
 	Position
+	// If is true if either IF GRANTED or IF NOT GRANTED is present,
+	// depending on the statement.
+	If bool
 	// IsGrant is true if the statement is a GRANT statement.
 	// If it is false, then it is a REVOKE statement.
 	IsGrant bool
@@ -1110,11 +1113,14 @@ type GrantOrRevokeStatement struct {
 	// Either Privileges or Role must be set, but not both.
 	GrantRole string
 	// ToRole is the role being granted to.
-	// Either ToUser or ToRole must be set, but not both.
+	// Only one of ToUser, ToRole, or ToVariable must be set.
 	ToRole string
 	// ToUser is the user being granted to.
-	// Either ToUser or ToRole must be set, but not both.
+	// Only one of ToUser, ToRole, or ToVariable must be set.
 	ToUser string
+	// ToVariable is the variable being granted to.
+	// Only one of ToUser, ToRole, or ToVariable must be set.
+	ToVariable Expression
 }
 
 func (g *GrantOrRevokeStatement) topLevelStatement() {}
@@ -1149,18 +1155,6 @@ func (d *DropRoleStatement) topLevelStatement() {}
 
 func (d *DropRoleStatement) Accept(v Visitor) any {
 	return v.VisitDropRoleStatement(d)
-}
-
-type TransferOwnershipStatement struct {
-	Position
-	// To is the user that the ownership is being transferred to.
-	To string
-}
-
-func (t *TransferOwnershipStatement) topLevelStatement() {}
-
-func (t *TransferOwnershipStatement) Accept(v Visitor) any {
-	return v.VisitTransferOwnershipStatement(t)
 }
 
 type UseExtensionStatement struct {
@@ -1694,7 +1688,6 @@ type DDLVisitor interface {
 	VisitColumn(*Column) any
 	VisitCreateRoleStatement(*CreateRoleStatement) any
 	VisitDropRoleStatement(*DropRoleStatement) any
-	VisitTransferOwnershipStatement(*TransferOwnershipStatement) any
 	VisitUseExtensionStatement(*UseExtensionStatement) any
 	VisitUnuseExtensionStatement(*UnuseExtensionStatement) any
 	VisitCreateNamespaceStatement(*CreateNamespaceStatement) any
@@ -1899,10 +1892,6 @@ func (u *UnimplementedDDLVisitor) VisitCreateRoleStatement(p0 *CreateRoleStateme
 }
 
 func (u *UnimplementedDDLVisitor) VisitDropRoleStatement(p0 *DropRoleStatement) any {
-	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
-}
-
-func (u *UnimplementedDDLVisitor) VisitTransferOwnershipStatement(p0 *TransferOwnershipStatement) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", u))
 }
 

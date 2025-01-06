@@ -32,14 +32,6 @@ func newAccessController(ctx context.Context, db sql.DB) (*accessController, err
 		knownNamespaces: make(map[string]struct{}),
 	}
 
-	// get the owner
-	err := queryRowFunc(ctx, db, "SELECT value FROM kwild_engine.metadata WHERE key = $1", []any{&ac.owner}, func() error {
-		return nil
-	}, ownerKey)
-	if err != nil {
-		return nil, err
-	}
-
 	getRolesStmt := `SELECT r.name, array_agg(rp.privilege_type::text), array_agg(n.name)
 	FROM kwild_engine.roles r
 	LEFT JOIN kwild_engine.role_privileges rp ON rp.role_id = r.id
@@ -51,15 +43,26 @@ func newAccessController(ctx context.Context, db sql.DB) (*accessController, err
 	var roleName string
 	var privileges []*string
 	var namespaces []*string
-	err = queryRowFunc(ctx, db, getRolesStmt, []any{&roleName, &privileges, &namespaces}, func() error {
+	err := queryRowFunc(ctx, db, getRolesStmt, []any{&roleName, &privileges, &namespaces}, func() error {
 		perm := &perms{
 			namespacePrivileges: make(map[string]map[privilege]struct{}),
 			globalPrivileges:    make(map[privilege]struct{}),
 		}
 
+		if len(privileges) != len(namespaces) {
+			return fmt.Errorf(`unexpected error: length of privileges and namespaces do not match. this is an internal bug`)
+		}
+
 		for i, priv := range privileges {
 			if priv == nil {
-				panic("unexpected error: privilege is nil")
+				// priv can be nil if the role has no privileges
+				if len(namespaces) != 1 {
+					return fmt.Errorf(`unexpected error: nil privilege in non-nil list of privileges. this is an internal bug`)
+				}
+				if namespaces[i] != nil {
+					return fmt.Errorf(`unexpected error: nil privilege in non-nil list of namespaces. this is an internal bug`)
+				}
+				continue
 			}
 
 			// check that the privilege exists
@@ -117,7 +120,6 @@ func newAccessController(ctx context.Context, db sql.DB) (*accessController, err
 
 // accessController enforces access control on the database.
 type accessController struct {
-	owner           string // the db owner
 	roles           map[string]*perms
 	userRoles       map[string][]string // a map of user public keys to the roles they have. It does _not_ include the default role.
 	knownNamespaces map[string]struct{} // a set of all known namespaces
@@ -126,7 +128,7 @@ type accessController struct {
 // CreateRole adds a new role to the access controller.
 func (a *accessController) CreateRole(ctx context.Context, db sql.DB, role string) error {
 	if isBuiltInRole(role) {
-		return fmt.Errorf(`role "%s" is a built-in role and cannot be added`, role)
+		return fmt.Errorf(`%w: role "%s" cannot be added`, ErrBuiltInRole, role)
 	}
 
 	_, ok := a.roles[role]
@@ -154,7 +156,7 @@ func (a *accessController) CreateRole(ctx context.Context, db sql.DB, role strin
 
 func (a *accessController) DeleteRole(ctx context.Context, db sql.DB, role string) error {
 	if isBuiltInRole(role) {
-		return fmt.Errorf(`role "%s" is a built-in role and cannot be removed`, role)
+		return fmt.Errorf(`%w: role "%s" cannot be dropped`, ErrBuiltInRole, role)
 	}
 
 	_, ok := a.roles[role]
@@ -203,7 +205,7 @@ func (a *accessController) unregisterNamespace(namespace string) {
 
 func (a *accessController) HasPrivilege(user string, namespace *string, privilege privilege) bool {
 	// if it is the owner, they have all privileges
-	if user == a.owner {
+	if a.IsOwner(user) {
 		return true
 	}
 
@@ -232,7 +234,7 @@ func (a *accessController) HasPrivilege(user string, namespace *string, privileg
 	return false
 }
 
-func (a *accessController) GrantPrivileges(ctx context.Context, db sql.DB, role string, privs []string, namespace *string) error {
+func (a *accessController) GrantPrivileges(ctx context.Context, db sql.DB, role string, privs []privilege, namespace *string, ifNotGranted bool) error {
 	if role == ownerRole {
 		return fmt.Errorf(`owner role already has all privileges`)
 	}
@@ -242,39 +244,29 @@ func (a *accessController) GrantPrivileges(ctx context.Context, db sql.DB, role 
 		return fmt.Errorf(`role "%s" does not exist`, role)
 	}
 
-	// verify that the privileges are valid
-	convPrivs, err := validatePrivileges(privs...)
-	if err != nil {
-		return err
-	}
-
-	// if a namespace is provided, check that it exists and that all privileges can be namespaced
-	if namespace != nil {
-		_, ok := perms.namespacePrivileges[*namespace]
-		if !ok {
-			return fmt.Errorf(`namespace "%s" does not exist`, *namespace)
-		}
-
-		err = canBeNamespaced(convPrivs...)
-		if err != nil {
-			return err
-		}
-	}
-
-	for _, p := range convPrivs {
+	ungrantedPrivs := make([]privilege, 0, len(privs))
+	for _, p := range privs {
 		if perms.canDo(p, namespace) {
-			return fmt.Errorf(`role "%s" already has some or all of the specified privileges`, role)
+			if ifNotGranted {
+				ungrantedPrivs = append(ungrantedPrivs, p)
+			} else {
+				return fmt.Errorf(`role "%s" already has some or all of the specified privileges`, role)
+			}
+		} else {
+			ungrantedPrivs = append(ungrantedPrivs, p)
 		}
 	}
+
+	var err error
 
 	// update the cache if the db operation is successful
 	defer func() {
 		if err == nil {
-			a.roles[role].grant(namespace, convPrivs...)
+			a.roles[role].grant(namespace, ungrantedPrivs...)
 		}
 	}()
 
-	err = grantPrivileges(ctx, db, role, convPrivs, namespace)
+	err = grantPrivileges(ctx, db, role, ungrantedPrivs, namespace)
 	if err != nil {
 		return err
 	}
@@ -282,7 +274,7 @@ func (a *accessController) GrantPrivileges(ctx context.Context, db sql.DB, role 
 	return nil
 }
 
-func (a *accessController) RevokePrivileges(ctx context.Context, db sql.DB, role string, privs []string, namespace *string) error {
+func (a *accessController) RevokePrivileges(ctx context.Context, db sql.DB, role string, privs []privilege, namespace *string, ifGranted bool) error {
 	if role == ownerRole {
 		return fmt.Errorf(`owner role cannot have privileges revoked`)
 	}
@@ -292,39 +284,29 @@ func (a *accessController) RevokePrivileges(ctx context.Context, db sql.DB, role
 		return fmt.Errorf(`role "%s" does not exist`, role)
 	}
 
-	// verify that the privileges are valid
-	convPrivs, err := validatePrivileges(privs...)
-	if err != nil {
-		return err
-	}
-
-	// if a namespace is provided, check that it exists and that all privileges can be namespaced
-	if namespace != nil {
-		_, ok := perms.namespacePrivileges[*namespace]
-		if !ok {
-			return fmt.Errorf(`namespace "%s" does not exist`, *namespace)
-		}
-
-		err = canBeNamespaced(convPrivs...)
-		if err != nil {
-			return err
-		}
-	}
-
-	for _, p := range convPrivs {
+	grantedPrivs := make([]privilege, 0, len(privs))
+	for _, p := range privs {
 		if !perms.canDo(p, namespace) {
-			return fmt.Errorf(`role "%s" does not have some or all of the specified privileges`, role)
+			if ifGranted {
+				grantedPrivs = append(grantedPrivs, p)
+			} else {
+				return fmt.Errorf(`role "%s" does not have some or all of the specified privileges`, role)
+			}
+		} else {
+			grantedPrivs = append(grantedPrivs, p)
 		}
 	}
+
+	var err error
 
 	// update the cache if the db operation is successful
 	defer func() {
 		if err == nil {
-			a.roles[role].revoke(namespace, convPrivs...)
+			a.roles[role].revoke(namespace, grantedPrivs...)
 		}
 	}()
 
-	err = revokePrivileges(ctx, db, role, privs, namespace)
+	err = revokePrivileges(ctx, db, role, grantedPrivs, namespace)
 	if err != nil {
 		return err
 	}
@@ -332,11 +314,7 @@ func (a *accessController) RevokePrivileges(ctx context.Context, db sql.DB, role
 	return nil
 }
 
-func (a *accessController) AssignRole(ctx context.Context, db sql.DB, role string, user string) error {
-	if isBuiltInRole(role) {
-		return fmt.Errorf(`role "%s" is a built-in role and cannot be assigned`, role)
-	}
-
+func (a *accessController) AssignRole(ctx context.Context, db sql.DB, role string, user string, ifNotGranted bool) error {
 	// check that the role exists
 	_, ok := a.roles[role]
 	if !ok {
@@ -352,6 +330,9 @@ func (a *accessController) AssignRole(ctx context.Context, db sql.DB, role strin
 	// check if the user already has the role
 	for _, r := range a.userRoles[user] {
 		if r == role {
+			if ifNotGranted {
+				return nil
+			}
 			return fmt.Errorf(`user "%s" already has role "%s"`, user, role)
 		}
 	}
@@ -372,11 +353,7 @@ func (a *accessController) AssignRole(ctx context.Context, db sql.DB, role strin
 	return nil
 }
 
-func (a *accessController) UnassignRole(ctx context.Context, db sql.DB, role string, user string) error {
-	if isBuiltInRole(role) {
-		return fmt.Errorf(`role "%s" is a built-in role and cannot be unassigned`, role)
-	}
-
+func (a *accessController) UnassignRole(ctx context.Context, db sql.DB, role string, user string, ifGranted bool) error {
 	_, ok := a.roles[role]
 	if !ok {
 		return fmt.Errorf(`role "%s" does not exist`, role)
@@ -399,6 +376,9 @@ func (a *accessController) UnassignRole(ctx context.Context, db sql.DB, role str
 	}
 
 	if !hasRole {
+		if ifGranted {
+			return nil
+		}
 		return fmt.Errorf(`user "%s" does not have role "%s"`, user, role)
 	}
 
@@ -410,25 +390,19 @@ func (a *accessController) UnassignRole(ctx context.Context, db sql.DB, role str
 	return nil
 }
 
-const ownerKey = "db_owner"
-
-// SetOwnership sets the owner of the database.
-// It will overwrite the current owner.
-func (a *accessController) SetOwnership(ctx context.Context, db sql.DB, user string) error {
-	// update the db
-	err := execute(ctx, db, "INSERT INTO kwild_engine.metadata (key, value) VALUES ($1, $2) ON CONFLICT (key) DO UPDATE SET value = $2", ownerKey, user)
-	if err != nil {
-		return err
+func (a *accessController) IsOwner(user string) bool {
+	roles, ok := a.userRoles[user]
+	if !ok {
+		return false
 	}
 
-	// update the cache
-	a.owner = user
+	for _, role := range roles {
+		if role == ownerRole {
+			return true
+		}
+	}
 
-	return nil
-}
-
-func (a *accessController) IsOwner(user string) bool {
-	return user == a.owner
+	return false
 }
 
 func (a *accessController) RoleExists(role string) bool {
@@ -468,17 +442,23 @@ func grantPrivileges(ctx context.Context, db sql.DB, roleName string, privileges
 // revokePrivileges revokes privileges from a role.
 // If the privileges do not exist, it will return an error.
 // It can optionally be applied to a specific namespace.
-func revokePrivileges(ctx context.Context, db sql.DB, roleName string, privileges []string, namespace *string) error {
+func revokePrivileges(ctx context.Context, db sql.DB, roleName string, privileges []privilege, namespace *string) error {
+	// we need to convert the privileges back to strings so that pgx can find an encode plan
+	privStrs := make([]string, len(privileges))
+	for i, p := range privileges {
+		privStrs[i] = string(p)
+	}
+
 	if namespace == nil {
 		err := execute(ctx, db, `DELETE FROM kwild_engine.role_privileges
-	WHERE role_id = (SELECT id FROM kwild_engine.roles WHERE name = $1) AND privilege_type::text = ANY($2::text[])`, roleName, privileges)
+	WHERE role_id = (SELECT id FROM kwild_engine.roles WHERE name = $1) AND privilege_type::text = ANY($2::text[])`, roleName, privStrs)
 		return err
 	}
 
 	err := execute(ctx, db, `DELETE FROM kwild_engine.role_privileges
 	WHERE role_id = (SELECT id FROM kwild_engine.roles WHERE name = $1)
 	AND namespace_id = (SELECT id FROM kwild_engine.namespaces WHERE name = $2)
-	AND privilege_type::text = ANY($3::text[])`, roleName, *namespace, privileges)
+	AND privilege_type::text = ANY($3::text[])`, roleName, *namespace, privStrs)
 	return err
 }
 
@@ -616,8 +596,9 @@ func (p *perms) revoke(namespace *string, privs ...privilege) {
 // canBeNamespaced returns a nil error if the privilege can be namespaced.
 func canBeNamespaced(ps ...privilege) error {
 	for _, p := range ps {
-		if p == RolesPrivilege {
-			return fmt.Errorf(`privilege "%s" cannot be namespaced`, p)
+		switch p {
+		case RolesPrivilege, UsePrivilege:
+			return fmt.Errorf(`%w: %s`, ErrPrivilegeCannotBeNamespaced, p)
 		}
 	}
 

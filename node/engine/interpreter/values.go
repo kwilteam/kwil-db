@@ -1468,7 +1468,7 @@ func (a *IntArrayValue) Len() int32 {
 
 func (a *IntArrayValue) Index(i int32) (ScalarValue, error) {
 	if i < 1 || i > a.Len() {
-		return nil, fmt.Errorf("index out of bounds")
+		return nil, ErrIndexOutOfBounds
 	}
 
 	return &IntValue{a.Elements[i-1]}, nil // indexing is 1-based
@@ -1477,7 +1477,7 @@ func (a *IntArrayValue) Index(i int32) (ScalarValue, error) {
 // allocArr checks that the array has index i, and if not, it allocates enough space to set the value.
 func allocArr[T any](p *pgtype.Array[T], i int32) error {
 	if i < 1 {
-		return fmt.Errorf("index out of bounds")
+		return ErrIndexOutOfBounds
 	}
 
 	if i > int32(len(p.Elements)) {
@@ -1601,7 +1601,7 @@ func (a *TextArrayValue) Len() int32 {
 
 func (a *TextArrayValue) Index(i int32) (ScalarValue, error) {
 	if i < 1 || i > a.Len() {
-		return nil, fmt.Errorf("index out of bounds")
+		return nil, ErrIndexOutOfBounds
 	}
 
 	return &TextValue{a.Elements[i-1]}, nil
@@ -1756,7 +1756,7 @@ func (a *BoolArrayValue) Len() int32 {
 
 func (a *BoolArrayValue) Index(i int32) (ScalarValue, error) {
 	if i < 1 || i > a.Len() {
-		return nil, fmt.Errorf("index out of bounds")
+		return nil, ErrIndexOutOfBounds
 	}
 
 	return &BoolValue{a.Elements[i-1]}, nil
@@ -1917,7 +1917,7 @@ func (a *DecimalArrayValue) Len() int32 {
 
 func (a *DecimalArrayValue) Index(i int32) (ScalarValue, error) {
 	if i < 1 || i > a.Len() {
-		return nil, fmt.Errorf("index out of bounds")
+		return nil, ErrIndexOutOfBounds
 	}
 
 	return &DecimalValue{Numeric: a.Elements[i-1]}, nil
@@ -2044,7 +2044,7 @@ func (a *BlobArrayValue) Len() int32 {
 
 func (a *BlobArrayValue) Index(i int32) (ScalarValue, error) {
 	if i < 1 || i > a.Len() {
-		return nil, fmt.Errorf("index out of bounds")
+		return nil, ErrIndexOutOfBounds
 	}
 
 	return a.Elements[i-1], nil
@@ -2129,7 +2129,7 @@ func (a *UuidArrayValue) Len() int32 {
 
 func (a *UuidArrayValue) Index(i int32) (ScalarValue, error) {
 	if i < 1 || i > a.Len() {
-		return nil, fmt.Errorf("index out of bounds")
+		return nil, ErrIndexOutOfBounds
 	}
 
 	return &UUIDValue{a.Elements[i-1]}, nil

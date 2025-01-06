@@ -62,7 +62,7 @@ func makeActionToExecutable(namespace string, act *Action) *executable {
 				}
 			}
 
-			exec2 := exec.child(namespace)
+			exec2 := exec.subscope(namespace)
 
 			for j, param := range act.Parameters {
 				err = exec2.allocateVariable(param.Name, args[j])
@@ -318,7 +318,7 @@ func (i *interpreterPlanner) VisitActionStmtCall(p0 *parse.ActionStmtCall) any {
 // It takes a list of statements, and a list of variable allocations that will be made in the sub-scope.
 func executeBlock(exec *executionContext, fn resultFunc,
 	stmtFuncs []stmtFunc) error {
-	exec.scope.subScope()
+	exec.scope.child()
 	defer exec.scope.popScope()
 
 	for _, stmt := range stmtFuncs {
@@ -341,7 +341,7 @@ func (i *interpreterPlanner) VisitActionStmtForLoop(p0 *parse.ActionStmtForLoop)
 
 	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
 		err := loopFn(exec, func(term Value) error {
-			exec.scope.subScope()
+			exec.scope.child()
 			defer exec.scope.popScope()
 			err := exec.allocateVariable(p0.Receiver.Name, term)
 			if err != nil {
@@ -1112,9 +1112,23 @@ func (i *interpreterPlanner) VisitExpressionIs(p0 *parse.ExpressionIs) any {
 Role management
 */
 func (i *interpreterPlanner) VisitGrantOrRevokeStatement(p0 *parse.GrantOrRevokeStatement) any {
+	var varExprFn exprFunc
+	if p0.ToVariable != nil {
+		varExprFn = p0.ToVariable.Accept(i).(exprFunc)
+	}
 	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
-		if !exec.interpreter.accessController.HasPrivilege(exec.txCtx.Caller, nil, RolesPrivilege) {
-			return fmt.Errorf("%w: %s", ErrDoesNotHavePriv, RolesPrivilege)
+		if err := exec.checkPrivilege(RolesPrivilege); err != nil {
+			return err
+		}
+
+		// if we are granting ownership, then we need to check if the caller is an owner.
+		if p0.GrantRole == ownerRole && !exec.engineCtx.OverrideAuthz {
+			if !exec.isOwner() {
+				return fmt.Errorf("%w: %s", ErrDoesNotHavePriv, `only an owner can grant the "owner" role`)
+			}
+		}
+		if p0.GrantRole == defaultRole {
+			return fmt.Errorf("cannot grant or revoke the default role")
 		}
 
 		switch {
@@ -1123,13 +1137,59 @@ func (i *interpreterPlanner) VisitGrantOrRevokeStatement(p0 *parse.GrantOrRevoke
 			if !p0.IsGrant {
 				fn = exec.interpreter.accessController.RevokePrivileges
 			}
-			return fn(exec.txCtx.Ctx, exec.db, p0.ToRole, p0.Privileges, p0.Namespace)
+
+			convPrivs, err := validatePrivileges(p0.Privileges...)
+			if err != nil {
+				return err
+			}
+
+			if p0.Namespace != nil {
+				err = canBeNamespaced(convPrivs...)
+				if err != nil {
+					return err
+				}
+			}
+
+			return fn(exec.engineCtx.TxContext.Ctx, exec.db, p0.ToRole, convPrivs, p0.Namespace, p0.If)
 		case p0.GrantRole != "" && p0.ToUser != "":
 			fn := exec.interpreter.accessController.AssignRole
 			if !p0.IsGrant {
 				fn = exec.interpreter.accessController.UnassignRole
 			}
-			return fn(exec.txCtx.Ctx, exec.db, p0.GrantRole, p0.ToUser)
+
+			if p0.Namespace != nil {
+				return fmt.Errorf("role assignment is global and cannot be namespaced")
+			}
+
+			return fn(exec.engineCtx.TxContext.Ctx, exec.db, p0.GrantRole, p0.ToUser, p0.If)
+		case p0.GrantRole != "" && p0.ToVariable != nil:
+			fn := exec.interpreter.accessController.AssignRole
+			if !p0.IsGrant {
+				fn = exec.interpreter.accessController.UnassignRole
+			}
+
+			if p0.Namespace != nil {
+				return fmt.Errorf("role assignment is global and cannot be namespaced")
+			}
+
+			val, err := varExprFn(exec)
+			if err != nil {
+				return err
+			}
+
+			if val.Type() != types.TextType {
+				return fmt.Errorf("expected text, got %s", val.Type())
+			}
+
+			strVal, ok := val.RawValue().(string)
+			if !ok {
+				if val.Null() {
+					return fmt.Errorf("cannot assign role to null user")
+				}
+				return fmt.Errorf("expected string, got %T", val.RawValue())
+			}
+
+			return fn(exec.engineCtx.TxContext.Ctx, exec.db, p0.GrantRole, strVal, p0.If)
 		default:
 			// failure to hit these cases should have been caught by the parser, where better error
 			// messages can be generated. This is a catch-all for any other invalid cases.
@@ -1140,8 +1200,8 @@ func (i *interpreterPlanner) VisitGrantOrRevokeStatement(p0 *parse.GrantOrRevoke
 
 func (i *interpreterPlanner) VisitCreateRoleStatement(p0 *parse.CreateRoleStatement) any {
 	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
-		if !exec.interpreter.accessController.HasPrivilege(exec.txCtx.Caller, nil, RolesPrivilege) {
-			return fmt.Errorf("%w: %s", ErrDoesNotHavePriv, RolesPrivilege)
+		if err := exec.checkPrivilege(RolesPrivilege); err != nil {
+			return err
 		}
 
 		if p0.IfNotExists {
@@ -1150,14 +1210,14 @@ func (i *interpreterPlanner) VisitCreateRoleStatement(p0 *parse.CreateRoleStatem
 			}
 		}
 
-		return exec.interpreter.accessController.CreateRole(exec.txCtx.Ctx, exec.db, p0.Role)
+		return exec.interpreter.accessController.CreateRole(exec.engineCtx.TxContext.Ctx, exec.db, p0.Role)
 	})
 }
 
 func (i *interpreterPlanner) VisitDropRoleStatement(p0 *parse.DropRoleStatement) any {
 	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
-		if !exec.interpreter.accessController.HasPrivilege(exec.txCtx.Caller, nil, RolesPrivilege) {
-			return fmt.Errorf("%w: %s", ErrDoesNotHavePriv, RolesPrivilege)
+		if err := exec.checkPrivilege(RolesPrivilege); err != nil {
+			return err
 		}
 
 		if p0.IfExists {
@@ -1166,17 +1226,7 @@ func (i *interpreterPlanner) VisitDropRoleStatement(p0 *parse.DropRoleStatement)
 			}
 		}
 
-		return exec.interpreter.accessController.DeleteRole(exec.txCtx.Ctx, exec.db, p0.Role)
-	})
-}
-
-func (i *interpreterPlanner) VisitTransferOwnershipStatement(p0 *parse.TransferOwnershipStatement) any {
-	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
-		if !exec.interpreter.accessController.IsOwner(exec.txCtx.Caller) {
-			return fmt.Errorf("%w: %s", ErrDoesNotHavePriv, "caller must be owner")
-		}
-
-		return exec.interpreter.accessController.SetOwnership(exec.txCtx.Ctx, exec.db, p0.To)
+		return exec.interpreter.accessController.DeleteRole(exec.engineCtx.TxContext.Ctx, exec.db, p0.Role)
 	})
 }
 
@@ -1235,6 +1285,12 @@ func (i *interpreterPlanner) VisitSQLStatement(p0 *parse.SQLStatement) any {
 		}
 		defer reset()
 
+		if mutatesState {
+			if err := exec.checkNamespaceMutatbility(); err != nil {
+				return err
+			}
+		}
+
 		if err := exec.checkPrivilege(privilege); err != nil {
 			return err
 		}
@@ -1258,7 +1314,7 @@ func genAndExec(exec *executionContext, stmt parse.TopLevelStatement) error {
 		return err
 	}
 
-	return execute(exec.txCtx.Ctx, exec.db, sql)
+	return execute(exec.engineCtx.TxContext.Ctx, exec.db, sql)
 }
 
 func (i *interpreterPlanner) VisitAlterTableStatement(p0 *parse.AlterTableStatement) any {
@@ -1268,6 +1324,10 @@ func (i *interpreterPlanner) VisitAlterTableStatement(p0 *parse.AlterTableStatem
 			return err
 		}
 		defer reset()
+
+		if err := exec.checkNamespaceMutatbility(); err != nil {
+			return err
+		}
 
 		// ensure that the caller has the necessary privileges
 		if err := exec.checkPrivilege(AlterPrivilege); err != nil {
@@ -1301,6 +1361,10 @@ func (i *interpreterPlanner) VisitCreateTableStatement(p0 *parse.CreateTableStat
 		}
 		defer reset()
 
+		if err := exec.checkNamespaceMutatbility(); err != nil {
+			return err
+		}
+
 		// ensure that the caller has the necessary privileges
 		if err := exec.checkPrivilege(CreatePrivilege); err != nil {
 			return err
@@ -1332,6 +1396,10 @@ func (i *interpreterPlanner) VisitDropTableStatement(p0 *parse.DropTableStatemen
 			return err
 		}
 		defer reset()
+
+		if err := exec.checkNamespaceMutatbility(); err != nil {
+			return err
+		}
 
 		// ensure that the caller has the necessary privileges
 		if err := exec.checkPrivilege(DropPrivilege); err != nil {
@@ -1365,6 +1433,10 @@ func (i *interpreterPlanner) VisitCreateIndexStatement(p0 *parse.CreateIndexStat
 			return err
 		}
 		defer reset()
+
+		if err := exec.checkNamespaceMutatbility(); err != nil {
+			return err
+		}
 
 		// ensure that the caller has the necessary privileges
 		if err := exec.checkPrivilege(CreatePrivilege); err != nil {
@@ -1406,6 +1478,10 @@ func (i *interpreterPlanner) VisitDropIndexStatement(p0 *parse.DropIndexStatemen
 		}
 		defer reset()
 
+		if err := exec.checkNamespaceMutatbility(); err != nil {
+			return err
+		}
+
 		// ensure that the caller has the necessary privileges
 		if err := exec.checkPrivilege(DropPrivilege); err != nil {
 			return err
@@ -1432,6 +1508,19 @@ func (i *interpreterPlanner) VisitUseExtensionStatement(p0 *parse.UseExtensionSt
 			return err
 		}
 
+		// see if the extension is already initialized
+		if existing, exists := exec.interpreter.namespaces[p0.Alias]; exists {
+			if existing.namespaceType == namespaceTypeExtension {
+				if p0.IfNotExists {
+					return nil
+				} else {
+					return fmt.Errorf(`extension initialized with alias "%s" already exists`, p0.Alias)
+				}
+			}
+
+			return fmt.Errorf(`namespace "%s" already exists and is not an extension`, p0.Alias)
+		}
+
 		config := make(map[string]Value, len(p0.Config))
 
 		for j, configValue := range configValues {
@@ -1448,7 +1537,7 @@ func (i *interpreterPlanner) VisitUseExtensionStatement(p0 *parse.UseExtensionSt
 			return fmt.Errorf(`extension "%s" does not exist`, p0.ExtName)
 		}
 
-		extNamespace, err := initializeExtension(exec.txCtx.Ctx, exec.interpreter.service, exec.db, initializer, config)
+		extNamespace, err := initializeExtension(exec.engineCtx.TxContext.Ctx, exec.interpreter.service, exec.db, initializer, p0.Alias, config)
 		if err != nil {
 			return err
 		}
@@ -1458,7 +1547,7 @@ func (i *interpreterPlanner) VisitUseExtensionStatement(p0 *parse.UseExtensionSt
 			return err
 		}
 
-		err = registerExtensionInitialization(exec.txCtx.Ctx, exec.db, p0.Alias, p0.ExtName, config)
+		err = registerExtensionInitialization(exec.engineCtx.TxContext.Ctx, exec.db, p0.Alias, p0.ExtName, config)
 		if err != nil {
 			return err
 		}
@@ -1495,7 +1584,7 @@ func (i *interpreterPlanner) VisitUnuseExtensionStatement(p0 *parse.UnuseExtensi
 			return err
 		}
 
-		err = unregisterExtensionInitialization(exec.txCtx.Ctx, exec.db, p0.Alias)
+		err = unregisterExtensionInitialization(exec.engineCtx.TxContext.Ctx, exec.db, p0.Alias)
 		if err != nil {
 			return err
 		}
@@ -1515,17 +1604,30 @@ func (i *interpreterPlanner) VisitCreateActionStatement(p0 *parse.CreateActionSt
 		}
 		defer reset()
 
-		if err := exec.checkPrivilege(CreatePrivilege); err != nil {
+		if err := exec.checkNamespaceMutatbility(); err != nil {
 			return err
 		}
 
+		if err := exec.checkPrivilege(CreatePrivilege); err != nil {
+			return err
+		}
 		namespace := exec.interpreter.namespaces[exec.scope.namespace]
 
 		// we check in the available functions map because there is a chance that the user is overwriting an existing function.
-		if _, exists := namespace.availableFunctions[p0.Name]; exists {
+		if existingExec, exists := namespace.availableFunctions[p0.Name]; exists {
 			if p0.IfNotExists {
 				return nil
 			} else if p0.OrReplace {
+				// we delete the existing function.
+				// If it is an action, we need to unstore it
+				// If it is a built-in function, we just remove it from the map.
+				if existingExec.Type == executableTypeAction {
+					err = deleteAction(exec.engineCtx.TxContext.Ctx, exec.db, exec.scope.namespace, p0.Name)
+					if err != nil {
+						return err
+					}
+				}
+
 				delete(namespace.availableFunctions, p0.Name)
 			} else {
 				return fmt.Errorf(`action/function "%s" already exists`, p0.Name)
@@ -1537,7 +1639,7 @@ func (i *interpreterPlanner) VisitCreateActionStatement(p0 *parse.CreateActionSt
 			return err
 		}
 
-		err = storeAction(exec.txCtx.Ctx, exec.db, exec.scope.namespace, &act)
+		err = storeAction(exec.engineCtx.TxContext.Ctx, exec.db, exec.scope.namespace, &act)
 		if err != nil {
 			return err
 		}
@@ -1556,6 +1658,10 @@ func (i *interpreterPlanner) VisitDropActionStatement(p0 *parse.DropActionStatem
 			return err
 		}
 		defer reset()
+
+		if err := exec.checkNamespaceMutatbility(); err != nil {
+			return err
+		}
 
 		if err := exec.checkPrivilege(DropPrivilege); err != nil {
 			return err
@@ -1578,10 +1684,27 @@ func (i *interpreterPlanner) VisitDropActionStatement(p0 *parse.DropActionStatem
 
 		delete(namespace.availableFunctions, p0.Name)
 
-		// there is a case where an action overwrites a function. We should restore the function if it exists.
+		err = deleteAction(exec.engineCtx.TxContext.Ctx, exec.db, exec.scope.namespace, p0.Name)
+		if err != nil {
+			return err
+		}
+
+		// there are two cases we need to watch out for.
+		// One is where the action originally overwrote a function. We should restore the function if it exists.
+		// The second is if the action overwrote a method on an extension namespace, which we need to restore.
+		// If it overwrote a method that overwrote a function, we should restore the method
 		if funcDef, ok := parse.Functions[p0.Name]; ok {
 			if scalarFunc, ok := funcDef.(*parse.ScalarFunctionDefinition); ok {
 				namespace.availableFunctions[p0.Name] = funcDefToExecutable(p0.Name, scalarFunc)
+			}
+		}
+
+		// if it is an extension, see if a corresponding method exists.
+		// This will overwrite the function we just restored.
+		if namespace.namespaceType == namespaceTypeExtension {
+			method, ok := namespace.methods[p0.Name]
+			if ok {
+				namespace.availableFunctions[p0.Name] = method
 			}
 		}
 
@@ -1603,7 +1726,7 @@ func (i *interpreterPlanner) VisitCreateNamespaceStatement(p0 *parse.CreateNames
 			return fmt.Errorf(`%w: "%s"`, ErrNamespaceExists, p0.Namespace)
 		}
 
-		if _, err := createNamespace(exec.txCtx.Ctx, exec.db, p0.Namespace, namespaceTypeUser); err != nil {
+		if _, err := createNamespace(exec.engineCtx.TxContext.Ctx, exec.db, p0.Namespace, namespaceTypeUser); err != nil {
 			return err
 		}
 
@@ -1634,14 +1757,14 @@ func (i *interpreterPlanner) VisitDropNamespaceStatement(p0 *parse.DropNamespace
 			return fmt.Errorf(`%w: namespace "%s" does not exist`, ErrNamespaceNotFound, p0.Namespace)
 		}
 
-		if ns.namespaceType == namespaceTypeSystem {
-			return fmt.Errorf(`cannot drop built-in namespace "%s"`, p0.Namespace)
+		if p0.Namespace == DefaultNamespace || p0.Namespace == infoNamespace {
+			return fmt.Errorf(`%w: "%s"`, ErrCannotDropBuiltinNamespace, p0.Namespace)
 		}
 		if ns.namespaceType == namespaceTypeExtension {
-			return fmt.Errorf(`cannot drop extension namespace using DROP "%s"`, p0.Namespace)
+			return fmt.Errorf(`%w: cannot drop extension namespace "%s" using DROP NAMESPACE. use UNUSE instead`, ErrCannotMutateExtension, p0.Namespace)
 		}
 
-		if err := dropNamespace(exec.txCtx.Ctx, exec.db, p0.Namespace); err != nil {
+		if err := dropNamespace(exec.engineCtx.TxContext.Ctx, exec.db, p0.Namespace); err != nil {
 			return err
 		}
 

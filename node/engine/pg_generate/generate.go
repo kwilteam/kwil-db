@@ -891,6 +891,7 @@ func (s *sqlGenerator) VisitCreateIndexStatement(p0 *parse.CreateIndexStatement)
 	}
 	if p0.Name != "" {
 		str.WriteString(p0.Name)
+		str.WriteString(" ")
 	}
 	str.WriteString("ON ")
 	str.WriteString(s.qualify(p0.On))
@@ -1028,10 +1029,6 @@ func (s *sqlGenerator) VisitCreateRoleStatement(p0 *parse.CreateRoleStatement) a
 
 func (s *sqlGenerator) VisitDropRoleStatement(p0 *parse.DropRoleStatement) any {
 	panic("drop role should never be used within a generated SQL statement")
-}
-
-func (s *sqlGenerator) VisitTransferOwnershipStatement(p0 *parse.TransferOwnershipStatement) any {
-	panic("transfer ownership should never be used within a generated SQL statement")
 }
 
 func (s *sqlGenerator) VisitPrimaryKeyInlineConstraint(p0 *parse.PrimaryKeyInlineConstraint) any {

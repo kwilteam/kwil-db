@@ -18,7 +18,7 @@ import (
 // It should be used for reading values into memory, creating
 // connections, and other setup that should only be done once per
 // extension instance.
-type Initializer func(ctx context.Context, service *common.Service, db sql.DB, metadata map[string]any) (Instance, error)
+type Initializer func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]any) (Instance, error)
 
 // Instance is a named initialized instance of a precompile. It is
 // returned from the precompile initialization, as specified by the
@@ -31,34 +31,34 @@ type Instance interface {
 	// initializer.
 	// It should be used for setting up state such as tables, indexes,
 	// and other data structures that are part of the application state.
-	OnUse(ctx *common.TxContext, app *common.App) error
+	OnUse(ctx *common.EngineContext, app *common.App) error
 	// Methods returns the methods that are available on the instance.
 	Methods() []*ExportedMethod
 	// OnUnuse is called when a `UNUSE ...` statement is executed.
-	OnUnuse(ctx *common.TxContext, app *common.App) error
+	OnUnuse(ctx *common.EngineContext, app *common.App) error
 }
 
 // ConcreteInstance is a concrete implementation of an extension instance.
 type PrecompileExtension[T any] struct {
 	// Initialize is the function that creates a new instance of the extension.
-	Initialize func(ctx context.Context, service *common.Service, db sql.DB, metadata map[string]any) (*T, error)
+	Initialize func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]any) (*T, error)
 	// OnUse is called when a `USE ... AS ...` statement is executed
-	OnUse func(ctx *common.TxContext, app *common.App, t *T) error
+	OnUse func(ctx *common.EngineContext, app *common.App, t *T) error
 	// Methods is a map of method names to method implementations.
-	Methods []*Method[T]
+	Methods []Method[T]
 	// OnUnuse is called when a `UNUSE ...` statement is executed
-	OnUnuse func(ctx *common.TxContext, app *common.App, t *T) error
+	OnUnuse func(ctx *common.EngineContext, app *common.App, t *T) error
 }
 
 // Export exports the extension to a form that does not rely on generics, allowing the extension to be consumed by callers without forcing
 // the callers to know the generic type.
 func (p *PrecompileExtension[T]) Export() Initializer {
-	return func(ctx context.Context, service *common.Service, db sql.DB, metadata map[string]any) (Instance, error) {
+	return func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]any) (Instance, error) {
 		var t *T
 		if p.Initialize == nil {
 			t = new(T)
 		} else {
-			t2, err := p.Initialize(ctx, service, db, metadata)
+			t2, err := p.Initialize(ctx, service, db, alias, metadata)
 			if err != nil {
 				return nil, err
 			}
@@ -72,14 +72,14 @@ func (p *PrecompileExtension[T]) Export() Initializer {
 		}
 
 		return &ExportedExtension{
-			onUse: func(ctx *common.TxContext, app *common.App) error {
+			onUse: func(ctx *common.EngineContext, app *common.App) error {
 				if p.OnUse == nil {
 					return nil
 				}
 				return p.OnUse(ctx, app, t)
 			},
 			methods: methods,
-			onUnuse: func(ctx *common.TxContext, app *common.App) error {
+			onUnuse: func(ctx *common.EngineContext, app *common.App) error {
 				if p.OnUnuse == nil {
 					return nil
 				}
@@ -91,11 +91,11 @@ func (p *PrecompileExtension[T]) Export() Initializer {
 
 type ExportedExtension struct {
 	methods []*ExportedMethod
-	onUse   func(ctx *common.TxContext, app *common.App) error
-	onUnuse func(ctx *common.TxContext, app *common.App) error
+	onUse   func(ctx *common.EngineContext, app *common.App) error
+	onUnuse func(ctx *common.EngineContext, app *common.App) error
 }
 
-func (e *ExportedExtension) OnUse(ctx *common.TxContext, app *common.App) error {
+func (e *ExportedExtension) OnUse(ctx *common.EngineContext, app *common.App) error {
 	return e.onUse(ctx, app)
 }
 
@@ -103,7 +103,7 @@ func (e *ExportedExtension) Methods() []*ExportedMethod {
 	return e.methods
 }
 
-func (e *ExportedExtension) OnUnuse(ctx *common.TxContext, app *common.App) error {
+func (e *ExportedExtension) OnUnuse(ctx *common.EngineContext, app *common.App) error {
 	return e.onUnuse(ctx, app)
 }
 
@@ -115,8 +115,8 @@ type Method[T any] struct {
 	// It must have exactly one of PUBLIC, PRIVATE, or SYSTEM,
 	// and can have any number of other modifiers.
 	AccessModifiers []Modifier
-	// Call is the function that is called when the method is invoked.
-	Call func(ctx *common.TxContext, app *common.App, inputs []any, resultFn func([]any) error, t *T) error
+	// Handler is the function that is called when the method is invoked.
+	Handler func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error, t *T) error
 	// ReturnColumns is a list of the returned column names. It is optional. If it is set, its length must be
 	// equal to the length of the returned values passed to the resultFn. If it is not set, the returned column
 	// names will be generated based on their position in the returned values.
@@ -157,8 +157,8 @@ func (m *Method[T]) export(t *T) *ExportedMethod {
 	return &ExportedMethod{
 		Name:            m.Name,
 		AccessModifiers: m.AccessModifiers,
-		Call: func(ctx *common.TxContext, app *common.App, inputs []any, resultFn func([]any) error) error {
-			return m.Call(ctx, app, inputs, resultFn, t)
+		Call: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+			return m.Handler(ctx, app, inputs, resultFn, t)
 		},
 	}
 }
@@ -166,7 +166,7 @@ func (m *Method[T]) export(t *T) *ExportedMethod {
 type ExportedMethod struct {
 	Name            string
 	AccessModifiers []Modifier
-	Call            func(ctx *common.TxContext, app *common.App, inputs []any, resultFn func([]any) error) error
+	Call            func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error
 	// ReturnColumns is a list of the returned column names. It is optional. If it is set, its length must be
 	// equal to the length of the returned values passed to the resultFn.
 	ReturnColumns []string

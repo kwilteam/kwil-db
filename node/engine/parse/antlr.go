@@ -81,8 +81,6 @@ func (s *schemaVisitor) VisitStatement(ctx *gen.StatementContext) any {
 		s2 = ctx.Grant_statement().Accept(s).(TopLevelStatement)
 	case ctx.Revoke_statement() != nil:
 		s2 = ctx.Revoke_statement().Accept(s).(TopLevelStatement)
-	case ctx.Transfer_ownership_statement() != nil:
-		s2 = ctx.Transfer_ownership_statement().Accept(s).(TopLevelStatement)
 	case ctx.Create_action_statement() != nil:
 		s3 := ctx.Create_action_statement().Accept(s).(*CreateActionStatement)
 		r := s.getTextFromStream(ctx.GetStart().GetStart(), ctx.GetStop().GetStop()) + ";"
@@ -143,7 +141,7 @@ func (s *schemaVisitor) VisitCreate_action_statement(ctx *gen.Create_action_stat
 
 	paramSet := make(map[string]struct{})
 	for i, t := range ctx.AllType_() {
-		name := s.cleanStringIdent(ctx.VARIABLE(i))
+		name := s.cleanStringIdent(ctx, ctx.VARIABLE(i).GetText())
 
 		// check for duplicate parameters
 		if _, ok := paramSet[name]; ok {
@@ -372,6 +370,11 @@ func (s *schemaVisitor) VisitIdentifier_list(ctx *gen.Identifier_listContext) an
 	return ident
 }
 
+func (s *schemaVisitor) VisitAllowed_identifier(ctx *gen.Allowed_identifierContext) any {
+	// is directly visited by VisitIdentifier (see the next method)
+	panic("Allowed_identifier should not be visited directly")
+}
+
 func (s *schemaVisitor) VisitIdentifier(ctx *gen.IdentifierContext) any {
 	return s.getIdent(ctx)
 }
@@ -418,20 +421,20 @@ func (s *schemaVisitor) VisitType_cast(ctx *gen.Type_castContext) any {
 
 func (s *schemaVisitor) VisitVariable(ctx *gen.VariableContext) any {
 	var e *ExpressionVariable
-	var tok antlr.Token
+	var tok antlr.ParserRuleContext
 	switch {
 	case ctx.VARIABLE() != nil:
 		e = &ExpressionVariable{
 			Name:   strings.ToLower(ctx.GetText()),
 			Prefix: VariablePrefixDollar,
 		}
-		tok = ctx.VARIABLE().GetSymbol()
+		tok = ctx
 	case ctx.CONTEXTUAL_VARIABLE() != nil:
 		e = &ExpressionVariable{
 			Name:   strings.ToLower(ctx.GetText()),
 			Prefix: VariablePrefixAt,
 		}
-		tok = ctx.CONTEXTUAL_VARIABLE().GetSymbol()
+		tok = ctx
 	default:
 		panic("unknown variable")
 	}
@@ -1026,11 +1029,13 @@ func (s *schemaVisitor) VisitRevoke_statement(ctx *gen.Revoke_statementContext) 
 // It is the responsibility of the caller to set the correct IsGrant field.
 func (s *schemaVisitor) parseGrantOrRevoke(ctx interface {
 	antlr.ParserRuleContext
+	IF() antlr.TerminalNode
 	Privilege_list() gen.IPrivilege_listContext
 	GetGrant_role() gen.IRole_nameContext
 	GetRole() gen.IRole_nameContext
 	GetUser() antlr.Token
 	GetNamespace() gen.IIdentifierContext
+	GetUser_var() gen.IAction_exprContext
 }) *GrantOrRevokeStatement {
 	// can be:
 	// GRANT/REVOKE privilege_list/role TO/FROM role/user
@@ -1051,6 +1056,8 @@ func (s *schemaVisitor) parseGrantOrRevoke(ctx interface {
 		c.ToRole = ctx.GetRole().Accept(s).(string)
 	case ctx.GetUser() != nil:
 		c.ToUser = parseStringLiteral(ctx.GetUser().GetText())
+	case ctx.GetUser_var() != nil:
+		c.ToVariable = ctx.GetUser_var().Accept(s).(Expression)
 	default:
 		// should not happen, as this would suggest a bug in the parser
 		panic("invalid grant/revoke statement")
@@ -1061,6 +1068,8 @@ func (s *schemaVisitor) parseGrantOrRevoke(ctx interface {
 		ns := s.getIdent(ctx.GetNamespace())
 		c.Namespace = &ns
 	}
+
+	c.If = ctx.IF() != nil
 
 	// either privileges can be granted to roles, or roles can be granted to users.
 	// Other permutations are invalid.
@@ -1077,7 +1086,7 @@ func (s *schemaVisitor) parseGrantOrRevoke(ctx interface {
 		}
 	} else {
 		// if granting privileges, then recipient must be a role
-		if c.ToUser != "" {
+		if c.ToUser != "" || c.ToVariable != nil {
 			s.errs.RuleErr(ctx, ErrGrantOrRevoke, "cannot grant or revoke privileges to a user")
 		}
 	}
@@ -1086,9 +1095,6 @@ func (s *schemaVisitor) parseGrantOrRevoke(ctx interface {
 }
 
 func (s *schemaVisitor) VisitRole_name(ctx *gen.Role_nameContext) any {
-	if ctx.DEFAULT() != nil {
-		return "default"
-	}
 	return s.getIdent(ctx.Identifier())
 }
 
@@ -1104,15 +1110,6 @@ func (s *schemaVisitor) VisitPrivilege_list(ctx *gen.Privilege_listContext) any 
 func (s *schemaVisitor) VisitPrivilege(ctx *gen.PrivilegeContext) any {
 	// since there is only one token, we can just get all text
 	return ctx.GetText()
-}
-
-func (s *schemaVisitor) VisitTransfer_ownership_statement(ctx *gen.Transfer_ownership_statementContext) any {
-	stmt := &TransferOwnershipStatement{
-		To: ctx.STRING_().GetText(),
-	}
-
-	stmt.Set(ctx)
-	return stmt
 }
 
 func (s *schemaVisitor) VisitSelect_statement(ctx *gen.Select_statementContext) any {
@@ -1591,7 +1588,7 @@ func (s *schemaVisitor) VisitWindow_function_call_sql_expr(ctx *gen.Window_funct
 		wr := &WindowReference{
 			Name: name,
 		}
-		wr.SetToken(ctx.Identifier().IDENTIFIER().GetSymbol())
+		wr.Set(ctx.Identifier().Allowed_identifier())
 		e.Window = wr
 	} else {
 		e.Window = ctx.Window().Accept(s).(*WindowImpl)
@@ -2178,7 +2175,7 @@ func (s *schemaVisitor) VisitVariable_or_underscore(ctx *gen.Variable_or_undersc
 		return nil
 	}
 
-	str := s.cleanStringIdent(ctx.VARIABLE())
+	str := s.cleanStringIdent(ctx, ctx.VARIABLE().GetText())
 	return &str
 }
 
@@ -2384,20 +2381,20 @@ func (s *schemaVisitor) Visit(tree antlr.ParseTree) interface {
 // It checks that the identifier is not too long.
 // It also converts the identifier to lowercase.
 func (s *schemaVisitor) getIdent(i gen.IIdentifierContext) string {
-	return strings.ToLower(s.cleanStringIdent(i.IDENTIFIER()))
+
+	return strings.ToLower(s.cleanStringIdent(i, i.Allowed_identifier().GetText()))
 }
 
-func (s *schemaVisitor) cleanStringIdent(i antlr.TerminalNode) string {
-	ident := i.GetText()
-	s.validateVariableIdentifier(i.GetSymbol(), ident)
-	return strings.ToLower(ident)
+func (s *schemaVisitor) cleanStringIdent(t antlr.ParserRuleContext, i string) string {
+	s.validateVariableIdentifier(t, i)
+	return strings.ToLower(i)
 }
 
 // validateVariableIdentifier validates that a variable's identifier is not too long.
 // It doesn't check if it is a keyword, since variables have $ prefixes.
-func (s *schemaVisitor) validateVariableIdentifier(i antlr.Token, str string) {
+func (s *schemaVisitor) validateVariableIdentifier(i antlr.ParserRuleContext, str string) {
 	if len(str) > validation.MAX_IDENT_NAME_LENGTH {
-		s.errs.TokenErr(i, ErrIdentifier, "maximum identifier length is %d", maxIdentifierLength)
+		s.errs.RuleErr(i, ErrIdentifier, "maximum identifier length is %d", maxIdentifierLength)
 	}
 }
 

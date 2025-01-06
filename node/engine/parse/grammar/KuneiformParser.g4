@@ -27,7 +27,6 @@ statement:
         | drop_role_statement
         | grant_statement
         | revoke_statement
-        | transfer_ownership_statement
         | create_action_statement
         | drop_action_statement
         | use_extension_statement
@@ -53,7 +52,113 @@ literal:
 
 // identifier is used for table / column names
 identifier:
-    (DOUBLE_QUOTE IDENTIFIER DOUBLE_QUOTE) | IDENTIFIER
+    (DOUBLE_QUOTE allowed_identifier DOUBLE_QUOTE) | allowed_identifier
+;
+
+// allowed_identifier allows us to use reserved keywords as identifiers
+allowed_identifier:
+    IDENTIFIER
+    | CREATE
+    | ALTER
+    | COLUMN
+    | ADD
+    | DROP
+    | RENAME
+    | TO
+    | CONSTRAINT
+    | CHECK
+    | FOREIGN
+    | PRIMARY
+    | KEY
+    | ON
+    | DO
+    | UNIQUE
+    | CASCADE
+    | RESTRICT
+    | SET
+    | DEFAULT
+    | NULL
+    | DELETE
+    | UPDATE
+    | REFERENCES
+    | REF
+    | NOT
+    | INDEX
+    | AND
+    | OR
+    | LIKE
+    | ILIKE
+    | IN
+    | BETWEEN
+    | IS
+    | EXISTS
+    | ALL
+    | ANY
+    | JOIN
+    | LEFT
+    | RIGHT
+    | INNER
+    | AS
+    | ASC
+    | DESC
+    | LIMIT
+    | OFFSET
+    | ORDER
+    | BY
+    | GROUP
+    | HAVING
+    | RETURNS
+    | NO
+    | WITH
+    | CASE
+    | WHEN
+    | THEN
+    | END
+    | DISTINCT
+    | FROM
+    | WHERE
+    | COLLATE
+    | SELECT
+    | INSERT
+    | VALUES
+    | FULL
+    | UNION
+    | INTERSECT
+    | EXCEPT
+    | NULLS
+    | FIRST
+    | LAST
+    | RETURNING
+    | INTO
+    | CONFLICT
+    | NOTHING
+    | FOR
+    | IF
+    | ELSEIF
+    | ELSE
+    | BREAK
+    | CONTINUE
+    | RETURN
+    | NEXT
+    | OVER
+    | PARTITION
+    | WINDOW
+    | FILTER
+    | RECURSIVE
+    | GRANT
+    | GRANTED
+    | REVOKE
+    | ROLE
+    | REPLACE
+    | ARRAY
+    | NAMESPACE
+    | ROLES
+    | CALL
+    | USE
+    | UNUSE
+    | DEFAULT
+    | TABLE
+    | ACTION
 ;
 
 identifier_list:
@@ -186,16 +291,15 @@ drop_role_statement:
 ;
 
 grant_statement:
-    GRANT (privilege_list|grant_role=role_name) (ON namespace=identifier)? TO (role=role_name|user=STRING_)
+    GRANT (IF NOT GRANTED)? (privilege_list|grant_role=role_name) (ON namespace=identifier)? TO (role=role_name|user=STRING_|user_var=action_expr)
 ;
 
 revoke_statement:
-    REVOKE (privilege_list|grant_role=role_name) (ON namespace=identifier)? FROM (role=role_name|user=STRING_)
+    REVOKE (IF GRANTED)? (privilege_list|grant_role=role_name) (ON namespace=identifier)? FROM (role=role_name|user=STRING_|user_var=action_expr)
 ;
 
-// we need a separate role_name rule to allow usage of the DEFAULT keyword
 role_name:
-    identifier | DEFAULT
+    identifier
 ;
 
 privilege_list:
@@ -204,10 +308,6 @@ privilege_list:
 
 privilege:
     SELECT | INSERT | UPDATE | DELETE | CREATE | DROP | ALTER | ROLES | CALL | USE
-;
-
-transfer_ownership_statement:
-    TRANSFER OWNERSHIP TO STRING_
 ;
 
 create_action_statement:
@@ -223,7 +323,7 @@ drop_action_statement:
 ;
 
 use_extension_statement:
-    USE extension_name=identifier (IF NOT EXISTS)?
+    USE (IF NOT EXISTS)? extension_name=identifier 
     (LBRACE (identifier COL action_expr (COMMA identifier COL action_expr)*)? RBRACE)?
     AS alias=identifier
 ;

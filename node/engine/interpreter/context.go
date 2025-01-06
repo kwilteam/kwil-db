@@ -15,8 +15,8 @@ import (
 
 // executionContext is the context of the entire execution.
 type executionContext struct {
-	// txCtx is the transaction context.
-	txCtx *common.TxContext
+	// engineCtx is the transaction context.
+	engineCtx *common.EngineContext
 	// scope is the current scope.
 	scope *scopeContext
 	// canMutateState is true if the execution is capable of mutating state.
@@ -25,17 +25,19 @@ type executionContext struct {
 	// db is the database to execute against.
 	db sql.DB
 	// interpreter is the interpreter that created this execution context.
-	interpreter *BaseInterpreter
+	interpreter *baseInterpreter
 	// logs are the logs that have been generated.
 	logs []string
 }
 
-// child creates a new child execution context.
-// A child allows for a new context to exist without
-// modifying the parent context.
-func (e *executionContext) child(namespace string) *executionContext {
+// subscope creates a new subscope execution context.
+// A subscope allows for a new context to exist without
+// modifying the original. Unlike a child, a subscope does not
+// inherit the parent's variables.
+// It is used for when an action calls another action / extension method.
+func (e *executionContext) subscope(namespace string) *executionContext {
 	return &executionContext{
-		txCtx:          e.txCtx,
+		engineCtx:      e.engineCtx,
 		scope:          newScope(namespace),
 		canMutateState: e.canMutateState,
 		db:             e.db,
@@ -47,11 +49,20 @@ func (e *executionContext) child(namespace string) *executionContext {
 // checkPrivilege checks that the current user has a privilege,
 // and returns an error if they do not.
 func (e *executionContext) checkPrivilege(priv privilege) error {
-	if !e.interpreter.accessController.HasPrivilege(e.txCtx.Caller, &e.scope.namespace, priv) {
+	if e.engineCtx.OverrideAuthz {
+		return nil
+	}
+
+	if !e.interpreter.accessController.HasPrivilege(e.engineCtx.TxContext.Caller, &e.scope.namespace, priv) {
 		return fmt.Errorf(`%w %s on namespace "%s"`, ErrDoesNotHavePriv, priv, e.scope.namespace)
 	}
 
 	return nil
+}
+
+// isOwner checks if the current user is the owner of the namespace.
+func (e *executionContext) isOwner() bool {
+	return e.interpreter.accessController.IsOwner(e.engineCtx.TxContext.Caller)
 }
 
 // getNamespace gets the specified namespace.
@@ -64,7 +75,7 @@ func (e *executionContext) getNamespace(namespace string) (*namespace, error) {
 
 	ns, ok := e.interpreter.namespaces[namespace]
 	if !ok {
-		return nil, fmt.Errorf("%w: %s", ErrNamespaceNotFound, namespace)
+		return nil, fmt.Errorf(`%w: "%s"`, ErrNamespaceNotFound, namespace)
 	}
 
 	return ns, nil
@@ -81,6 +92,28 @@ func (e *executionContext) getTable(namespace, tableName string) (*engine.Table,
 
 	table, ok := ns.tables[tableName]
 	return table, ok
+}
+
+// checkNamespaceMutatbility checks if the current namespace is mutable.
+// It allows extensions to be overridden, but not the main namespace.
+// It does not check for drops; these should be handled separately.
+// These rules are not handled in the accessController because they are always
+// enforced, regardless of the roles and privileges of the caller.
+func (e *executionContext) checkNamespaceMutatbility() error {
+	if e.scope.namespace == infoNamespace {
+		return ErrCannotMutateInfoNamespace
+	}
+
+	ns2, err := e.getNamespace(e.scope.namespace)
+	if err != nil {
+		return err
+	}
+
+	if ns2.namespaceType == namespaceTypeExtension && !e.engineCtx.OverrideAuthz {
+		return fmt.Errorf(`%w: "%s"`, ErrCannotMutateExtension, e.scope.namespace)
+	}
+
+	return nil
 }
 
 // query executes a query.
@@ -181,7 +214,7 @@ func (e *executionContext) query(sql string, fn func(*row) error) error {
 		cols[i] = field.Name
 	}
 
-	return query(e.txCtx.Ctx, e.db, generatedSQL, scanValues, func() error {
+	return query(e.engineCtx.TxContext.Ctx, e.db, generatedSQL, scanValues, func() error {
 		if len(scanValues) != len(cols) {
 			// should never happen, but just in case
 			return fmt.Errorf("node bug: scan values and columns are not the same length")
@@ -258,13 +291,13 @@ func (e *executionContext) getVariable(name string) (Value, bool) {
 	case '@':
 		switch name[1:] {
 		case "caller":
-			return newText(e.txCtx.Caller), true
+			return newText(e.engineCtx.TxContext.Caller), true
 		case "txid":
-			return newText(e.txCtx.TxID), true
+			return newText(e.engineCtx.TxContext.TxID), true
 		case "signer":
-			return newBlob(e.txCtx.Signer), true
+			return newBlob(e.engineCtx.TxContext.Signer), true
 		case "height":
-			return newInt(e.txCtx.BlockContext.Height), true
+			return newInt(e.engineCtx.TxContext.BlockContext.Height), true
 		case "foreign_caller":
 			if e.scope.parent != nil {
 				return newText(e.scope.parent.namespace), true
@@ -272,9 +305,9 @@ func (e *executionContext) getVariable(name string) (Value, bool) {
 				return newText(""), true
 			}
 		case "block_timestamp":
-			return newInt(e.txCtx.BlockContext.Timestamp), true
+			return newInt(e.engineCtx.TxContext.BlockContext.Timestamp), true
 		case "authenticator":
-			return newText(e.txCtx.Authenticator), true
+			return newText(e.engineCtx.TxContext.Authenticator), true
 		}
 	}
 
@@ -283,7 +316,7 @@ func (e *executionContext) getVariable(name string) (Value, bool) {
 
 // reloadTables reloads the cached tables from the database for the current namespace.
 func (e *executionContext) reloadTables() error {
-	tables, err := listTablesInNamespace(e.txCtx.Ctx, e.db, e.scope.namespace)
+	tables, err := listTablesInNamespace(e.engineCtx.TxContext.Ctx, e.db, e.scope.namespace)
 	if err != nil {
 		return err
 	}
@@ -300,26 +333,39 @@ func (e *executionContext) reloadTables() error {
 
 // canExecute checks if the context can execute the action.
 // It returns an error if it cannot.
-func (e *executionContext) canExecute(namespace string, name string, modifiers precompiles.Modifiers) error {
+// It should always be called BEFORE you are in the new action's scope.
+func (e *executionContext) canExecute(newNamespace, actionName string, modifiers precompiles.Modifiers) error {
 	// if the ctx cannot mutate state and the action is not a view (and thus might try to mutate state),
 	// then return an error
 	if !modifiers.Has(precompiles.VIEW) && !e.canMutateState {
-		return fmt.Errorf("%w: cannot execute action %s in a read-only transaction", ErrActionMutatesState, name)
+		return fmt.Errorf("%w: cannot execute action %s in a read-only transaction", ErrActionMutatesState, actionName)
 	}
 
-	// if the action is private, then the calling namespace must be the same as the action's namespace
-	if modifiers.Has(precompiles.PRIVATE) && e.scope.namespace != namespace {
-		return fmt.Errorf("%w: action %s is private", ErrActionPrivate, name)
+	// the VIEW check protects against state being modified outside of consensus. This is critical to protect
+	// against consensus errors. Every other check enforces user-defined rules, and thus can be overridden by
+	// extensions.
+	// We only pass other checks if this is the top-level call, since we still want typical checks like private
+	// and system to apply. We simply want the override to be able to directly call private and system actions.
+	if e.engineCtx.OverrideAuthz && e.scope.isTopLevel {
+		return nil
 	}
 
-	// if it is system-only, then this must not be called without an outer scope
-	if modifiers.Has(precompiles.SYSTEM) && e.scope.parent == nil {
-		return fmt.Errorf("%w: action %s is system-only", ErrSystemOnly, name)
+	// if the action is private and either:
+	// - the calling namespace is not the same as the new namespace
+	// - the action is top level
+	// then return an error
+	if modifiers.Has(precompiles.PRIVATE) && (e.scope.namespace != newNamespace || e.scope.isTopLevel) {
+		return fmt.Errorf("%w: action %s is private", ErrActionPrivate, actionName)
+	}
+
+	// if it is system-only, then it must be within a subscope
+	if modifiers.Has(precompiles.SYSTEM) && e.scope.isTopLevel {
+		return fmt.Errorf("%w: action %s is system-only", ErrSystemOnly, actionName)
 	}
 
 	// if the action is owner only, then check if the user is the owner
-	if modifiers.Has(precompiles.OWNER) && !e.interpreter.accessController.IsOwner(e.txCtx.Caller) {
-		return fmt.Errorf("%w: action %s can only be executed by the owner", ErrActionOwnerOnly, name)
+	if modifiers.Has(precompiles.OWNER) && !e.interpreter.accessController.IsOwner(e.engineCtx.TxContext.Caller) {
+		return fmt.Errorf("%w: action %s can only be executed by the owner", ErrActionOwnerOnly, actionName)
 	}
 
 	return nil
@@ -330,7 +376,10 @@ func (e *executionContext) app() *common.App {
 	return &common.App{
 		Service: e.interpreter.service,
 		DB:      e.db,
-		Engine:  e.interpreter,
+		Engine: &recursiveInterpreter{
+			i:    e.interpreter,
+			logs: e.logs,
+		},
 	}
 }
 
@@ -355,6 +404,9 @@ type scopeContext struct {
 	variables map[string]Value
 	// namespace is the current namespace.
 	namespace string
+	// isTopLevel is true if this is the top level scope.
+	// A scope can not be top level and also not have a parent.
+	isTopLevel bool
 }
 
 // newScope creates a new scope.
@@ -365,8 +417,11 @@ func newScope(namespace string) *scopeContext {
 	}
 }
 
-// subScope creates a new sub-scope, which has access to the parent scope.
-func (s *scopeContext) subScope() {
+// child creates a new sub-scope, which has access to the parent scope.
+// It is used for if blocks and for loops, which can access the outer
+// blocks variables and modify them, but new variables created are not
+// accessible outside of the block.
+func (s *scopeContext) child() {
 	s.parent = &scopeContext{
 		parent:    s.parent,
 		variables: s.variables,

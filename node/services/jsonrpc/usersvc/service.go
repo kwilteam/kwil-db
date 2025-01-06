@@ -29,8 +29,8 @@ import (
 )
 
 type EngineReader interface {
-	Call(ctx *common.TxContext, tx sql.DB, namespace, action string, args []any, resultFn func(*common.Row) error) (*common.CallResult, error)
-	Execute(ctx *common.TxContext, tx sql.DB, query string, params map[string]any, resultFn func(*common.Row) error) error
+	Call(ctx *common.EngineContext, tx sql.DB, namespace, action string, args []any, resultFn func(*common.Row) error) (*common.CallResult, error)
+	Execute(ctx *common.EngineContext, tx sql.DB, query string, params map[string]any, resultFn func(*common.Row) error) error
 }
 
 type BlockchainTransactor interface {
@@ -511,12 +511,13 @@ func (svc *Service) Query(ctx context.Context, req *userjson.QueryRequest) (*use
 	defer readTx.Rollback(ctx)
 
 	r := &rowReader{}
-	err := svc.engine.Execute(&common.TxContext{
-		Ctx: ctxExec,
-		BlockContext: &common.BlockContext{
-			Height: -1, // cannot know the height here.
-		},
-	}, readTx, req.Query, req.Params, r.read)
+	err := svc.engine.Execute(&common.EngineContext{
+		TxContext: &common.TxContext{
+			Ctx: ctxExec,
+			BlockContext: &common.BlockContext{
+				Height: -1, // cannot know the height here.
+			},
+		}}, readTx, req.Query, req.Params, r.read)
 	if err != nil {
 		// We don't know for sure that it's an invalid argument, but an invalid
 		// user-provided query isn't an internal server error.
@@ -664,7 +665,7 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 	defer readTx.Rollback(ctx)
 
 	r := &rowReader{}
-	callRes, err := svc.engine.Call(txContext, readTx, body.DBID, body.Action, args, r.read)
+	callRes, err := svc.engine.Call(&common.EngineContext{TxContext: txContext}, readTx, body.DBID, body.Action, args, r.read)
 	if err != nil {
 		return nil, engineError(err)
 	}

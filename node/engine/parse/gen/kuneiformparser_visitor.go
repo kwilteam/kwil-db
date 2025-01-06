@@ -34,6 +34,9 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#identifier.
 	VisitIdentifier(ctx *IdentifierContext) interface{}
 
+	// Visit a parse tree produced by KuneiformParser#allowed_identifier.
+	VisitAllowed_identifier(ctx *Allowed_identifierContext) interface{}
+
 	// Visit a parse tree produced by KuneiformParser#identifier_list.
 	VisitIdentifier_list(ctx *Identifier_listContext) interface{}
 
@@ -138,9 +141,6 @@ type KuneiformParserVisitor interface {
 
 	// Visit a parse tree produced by KuneiformParser#privilege.
 	VisitPrivilege(ctx *PrivilegeContext) interface{}
-
-	// Visit a parse tree produced by KuneiformParser#transfer_ownership_statement.
-	VisitTransfer_ownership_statement(ctx *Transfer_ownership_statementContext) interface{}
 
 	// Visit a parse tree produced by KuneiformParser#create_action_statement.
 	VisitCreate_action_statement(ctx *Create_action_statementContext) interface{}

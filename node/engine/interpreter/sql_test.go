@@ -316,8 +316,8 @@ func Test_built_in_sql(t *testing.T) {
 
 			interp, err := NewInterpreter(ctx, tx, &common.Service{})
 			require.NoError(t, err)
+			_ = interp
 
-			err = interp.SetOwner(ctx, tx, "owner")
 			require.NoError(t, err)
 
 			test.fn(ctx, tx)

@@ -72,18 +72,27 @@ type TxContext struct {
 	Authenticator string
 }
 
+// EngineContext is a context that is passed to the engine when executing
+// an action or statement.
+type EngineContext struct {
+	// TxContext is the transaction context of the current transaction.
+	TxContext *TxContext
+	// OverrideAuthz is a flag that indicates whether the authorization
+	// should be overridden. This is used to allow extensions to perform
+	// owner-level operations on the database, even if the caller is not
+	// the owner.
+	OverrideAuthz bool
+}
+
 type Engine interface {
 	// Call calls an action in the database. The resultFn callback is
 	// called for each row in the result set. If the resultFn returns
 	// an error, the call will be aborted and the error will be returned.
-	Call(ctx *TxContext, db sql.DB, namespace, action string, args []any, resultFn func(*Row) error) (*CallResult, error)
+	Call(ctx *EngineContext, db sql.DB, namespace, action string, args []any, resultFn func(*Row) error) (*CallResult, error)
 	// Execute executes a statement in the database. The fn callback is
 	// called for each row in the result set. If the fn returns an error,
 	// the call will be aborted and the error will be returned.
-	Execute(ctx *TxContext, db sql.DB, statement string, params map[string]any, fn func(*Row) error) error
-	// SetOwner sets the owner of the database.
-	// There can only be one owner of a database at a time.
-	SetOwner(ctx context.Context, db sql.DB, owner string) error
+	Execute(ctx *EngineContext, db sql.DB, statement string, params map[string]any, fn func(*Row) error) error
 }
 
 // CallResult is the result of a call to an action.

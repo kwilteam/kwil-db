@@ -27,7 +27,7 @@ BEGIN
     -- privilege_type is an enumeration of all privilege types that can be applied to a role
     BEGIN
         CREATE TYPE kwild_engine.privilege_type AS ENUM (
-            'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'CALL', 'ROLES'
+            'SELECT', 'INSERT', 'UPDATE', 'DELETE', 'CREATE', 'DROP', 'ALTER', 'CALL', 'ROLES', 'USE'
         );
     EXCEPTION
         WHEN duplicate_object THEN NULL;
@@ -41,13 +41,6 @@ BEGIN
         WHEN duplicate_object THEN NULL;
     END;
 END $$;
-
--- metadata stores all metadata for the engine
-CREATE TABLE IF NOT EXISTS kwild_engine.metadata (
-    id BIGSERIAL PRIMARY KEY,
-    key TEXT NOT NULL UNIQUE,
-    value TEXT NOT NULL
-);
 
 -- namespaces is a table that stores all user schemas in the engine
 CREATE TABLE IF NOT EXISTS kwild_engine.namespaces (
@@ -75,11 +68,12 @@ CREATE TABLE IF NOT EXISTS kwild_engine.extension_initialization_parameters (
 -- actions is a table that stores all actions in the engine
 CREATE TABLE IF NOT EXISTS kwild_engine.actions (
     id BIGSERIAL PRIMARY KEY,
-    schema_name TEXT NOT NULL REFERENCES kwild_engine.namespaces(name) ON UPDATE CASCADE ON DELETE CASCADE,
-    name TEXT NOT NULL UNIQUE,
+    namespace TEXT NOT NULL REFERENCES kwild_engine.namespaces(name) ON UPDATE CASCADE ON DELETE CASCADE,
+    name TEXT NOT NULL CHECK (name = lower(name)),
     raw_statement TEXT NOT NULL,
     returns_table BOOLEAN NOT NULL DEFAULT FALSE,
-    modifiers kwild_engine.modifiers[]
+    modifiers kwild_engine.modifiers[],
+    UNIQUE (namespace, name)
 );
 
 -- parameters is a table that stores all parameters for actions in the engine
@@ -141,6 +135,53 @@ INSERT INTO kwild_engine.role_privileges (privilege_type, role_id) VALUES ('SELE
     WHERE name = 'default'
 )) ON CONFLICT DO NOTHING;
 
+-- create an owner role, which has all privileges
+INSERT INTO kwild_engine.roles (name) VALUES ('owner') ON CONFLICT DO NOTHING;
+
+-- owner role can do everything
+INSERT INTO kwild_engine.role_privileges (privilege_type, role_id) VALUES ('SELECT', (
+    SELECT id
+    FROM kwild_engine.roles
+    WHERE name = 'owner'
+)), ('INSERT', (
+    SELECT id
+    FROM kwild_engine.roles
+    WHERE name = 'owner'
+)), ('UPDATE', (
+    SELECT id
+    FROM kwild_engine.roles
+    WHERE name = 'owner'
+)), ('DELETE', (
+    SELECT id
+    FROM kwild_engine.roles
+    WHERE name = 'owner'
+)), ('CREATE', (
+    SELECT id
+    FROM kwild_engine.roles
+    WHERE name = 'owner'
+)), ('DROP', (
+    SELECT id
+    FROM kwild_engine.roles
+    WHERE name = 'owner'
+)), ('ALTER', (
+    SELECT id
+    FROM kwild_engine.roles
+    WHERE name = 'owner'
+)), ('CALL', (
+    SELECT id
+    FROM kwild_engine.roles
+    WHERE name = 'owner'
+)), ('ROLES', (
+    SELECT id
+    FROM kwild_engine.roles
+    WHERE name = 'owner'
+)), ('USE', (
+    SELECT id
+    FROM kwild_engine.roles
+    WHERE name = 'owner'
+)) ON CONFLICT DO NOTHING;
+
+
 -- format_type is a function that formats a data type for display
 CREATE OR REPLACE FUNCTION kwild_engine.format_type(scal kwild_engine.scalar_data_type, is_arr BOOLEAN, meta BYTEA)
 RETURNS TEXT AS $$
@@ -195,7 +236,7 @@ ORDER BY
 CREATE VIEW info.tables AS
 SELECT
     t.tablename::text   AS name,
-    t.schemaname::text  AS schema
+    t.schemaname::text  AS namespace
 FROM pg_tables t
 JOIN kwild_engine.namespaces us
     ON t.schemaname = us.name
@@ -204,7 +245,7 @@ UNION ALL
 
 SELECT
     v.viewname::text    AS name,
-    v.schemaname::text  AS schema
+    v.schemaname::text  AS namespace
 FROM pg_views v
 JOIN kwild_engine.namespaces us
     ON v.schemaname = us.name
@@ -214,9 +255,9 @@ ORDER BY 1, 2;
 -- info.columns is a public view that provides a list of all columns in the database
 CREATE VIEW info.columns AS
 SELECT 
-    c.table_schema::TEXT AS schema_name,
+    c.table_schema::TEXT AS namespace,
     c.table_name::TEXT AS table_name,
-    c.column_name::TEXT AS column_name,
+    c.column_name::TEXT AS name,
     (CASE 
         WHEN t.typcategory = 'A'
             THEN (pg_catalog.format_type(a.atttypid, a.atttypmod))
@@ -260,9 +301,9 @@ ORDER BY
 -- info.indexes is a public view that provides a list of all indexes in the database
 CREATE VIEW info.indexes AS
 SELECT 
-    n.nspname::TEXT AS schema_name,
+    n.nspname::TEXT AS namespace,
     c.relname::TEXT AS table_name,
-    ic.relname::TEXT AS index_name,
+    ic.relname::TEXT AS name,
     i.indisprimary AS is_pk,
     i.indisunique AS is_unique,
     array_agg(a.attname ORDER BY x.ordinality)::TEXT[] AS column_names
@@ -281,7 +322,7 @@ ORDER BY 1,2,3,4,5,6;
 -- info.constraints is a public view that provides a list of all constraints in the database
 CREATE VIEW info.constraints AS
 SELECT 
-    pg_namespace.nspname::TEXT AS schema_name,
+    pg_namespace.nspname::TEXT AS namespace,
     conname::TEXT AS constraint_name,
     split_part(conrelid::regclass::text, '.', 2) AS table_name,
     array_agg(attname)::TEXT[] AS columns,
@@ -313,7 +354,7 @@ ORDER BY
 -- info.foreign_keys is a public view that provides a list of all foreign keys in the database
 CREATE VIEW info.foreign_keys AS
 SELECT 
-    pg_namespace.nspname::TEXT AS schema_name,
+    pg_namespace.nspname::TEXT AS namespace,
     conname::TEXT AS constraint_name,
     split_part(conrelid::regclass::text, '.', 2) AS table_name,
     array_agg(attname)::TEXT[] AS columns,
@@ -354,8 +395,8 @@ ORDER BY
 -- actions is a public view that provides a list of all actions in the database
 CREATE VIEW info.actions AS
 SELECT 
-    a.schema_name AS namespace,
-    a.name::TEXT,
+    a.namespace AS namespace,
+    a.name::TEXT AS name,
     a.raw_statement,
     a.modifiers::TEXT[] AS modifiers,
     a.returns_table,
@@ -374,11 +415,11 @@ SELECT
         ORDER BY r.position, r.name, kwild_engine.format_type(r.scalar_type, r.is_array, r.metadata)
     ) AS return_types
 FROM kwild_engine.actions a
-JOIN kwild_engine.parameters p
+LEFT JOIN kwild_engine.parameters p
     ON a.id = p.action_id
 LEFT JOIN kwild_engine.return_fields r
     ON a.id = r.action_id
-GROUP BY a.schema_name, a.name, a.modifiers, a.raw_statement, a.returns_table
+GROUP BY a.namespace, a.name, a.modifiers, a.raw_statement, a.returns_table
 ORDER BY a.name,
     1, 2, 3, 4, 5  --TODO: do we need to order the aggregates?
 ;
