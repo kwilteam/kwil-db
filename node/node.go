@@ -22,6 +22,7 @@ import (
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	adminTypes "github.com/kwilteam/kwil-db/core/types/admin"
 	chainTypes "github.com/kwilteam/kwil-db/core/types/chain"
+	"github.com/kwilteam/kwil-db/node/consensus"
 	"github.com/kwilteam/kwil-db/node/peers"
 	"github.com/kwilteam/kwil-db/node/peers/sec"
 	"github.com/kwilteam/kwil-db/node/types"
@@ -456,8 +457,19 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 	go func() {
 		defer n.wg.Done()
 		defer cancel()
-		// TODO: umm, should node bringup the consensus engine? or server?
-		nodeErr = n.ce.Start(ctx, n.announceBlkProp, n.announceBlk, n.sendACK, n.getBlkHeight, n.sendReset, n.sendDiscoveryRequest, n.BroadcastTx)
+
+		broadcastFns := consensus.BroadcastFns{
+			ProposalBroadcaster:     n.announceBlkProp,
+			TxAnnouncer:             n.announceTx,
+			BlkAnnouncer:            n.announceBlk,
+			AckBroadcaster:          n.sendACK,
+			BlkRequester:            n.getBlkHeight,
+			RstStateBroadcaster:     n.sendReset,
+			DiscoveryReqBroadcaster: n.sendDiscoveryRequest,
+			TxBroadcaster:           n.BroadcastTx,
+		}
+
+		nodeErr = n.ce.Start(ctx, broadcastFns)
 		if err != nil {
 			n.log.Errorf("Consensus engine failed: %v", nodeErr)
 			return // cancel context
@@ -647,23 +659,8 @@ func (n *Node) TxQuery(ctx context.Context, hash types.Hash, prove bool) (*ktype
 	}, nil
 }
 
-func (n *Node) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, _ /*sync TODO*/ uint8) (*ktypes.ResultBroadcastTx, error) {
-	rawTx := tx.Bytes()
-	txHash := types.HashBytes(rawTx)
-
-	if err := n.ce.CheckTx(ctx, tx); err != nil {
-		return nil, err
-	}
-
-	n.mp.Store(txHash, tx)
-
-	n.log.Infof("broadcasting new tx %v", txHash)
-	n.announceTx(ctx, txHash, rawTx, n.host.ID())
-
-	return &ktypes.ResultBroadcastTx{
-		Hash: txHash,
-		// Log and Code just for sync?
-	}, nil
+func (n *Node) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (*ktypes.ResultBroadcastTx, error) {
+	return n.ce.BroadcastTx(ctx, tx, sync)
 }
 
 // ChainTx return tx info that is used in Chain rpc.

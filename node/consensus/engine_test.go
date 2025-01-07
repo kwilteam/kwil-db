@@ -7,7 +7,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -33,11 +32,25 @@ import (
 	"github.com/kwilteam/kwil-db/node/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
+	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/kwilteam/kwil-db/core/log"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+)
+
+var (
+	broadcastFns = BroadcastFns{
+		ProposalBroadcaster:     mockBlockPropBroadcaster,
+		TxAnnouncer:             mockTxAnnouncer,
+		BlkAnnouncer:            mockBlkAnnouncer,
+		BlkRequester:            mockBlkRequester,
+		AckBroadcaster:          mockVoteBroadcaster,
+		RstStateBroadcaster:     mockResetStateBroadcaster,
+		DiscoveryReqBroadcaster: mockDiscoveryBroadcaster,
+		TxBroadcaster:           nil,
+	}
 )
 
 // leaderDB is set assigns DB to the leader, else DB is assigned to the follower
@@ -150,6 +163,7 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) []*Config {
 			ProposeTimeout:        1 * time.Second,
 			BlockProposalInterval: 1 * time.Second,
 			BlockAnnInterval:      3 * time.Second,
+			BroadcastTxTimeout:    10 * time.Second,
 		}
 
 		closers = append(closers, func() {
@@ -607,7 +621,7 @@ func TestValidatorStateMachine(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				val.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster, nil)
+				val.Start(ctx, broadcastFns)
 			}()
 
 			t.Cleanup(func() {
@@ -643,7 +657,7 @@ func TestCELeaderSingleNode(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		leader.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster, nil)
+		leader.Start(ctx, broadcastFns)
 	}()
 
 	t.Cleanup(func() {
@@ -668,8 +682,7 @@ func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		n1.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster,
-			mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster, nil)
+		n1.Start(ctx, broadcastFns)
 	}()
 
 	t.Cleanup(func() {
@@ -734,7 +747,7 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 
 	go func() {
 		defer wg.Done()
-		n1.Start(ctx, mockBlockPropBroadcaster, mockBlkAnnouncer, mockVoteBroadcaster, mockBlockRequester, mockResetStateBroadcaster, mockDiscoveryBroadcaster, nil)
+		n1.Start(ctx, broadcastFns)
 	}()
 
 	n1.bestHeightCh <- &discoveryMsg{
@@ -784,19 +797,19 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 }
 
 // MockBroadcasters
-func mockBlockRequester(_ context.Context, height int64) (types.Hash, []byte, *ktypes.CommitInfo, error) {
-	return types.Hash{}, nil, nil, errors.New("not implemented")
+func mockBlkRequester(ctx context.Context, height int64) (types.Hash, []byte, *ktypes.CommitInfo, error) {
+	return types.Hash{}, nil, nil, fmt.Errorf("not implemented")
 }
 
-func mockBlockPropBroadcaster(_ context.Context, blk *ktypes.Block) {
-}
+func mockBlockPropBroadcaster(_ context.Context, blk *ktypes.Block) {}
 
 func mockVoteBroadcaster(ack bool, height int64, blkID types.Hash, appHash *types.Hash, sig []byte) error {
 	return nil
 }
 
-func mockBlkAnnouncer(_ context.Context, blk *ktypes.Block, ci *ktypes.CommitInfo) {
-}
+func mockBlkAnnouncer(_ context.Context, blk *ktypes.Block, ci *ktypes.CommitInfo) {}
+
+func mockTxAnnouncer(ctx context.Context, txHash types.Hash, rawTx []byte, from peer.ID) {}
 
 func mockResetStateBroadcaster(_ int64, _ []ktypes.Hash) error {
 	return nil

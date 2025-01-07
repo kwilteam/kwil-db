@@ -180,6 +180,7 @@ func DefaultConfig() *Config {
 		},
 		RPC: RPCConfig{
 			ListenAddress:      "0.0.0.0:8484",
+			BroadcastTxTimeout: Duration(15 * time.Second),
 			Timeout:            Duration(20 * time.Second),
 			MaxReqSize:         6_000_000,
 			Private:            false,
@@ -279,6 +280,7 @@ type ConsensusConfig struct {
 
 type RPCConfig struct {
 	ListenAddress      string   `toml:"listen" comment:"address in host:port format on which the RPC server will listen"`
+	BroadcastTxTimeout Duration `toml:"broadcast_tx_timeout" comment:"duration to wait for a tx to be committed when transactions are authored with --sync flag"`
 	Timeout            Duration `toml:"timeout" comment:"user request duration limit after which it is cancelled"`
 	MaxReqSize         int      `toml:"max_req_size" comment:"largest permissible user request size"`
 	Private            bool     `toml:"private" comment:"enable private mode that requires challenge authentication for each call"`

@@ -29,13 +29,11 @@ func WithAuthCookie(cookie *http.Cookie) ActionCallOption {
 }
 
 // BroadcastWait is an argument type that indicates how long to wait when
-// broadcasting a transaction. The levels are async (do not wait for mempool
-// acceptance), sync (wait for mempool acceptance), and commit (wait for it to
-// be included in a block).
+// broadcasting a transaction. The levels are sync (wait for mempool acceptance),
+// and commit (wait for it to be included in a block).
 type BroadcastWait uint8
 
 const (
-	BroadcastWaitAsync  = BroadcastWait(userjson.BroadcastSyncAsync)
 	BroadcastWaitSync   = BroadcastWait(userjson.BroadcastSyncSync)
 	BroadcastWaitCommit = BroadcastWait(userjson.BroadcastSyncCommit)
 )

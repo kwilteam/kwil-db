@@ -4,8 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	ktypes "github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/node/types"
 )
 
 // TODO: should include consensus params hash
@@ -51,6 +53,52 @@ func (ce *ConsensusEngine) CheckTx(ctx context.Context, tx *ktypes.Transaction) 
 	defer ce.mempoolMtx.Unlock()
 
 	return ce.blockProcessor.CheckTx(ctx, tx, false)
+}
+
+// BroadcastTx checks the Tx with the mempool and if the verification is successful, broadcasts the Tx to the network.
+// If sync is set to 1, the BroadcastTx returns only after the Tx is successfully committed in a block.
+func (ce *ConsensusEngine) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (*ktypes.ResultBroadcastTx, error) {
+	if err := ce.CheckTx(ctx, tx); err != nil {
+		return nil, err
+	}
+
+	rawTx := tx.Bytes()
+	txHash := types.HashBytes(rawTx)
+
+	// add the transaction to the mempool
+	ce.mempool.Store(txHash, tx)
+
+	// Announce the transaction to the network
+	ce.log.Infof("broadcasting new tx %v", txHash)
+	go ce.txAnnouncer(ctx, txHash, rawTx, ce.peerID)
+
+	res := &ktypes.ResultBroadcastTx{
+		Hash: txHash, // Code and Log are set only if sync is set to 1
+	}
+
+	// If sync is set to 1, wait for the transaction to be committed in a block.
+	if sync == 1 { // Blocking code
+		subChan, err := ce.SubscribeTx(txHash)
+		if err != nil {
+			return nil, err
+		}
+		defer ce.UnsubscribeTx(txHash) // Unsubscribe tx if BroadcastTx returns
+
+		select {
+		case txRes := <-subChan:
+			return &ktypes.ResultBroadcastTx{
+				Code: txRes.Code,
+				Hash: txHash,
+				Log:  txRes.Log,
+			}, nil
+		case <-ctx.Done():
+			return res, ctx.Err()
+		case <-time.After(ce.broadcastTxTimeout):
+			return res, errors.New("timed out waiting for tx to be included in a block")
+		}
+	}
+
+	return res, nil
 }
 
 func (ce *ConsensusEngine) ConsensusParams() *ktypes.ConsensusParams {
@@ -114,9 +162,15 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 	}
 
 	// remove transactions from the mempool
-	for _, txn := range blkProp.blk.Txns {
+	for idx, txn := range blkProp.blk.Txns {
 		txHash := txn.Hash()
 		ce.mempool.Remove(txHash)
+
+		txRes := ce.state.blockRes.txResults[idx]
+		subChan, ok := ce.txSubscribers[txHash]
+		if ok { // Notify the subscribers about the transaction result
+			subChan <- txRes
+		}
 	}
 
 	// recheck the transactions in the mempool

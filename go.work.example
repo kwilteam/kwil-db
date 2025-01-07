@@ -3,6 +3,7 @@ go 1.22.0
 use (
 	.
 	./core
+	./test
 )
 
 // replace github.com/kwilteam/kuneiform => ../kuneiform
