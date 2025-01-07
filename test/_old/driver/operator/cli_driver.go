@@ -2,13 +2,14 @@ package operator
 
 import (
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/app/shared/display"
+	"github.com/kwilteam/kwil-db/config"
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
 	admintypes "github.com/kwilteam/kwil-db/core/types/admin"
 
@@ -76,9 +77,10 @@ func (o *OperatorCLIDriver) TxSuccess(ctx context.Context, txHash types.Hash) er
 	return nil
 }
 
-func (o *OperatorCLIDriver) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*types.JoinRequest, error) {
+func (o *OperatorCLIDriver) ValidatorJoinStatus(ctx context.Context, pubKey []byte, pubKeyType crypto.KeyType) (*types.JoinRequest, error) {
 	var res types.JoinRequest
-	err := o.runCommand(ctx, &res, "validators", "join-status", hex.EncodeToString(pubKey))
+	keyStr := config.EncodePubKeyAndType(pubKey, pubKeyType)
+	err := o.runCommand(ctx, &res, "validators", "join-status", keyStr)
 	if err != nil {
 		return nil, err
 	}
@@ -87,9 +89,10 @@ func (o *OperatorCLIDriver) ValidatorJoinStatus(ctx context.Context, pubKey []by
 }
 
 // commands that return a tx hash return a hex encoded string
-func (o *OperatorCLIDriver) ValidatorNodeApprove(ctx context.Context, joinerPubKey []byte) (types.Hash, error) {
+func (o *OperatorCLIDriver) ValidatorNodeApprove(ctx context.Context, joinerPubKey []byte, pubKeyType crypto.KeyType) (types.Hash, error) {
 	var res display.TxHashResponse
-	err := o.runCommand(ctx, &res, "validators", "approve", hex.EncodeToString(joinerPubKey))
+	keyStr := config.EncodePubKeyAndType(joinerPubKey, pubKeyType)
+	err := o.runCommand(ctx, &res, "validators", "approve", keyStr)
 	if err != nil {
 		return types.Hash{}, err
 	}
@@ -117,9 +120,10 @@ func (o *OperatorCLIDriver) ValidatorNodeLeave(ctx context.Context) (types.Hash,
 	return res.TxHash, nil
 }
 
-func (o *OperatorCLIDriver) ValidatorNodeRemove(ctx context.Context, target []byte) (types.Hash, error) {
+func (o *OperatorCLIDriver) ValidatorNodeRemove(ctx context.Context, target []byte, pubKeyType crypto.KeyType) (types.Hash, error) {
 	var res display.TxHashResponse
-	err := o.runCommand(ctx, &res, "validators", "remove", hex.EncodeToString(target))
+	keyStr := config.EncodePubKeyAndType(target, pubKeyType)
+	err := o.runCommand(ctx, &res, "validators", "remove", keyStr)
 	if err != nil {
 		return types.Hash{}, err
 	}

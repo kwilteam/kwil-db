@@ -1,5 +1,7 @@
 package common
 
+import "github.com/kwilteam/kwil-db/core/crypto"
+
 // ChainContext provides context for all chain operations.
 // Fields in ChainContext should never be mutated, except
 // NetworkParameters can be deterministically mutated as part
@@ -30,7 +32,7 @@ type BlockContext struct {
 	// timestamps could result in security vulnerabilities.
 	Timestamp int64
 	// Proposer gets the proposer public key of the current block.
-	Proposer []byte
+	Proposer crypto.PublicKey
 }
 
 // MigrationContext provides context for all migration operations.

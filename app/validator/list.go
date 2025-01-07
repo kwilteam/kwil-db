@@ -54,16 +54,18 @@ type respValSets struct {
 }
 
 type valInfo struct {
-	PubKey string `json:"pubkey"`
-	Power  int64  `json:"power"`
+	PubKey     string `json:"pubkey"`
+	PubKeyType string `json:"pubkey_type"`
+	Power      int64  `json:"power"`
 }
 
 func (r *respValSets) MarshalJSON() ([]byte, error) {
 	valInfos := make([]valInfo, len(r.Data))
 	for i, v := range r.Data {
 		valInfos[i] = valInfo{
-			PubKey: fmt.Sprintf("%x", v.PubKey),
-			Power:  v.Power,
+			PubKey:     fmt.Sprintf("%x", v.PubKey),
+			Power:      v.Power,
+			PubKeyType: v.PubKeyType.String(),
 		}
 	}
 

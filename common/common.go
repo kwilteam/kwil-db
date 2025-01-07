@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/config"
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
@@ -142,7 +143,7 @@ type Accounts interface {
 type Validators interface {
 	// GetValidatorPower retrieves the power of the given validator. If
 	// the validator does not exist, it will return 0.
-	GetValidatorPower(ctx context.Context, validator []byte) (int64, error)
+	GetValidatorPower(ctx context.Context, pubKey []byte, pubKeyType crypto.KeyType) (int64, error)
 	// GetValidators retrieves all validators.
 	GetValidators() []*types.Validator
 	// SetValidatorPower sets the power of a validator. If the target
@@ -150,7 +151,7 @@ type Validators interface {
 	// If set to 0, the target validator will be deleted, and will no
 	// longer be considered a validator. It will return an error if a
 	// negative power is given.
-	SetValidatorPower(ctx context.Context, tx sql.Executor, validator []byte, power int64) error
+	SetValidatorPower(ctx context.Context, tx sql.Executor, pubKey []byte, pubKeyType crypto.KeyType, power int64) error
 }
 
 // ExecutionOptions is contextual data that is passed to a procedure

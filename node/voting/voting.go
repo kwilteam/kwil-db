@@ -12,6 +12,7 @@ import (
 	"slices"
 	"sync"
 
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/versioning"
@@ -31,7 +32,7 @@ const (
 type VoteStore struct {
 	mtx sync.Mutex
 	// validatorSet is an in-memory cache of the validators of the network.
-	validatorSet map[string]*types.Validator
+	validatorSet []*types.Validator
 	// valUpdates refers to any updates to the validator set during a block.
 	// This is reset after each block.
 	valUpdates map[string]*types.Validator
@@ -50,9 +51,8 @@ func InitializeVoteStore(ctx context.Context, db sql.TxMaker) (*VoteStore, error
 		log.WithWriter(os.Stdout), log.WithFormat(log.FormatUnstructured))
 
 	vs := &VoteStore{
-		validatorSet: make(map[string]*types.Validator),
-		valUpdates:   make(map[string]*types.Validator),
-		logger:       logger,
+		logger:     logger,
+		valUpdates: make(map[string]*types.Validator),
 	}
 
 	upgradeFns := map[int64]versioning.UpgradeFunc{
@@ -118,7 +118,11 @@ func InitializeVoteStore(ctx context.Context, db sql.TxMaker) (*VoteStore, error
 	}
 
 	for _, v := range vals {
-		vs.validatorSet[string(v.PubKey)] = v
+		vs.validatorSet = append(vs.validatorSet, &types.Validator{
+			PubKey:     slices.Clone(v.PubKey),
+			PubKeyType: v.PubKeyType,
+			Power:      v.Power,
+		})
 	}
 
 	return vs, tx.Commit(ctx)
@@ -179,7 +183,7 @@ func dropExtraVoteIDColumn(ctx context.Context, db sql.DB) error {
 // If the voter has already approved the resolution, no error will be returned.
 // This should not be used if the resolution has already been processed
 // (see FilterNotProcessed)
-func ApproveResolution(ctx context.Context, db sql.TxMaker, resolutionID *types.UUID, from []byte) error {
+func ApproveResolution(ctx context.Context, db sql.TxMaker, resolutionID *types.UUID, approverPubKey []byte, approverKeyType crypto.KeyType) error {
 	tx, err := db.BeginTx(ctx)
 	if err != nil {
 		return err
@@ -193,7 +197,9 @@ func ApproveResolution(ctx context.Context, db sql.TxMaker, resolutionID *types.
 	// if the voter does not exist, the following will error
 	// if the vote from the voter already exists, nothing will happen
 	// if the resolution doesn't exist, the following would error
-	userID := types.NewUUIDV5(from)
+
+	serializedPubKey := encodePubKey(approverPubKey, approverKeyType)
+	userID := types.NewUUIDV5(serializedPubKey)
 	_, err = tx.Execute(ctx, addVote, resolutionID[:], userID[:])
 	if err != nil {
 		return err
@@ -205,7 +211,7 @@ func ApproveResolution(ctx context.Context, db sql.TxMaker, resolutionID *types.
 // CreateResolution creates a resolution for a votable event. The expiration
 // should be a block height. Resolution creation will fail if the resolution
 // either already exists or has been processed.
-func CreateResolution(ctx context.Context, db sql.TxMaker, event *types.VotableEvent, expiration int64, voteBodyProposer []byte) error {
+func CreateResolution(ctx context.Context, db sql.TxMaker, event *types.VotableEvent, expiration int64, voteBodyProposer []byte, proposerKeyType crypto.KeyType) error {
 	tx, err := db.BeginTx(ctx)
 	if err != nil {
 		return err
@@ -214,8 +220,10 @@ func CreateResolution(ctx context.Context, db sql.TxMaker, event *types.VotableE
 
 	// NOTE: could check IsProcessed() here and skip the insert.
 
+	proposerBts := encodePubKey(voteBodyProposer, proposerKeyType)
 	id := event.ID()
-	_, err = tx.Execute(ctx, insertResolution, id[:], event.Body, event.Type, expiration, voteBodyProposer)
+
+	_, err = tx.Execute(ctx, insertResolution, id[:], event.Body, event.Type, expiration, proposerBts)
 	if err != nil {
 		return err
 	}
@@ -242,7 +250,7 @@ func DeleteResolution(ctx context.Context, db sql.TxMaker, id *types.UUID) error
 // fromRow converts a row from the database into a resolutions.Resolution
 // It expects there to be 7 columns in the row, in the following order:
 // id, body, type, expiration, approved_power, voters, voteBodyProposer
-func fromRow(row []any) (*resolutions.Resolution, error) {
+func fromRow(db sql.Executor, row []any) (*resolutions.Resolution, error) {
 	if len(row) != 7 {
 		return nil, fmt.Errorf("expected 7 columns, got %d", len(row))
 	}
@@ -289,13 +297,34 @@ func fromRow(row []any) (*resolutions.Resolution, error) {
 		}
 	}
 
+	if row[6] == nil {
+		v.Proposer = nil
+	} else {
+		vProposer, ok := row[6].([]byte)
+		if !ok {
+			return nil, fmt.Errorf("invalid type for voteBodyProposer (%T)", row[6])
+		}
+
+		pubKey, keyType, err := decodePubKey(vProposer)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode pubKey from voteBodyProposer: %w", err)
+		}
+
+		proposer, err := getValidator(context.Background(), db, pubKey, keyType)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get proposer: %w", err)
+		}
+
+		v.Proposer = proposer
+	}
+
 	var voters [][]byte
 	voters, ok = row[5].([][]byte)
 	if !ok {
 		return nil, fmt.Errorf("invalid type for voters (%T)", row[5])
 	}
 
-	// returns bigendian int64 + pubKey in []byte
+	// returns bigendian int64(power) + pubKey in []byte
 	v.Voters = make([]*types.Validator, 0)
 	for _, voter := range voters {
 		if voter == nil {
@@ -308,26 +337,22 @@ func fromRow(row []any) (*resolutions.Resolution, error) {
 			return nil, fmt.Errorf("invalid length for voter (%d)", len(voter))
 		}
 
-		var num uint64
-		err := binary.Read(bytes.NewReader(voter[:8]), binary.BigEndian, &num)
+		var power uint64
+		err := binary.Read(bytes.NewReader(voter[:8]), binary.BigEndian, &power)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read bigendian int64 from voter: %w", err)
 		}
 
-		v.Voters = append(v.Voters, &types.Validator{
-			Power:  int64(num),
-			PubKey: slices.Clone(voter[8:]),
-		})
-	}
-
-	if row[6] == nil {
-		v.Proposer = nil
-	} else {
-		vProposer, ok := row[6].([]byte)
-		if !ok {
-			return nil, fmt.Errorf("invalid type for voteBodyProposer (%T)", row[6])
+		pubKey, keyType, err := decodePubKey(voter[8:])
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode pubKey from voter: %w", err)
 		}
-		v.Proposer = slices.Clone(vProposer)
+
+		v.Voters = append(v.Voters, &types.Validator{
+			Power:      int64(power),
+			PubKeyType: keyType,
+			PubKey:     slices.Clone(pubKey),
+		})
 	}
 
 	return v, nil
@@ -348,7 +373,7 @@ func GetResolutionInfo(ctx context.Context, db sql.Executor, id *types.UUID) (*r
 		return nil, fmt.Errorf("expected 7 columns, got %d", len(res.Rows[0]))
 	}
 
-	return fromRow(res.Rows[0])
+	return fromRow(db, res.Rows[0])
 }
 
 // GetExpired returns all resolutions with an expiration
@@ -361,7 +386,7 @@ func GetExpired(ctx context.Context, db sql.Executor, blockHeight int64) ([]*res
 
 	ids := make([]*resolutions.Resolution, len(res.Rows))
 	for i, row := range res.Rows {
-		ids[i], err = fromRow(row)
+		ids[i], err = fromRow(db, row)
 		if err != nil {
 			return nil, fmt.Errorf("internal bug: %w", err)
 		}
@@ -388,7 +413,7 @@ func GetResolutionsByThresholdAndType(ctx context.Context, db sql.TxMaker, thres
 
 	results := make([]*resolutions.Resolution, len(res.Rows))
 	for i, row := range res.Rows {
-		results[i], err = fromRow(row)
+		results[i], err = fromRow(tx, row)
 		if err != nil {
 			return nil, fmt.Errorf("fromRow: %w", err)
 		}
@@ -406,7 +431,7 @@ func GetResolutionsByType(ctx context.Context, db sql.Executor, resType string) 
 
 	results := make([]*resolutions.Resolution, len(res.Rows))
 	for i, row := range res.Rows {
-		results[i], err = fromRow(row)
+		results[i], err = fromRow(db, row)
 		if err != nil {
 			return nil, fmt.Errorf("internal bug: %w", err)
 		}
@@ -417,8 +442,9 @@ func GetResolutionsByType(ctx context.Context, db sql.Executor, resType string) 
 }
 
 // GetResolutionIDsByTypeAndProposer gets all resolution ids of a specific type and the body proposer.
-func GetResolutionIDsByTypeAndProposer(ctx context.Context, db sql.Executor, resType string, proposer []byte) ([]*types.UUID, error) {
-	res, err := db.Execute(ctx, getResolutionByTypeAndProposer, resType, proposer)
+func GetResolutionIDsByTypeAndProposer(ctx context.Context, db sql.Executor, resType string, proposer []byte, proposerKeyType crypto.KeyType) ([]*types.UUID, error) {
+	serializedProposer := encodePubKey(proposer, proposerKeyType)
+	res, err := db.Execute(ctx, getResolutionByTypeAndProposer, resType, serializedProposer)
 	if err != nil {
 		return nil, err
 	}
@@ -553,18 +579,19 @@ func ReadjustExpirations(ctx context.Context, db sql.Executor, startHeight int64
 // It will create the voter if it does not exist.
 // It will return an error if a negative power is given.
 // If set to 0, the voter will be deleted.
-func (v *VoteStore) SetValidatorPower(ctx context.Context, db sql.Executor, recipient []byte, power int64) error {
+func (v *VoteStore) SetValidatorPower(ctx context.Context, db sql.Executor, pubKey []byte, pubKeyType crypto.KeyType, power int64) error {
 	if power < 0 {
 		return errors.New("cannot set a negative power")
 	}
 
-	uuid := types.NewUUIDV5(recipient)
+	pubkeyBts := encodePubKey(pubKey, pubKeyType)
+	uuid := types.NewUUIDV5(pubkeyBts)
 
 	var err error
 	if power == 0 {
 		_, err = db.Execute(ctx, removeVoter, uuid[:])
 	} else {
-		_, err = db.Execute(ctx, upsertVoter, uuid[:], recipient, power)
+		_, err = db.Execute(ctx, upsertVoter, uuid[:], pubkeyBts, power)
 	}
 
 	if err != nil {
@@ -574,9 +601,10 @@ func (v *VoteStore) SetValidatorPower(ctx context.Context, db sql.Executor, reci
 	v.mtx.Lock()
 	defer v.mtx.Unlock()
 
-	v.valUpdates[string(recipient)] = &types.Validator{
-		PubKey: recipient,
-		Power:  power,
+	v.valUpdates[string(pubkeyBts)] = &types.Validator{
+		PubKey:     pubKey,
+		PubKeyType: pubKeyType,
+		Power:      power,
 	}
 
 	return nil
@@ -584,13 +612,13 @@ func (v *VoteStore) SetValidatorPower(ctx context.Context, db sql.Executor, reci
 
 // GetValidatorPower gets the power of a voter.
 // If the voter does not exist, it will return 0.
-func (v *VoteStore) GetValidatorPower(ctx context.Context, identifier []byte) (power int64, err error) {
+func (v *VoteStore) GetValidatorPower(ctx context.Context, pubKey []byte, keyType crypto.KeyType) (power int64, err error) {
 	v.mtx.Lock()
 	defer v.mtx.Unlock()
 
-	val, ok := v.validatorSet[string(identifier)]
-	if !ok {
-		return 0, fmt.Errorf("voter %s not found", hex.EncodeToString(identifier))
+	val := v.getValidator(pubKey, keyType)
+	if val == nil {
+		return 0, fmt.Errorf("voter %s not found", hex.EncodeToString(pubKey))
 	}
 
 	// No need to check the db as v.validatorSet is always in sync with the db
@@ -604,8 +632,9 @@ func (v *VoteStore) GetValidators() []*types.Validator {
 	vals := make([]*types.Validator, 0, len(v.validatorSet))
 	for _, val := range v.validatorSet {
 		vals = append(vals, &types.Validator{
-			PubKey: slices.Clone(val.PubKey),
-			Power:  val.Power,
+			PubKey:     slices.Clone(val.PubKey),
+			PubKeyType: val.PubKeyType,
+			Power:      val.Power,
 		})
 	}
 
@@ -623,7 +652,7 @@ func getValidators(ctx context.Context, db sql.Executor) ([]*types.Validator, er
 		return nil, nil
 	}
 
-	if len(res.Rows[0]) != 2 {
+	if len(res.Rows[0]) != 3 {
 		// this should never happen, just for safety
 		return nil, errors.New("invalid number of columns returned. this is an internal bug")
 	}
@@ -639,17 +668,70 @@ func getValidators(ctx context.Context, db sql.Executor) ([]*types.Validator, er
 		if !ok {
 			return nil, errors.New("invalid type for voter")
 		}
+
+		pubkey, keyType, err := decodePubKey(voterBts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode pubKey from voter: %w", err)
+		}
+
 		power, ok := sql.Int64(row[1])
 		if !ok {
 			return nil, errors.New("invalid type for power")
 		}
 		voters[i] = &types.Validator{
-			PubKey: slices.Clone(voterBts),
-			Power:  power,
+			PubKey:     slices.Clone(pubkey),
+			PubKeyType: crypto.KeyType(int32(keyType)),
+			Power:      power,
 		}
 	}
 
 	return voters, nil
+}
+
+func getValidator(ctx context.Context, db sql.Executor, pubKey []byte, keyType crypto.KeyType) (*types.Validator, error) {
+	pubkeyBts := encodePubKey(pubKey, keyType)
+	uuid := types.NewUUIDV5(pubkeyBts)
+
+	res, err := db.Execute(ctx, getVoter, uuid[:])
+	if err != nil {
+		return nil, err
+	}
+
+	if len(res.Rows) == 0 {
+		return nil, nil
+	}
+
+	if len(res.Rows[0]) != 2 {
+		// this should never happen, just for safety
+		return nil, errors.New("invalid number of columns returned. this is an internal bug")
+	}
+
+	row := res.Rows[0]
+	voterBts, ok := row[0].([]byte)
+	if !ok {
+		return nil, errors.New("invalid type for voter")
+	}
+
+	// Ensure that it is the same voter
+	if !bytes.Equal(voterBts, pubkeyBts) {
+		return nil, errors.New("query returned a different voter")
+	}
+
+	pubkey, keyType, err := decodePubKey(voterBts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode pubKey from voter: %w", err)
+	}
+
+	power, ok := sql.Int64(row[1])
+	if !ok {
+		return nil, errors.New("invalid type for power")
+	}
+
+	return &types.Validator{
+		PubKey:     slices.Clone(pubkey),
+		PubKeyType: keyType,
+		Power:      power,
+	}, nil
 }
 
 // Commit applies the updates to the validator set cache.
@@ -657,15 +739,15 @@ func (v *VoteStore) Commit() error {
 	v.mtx.Lock()
 	defer v.mtx.Unlock()
 
-	for k, val := range v.valUpdates {
+	for _, val := range v.valUpdates {
 		if val.Power == 0 {
-			delete(v.validatorSet, k)
+			v.removeValidator(val)
 		} else {
-			v.validatorSet[k] = val
+			v.addOrUpdateValidator(val)
 		}
 	}
 
-	v.valUpdates = make(map[string]*types.Validator)
+	v.valUpdates = nil
 	return nil
 }
 
@@ -680,5 +762,57 @@ func (v *VoteStore) Rollback() {
 	v.mtx.Lock()
 	defer v.mtx.Unlock()
 
-	v.valUpdates = make(map[string]*types.Validator)
+	v.valUpdates = nil
+}
+
+// EncodePubKey encodes public key and key type into a byte slice.
+// This should be used only within this package to store the pubkey
+// with its type in the voting store.
+func encodePubKey(pubKey []byte, keyType crypto.KeyType) []byte {
+	b := binary.LittleEndian.AppendUint32(nil, uint32(keyType))
+	b = append(b, pubKey...)
+	return b
+}
+
+// DecodePubKey decodes a byte slice into a public key and key type.
+func decodePubKey(b []byte) ([]byte, crypto.KeyType, error) {
+	if len(b) <= 4 {
+		return nil, 0, errors.New("insufficient data for public key")
+	}
+
+	keyType := crypto.KeyType(binary.LittleEndian.Uint32(b))
+	return b[4:], keyType, nil
+}
+
+func (v *VoteStore) addOrUpdateValidator(val *types.Validator) {
+	// Check if the validator already exists
+	idx := slices.IndexFunc(v.validatorSet, func(v *types.Validator) bool {
+		return bytes.Equal(v.PubKey, val.PubKey) && v.PubKeyType == val.PubKeyType
+	})
+
+	if idx == -1 {
+		v.validatorSet = append(v.validatorSet, val)
+		return
+	}
+
+	v.validatorSet[idx] = val
+}
+
+func (v *VoteStore) removeValidator(val *types.Validator) {
+	// Check if the validator exists
+	v.validatorSet = slices.DeleteFunc(v.validatorSet, func(v *types.Validator) bool {
+		return bytes.Equal(v.PubKey, val.PubKey) && v.PubKeyType == val.PubKeyType
+	})
+}
+
+func (v *VoteStore) getValidator(pubKey []byte, keyType crypto.KeyType) *types.Validator {
+	// Check if the validator exists
+	idx := slices.IndexFunc(v.validatorSet, func(v *types.Validator) bool {
+		return bytes.Equal(v.PubKey, pubKey) && v.PubKeyType == keyType
+	})
+	if idx == -1 {
+		return nil
+	}
+
+	return v.validatorSet[idx]
 }

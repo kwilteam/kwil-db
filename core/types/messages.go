@@ -1,6 +1,10 @@
 package types
 
-import "time"
+import (
+	"time"
+
+	"github.com/kwilteam/kwil-db/core/crypto"
+)
 
 // This file contains the messages exchanged between the consensus engine and the block processor.
 
@@ -8,7 +12,7 @@ type BlockExecRequest struct {
 	Height   int64
 	Block    *Block
 	BlockID  Hash
-	Proposer []byte
+	Proposer crypto.PublicKey
 }
 
 type BlockExecResult struct {

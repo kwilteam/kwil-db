@@ -10,6 +10,7 @@ import (
 	"sync"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
@@ -118,7 +119,12 @@ func (m *mempool) applyTransaction(ctx *common.TxContext, tx *types.Transaction,
 	// seems like maybe this should go in the switch statement below,
 	// but I put it here to avoid extra db call for account info
 	if tx.Body.PayloadType == types.PayloadTypeValidatorVoteIDs {
-		power, err := m.validatorMgr.GetValidatorPower(ctx.Ctx, tx.Sender)
+		keyType, err := crypto.ParseKeyType(tx.Signature.Type)
+		if err != nil {
+			return fmt.Errorf("invalid key type: %w", err)
+		}
+
+		power, err := m.validatorMgr.GetValidatorPower(ctx.Ctx, tx.Sender, keyType)
 		if err != nil {
 			return err
 		}

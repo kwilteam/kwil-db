@@ -216,7 +216,7 @@ func SetupTests(t *testing.T, testConfig *TestConfig) *Testnet {
 				t.Fatal("first node must be a validator")
 			}
 
-			genesisConfig.Leader = nodeCfg.PrivateKey.Public().Bytes()
+			genesisConfig.Leader = config.EncodePubKeyAndType(nodeCfg.PrivateKey.Public().Bytes(), firstNode.PrivateKey().Type())
 		}
 		if nodeCfg.Validator {
 			genesisConfig.Validators = append(genesisConfig.Validators, &types.Validator{
@@ -373,8 +373,7 @@ func (c *NodeConfig) makeNode(generated *generatedNodeInfo, isFirstNode bool, fi
 	err := errors.Join(
 		ensureEq("admin.listen", conf.Admin.ListenAddress, defaultConf.Admin.ListenAddress),
 		ensureEq("rpc.listen", conf.RPC.ListenAddress, defaultConf.RPC.ListenAddress),
-		ensureEq("p2p.ip", conf.P2P.IP, defaultConf.P2P.IP),
-		ensureEq("p2p.port", conf.P2P.Port, defaultConf.P2P.Port),
+		ensureEq("p2p.listen", conf.P2P.ListenAddress, defaultConf.P2P.ListenAddress),
 		ensureEq("db.host", conf.DB.Host, defaultConf.DB.Host),
 		ensureEq("db.port", conf.DB.Port, defaultConf.DB.Port),
 		ensureEq("db.user", conf.DB.User, defaultConf.DB.User),

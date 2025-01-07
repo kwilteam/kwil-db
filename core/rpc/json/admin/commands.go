@@ -2,21 +2,27 @@
 // and response objects.
 package adminjson
 
-import "github.com/kwilteam/kwil-db/core/types"
+import (
+	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/types"
+)
 
 type StatusRequest struct{}
 type PeersRequest struct{}
 type GetConfigRequest struct{}
 type ApproveRequest struct {
-	PubKey []byte `json:"pubkey"`
+	PubKey     []byte         `json:"pubkey"`
+	PubKeyType crypto.KeyType `json:"pubkey_type"`
 }
 type JoinRequest struct{}
 type LeaveRequest struct{}
 type RemoveRequest struct {
-	PubKey []byte `json:"pubkey"`
+	PubKey     []byte         `json:"pubkey"`
+	PubKeyType crypto.KeyType `json:"pubkey_type"`
 }
 type JoinStatusRequest struct {
-	PubKey []byte `json:"pubkey"`
+	PubKey     []byte         `json:"pubkey"`
+	PubKeyType crypto.KeyType `json:"pubkey_type"`
 }
 type ListValidatorsRequest struct{}
 type ListJoinRequestsRequest struct{}

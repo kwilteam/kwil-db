@@ -4,6 +4,7 @@ import (
 	"context"
 	"math/big"
 
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
@@ -20,8 +21,8 @@ type Accounts interface {
 }
 
 type Validators interface {
-	SetValidatorPower(ctx context.Context, tx sql.Executor, pubKey []byte, power int64) error
-	GetValidatorPower(ctx context.Context, pubKey []byte) (int64, error)
+	SetValidatorPower(ctx context.Context, tx sql.Executor, pubKey []byte, keyType crypto.KeyType, power int64) error
+	GetValidatorPower(ctx context.Context, pubKey []byte, pubKeyType crypto.KeyType) (int64, error)
 	GetValidators() []*types.Validator
 	Commit() error
 	Rollback()

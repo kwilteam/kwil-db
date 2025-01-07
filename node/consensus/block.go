@@ -116,7 +116,7 @@ func (ce *ConsensusEngine) executeBlock(ctx context.Context, blkProp *blockPropo
 		Block:    blkProp.blk,
 		Height:   blkProp.height,
 		BlockID:  blkProp.blkHash,
-		Proposer: ce.leader.Bytes(),
+		Proposer: ce.leader,
 	}
 	results, err := ce.blockProcessor.ExecuteBlock(ctx, req)
 	if err != nil {

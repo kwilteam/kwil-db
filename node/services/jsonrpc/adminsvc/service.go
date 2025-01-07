@@ -7,6 +7,7 @@ import (
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/config"
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
@@ -53,8 +54,8 @@ type App interface {
 }
 
 type Validators interface {
-	SetValidatorPower(ctx context.Context, tx sql.Executor, pubKey []byte, power int64) error
-	GetValidatorPower(ctx context.Context, pubKey []byte) (int64, error)
+	SetValidatorPower(ctx context.Context, tx sql.Executor, pubKey []byte, pubKeyType crypto.KeyType, power int64) error
+	GetValidatorPower(ctx context.Context, pubKey []byte, pubKeyType crypto.KeyType) (int64, error)
 	GetValidators() []*ktypes.Validator
 }
 
@@ -264,7 +265,7 @@ func (svc *Service) Status(ctx context.Context, req *adminjson.StatusRequest) (*
 	}
 
 	var power int64
-	power, _ = svc.voting.GetValidatorPower(ctx, status.Validator.PubKey)
+	power, _ = svc.voting.GetValidatorPower(ctx, status.Validator.PubKey, status.Validator.PubKeyType)
 
 	return &adminjson.StatusResponse{
 		Node: status.Node,
@@ -356,6 +357,7 @@ func (svc *Service) sendTx(ctx context.Context, payload ktypes.Payload) (*userjs
 func (svc *Service) Approve(ctx context.Context, req *adminjson.ApproveRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
 	return svc.sendTx(ctx, &ktypes.ValidatorApprove{
 		Candidate: req.PubKey,
+		KeyType:   req.PubKeyType,
 	})
 }
 
@@ -368,13 +370,14 @@ func (svc *Service) Join(ctx context.Context, req *adminjson.JoinRequest) (*user
 func (svc *Service) Remove(ctx context.Context, req *adminjson.RemoveRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
 	return svc.sendTx(ctx, &ktypes.ValidatorRemove{
 		Validator: req.PubKey,
+		KeyType:   req.PubKeyType,
 	})
 }
 
 func (svc *Service) JoinStatus(ctx context.Context, req *adminjson.JoinStatusRequest) (*adminjson.JoinStatusResponse, *jsonrpc.Error) {
 	readTx := svc.db.BeginDelayedReadTx()
 	defer readTx.Rollback(ctx)
-	ids, err := voting.GetResolutionIDsByTypeAndProposer(ctx, readTx, voting.ValidatorJoinEventType, req.PubKey)
+	ids, err := voting.GetResolutionIDsByTypeAndProposer(ctx, readTx, voting.ValidatorJoinEventType, req.PubKey, req.PubKeyType)
 	if err != nil {
 		svc.log.Error("failed to retrieve join request", "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to retrieve join request", nil)
@@ -459,6 +462,7 @@ func (svc *Service) toPendingInfo(resolution *resolutions.Resolution, allVoters 
 
 	return &adminjson.PendingJoin{
 		Candidate: resolutionBody.PubKey,
+		KeyType:   resolutionBody.PubKeyType,
 		Power:     resolutionBody.Power,
 		ExpiresAt: resolution.ExpirationHeight,
 		Board:     board,

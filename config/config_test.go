@@ -50,10 +50,9 @@ func TestConfigSaveAndLoad(t *testing.T) {
 				LogLevel:  log.LevelDebug,
 				LogFormat: log.FormatJSON,
 				P2P: PeerConfig{
-					IP:        "192.168.1.1",
-					Port:      8080,
-					Pex:       false,
-					BootNodes: []string{"/ip4/192.168.1.1/tcp/8080/p2p/test"},
+					ListenAddress: "0.0.0.0:6600",
+					Pex:           false,
+					BootNodes:     []string{"/ip4/192.168.1.1/tcp/8080/p2p/test"},
 				},
 				DB: DBConfig{
 					Host:          "127.0.0.1",
@@ -98,11 +97,8 @@ func TestConfigSaveAndLoad(t *testing.T) {
 				if loaded.LogFormat != tt.config.LogFormat {
 					t.Errorf("LogFormat mismatch: got %v, want %v", loaded.LogFormat, tt.config.LogFormat)
 				}
-				if loaded.P2P.IP != tt.config.P2P.IP {
-					t.Errorf("P2P.IP mismatch: got %v, want %v", loaded.P2P.IP, tt.config.P2P.IP)
-				}
-				if loaded.P2P.Port != tt.config.P2P.Port {
-					t.Errorf("P2P.Port mismatch: got %v, want %v", loaded.P2P.Port, tt.config.P2P.Port)
+				if loaded.P2P.ListenAddress != tt.config.P2P.ListenAddress {
+					t.Errorf("P2P.ListenAddress mismatch: got %v, want %v", loaded.P2P.ListenAddress, tt.config.P2P.ListenAddress)
 				}
 				if loaded.P2P.Pex != tt.config.P2P.Pex {
 					t.Errorf("P2P.Pex mismatch: got %v, want %v", loaded.P2P.Pex, tt.config.P2P.Pex)

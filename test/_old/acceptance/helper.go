@@ -242,7 +242,7 @@ func makeSingleNodeNet(seed uint64) (crypto.PrivateKey, *config.GenesisConfig) {
 
 	genConfig := &config.GenesisConfig{
 		ChainID:          "kwil-testnet",
-		Leader:           pubBts,
+		Leader:           config.EncodePubKeyAndType(pubBts, priv.Type()),
 		DisabledGasCosts: true,
 		JoinExpiry:       14400,
 		VoteExpiry:       108000,
@@ -250,8 +250,9 @@ func makeSingleNodeNet(seed uint64) (crypto.PrivateKey, *config.GenesisConfig) {
 		MaxVotesPerTx:    200,
 		Validators: []*types.Validator{
 			{
-				PubKey: pubBts,
-				Power:  1,
+				PubKey:     pubBts,
+				PubKeyType: priv.Type(),
+				Power:      1,
 			},
 		},
 	}

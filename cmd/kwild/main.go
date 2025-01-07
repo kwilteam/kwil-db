@@ -25,7 +25,7 @@ func main() {
 	rootCmd := app.RootCmd()
 
 	// Run "start" as the default command if none is given.
-	cmd, _, err := rootCmd.Find(os.Args[1:])
+	cmd, _, err := rootCmd.Traverse(os.Args[1:])
 	if err == nil && cmd.Use == rootCmd.Use && cmd.Flags().Parse(os.Args[1:]) != pflag.ErrHelp {
 		// rewrite from "kwild <whatever...>" to "kwild start <whatever...>"
 		args := append([]string{"start"}, os.Args[1:]...)

@@ -2,19 +2,19 @@ package validator
 
 import (
 	"context"
-	"encoding/hex"
 
 	"github.com/spf13/cobra"
 
 	"github.com/kwilteam/kwil-db/app/rpc"
 	"github.com/kwilteam/kwil-db/app/shared/display"
+	"github.com/kwilteam/kwil-db/config"
 )
 
 var (
 	removeLong = "Command `remove` votes to remove a validator from the validator set. If enough validators vote to remove the validator, the validator will be removed from the validator set."
 
-	removeExample = `# Remove a validator from the validator set, by hex public key
-kwil-admin validators remove e16141e4def3a7f2dfc5bbf40d50619b4d7bc9c9f670fcad98327b0d3d7b97b6`
+	removeExample = `# Remove a validator from the validator set by providing the validator info in format <hexPubkey#pubkeytype>
+kwil-admin validators remove e16141e4def3a7f2dfc5bbf40d50619b4d7bc9c9f670fcad98327b0d3d7b97b6#0`
 )
 
 func removeCmd() *cobra.Command {
@@ -32,12 +32,12 @@ func removeCmd() *cobra.Command {
 				return display.PrintErr(cmd, err)
 			}
 
-			validatorBts, err := hex.DecodeString(args[0])
+			validatorBts, valKeyType, err := config.DecodePubKeyAndType(args[0])
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
 
-			txHash, err := clt.Remove(ctx, validatorBts)
+			txHash, err := clt.Remove(ctx, validatorBts, valKeyType)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}

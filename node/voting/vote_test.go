@@ -8,6 +8,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	dbtest "github.com/kwilteam/kwil-db/node/pg/test"
@@ -32,40 +33,53 @@ func TestMain(m *testing.M) {
 }
 
 func Test_Voting(t *testing.T) {
+	type validator struct {
+		power   int64
+		keyType crypto.KeyType
+	}
 	type testcase struct {
-		name          string
-		startingPower map[string]int64 // starting power for any validators
-		fn            func(t *testing.T, db sql.DB, v *VoteStore)
+		name       string
+		validators map[string]validator // starting power for any validators
+		fn         func(t *testing.T, db sql.DB, v *VoteStore)
 	}
 
 	tests := []testcase{
 		{
 			name: "successful creating and voting",
-			startingPower: map[string]int64{
-				"a": 100,
-				"b": 100,
+			validators: map[string]validator{
+				"a": {100, crypto.KeyTypeEd25519},
+				"b": {100, crypto.KeyTypeSecp256k1},
 			},
+
 			fn: func(t *testing.T, db sql.DB, v *VoteStore) {
 				ctx := context.Background()
 
-				err := CreateResolution(ctx, db, dummyEvent, 10, []byte("a"))
+				err := CreateResolution(ctx, db, dummyEvent, 10, []byte("a"), crypto.KeyTypeEd25519)
 				require.Error(t, err)
 
 				// Can't approve non-existent resolutions
-				err = ApproveResolution(ctx, db, testEvent.ID(), []byte("a"))
+				err = ApproveResolution(ctx, db, testEvent.ID(), []byte("a"), crypto.KeyTypeEd25519)
 				require.Error(t, err)
 
-				err = CreateResolution(ctx, db, testEvent, 10, []byte("a"))
+				err = CreateResolution(ctx, db, testEvent, 10, []byte("a"), crypto.KeyTypeEd25519)
 				require.NoError(t, err)
 
 				// duplicate creation should fail
-				err = CreateResolution(ctx, db, testEvent, 10, []byte("a"))
+				err = CreateResolution(ctx, db, testEvent, 10, []byte("a"), crypto.KeyTypeEd25519)
 				require.Error(t, err)
 
-				err = ApproveResolution(ctx, db, testEvent.ID(), []byte("a"))
+				// voter doesn't exist (non existent pubkey)
+				err = ApproveResolution(ctx, db, testEvent.ID(), []byte("a"), crypto.KeyTypeSecp256k1)
+				require.Error(t, err)
+
+				// voter doesn't exist (invalid key type)
+				err = ApproveResolution(ctx, db, testEvent.ID(), []byte("c"), crypto.KeyTypeEd25519)
+				require.Error(t, err)
+
+				err = ApproveResolution(ctx, db, testEvent.ID(), []byte("a"), crypto.KeyTypeEd25519)
 				require.NoError(t, err)
 
-				err = ApproveResolution(ctx, db, testEvent.ID(), []byte("b"))
+				err = ApproveResolution(ctx, db, testEvent.ID(), []byte("b"), crypto.KeyTypeSecp256k1)
 				require.NoError(t, err)
 
 				events, err := GetResolutionsByThresholdAndType(ctx, db, testConfirmationThreshold, testType, 200)
@@ -86,10 +100,10 @@ func Test_Voting(t *testing.T) {
 				// I add power here because this is part of the domain of validator management
 				// if test setup changes, this test will still be valid
 				ctx := context.Background()
-				err := v.SetValidatorPower(ctx, db, []byte("a"), 100)
+				err := v.SetValidatorPower(ctx, db, []byte("a"), 1, 100)
 				require.NoError(t, err)
 
-				err = v.SetValidatorPower(ctx, db, []byte("b"), 100)
+				err = v.SetValidatorPower(ctx, db, []byte("b"), 1, 100)
 				require.NoError(t, err)
 
 				voters := v.GetValidators()
@@ -103,7 +117,12 @@ func Test_Voting(t *testing.T) {
 				voters = v.GetValidators()
 				require.Len(t, voters, 2)
 
-				voterAPower, err := v.GetValidatorPower(ctx, []byte("a"))
+				// Ensure that the voter type is set to 1 / ed25519
+				for _, voter := range voters {
+					require.Equal(t, crypto.KeyTypeEd25519, voter.PubKeyType)
+				}
+
+				voterAPower, err := v.GetValidatorPower(ctx, []byte("a"), crypto.KeyTypeEd25519)
 				require.NoError(t, err)
 
 				require.Equal(t, int64(100), voterAPower)
@@ -111,13 +130,13 @@ func Test_Voting(t *testing.T) {
 		},
 		{
 			name: "deletion and processed",
-			startingPower: map[string]int64{
-				"a": 100,
+			validators: map[string]validator{
+				"a": {100, crypto.KeyTypeEd25519},
 			},
 			fn: func(t *testing.T, db sql.DB, v *VoteStore) {
 				ctx := context.Background()
 
-				err := CreateResolution(ctx, db, testEvent, 10, []byte("a"))
+				err := CreateResolution(ctx, db, testEvent, 10, []byte("a"), crypto.KeyTypeEd25519)
 				require.NoError(t, err)
 
 				// verify that the resolution exists
@@ -145,7 +164,7 @@ func Test_Voting(t *testing.T) {
 				require.NoError(t, err)
 
 				// Resolution creation should fail if the resolution is already processed
-				err = CreateResolution(ctx, db, testEvent, 10, []byte("a"))
+				err = CreateResolution(ctx, db, testEvent, 10, []byte("a"), crypto.KeyTypeEd25519)
 				require.Error(t, err)
 
 				require.True(t, processed)
@@ -153,18 +172,18 @@ func Test_Voting(t *testing.T) {
 		},
 		{
 			name: "reading resolution info",
-			startingPower: map[string]int64{
-				"a": 100,
-				"b": 100,
+			validators: map[string]validator{
+				"a": {100, crypto.KeyTypeEd25519},
+				"b": {100, crypto.KeyTypeSecp256k1},
 			},
 			fn: func(t *testing.T, db sql.DB, v *VoteStore) {
 				ctx := context.Background()
 
 				// Voters can't approve non-existent resolutions
-				err := ApproveResolution(ctx, db, testEvent.ID(), []byte("a"))
+				err := ApproveResolution(ctx, db, testEvent.ID(), []byte("a"), crypto.KeyTypeEd25519)
 				require.Error(t, err)
 
-				err = CreateResolution(ctx, db, testEvent, 10, []byte("a"))
+				err = CreateResolution(ctx, db, testEvent, 10, []byte("a"), crypto.KeyTypeEd25519)
 				require.NoError(t, err)
 
 				// verify that the resolution exists
@@ -172,10 +191,10 @@ func Test_Voting(t *testing.T) {
 				require.NoError(t, err)
 				require.True(t, exists)
 
-				err = ApproveResolution(ctx, db, testEvent.ID(), []byte("a"))
+				err = ApproveResolution(ctx, db, testEvent.ID(), []byte("a"), crypto.KeyTypeEd25519)
 				require.NoError(t, err)
 
-				err = ApproveResolution(ctx, db, testEvent.ID(), []byte("b"))
+				err = ApproveResolution(ctx, db, testEvent.ID(), []byte("b"), crypto.KeyTypeSecp256k1)
 				require.NoError(t, err)
 
 				info, err := GetResolutionInfo(ctx, db, testEvent.ID())
@@ -187,7 +206,7 @@ func Test_Voting(t *testing.T) {
 
 				require.EqualValues(t, testEvent.ID(), infoSlice[0].ID)
 
-				info2Slice, err := GetResolutionIDsByTypeAndProposer(ctx, db, testType, []byte("a"))
+				info2Slice, err := GetResolutionIDsByTypeAndProposer(ctx, db, testType, []byte("a"), crypto.KeyTypeEd25519)
 				require.NoError(t, err)
 				require.Len(t, info2Slice, 1)
 
@@ -218,13 +237,13 @@ func Test_Voting(t *testing.T) {
 		},
 		{
 			name: "test expiration",
-			startingPower: map[string]int64{
-				"a": 100,
+			validators: map[string]validator{
+				"a": {100, crypto.KeyTypeEd25519},
 			},
 			fn: func(t *testing.T, db sql.DB, v *VoteStore) {
 				ctx := context.Background()
 
-				err := CreateResolution(ctx, db, testEvent, 10, []byte("a"))
+				err := CreateResolution(ctx, db, testEvent, 10, []byte("a"), crypto.KeyTypeEd25519)
 				require.NoError(t, err)
 
 				expired, err := GetExpired(ctx, db, 10)
@@ -235,12 +254,15 @@ func Test_Voting(t *testing.T) {
 				require.NoError(t, err)
 
 				require.EqualValues(t, resolutionInfo, expired[0])
+				require.Equal(t, resolutionInfo.Proposer.Power, int64(100))
+				require.Equal(t, resolutionInfo.Proposer.PubKeyType, crypto.KeyTypeEd25519)
+				require.Equal(t, []byte(resolutionInfo.Proposer.PubKey[:]), []byte("a"))
 			},
 		},
 		{
 			name: "many resolutions test",
-			startingPower: map[string]int64{
-				"a": 100,
+			validators: map[string]validator{
+				"a": {100, crypto.KeyTypeEd25519},
 			},
 			fn: func(t *testing.T, db sql.DB, v *VoteStore) {
 				ctx := context.Background()
@@ -260,15 +282,15 @@ func Test_Voting(t *testing.T) {
 				// create 2,
 				// and only approve 3
 
-				err := CreateResolution(ctx, db, events[0], 10, []byte("a"))
+				err := CreateResolution(ctx, db, events[0], 10, []byte("a"), crypto.KeyTypeEd25519)
 				require.NoError(t, err)
-				err = ApproveResolution(ctx, db, events[0].ID(), []byte("a"))
-				require.NoError(t, err)
-
-				err = CreateResolution(ctx, db, events[1], 10, []byte("a"))
+				err = ApproveResolution(ctx, db, events[0].ID(), []byte("a"), crypto.KeyTypeEd25519)
 				require.NoError(t, err)
 
-				err = ApproveResolution(ctx, db, events[2].ID(), []byte("a"))
+				err = CreateResolution(ctx, db, events[1], 10, []byte("a"), crypto.KeyTypeEd25519)
+				require.NoError(t, err)
+
+				err = ApproveResolution(ctx, db, events[2].ID(), []byte("a"), crypto.KeyTypeEd25519)
 				require.Error(t, err)
 
 				// check that none are processed
@@ -291,8 +313,8 @@ func Test_Voting(t *testing.T) {
 		},
 		{
 			name: "no resolutions",
-			startingPower: map[string]int64{
-				"a": 100,
+			validators: map[string]validator{
+				"a": {100, crypto.KeyTypeEd25519},
 			},
 			fn: func(t *testing.T, db sql.DB, v *VoteStore) {
 				ctx := context.Background()
@@ -319,8 +341,8 @@ func Test_Voting(t *testing.T) {
 			v, err := InitializeVoteStore(ctx, dbTx)
 			require.NoError(t, err)
 
-			for addr, power := range tt.startingPower {
-				err = v.SetValidatorPower(ctx, dbTx, []byte(addr), power)
+			for addr, val := range tt.validators {
+				err = v.SetValidatorPower(ctx, dbTx, []byte(addr), val.keyType, val.power)
 				require.NoError(t, err)
 			}
 

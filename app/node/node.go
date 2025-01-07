@@ -14,7 +14,9 @@ import (
 
 	"github.com/kwilteam/kwil-db/app/key"
 	"github.com/kwilteam/kwil-db/config"
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node"
 	"github.com/kwilteam/kwil-db/node/consensus"
 	"github.com/kwilteam/kwil-db/node/listeners"
@@ -43,7 +45,7 @@ type server struct {
 	jsonRPCAdminServer *rpcserver.Server
 }
 
-func runNode(ctx context.Context, rootDir string, cfg *config.Config) (err error) {
+func runNode(ctx context.Context, rootDir string, cfg *config.Config, autogen bool) (err error) {
 	var logWriters []io.Writer
 	if idx := slices.Index(cfg.LogOutput, "stdout"); idx != -1 {
 		logWriters = append(logWriters, os.Stdout)
@@ -83,16 +85,11 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config) (err error
 
 	logger.Infof("Loading the genesis configuration from %s", genFile)
 
-	genConfig, err := config.LoadGenesisConfig(genFile)
+	privKey, genConfig, err := loadGenesisAndPrivateKey(rootDir, autogen)
 	if err != nil {
-		return fmt.Errorf("failed to load genesis config: %w", err)
+		return fmt.Errorf("failed to load genesis and private key: %w", err)
 	}
 
-	keyFilePath := filepath.Join(rootDir, "nodekey.json")
-	privKey, err := key.LoadNodeKey(keyFilePath)
-	if err != nil {
-		return fmt.Errorf("failed to load node key: %w", err)
-	}
 	pubKey := privKey.Public().Bytes()
 	logger.Infoln("Node public key:", hex.EncodeToString(pubKey))
 
@@ -122,6 +119,15 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config) (err error
 
 	if err := genConfig.SanityChecks(); err != nil {
 		return fmt.Errorf("genesis configuration failed sanity checks: %w", err)
+	}
+
+	// if running in autogen mode, and config.toml does not exist, write it
+	tomlFile := config.ConfigFilePath(rootDir)
+	if autogen && !fileExists(tomlFile) {
+		logger.Infof("Writing config file to %s", tomlFile)
+		if err := cfg.SaveAs(tomlFile); err != nil {
+			return fmt.Errorf("failed to write config file: %w", err)
+		}
 	}
 
 	d := &coreDependencies{
@@ -254,4 +260,59 @@ func rootedPath(path, rootDir string) string {
 		return path
 	}
 	return filepath.Join(rootDir, path)
+}
+
+// ReadOrCreatePrivateKeyFile will read the node key pair from the given file,
+// or generate it if it does not exist and requested.
+func readOrCreatePrivateKeyFile(rootDir string, autogen bool) (privKey crypto.PrivateKey, err error) {
+	keyFile := config.NodeKeyFilePath(rootDir)
+	privKey, err = key.LoadNodeKey(keyFile)
+	if err == nil {
+		return privKey, nil
+	}
+
+	if !autogen {
+		return nil, fmt.Errorf("failed to load node key: %w", err)
+	}
+
+	privKey, err = crypto.GeneratePrivateKey(crypto.KeyTypeSecp256k1)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate node key: %w", err)
+	}
+
+	if err := key.SaveNodeKey(keyFile, privKey); err != nil {
+		return nil, fmt.Errorf("failed to save node key: %w", err)
+	}
+
+	return privKey, nil
+}
+
+func loadGenesisAndPrivateKey(rootDir string, autogen bool) (privKey crypto.PrivateKey, genCfg *config.GenesisConfig, err error) {
+	privKey, err = readOrCreatePrivateKeyFile(rootDir, autogen)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to read or create private key: %w", err)
+	}
+
+	genFile := config.GenesisFilePath(rootDir)
+	if fileExists(genFile) {
+		genCfg, err = config.LoadGenesisConfig(genFile)
+		if err != nil {
+			return nil, nil, fmt.Errorf("error loading genesis file %s: %w", genFile, err)
+		}
+		return privKey, genCfg, nil
+	}
+
+	genCfg = config.DefaultGenesisConfig()
+	leader := config.EncodePubKeyAndType(privKey.Public().Bytes(), privKey.Type())
+	genCfg.Leader = leader
+	genCfg.Validators = append(genCfg.Validators, &types.Validator{
+		PubKey:     privKey.Public().Bytes(),
+		PubKeyType: privKey.Type(),
+		Power:      1,
+	})
+	if err := genCfg.SaveAs(genFile); err != nil {
+		return nil, nil, fmt.Errorf("failed to write genesis file in autogen mode %s: %w", genFile, err)
+	}
+
+	return privKey, genCfg, nil
 }

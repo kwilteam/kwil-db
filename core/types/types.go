@@ -3,6 +3,8 @@ package types
 import (
 	"fmt"
 	"math/big"
+
+	"github.com/kwilteam/kwil-db/core/crypto"
 )
 
 // TODO: doc it all
@@ -32,16 +34,18 @@ type ChainInfo struct {
 // the account/owner fields in the user service.
 
 type JoinRequest struct {
-	Candidate HexBytes   `json:"candidate"`  // pubkey of the candidate validator
-	Power     int64      `json:"power"`      // the requested power
-	ExpiresAt int64      `json:"expires_at"` // the block height at which the join request expires
-	Board     []HexBytes `json:"board"`      // slice of pubkeys of all the eligible voting validators
-	Approved  []bool     `json:"approved"`   // slice of bools indicating if the corresponding validator approved
+	Candidate HexBytes       `json:"candidate"`  // pubkey of the candidate validator
+	KeyType   crypto.KeyType `json:"key_type"`   // the type of the pubkey of the joiner (ed25519 or secp256k1)
+	Power     int64          `json:"power"`      // the requested power
+	ExpiresAt int64          `json:"expires_at"` // the block height at which the join request expires
+	Board     []HexBytes     `json:"board"`      // slice of pubkeys of all the eligible voting validators
+	Approved  []bool         `json:"approved"`   // slice of bools indicating if the corresponding validator approved
 }
 
 type Validator struct {
-	PubKey HexBytes `json:"pubkey"`
-	Power  int64    `json:"power"`
+	PubKey     HexBytes       `json:"pubkey"`
+	PubKeyType crypto.KeyType `json:"pubkey_type"`
+	Power      int64          `json:"power"`
 }
 
 // ValidatorRemoveProposal is a proposal from an existing validator (remover) to
@@ -52,7 +56,7 @@ type ValidatorRemoveProposal struct {
 }
 
 func (v *Validator) String() string {
-	return fmt.Sprintf("Validator{pubkey = %x, power = %d}", v.PubKey, v.Power)
+	return fmt.Sprintf("Validator{pubkey = %x, keyType = %s, power = %d}", v.PubKey, v.PubKeyType.String(), v.Power)
 }
 
 // DatasetIdentifier contains the information required to identify a dataset.
@@ -138,14 +142,6 @@ type GenesisInfo struct {
 	AppHash HexBytes `json:"app_hash"`
 	// Validators is the list of validators that the new network should start with
 	Validators []*Validator `json:"validators"`
-}
-
-// NamedValidator is a validator with a name.
-// Since CometBFT assigns validators human-readable names, this struct
-// is used to represent a validator with its name that will be used in the genesis file.
-type NamedValidator struct {
-	Name      string `json:"name"`
-	Validator `json:"validator"`
 }
 
 // ServiceMode describes the operating mode of the user service. Namely, if the

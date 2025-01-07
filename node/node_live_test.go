@@ -68,8 +68,9 @@ func TestSingleNodeMocknet(t *testing.T) {
 	valSet := make(map[string]ktypes.Validator)
 	for _, priv := range privKeys {
 		valSet[hex.EncodeToString(priv.Public().Bytes())] = ktypes.Validator{
-			PubKey: priv.Public().Bytes(),
-			Power:  1,
+			PubKey:     priv.Public().Bytes(),
+			PubKeyType: priv.Type(),
+			Power:      1,
 		}
 	}
 	valSetList := make([]*ktypes.Validator, 0, len(valSet))
@@ -83,7 +84,7 @@ func TestSingleNodeMocknet(t *testing.T) {
 	require.NoError(t, err)
 
 	genCfg := config.DefaultGenesisConfig()
-	genCfg.Leader = privKeys[0].Public().Bytes()
+	genCfg.Leader = config.EncodePubKeyAndType(privKeys[0].Public().Bytes(), privKeys[0].Type())
 	genCfg.Validators = valSetList
 
 	k, err := crypto.UnmarshalSecp256k1PrivateKey(pk1)
@@ -199,8 +200,9 @@ func TestDualNodeMocknet(t *testing.T) {
 	valSet := make(map[string]ktypes.Validator)
 	for _, priv := range privKeys {
 		valSet[hex.EncodeToString(priv.Public().Bytes())] = ktypes.Validator{
-			PubKey: priv.Public().Bytes(),
-			Power:  1,
+			PubKey:     priv.Public().Bytes(),
+			PubKeyType: priv.Type(),
+			Power:      1,
 		}
 	}
 	valSetList := make([]*ktypes.Validator, 0, len(valSet))
@@ -210,7 +212,7 @@ func TestDualNodeMocknet(t *testing.T) {
 	ss := newSnapshotStore()
 
 	genCfg := config.DefaultGenesisConfig()
-	genCfg.Leader = privKeys[0].Public().Bytes()
+	genCfg.Leader = config.EncodePubKeyAndType(privKeys[0].Public().Bytes(), privKeys[0].Type())
 	genCfg.Validators = valSetList
 
 	// _, vsReal, err := voting.NewResolutionStore(ctx, db1)
@@ -431,24 +433,6 @@ func (d *dummyTxApp) AccountInfo(ctx context.Context, dbTx sql.DB, identifier st
 func (d *dummyTxApp) ApplyMempool(ctx *common.TxContext, db sql.DB, tx *ktypes.Transaction) error {
 	return nil
 }
-
-/*type validatorStore struct {
-	valSet []*ktypes.Validator
-}
-
-func newValidatorStore(valSet []*ktypes.Validator) *validatorStore {
-	return &validatorStore{
-		valSet: valSet,
-	}
-}
-
-func (v *validatorStore) GetValidators() []*ktypes.Validator {
-	return v.valSet
-}
-
-func (v *validatorStore) ValidatorUpdates() map[string]*ktypes.Validator {
-	return nil
-}*/
 
 type mockAccounts struct{}
 

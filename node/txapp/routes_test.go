@@ -31,10 +31,8 @@ func init() {
 }
 
 var (
-	signer1 = getSigner("81487a6b7bd63f77da1d09758bf657448425c398bbbb63b8a304f0551c182703")
-	signer2 = getSigner("24ee0732c3f9d7ff2b45def78260968bbdf2d977675e968bcbcf98726c2bddd2")
-	// signer1Ed = getSigner("7c67e60fce0c403ff40193a3128e5f3d8c2139aed36d76d7b5f1e70ec19c43f00aa611bf555596912bc6f9a9f169f8785918e7bab9924001895798ff13f05842")
-	// signer2Ed = getSigner("2b8615d7ee7b7d3fc7d6b89d9b31c045ca5c4d220c82eab25420873c99010422fb35029f37e80148ae89588710eb7d692e96a070d48e579cad51a253e9d1c030")
+	privKey1, signer1 = getSigner("81487a6b7bd63f77da1d09758bf657448425c398bbbb63b8a304f0551c182703")
+	privKey2, signer2 = getSigner("24ee0732c3f9d7ff2b45def78260968bbdf2d977675e968bcbcf98726c2bddd2")
 )
 
 type getVoterPowerFunc func() (int64, error)
@@ -77,7 +75,7 @@ func Test_Routes(t *testing.T) {
 					return nil
 				}
 
-				approveResolution = func(ctx context.Context, db sql.TxMaker, resolutionID *types.UUID, from []byte) error {
+				approveResolution = func(ctx context.Context, db sql.TxMaker, resolutionID *types.UUID, from []byte, keyType crypto.KeyType) error {
 					approveCount++
 
 					return nil
@@ -113,7 +111,7 @@ func Test_Routes(t *testing.T) {
 
 					return nil
 				}
-				approveResolution = func(_ context.Context, _ sql.TxMaker, _ *types.UUID, _ []byte) error {
+				approveResolution = func(_ context.Context, _ sql.TxMaker, _ *types.UUID, _ []byte, _ crypto.KeyType) error {
 					approveCount++
 
 					return nil
@@ -165,7 +163,7 @@ func Test_Routes(t *testing.T) {
 
 					return nil
 				}
-				createResolution = func(_ context.Context, _ sql.TxMaker, _ *types.VotableEvent, _ int64, _ []byte) error {
+				createResolution = func(_ context.Context, _ sql.TxMaker, _ *types.VotableEvent, _ int64, _ []byte, _ crypto.KeyType) error {
 					return nil
 				}
 
@@ -182,7 +180,7 @@ func Test_Routes(t *testing.T) {
 			},
 			ctx: &common.TxContext{
 				BlockContext: &common.BlockContext{
-					Proposer: signer1.Identity(), // TODO: Proposer in the new model is always the leader
+					Proposer: privKey1.Public(),
 				},
 			},
 			from: signer1,
@@ -193,7 +191,7 @@ func Test_Routes(t *testing.T) {
 			name: "validator_vote_bodies, as non-proposer",
 			fee:  voting.ValidatorVoteIDPrice,
 			getVoterPower: func() (int64, error) {
-				return 1, nil
+				return 0, nil
 			},
 			fn: func(t *testing.T, callback func()) {
 				deleteCount := 0
@@ -217,7 +215,7 @@ func Test_Routes(t *testing.T) {
 			},
 			ctx: &common.TxContext{
 				BlockContext: &common.BlockContext{
-					Proposer: signer1.Identity(), // TODO: Proposer in the new model is always the leader
+					Proposer: privKey2.Public(),
 				},
 			},
 			from: signer2,
@@ -271,25 +269,18 @@ func Test_Routes(t *testing.T) {
 					tc.ctx = &common.TxContext{}
 				}
 
-				if tc.ctx.BlockContext == nil {
-					tc.ctx.BlockContext = &common.BlockContext{
-						ChainContext: &common.ChainContext{
-							NetworkParameters: &common.NetworkParameters{
-								DisabledGasCosts: false,
-							},
-						},
-					}
-				} else if tc.ctx.BlockContext.ChainContext == nil {
-					tc.ctx.BlockContext.ChainContext = &common.ChainContext{
+				tc.ctx.BlockContext = &common.BlockContext{
+					ChainContext: &common.ChainContext{
 						NetworkParameters: &common.NetworkParameters{
 							DisabledGasCosts: false,
 						},
-					}
+					},
+					Proposer: privKey1.Public(),
 				}
 
 				res := app.Execute(tc.ctx, db, tx)
 				if tc.err != nil {
-					require.ErrorIs(t, tc.err, res.Error)
+					require.ErrorIs(t, res.Error, tc.err)
 				} else {
 					require.NoError(t, res.Error)
 				}
@@ -338,11 +329,11 @@ func (v *mockValidator) GetValidators() []*types.Validator {
 	return nil
 }
 
-func (v *mockValidator) GetValidatorPower(_ context.Context, pubKey []byte) (int64, error) {
+func (v *mockValidator) GetValidatorPower(_ context.Context, pubKey []byte, pubKeyType crypto.KeyType) (int64, error) {
 	return v.getVoterFn()
 }
 
-func (v *mockValidator) SetValidatorPower(_ context.Context, _ sql.Executor, pubKey []byte, power int64) error {
+func (v *mockValidator) SetValidatorPower(_ context.Context, _ sql.Executor, pubKey []byte, keyType crypto.KeyType, power int64) error {
 	return nil
 }
 
@@ -352,7 +343,7 @@ func (v *mockValidator) Commit() error {
 
 func (v *mockValidator) Rollback() {}
 
-func getSigner(hexPrivKey string) auth.Signer {
+func getSigner(hexPrivKey string) (crypto.PrivateKey, auth.Signer) {
 	bts, err := hex.DecodeString(hexPrivKey)
 	if err != nil {
 		panic(err)
@@ -362,5 +353,5 @@ func getSigner(hexPrivKey string) auth.Signer {
 		panic(err)
 	}
 
-	return auth.GetNodeSigner(pk)
+	return pk, auth.GetNodeSigner(pk)
 }

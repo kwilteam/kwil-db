@@ -144,6 +144,5 @@ type Resolution struct {
 	// This includes the proposer of the resolution.
 	Voters []*types.Validator
 	// Proposer is the voter that proposed the resolution body.
-	// The power of the proposer can be found in the Voters list.
-	Proposer []byte
+	Proposer *types.Validator
 }

@@ -8,9 +8,10 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/test/driver"
 	"github.com/stretchr/testify/require"
 )
+
+var ErrTxNotConfirmed = errors.New("transaction not confirmed")
 
 func ExpectTxSuccess(t *testing.T, spec TxQueryDsl, ctx context.Context, txHash types.Hash) {
 	expectTxSuccess(t, spec, ctx, txHash, defaultTxQueryTimeout)()
@@ -52,7 +53,7 @@ func expectTxFail(t *testing.T, spec TxQueryDsl, ctx context.Context, txHash typ
 			} else {
 				status.WriteString(err.Error())
 				// NOTE: ErrTxNotConfirmed is not considered a failure, should retry
-				return !errors.Is(err, driver.ErrTxNotConfirmed)
+				return !errors.Is(err, ErrTxNotConfirmed)
 			}
 		}, waitFor, time.Second*1, "tx should fail - status: %v, hash %x", status.String(), txHash)
 	}

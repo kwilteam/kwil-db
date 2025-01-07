@@ -143,9 +143,11 @@ func GenerateTestnetConfigs(cfg *TestnetConfig, opts *ConfigOpts) error {
 	if chainID == "" {
 		chainID = "kwil-testnet"
 	}
+
+	leader := config.EncodePubKeyAndType(leaderPub.Bytes(), leaderPub.Type())
 	genConfig := &config.GenesisConfig{
 		ChainID:          chainID,
-		Leader:           leaderPub.Bytes(), // rethink this so it can be different key types?
+		Leader:           leader,
 		Validators:       make([]*ktypes.Validator, cfg.NumVals),
 		DisabledGasCosts: true,
 		JoinExpiry:       14400,
@@ -157,8 +159,9 @@ func GenerateTestnetConfigs(cfg *TestnetConfig, opts *ConfigOpts) error {
 
 	for i := range cfg.NumVals {
 		genConfig.Validators[i] = &ktypes.Validator{
-			PubKey: keys[i].Public().Bytes(),
-			Power:  1,
+			PubKey:     keys[i].Public().Bytes(),
+			PubKeyType: keys[i].Type(),
+			Power:      1,
 		}
 	}
 
@@ -202,11 +205,12 @@ func GenerateNodeRoot(ncfg *NodeGenConfig) error {
 	cfg := custom.DefaultConfig() // not config.DefaultConfig(), so custom command config is used
 
 	// P2P
-	cfg.P2P.Port = uint64(ncfg.PortOffset + 6600)
-	cfg.P2P.IP = "0.0.0.0"
+	port := uint64(ncfg.PortOffset + 6600)
+	host := "127.0.0.1"
 	if ncfg.IP != "" {
-		cfg.P2P.IP = ncfg.IP
+		host = ncfg.IP
 	}
+	cfg.P2P.ListenAddress = net.JoinHostPort(host, strconv.FormatUint(port, 10))
 	cfg.P2P.Pex = !ncfg.NoPEX
 
 	cfg.P2P.BootNodes = ncfg.BootNodes

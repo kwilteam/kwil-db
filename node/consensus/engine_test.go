@@ -78,8 +78,9 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) []*Config {
 	var valSet []*ktypes.Validator
 	for _, pubKey := range pubKeys {
 		val := &ktypes.Validator{
-			PubKey: types.HexBytes(pubKey.Bytes()),
-			Power:  1,
+			PubKey:     types.HexBytes(pubKey.Bytes()),
+			PubKeyType: pubKey.Type(),
+			Power:      1,
 		}
 		validatorSet[hex.EncodeToString(pubKey.Bytes())] = *val
 		valSet = append(valSet, val)
@@ -125,7 +126,7 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) []*Config {
 	ss := &snapshotStore{}
 
 	genCfg := config.DefaultGenesisConfig()
-	genCfg.Leader = pubKeys[0].Bytes()
+	genCfg.Leader = config.EncodePubKeyAndType(pubKeys[0].Bytes(), pubKeys[0].Type())
 
 	for i := range nodes {
 		nodeStr := fmt.Sprintf("NODE%d", i)

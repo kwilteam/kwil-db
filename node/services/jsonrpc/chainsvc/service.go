@@ -242,8 +242,8 @@ func (svc *Service) Tx(_ context.Context, req *chainjson.TxRequest) (*chainjson.
 
 func (svc *Service) Genesis(ctx context.Context, _ *chainjson.GenesisRequest) (*chainjson.GenesisResponse, *jsonrpc.Error) {
 	return &chainjson.GenesisResponse{
-		ChainID:          svc.genesisCfg.ChainID,
-		Leader:           svc.genesisCfg.Leader,
+		ChainID: svc.genesisCfg.ChainID,
+		// Leader:           svc.genesisCfg.Leader,
 		Validators:       svc.genesisCfg.Validators,
 		MaxBlockSize:     svc.genesisCfg.MaxBlockSize,
 		JoinExpiry:       svc.genesisCfg.JoinExpiry,

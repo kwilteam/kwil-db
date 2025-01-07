@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"time"
 
+	"github.com/kwilteam/kwil-db/core/crypto"
 	rpcclient "github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/rpc/client/admin"
 	"github.com/kwilteam/kwil-db/core/rpc/client/user"
@@ -42,9 +43,10 @@ var _ admin.AdminClient = (*Client)(nil) // with extra methods
 // Approve approves a validator join request for the validator identified by a
 // public key. The transaction hash for the broadcasted approval transaction is
 // returned.
-func (cl *Client) Approve(ctx context.Context, publicKey []byte) (types.Hash, error) {
+func (cl *Client) Approve(ctx context.Context, publicKey []byte, pubKeyType crypto.KeyType) (types.Hash, error) {
 	cmd := &adminjson.ApproveRequest{
-		PubKey: publicKey,
+		PubKey:     publicKey,
+		PubKeyType: pubKeyType,
 	}
 	res := &userjson.BroadcastResponse{}
 	err := cl.CallMethod(ctx, string(adminjson.MethodValApprove), cmd, res)
@@ -68,9 +70,10 @@ func (cl *Client) Join(ctx context.Context) (types.Hash, error) {
 
 // JoinStatus returns the status of an active join request for the validator
 // identified by the public key.
-func (cl *Client) JoinStatus(ctx context.Context, pubkey []byte) (*types.JoinRequest, error) {
+func (cl *Client) JoinStatus(ctx context.Context, pubkey []byte, pubkeyType crypto.KeyType) (*types.JoinRequest, error) {
 	cmd := &adminjson.JoinStatusRequest{
-		PubKey: pubkey,
+		PubKey:     pubkey,
+		PubKeyType: pubkeyType,
 	}
 	res := &adminjson.JoinStatusResponse{}
 	err := cl.CallMethod(ctx, string(adminjson.MethodValJoinStatus), cmd, res)
@@ -115,9 +118,10 @@ func (cl *Client) Peers(ctx context.Context) ([]*adminTypes.PeerInfo, error) {
 }
 
 // Remove votes to remove the validator specified by the given public key.
-func (cl *Client) Remove(ctx context.Context, publicKey []byte) (types.Hash, error) {
+func (cl *Client) Remove(ctx context.Context, publicKey []byte, pubKeyType crypto.KeyType) (types.Hash, error) {
 	cmd := &adminjson.RemoveRequest{
-		PubKey: publicKey,
+		PubKey:     publicKey,
+		PubKeyType: pubKeyType,
 	}
 	res := &userjson.BroadcastResponse{}
 	err := cl.CallMethod(ctx, string(adminjson.MethodValRemove), cmd, res)

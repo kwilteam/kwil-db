@@ -1,11 +1,17 @@
 package config
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"math/big"
 	"os"
+	"strconv"
+	"strings"
 	"time"
 
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 
@@ -35,17 +41,21 @@ func (d *Duration) UnmarshalText(text []byte) error {
 	return nil
 }
 
+type GenesisAlloc map[string]*big.Int
+
 type GenesisConfig struct {
 	ChainID       string `json:"chain_id"`
 	InitialHeight int64  `json:"initial_height"`
-	// Leader is the leader's public key.
-	Leader types.HexBytes `json:"leader"`
+	// Leader is the leader's public key. It is of the format "pubkey#pubkeyType".
+	// PubkeyType is 0 for Secp256k1 and 1 for Ed25519.
+	Leader string `json:"leader"`
 	// Validators is the list of genesis validators (including the leader).
 	Validators []*types.Validator `json:"validators"`
 	// DBOwner is the owner of the database.
 	// This should be either a public key or address.
 	DBOwner string `json:"db_owner"`
-
+	// Alloc is the initial allocation of balances.
+	Allocs GenesisAlloc `json:"alloc,omitempty"`
 	// MaxBlockSize is the maximum size of a block in bytes.
 	MaxBlockSize int64 `json:"max_block_size"`
 	// JoinExpiry is the number of blocks after which the validators
@@ -96,6 +106,43 @@ func (gc *GenesisConfig) SanityChecks() error {
 	return nil
 }
 
+func DecodeLeader(leader string) (crypto.PublicKey, error) {
+	pubKeyBts, pubKeyType, err := DecodePubKeyAndType(leader)
+	if err != nil {
+		return nil, err
+	}
+
+	pubKey, err := crypto.UnmarshalPublicKey(pubKeyBts, pubKeyType)
+	if err != nil {
+		return nil, fmt.Errorf("error unmarshalling leader public key: %s of type %s error: %s", hex.EncodeToString(pubKeyBts), pubKeyType.String(), err)
+	}
+
+	return pubKey, nil
+}
+
+func DecodePubKeyAndType(encodedPubKey string) ([]byte, crypto.KeyType, error) {
+	parts := strings.Split(encodedPubKey, "#")
+	if len(parts) != 2 {
+		return nil, 0, errors.New("invalid leader config in genesis, expected pubkey#pubkeyType")
+	}
+
+	pubKey, err := hex.DecodeString(parts[0])
+	if err != nil {
+		return nil, 0, fmt.Errorf("error decoding leader public key: %s error: %s", parts[0], err)
+	}
+
+	pubKeyType, err := strconv.ParseInt(parts[1], 10, 64)
+	if err != nil {
+		return nil, 0, fmt.Errorf("error parsing leader public key type: %s error: %s", parts[1], err)
+	}
+
+	return pubKey, crypto.KeyType(pubKeyType), nil
+}
+
+func EncodePubKeyAndType(pubKey []byte, pubKeyType crypto.KeyType) string {
+	return fmt.Sprintf("%s#%d", hex.EncodeToString(pubKey), pubKeyType)
+}
+
 type MigrationParams struct {
 	// StartHeight is the height from which the state from the old chain is to be migrated.
 	StartHeight int64 `json:"start_height"`
@@ -134,8 +181,9 @@ func DefaultGenesisConfig() *GenesisConfig {
 	return &GenesisConfig{
 		ChainID:          "kwil-test-chain",
 		InitialHeight:    0,
-		Leader:           types.HexBytes{},
+		Leader:           "",
 		Validators:       []*types.Validator{},
+		Allocs:           make(map[string]*big.Int),
 		DisabledGasCosts: true,
 		JoinExpiry:       14400,
 		VoteExpiry:       108000,
@@ -157,10 +205,9 @@ func DefaultConfig() *Config {
 		LogFormat: log.FormatUnstructured,
 		LogOutput: []string{"stdout", "kwild.log"},
 		P2P: PeerConfig{
-			IP:        "0.0.0.0",
-			Port:      6600,
-			Pex:       true,
-			BootNodes: []string{},
+			ListenAddress: "0.0.0.0:6600",
+			Pex:           true,
+			BootNodes:     []string{},
 		},
 		Consensus: ConsensusConfig{
 			ProposeTimeout:        Duration(1000 * time.Millisecond),
@@ -232,12 +279,11 @@ type Config struct {
 
 // PeerConfig corresponds to the [p2p] section of the config.
 type PeerConfig struct {
-	IP          string   `toml:"ip" comment:"IP address to listen on for P2P connections"`
-	Port        uint64   `toml:"port" comment:"port to listen on for P2P connections"`
-	Pex         bool     `toml:"pex" comment:"enable peer exchange"`
-	BootNodes   []string `toml:"bootnodes" comment:"bootnodes to connect to on startup"`
-	PrivateMode bool     `toml:"private" comment:"operate in private mode using a node ID whitelist"`
-	Whitelist   []string `toml:"whitelist" comment:"allowed node IDs when in private mode"`
+	ListenAddress string   `toml:"listen" comment:"address in host:port format to listen on for P2P connections"`
+	Pex           bool     `toml:"pex" comment:"enable peer exchange"`
+	BootNodes     []string `toml:"bootnodes" comment:"bootnodes to connect to on startup"`
+	PrivateMode   bool     `toml:"private" comment:"operate in private mode using a node ID whitelist"`
+	Whitelist     []string `toml:"whitelist" comment:"allowed node IDs when in private mode"`
 }
 
 type DBConfig struct {

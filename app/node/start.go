@@ -12,6 +12,7 @@ import (
 )
 
 func StartCmd() *cobra.Command {
+	var autogen bool
 	cmd := &cobra.Command{
 		Use:               "start",
 		Short:             "start the node (default command)",
@@ -30,7 +31,6 @@ func StartCmd() *cobra.Command {
 			}
 
 			cfg := conf.ActiveConfig()
-			// root2 := conf.RootDir(); fmt.Println(rootDir, "vs", root2)
 
 			bind.Debugf("effective node config (toml):\n%s", bind.LazyPrinter(func() string {
 				rawToml, err := cfg.ToTOML()
@@ -47,7 +47,7 @@ func StartCmd() *cobra.Command {
 			}
 			defer stopProfiler()
 
-			return runNode(cmd.Context(), rootDir, cfg)
+			return runNode(cmd.Context(), rootDir, cfg, autogen)
 		},
 	}
 
@@ -57,6 +57,7 @@ func StartCmd() *cobra.Command {
 	bind.SetFlagsFromStruct(cmd.Flags(), defaultCfg)
 
 	cmd.SetVersionTemplate(custom.BinaryConfig.NodeCmd + " {{printf \"version %s\" .Version}}\n")
-
+	cmd.Flags().BoolVarP(&autogen, "autogen", "a", false,
+		"auto generate private key, genesis file, and config file if not exist")
 	return cmd
 }

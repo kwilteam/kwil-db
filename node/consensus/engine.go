@@ -109,6 +109,7 @@ type ConsensusEngine struct {
 	txAnnouncer             TxAnnouncer
 
 	// TxSubscriber
+	subMtx        sync.Mutex // protects access to txSubscribers
 	txSubscribers map[ktypes.Hash]chan ktypes.TxResult
 
 	// waitgroup to track all the consensus goroutines
@@ -566,8 +567,9 @@ func (ce *ConsensusEngine) updateValidatorSetAndRole() error {
 	ce.validatorSet = make(map[string]ktypes.Validator)
 	for _, v := range valset {
 		ce.validatorSet[hex.EncodeToString(v.PubKey)] = ktypes.Validator{
-			PubKey: v.PubKey,
-			Power:  v.Power,
+			PubKey:     v.PubKey,
+			PubKeyType: v.PubKeyType,
+			Power:      v.Power,
 		}
 	}
 
@@ -830,6 +832,9 @@ func (ce *ConsensusEngine) InCatchup() bool {
 }
 
 func (ce *ConsensusEngine) SubscribeTx(txHash ktypes.Hash) (<-chan ktypes.TxResult, error) {
+	ce.subMtx.Lock()
+	defer ce.subMtx.Unlock()
+
 	ch := make(chan ktypes.TxResult, 1)
 
 	_, ok := ce.txSubscribers[txHash]
@@ -842,5 +847,8 @@ func (ce *ConsensusEngine) SubscribeTx(txHash ktypes.Hash) (<-chan ktypes.TxResu
 }
 
 func (ce *ConsensusEngine) UnsubscribeTx(txHash ktypes.Hash) {
+	ce.subMtx.Lock()
+	defer ce.subMtx.Unlock()
+
 	delete(ce.txSubscribers, txHash)
 }

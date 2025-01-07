@@ -9,6 +9,7 @@ import (
 	"reflect"
 	"strconv"
 
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 )
@@ -522,6 +523,7 @@ func (v *ValidatorJoin) MarshalBinary() ([]byte, error) {
 // ValidatorApprove is used to vote for a validators approval to join the network
 type ValidatorApprove struct {
 	Candidate []byte
+	KeyType   crypto.KeyType
 }
 
 func (v *ValidatorApprove) Type() PayloadType {
@@ -542,6 +544,7 @@ func (v *ValidatorApprove) MarshalBinary() ([]byte, error) {
 // ValidatorRemove is used to vote for a validators removal from the network
 type ValidatorRemove struct {
 	Validator []byte
+	KeyType   crypto.KeyType
 }
 
 func (v *ValidatorRemove) Type() PayloadType {

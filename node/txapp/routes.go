@@ -9,6 +9,7 @@ import (
 	"sync"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/consensus"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
@@ -420,7 +421,12 @@ func (d *validatorJoinRoute) PreTx(ctx *common.TxContext, svc *common.Service, t
 
 func (d *validatorJoinRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
 	// ensure this candidate is not already a validator
-	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender)
+	keyType, err := crypto.ParseKeyType(tx.Signature.Type)
+	if err != nil {
+		return types.CodeInvalidSender, fmt.Errorf("failed to parse key type: %w", err)
+	}
+
+	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender, keyType)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}
@@ -430,7 +436,7 @@ func (d *validatorJoinRoute) InTx(ctx *common.TxContext, app *common.App, tx *ty
 
 	// we first need to ensure that this validator does not have a pending join request
 	// if it does, we should not allow it to join again
-	pending, err := getResolutionsByTypeAndProposer(ctx.Ctx, app.DB, voting.ValidatorJoinEventType, tx.Sender)
+	pending, err := getResolutionsByTypeAndProposer(ctx.Ctx, app.DB, voting.ValidatorJoinEventType, tx.Sender, keyType)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}
@@ -440,8 +446,9 @@ func (d *validatorJoinRoute) InTx(ctx *common.TxContext, app *common.App, tx *ty
 
 	// there are no pending join requests, so we can create a new one
 	joinReq := &voting.UpdatePowerRequest{
-		PubKey: tx.Sender,
-		Power:  int64(d.power),
+		PubKey:     tx.Sender,
+		PubKeyType: keyType,
+		Power:      int64(d.power),
 	}
 	bts, err := joinReq.MarshalBinary()
 	if err != nil {
@@ -453,7 +460,8 @@ func (d *validatorJoinRoute) InTx(ctx *common.TxContext, app *common.App, tx *ty
 		Type: voting.ValidatorJoinEventType,
 	}
 
-	err = createResolution(ctx.Ctx, app.DB, event, ctx.BlockContext.Height+ctx.BlockContext.ChainContext.NetworkParameters.JoinExpiry, tx.Sender)
+	expiry := ctx.BlockContext.Height + ctx.BlockContext.ChainContext.NetworkParameters.JoinExpiry
+	err = createResolution(ctx.Ctx, app.DB, event, expiry, tx.Sender, keyType)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}
@@ -463,6 +471,7 @@ func (d *validatorJoinRoute) InTx(ctx *common.TxContext, app *common.App, tx *ty
 
 type validatorApproveRoute struct {
 	candidate []byte
+	keyType   crypto.KeyType
 }
 
 var _ consensus.Route = (*validatorApproveRoute)(nil)
@@ -492,13 +501,15 @@ func (d *validatorApproveRoute) PreTx(ctx *common.TxContext, svc *common.Service
 	}
 
 	d.candidate = approve.Candidate
+	d.keyType = approve.KeyType
+
 	return 0, nil
 }
 
 func (d *validatorApproveRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
 	// each pending validator can only have one active join request at a time
 	// we need to retrieve the join request and ensure that it is still pending
-	pending, err := getResolutionsByTypeAndProposer(ctx.Ctx, app.DB, voting.ValidatorJoinEventType, d.candidate)
+	pending, err := getResolutionsByTypeAndProposer(ctx.Ctx, app.DB, voting.ValidatorJoinEventType, d.candidate, d.keyType)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}
@@ -510,8 +521,13 @@ func (d *validatorApproveRoute) InTx(ctx *common.TxContext, app *common.App, tx 
 		return types.CodeUnknownError, errors.New("validator has more than one pending join request. this is an internal bug")
 	}
 
+	keyType, err := crypto.ParseKeyType(tx.Signature.Type)
+	if err != nil {
+		return types.CodeUnknownError, fmt.Errorf("failed to parse key type: %w", err)
+	}
+
 	// ensure that sender is a validator
-	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender)
+	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender, keyType)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}
@@ -519,7 +535,7 @@ func (d *validatorApproveRoute) InTx(ctx *common.TxContext, app *common.App, tx 
 		return types.CodeInvalidSender, ErrCallerNotValidator
 	}
 
-	err = approveResolution(ctx.Ctx, app.DB, pending[0], tx.Sender)
+	err = approveResolution(ctx.Ctx, app.DB, pending[0], tx.Sender, keyType)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}
@@ -528,7 +544,8 @@ func (d *validatorApproveRoute) InTx(ctx *common.TxContext, app *common.App, tx 
 }
 
 type validatorRemoveRoute struct {
-	target []byte
+	target  []byte
+	keyType crypto.KeyType
 }
 
 var _ consensus.Route = (*validatorRemoveRoute)(nil)
@@ -554,6 +571,8 @@ func (d *validatorRemoveRoute) PreTx(ctx *common.TxContext, svc *common.Service,
 	}
 
 	d.target = remove.Validator
+	d.keyType = remove.KeyType
+
 	return 0, nil
 }
 
@@ -572,8 +591,13 @@ func (d *validatorRemoveRoute) InTx(ctx *common.TxContext, app *common.App, tx *
 		Type: voting.ValidatorRemoveEventType,
 	}
 
+	senderKeyType, err := crypto.ParseKeyType(tx.Signature.Type)
+	if err != nil {
+		return types.CodeUnknownError, fmt.Errorf("failed to parse key type: %w", err)
+	}
+
 	// ensure the sender is a validator
-	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender)
+	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender, senderKeyType)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}
@@ -582,7 +606,7 @@ func (d *validatorRemoveRoute) InTx(ctx *common.TxContext, app *common.App, tx *
 	}
 
 	// ensure that the target is a validator
-	power, err = app.Validators.GetValidatorPower(ctx.Ctx, d.target)
+	power, err = app.Validators.GetValidatorPower(ctx.Ctx, d.target, d.keyType)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}
@@ -601,14 +625,15 @@ func (d *validatorRemoveRoute) InTx(ctx *common.TxContext, app *common.App, tx *
 
 	// if the resolution does not exist, create it
 	if !exists {
-		err = createResolution(ctx.Ctx, app.DB, event, ctx.BlockContext.Height+ctx.BlockContext.ChainContext.NetworkParameters.JoinExpiry, tx.Sender)
+		expiry := ctx.BlockContext.Height + ctx.BlockContext.ChainContext.NetworkParameters.JoinExpiry
+		err = createResolution(ctx.Ctx, app.DB, event, expiry, tx.Sender, senderKeyType)
 		if err != nil {
 			return types.CodeUnknownError, err
 		}
 	}
 
 	// we need to approve the resolution as well
-	err = approveResolution(ctx.Ctx, app.DB, event.ID(), tx.Sender)
+	err = approveResolution(ctx.Ctx, app.DB, event.ID(), tx.Sender, senderKeyType)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}
@@ -637,7 +662,12 @@ func (d *validatorLeaveRoute) PreTx(ctx *common.TxContext, svc *common.Service, 
 }
 
 func (d *validatorLeaveRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
-	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender)
+	keyType, err := crypto.ParseKeyType(tx.Signature.Type)
+	if err != nil {
+		return types.CodeUnknownError, fmt.Errorf("failed to parse key type: %w", err)
+	}
+
+	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender, keyType)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}
@@ -646,7 +676,8 @@ func (d *validatorLeaveRoute) InTx(ctx *common.TxContext, app *common.App, tx *t
 	}
 
 	const noPower = 0
-	err = app.Validators.SetValidatorPower(ctx.Ctx, app.DB, tx.Sender, noPower)
+
+	err = app.Validators.SetValidatorPower(ctx.Ctx, app.DB, tx.Sender, keyType, noPower)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}
@@ -683,7 +714,12 @@ func (d *validatorVoteIDsRoute) PreTx(ctx *common.TxContext, svc *common.Service
 
 func (d *validatorVoteIDsRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
 	// if the caller has 0 power, they are not a validator, and should not be able to vote
-	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender)
+	keyType, err := crypto.ParseKeyType(tx.Signature.Type)
+	if err != nil {
+		return types.CodeInvalidSender, fmt.Errorf("failed to parse key type: %w", err)
+	}
+
+	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender, keyType)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}
@@ -706,7 +742,7 @@ func (d *validatorVoteIDsRoute) InTx(ctx *common.TxContext, app *common.App, tx 
 	fromLocalValidator := bytes.Equal(tx.Sender, app.Service.Identity)
 
 	for _, voteID := range ids {
-		err = approveResolution(ctx.Ctx, app.DB, voteID, tx.Sender)
+		err = approveResolution(ctx.Ctx, app.DB, voteID, tx.Sender, keyType)
 		if err != nil {
 			return types.CodeUnknownError, err
 		}
@@ -761,7 +797,7 @@ func (d *validatorVoteBodiesRoute) PreTx(ctx *common.TxContext, _ *common.Servic
 	}
 
 	// Only proposer can issue a VoteBody transaction.
-	if !bytes.Equal(tx.Sender, ctx.BlockContext.Proposer) {
+	if !bytes.Equal(tx.Sender, ctx.BlockContext.Proposer.Bytes()) {
 		return types.CodeInvalidSender, ErrCallerNotProposer
 	}
 
@@ -793,15 +829,20 @@ func (d *validatorVoteBodiesRoute) InTx(ctx *common.TxContext, app *common.App, 
 			Body: event.Body,
 		}
 
+		keyType, err := crypto.ParseKeyType(tx.Signature.Type)
+		if err != nil {
+			return types.CodeInvalidSender, fmt.Errorf("failed to parse key type: %w", err)
+		}
+
 		expiryHeight := ctx.BlockContext.Height + resCfg.ExpirationPeriod
-		err = createResolution(ctx.Ctx, app.DB, ev, expiryHeight, tx.Sender)
+		err = createResolution(ctx.Ctx, app.DB, ev, expiryHeight, tx.Sender, keyType)
 		if err != nil {
 			return types.CodeUnknownError, err
 		}
 
 		// since the vote body proposer is implicitly voting for the event,
 		// we need to approve the newly created vote body here
-		err = approveResolution(ctx.Ctx, app.DB, ev.ID(), tx.Sender)
+		err = approveResolution(ctx.Ctx, app.DB, ev.ID(), tx.Sender, keyType)
 		if err != nil {
 			return types.CodeUnknownError, err
 		}
@@ -877,7 +918,13 @@ func (d *createResolutionRoute) PreTx(ctx *common.TxContext, svc *common.Service
 func (d *createResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
 	// ensure the sender is a validator
 	// only validators can create resolutions
-	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender)
+
+	keyType, err := crypto.ParseKeyType(tx.Signature.Type)
+	if err != nil {
+		return types.CodeInvalidSender, err
+	}
+
+	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender, keyType)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}
@@ -887,13 +934,13 @@ func (d *createResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx 
 
 	// create the resolution
 	// if resolution already exists, it will return an error
-	err = createResolution(ctx.Ctx, app.DB, d.resolution, d.expiry, tx.Sender)
+	err = createResolution(ctx.Ctx, app.DB, d.resolution, d.expiry, tx.Sender, keyType)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}
 
 	// approve the resolution
-	err = approveResolution(ctx.Ctx, app.DB, d.resolution.ID(), tx.Sender)
+	err = approveResolution(ctx.Ctx, app.DB, d.resolution.ID(), tx.Sender, keyType)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}
@@ -933,7 +980,13 @@ func (d *approveResolutionRoute) PreTx(ctx *common.TxContext, svc *common.Servic
 
 func (d *approveResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
 	// ensure the sender is a validator
-	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender)
+
+	keyType, err := crypto.ParseKeyType(tx.Signature.Type)
+	if err != nil {
+		return types.CodeInvalidSender, err
+	}
+
+	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender, keyType)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}
@@ -957,7 +1010,7 @@ func (d *approveResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx
 	}
 
 	// vote on the resolution
-	err = approveResolution(ctx.Ctx, app.DB, d.resolutionID, tx.Sender)
+	err = approveResolution(ctx.Ctx, app.DB, d.resolutionID, tx.Sender, keyType)
 	if err != nil {
 		return types.CodeUnknownError, err
 	}

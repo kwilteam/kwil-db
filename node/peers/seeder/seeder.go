@@ -116,7 +116,7 @@ func makePeerAddrInfo(addr string) (*peer.AddrInfo, error) {
 	return peer.AddrInfoFromP2pAddr(maddr)
 }
 
-func newHost(ip string, port uint64, chainID string, privKey crypto.PrivateKey, logger log.Logger) (host.Host, error) {
+func newHost(ip string, port uint64, _ string, privKey crypto.PrivateKey, _ log.Logger) (host.Host, error) {
 	// convert to the libp2p crypto key type
 	var privKeyP2P p2pcrypto.PrivKey
 	var err error
