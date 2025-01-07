@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )
 
@@ -128,7 +129,7 @@ type accessController struct {
 // CreateRole adds a new role to the access controller.
 func (a *accessController) CreateRole(ctx context.Context, db sql.DB, role string) error {
 	if isBuiltInRole(role) {
-		return fmt.Errorf(`%w: role "%s" cannot be added`, ErrBuiltInRole, role)
+		return fmt.Errorf(`%w: role "%s" cannot be added`, engine.ErrBuiltInRole, role)
 	}
 
 	_, ok := a.roles[role]
@@ -156,7 +157,7 @@ func (a *accessController) CreateRole(ctx context.Context, db sql.DB, role strin
 
 func (a *accessController) DeleteRole(ctx context.Context, db sql.DB, role string) error {
 	if isBuiltInRole(role) {
-		return fmt.Errorf(`%w: role "%s" cannot be dropped`, ErrBuiltInRole, role)
+		return fmt.Errorf(`%w: role "%s" cannot be dropped`, engine.ErrBuiltInRole, role)
 	}
 
 	_, ok := a.roles[role]
@@ -598,7 +599,7 @@ func canBeNamespaced(ps ...privilege) error {
 	for _, p := range ps {
 		switch p {
 		case RolesPrivilege, UsePrivilege:
-			return fmt.Errorf(`%w: %s`, ErrPrivilegeCannotBeNamespaced, p)
+			return fmt.Errorf(`%w: %s`, engine.ErrCannotBeNamespaced, p)
 		}
 	}
 

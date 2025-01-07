@@ -124,8 +124,6 @@ func (e *errorListener) MarshalJSON() ([]byte, error) {
 
 // AddErr adds an error to the error listener.
 func (e *errorListener) AddErr(node GetPositioner, err error, msg string, v ...any) {
-	// TODO: we should change the ParseError struct. It should use the passed error as the "Type",
-	// and replace the Err field with message.
 	if len(v) > 0 {
 		// Almost always incorrect to "printf" a format string with no args. Any
 		// "%" in the string will result in an error string.
@@ -222,21 +220,16 @@ func (e *errorListener) ReportContextSensitivity(recognizer antlr.Parser, dfa *a
 }
 
 var (
-	ErrSyntax                     = errors.New("syntax error")
-	ErrUndeclaredVariable         = errors.New("undeclared variable")
-	ErrType                       = errors.New("type error")
-	ErrTableDefinition            = errors.New("table definition error")
-	ErrUnknownColumn              = errors.New("unknown column reference")
-	ErrColumnConstraint           = errors.New("column constraint error")
-	ErrDuplicateParameterName     = errors.New("duplicate parameter name")
-	ErrDuplicateResultColumnName  = errors.New("duplicate result column name")
-	ErrUnknownFunctionOrProcedure = errors.New("unknown function or procedure")
-	ErrUnknownContextualVariable  = errors.New("unknown contextual variable")
-	ErrIdentifier                 = errors.New("identifier error")
-	ErrViewMutatesState           = errors.New("view mutates state")
-	ErrCollation                  = errors.New("collation error")
-	ErrNoPrimaryKey               = errors.New("missing primary key")
-	ErrRedeclaredPrimaryKey       = errors.New("redeclare primary key")
-	ErrRedeclaredConstraint       = errors.New("redeclared constraint")
-	ErrGrantOrRevoke              = errors.New("grant or revoke error")
+	ErrSyntax                    = errors.New("syntax error")
+	ErrType                      = errors.New("type error")
+	ErrTableDefinition           = errors.New("table definition error")
+	ErrUnknownColumn             = errors.New("unknown column reference")
+	ErrDuplicateParameterName    = errors.New("duplicate parameter name")
+	ErrDuplicateResultColumnName = errors.New("duplicate result column name")
+	ErrIdentifier                = errors.New("identifier error")
+	ErrCollation                 = errors.New("collation error")
+	ErrNoPrimaryKey              = errors.New("missing primary key")
+	ErrRedeclaredPrimaryKey      = errors.New("redeclare primary key")
+	ErrRedeclaredConstraint      = errors.New("redeclared constraint")
+	ErrGrantOrRevoke             = errors.New("grant or revoke error")
 )

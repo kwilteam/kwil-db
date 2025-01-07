@@ -8,6 +8,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
+	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/engine/parse"
 )
 
@@ -22,7 +23,12 @@ import (
 func GenerateSQL(ast parse.Node, pgSchema string) (stmt string, params []string, err error) {
 	defer func() {
 		if r := recover(); r != nil {
-			err = fmt.Errorf("error generating SQL: %v", r)
+			// we should try to preserve any errors
+			if e, ok := r.(error); ok {
+				err = e
+			} else {
+				err = fmt.Errorf("%v", r)
+			}
 		}
 	}()
 
@@ -37,7 +43,7 @@ func GenerateSQL(ast parse.Node, pgSchema string) (stmt string, params []string,
 // sqlVisitor creates Postgres compatible SQL from an AST
 type sqlGenerator struct {
 	// pgSchema is the schema name to prefix to the table names
-	pgSchema string // TODO: this should be removed. Qualification needs to happen at the logical planner, to avoid qualifying CTEs
+	pgSchema string
 	// orderedParams is the order of parameters in the order they appear in the statement.
 	// It is only set if numberParameters is true. For example, the statement SELECT $1, $2
 	// would have orderedParams = ["$1", "$2"]
@@ -71,7 +77,7 @@ func (s *sqlGenerator) VisitExpressionFunctionCall(p0 *parse.ExpressionFunctionC
 
 	// if this is not a built-in function, we need to prefix it with
 	// the schema name, since it is a local procedure
-	fn, ok := parse.Functions[p0.Name]
+	fn, ok := engine.Functions[p0.Name]
 	if !ok {
 		panic("function " + p0.Name + " not found")
 	}
@@ -79,9 +85,9 @@ func (s *sqlGenerator) VisitExpressionFunctionCall(p0 *parse.ExpressionFunctionC
 	var pgFmt string
 	var err error
 	switch fn := fn.(type) {
-	case *parse.ScalarFunctionDefinition:
+	case *engine.ScalarFunctionDefinition:
 		pgFmt, err = fn.PGFormatFunc(args)
-	case *parse.AggregateFunctionDefinition:
+	case *engine.AggregateFunctionDefinition:
 		pgFmt, err = fn.PGFormatFunc(args, p0.Distinct)
 	default:
 		panic("unknown function type " + fmt.Sprintf("%T", fn))
@@ -1150,12 +1156,12 @@ func (s *sqlGenerator) VisitLoopTermRange(p0 *parse.LoopTermRange) any {
 	return nil
 }
 
-func (s *sqlGenerator) VisitLoopTermSQL(p0 *parse.LoopTermSQL) any {
+func (s *sqlGenerator) VisitLoopTermExpression(p0 *parse.LoopTermExpression) any {
 	generateErr(s)
 	return nil
 }
 
-func (s *sqlGenerator) VisitLoopTermVariable(p0 *parse.LoopTermVariable) any {
+func (s *sqlGenerator) VisitLoopTermSQL(p0 *parse.LoopTermSQL) any {
 	generateErr(s)
 	return nil
 }
@@ -1261,11 +1267,6 @@ func (s *sqlGenerator) VisitCreateNamespaceStatement(p0 *parse.CreateNamespaceSt
 }
 
 func (s *sqlGenerator) VisitDropNamespaceStatement(p0 *parse.DropNamespaceStatement) any {
-	generateErr(s)
-	return nil
-}
-
-func (s *sqlGenerator) VisitLoopTermFunctionCall(p0 *parse.LoopTermFunctionCall) any {
 	generateErr(s)
 	return nil
 }

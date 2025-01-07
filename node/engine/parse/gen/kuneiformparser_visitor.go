@@ -133,9 +133,6 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#revoke_statement.
 	VisitRevoke_statement(ctx *Revoke_statementContext) interface{}
 
-	// Visit a parse tree produced by KuneiformParser#role_name.
-	VisitRole_name(ctx *Role_nameContext) interface{}
-
 	// Visit a parse tree produced by KuneiformParser#privilege_list.
 	VisitPrivilege_list(ctx *Privilege_listContext) interface{}
 

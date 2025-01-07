@@ -175,10 +175,6 @@ func (v *BaseKuneiformParserVisitor) VisitRevoke_statement(ctx *Revoke_statement
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitRole_name(ctx *Role_nameContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
 func (v *BaseKuneiformParserVisitor) VisitPrivilege_list(ctx *Privilege_listContext) interface{} {
 	return v.VisitChildren(ctx)
 }

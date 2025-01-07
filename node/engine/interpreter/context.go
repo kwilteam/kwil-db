@@ -27,7 +27,13 @@ type executionContext struct {
 	// interpreter is the interpreter that created this execution context.
 	interpreter *baseInterpreter
 	// logs are the logs that have been generated.
-	logs []string
+	// it is a pointer to a slice to allow for child scopes to allocate
+	// space for more logs on the parent.
+	logs *[]string
+	// queryActive is true if a query is currently active.
+	// This is used to prevent nested queries, which can cause
+	// a deadlock or unexpected behavior.
+	queryActive bool
 }
 
 // subscope creates a new subscope execution context.
@@ -54,7 +60,7 @@ func (e *executionContext) checkPrivilege(priv privilege) error {
 	}
 
 	if !e.interpreter.accessController.HasPrivilege(e.engineCtx.TxContext.Caller, &e.scope.namespace, priv) {
-		return fmt.Errorf(`%w %s on namespace "%s"`, ErrDoesNotHavePriv, priv, e.scope.namespace)
+		return fmt.Errorf(`%w %s on namespace "%s"`, engine.ErrDoesNotHavePrivilege, priv, e.scope.namespace)
 	}
 
 	return nil
@@ -75,7 +81,7 @@ func (e *executionContext) getNamespace(namespace string) (*namespace, error) {
 
 	ns, ok := e.interpreter.namespaces[namespace]
 	if !ok {
-		return nil, fmt.Errorf(`%w: "%s"`, ErrNamespaceNotFound, namespace)
+		return nil, fmt.Errorf(`%w: "%s"`, engine.ErrNamespaceNotFound, namespace)
 	}
 
 	return ns, nil
@@ -101,7 +107,7 @@ func (e *executionContext) getTable(namespace, tableName string) (*engine.Table,
 // enforced, regardless of the roles and privileges of the caller.
 func (e *executionContext) checkNamespaceMutatbility() error {
 	if e.scope.namespace == infoNamespace {
-		return ErrCannotMutateInfoNamespace
+		return engine.ErrCannotMutateInfoNamespace
 	}
 
 	ns2, err := e.getNamespace(e.scope.namespace)
@@ -110,7 +116,7 @@ func (e *executionContext) checkNamespaceMutatbility() error {
 	}
 
 	if ns2.namespaceType == namespaceTypeExtension && !e.engineCtx.OverrideAuthz {
-		return fmt.Errorf(`%w: "%s"`, ErrCannotMutateExtension, e.scope.namespace)
+		return fmt.Errorf(`%w: "%s"`, engine.ErrCannotMutateExtension, e.scope.namespace)
 	}
 
 	return nil
@@ -119,9 +125,15 @@ func (e *executionContext) checkNamespaceMutatbility() error {
 // query executes a query.
 // It will parse the SQL, create a logical plan, and execute the query.
 func (e *executionContext) query(sql string, fn func(*row) error) error {
+	if e.queryActive {
+		return engine.ErrQueryActive
+	}
+	e.queryActive = true
+	defer func() { e.queryActive = false }()
+
 	res, err := parse.Parse(sql)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", engine.ErrParse, err)
 	}
 
 	if len(res) != 1 {
@@ -174,12 +186,12 @@ func (e *executionContext) query(sql string, fn func(*row) error) error {
 		e.scope.namespace,
 	)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", engine.ErrQueryPlanner, err)
 	}
 
 	generatedSQL, params, err := pggenerate.GenerateSQL(sqlStmt, e.scope.namespace)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", engine.ErrPGGen, err)
 	}
 
 	// get the params we will pass
@@ -187,7 +199,7 @@ func (e *executionContext) query(sql string, fn func(*row) error) error {
 	for _, param := range params {
 		val, found := e.getVariable(param)
 		if !found {
-			return fmt.Errorf("%w: %s", ErrVariableNotFound, param)
+			return fmt.Errorf("%w: %s", engine.ErrUnknownVariable, param)
 		}
 
 		args = append(args, val)
@@ -256,9 +268,13 @@ type execFunc func(exec *executionContext, args []Value, returnFn resultFunc) er
 // if we are setting a variable that was defined in an outer scope,
 // it will overwrite the variable in the outer scope.
 func (e *executionContext) setVariable(name string, value Value) error {
-	_, foundScope, found := getVarFromScope(name, e.scope)
+	oldVal, foundScope, found := getVarFromScope(name, e.scope)
 	if !found {
 		return e.allocateVariable(name, value)
+	}
+
+	if !oldVal.Type().EqualsStrict(value.Type()) {
+		return fmt.Errorf("%w: cannot assign variable of type %s to existing variable of type %s", engine.ErrType, value.Type(), oldVal.Type())
 	}
 
 	foundScope.variables[name] = value
@@ -338,7 +354,7 @@ func (e *executionContext) canExecute(newNamespace, actionName string, modifiers
 	// if the ctx cannot mutate state and the action is not a view (and thus might try to mutate state),
 	// then return an error
 	if !modifiers.Has(precompiles.VIEW) && !e.canMutateState {
-		return fmt.Errorf("%w: cannot execute action %s in a read-only transaction", ErrActionMutatesState, actionName)
+		return fmt.Errorf(`%w: action "%s" requires a writer connection`, engine.ErrCannotMutateState, actionName)
 	}
 
 	// the VIEW check protects against state being modified outside of consensus. This is critical to protect
@@ -355,17 +371,17 @@ func (e *executionContext) canExecute(newNamespace, actionName string, modifiers
 	// - the action is top level
 	// then return an error
 	if modifiers.Has(precompiles.PRIVATE) && (e.scope.namespace != newNamespace || e.scope.isTopLevel) {
-		return fmt.Errorf("%w: action %s is private", ErrActionPrivate, actionName)
+		return fmt.Errorf("%w: action %s is private", engine.ErrActionPrivate, actionName)
 	}
 
 	// if it is system-only, then it must be within a subscope
 	if modifiers.Has(precompiles.SYSTEM) && e.scope.isTopLevel {
-		return fmt.Errorf("%w: action %s is system-only", ErrSystemOnly, actionName)
+		return fmt.Errorf("%w: action %s is system-only", engine.ErrActionSystemOnly, actionName)
 	}
 
 	// if the action is owner only, then check if the user is the owner
 	if modifiers.Has(precompiles.OWNER) && !e.interpreter.accessController.IsOwner(e.engineCtx.TxContext.Caller) {
-		return fmt.Errorf("%w: action %s can only be executed by the owner", ErrActionOwnerOnly, actionName)
+		return fmt.Errorf("%w: action %s can only be executed by the owner", engine.ErrActionOwnerOnly, actionName)
 	}
 
 	return nil

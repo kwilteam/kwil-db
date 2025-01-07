@@ -1201,7 +1201,7 @@ func cmpOpts() []cmp.Option {
 			ActionStmtReturnNext{},
 			LoopTermRange{},
 			LoopTermSQL{},
-			LoopTermVariable{},
+			LoopTermExpression{},
 			ActionStmtSQL{},
 			SQLStatement{},
 		),
@@ -1293,7 +1293,7 @@ func TestCreateActionStatements(t *testing.T) {
 		},
 		{
 			name:  "Create action with OR REPLACE",
-			input: `CREATE ACTION OR REPLACE my_action() PUBLIC {};`,
+			input: `CREATE OR REPLACE ACTION my_action() PUBLIC {};`,
 			expect: &CreateActionStatement{
 				OrReplace: true,
 				Name:      "my_action",
@@ -1495,7 +1495,7 @@ func TestCreateActionStatements(t *testing.T) {
 				CREATE ACTION return_next_action($arr int) PUBLIC RETURNS (int) {
 					// Assume $arr is an array of ints.
 					$el int;
-					for $el in $arr {
+					for $el in array $arr {
 						return next $el;
 					}
 					// If loop finishes, return a default value
@@ -1521,8 +1521,9 @@ func TestCreateActionStatements(t *testing.T) {
 					},
 					&ActionStmtForLoop{
 						Receiver: &ExpressionVariable{Name: "$el", Prefix: VariablePrefixDollar},
-						LoopTerm: &LoopTermVariable{
-							Variable: &ExpressionVariable{Name: "$arr", Prefix: VariablePrefixDollar},
+						LoopTerm: &LoopTermExpression{
+							Array:      true,
+							Expression: &ExpressionVariable{Name: "$arr", Prefix: VariablePrefixDollar},
 						},
 						Body: []ActionStmt{
 							&ActionStmtReturnNext{

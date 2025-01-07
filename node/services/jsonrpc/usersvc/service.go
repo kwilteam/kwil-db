@@ -16,13 +16,14 @@ import (
 	userjson "github.com/kwilteam/kwil-db/core/rpc/json/user"
 	"github.com/kwilteam/kwil-db/core/types"
 	adminTypes "github.com/kwilteam/kwil-db/core/types/admin"
+	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/ident"
 	"github.com/kwilteam/kwil-db/node/migrations"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
 
 	// errors from engine
-	"github.com/kwilteam/kwil-db/node/engine/interpreter"
+
 	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/node/services/jsonrpc/ratelimit"
 	"github.com/kwilteam/kwil-db/version"
@@ -572,10 +573,10 @@ func checkEngineError(err error) (jsonrpc.ErrorCode, string) {
 	if errors.Is(err, context.DeadlineExceeded) {
 		return jsonrpc.ErrorTimeout, "db timeout"
 	}
-	if errors.Is(err, interpreter.ErrNamespaceExists) {
+	if errors.Is(err, engine.ErrNamespaceExists) {
 		return jsonrpc.ErrorEngineDatasetExists, err.Error()
 	}
-	if errors.Is(err, interpreter.ErrNamespaceNotFound) {
+	if errors.Is(err, engine.ErrNamespaceNotFound) {
 		return jsonrpc.ErrorEngineDatasetNotFound, err.Error()
 	}
 

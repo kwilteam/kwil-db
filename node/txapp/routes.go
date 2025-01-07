@@ -13,7 +13,7 @@ import (
 	"github.com/kwilteam/kwil-db/extensions/consensus"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/node/accounts"
-	"github.com/kwilteam/kwil-db/node/engine/interpreter"
+	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
 )
@@ -202,10 +202,10 @@ func codeForEngineError(err error) types.TxCode {
 	if err == nil {
 		return types.CodeOk
 	}
-	if errors.Is(err, interpreter.ErrNamespaceExists) {
+	if errors.Is(err, engine.ErrNamespaceExists) {
 		return types.CodeDatasetExists
 	}
-	if errors.Is(err, interpreter.ErrNamespaceNotFound) {
+	if errors.Is(err, engine.ErrNamespaceNotFound) {
 		return types.CodeDatasetMissing
 	}
 

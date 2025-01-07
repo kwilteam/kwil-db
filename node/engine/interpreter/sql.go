@@ -96,7 +96,7 @@ func storeAction(ctx context.Context, db sql.DB, namespace string, action *Actio
 
 	if action.Returns != nil {
 		for i, field := range action.Returns.Fields {
-			dt, err := field.Type.PGString()
+			dt, err := field.Type.PGScalar()
 			if err != nil {
 				return err
 			}
@@ -322,7 +322,7 @@ func listActionsInNamespace(ctx context.Context, db sql.DB, namespace string) ([
 		func() error {
 			res, err := parse.Parse(rawStmt)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: %w", engine.ErrParse, err)
 			}
 
 			if len(res) != 1 {

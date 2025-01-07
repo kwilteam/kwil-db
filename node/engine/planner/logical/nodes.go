@@ -257,7 +257,6 @@ type Subquery struct {
 
 	// Correlated is the list of columns that are correlated
 	// to the outer query. If empty, the subquery is uncorrelated.
-	// TODO: we need to revisit this, because expressions in result sets can be correlated
 	Correlated []*Field
 }
 
@@ -2795,14 +2794,6 @@ func (d *Delete) Equal(t Traversable) bool {
 
 	return eq(d.Child, o.Child)
 }
-
-// TODO: I dont love this insert. Everything else feels very relational, but this
-// feels like it is too much about the ast still.
-// The general complexity of both the AST visitor and the evaluation phase
-// makes me feel uneasy.
-// I really think it is the UPDATE conflict target that feels wrong to me, but
-// I am not sure what to do.
-// Will revisit tomorrow.
 
 // Insert is a node that plans an insert operation.
 type Insert struct {

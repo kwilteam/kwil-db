@@ -15,6 +15,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
+	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/engine/interpreter"
 	"github.com/kwilteam/kwil-db/node/pg"
 	"github.com/kwilteam/kwil-db/node/types/sql"
@@ -225,17 +226,17 @@ func Test_SQL(t *testing.T) {
 		{
 			name:    "drop default namespace",
 			execSQL: "DROP NAMESPACE main;",
-			err:     interpreter.ErrCannotDropBuiltinNamespace,
+			err:     engine.ErrCannotDropBuiltinNamespace,
 		},
 		{
 			name:    "drop info namespace",
 			execSQL: "DROP NAMESPACE info;",
-			err:     interpreter.ErrCannotDropBuiltinNamespace,
+			err:     engine.ErrCannotDropBuiltinNamespace,
 		},
 		{
 			name:    "drop non-existent namespace",
 			execSQL: "DROP NAMESPACE some_ns;",
-			err:     interpreter.ErrNamespaceNotFound,
+			err:     engine.ErrNamespaceNotFound,
 		},
 		{
 			name: "global select permission - failure",
@@ -248,7 +249,7 @@ func Test_SQL(t *testing.T) {
 			execSQL:     "SELECT * FROM users;",
 			errContains: "permission denied for table users",
 			caller:      "user",
-			err:         interpreter.ErrDoesNotHavePriv,
+			err:         engine.ErrDoesNotHavePrivilege,
 		},
 		{
 			name: "global select permission - success",
@@ -273,7 +274,7 @@ func Test_SQL(t *testing.T) {
 			},
 			// they do not have permission to select from the users table, which is in the main namespace
 			execSQL: "SELECT * FROM users;",
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "user",
 		},
 		{
@@ -293,7 +294,7 @@ func Test_SQL(t *testing.T) {
 		{
 			name:    "global insert permission - failure",
 			execSQL: "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "user",
 		},
 		{
@@ -317,7 +318,7 @@ func Test_SQL(t *testing.T) {
 				"DROP ROLE test_role;",
 			},
 			execSQL: "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "user",
 		},
 		{
@@ -331,7 +332,7 @@ func Test_SQL(t *testing.T) {
 				"CREATE NAMESPACE test;",
 			},
 			execSQL: "{test}INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "user",
 		},
 		{
@@ -343,7 +344,7 @@ func Test_SQL(t *testing.T) {
 				"REVOKE insert FROM test_role;",
 			},
 			execSQL: "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "user",
 		},
 		{
@@ -357,7 +358,7 @@ func Test_SQL(t *testing.T) {
 				"{test}CREATE TABLE users (id INT PRIMARY KEY, name TEXT, age INT);",
 			},
 			execSQL: "{test}INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "user",
 		},
 		{
@@ -369,7 +370,7 @@ func Test_SQL(t *testing.T) {
 				"REVOKE test_role FROM 'user';",
 			},
 			execSQL: "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "user",
 		},
 		{
@@ -395,7 +396,7 @@ func Test_SQL(t *testing.T) {
 				"GRANT test_role TO 'user';",
 			},
 			execSQL: `grant owner to 'user2';`,
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "user",
 		},
 		{
@@ -411,42 +412,42 @@ func Test_SQL(t *testing.T) {
 		{
 			name:    "default role cannot be dropped",
 			execSQL: "DROP ROLE default;",
-			err:     interpreter.ErrBuiltInRole,
+			err:     engine.ErrBuiltInRole,
 		},
 		{
 			name:    "default role cannot create tables",
 			execSQL: `CREATE TABLE tbl (col int primary key);`,
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "default",
 		},
 		{
 			name:    "default role cannot alter tables",
 			execSQL: "ALTER TABLE users ADD COLUMN email TEXT;",
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "default",
 		},
 		{
 			name:    "default role cannot drop tables",
 			execSQL: "DROP TABLE users;",
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "default",
 		},
 		{
 			name:    "default role cannot create roles",
 			execSQL: `CREATE ROLE test_role;`,
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "default",
 		},
 		{
 			name:    "default role cannot drop roles",
 			execSQL: `DROP ROLE test_role;`,
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "default",
 		},
 		{
 			name:    "default role cannot create namespaces",
 			execSQL: `CREATE NAMESPACE ns;`,
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "default",
 		},
 		{
@@ -455,13 +456,13 @@ func Test_SQL(t *testing.T) {
 				"CREATE NAMESPACE ns;",
 			},
 			execSQL: `DROP NAMESPACE ns;`,
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "default",
 		},
 		{
 			name:    "default role cannot create actions",
 			execSQL: `CREATE ACTION act() public {};`,
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "default",
 		},
 		{
@@ -470,7 +471,7 @@ func Test_SQL(t *testing.T) {
 				"CREATE ACTION act() public {};",
 			},
 			execSQL: `DROP ACTION act;`,
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "default",
 		},
 		{
@@ -479,7 +480,7 @@ func Test_SQL(t *testing.T) {
 				"CREATE ROLE test_role;",
 			},
 			execSQL: `GRANT test_role TO 'default_user';`,
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "default",
 		},
 		{
@@ -489,7 +490,7 @@ func Test_SQL(t *testing.T) {
 				"GRANT test_role TO 'default_user';",
 			},
 			execSQL: `REVOKE test_role FROM 'default_user';`,
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "default",
 		},
 		{
@@ -498,7 +499,7 @@ func Test_SQL(t *testing.T) {
 				"CREATE ROLE test_role;",
 			},
 			execSQL: `GRANT select ON users TO test_role;`,
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "default",
 		},
 		{
@@ -508,37 +509,37 @@ func Test_SQL(t *testing.T) {
 				"GRANT select ON main TO test_role;",
 			},
 			execSQL: `REVOKE select ON main FROM test_role;`,
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "default",
 		},
 		{
 			name:    "default role cannot use extensions",
 			execSQL: "USE test AS test_ext;",
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "default",
 		},
 		{
 			name:    "default role cannot unuse extensions",
 			execSQL: "UNUSE test_ext;",
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "default",
 		},
 		{
 			name:    "default role cannot insert",
 			execSQL: "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "default",
 		},
 		{
 			name:    "default role cannot update",
 			execSQL: "UPDATE users SET age = 50 WHERE name = 'Alice';",
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "default",
 		},
 		{
 			name:    "default role cannot delete",
 			execSQL: "DELETE FROM users WHERE age = 40;",
-			err:     interpreter.ErrDoesNotHavePriv,
+			err:     engine.ErrDoesNotHavePrivilege,
 			caller:  "default",
 		},
 		// testing that the admin cannot perform disallowed operations
@@ -546,34 +547,34 @@ func Test_SQL(t *testing.T) {
 		{
 			name:    "admin cannot drop info namespace",
 			execSQL: "DROP NAMESPACE info;",
-			err:     interpreter.ErrCannotDropBuiltinNamespace,
+			err:     engine.ErrCannotDropBuiltinNamespace,
 		},
 		{
 			name:    "admin cannot drop main namespace",
 			execSQL: `DROP NAMESPACE main;`,
-			err:     interpreter.ErrCannotDropBuiltinNamespace,
+			err:     engine.ErrCannotDropBuiltinNamespace,
 		},
 		{
 			name:    "admin cannot add table to info namespace",
 			execSQL: `{info}CREATE TABLE tbl (col int primary key);`,
-			err:     interpreter.ErrCannotMutateInfoNamespace,
+			err:     engine.ErrCannotMutateInfoNamespace,
 		},
 		{
 			name:    "admin cannot add action to info namespace",
 			execSQL: `{info}CREATE ACTION act() public {};`,
-			err:     interpreter.ErrCannotMutateInfoNamespace,
+			err:     engine.ErrCannotMutateInfoNamespace,
 		},
 		{
 			name:    "admin cannot drop table from info namespace",
 			execSQL: `{info}DROP TABLE namespaces;`,
-			err:     interpreter.ErrCannotMutateInfoNamespace,
+			err:     engine.ErrCannotMutateInfoNamespace,
 		},
 		{
 			// this should always fail because it is a postgres view, but I want to make sure
 			// the error is correctly caught by the engine
 			name:    "admin cannot insert into info namespace",
 			execSQL: `{info}INSERT INTO namespaces (name, type) VALUES ('test', 'SYSTEM');`,
-			err:     interpreter.ErrCannotMutateInfoNamespace,
+			err:     engine.ErrCannotMutateInfoNamespace,
 		},
 		// testing info schema
 		// I only have one test here because sql_test.go tests all of the info schema,
@@ -585,6 +586,22 @@ func Test_SQL(t *testing.T) {
 				{"info", "SYSTEM"},
 				{"main", "SYSTEM"},
 			},
+		},
+		{
+			name: "cannot grant roles privileges on a namespace",
+			sql: []string{
+				"CREATE ROLE test_role;",
+			},
+			execSQL: `GRANT ROLES ON main TO test_role;`,
+			err:     engine.ErrCannotBeNamespaced,
+		},
+		{
+			name: "cannot grant use privileges on a namespace",
+			sql: []string{
+				"CREATE ROLE test_role;",
+			},
+			execSQL: `GRANT USE ON main TO test_role;`,
+			err:     engine.ErrCannotBeNamespaced,
 		},
 	}
 
@@ -786,13 +803,22 @@ func Test_Actions(t *testing.T) {
 	}
 
 	// rawTest is a helper that allows us to write test logic purely in Kuneiform.
-	rawTest := func(name string, body string) testcase {
+	rawTest := func(name string, body string, err ...error) testcase {
+		var err1 error
+		if len(err) > 0 {
+			err1 = err[0]
+		}
+		if len(err) > 1 {
+			panic("too many errors")
+		}
 		return testcase{
 			name:   name,
 			stmt:   []string{`CREATE ACTION raw_test() public {` + body + `}`},
 			action: "raw_test",
+			err:    err1,
 		}
 	}
+	_ = rawTest
 
 	tests := []testcase{
 		{
@@ -869,10 +895,125 @@ func Test_Actions(t *testing.T) {
 				{"craig wright", int64(22)},
 			},
 		},
+		{
+			name: "calling an action that returns several variables",
+			stmt: []string{
+				`CREATE ACTION get_several_values($i int) public view returns (value1 int, value2 int, value3 int) {
+					RETURN $i, $i + 1, $i + 2;
+				}`,
+				`CREATE ACTION call_get_several_values() public view {
+					$value1, $value2, $value3 := get_several_values(1);
+
+					_, $value2Again, _ := get_several_values(1);
+					$value1Again := get_several_values(1);
+
+					if $value1 != 1 {
+						error('value1 is not 1');
+					}
+					if $value2 != 2 {
+						error('value2 is not 2');
+					}
+					if $value3 != 3 {
+						error('value3 is not 3');
+					}
+					if $value2Again != 2 {
+						error('value2Again is not 2');
+					}
+					if $value1Again != 1 {
+						error('value1Again is not 1');
+					}
+				}`,
+			},
+			action: "call_get_several_values",
+		},
+		{
+			// we test a single typed receiver because it calls a different interpreter function
+			name: "calling an action that returns a table to values (single receiver)",
+			stmt: []string{
+				`CREATE ACTION get_table() public view returns table(value int) {
+					RETURN NEXT 1;
+					RETURN NEXT 2;
+				}`,
+				`CREATE ACTION call_get_table() public view {
+					$value1 text := get_table();
+				}`,
+			},
+			action: "call_get_table",
+			err:    engine.ErrReturnShape,
+		},
+		{
+			name: "calling an action that returns a table to values (multiple receivers)",
+			stmt: []string{
+				`CREATE ACTION get_table() public view returns table(value int) {
+					RETURN NEXT 1, 2, 3;
+					RETURN NEXT 4, 5, 6;
+				};
+				`,
+				`CREATE ACTION call_get_table() public view {
+					$value1, $value2, $value3 := get_table();
+				}`,
+			},
+			action: "call_get_table",
+			err:    engine.ErrReturnShape,
+		},
+		{
+			name: "calling an action that returns not enough values (single receiver)",
+			stmt: []string{
+				`CREATE ACTION get_val() public view { /*returns nothing*/ }`,
+				`CREATE ACTION call_get_val() public view {
+					$value1 text := get_val();
+				}`,
+			},
+			action: "call_get_val",
+			err:    engine.ErrReturnShape,
+		},
+		{
+			name: "calling an action that returns not enough values (multiple receivers)",
+			stmt: []string{
+				`CREATE ACTION get_val() public view returns (int) {
+					RETURN 1;
+				}`,
+				`CREATE ACTION call_get_val() public view {
+					$value1, $value2 := get_val();
+				}`,
+			},
+			action: "call_get_val",
+			err:    engine.ErrReturnShape,
+		},
+		{
+			// we test a single typed receiver because it calls a different interpreter function
+			name: "calling an action that returns wrong type (single receiver)",
+			stmt: []string{
+				`CREATE ACTION get_val() public view returns (int) {
+					RETURN 1;
+				}`,
+				`CREATE ACTION call_get_val() public view {
+					$value1 text := get_val();
+				}`,
+			},
+			action: "call_get_val",
+			err:    engine.ErrType,
+		},
+		{
+			// we test multiple returns because it calls a different interpreter function
+			// if we are returning more than 1 value
+			name: "calling an action that returns wrong type (multiple receivers)",
+			stmt: []string{
+				`CREATE ACTION get_val() public view returns (int, int) {
+					RETURN 1, 2;
+				}`,
+				`CREATE ACTION call_get_val() public view {
+					$value1 text;
+					$value1, $value2 := get_val();
+				}`,
+			},
+			action: "call_get_val",
+			err:    engine.ErrType,
+		},
 		rawTest("loop over array", `
 		$arr := array[1,2,3];
 		$sum := 0;
-		for $i in $arr {
+		for $i in array $arr {
 			$sum := $sum + $i;
 		};
 
@@ -913,7 +1054,7 @@ func Test_Actions(t *testing.T) {
 				`CREATE NAMESPACE other;`,
 				`{other}CREATE ACTION get_single_value() public view returns (value int) { return 1; }`,
 				`{other}CREATE ACTION get_several_values() public view returns (value1 int, value2 int) { return 2, 3; }`,
-				`{other}CREATE ACTION get_table($to int, $from int) public view returns table(value int) { 
+				`{other}CREATE ACTION get_table($to int, $from int) public view returns table(value int) {
 					for $i in $to..$from {
 						RETURN NEXT $i;
 					};
@@ -958,23 +1099,23 @@ func Test_Actions(t *testing.T) {
 		if $a < $b {
 			$total := $total + 1;
 		} else {
-			error('a is not less than b'); 
+			error('a is not less than b');
 		}
 
 		if $a > $b {
 			error('a is not greater than b');
 		} else if $a == $b {
-			error('a is not equal to b'); 
+			error('a is not equal to b');
 		} else {
-			$total := $total + 1; 
+			$total := $total + 1;
 		}
 
 		if $a + $b == 4 {
 			error('a + b is not 4');
 		} elseif $a + $b == 3 { -- supports else if and elseif
-			$total := $total + 1; 
+			$total := $total + 1;
 		} else {
-			error('a + b is not 3'); 
+			error('a + b is not 3');
 		}
 
 		if $total != 3 {
@@ -1020,7 +1161,7 @@ func Test_Actions(t *testing.T) {
 		if true or false {
 			-- pass
 		} else {
-			error('true or false is not true'); 
+			error('true or false is not true');
 		}
 
 		if (true or false) and true {
@@ -1056,6 +1197,127 @@ func Test_Actions(t *testing.T) {
 			error('5 + null is not null');
 		}
 		`),
+		{
+			name: "replace action",
+			stmt: []string{
+				"CREATE ACTION act() public { error('replace me'); };",
+				"CREATE OR REPLACE ACTION act() public { /* no error */ };",
+			},
+			action: "act",
+		},
+		rawTest("adding a string to a number", `$a := 1 + 'a';`, engine.ErrType),
+		rawTest("if on a number", `if 'a' { error('should not be true'); }`, engine.ErrType),
+		rawTest("invalid function arg type", `abs('a');`, engine.ErrType),
+
+		rawTest("for loop with invalid range", `for $i in 'a'..3 { error('should not be true'); }`, engine.ErrType),
+		rawTest("for loop with invalid array", `for $i in array 'a' { error('should not be true'); }`, engine.ErrType),
+		{
+			name: "for loop over action that returns many records",
+			stmt: []string{
+				`CREATE ACTION get_users() public view returns table(name text, age int) {
+					return next 'satoshi', 42;
+					return next 'hal finney', 50;
+				}`,
+				`CREATE ACTION loop_over_users() public view {
+					$i := 0;
+					for $row in get_users() {
+						if $i == 0 {
+							if $row.name != 'satoshi' {
+								error('name is not satoshi');
+							};
+						} else if $i == 1 {
+							if $row.name != 'hal finney' {
+								error('name is not hal finney');
+							};
+						} else {
+							error('too many rows');
+						}
+
+						$i := $i + 1;
+					};
+				}`,
+			},
+			action: "loop_over_users",
+		},
+		{
+			name: "for loop over action that returns an array",
+			stmt: []string{
+				`CREATE ACTION get_users($a int, $b int) public view returns (int[]) {
+					return array[$a, $b];
+				}`,
+				`CREATE ACTION loop_over_users() public view {
+					$i := 0;
+					for $row in array get_users(1,2) {
+						$i := $i + 1;
+					}
+					if $i != 2 {
+						error('expected 2 rows');
+					}
+
+					$i := 0;
+					-- without the array keyword, it should be treated as a single row
+					for $row in get_users(3,4) {
+						$i := $i + 1;
+					}
+					if $i != 1 {
+						error('expected 1 row');
+					}
+				}`,
+			},
+			action: "loop_over_users",
+		},
+		rawTest("loop over array without ARRAY keyword", `
+		$a := array[1,2,3];
+		for $i in $a {
+			error('should not be true');
+		}
+		`, engine.ErrLoop),
+		{
+			name: "nested query",
+			stmt: []string{
+				`CREATE ACTION create_users() public returns table(name text, age int) {
+					for $row in SELECT 'satoshi' as name, 42 as age {
+						INSERT INTO users (id, name, age) VALUES (1, $row.name, $row.age);
+					}
+
+					return SELECT name, age FROM users;
+				}`,
+			},
+			action: "create_users",
+			err:    engine.ErrQueryActive,
+		},
+		// case sensitivity
+		{
+			name: "case insensitivity",
+			stmt: []string{
+				"CREATE NAMESPACE cAsE_senSitivE;",
+				"{cAsE_SenSitive}CReATE TaBLE tAbLee (cOl iNT PRImARY KEY);",
+				"{CAsE_SenSitive}INSeRT InTO tAbLEe (cOL) VaLUES (1);",
+				"{cASE_SENSITIVE}CREATE InDEX idX ON tAblee (Col);",
+				"{cAsE_sEnSiTive}DROP INDEX iDx;",
+				`{cAsE_sENSiTive}CREATE AcTiON aCt($aA inT) PuBLIC vIeW retUrns tabLe(vAl InT) {
+							Return seleCt $Aa + 1;
+						};`,
+				`{cAsE_sEnSiTivE}CrEate AcTion acT2() pUbLic vIew ReTurns tAble(vAl Int) {
+							for $rOw in Act(1) {
+								rEturn NeXt $roW.VAL;
+							}
+						}`,
+				// roles
+				`CREATE ROLE teSt_rOle;`,
+				`grant test_rolE to 'user';`,
+				`revoke tesT_Role from 'user';`,
+				`grant CaLL oN CASE_SEnsItive TO Test_rOle;`,
+				`revoke cALl on case_SENsitive from test_ROLe;`,
+				`dRop RoLe tEst_ROLE;`,
+				// namespaces
+				`CREATE NAMESPACE tEst_Namespace;`,
+				`DROP NAMESPACE test_namespACe;`,
+			},
+			namespace: "case_sensITIVE",
+			action:    "Act2",
+			results:   [][]any{{int64(2)}},
+		},
 	}
 
 	db, err := newTestDB()
@@ -1072,7 +1334,6 @@ func Test_Actions(t *testing.T) {
 			interp := newTestInterp(t, tx, test.stmt)
 
 			var results [][]any
-			// TODO: add expected logs
 			_, err = interp.Call(newEngineCtx(test.caller), tx, test.namespace, test.action, test.values, func(v *common.Row) error {
 				results = append(results, v.Values)
 				return nil
@@ -1269,7 +1530,7 @@ func Test_Extensions(t *testing.T) {
 
 		// 1: concat can only be called by other actions
 		err = callFromUser(defaultCaller, "test_ext", "concat", []any{"hello", "world"}, nil)
-		assert.ErrorIs(t, err, interpreter.ErrSystemOnly)
+		assert.ErrorIs(t, err, engine.ErrActionSystemOnly)
 
 		err = adminExec("CREATE ACTION IF NOT EXISTS call_concat() public view returns (text) { return test_ext.concat('hello', 'world'); }", nil)
 		require.NoError(t, err)
@@ -1286,7 +1547,7 @@ func Test_Extensions(t *testing.T) {
 		defer readTx.Rollback(ctx)
 
 		_, err = interp.Call(newEngineCtx(defaultCaller), readTx, "", "call_concat_view", nil, exact("helloworld"))
-		assert.ErrorIs(t, err, interpreter.ErrActionMutatesState)
+		assert.ErrorIs(t, err, engine.ErrCannotMutateState)
 
 		// 2: get can be called publicly or by other actions, and can be called in a view action
 		err = callFromUser(defaultCaller, "test_ext", "get", []any{"text"}, exact("text"))
@@ -1303,21 +1564,21 @@ func Test_Extensions(t *testing.T) {
 		require.NoError(t, err)
 
 		err = callFromUser("user", "test_ext", "owner_only", nil, nil)
-		assert.ErrorIs(t, err, interpreter.ErrActionOwnerOnly)
+		assert.ErrorIs(t, err, engine.ErrActionOwnerOnly)
 
 		// 4: internal can only be called by other methods, and not externally nor by
 		// other actions in different namespaces
 
 		// callable by other methods is tested implicitly with the get method
 		err = callFromUser(defaultCaller, "test_ext", "internal", nil, exact("internal"))
-		assert.ErrorIs(t, err, interpreter.ErrActionPrivate)
+		assert.ErrorIs(t, err, engine.ErrActionPrivate)
 
 		// action in "main" namespace cannot call internal
 		err = adminExec("CREATE ACTION IF NOT EXISTS call_internal() public view returns (text) { return test_ext.internal(); }", nil)
 		require.NoError(t, err)
 
 		err = callFromUser(defaultCaller, "", "call_internal", nil, exact("internal"))
-		assert.ErrorIs(t, err, interpreter.ErrActionPrivate)
+		assert.ErrorIs(t, err, engine.ErrActionPrivate)
 
 		// calling a private action with overrideAuthz should work
 		err = adminCall("test_ext", "internal", nil, exact("internal"))
@@ -1348,7 +1609,7 @@ func Test_Extensions(t *testing.T) {
 
 		// 6. The imported extension creates a namespace that cannot be dropped by the admin
 		err = adminExec("DROP NAMESPACE IF EXISTS test_ext;", nil)
-		require.ErrorIs(t, err, interpreter.ErrCannotMutateExtension)
+		require.ErrorIs(t, err, engine.ErrCannotMutateExtension)
 
 		// 7. The extension namespace can have privileges granted to roles
 		err = execFromUser(defaultCaller, "CREATE ROLE IF NOT EXISTS test_role;", nil)
@@ -1361,13 +1622,13 @@ func Test_Extensions(t *testing.T) {
 
 		// tables
 		err = execFromUser(defaultCaller, "{test_ext}CREATE TABLE IF NOT EXISTS test_table (id INT PRIMARY KEY);", nil)
-		require.ErrorIs(t, err, interpreter.ErrCannotMutateExtension)
+		require.ErrorIs(t, err, engine.ErrCannotMutateExtension)
 
 		err = adminExec("{test_ext}CREATE TABLE IF NOT EXISTS test_table (id INT PRIMARY KEY);", nil)
 		require.NoError(t, err)
 
 		err = execFromUser(defaultCaller, "{test_ext}ALTER TABLE test_table ADD COLUMN name TEXT;", nil)
-		require.ErrorIs(t, err, interpreter.ErrCannotMutateExtension)
+		require.ErrorIs(t, err, engine.ErrCannotMutateExtension)
 
 		if i == 0 {
 			err = adminExec("{test_ext}ALTER TABLE test_table ADD COLUMN name TEXT;", nil)
@@ -1376,13 +1637,13 @@ func Test_Extensions(t *testing.T) {
 
 		// indexes
 		err = execFromUser(defaultCaller, "{test_ext}CREATE INDEX IF NOT EXISTS test_index ON test_table (id);", nil)
-		require.ErrorIs(t, err, interpreter.ErrCannotMutateExtension)
+		require.ErrorIs(t, err, engine.ErrCannotMutateExtension)
 
 		err = adminExec("{test_ext}CREATE INDEX IF NOT EXISTS test_index ON test_table (id);", nil)
 		require.NoError(t, err)
 
 		err = execFromUser(defaultCaller, "{test_ext}DROP INDEX IF EXISTS test_index;", nil)
-		require.ErrorIs(t, err, interpreter.ErrCannotMutateExtension)
+		require.ErrorIs(t, err, engine.ErrCannotMutateExtension)
 
 		err = adminExec("{test_ext}DROP INDEX IF EXISTS test_index;", nil)
 		require.NoError(t, err)
@@ -1390,7 +1651,7 @@ func Test_Extensions(t *testing.T) {
 		// drop table
 
 		err = execFromUser(defaultCaller, "{test_ext}DROP TABLE IF EXISTS test_table;", nil)
-		require.ErrorIs(t, err, interpreter.ErrCannotMutateExtension)
+		require.ErrorIs(t, err, engine.ErrCannotMutateExtension)
 
 		err = adminExec("{test_ext}DROP TABLE IF EXISTS test_table;", nil)
 		require.NoError(t, err)
@@ -1398,13 +1659,13 @@ func Test_Extensions(t *testing.T) {
 		// actions
 
 		err = execFromUser(defaultCaller, "{test_ext}CREATE ACTION IF NOT EXISTS test_action() public view returns (text) { return 'test'; }", nil)
-		require.ErrorIs(t, err, interpreter.ErrCannotMutateExtension)
+		require.ErrorIs(t, err, engine.ErrCannotMutateExtension)
 
 		err = adminExec("{test_ext}CREATE ACTION IF NOT EXISTS test_action() public view returns (text) { return 'test'; }", nil)
 		require.NoError(t, err)
 
 		err = execFromUser(defaultCaller, "{test_ext}DROP ACTION IF EXISTS test_action;", nil)
-		require.ErrorIs(t, err, interpreter.ErrCannotMutateExtension)
+		require.ErrorIs(t, err, engine.ErrCannotMutateExtension)
 
 		err = adminExec("{test_ext}DROP ACTION IF EXISTS test_action;", nil)
 		require.NoError(t, err)
@@ -1455,7 +1716,7 @@ func Test_NamingOverwrites(t *testing.T) {
 	require.NoError(t, err)
 
 	// we will create an action in the extension schema and call abs
-	err = interp.Execute(adminCtx(), tx, `{test_ext}CREATE ACTION OR REPLACE use_abs() public view returns (int) { return abs(-1); }`, nil, nil)
+	err = interp.Execute(adminCtx(), tx, `{test_ext}CREATE OR REPLACE ACTION use_abs() public view returns (int) { return abs(-1); }`, nil, nil)
 	require.NoError(t, err)
 
 	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "test_ext", "use_abs", nil, exact(int64(1)))
@@ -1465,7 +1726,7 @@ func Test_NamingOverwrites(t *testing.T) {
 
 	// now we will create an action that overwrites the abs function
 	absCalled = false
-	err = interp.Execute(adminCtx(), tx, `{test_ext}CREATE ACTION OR REPLACE abs($a int) system view returns (int) { return 2; }`, nil, nil)
+	err = interp.Execute(adminCtx(), tx, `{test_ext}CREATE OR REPLACE ACTION abs($a int) system view returns (int) { return 2; }`, nil, nil)
 	require.NoError(t, err)
 
 	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "test_ext", "use_abs", nil, exact(int64(2)))
@@ -1487,10 +1748,10 @@ func Test_NamingOverwrites(t *testing.T) {
 	assert.True(t, absCalled)
 
 	// will now try it to make sure we can go from action -> function
-	err = interp.Execute(adminCtx(), tx, `create action OR REPLACE length($a text) public view returns (int) { return 1; }`, nil, nil)
+	err = interp.Execute(adminCtx(), tx, `create OR REPLACE action length($a text) public view returns (int) { return 1; }`, nil, nil)
 	require.NoError(t, err)
 
-	err = interp.Execute(adminCtx(), tx, `create action OR REPLACE use_length() public view returns (int) { return length('hello'); }`, nil, nil)
+	err = interp.Execute(adminCtx(), tx, `create OR REPLACE action use_length() public view returns (int) { return length('hello'); }`, nil, nil)
 	require.NoError(t, err)
 
 	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "", "use_length", nil, exact(int64(1)))
@@ -1502,6 +1763,81 @@ func Test_NamingOverwrites(t *testing.T) {
 
 	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "", "use_length", nil, exact(int64(5)))
 	require.NoError(t, err)
+}
+
+// This tests that the `notice` function works correctly, even when methods call an action that
+// logs a notice, and that method is called from another action (which was a previous bug).
+func Test_Notice(t *testing.T) {
+	db, err := newTestDB()
+	require.NoError(t, err)
+	defer db.Close()
+
+	ctx := context.Background()
+	tx, err := db.BeginTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx) // always rollback
+
+	err = precompiles.RegisterPrecompile("log", precompiles.PrecompileExtension[string]{
+		Initialize: func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]any) (*string, error) {
+			return &alias, nil
+		},
+		OnUse: func(ctx *common.EngineContext, app *common.App, t *string) error {
+			// we create an action that logs a notice
+			ctx.OverrideAuthz = true
+			defer func() { ctx.OverrideAuthz = false }()
+			return app.Engine.Execute(ctx, app.DB, "{"+*t+"}"+`CREATE ACTION log_notice() public view { notice('internal notice'); }`, nil, nil)
+		},
+		Methods: []precompiles.Method[string]{
+			{
+				Name: "method_log_notice",
+				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error, t *string) error {
+					res, err := app.Engine.Call(ctx, app.DB, *t, "log_notice", nil, nil)
+					if err != nil {
+						return err
+					}
+
+					if len(res.Logs) != 1 {
+						return errors.New("expected 1 log")
+					}
+
+					if res.Logs[0] != "internal notice" {
+						return fmt.Errorf("expected 'internal notice', got %s", res.Logs[0])
+					}
+
+					return nil
+				},
+				AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	interp := newTestInterp(t, tx, nil)
+
+	err = interp.Execute(newEngineCtx(defaultCaller), tx, `USE log AS log_ext;`, nil, nil)
+	require.NoError(t, err)
+
+	err = interp.Execute(adminCtx(), tx, `{log_ext}CREATE OR REPLACE ACTION call_log_notice() public view { notice('external notice'); log_ext.method_log_notice(); }`, nil, nil)
+	require.NoError(t, err)
+
+	res, err := interp.Call(newEngineCtx(defaultCaller), tx, "log_ext", "call_log_notice", nil, nil)
+	require.NoError(t, err)
+
+	if len(res.Logs) != 2 {
+		t.Fatalf("expected 2 logs, got %d", len(res.Logs))
+	}
+
+	if res.Logs[0] != "external notice" {
+		t.Fatalf("expected 'external notice', got %s", res.Logs[0])
+	}
+
+	if res.Logs[1] != "internal notice" {
+		t.Fatalf("expected 'internal notice', got %s", res.Logs[1])
+	}
+
+	// we will also test that notice cannot be called within a sql statement
+	err = interp.Execute(newEngineCtx(defaultCaller), tx, `SELECT notice('hello');`, nil, nil)
+	require.ErrorIs(t, err, engine.ErrIllegalFunctionUsage)
 }
 
 // exact is a helper function that verifies that a result is called exactly once, and that the result is equal to the expected value.
@@ -1596,9 +1932,9 @@ func newTestInterp(t *testing.T, tx sql.DB, seeds []string) *interpreter.ThreadS
 	}, nil)
 	require.NoError(t, err)
 
-	for _, stmt := range append([]string{createUsersTable, createPostsTable}, seeds...) {
+	for i, stmt := range append([]string{createUsersTable, createPostsTable}, seeds...) {
 		err := interp.Execute(newEngineCtx(defaultCaller), tx, stmt, nil, nil)
-		require.NoError(t, err)
+		require.NoErrorf(t, err, "failed to execute seed statement %d: %s", i-1, stmt) // -1 to account for the two tables
 	}
 
 	return interp

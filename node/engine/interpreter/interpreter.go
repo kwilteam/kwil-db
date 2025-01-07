@@ -69,7 +69,7 @@ type recursiveInterpreter struct {
 	i *baseInterpreter
 	// logs is the slice of logs that the interpreter has written.
 	// It references the slice that will be returned to the caller.
-	logs []string
+	logs *[]string
 }
 
 func (r *recursiveInterpreter) Call(ctx *common.EngineContext, db sql.DB, namespace string, action string, args []any, resultFn func(*common.Row) error) (*common.CallResult, error) {
@@ -78,7 +78,7 @@ func (r *recursiveInterpreter) Call(ctx *common.EngineContext, db sql.DB, namesp
 		return nil, err
 	}
 
-	r.logs = append(r.logs, res.Logs...)
+	*r.logs = append(*r.logs, res.Logs...)
 	return res, nil
 }
 
@@ -262,7 +262,7 @@ func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service) (*T
 // to ensure that the function is executed correctly. In the future, we can replicate
 // the functionality of the function in Go to avoid the roundtrip. I initially tried
 // to do this, however it get's extroadinarily complex when getting to string formatting.
-func funcDefToExecutable(funcName string, funcDef *parse.ScalarFunctionDefinition) *executable {
+func funcDefToExecutable(funcName string, funcDef *engine.ScalarFunctionDefinition) *executable {
 	return &executable{
 		Name: funcName,
 		Func: func(e *executionContext, args []Value, fn resultFunc) error {
@@ -283,7 +283,7 @@ func funcDefToExecutable(funcName string, funcDef *parse.ScalarFunctionDefinitio
 			// if the function name is notice, then we need to get write the notice to our logs locally,
 			// instead of executing a query. This is the functional eqauivalent of Kwil's console.log().
 			if funcName == "notice" {
-				e.logs = append(e.logs, args[0].RawValue().(string))
+				*e.logs = append(*e.logs, args[0].RawValue().(string))
 				return nil
 			}
 
@@ -332,7 +332,7 @@ func (i *baseInterpreter) execute(ctx *common.EngineContext, db sql.DB, statemen
 	// parse the statement
 	ast, err := parse.Parse(statement)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", engine.ErrParse, err)
 	}
 
 	if len(ast) == 0 {
@@ -408,6 +408,8 @@ func (i *baseInterpreter) call(ctx *common.EngineContext, db sql.DB, namespace, 
 	if namespace == "" {
 		namespace = DefaultNamespace
 	}
+	namespace = strings.ToLower(namespace)
+	action = strings.ToLower(action)
 
 	execCtx, err := i.newExecCtx(ctx, db, namespace, toplevel)
 	if err != nil {
@@ -423,13 +425,12 @@ func (i *baseInterpreter) call(ctx *common.EngineContext, db sql.DB, namespace, 
 	// (e.g. in case of a private action or owner action)
 	exec, ok := ns.availableFunctions[action]
 	if !ok {
-		// this should never happen
-		return nil, fmt.Errorf(`node bug: action "%s" does not exist in namespace "%s"`, action, namespace)
+		return nil, fmt.Errorf(`%w: action "%s" does not exist in namespace "%s"`, engine.ErrUnknownAction, action, namespace)
 	}
 
 	switch exec.Type {
 	case executableTypeFunction:
-		return nil, fmt.Errorf(`%w: action "%s" is a built-in function and cannot be called directly`, ErrCannotCall, action)
+		return nil, fmt.Errorf(`action "%s" is a built-in function and cannot be called directly`, action)
 	case executableTypeAction, executableTypePrecompile:
 		// do nothing, this is what we want
 	default:
@@ -454,7 +455,7 @@ func (i *baseInterpreter) call(ctx *common.EngineContext, db sql.DB, namespace, 
 	}
 
 	return &common.CallResult{
-		Logs: execCtx.logs,
+		Logs: *execCtx.logs,
 	}, nil
 }
 
@@ -482,12 +483,15 @@ func (i *baseInterpreter) newExecCtx(txCtx *common.EngineContext, db sql.DB, nam
 		return nil, fmt.Errorf("database does not implement AccessModer")
 	}
 
+	logs := make([]string, 0)
+
 	e := &executionContext{
 		engineCtx:      txCtx,
 		scope:          newScope(namespace),
 		canMutateState: am.AccessMode() == sql.ReadWrite,
 		db:             db,
 		interpreter:    i,
+		logs:           &logs,
 	}
 	e.scope.isTopLevel = toplevel
 
@@ -501,8 +505,8 @@ const (
 
 var builtInExecutables = func() map[string]*executable {
 	execs := make(map[string]*executable)
-	for funcName, impl := range parse.Functions {
-		if scalarImpl, ok := impl.(*parse.ScalarFunctionDefinition); ok {
+	for funcName, impl := range engine.Functions {
+		if scalarImpl, ok := impl.(*engine.ScalarFunctionDefinition); ok {
 			execs[funcName] = funcDefToExecutable(funcName, scalarImpl)
 		}
 	}

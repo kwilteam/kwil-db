@@ -58,80 +58,22 @@ identifier:
 // allowed_identifier allows us to use reserved keywords as identifiers
 allowed_identifier:
     IDENTIFIER
+    // we include a lot of tokens here to allow them to be used as identifiers.
+    // Some tokens, such as NOT, IS, etc., are not included since it causes parsing issues.
     | CREATE
     | ALTER
-    | COLUMN
     | ADD
     | DROP
     | RENAME
-    | TO
-    | CONSTRAINT
     | CHECK
     | FOREIGN
     | PRIMARY
     | KEY
-    | ON
-    | DO
     | UNIQUE
-    | CASCADE
     | RESTRICT
-    | SET
-    | DEFAULT
-    | NULL
-    | DELETE
-    | UPDATE
-    | REFERENCES
-    | REF
-    | NOT
     | INDEX
-    | AND
-    | OR
-    | LIKE
-    | ILIKE
-    | IN
-    | BETWEEN
-    | IS
-    | EXISTS
-    | ALL
-    | ANY
-    | JOIN
-    | LEFT
-    | RIGHT
-    | INNER
-    | AS
-    | ASC
-    | DESC
-    | LIMIT
-    | OFFSET
-    | ORDER
-    | BY
-    | GROUP
-    | HAVING
     | RETURNS
-    | NO
-    | WITH
-    | CASE
-    | WHEN
-    | THEN
-    | END
-    | DISTINCT
-    | FROM
-    | WHERE
-    | COLLATE
-    | SELECT
-    | INSERT
-    | VALUES
-    | FULL
-    | UNION
-    | INTERSECT
-    | EXCEPT
-    | NULLS
-    | FIRST
-    | LAST
-    | RETURNING
-    | INTO
     | CONFLICT
-    | NOTHING
     | FOR
     | IF
     | ELSEIF
@@ -139,25 +81,17 @@ allowed_identifier:
     | BREAK
     | CONTINUE
     | RETURN
-    | NEXT
-    | OVER
-    | PARTITION
-    | WINDOW
-    | FILTER
-    | RECURSIVE
     | GRANT
     | GRANTED
     | REVOKE
     | ROLE
     | REPLACE
-    | ARRAY
     | NAMESPACE
     | ROLES
     | CALL
     | USE
     | UNUSE
     | DEFAULT
-    | TABLE
     | ACTION
 ;
 
@@ -283,23 +217,19 @@ drop_index_statement:
 ;
 
 create_role_statement:
-    CREATE ROLE (IF NOT EXISTS)? role_name
+    CREATE ROLE (IF NOT EXISTS)? identifier
 ;
 
 drop_role_statement:
-    DROP ROLE (IF EXISTS)? role_name
+    DROP ROLE (IF EXISTS)? identifier
 ;
 
 grant_statement:
-    GRANT (IF NOT GRANTED)? (privilege_list|grant_role=role_name) (ON namespace=identifier)? TO (role=role_name|user=STRING_|user_var=action_expr)
+    GRANT (IF NOT GRANTED)? (privilege_list|grant_role=identifier) (ON namespace=identifier)? TO (role=identifier|user=STRING_|user_var=action_expr)
 ;
 
 revoke_statement:
-    REVOKE (IF GRANTED)? (privilege_list|grant_role=role_name) (ON namespace=identifier)? FROM (role=role_name|user=STRING_|user_var=action_expr)
-;
-
-role_name:
-    identifier
+    REVOKE (IF GRANTED)? (privilege_list|grant_role=identifier) (ON namespace=identifier)? FROM (role=identifier|user=STRING_|user_var=action_expr)
 ;
 
 privilege_list:
@@ -311,7 +241,7 @@ privilege:
 ;
 
 create_action_statement:
-    CREATE ACTION ((IF NOT EXISTS)|(OR REPLACE))? identifier
+    CREATE (OR REPLACE)? ACTION (IF NOT EXISTS)? identifier
     LPAREN (VARIABLE type (COMMA VARIABLE type)*)? RPAREN
     identifier*
     action_return?
@@ -531,7 +461,7 @@ action_statement:
     // stmt_action_call must go above stmt_variable_assignment due to lexer ambiguity
     | ((variable_or_underscore) (COMMA (variable_or_underscore))* (ASSIGN | EQUALS))? action_function_call SCOL # stmt_action_call
     | action_expr type? (ASSIGN | EQUALS) action_expr SCOL                                                         # stmt_variable_assignment
-    | FOR receiver=VARIABLE IN (range|target_variable=variable|sql_statement|action_function_call) LBRACE action_statement* RBRACE SCOL?  # stmt_for_loop
+    | FOR receiver=VARIABLE IN (range|sql_statement|ARRAY? action_expr) LBRACE action_statement* RBRACE SCOL?  # stmt_for_loop
     | IF if_then_block ((ELSEIF| ELSE IF) if_then_block)* (ELSE LBRACE action_statement* RBRACE)? SCOL?                        # stmt_if
     | sql_statement SCOL                                                                                # stmt_sql
     | (BREAK|CONTINUE) SCOL                                                                                        # stmt_loop_control

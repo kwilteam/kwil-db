@@ -30,7 +30,7 @@ func makeActionToExecutable(namespace string, act *Action) *executable {
 
 		for i, arg := range v {
 			if !act.Parameters[i].Type.EqualsStrict(arg.Type()) {
-				return fmt.Errorf("expected argument %d to be %s, got %s", i+1, act.Parameters[i].Type, arg.Type())
+				return fmt.Errorf("%w: expected argument %d to be %s, got %s", engine.ErrType, i+1, act.Parameters[i].Type, arg.Type())
 			}
 		}
 
@@ -195,13 +195,29 @@ func (i *interpreterPlanner) VisitActionStmtAssignment(p0 *parse.ActionStmtAssig
 			return err
 		}
 
+		// if the user specifies an expected type
+		// (e.g. $a text := 'a'), we should check that the type matches.
+		checkType := func(v Value) error {
+			if p0.Type != nil {
+				if !v.Type().EqualsStrict(p0.Type) {
+					return fmt.Errorf("%w: expected %s, got %s", engine.ErrType, p0.Type, v.Type())
+				}
+			}
+
+			return nil
+		}
+
 		switch a := p0.Variable.(type) {
 		case *parse.ExpressionVariable:
+			if err := checkType(val); err != nil {
+				return err
+			}
+
 			return exec.setVariable(a.Name, val)
 		case *parse.ExpressionArrayAccess:
 			scalarVal, ok := val.(ScalarValue)
 			if !ok {
-				return fmt.Errorf("expected scalar value, got %T", val)
+				return fmt.Errorf("%w: expected scalar value, got %T", engine.ErrType, val)
 			}
 
 			arrVal, err := arrFn(exec)
@@ -211,7 +227,7 @@ func (i *interpreterPlanner) VisitActionStmtAssignment(p0 *parse.ActionStmtAssig
 
 			arr, ok := arrVal.(ArrayValue)
 			if !ok {
-				return fmt.Errorf("expected array, got %T", arrVal)
+				return fmt.Errorf("%w: expected array, got %T", engine.ErrType, arrVal)
 			}
 
 			index, err := indexFn(exec)
@@ -221,6 +237,10 @@ func (i *interpreterPlanner) VisitActionStmtAssignment(p0 *parse.ActionStmtAssig
 
 			if !index.Type().EqualsStrict(types.IntType) {
 				return fmt.Errorf("array index must be integer, got %s", index.Type())
+			}
+
+			if err := checkType(scalarVal); err != nil {
+				return err
 			}
 
 			err = arr.Set(int32(index.RawValue().(int64)), scalarVal)
@@ -278,12 +298,16 @@ func (i *interpreterPlanner) VisitActionStmtCall(p0 *parse.ActionStmtCall) any {
 
 		iter := 0
 		err = funcDef.Func(exec, vals, func(row *row) error {
+			// if there are receivers and this returns more than 1 value, we should return an error.
+			if iter > 0 && len(receivers) > 0 {
+				return fmt.Errorf(`%w: expected function or action "%s" to return a single record, but it returned a record set`, engine.ErrReturnShape, funcDef.Name)
+			}
 			iter++
 
 			// re-verify the returns, since the above checks only for what the function signature
 			// says, but this checks what the function actually returns.
 			if len(receivers) > len(row.Values) {
-				return fmt.Errorf(`expected action "%s" to return at least %d values, but it returned %d`, funcDef.Name, len(receivers), len(row.Values))
+				return fmt.Errorf(`%w: expected function or action "%s" to return at least %d values, but it returned %d`, engine.ErrReturnShape, funcDef.Name, len(receivers), len(row.Values))
 			}
 
 			for j, r := range receivers {
@@ -303,10 +327,7 @@ func (i *interpreterPlanner) VisitActionStmtCall(p0 *parse.ActionStmtCall) any {
 		}
 		if len(receivers) > 0 {
 			if iter == 0 {
-				return fmt.Errorf(`expected action "%s" to return a single record, but it returned nothing`, funcDef.Name)
-			}
-			if iter > 1 {
-				return fmt.Errorf(`expected action "%s" to return a single record, but it returned %d records`, funcDef.Name, iter)
+				return fmt.Errorf(`%w: expected function or action "%s" to return a single record, but it returned nothing`, engine.ErrReturnShape, funcDef.Name)
 			}
 		}
 
@@ -394,15 +415,97 @@ func (i *interpreterPlanner) VisitLoopTermRange(p0 *parse.LoopTermRange) any {
 		}
 
 		if !start.Type().EqualsStrict(types.IntType) {
-			return fmt.Errorf("expected integer, got %s", start.Type())
+			return fmt.Errorf("%w: expected integer, got %s", engine.ErrType, start.Type())
 		}
 
 		if !end.Type().EqualsStrict(types.IntType) {
-			return fmt.Errorf("expected integer, got %s", end.Type())
+			return fmt.Errorf("%w: expected integer, got %s", engine.ErrType, end.Type())
 		}
 
 		for i := start.RawValue().(int64); i <= end.RawValue().(int64); i++ {
 			err = handleLoopTermErr(fn(newInt(i)))
+			if err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
+}
+
+func (i *interpreterPlanner) VisitLoopTermExpression(p0 *parse.LoopTermExpression) any {
+	expr := p0.Expression.Accept(i).(exprFunc)
+	return loopTermFunc(func(exec *executionContext, fn func(Value) error) error {
+		// there are two cases for expressions here.
+		// The first is that the expression is calling a table-returning function.
+		// The second is that the expression returns an array.
+		// In the second case, we should verify that p0.Array is true.
+		// TODO: we should test all of this
+
+		// check if the expression is a function call
+		functionCall, ok := p0.Expression.(*parse.ExpressionFunctionCall)
+		// Even if it is a function call, if p0.Array is true, then we should expect it to return a single array.
+		if ok && !p0.Array {
+			// user did not specify IN ARRAY and it is a function.
+
+			ns, err := exec.getNamespace(functionCall.Namespace)
+			if err != nil {
+				return err
+			}
+
+			funcDef, ok := ns.availableFunctions[functionCall.Name]
+			if !ok {
+				return fmt.Errorf(`unknown function "%s" in namespace "%s"`, functionCall.Name, functionCall.Namespace)
+			}
+
+			vals := make([]Value, len(functionCall.Args))
+			for j, arg := range functionCall.Args {
+				val, err := arg.Accept(i).(exprFunc)(exec)
+				if err != nil {
+					return err
+				}
+
+				vals[j] = val
+			}
+
+			err = funcDef.Func(exec, vals, func(row *row) error {
+				rec, err := row.record()
+				if err != nil {
+					return err
+				}
+
+				return handleLoopTermErr(fn(rec))
+			})
+			if err != nil {
+				return err
+			}
+
+			return nil
+		}
+
+		// expect the expression to return a single array
+		// If the user did not specify this, we should return an error.
+		if !p0.Array {
+			return fmt.Errorf("%w: must use IN ARRAY when looping over anything that is not a function", engine.ErrLoop)
+		}
+
+		val, err := expr(exec)
+		if err != nil {
+			return err
+		}
+
+		arr, ok := val.(ArrayValue)
+		if !ok {
+			return fmt.Errorf("%w: expected array, got %T", engine.ErrType, val)
+		}
+
+		for i := range arr.Len() {
+			scalar, err := arr.Index(i + 1) // all arrays are 1-indexed
+			if err != nil {
+				return err
+			}
+
+			err = handleLoopTermErr(fn(scalar))
 			if err != nil {
 				return err
 			}
@@ -428,80 +531,6 @@ func (i *interpreterPlanner) VisitLoopTermSQL(p0 *parse.LoopTermSQL) any {
 
 			return handleLoopTermErr(fn(rec))
 		})
-	})
-}
-
-func (i *interpreterPlanner) VisitLoopTermVariable(p0 *parse.LoopTermVariable) any {
-	return loopTermFunc(func(exec *executionContext, fn func(Value) error) (err error) {
-		val, found := exec.getVariable(p0.Variable.Name)
-		if !found {
-			return fmt.Errorf("%w: %s", ErrVariableNotFound, p0.Variable.Name)
-		}
-
-		arr, ok := val.(ArrayValue)
-		if !ok {
-			return fmt.Errorf("expected array, got %T", val)
-		}
-
-		for i := range arr.Len() {
-			scalar, err := arr.Index(i + 1) // all arrays are 1-indexed
-			if err != nil {
-				return err
-			}
-
-			err = handleLoopTermErr(fn(scalar))
-			if err != nil {
-				return err
-			}
-		}
-
-		return nil
-	})
-}
-
-func (i *interpreterPlanner) VisitLoopTermFunctionCall(p0 *parse.LoopTermFunctionCall) any {
-	// we cannot simply use the expression function call because we enforce that expression function
-	// calls do not return tables. Here, we can return tables.
-
-	args := make([]exprFunc, len(p0.Call.Args))
-	for j, arg := range p0.Call.Args {
-		args[j] = arg.Accept(i).(exprFunc)
-	}
-	return loopTermFunc(func(exec *executionContext, fn func(Value) error) error {
-		// the function call here can either return a table or a single array value.
-		ns, err := exec.getNamespace(p0.Call.Namespace)
-		if err != nil {
-			return err
-		}
-
-		funcDef, ok := ns.availableFunctions[p0.Call.Name]
-		if !ok {
-			return fmt.Errorf(`unknown function "%s" in namespace "%s"`, p0.Call.Name, p0.Call.Namespace)
-		}
-
-		vals := make([]Value, len(args))
-		for j, valFn := range args {
-			val, err := valFn(exec)
-			if err != nil {
-				return err
-			}
-
-			vals[j] = val
-		}
-
-		err = funcDef.Func(exec, vals, func(row *row) error {
-			rec, err := row.record()
-			if err != nil {
-				return err
-			}
-
-			return handleLoopTermErr(fn(rec))
-		})
-		if err != nil {
-			return err
-		}
-
-		return nil
 	})
 }
 
@@ -554,7 +583,7 @@ func (i *interpreterPlanner) VisitActionStmtIf(p0 *parse.ActionStmtIf) any {
 					continue
 				}
 			} else {
-				return fmt.Errorf("expected bool, got %s", cond.Type())
+				return fmt.Errorf("%w: IF clause expects type bool, got %s", engine.ErrType, cond.Type())
 			}
 
 			branchRun = true
@@ -736,7 +765,7 @@ func (i *interpreterPlanner) VisitExpressionFunctionCall(p0 *parse.ExpressionFun
 		err = execute.Func(exec, vals, func(received *row) error {
 			iters++
 			if len(received.Values) != 1 {
-				return fmt.Errorf(`expected function "%s" to return 1 value, but it returned %d`, p0.Name, len(received.Values))
+				return fmt.Errorf(`%w: expected function or action "%s" to return 1 value, but it returned %d`, engine.ErrReturnShape, p0.Name, len(received.Values))
 			}
 
 			val = received.Values[0]
@@ -748,9 +777,9 @@ func (i *interpreterPlanner) VisitExpressionFunctionCall(p0 *parse.ExpressionFun
 		}
 
 		if iters == 0 {
-			return nil, fmt.Errorf(`expected function "%s" to return a single value, but it returned nothing`, p0.Name)
+			return nil, fmt.Errorf(`%w: expected function or action "%s" to return a single value, but it returned nothing`, engine.ErrReturnShape, p0.Name)
 		} else if iters > 1 {
-			return nil, fmt.Errorf(`expected function "%s" to return a single value, but it returned %d values`, p0.Name, iters)
+			return nil, fmt.Errorf(`%w: expected function or action "%s" to return a single value, but it returned %d values`, engine.ErrReturnShape, p0.Name, iters)
 		}
 
 		return val, nil
@@ -761,7 +790,7 @@ func (i *interpreterPlanner) VisitExpressionVariable(p0 *parse.ExpressionVariabl
 	return cast(p0, func(exec *executionContext) (Value, error) {
 		val, found := exec.getVariable(p0.Name)
 		if !found {
-			return nil, fmt.Errorf("%w: %s", ErrVariableNotFound, p0.Name)
+			return nil, fmt.Errorf("%w: %s", engine.ErrUnknownVariable, p0.Name)
 		}
 
 		return val, nil
@@ -794,7 +823,7 @@ func (i *interpreterPlanner) VisitExpressionArrayAccess(p0 *parse.ExpressionArra
 
 		arr, ok := arrVal.(ArrayValue)
 		if !ok {
-			return nil, fmt.Errorf("expected array, got %T", arrVal)
+			return nil, fmt.Errorf("%w: expected array, got %T", engine.ErrType, arrVal)
 		}
 
 		checkArrIdx := func(v Value) error {
@@ -867,7 +896,7 @@ func (i *interpreterPlanner) VisitExpressionArrayAccess(p0 *parse.ExpressionArra
 		arrZv, ok := zv.(ArrayValue)
 		if !ok {
 			// should never happen
-			return nil, fmt.Errorf("expected array, got %T", zv)
+			return nil, fmt.Errorf("%w: expected array, got %T", engine.ErrType, zv)
 		}
 
 		j := int32(1)
@@ -906,7 +935,7 @@ func (i *interpreterPlanner) VisitExpressionMakeArray(p0 *parse.ExpressionMakeAr
 
 		scal, ok := val0.(ScalarValue)
 		if !ok {
-			return nil, fmt.Errorf("expected scalar value, got %T", val0)
+			return nil, fmt.Errorf("%w: expected scalar value, got %T", engine.ErrType, val0)
 		}
 
 		var vals []ScalarValue
@@ -922,7 +951,7 @@ func (i *interpreterPlanner) VisitExpressionMakeArray(p0 *parse.ExpressionMakeAr
 
 			scal, ok := val.(ScalarValue)
 			if !ok {
-				return nil, fmt.Errorf("expected scalar value, got %T", val)
+				return nil, fmt.Errorf("%w: expected scalar value, got %T", engine.ErrType, val)
 			}
 
 			vals = append(vals, scal)
@@ -943,7 +972,7 @@ func (i *interpreterPlanner) VisitExpressionFieldAccess(p0 *parse.ExpressionFiel
 
 		obj, ok := objVal.(*RecordValue)
 		if !ok {
-			return nil, fmt.Errorf("expected object, got %T", objVal)
+			return nil, fmt.Errorf("%w: expected object, got %T", engine.ErrType, objVal)
 		}
 
 		f, ok := obj.Fields[p0.Field]
@@ -1026,7 +1055,7 @@ func makeLogicalFunc(left, right exprFunc, and bool) exprFunc {
 		}
 
 		if leftVal.Type() != types.BoolType || rightVal.Type() != types.BoolType {
-			return nil, fmt.Errorf("expected bools, got %s and %s", leftVal.Type(), rightVal.Type())
+			return nil, fmt.Errorf("%w: AND and OR operands must be of type bool, got %s and %s", engine.ErrType, leftVal.Type(), rightVal.Type())
 		}
 
 		if and {
@@ -1055,12 +1084,12 @@ func (i *interpreterPlanner) VisitExpressionArithmetic(p0 *parse.ExpressionArith
 
 		leftScalar, ok := left.(ScalarValue)
 		if !ok {
-			return nil, fmt.Errorf("expected scalar, got %T", left)
+			return nil, fmt.Errorf("%w: expected scalar, got %T", engine.ErrType, left)
 		}
 
 		rightScalar, ok := right.(ScalarValue)
 		if !ok {
-			return nil, fmt.Errorf("expected scalar, got %T", right)
+			return nil, fmt.Errorf("%w: expected scalar, got %T", engine.ErrType, right)
 		}
 
 		return leftScalar.Arithmetic(rightScalar, op)
@@ -1083,7 +1112,7 @@ func makeUnaryFunc(val exprFunc, op UnaryOp) exprFunc {
 
 		vScalar, ok := v.(ScalarValue)
 		if !ok {
-			return nil, fmt.Errorf("%w: expected scalar, got %T", ErrUnaryOnNonScalar, v)
+			return nil, fmt.Errorf("%w: unary operations can only be performed on scalars, got %T", engine.ErrType, v)
 		}
 
 		return vScalar.Unary(op)
@@ -1124,7 +1153,7 @@ func (i *interpreterPlanner) VisitGrantOrRevokeStatement(p0 *parse.GrantOrRevoke
 		// if we are granting ownership, then we need to check if the caller is an owner.
 		if p0.GrantRole == ownerRole && !exec.engineCtx.OverrideAuthz {
 			if !exec.isOwner() {
-				return fmt.Errorf("%w: %s", ErrDoesNotHavePriv, `only an owner can grant the "owner" role`)
+				return fmt.Errorf("%w: %s", engine.ErrDoesNotHavePrivilege, `only an owner can grant the "owner" role`)
 			}
 		}
 		if p0.GrantRole == defaultRole {
@@ -1178,7 +1207,7 @@ func (i *interpreterPlanner) VisitGrantOrRevokeStatement(p0 *parse.GrantOrRevoke
 			}
 
 			if val.Type() != types.TextType {
-				return fmt.Errorf("expected text, got %s", val.Type())
+				return fmt.Errorf("%w: expected text, got %s", engine.ErrType, val.Type())
 			}
 
 			strVal, ok := val.RawValue().(string)
@@ -1186,7 +1215,7 @@ func (i *interpreterPlanner) VisitGrantOrRevokeStatement(p0 *parse.GrantOrRevoke
 				if val.Null() {
 					return fmt.Errorf("cannot assign role to null user")
 				}
-				return fmt.Errorf("expected string, got %T", val.RawValue())
+				return fmt.Errorf("%w: expected text, got %T", engine.ErrType, val.RawValue())
 			}
 
 			return fn(exec.engineCtx.TxContext.Ctx, exec.db, p0.GrantRole, strVal, p0.If)
@@ -1297,7 +1326,7 @@ func (i *interpreterPlanner) VisitSQLStatement(p0 *parse.SQLStatement) any {
 
 		// if the query is trying to mutate state but the exec ctx cant then we should error
 		if mutatesState && !exec.canMutateState {
-			return fmt.Errorf("%w: SQL statement mutates state, but the execution context is read-only: %s", ErrStatementMutatesState, raw)
+			return fmt.Errorf("%w: SQL statement mutates state, but the execution context is read-only: %s", engine.ErrCannotMutateState, raw)
 		}
 
 		return exec.query(raw, fn)
@@ -1311,7 +1340,7 @@ func (i *interpreterPlanner) VisitSQLStatement(p0 *parse.SQLStatement) any {
 func genAndExec(exec *executionContext, stmt parse.TopLevelStatement) error {
 	sql, _, err := pggenerate.GenerateSQL(stmt, exec.scope.namespace)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", engine.ErrPGGen, err)
 	}
 
 	return execute(exec.engineCtx.TxContext.Ctx, exec.db, sql)
@@ -1542,11 +1571,6 @@ func (i *interpreterPlanner) VisitUseExtensionStatement(p0 *parse.UseExtensionSt
 			return err
 		}
 
-		err = extNamespace.onDeploy(exec)
-		if err != nil {
-			return err
-		}
-
 		err = registerExtensionInitialization(exec.engineCtx.TxContext.Ctx, exec.db, p0.Alias, p0.ExtName, config)
 		if err != nil {
 			return err
@@ -1554,6 +1578,13 @@ func (i *interpreterPlanner) VisitUseExtensionStatement(p0 *parse.UseExtensionSt
 
 		exec.interpreter.namespaces[p0.Alias] = extNamespace
 		exec.interpreter.accessController.registerNamespace(p0.Alias)
+
+		err = extNamespace.onDeploy(exec)
+		if err != nil {
+			delete(exec.interpreter.namespaces, p0.Alias)
+			exec.interpreter.accessController.unregisterNamespace(p0.Alias)
+			return err
+		}
 
 		return nil
 	})
@@ -1679,7 +1710,7 @@ func (i *interpreterPlanner) VisitDropActionStatement(p0 *parse.DropActionStatem
 			return fmt.Errorf(`action "%s" does not exist`, p0.Name)
 		}
 		if executable.Type != executableTypeAction {
-			return fmt.Errorf(`%w: cannot drop executable "%s" of type %s`, ErrCannotDrop, p0.Name, executable.Type)
+			return fmt.Errorf(`cannot drop executable "%s" of type %s`, p0.Name, executable.Type)
 		}
 
 		delete(namespace.availableFunctions, p0.Name)
@@ -1693,8 +1724,8 @@ func (i *interpreterPlanner) VisitDropActionStatement(p0 *parse.DropActionStatem
 		// One is where the action originally overwrote a function. We should restore the function if it exists.
 		// The second is if the action overwrote a method on an extension namespace, which we need to restore.
 		// If it overwrote a method that overwrote a function, we should restore the method
-		if funcDef, ok := parse.Functions[p0.Name]; ok {
-			if scalarFunc, ok := funcDef.(*parse.ScalarFunctionDefinition); ok {
+		if funcDef, ok := engine.Functions[p0.Name]; ok {
+			if scalarFunc, ok := funcDef.(*engine.ScalarFunctionDefinition); ok {
 				namespace.availableFunctions[p0.Name] = funcDefToExecutable(p0.Name, scalarFunc)
 			}
 		}
@@ -1723,7 +1754,7 @@ func (i *interpreterPlanner) VisitCreateNamespaceStatement(p0 *parse.CreateNames
 				return nil
 			}
 
-			return fmt.Errorf(`%w: "%s"`, ErrNamespaceExists, p0.Namespace)
+			return fmt.Errorf(`%w: "%s"`, engine.ErrNamespaceExists, p0.Namespace)
 		}
 
 		if _, err := createNamespace(exec.engineCtx.TxContext.Ctx, exec.db, p0.Namespace, namespaceTypeUser); err != nil {
@@ -1754,14 +1785,14 @@ func (i *interpreterPlanner) VisitDropNamespaceStatement(p0 *parse.DropNamespace
 				return nil
 			}
 
-			return fmt.Errorf(`%w: namespace "%s" does not exist`, ErrNamespaceNotFound, p0.Namespace)
+			return fmt.Errorf(`%w: namespace "%s" does not exist`, engine.ErrNamespaceNotFound, p0.Namespace)
 		}
 
 		if p0.Namespace == DefaultNamespace || p0.Namespace == infoNamespace {
-			return fmt.Errorf(`%w: "%s"`, ErrCannotDropBuiltinNamespace, p0.Namespace)
+			return fmt.Errorf(`%w: "%s"`, engine.ErrCannotDropBuiltinNamespace, p0.Namespace)
 		}
 		if ns.namespaceType == namespaceTypeExtension {
-			return fmt.Errorf(`%w: cannot drop extension namespace "%s" using DROP NAMESPACE. use UNUSE instead`, ErrCannotMutateExtension, p0.Namespace)
+			return fmt.Errorf(`%w: cannot drop extension namespace "%s" using DROP NAMESPACE. use UNUSE instead`, engine.ErrCannotMutateExtension, p0.Namespace)
 		}
 
 		if err := dropNamespace(exec.engineCtx.TxContext.Ctx, exec.db, p0.Namespace); err != nil {

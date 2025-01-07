@@ -421,7 +421,7 @@ LEFT JOIN kwild_engine.return_fields r
     ON a.id = r.action_id
 GROUP BY a.namespace, a.name, a.modifiers, a.raw_statement, a.returns_table
 ORDER BY a.name,
-    1, 2, 3, 4, 5  --TODO: do we need to order the aggregates?
+    1, 2, 3, 4, 5
 ;
 
 -- roles is a public view that provides a list of all roles in the database

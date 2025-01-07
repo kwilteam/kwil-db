@@ -1558,25 +1558,19 @@ func (e *LoopTermSQL) Accept(v Visitor) interface{} {
 	return v.VisitLoopTermSQL(e)
 }
 
-type LoopTermFunctionCall struct {
+// LoopTermExpression is a loop term that loops over an expression.
+type LoopTermExpression struct {
 	baseLoopTerm
-	// Call is the function call to execute.
-	Call *ExpressionFunctionCall
+	// If Array is true, then the ARRAY keyword was used, specifying that
+	// the function is expected to return a single array, and we should loop
+	// through each element in the array.
+	Array bool
+	// Expression is the expression to loop through.
+	Expression Expression
 }
 
-type LoopTermVariable struct {
-	baseLoopTerm
-	// Variable is the variable to loop through.
-	// It must be an array.
-	Variable *ExpressionVariable
-}
-
-func (e *LoopTermFunctionCall) Accept(v Visitor) interface{} {
-	return v.VisitLoopTermFunctionCall(e)
-}
-
-func (e *LoopTermVariable) Accept(v Visitor) interface{} {
-	return v.VisitLoopTermVariable(e)
+func (e *LoopTermExpression) Accept(v Visitor) interface{} {
+	return v.VisitLoopTermExpression(e)
 }
 
 type ActionStmtIf struct {
@@ -1716,8 +1710,7 @@ type ActionVisitor interface {
 	VisitActionStmtForLoop(*ActionStmtForLoop) any
 	VisitLoopTermRange(*LoopTermRange) any
 	VisitLoopTermSQL(*LoopTermSQL) any
-	VisitLoopTermFunctionCall(*LoopTermFunctionCall) any
-	VisitLoopTermVariable(*LoopTermVariable) any
+	VisitLoopTermExpression(*LoopTermExpression) any
 	VisitActionStmtIf(*ActionStmtIf) any
 	VisitIfThen(*IfThen) any
 	VisitActionStmtSQL(*ActionStmtSQL) any
@@ -1794,10 +1787,6 @@ func (s *UnimplementedActionVisitor) VisitLoopTermRange(p0 *LoopTermRange) any {
 }
 
 func (s *UnimplementedActionVisitor) VisitLoopTermSQL(p0 *LoopTermSQL) any {
-	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
-}
-
-func (s *UnimplementedActionVisitor) VisitLoopTermVariable(p0 *LoopTermVariable) any {
 	panic(fmt.Sprintf("api misuse: cannot visit %T in constrained visitor", s))
 }
 
