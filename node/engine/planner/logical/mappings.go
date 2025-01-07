@@ -27,6 +27,7 @@ var arithmeticOps = map[parse.ArithmeticOperator]ArithmeticOperator{
 	parse.ArithmeticOperatorMultiply: Multiply,
 	parse.ArithmeticOperatorDivide:   Divide,
 	parse.ArithmeticOperatorModulo:   Modulo,
+	parse.ArithmeticOperatorConcat:   Concat,
 }
 
 var unaryOps = map[parse.UnaryOperator]UnaryOperator{

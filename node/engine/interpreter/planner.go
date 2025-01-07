@@ -440,7 +440,6 @@ func (i *interpreterPlanner) VisitLoopTermExpression(p0 *parse.LoopTermExpressio
 		// The first is that the expression is calling a table-returning function.
 		// The second is that the expression returns an array.
 		// In the second case, we should verify that p0.Array is true.
-		// TODO: we should test all of this
 
 		// check if the expression is a function call
 		functionCall, ok := p0.Expression.(*parse.ExpressionFunctionCall)

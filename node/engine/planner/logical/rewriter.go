@@ -229,13 +229,6 @@ func (r *rewriteVisitor) VisitScalarFunctionCall(p0 *ScalarFunctionCall) any {
 	)
 }
 
-func (r *rewriteVisitor) VisitProcedureCall(p0 *ProcedureCall) any {
-	return r.expr(p0,
-		func() { r.slice(p0.ContextArgs) },
-		func() { r.slice(p0.Args) },
-	)
-}
-
 func (r *rewriteVisitor) VisitArithmeticOp(p0 *ArithmeticOp) any {
 	return r.expr(p0,
 		func() { p0.Left = p0.Left.Accept(r).(Expression) },
