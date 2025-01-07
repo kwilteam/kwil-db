@@ -293,7 +293,7 @@ func (db *DB) Close() error {
 
 	db.tx = nil
 	db.pool.Close()
-	panic("Closed the DB with an active transaction!")
+	panic("Closed the DB with an active transaction, probably forgot to rollback the tx somewhere!")
 }
 
 // Done allows higher level systems to monitor the state of the DB backend
@@ -526,6 +526,11 @@ func (db *DB) beginWriterTx(ctx context.Context, sequenced bool) (pgx.Tx, error)
 	// from it includes the expected seq value.
 	seq, err := incrementSeq(ctx, tx)
 	if err != nil {
+		defer writer.Release()
+		if err2 := db.tx.Rollback(context.Background()); err2 != nil {
+			return nil, fmt.Errorf("failed to rollback: %w", errors.Join(err, err2))
+		}
+		db.tx = nil
 		return nil, err
 	}
 	logger.Debugf("updated seq to %d", seq)

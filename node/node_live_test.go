@@ -61,7 +61,6 @@ func TestSingleNodeMocknet(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		wg.Wait()
-		cleanupDB(db1)
 	})
 
 	privKeys, _ := newGenesis(t, [][]byte{pk1})
@@ -193,8 +192,6 @@ func TestDualNodeMocknet(t *testing.T) {
 	t.Cleanup(func() {
 		cancel()
 		wg.Wait()
-		cleanupDB(db1)
-		cleanupDB(db2)
 	})
 
 	privKeys, _ := newGenesis(t, [][]byte{pk1, pk2})
@@ -365,7 +362,7 @@ func initDB(t *testing.T, port, dbName string) *pg.DB {
 		Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
 		DBName: dbName,
 	}
-	db, err := pgtest.NewTestDBWithCfg(t, cfg)
+	db, err := pgtest.NewTestDBWithCfg(t, cfg, cleanupDB)
 	require.NoError(t, err)
 	ctx := context.Background()
 
