@@ -176,3 +176,16 @@ func UnmarshalPrivateKey(data []byte, keyType KeyType) (PrivateKey, error) {
 		return nil, fmt.Errorf("invalid key type %v", keyType)
 	}
 }
+
+func GeneratePrivateKey(keyType KeyType) (PrivateKey, error) {
+	switch keyType {
+	case KeyTypeSecp256k1:
+		priv, _, err := GenerateSecp256k1Key(nil)
+		return priv, err
+	case KeyTypeEd25519:
+		priv, _, err := GenerateEd25519Key(nil)
+		return priv, err
+	default:
+		return nil, fmt.Errorf("unsupported key type: %s", keyType)
+	}
+}

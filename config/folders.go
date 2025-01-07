@@ -2,6 +2,12 @@ package config
 
 import "path/filepath"
 
+const (
+	NodeKeyFileName = "nodekey.json"
+)
+
+// TODO: cleanup the below consts and funcs
+
 // Top-level directory structure for the Server's systems. These are not user
 // configurable.
 const (

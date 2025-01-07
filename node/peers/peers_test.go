@@ -67,6 +67,17 @@ func TestPersistAndLoadPeers(t *testing.T) {
 		require.Empty(t, loadedPeers)
 	})
 
+	t.Run("persist empty peer list file", func(t *testing.T) {
+		emptyFile := filepath.Join(tempDir, "empty_peers_file.json")
+		fid, err := os.Create(emptyFile)
+		require.NoError(t, err)
+		fid.Close()
+
+		loadedPeers, err := loadPeers(emptyFile)
+		require.NoError(t, err)
+		require.Empty(t, loadedPeers)
+	})
+
 	t.Run("load from non-existent file", func(t *testing.T) {
 		nonExistentFile := filepath.Join(tempDir, "non_existent.json")
 		_, err := loadPeers(nonExistentFile)

@@ -1,22 +1,28 @@
 package peers
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	mrand "math/rand/v2"
 	"os"
+	"slices"
 	"sync"
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/core/utils/random"
 
 	"github.com/libp2p/go-libp2p/core/discovery"
+	"github.com/libp2p/go-libp2p/core/event"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
+	"github.com/libp2p/go-libp2p/p2p/protocol/identify"
 	"github.com/multiformats/go-multiaddr"
 )
 
@@ -25,6 +31,22 @@ const (
 	baseReconnectDelay = 2 * time.Second
 	disconnectLimit    = 7 * 24 * time.Hour // 1 week
 )
+
+// PeerIDStringer provides lazy lazy conversion of a libp2p peer ID into a Kwil
+// node ID, which is a public key with a type suffix.
+type PeerIDStringer string
+
+func (p PeerIDStringer) String() string {
+	pid, err := peer.Decode(string(p))
+	if err != nil {
+		pid = peer.ID(p) // assume it was the multihash bytes, not peer.ID.String() output
+	}
+	nodeID, err := nodeIDFromPeerID(pid)
+	if err == nil {
+		return nodeID
+	}
+	return string(p)
+}
 
 type Connector interface {
 	Connect(ctx context.Context, pi peer.AddrInfo) error
@@ -47,18 +69,21 @@ type PeerMan struct {
 	c   Connector
 	ps  peerstore.Peerstore
 
+	idService identify.IDService
+
 	// the connection gater enforces an effective ephemeral whitelist.
 	cg                  *WhitelistGater
 	wlMtx               sync.RWMutex
 	persistentWhitelist map[peer.ID]bool // whitelist to persist
 
-	requestPeers RemotePeersFn
-
 	requiredProtocols []protocol.ID
 
+	chainID           string
 	pex               bool
 	addrBook          string
 	targetConnections int
+	seedMode          bool
+	crawlPeerInfos    map[peer.ID]crawlPeerInfo
 
 	done  chan struct{}
 	close func()
@@ -70,28 +95,62 @@ type PeerMan struct {
 	noReconnect map[peer.ID]bool
 }
 
-func NewPeerMan(pex bool, addrBook string, logger log.Logger, cg *WhitelistGater, h host.Host,
-	requestPeers RemotePeersFn, requiredProtocols []protocol.ID) (*PeerMan, error) {
+// In seed mode:
+//	1. hang up after a short period (TTL set differently after discover?)
+//	2. hang up on completion of incoming discovery stream
+//	3. maybe have a crawl goroutine instead of maintainMinPeers
+
+type Config struct {
+	PEX      bool
+	AddrBook string
+	Host     host.Host
+
+	SeedMode          bool
+	TargetConnections int
+	ChainID           string
+
+	// Optionals
+	Logger            log.Logger
+	ConnGater         *WhitelistGater
+	RequiredProtocols []protocol.ID
+}
+
+type idService interface {
+	IDService() identify.IDService
+}
+
+func NewPeerMan(cfg *Config) (*PeerMan, error) {
+	logger := cfg.Logger
 	if logger == nil {
 		logger = log.DiscardLogger
 	}
 	done := make(chan struct{})
+	host := cfg.Host
+
+	hi, ok := host.(idService)
+	if !ok {
+		return nil, errors.New("no IDService available.")
+	}
+
 	pm := &PeerMan{
-		h:                   h, // tmp: tooo much, should become minimal interface, maybe set after construction
-		c:                   h,
-		ps:                  h.Peerstore(),
-		cg:                  cg,
+		h:                   host, // tmp: tooo much, should become minimal interface, maybe set after construction
+		c:                   host,
+		ps:                  host.Peerstore(),
+		cg:                  cfg.ConnGater,
+		idService:           hi.IDService(),
 		persistentWhitelist: make(map[peer.ID]bool),
 		log:                 logger,
 		done:                done,
 		close: sync.OnceFunc(func() {
 			close(done)
 		}),
-		requiredProtocols: requiredProtocols,
-		pex:               pex,
-		requestPeers:      requestPeers,
-		addrBook:          addrBook,
-		targetConnections: 20, // TODO: configurable max(1, targetConnections)
+		requiredProtocols: cfg.RequiredProtocols,
+		chainID:           cfg.ChainID,
+		pex:               cfg.PEX,
+		seedMode:          cfg.SeedMode,
+		addrBook:          cfg.AddrBook,
+		crawlPeerInfos:    make(map[peer.ID]crawlPeerInfo),
+		targetConnections: cfg.TargetConnections,
 		disconnects:       make(map[peer.ID]time.Time),
 		noReconnect:       make(map[peer.ID]bool),
 	}
@@ -102,30 +161,82 @@ func NewPeerMan(pex bool, addrBook string, logger log.Logger, cg *WhitelistGater
 	}
 	logger.Infof("Loaded address book with %d peers", numPeers)
 
+	if cfg.PEX || cfg.SeedMode {
+		host.SetStreamHandler(ProtocolIDDiscover, pm.DiscoveryStreamHandler)
+	} else {
+		host.SetStreamHandler(ProtocolIDDiscover, func(s network.Stream) {
+			s.Close()
+		})
+	}
+
+	host.SetStreamHandler(ProtocolIDPrefixChainID+protocol.ID(cfg.ChainID), func(s network.Stream) {
+		s.Close() // protocol handshake is all we need
+	})
+
+	if cfg.SeedMode {
+		host.SetStreamHandler(ProtocolIDCrawler, func(s network.Stream) {
+			s.Close() // this protocol is just to signal capabilities
+		})
+	}
+
 	return pm, nil
 }
 
-var _ discovery.Discoverer = (*PeerMan)(nil) // FindPeers method
-
 func (pm *PeerMan) Start(ctx context.Context) error {
-	if pm.pex {
+	// listen for messages when peer identification (protocol listing) is completed
+	evtSub, err := pm.h.EventBus().Subscribe(&event.EvtPeerIdentificationCompleted{})
+	if err != nil {
+		return fmt.Errorf("event subscribe failed: %w", err)
+	}
+	pm.wg.Add(1)
+	go func() {
+		defer pm.wg.Done()
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case evt := <-evtSub.Out():
+				idComplete, ok := evt.(event.EvtPeerIdentificationCompleted)
+				if !ok {
+					pm.log.Infof("event %T", evt)
+					continue
+				}
+				if !slices.Contains(idComplete.Protocols, ProtocolIDPrefixChainID+protocol.ID(pm.chainID)) {
+					pm.log.Warn("Removing peer not on "+pm.chainID, "agent", idComplete.AgentVersion, "pver", idComplete.ProtocolVersion)
+					pm.removePeer(idComplete.Peer)
+				} else {
+					pm.log.Debug("Peer is on "+pm.chainID, "agent", idComplete.AgentVersion, "pver", idComplete.ProtocolVersion)
+				}
+			}
+		}
+	}()
+
+	if pm.seedMode {
 		pm.wg.Add(1)
 		go func() {
 			defer pm.wg.Done()
-			pm.startPex(ctx)
+			pm.crawl(ctx)
 		}()
+	} else {
+		pm.wg.Add(1)
+		go func() {
+			defer pm.wg.Done()
+			pm.maintainMinPeers(ctx)
+		}()
+
+		if pm.pex {
+			pm.wg.Add(1)
+			go func() {
+				defer pm.wg.Done()
+				pm.startPex(ctx)
+			}()
+		}
 	}
 
 	pm.wg.Add(1)
 	go func() {
 		defer pm.wg.Done()
 		pm.removeOldPeers()
-	}()
-
-	pm.wg.Add(1)
-	go func() {
-		defer pm.wg.Done()
-		pm.maintainMinPeers(ctx)
 	}()
 
 	<-ctx.Done()
@@ -176,9 +287,11 @@ func (pm *PeerMan) maintainMinPeers(ctx context.Context) {
 				}
 				err := pm.h.Connect(ctx, peer.AddrInfo{ID: pid})
 				if err != nil {
-					pm.log.Warnf("Failed to connect to peer %s: %v", pid, CompressDialError(err))
+					// NOTE: if this fails because of security protocol
+					// handshake failure (e.g. chain ID mismatch), we can't tell the precise reason.
+					pm.log.Warnf("Failed to connect to peer %s (%v): %v", peerIDStringer(pid), pid, CompressDialError(err))
 				} else {
-					pm.log.Infof("Connected to peer %s", pid)
+					pm.log.Infof("Connected to peer %s", peerIDStringer(pid))
 					added++
 				}
 			}
@@ -210,7 +323,7 @@ func (pm *PeerMan) startPex(ctx context.Context) {
 					if pm.addPeerAddrs(peer) {
 						// TODO: connection manager, with limits
 						if err = pm.c.Connect(ctx, peer); err != nil {
-							pm.log.Warnf("Failed to connect to %s: %v", peer.ID, CompressDialError(err))
+							pm.log.Warnf("Failed to connect to %s: %v", peerIDStringer(peer.ID), CompressDialError(err))
 						}
 					}
 					count++
@@ -235,6 +348,131 @@ func (pm *PeerMan) startPex(ctx context.Context) {
 	}
 }
 
+func filterPeer(peers []peer.ID, peerID peer.ID) []peer.ID {
+	return slices.DeleteFunc(peers, func(p peer.ID) bool {
+		return p == peerID
+	})
+}
+
+type crawlPeerInfo struct {
+	ID peer.ID `json:"id"`
+	// Addr *Addr `json:"addr"`
+	LastCrawl time.Time `json:"last_crawl"`
+}
+
+const recrawlThreshold = time.Minute
+
+func (pm *PeerMan) randomPeer() (peer.ID, bool) {
+	// Connected peers first.
+	peers := filterPeer(pm.h.Network().Peers(), pm.h.ID())
+	// Filter out peers that were crawled too recently.
+	peers = slices.DeleteFunc(peers, func(p peer.ID) bool {
+		return time.Since(pm.crawlPeerInfos[p].LastCrawl) < recrawlThreshold
+	})
+	if n := len(peers); n > 0 {
+		i := mrand.IntN(n)
+		return peers[i], true
+	}
+
+	// Address book peers if no eligible connected peers.
+	peers = filterPeer(pm.ps.PeersWithAddrs(), pm.h.ID())
+	peers = slices.DeleteFunc(peers, func(p peer.ID) bool {
+		return time.Since(pm.crawlPeerInfos[p].LastCrawl) < recrawlThreshold
+	})
+	if n := len(peers); n > 0 {
+		i := mrand.IntN(n)
+		return peers[i], true
+	}
+	return "", false
+
+}
+
+func (pm *PeerMan) crawl(ctx context.Context) {
+	for {
+		peer, found := pm.randomPeer()
+		if !found {
+			pm.log.Warn("no known peers available to crawl")
+		} else {
+			pm.crawlPeer(ctx, peer)
+		}
+
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(20 * time.Second):
+			continue
+		}
+	}
+}
+
+const maxCrawlSpread = 20
+
+var rng = random.New()
+
+func (pm *PeerMan) crawlPeer(ctx context.Context, peerID peer.ID) {
+	if peerID == pm.h.ID() {
+		return
+	}
+
+	pm.log.Infoln("Crawling network through peer", peerIDStringer(peerID))
+
+	// TODO: make this smarter by trying to connect first so we can only add the
+	// peer to the store if the connect succeeds. Presently it's just a low TTL.
+
+	ctxPR, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+	peersInfo, err := pm.RequestPeers(ctxPR, peerID)
+	if err != nil {
+		pm.log.Warnf("Failed to get peers from %v: %v", peerIDStringer(peerID), err)
+		return
+	}
+	defer pm.h.Network().ClosePeer(peerID) // we're done here
+
+	// Remember successful crawl so we don't bother them again too soon.
+	pm.crawlPeerInfos[peerID] = crawlPeerInfo{
+		ID:        peerID,
+		LastCrawl: time.Now(),
+	}
+
+	var newPeers []peer.AddrInfo
+
+	for _, peerInfo := range peersInfo {
+		if peerInfo.ID == pm.h.ID() {
+			continue
+		}
+		pai := peer.AddrInfo(peerInfo.AddrInfo)
+		if pm.addPeerAddrs(pai) {
+			// new peer address, added to address book with temp TTL
+			newPeers = append(newPeers, pai)
+		}
+	}
+
+	if len(newPeers) == 0 {
+		pm.log.Infof("No new peers found from %v", peerIDStringer(peerID))
+		return
+	}
+
+	if err := pm.savePeers(); err != nil {
+		pm.log.Warnf("Failed to write address book: %v", err)
+	}
+
+	rng.Shuffle(len(newPeers), func(i, j int) {
+		newPeers[i], newPeers[j] = newPeers[j], newPeers[i]
+	})
+
+	for i, newPeer := range newPeers[:min(len(newPeers), maxCrawlSpread)] {
+		// go request their peers
+		pm.wg.Add(1)
+		go func() {
+			defer pm.wg.Done()
+			time.Sleep(time.Duration(i) * 200 * time.Millisecond) // slight staggering
+			pm.crawlPeer(ctx, newPeer.ID)                         // outer context
+		}()
+	}
+}
+
+var _ discovery.Discoverer = (*PeerMan)(nil) // FindPeers method, namespace ignored
+
 func (pm *PeerMan) FindPeers(ctx context.Context, ns string, opts ...discovery.Option) (<-chan peer.AddrInfo, error) {
 	peerChan := make(chan peer.AddrInfo)
 
@@ -250,16 +488,19 @@ func (pm *PeerMan) FindPeers(ctx context.Context, ns string, opts ...discovery.O
 	for _, peerID := range peers {
 		go func() {
 			defer wg.Done()
+			if peerID == pm.h.ID() {
+				return
+			}
 			ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 			defer cancel()
-			peers, err := pm.requestPeers(ctx, peerID)
+			peers, err := pm.RequestPeers(ctx, peerID)
 			if err != nil {
-				pm.log.Warnf("Failed to get peers from %v: %v", peerID, err)
+				pm.log.Warnf("Failed to get peers from %v: %v", peerIDStringer(peerID), err)
 				return
 			}
 
 			for _, p := range peers {
-				peerChan <- p
+				peerChan <- peer.AddrInfo(p.AddrInfo)
 			}
 		}()
 	}
@@ -281,7 +522,7 @@ func (pm *PeerMan) ConnectedPeers() []PeerInfo {
 		}
 		peerInfo, err := pm.peerInfo(peerID)
 		if err != nil {
-			pm.log.Warnf("peerInfo for %v: %v", peerID, err)
+			pm.log.Warnf("(ConnectedPeers) peerInfo for %v: %v", peerID, err)
 			continue
 		}
 
@@ -312,7 +553,7 @@ func (pm *PeerMan) KnownPeers() (all, connected, disconnected []PeerInfo) {
 		}
 		peerInfo, err := pm.peerInfo(peerID)
 		if err != nil {
-			pm.log.Warnf("peerInfo for %v: %v", peerID, err)
+			pm.log.Warnf("(other peers) peerInfo for %v: %v", peerID, err)
 			continue
 		}
 
@@ -324,13 +565,22 @@ func (pm *PeerMan) KnownPeers() (all, connected, disconnected []PeerInfo) {
 }
 
 func CheckProtocolSupport(_ context.Context, ps peerstore.Peerstore, peerID peer.ID, protoIDs ...protocol.ID) (bool, error) {
-	// all, err := ps.GetProtocols(peerID)
-	// fmt.Println(all, err)
-	supported, err := ps.SupportsProtocols(peerID, protoIDs...)
+	// supported, err := ps.SupportsProtocols(peerID, protoIDs...)
+	// if err != nil { return false, err }
+	// return len(protoIDs) == len(supported), nil
+
+	supportedProtos, err := ps.GetProtocols(peerID)
 	if err != nil {
-		return false, fmt.Errorf("Failed to check protocols for peer %v: %w", peerID, err)
+		return false, err
 	}
-	return len(protoIDs) == len(supported), nil
+
+	for _, protoID := range protoIDs {
+		if !slices.Contains(supportedProtos, protoID) {
+			return false, nil
+		}
+	}
+
+	return true, nil
 }
 
 func RequirePeerProtos(ctx context.Context, ps peerstore.Peerstore, peer peer.ID, protoIDs ...protocol.ID) error {
@@ -369,25 +619,26 @@ func (pm *PeerMan) peerInfo(peerID peer.ID) (*PeerInfo, error) {
 func (pm *PeerMan) PrintKnownPeers() {
 	_, connected, disconnected := pm.KnownPeers()
 	for _, p := range connected {
-		pm.log.Info("Known peer", "id", p.ID.String(), "connected", true)
+		pm.log.Info("Known peer", "id", p.ID.String(), "node", peerIDStringer(p.ID), "connected", true)
 	}
 	for _, p := range disconnected {
-		pm.log.Info("Known peer", "id", p.ID.String(), "connected", false)
+		pm.log.Info("Known peer", "id", p.ID.String(), "node", peerIDStringer(p.ID), "connected", false)
 	}
 }
 
 // savePeers writes the address book file.
 func (pm *PeerMan) savePeers() error {
 	peerList, _, _ := pm.KnownPeers()
-	pm.log.Infof("saving %d peers to address book", len(peerList))
+	pm.log.Debugf("Saving %d peers to address book", len(peerList))
 
-	// set whitelist flag for persistence
+	// set whitelisted flag for persistence
 	pm.wlMtx.RLock()
 	persistentPeerList := make([]PersistentPeerInfo, len(peerList))
 	for i, peerInfo := range peerList {
 		pk, _ := pubKeyFromPeerID(peerInfo.ID)
 		if pk == nil {
 			pm.log.Errorf("Invalid peer ID %v", peerInfo.ID)
+			pm.removePeer(peerInfo.ID)
 			continue
 		}
 		nodeID := NodeIDFromPubKey(pk)
@@ -397,11 +648,24 @@ func (pm *PeerMan) savePeers() error {
 			Protos:      peerInfo.Protos,
 			Whitelisted: pm.persistentWhitelist[peerInfo.ID],
 		}
-		pm.log.Infoln("saving", peerInfo.ID, nodeID)
 	}
 	pm.wlMtx.RUnlock()
 
 	return persistPeers(persistentPeerList, pm.addrBook)
+}
+
+func (pm *PeerMan) removePeer(pid peer.ID) {
+	pm.ps.RemovePeer(pid)
+	pm.ps.ClearAddrs(pid)
+	for _, conn := range pm.h.Network().ConnsToPeer(pid) {
+		if conn.Stat().Extra != nil {
+			conn.Stat().Extra[kicked] = struct{}{}
+		}
+		conn.Close()
+	}
+	pm.mtx.Lock()
+	pm.noReconnect[pid] = true
+	pm.mtx.Unlock()
 }
 
 // persistPeers saves known peers to a JSON file
@@ -422,6 +686,11 @@ func loadPeers(filePath string) ([]PersistentPeerInfo, error) {
 	data, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read peerstore file: %w", err)
+	}
+
+	data = bytes.TrimSpace(data)
+	if len(data) == 0 {
+		return nil, nil
 	}
 
 	var peerList []PersistentPeerInfo
@@ -448,9 +717,9 @@ func (pm *PeerMan) loadAddrBook() (int, error) {
 		if pm.cg != nil { // private mode
 			if pInfo.Whitelisted {
 				pm.cg.Allow(peerID)
-				pm.mtx.Lock()
+				pm.wlMtx.Lock()
 				pm.persistentWhitelist[peerID] = true
-				pm.mtx.Unlock()
+				pm.wlMtx.Unlock()
 			}
 		}
 
@@ -473,6 +742,12 @@ func (pm *PeerMan) loadAddrBook() (int, error) {
 // addPeer adds a peer to the peerstore and returns if a new address was added
 // for the peer. This does not check peer whitelist in private mode.
 func (pm *PeerMan) addPeer(pInfo PeerInfo, ttl time.Duration) bool {
+	nodeID, err := nodeIDFromPeerID(pInfo.ID)
+	if err != nil {
+		pm.log.Errorln("Unsupported peer ID %v", pInfo.ID)
+		return false
+	}
+
 	var addrCount int
 
 	knownAddrs := pm.ps.Addrs(pInfo.ID)
@@ -481,7 +756,7 @@ func (pm *PeerMan) addPeer(pInfo PeerInfo, ttl time.Duration) bool {
 			continue // address already known
 		}
 		pm.ps.AddAddr(pInfo.ID, addr, ttl)
-		pm.log.Infof("Added new peer address to store: %v @ %v", pInfo.ID, addr)
+		pm.log.Infof("Added new peer address to store: %v (%v) @ %v", nodeID, pInfo.ID, addr)
 		addrCount++
 	}
 	for _, proto := range pInfo.Protos {
@@ -505,9 +780,9 @@ func (pm *PeerMan) Allow(p peer.ID) {
 }
 
 func (pm *PeerMan) AllowPersistent(p peer.ID) {
-	pm.mtx.Lock()
+	pm.wlMtx.Lock()
 	pm.persistentWhitelist[p] = true
-	pm.mtx.Unlock()
+	pm.wlMtx.Unlock()
 	if err := pm.savePeers(); err != nil {
 		pm.log.Errorf("failed to save address book: %v", err)
 	}
@@ -515,9 +790,9 @@ func (pm *PeerMan) AllowPersistent(p peer.ID) {
 }
 
 func (pm *PeerMan) Disallow(p peer.ID) {
-	pm.mtx.Lock()
+	pm.wlMtx.Lock()
 	delete(pm.persistentWhitelist, p)
-	pm.mtx.Unlock()
+	pm.wlMtx.Unlock()
 	pm.cg.Disallow(p)
 }
 
@@ -531,8 +806,8 @@ func (pm *PeerMan) Allowed() []peer.ID {
 
 func (pm *PeerMan) AllowedPersistent() []peer.ID {
 	var peerList []peer.ID
-	pm.mtx.Lock()
-	defer pm.mtx.Unlock()
+	pm.wlMtx.Lock()
+	defer pm.wlMtx.Unlock()
 	for peerID := range pm.persistentWhitelist {
 		peerList = append(peerList, peerID)
 	}
@@ -555,53 +830,140 @@ func (pm *PeerMan) addPeerAddrs(p peer.AddrInfo) (added bool) {
 	)
 }
 
-// Connected is triggered when a peer connects
+type peerIDStringer peer.ID
+
+func (p peerIDStringer) String() string {
+	pid := peer.ID(p)
+	nodeID, err := nodeIDFromPeerID(pid)
+	if err == nil {
+		return nodeID
+	}
+	return pid.String()
+}
+
+// Connected is triggered when a peer is connected (inbound or outbound).
 func (pm *PeerMan) Connected(net network.Network, conn network.Conn) {
 	peerID := conn.RemotePeer()
 	addr := conn.RemoteMultiaddr()
-	pm.log.Infof("Connected to peer (%s) %s @ %v", conn.Stat().Direction, peerID, addr.String())
+	pm.log.Infof("Connected to peer (%s) %s @ %v", conn.Stat().Direction, peerIDStringer(peerID), addr)
 
-	// pm.ps.UpdateAddrs(peerID, ttlProvisional, ttlKnown)
-
-	go func() {
-		// Particularly for inbound, there seems to be a race condition with
-		// protocol negotiation after connect. We have to delay this check.
-		// https://github.com/libp2p/go-libp2p/issues/2643
-		select {
-		case <-pm.done:
-		case <-time.After(500 * time.Millisecond):
-		}
-		if conn.IsClosed() {
-			return
-		}
-		if err := RequirePeerProtos(context.TODO(), pm.ps, peerID, pm.requiredProtocols...); err != nil {
-			pm.log.Warnf("Peer %v does not support required protocols: %v", peerID, err)
-			// pm.mtx.Lock()
-			// pm.noReconnect[peerID] = true
-			// pm.mtx.Unlock()
-			// conn.Close()
-			return
-		}
-	}()
+	if _, err := pubKeyFromPeerID(peerID); err != nil {
+		pm.log.Warnf("Peer with unsupported peer ID connected (%v): %v", peerIDStringer(peerID), err)
+		pm.removePeer(peerID)
+		return
+	}
 
 	// Reset disconnect timestamp on successful connection
 	pm.mtx.Lock()
-	defer pm.mtx.Unlock()
 	delete(pm.disconnects, peerID)
+	pm.mtx.Unlock()
+
+	pm.wg.Add(1)
+	go func() {
+		defer pm.wg.Done()
+
+		// Particularly for inbound, there seems to be a race condition with
+		// protocol negotiation after connect. We have to delay this check.
+		// https://github.com/libp2p/go-libp2p/issues/2643
+		t0 := time.Now()
+		select {
+		case <-time.After(5 * time.Second):
+			pm.log.Warnf("Peer identify not complete after %v (%v)", time.Since(t0), peerIDStringer(peerID))
+		case <-pm.idService.IdentifyWait(conn):
+			pm.log.Infof("Identified peer %s in %v", peerIDStringer(peerID), time.Since(t0))
+		case <-pm.done:
+			return
+		}
+
+		if conn.IsClosed() {
+			return
+		}
+
+		supportedProtos, err := pm.ps.GetProtocols(peerID)
+		if err != nil {
+			conn.Close()
+			return
+		}
+
+		if !slices.ContainsFunc(supportedProtos, func(pid protocol.ID) bool {
+			return pid == ProtocolIDPrefixChainID+protocol.ID(pm.chainID)
+		}) {
+			pm.log.Warnf("Peer %v is not on chain %v", peerIDStringer(peerID), pm.chainID)
+			pm.removePeer(peerID)
+			return
+		}
+
+		if slices.Contains(supportedProtos, ProtocolIDCrawler) {
+			pm.log.Infof("Connected to crawler at %v", peerIDStringer(peerID))
+			pm.h.ConnManager().TagPeer(peerID, "crawler", -1) // can't do this with pm.ps.RemovePeer(peerID)
+			pm.ps.ClearAddrs(peerID)                          // don't advertise them to others, and don't reconnect on disconnect
+			// pm.ps.RemovePeer(peerID) // forget peer ID, and also remove metadata and keys
+
+			// allow time for PEX then close
+			// pm.breakableWait(5 * time.Second)
+			// pm.log.Info("hanging up on crawler")
+			// pm.removePeer(peerID)
+		} else { // normal host
+			for _, protoID := range pm.requiredProtocols {
+				if !slices.Contains(supportedProtos, protoID) {
+					pm.log.Warnf("Peer %v does not support required protocol: %v", peerIDStringer(peerID), err)
+					pm.h.ConnManager().TagPeer(peerID, "lame", -1) // prune first
+					pm.ps.ClearAddrs(peerID)                       // don't advertise them to others
+					break
+				}
+			}
+		}
+	}()
+
 }
+
+// breakableWait is for use in methods that do not have a context, such as those
+// of the Notifiee interface.
+func (pm *PeerMan) breakableWait(after time.Duration) (quit bool) { //nolint
+	select {
+	case <-pm.done:
+		return true
+	case <-time.After(after):
+		return false
+	}
+}
+
+const kicked = "kicked"
 
 // Disconnected is triggered when a peer disconnects
 func (pm *PeerMan) Disconnected(net network.Network, conn network.Conn) {
+	if _, wasKicked := conn.Stat().Extra[kicked]; wasKicked {
+		pm.log.Info("KICKED PEER")
+		return // do not initiate reconnect loop
+	}
+
 	peerID := conn.RemotePeer()
-	pm.log.Infof("Disconnected from peer %v", peerID)
+
+	// might handle it this way instead...
+	if meta := pm.h.ConnManager().GetTagInfo(peerID); meta != nil {
+		if _, isCrawler := meta.Tags["crawler"]; isCrawler {
+			pm.log.Infof("Disconnected from crawler %v", peerIDStringer(peerID))
+			pm.ps.ClearAddrs(peerID)
+			pm.ps.RemovePeer(peerID) // forget peer ID, and also remove metadata and keys
+			return
+		}
+	}
+	if len(pm.ps.Addrs(peerID)) == 0 { // we explicitly removed it
+		pm.ps.RemovePeer(peerID) // forget peer ID, and also remove metadata and keys
+		return
+	}
+
+	pm.log.Infof("Disconnected from peer %v", peerIDStringer(peerID))
 	// Store disconnection timestamp
 	pm.mtx.Lock()
 	defer pm.mtx.Unlock()
-	// if pm.noReconnect[peerID] {
-	// 	delete(pm.noReconnect, peerID)
-	// 	return
-	// }
+
 	pm.disconnects[peerID] = time.Now()
+
+	if pm.noReconnect[peerID] {
+		// pm.log.Info("KICKED PEER")
+		return
+	}
 
 	select {
 	case <-pm.done:
@@ -657,15 +1019,15 @@ func (pm *PeerMan) reconnectWithRetry(ctx context.Context, peerID peer.ID) {
 			delay = 1 * time.Minute // Cap delay at 1 minute
 		}
 
-		pm.log.Infof("Attempting reconnection to peer %s (attempt %d/%d)", peerID, attempt+1, maxRetries)
+		pm.log.Infof("Attempting reconnection to peer %s (attempt %d/%d)", peerIDStringer(peerID), attempt+1, maxRetries)
 		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
 		if err := pm.c.Connect(ctx, addrInfo); err != nil {
 			cancel()
 			err = CompressDialError(err)
-			pm.log.Infof("Failed to reconnect to peer %s (trying again in %v): %v", peerID, delay, err)
+			pm.log.Infof("Failed to reconnect to peer %s (trying again in %v): %v", peerIDStringer(peerID), delay, err)
 		} else {
 			cancel()
-			pm.log.Infof("Successfully reconnected to peer %s", peerID)
+			pm.log.Infof("Successfully reconnected to peer %s", peerIDStringer(peerID))
 			return
 		}
 
@@ -675,7 +1037,7 @@ func (pm *PeerMan) reconnectWithRetry(ctx context.Context, peerID peer.ID) {
 		case <-time.After(delay):
 		}
 	}
-	pm.log.Infof("Exceeded max retries for peer %s. Giving up.", peerID)
+	pm.log.Infof("Exceeded max retries for peer %s. Giving up.", peerIDStringer(peerID))
 }
 
 // Periodically remove peers disconnected for over a week
@@ -695,13 +1057,18 @@ func (pm *PeerMan) removeOldPeers() {
 			pm.mtx.Lock()
 			defer pm.mtx.Unlock()
 			for peerID, disconnectTime := range pm.disconnects {
+				pm.wlMtx.RLock()
 				if pm.persistentWhitelist[peerID] {
+					pm.wlMtx.RUnlock()
 					continue
 				}
+				pm.wlMtx.RUnlock()
 				if now.Sub(disconnectTime) > disconnectLimit {
+					// a seeder needs to periodically recheck though...
+
 					pm.ps.RemovePeer(peerID)
 					delete(pm.disconnects, peerID) // Remove from tracking map
-					pm.log.Infof("Removed peer %s last connected %v ago", peerID, time.Since(disconnectTime))
+					pm.log.Infof("Removed peer %s last connected %v ago", peerIDStringer(peerID), time.Since(disconnectTime))
 				}
 			}
 		}()

@@ -103,7 +103,15 @@ func convertPubKey(pubkey crypto.PublicKey) (p2pcrypto.PubKey, peer.ID, error) {
 
 // Convert from go-libp2p's peer.ID format to Kwil's node ID format.
 func NodeIDFromPeerID(peerID string) (string, error) {
-	pk, err := PubKeyFromPeerID(peerID)
+	pid, err := peer.Decode(peerID)
+	if err != nil {
+		return "", err
+	}
+	return nodeIDFromPeerID(pid)
+}
+
+func nodeIDFromPeerID(pid peer.ID) (string, error) {
+	pk, err := pubKeyFromPeerID(pid)
 	if err != nil { // peers should have IDENTITY peer IDs
 		return "", err
 	}

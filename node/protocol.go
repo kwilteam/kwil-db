@@ -13,6 +13,7 @@ import (
 
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/utils"
+	"github.com/kwilteam/kwil-db/node/peers"
 	"github.com/kwilteam/kwil-db/node/types"
 
 	"github.com/libp2p/go-libp2p/core/host"
@@ -21,7 +22,9 @@ import (
 )
 
 const (
-	ProtocolIDDiscover    protocol.ID = "/kwil/discovery/1.0.0"
+	ProtocolIDDiscover = peers.ProtocolIDDiscover
+	ProtocolIDCrawler  = peers.ProtocolIDCrawler
+
 	ProtocolIDTx          protocol.ID = "/kwil/tx/1.0.0"
 	ProtocolIDTxAnn       protocol.ID = "/kwil/txann/1.0.0"
 	ProtocolIDBlockHeight protocol.ID = "/kwil/blkheight/1.0.0"
@@ -43,7 +46,7 @@ func requestFrom(ctx context.Context, host host.Host, peer peer.ID, resID []byte
 	proto protocol.ID, readLimit int64) ([]byte, error) {
 	txStream, err := host.NewStream(ctx, peer, proto)
 	if err != nil {
-		return nil, err
+		return nil, peers.CompressDialError(err)
 	}
 	defer txStream.Close()
 
@@ -119,7 +122,7 @@ func (n *Node) advertiseToPeer(ctx context.Context, peerID peer.ID, proto protoc
 	ann contentAnn, contentWriteTimeout time.Duration) error {
 	s, err := n.host.NewStream(ctx, peerID, proto)
 	if err != nil {
-		return fmt.Errorf("failed to open stream to peer: %w", err)
+		return fmt.Errorf("failed to open stream to peer: %w", peers.CompressDialError(err))
 	}
 
 	s.SetWriteDeadline(time.Now().Add(annWriteTimeout))

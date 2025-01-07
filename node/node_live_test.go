@@ -313,6 +313,7 @@ func TestDualNodeMocknet(t *testing.T) {
 
 	log2 := log.New(log.WithName("NODE2"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
 	cfg2 := &Config{
+		ChainID:     cfg1.ChainID,
 		RootDir:     root2,
 		PrivKey:     privKeys[1],
 		Logger:      log2,

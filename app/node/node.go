@@ -120,8 +120,6 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config) (err error
 		}
 	}
 
-	logger.Info("Entering startup mode")
-
 	if err := genConfig.SanityChecks(); err != nil {
 		return fmt.Errorf("genesis configuration failed sanity checks: %w", err)
 	}
