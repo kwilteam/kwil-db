@@ -257,7 +257,6 @@ type Subquery struct {
 
 	// Correlated is the list of columns that are correlated
 	// to the outer query. If empty, the subquery is uncorrelated.
-	// TODO: we need to revisit this, because expressions in result sets can be correlated
 	Correlated []*Field
 }
 
@@ -1610,100 +1609,6 @@ func (f *ScalarFunctionCall) Equal(other Traversable) bool {
 	return true
 }
 
-// TODO: remove this since it wont be supported
-// ProcedureCall is a call to a procedure.
-// This can be a call to either a procedure in the same schema, or
-// to a foreign procedure.
-type ProcedureCall struct {
-	ProcedureName string
-	Foreign       bool
-	Args          []Expression
-	ContextArgs   []Expression
-	// returnType is the data type of the return value.
-	// It is set during the evaluation phase.
-	returnType *types.DataType
-}
-
-func (p *ProcedureCall) String() string {
-	var buf bytes.Buffer
-	buf.WriteString(p.ProcedureName)
-	if p.Foreign {
-		buf.WriteString("[")
-		buf.WriteString(p.ContextArgs[0].String())
-		buf.WriteString(", ")
-		buf.WriteString(p.ContextArgs[1].String())
-		buf.WriteString("]")
-	}
-	buf.WriteString("(")
-	for i, arg := range p.Args {
-		if i > 0 {
-			buf.WriteString(", ")
-		}
-		buf.WriteString(arg.String())
-	}
-	buf.WriteString(")")
-
-	return buf.String()
-}
-
-func (s *ProcedureCall) Accept(v Visitor) any {
-	return v.VisitProcedureCall(s)
-}
-func (p *ProcedureCall) Children() []Traversable {
-	var c []Traversable
-	for _, arg := range p.Args {
-		c = append(c, arg)
-	}
-
-	for _, arg := range p.ContextArgs {
-		c = append(c, arg)
-	}
-
-	return c
-}
-
-func (p *ProcedureCall) Plans() []Plan {
-	var c []Plan
-	for _, arg := range p.Args {
-		c = append(c, arg.Plans()...)
-	}
-	return c
-}
-
-func (p *ProcedureCall) Field() *Field {
-	return &Field{
-		Name: p.ProcedureName,
-		val:  p.returnType.Copy(),
-	}
-}
-
-func (p *ProcedureCall) Equal(other Traversable) bool {
-	o, ok := other.(*ProcedureCall)
-	if !ok {
-		return false
-	}
-
-	if p.ProcedureName != o.ProcedureName {
-		return false
-	}
-
-	if p.Foreign != o.Foreign {
-		return false
-	}
-
-	if len(p.Args) != len(o.Args) {
-		return false
-	}
-
-	for i, arg := range p.Args {
-		if !eq(arg, o.Args[i]) {
-			return false
-		}
-	}
-
-	return true
-}
-
 type ArithmeticOp struct {
 	Left  Expression
 	Right Expression
@@ -1718,6 +1623,7 @@ const (
 	Multiply
 	Divide
 	Modulo
+	Concat
 )
 
 func (a *ArithmeticOp) String() string {
@@ -1733,6 +1639,8 @@ func (a *ArithmeticOp) String() string {
 		op = "/"
 	case Modulo:
 		op = "%"
+	case Concat:
+		op = "||"
 	}
 
 	return fmt.Sprintf("%s %s %s", a.Left.String(), op, a.Right.String())
@@ -2796,14 +2704,6 @@ func (d *Delete) Equal(t Traversable) bool {
 	return eq(d.Child, o.Child)
 }
 
-// TODO: I dont love this insert. Everything else feels very relational, but this
-// feels like it is too much about the ast still.
-// The general complexity of both the AST visitor and the evaluation phase
-// makes me feel uneasy.
-// I really think it is the UPDATE conflict target that feels wrong to me, but
-// I am not sure what to do.
-// Will revisit tomorrow.
-
 // Insert is a node that plans an insert operation.
 type Insert struct {
 	baseTopLevel
@@ -3237,7 +3137,6 @@ type Visitor interface {
 	VisitColumnRef(*ColumnRef) any
 	VisitAggregateFunctionCall(*AggregateFunctionCall) any
 	VisitScalarFunctionCall(*ScalarFunctionCall) any
-	VisitProcedureCall(*ProcedureCall) any
 	VisitArithmeticOp(*ArithmeticOp) any
 	VisitComparisonOp(*ComparisonOp) any
 	VisitLogicalOp(*LogicalOp) any

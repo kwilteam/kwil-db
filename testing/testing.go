@@ -176,7 +176,23 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 					return err
 				}
 
-				err = interp.SetOwner(ctx, outerTx, tc.Owner)
+				err = interp.Execute(&common.EngineContext{
+					TxContext: &common.TxContext{
+						Ctx:    ctx,
+						Signer: deployer,
+						Caller: string(deployer),
+						TxID:   "txid",
+						BlockContext: &common.BlockContext{
+							Height: 0,
+						},
+					},
+					OverrideAuthz: true,
+				}, outerTx, "GRANT owner TO $user", map[string]any{
+					"user": tc.Owner,
+				}, func(r *common.Row) error {
+					// do nothing
+					return nil
+				})
 				if err != nil {
 					return err
 				}
@@ -196,14 +212,17 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 
 				// deploy schemas
 				for _, stmt := range seedStmts {
-					err = interp.Execute(&common.TxContext{
-						Ctx:    ctx,
-						Signer: deployer,
-						Caller: string(deployer),
-						TxID:   platform.Txid(),
-						BlockContext: &common.BlockContext{
-							Height: 0,
+					err = interp.Execute(&common.EngineContext{
+						TxContext: &common.TxContext{
+							Ctx:    ctx,
+							Signer: deployer,
+							Caller: string(deployer),
+							TxID:   platform.Txid(),
+							BlockContext: &common.BlockContext{
+								Height: 0,
+							},
 						},
+						OverrideAuthz: true,
 					}, tx2, stmt, nil, func(r *common.Row) error {
 						// do nothing
 						return nil
@@ -282,18 +301,21 @@ func (e *TestCase) runExecution(ctx context.Context, platform *Platform) error {
 	platform.Logger.Logf(`executing action/procedure "%s" against namespace "%s"`, e.Action, e.Namespace)
 
 	var results [][]any
-	_, err := platform.Engine.Call(&common.TxContext{
-		Ctx:    ctx,
-		Signer: []byte(caller),
-		Caller: caller,
-		TxID:   platform.Txid(),
-		BlockContext: &common.BlockContext{
-			Height: e.Height,
-			ChainContext: &common.ChainContext{
-				MigrationParams:   &common.MigrationContext{},
-				NetworkParameters: &common.NetworkParameters{},
+	_, err := platform.Engine.Call(&common.EngineContext{
+		TxContext: &common.TxContext{
+			Ctx:    ctx,
+			Signer: []byte(caller),
+			Caller: caller,
+			TxID:   platform.Txid(),
+			BlockContext: &common.BlockContext{
+				Height: e.Height,
+				ChainContext: &common.ChainContext{
+					MigrationParams:   &common.MigrationContext{},
+					NetworkParameters: &common.NetworkParameters{},
+				},
 			},
 		},
+		OverrideAuthz: true,
 	}, platform.DB, e.Namespace, e.Action, e.Args, func(r *common.Row) error {
 		results = append(results, r.Values)
 		return nil

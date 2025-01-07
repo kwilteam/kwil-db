@@ -1,4 +1,4 @@
-package parse
+package engine
 
 import (
 	"fmt"
@@ -16,7 +16,7 @@ var (
 				}
 
 				if !args[0].EqualsStrict(types.IntType) && args[0].Name != types.DecimalStr {
-					return nil, fmt.Errorf("expected argument to be int or decimal, got %s", args[0].String())
+					return nil, fmt.Errorf("%w: expected argument to be int or decimal, got %s", ErrType, args[0].String())
 				}
 
 				return args[0], nil
@@ -92,7 +92,7 @@ var (
 				return types.NullType, nil
 			},
 			PGFormatFunc: func(inputs []string) (string, error) {
-				return "", fmt.Errorf("notice cannot be used in SQL statements")
+				return "", fmt.Errorf("%w: notice cannot be used in SQL statements", ErrIllegalFunctionUsage)
 			},
 		},
 		"uuid_generate_v5": &ScalarFunctionDefinition{
@@ -160,7 +160,7 @@ var (
 				}
 
 				if !args[0].EqualsStrict(types.TextType) && !args[0].EqualsStrict(types.BlobType) {
-					return nil, fmt.Errorf("expected first argument to be text or blob, got %s", args[0].String())
+					return nil, fmt.Errorf("%w: expected first argument to be text or blob, got %s", ErrType, args[0].String())
 				}
 
 				if !args[1].EqualsStrict(types.TextType) {
@@ -200,15 +200,15 @@ var (
 				}
 
 				if !args[0].IsArray {
-					return nil, fmt.Errorf("expected first argument to be an array, got %s", args[0].String())
+					return nil, fmt.Errorf("%w: expected first argument to be an array, got %s", ErrType, args[0].String())
 				}
 
 				if args[1].IsArray {
-					return nil, fmt.Errorf("expected second argument to be a scalar, got %s", args[1].String())
+					return nil, fmt.Errorf("%w: expected second argument to be a scalar, got %s", ErrType, args[1].String())
 				}
 
 				if !strings.EqualFold(args[0].Name, args[1].Name) {
-					return nil, fmt.Errorf("append type must be equal to scalar array type: array type: %s append type: %s", args[0].Name, args[1].Name)
+					return nil, fmt.Errorf("%w: append type must be equal to scalar array type. array type: %s append type: %s", ErrType, args[0].Name, args[1].Name)
 				}
 
 				return args[0], nil
@@ -222,15 +222,15 @@ var (
 				}
 
 				if args[0].IsArray {
-					return nil, fmt.Errorf("expected first argument to be a scalar, got %s", args[0].String())
+					return nil, fmt.Errorf("%w: expected first argument to be a scalar, got %s", ErrType, args[0].String())
 				}
 
 				if !args[1].IsArray {
-					return nil, fmt.Errorf("expected second argument to be an array, got %s", args[1].String())
+					return nil, fmt.Errorf("%w: expected second argument to be an array, got %s", ErrType, args[1].String())
 				}
 
 				if !strings.EqualFold(args[0].Name, args[1].Name) {
-					return nil, fmt.Errorf("prepend type must be equal to scalar array type: array type: %s prepend type: %s", args[1].Name, args[0].Name)
+					return nil, fmt.Errorf("%w: prepend type must be equal to scalar array type. array type: %s prepend type: %s", ErrType, args[1].Name, args[0].Name)
 				}
 
 				return args[1], nil
@@ -244,15 +244,15 @@ var (
 				}
 
 				if !args[0].IsArray {
-					return nil, fmt.Errorf("expected first argument to be an array, got %s", args[0].String())
+					return nil, fmt.Errorf("%w: expected first argument to be an array, got %s", ErrType, args[0].String())
 				}
 
 				if !args[1].IsArray {
-					return nil, fmt.Errorf("expected second argument to be an array, got %s", args[1].String())
+					return nil, fmt.Errorf("%w: expected second argument to be an array, got %s", ErrType, args[1].String())
 				}
 
 				if !strings.EqualFold(args[0].Name, args[1].Name) {
-					return nil, fmt.Errorf("expected both arrays to be of the same scalar type, got %s and %s", args[0].Name, args[1].Name)
+					return nil, fmt.Errorf("%w: expected both arrays to be of the same scalar type, got %s and %s", ErrType, args[0].Name, args[1].Name)
 				}
 
 				return args[0], nil
@@ -266,7 +266,7 @@ var (
 				}
 
 				if !args[0].IsArray {
-					return nil, fmt.Errorf("expected argument to be an array, got %s", args[0].String())
+					return nil, fmt.Errorf("%w: expected argument to be an array, got %s", ErrType, args[0].String())
 				}
 
 				return types.IntType, nil
@@ -282,15 +282,15 @@ var (
 				}
 
 				if !args[0].IsArray {
-					return nil, fmt.Errorf("expected first argument to be an array, got %s", args[0].String())
+					return nil, fmt.Errorf("%w: expected first argument to be an array, got %s", ErrType, args[0].String())
 				}
 
 				if args[1].IsArray {
-					return nil, fmt.Errorf("expected second argument to be a scalar, got %s", args[1].String())
+					return nil, fmt.Errorf("%w: expected second argument to be a scalar, got %s", ErrType, args[1].String())
 				}
 
 				if !strings.EqualFold(args[0].Name, args[1].Name) {
-					return nil, fmt.Errorf("remove type must be equal to scalar array type: array type: %s remove type: %s", args[0].Name, args[1].Name)
+					return nil, fmt.Errorf("%w: remove type must be equal to scalar array type. array type: %s remove type: %s", ErrType, args[0].Name, args[1].Name)
 				}
 
 				return args[0], nil
@@ -651,7 +651,7 @@ var (
 				// all arguments must be the same type
 				for i, arg := range args {
 					if !firstType.EqualsStrict(arg) {
-						return nil, fmt.Errorf("all arguments must be the same type, but argument %d is %s and argument 1 is %s", i+1, arg.String(), firstType.String())
+						return nil, fmt.Errorf("%w: all arguments must be the same type, but argument %d is %s and argument 1 is %s", ErrType, i+1, arg.String(), firstType.String())
 					}
 				}
 
@@ -691,7 +691,7 @@ var (
 				}
 
 				if !args[0].IsNumeric() {
-					return nil, fmt.Errorf("expected argument to be numeric, got %s", args[0].String())
+					return nil, fmt.Errorf("%w: expected argument to be numeric, got %s", ErrType, args[0].String())
 				}
 
 				// we check if it is an unknown type before the switch,
@@ -731,7 +731,7 @@ var (
 				}
 
 				if !args[0].IsNumeric() && !args[0].EqualsStrict(types.TextType) {
-					return nil, fmt.Errorf("expected argument to be numeric or text, got %s", args[0].String())
+					return nil, fmt.Errorf("%w: expected argument to be numeric or text, got %s", ErrType, args[0].String())
 				}
 
 				return args[0], nil
@@ -752,7 +752,7 @@ var (
 				}
 
 				if !args[0].IsNumeric() && !args[0].EqualsStrict(types.TextType) {
-					return nil, fmt.Errorf("expected argument to be numeric or text, got %s", args[0].String())
+					return nil, fmt.Errorf("%w: expected argument to be numeric or text, got %s", ErrType, args[0].String())
 				}
 
 				return args[0], nil
@@ -772,7 +772,7 @@ var (
 				}
 
 				if args[0].IsArray {
-					return nil, fmt.Errorf("expected argument to be a scalar, got %s", args[0].String())
+					return nil, fmt.Errorf("%w: expected argument to be a scalar, got %s", ErrType, args[0].String())
 				}
 
 				a2 := args[0].Copy()
@@ -796,7 +796,7 @@ var (
 				}
 
 				if !strings.EqualFold(args[0].Name, types.DecimalStr) {
-					return nil, fmt.Errorf("expected argument to be numeric, got %s", args[0].String())
+					return nil, fmt.Errorf("%w: expected argument to be numeric, got %s", ErrType, args[0].String())
 				}
 
 				return args[0], nil
@@ -825,7 +825,7 @@ var (
 
 				if len(args) == 3 {
 					if !args[2].EqualsStrict(args[0]) {
-						return nil, fmt.Errorf("expected default value to be the same type as the value expression: %s != %s", args[0].String(), args[2].String())
+						return nil, fmt.Errorf("%w: expected default value to be the same type as the value expression: %s != %s", ErrType, args[0].String(), args[2].String())
 					}
 				}
 
@@ -848,7 +848,7 @@ var (
 
 				if len(args) == 3 {
 					if !args[2].EqualsStrict(args[0]) {
-						return nil, fmt.Errorf("expected default value to be the same type as the value expression: %s != %s", args[0].String(), args[2].String())
+						return nil, fmt.Errorf("%w: expected default value to be the same type as the value expression: %s != %s", ErrType, args[0].String(), args[2].String())
 					}
 				}
 
@@ -1000,5 +1000,5 @@ func wrapErrArgumentNumber(expected, got int) error {
 }
 
 func wrapErrArgumentType(expected, got *types.DataType) error {
-	return fmt.Errorf("expected %s, got %s", expected.String(), got.String())
+	return fmt.Errorf("%w: expected %s, got %s", ErrType, expected.String(), got.String())
 }

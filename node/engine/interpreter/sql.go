@@ -73,7 +73,7 @@ func storeAction(ctx context.Context, db sql.DB, namespace string, action *Actio
 		modStrs[i] = string(mod)
 	}
 
-	actionID, err := queryOneInt64(ctx, db, `INSERT INTO kwild_engine.actions (name, schema_name, raw_statement, modifiers, returns_table)
+	actionID, err := queryOneInt64(ctx, db, `INSERT INTO kwild_engine.actions (name, namespace, raw_statement, modifiers, returns_table)
 		VALUES ($1, $2, $3, $4, $5) RETURNING id`,
 		action.Name, namespace, action.RawStatement, modStrs, returnsTable)
 	if err != nil {
@@ -96,7 +96,7 @@ func storeAction(ctx context.Context, db sql.DB, namespace string, action *Actio
 
 	if action.Returns != nil {
 		for i, field := range action.Returns.Fields {
-			dt, err := field.Type.PGString()
+			dt, err := field.Type.PGScalar()
 			if err != nil {
 				return err
 			}
@@ -111,6 +111,11 @@ func storeAction(ctx context.Context, db sql.DB, namespace string, action *Actio
 	}
 
 	return nil
+}
+
+// deleteAction deletes an action from the database.
+func deleteAction(ctx context.Context, db sql.DB, namespace, actionName string) error {
+	return execute(ctx, db, `DELETE FROM kwild_engine.actions WHERE namespace = $1 AND name = $2`, namespace, actionName)
 }
 
 // listNamespaces lists all namespaces that are created.
@@ -175,50 +180,50 @@ func listTablesInNamespace(ctx context.Context, db sql.DB, namespace string) ([]
 	}
 	err := queryRowFunc(ctx, db, `
 	WITH columns AS (
-		SELECT c.schema_name, c.table_name,
-			array_agg(c.column_name ORDER BY c.ordinal_position) AS column_names,
+		SELECT c.namespace, c.table_name,
+			array_agg(c.name ORDER BY c.ordinal_position) AS column_names,
 			array_agg(c.data_type ORDER BY c.ordinal_position) AS data_types,
 			array_agg(c.is_nullable ORDER BY c.ordinal_position) AS is_nullables,
 			array_agg(c.is_primary_key ORDER BY c.ordinal_position) AS is_primary_keys
 		FROM info.columns c
-		GROUP BY c.schema_name, c.table_name
+		GROUP BY c.namespace, c.table_name
 	),
 	indexes AS (
-		SELECT i.schema_name, i.table_name,
-			array_agg(i.index_name ORDER BY i.index_name) AS index_names,
-			array_agg(i.is_pk ORDER BY i.index_name) AS is_pks,
-			array_agg(i.is_unique ORDER BY i.index_name) AS is_uniques,
-			array_agg(i.column_names ORDER BY i.index_name) AS column_names
+		SELECT i.namespace, i.table_name,
+			array_agg(i.name ORDER BY i.name) AS names,
+			array_agg(i.is_pk ORDER BY i.name) AS is_pks,
+			array_agg(i.is_unique ORDER BY i.name) AS is_uniques,
+			array_agg(i.column_names ORDER BY i.name) AS column_names
 		FROM info.indexes i
-		GROUP BY i.schema_name, i.table_name
+		GROUP BY i.namespace, i.table_name
 	), constraints AS (
-		SELECT c.schema_name, c.table_name,
+		SELECT c.namespace, c.table_name,
 			array_agg(c.constraint_name ORDER BY c.constraint_name) AS constraint_names,
 			array_agg(c.constraint_type ORDER BY c.constraint_name) AS constraint_types,
 			array_agg(c.columns ORDER BY c.constraint_name) AS columns
 		FROM info.constraints c
-		GROUP BY c.schema_name, c.table_name
+		GROUP BY c.namespace, c.table_name
 	), foreign_keys AS (
-		SELECT f.schema_name, f.table_name,
+		SELECT f.namespace, f.table_name,
 			array_agg(f.constraint_name ORDER BY f.constraint_name) AS constraint_names,
 			array_agg(f.columns ORDER BY f.constraint_name) AS columns,
 			array_agg(f.on_update ORDER BY f.constraint_name) AS on_updates,
 			array_agg(f.on_delete ORDER BY f.constraint_name) AS on_deletes
 		FROM info.foreign_keys f
-		GROUP BY f.schema_name, f.table_name
+		GROUP BY f.namespace, f.table_name
 	)
 	SELECT
-		t.schema, t.name,
+		t.namespace, t.name,
 		c.column_names, c.data_types, c.is_nullables, c.is_primary_keys,
-		i.index_names, i.is_pks, i.is_uniques, i.column_names,
+		i.names, i.is_pks, i.is_uniques, i.column_names,
 		co.constraint_names, co.constraint_types, co.columns,
 		f.constraint_names, f.columns, f.on_updates, f.on_deletes
 	FROM info.tables t
-	JOIN columns c ON t.name = c.table_name AND t.schema = c.schema_name
-	LEFT JOIN indexes i ON t.name = i.table_name AND t.schema = i.schema_name
-	LEFT JOIN constraints co ON t.name = co.table_name AND t.schema = co.schema_name
-	LEFT JOIN foreign_keys f ON t.name = f.table_name AND t.schema = f.schema_name
-	WHERE t.schema = $1`, scans,
+	JOIN columns c ON t.name = c.table_name AND t.namespace = c.namespace
+	LEFT JOIN indexes i ON t.name = i.table_name AND t.namespace = i.namespace
+	LEFT JOIN constraints co ON t.name = co.table_name AND t.namespace = co.namespace
+	LEFT JOIN foreign_keys f ON t.name = f.table_name AND t.namespace = f.namespace
+	WHERE t.namespace = $1`, scans,
 		func() error {
 			tbl := &engine.Table{
 				Name:        tblName,
@@ -313,11 +318,11 @@ func listActionsInNamespace(ctx context.Context, db sql.DB, namespace string) ([
 		&rawStmt,
 	}
 
-	err := queryRowFunc(ctx, db, `SELECT raw_statement FROM kwild_engine.actions WHERE schema_name = $1`, scans,
+	err := queryRowFunc(ctx, db, `SELECT raw_statement FROM info.actions WHERE namespace = $1`, scans,
 		func() error {
 			res, err := parse.Parse(rawStmt)
 			if err != nil {
-				return err
+				return fmt.Errorf("%w: %w", engine.ErrParse, err)
 			}
 
 			if len(res) != 1 {
@@ -362,6 +367,10 @@ func registerExtensionInitialization(ctx context.Context, db sql.DB, name, baseE
 		return err
 	}
 
+	if len(metadata) == 0 {
+		return nil
+	}
+
 	insertMetaStmt := `INSERT INTO kwild_engine.extension_initialization_parameters (extension_id, key, value, data_type) VALUES `
 	i := 2
 	rawVals := []any{extId}
@@ -404,7 +413,7 @@ func getExtensionInitializationMetadata(ctx context.Context, db sql.DB) ([]*stor
 	extMap := make(map[string]*storedExtension) // maps the alias to the extension, will be sorted later
 
 	var extName, alias string
-	var key, val, dt string
+	var key, val, dt *string
 	err := queryRowFunc(ctx, db, `
 	SELECT n.name AS alias, ie.base_extension AS ext_name, eip.key, eip.value, eip.data_type
 	FROM kwild_engine.initialized_extensions ie
@@ -422,17 +431,26 @@ func getExtensionInitializationMetadata(ctx context.Context, db sql.DB) ([]*stor
 				extMap[alias] = ext
 			}
 
-			datatype, err := types.ParseDataType(dt)
+			// if key, val, and dt are all nil, then there is no metadata
+			// If some are nil, it is an error
+			if key == nil && val == nil && dt == nil {
+				return nil
+			}
+			if key == nil || val == nil || dt == nil {
+				return errors.New("expected all or none extension metadata values to be nil. this is an internal bug")
+			}
+
+			datatype, err := types.ParseDataType(*dt)
 			if err != nil {
 				return err
 			}
 
-			v, err := parseValue(val, datatype)
+			v, err := parseValue(*val, datatype)
 			if err != nil {
 				return err
 			}
 
-			ext.Metadata[key] = v
+			ext.Metadata[*key] = v
 			return nil
 		})
 	if err != nil {

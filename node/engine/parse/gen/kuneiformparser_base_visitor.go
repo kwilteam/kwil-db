@@ -43,6 +43,10 @@ func (v *BaseKuneiformParserVisitor) VisitIdentifier(ctx *IdentifierContext) int
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseKuneiformParserVisitor) VisitAllowed_identifier(ctx *Allowed_identifierContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseKuneiformParserVisitor) VisitIdentifier_list(ctx *Identifier_listContext) interface{} {
 	return v.VisitChildren(ctx)
 }
@@ -171,19 +175,11 @@ func (v *BaseKuneiformParserVisitor) VisitRevoke_statement(ctx *Revoke_statement
 	return v.VisitChildren(ctx)
 }
 
-func (v *BaseKuneiformParserVisitor) VisitRole_name(ctx *Role_nameContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
 func (v *BaseKuneiformParserVisitor) VisitPrivilege_list(ctx *Privilege_listContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 
 func (v *BaseKuneiformParserVisitor) VisitPrivilege(ctx *PrivilegeContext) interface{} {
-	return v.VisitChildren(ctx)
-}
-
-func (v *BaseKuneiformParserVisitor) VisitTransfer_ownership_statement(ctx *Transfer_ownership_statementContext) interface{} {
 	return v.VisitChildren(ctx)
 }
 

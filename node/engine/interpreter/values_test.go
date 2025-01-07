@@ -5,6 +5,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
+	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -32,7 +33,7 @@ func Test_Arithmetic(t *testing.T) {
 			mul:    int64(50),
 			div:    int64(2),
 			mod:    int64(0),
-			concat: ErrArithmetic,
+			concat: engine.ErrArithmetic,
 		},
 		{
 			name:   "decimal",
@@ -43,51 +44,51 @@ func Test_Arithmetic(t *testing.T) {
 			mul:    mustDec("50.00"),
 			div:    mustDec("2.00"),
 			mod:    mustDec("0.00"),
-			concat: ErrArithmetic,
+			concat: engine.ErrArithmetic,
 		},
 		{
 			name:   "text",
 			a:      "hello",
 			b:      "world",
-			add:    ErrArithmetic,
-			sub:    ErrArithmetic,
-			mul:    ErrArithmetic,
-			div:    ErrArithmetic,
-			mod:    ErrArithmetic,
+			add:    engine.ErrArithmetic,
+			sub:    engine.ErrArithmetic,
+			mul:    engine.ErrArithmetic,
+			div:    engine.ErrArithmetic,
+			mod:    engine.ErrArithmetic,
 			concat: "helloworld",
 		},
 		{
 			name:   "uuid",
 			a:      mustUUID("550e8400-e29b-41d4-a716-446655440000"),
 			b:      mustUUID("550e8400-e29b-41d4-a716-446655440000"),
-			add:    ErrArithmetic,
-			sub:    ErrArithmetic,
-			mul:    ErrArithmetic,
-			div:    ErrArithmetic,
-			mod:    ErrArithmetic,
-			concat: ErrArithmetic,
+			add:    engine.ErrArithmetic,
+			sub:    engine.ErrArithmetic,
+			mul:    engine.ErrArithmetic,
+			div:    engine.ErrArithmetic,
+			mod:    engine.ErrArithmetic,
+			concat: engine.ErrArithmetic,
 		},
 		{
 			name:   "blob",
 			a:      []byte("hello"),
 			b:      []byte("world"),
-			add:    ErrArithmetic,
-			sub:    ErrArithmetic,
-			mul:    ErrArithmetic,
-			div:    ErrArithmetic,
-			mod:    ErrArithmetic,
+			add:    engine.ErrArithmetic,
+			sub:    engine.ErrArithmetic,
+			mul:    engine.ErrArithmetic,
+			div:    engine.ErrArithmetic,
+			mod:    engine.ErrArithmetic,
 			concat: []byte("helloworld"),
 		},
 		{
 			name:   "bool",
 			a:      true,
 			b:      false,
-			add:    ErrArithmetic,
-			sub:    ErrArithmetic,
-			mul:    ErrArithmetic,
-			div:    ErrArithmetic,
-			mod:    ErrArithmetic,
-			concat: ErrArithmetic,
+			add:    engine.ErrArithmetic,
+			sub:    engine.ErrArithmetic,
+			mul:    engine.ErrArithmetic,
+			div:    engine.ErrArithmetic,
+			mod:    engine.ErrArithmetic,
+			concat: engine.ErrArithmetic,
 		},
 	}
 
@@ -191,7 +192,7 @@ func Test_Comparison(t *testing.T) {
 			eq:           false,
 			gt:           true,
 			lt:           false,
-			is:           ErrComparison,
+			is:           engine.ErrComparison,
 			distinctFrom: true,
 		},
 		{
@@ -201,7 +202,7 @@ func Test_Comparison(t *testing.T) {
 			eq:           false,
 			gt:           true,
 			lt:           false,
-			is:           ErrComparison,
+			is:           engine.ErrComparison,
 			distinctFrom: true,
 		},
 		{
@@ -211,7 +212,7 @@ func Test_Comparison(t *testing.T) {
 			eq:           false,
 			gt:           false,
 			lt:           true,
-			is:           ErrComparison,
+			is:           engine.ErrComparison,
 			distinctFrom: true,
 		},
 		{
@@ -219,9 +220,9 @@ func Test_Comparison(t *testing.T) {
 			a:            mustUUID("550e8400-e29b-41d4-a716-446655440000"),
 			b:            mustUUID("550e8400-e29b-41d4-a716-446655440000"),
 			eq:           true,
-			gt:           ErrComparison,
-			lt:           ErrComparison,
-			is:           ErrComparison,
+			gt:           engine.ErrComparison,
+			lt:           engine.ErrComparison,
+			is:           engine.ErrComparison,
 			distinctFrom: false,
 		},
 		{
@@ -229,9 +230,9 @@ func Test_Comparison(t *testing.T) {
 			a:            []byte("hello"),
 			b:            []byte("world"),
 			eq:           false,
-			gt:           ErrComparison,
-			lt:           ErrComparison,
-			is:           ErrComparison,
+			gt:           engine.ErrComparison,
+			lt:           engine.ErrComparison,
+			is:           engine.ErrComparison,
 			distinctFrom: true,
 		},
 		{
@@ -270,9 +271,9 @@ func Test_Comparison(t *testing.T) {
 			a:            []int64{1, 2, 3},
 			b:            []int64{1, 2, 3},
 			eq:           true,
-			gt:           ErrComparison,
-			lt:           ErrComparison,
-			is:           ErrComparison,
+			gt:           engine.ErrComparison,
+			lt:           engine.ErrComparison,
+			is:           engine.ErrComparison,
 			distinctFrom: false,
 		},
 		{
@@ -280,9 +281,9 @@ func Test_Comparison(t *testing.T) {
 			a:            []string{"hello", "world"},
 			b:            []string{"hello", "world"},
 			eq:           true,
-			gt:           ErrComparison,
-			lt:           ErrComparison,
-			is:           ErrComparison,
+			gt:           engine.ErrComparison,
+			lt:           engine.ErrComparison,
+			is:           engine.ErrComparison,
 			distinctFrom: false,
 		},
 		{
@@ -290,9 +291,9 @@ func Test_Comparison(t *testing.T) {
 			a:            []*decimal.Decimal{mustDec("1.00"), mustDec("2.00"), mustDec("3.00")},
 			b:            []*decimal.Decimal{mustDec("1.00"), mustDec("2.00"), mustDec("3.00")},
 			eq:           true,
-			gt:           ErrComparison,
-			lt:           ErrComparison,
-			is:           ErrComparison,
+			gt:           engine.ErrComparison,
+			lt:           engine.ErrComparison,
+			is:           engine.ErrComparison,
 			distinctFrom: false,
 		},
 		{
@@ -300,9 +301,9 @@ func Test_Comparison(t *testing.T) {
 			a:            []string{"hello", "world"},
 			b:            []string{"world", "hello"},
 			eq:           false,
-			gt:           ErrComparison,
-			lt:           ErrComparison,
-			is:           ErrComparison,
+			gt:           engine.ErrComparison,
+			lt:           engine.ErrComparison,
+			is:           engine.ErrComparison,
 			distinctFrom: true,
 		},
 		{
@@ -310,9 +311,9 @@ func Test_Comparison(t *testing.T) {
 			a:            []*types.UUID{mustUUID("550e8400-e29b-41d4-a716-446655440000")},
 			b:            []*types.UUID{mustUUID("550e8400-e29b-41d4-a716-446655440000")},
 			eq:           true,
-			gt:           ErrComparison,
-			lt:           ErrComparison,
-			is:           ErrComparison,
+			gt:           engine.ErrComparison,
+			lt:           engine.ErrComparison,
+			is:           engine.ErrComparison,
 			distinctFrom: false,
 		},
 		{
@@ -320,9 +321,9 @@ func Test_Comparison(t *testing.T) {
 			a:            [][]byte{[]byte("hello"), []byte("world")},
 			b:            [][]byte{[]byte("hello"), []byte("world")},
 			eq:           true,
-			gt:           ErrComparison,
-			lt:           ErrComparison,
-			is:           ErrComparison,
+			gt:           engine.ErrComparison,
+			lt:           engine.ErrComparison,
+			is:           engine.ErrComparison,
 			distinctFrom: false,
 		},
 		{
@@ -330,9 +331,9 @@ func Test_Comparison(t *testing.T) {
 			a:            []bool{true, false},
 			b:            []bool{true, false},
 			eq:           true,
-			gt:           ErrComparison,
-			lt:           ErrComparison,
-			is:           ErrComparison,
+			gt:           engine.ErrComparison,
+			lt:           engine.ErrComparison,
+			is:           engine.ErrComparison,
 			distinctFrom: false,
 		},
 		{
@@ -563,7 +564,7 @@ func Test_Cast(t *testing.T) {
 			check := func(dataType *types.DataType, want any) {
 				t.Log(dataType.String())
 				if want == nil {
-					want = ErrCast
+					want = engine.ErrCast
 				}
 
 				res, err := val.Cast(dataType)
@@ -666,7 +667,7 @@ func Test_Unary(t *testing.T) {
 
 			check := func(op UnaryOp, want any) {
 				if want == nil {
-					want = ErrUnary
+					want = engine.ErrUnary
 				}
 
 				t.Log(op.String())
@@ -729,7 +730,7 @@ func Test_Array(t *testing.T) {
 		{
 			name:    "mixed",
 			vals:    []any{int64(1), "hello"},
-			wantErr: ErrArrayMixedTypes,
+			wantErr: engine.ErrType,
 		},
 	}
 

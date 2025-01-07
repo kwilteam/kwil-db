@@ -16,7 +16,6 @@ import (
 type GetVarTypeFunc = func(varName string) (dataType *types.DataType, found bool)
 
 // GetObjectFieldTypeFunc is a function that gets the type of a field in an object.
-// TODO: we will need a way to either bind objects or pass in their fields.
 type GetObjectFunc = func(objName string) (obj map[string]*types.DataType, found bool)
 
 // GetTableFunc is a function that gets a table by name.
@@ -56,7 +55,7 @@ func CreateLogicalPlan(statement *parse.SQLStatement, tables GetTableFunc,
 		onWindowFuncExpr: func(ewfc *parse.ExpressionWindowFunctionCall, _ *Relation, _ map[string]*IdentifiedExpr) (Expression, *Field, error) {
 			return nil, nil, fmt.Errorf("%w: cannot use window functions in this context", ErrIllegalWindowFunction)
 		},
-		onAggregateFuncExpr: func(efc *parse.ExpressionFunctionCall, agg *parse.AggregateFunctionDefinition, _ map[string]*IdentifiedExpr) (Expression, *Field, error) {
+		onAggregateFuncExpr: func(efc *parse.ExpressionFunctionCall, agg *engine.AggregateFunctionDefinition, _ map[string]*IdentifiedExpr) (Expression, *Field, error) {
 			return nil, nil, fmt.Errorf("%w: cannot use aggregate functions in this context", ErrIllegalAggregate)
 		},
 	}
@@ -149,7 +148,7 @@ type scopeContext struct {
 	// onAggregateFuncExpr is a function that is called when evaluating an aggregate function.
 	// It is NOT called if the aggregate function is being used as a window function; in this case,
 	// onWindowFuncExpr is called.
-	onAggregateFuncExpr func(*parse.ExpressionFunctionCall, *parse.AggregateFunctionDefinition, map[string]*IdentifiedExpr) (Expression, *Field, error)
+	onAggregateFuncExpr func(*parse.ExpressionFunctionCall, *engine.AggregateFunctionDefinition, map[string]*IdentifiedExpr) (Expression, *Field, error)
 	// aggViolationColumn is the column that is causing an aggregate violation.
 	aggViolationColumn string
 	cteCtx             cteContext
@@ -586,6 +585,12 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (preProjectPlan Plan, 
 		return nil, nil, nil, nil, nil, err
 	}
 
+	// we have expanded the columns, so we can replace them with the expanded columns
+	node.Columns = make([]parse.ResultColumn, len(results))
+	for i, result := range results {
+		node.Columns[i] = result
+	}
+
 	// we need to build the group by and having clauses.
 	// This means that for all result columns, we need to rewrite any
 	// column references or aggregate usage as columnrefs to the aggregate
@@ -642,7 +647,7 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (preProjectPlan Plan, 
 	oldOnAggregate := s.onAggregateFuncExpr
 	applyPreProject = append(applyPreProject, func() { s.onAggregateFuncExpr = oldOnAggregate })
 	newOnAggregate := s.makeOnAggregateFunc(aggTerms, &aggPlan.AggregateExpressions)
-	s.onAggregateFuncExpr = func(efc *parse.ExpressionFunctionCall, afd *parse.AggregateFunctionDefinition, grouping map[string]*IdentifiedExpr) (Expression, *Field, error) {
+	s.onAggregateFuncExpr = func(efc *parse.ExpressionFunctionCall, afd *engine.AggregateFunctionDefinition, grouping map[string]*IdentifiedExpr) (Expression, *Field, error) {
 		if !hasGroupBy {
 			usesAggWithoutGroupBy = true
 		}
@@ -766,7 +771,7 @@ func (s *scopeContext) makeOnWindowFunc(unnamedWindows *[]*Window, namedWindows 
 		// or a window function.
 		// We don't simply call expr on the function because we want to ensure
 		// it is a window and handle it differently.
-		funcDef, ok := parse.Functions[ewfc.FunctionCall.Name]
+		funcDef, ok := engine.Functions[ewfc.FunctionCall.Name]
 		if !ok {
 			return nil, nil, fmt.Errorf(`%w: "%s"`, ErrFunctionDoesNotExist, ewfc.FunctionCall.Name)
 		}
@@ -779,7 +784,7 @@ func (s *scopeContext) makeOnWindowFunc(unnamedWindows *[]*Window, namedWindows 
 		}
 
 		switch funcDef.(type) {
-		case *parse.AggregateFunctionDefinition, *parse.WindowFunctionDefinition:
+		case *engine.AggregateFunctionDefinition, *engine.WindowFunctionDefinition:
 			// intentionally do nothing
 		default:
 			return nil, nil, fmt.Errorf(`function "%s" is not a window function`, ewfc.FunctionCall.Name)
@@ -884,8 +889,8 @@ func (s *scopeContext) makeOnWindowFunc(unnamedWindows *[]*Window, namedWindows 
 // makeOnAggregateFunc makes a function that can be used as the callback for onAggregateFuncExpr.
 // The passed in aggTerms will be both read from and written to.
 // The passed in aggregateExpressions slice will be written to with any new aggregate expressions.
-func (s *scopeContext) makeOnAggregateFunc(aggTerms map[string]*exprFieldPair[*IdentifiedExpr], aggregateExpression *[]*IdentifiedExpr) func(*parse.ExpressionFunctionCall, *parse.AggregateFunctionDefinition, map[string]*IdentifiedExpr) (Expression, *Field, error) {
-	return func(efc *parse.ExpressionFunctionCall, afd *parse.AggregateFunctionDefinition, groupingTerms map[string]*IdentifiedExpr) (Expression, *Field, error) {
+func (s *scopeContext) makeOnAggregateFunc(aggTerms map[string]*exprFieldPair[*IdentifiedExpr], aggregateExpression *[]*IdentifiedExpr) func(*parse.ExpressionFunctionCall, *engine.AggregateFunctionDefinition, map[string]*IdentifiedExpr) (Expression, *Field, error) {
+	return func(efc *parse.ExpressionFunctionCall, afd *engine.AggregateFunctionDefinition, groupingTerms map[string]*IdentifiedExpr) (Expression, *Field, error) {
 		// if it matches any aggregate function, we should reference it.
 		// Otherwise, register it as a new aggregate
 
@@ -1085,7 +1090,6 @@ func (s *scopeContext) rewriteGroupingTerms(expr Expression, groupingTerms map[s
 
 // expandResultCols expands all wildcards to their respective column references.
 func (s *scopeContext) expandResultCols(rel *Relation, cols []parse.ResultColumn) ([]*parse.ResultColumnExpression, error) {
-	// TODO: we need to rewrite the statement here to explicitly reference the columns so that we can guarantee the order (maybe?)
 	var res []*parse.ResultColumnExpression
 	for _, col := range cols {
 		switch col := col.(type) {
@@ -1200,11 +1204,11 @@ func (s *scopeContext) exprWithAggRewrite(node parse.Expression, currentRel *Rel
 			Type:  node.Type,
 		}, anonField(node.Type))
 	case *parse.ExpressionFunctionCall:
-		funcDef, ok := parse.Functions[node.Name]
+		funcDef, ok := engine.Functions[node.Name]
 		// if it is an aggregate function, we need to handle it differently
 		if ok {
 			// now we need to apply rules depending on if it is aggregate or not
-			if aggFn, ok := funcDef.(*parse.AggregateFunctionDefinition); ok {
+			if aggFn, ok := funcDef.(*engine.AggregateFunctionDefinition); ok {
 				expr, field, err := s.onAggregateFuncExpr(node, aggFn, groupingTerms)
 				if err != nil {
 					return nil, nil, false, err

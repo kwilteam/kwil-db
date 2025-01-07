@@ -13,7 +13,7 @@ import (
 
 func init() {
 	err := RegisterPrecompile("math-precompile", PrecompileExtension[MathExtension]{
-		Initialize: func(ctx context.Context, service *common.Service, db sql.DB, metadata map[string]any) (*MathExtension, error) {
+		Initialize: func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]any) (*MathExtension, error) {
 			_, ok := metadata["round"]
 			if !ok {
 				metadata["round"] = "up"
@@ -28,11 +28,11 @@ func init() {
 
 			return &MathExtension{roundUp: roundUp}, nil
 		},
-		Methods: []*Method[MathExtension]{
+		Methods: []Method[MathExtension]{
 			{
 				Name:            "add",
 				AccessModifiers: []Modifier{SYSTEM},
-				Call: func(ctx *common.TxContext, app *common.App, inputs []any, resultFn func([]any) error, t *MathExtension) error {
+				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error, t *MathExtension) error {
 					a, b, err := getArgs(inputs)
 					if err != nil {
 						return err
@@ -44,7 +44,7 @@ func init() {
 			{
 				Name:            "subtract",
 				AccessModifiers: []Modifier{SYSTEM},
-				Call: func(ctx *common.TxContext, app *common.App, inputs []any, resultFn func([]any) error, t *MathExtension) error {
+				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error, t *MathExtension) error {
 					a, b, err := getArgs(inputs)
 					if err != nil {
 						return err
@@ -56,7 +56,7 @@ func init() {
 			{
 				Name:            "multiply",
 				AccessModifiers: []Modifier{SYSTEM},
-				Call: func(ctx *common.TxContext, app *common.App, inputs []any, resultFn func([]any) error, t *MathExtension) error {
+				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error, t *MathExtension) error {
 					a, b, err := getArgs(inputs)
 					if err != nil {
 						return err
@@ -68,7 +68,7 @@ func init() {
 			{
 				Name:            "divide",
 				AccessModifiers: []Modifier{SYSTEM},
-				Call: func(ctx *common.TxContext, app *common.App, inputs []any, resultFn func([]any) error, t *MathExtension) error {
+				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error, t *MathExtension) error {
 					a, b, err := getArgs(inputs)
 					if err != nil {
 						return err

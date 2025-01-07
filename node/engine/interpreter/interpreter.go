@@ -24,7 +24,7 @@ import (
 // deadlocks.
 type ThreadSafeInterpreter struct {
 	mu sync.RWMutex
-	i  *BaseInterpreter
+	i  *baseInterpreter
 }
 
 // lock locks the interpreter with either a read or write lock, depending on the access mode of the database.
@@ -43,36 +43,51 @@ func (t *ThreadSafeInterpreter) lock(db sql.DB) (unlock func(), err error) {
 	return t.mu.Unlock, nil
 }
 
-func (t *ThreadSafeInterpreter) Call(ctx *common.TxContext, db sql.DB, namespace string, action string, args []any, resultFn func(*common.Row) error) (*common.CallResult, error) {
+func (t *ThreadSafeInterpreter) Call(ctx *common.EngineContext, db sql.DB, namespace string, action string, args []any, resultFn func(*common.Row) error) (*common.CallResult, error) {
 	unlock, err := t.lock(db)
 	if err != nil {
 		return nil, err
 	}
 	defer unlock()
 
-	return t.i.Call(ctx, db, namespace, action, args, resultFn)
+	return t.i.call(ctx, db, namespace, action, args, resultFn, true)
 }
 
-func (t *ThreadSafeInterpreter) Execute(ctx *common.TxContext, db sql.DB, statement string, params map[string]any, fn func(*common.Row) error) error {
+func (t *ThreadSafeInterpreter) Execute(ctx *common.EngineContext, db sql.DB, statement string, params map[string]any, fn func(*common.Row) error) error {
 	unlock, err := t.lock(db)
 	if err != nil {
 		return err
 	}
 	defer unlock()
 
-	return t.i.Execute(ctx, db, statement, params, fn)
+	return t.i.execute(ctx, db, statement, params, fn, true)
 }
 
-func (t *ThreadSafeInterpreter) SetOwner(ctx context.Context, db sql.DB, owner string) error {
-	// we always need to lock for this
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	return t.i.SetOwner(ctx, db, owner)
+// recursiveInterpreter is an interpreter that can call itself.
+// It is used for extensions that need to call back into the interpreter.
+type recursiveInterpreter struct {
+	i *baseInterpreter
+	// logs is the slice of logs that the interpreter has written.
+	// It references the slice that will be returned to the caller.
+	logs *[]string
 }
 
-// BaseInterpreter interprets Kwil SQL statements.
-type BaseInterpreter struct {
+func (r *recursiveInterpreter) Call(ctx *common.EngineContext, db sql.DB, namespace string, action string, args []any, resultFn func(*common.Row) error) (*common.CallResult, error) {
+	res, err := r.i.call(ctx, db, namespace, action, args, resultFn, false)
+	if err != nil {
+		return nil, err
+	}
+
+	*r.logs = append(*r.logs, res.Logs...)
+	return res, nil
+}
+
+func (r *recursiveInterpreter) Execute(ctx *common.EngineContext, db sql.DB, statement string, params map[string]any, fn func(*common.Row) error) error {
+	return r.i.execute(ctx, db, statement, params, fn, false)
+}
+
+// baseInterpreter interprets Kwil SQL statements.
+type baseInterpreter struct {
 	namespaces map[string]*namespace
 	// accessController is used to check if a user has access to a namespace
 	accessController *accessController
@@ -104,6 +119,8 @@ type namespace struct {
 	// namespaceType is the type of namespace.
 	// It can be user-created, built-in, or extension.
 	namespaceType namespaceType
+	// methods is a map of methods that are available if the namespace is an extension.
+	methods map[string]*executable
 }
 
 type namespaceType string
@@ -156,7 +173,7 @@ func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service) (*T
 		return nil, err
 	}
 
-	interpreter := &BaseInterpreter{
+	interpreter := &baseInterpreter{
 		namespaces: make(map[string]*namespace),
 		service:    service,
 	}
@@ -213,15 +230,21 @@ func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service) (*T
 			return nil, fmt.Errorf("the database has an extension in use that is unknown to the system: %s", ext.ExtName)
 		}
 
-		namespace, err := initializeExtension(ctx, service, db, sysExt, ext.Metadata)
+		namespace, err := initializeExtension(ctx, service, db, sysExt, ext.Alias, ext.Metadata)
 		if err != nil {
 			return nil, err
 		}
 
-		_, ok = interpreter.namespaces[ext.Alias]
-		if ok {
-			// should never happen, as this should have been caught during execution of the block.
-			return nil, fmt.Errorf("internal bug on startup: extension alias %s is already in use", ext.Alias)
+		// if a namespace already exists, we should use it instead, since it might have been read earlier, and contain
+		// kuneiform actions and tables
+		if existing, ok := interpreter.namespaces[ext.Alias]; ok {
+			// kuneiform actions should overwrite methods,
+			// so any actions already read should just overwrite the methods
+			for k, v := range existing.availableFunctions {
+				namespace.availableFunctions[k] = v
+			}
+
+			namespace.tables = existing.tables
 		}
 
 		interpreter.namespaces[ext.Alias] = namespace
@@ -239,7 +262,7 @@ func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service) (*T
 // to ensure that the function is executed correctly. In the future, we can replicate
 // the functionality of the function in Go to avoid the roundtrip. I initially tried
 // to do this, however it get's extroadinarily complex when getting to string formatting.
-func funcDefToExecutable(funcName string, funcDef *parse.ScalarFunctionDefinition) *executable {
+func funcDefToExecutable(funcName string, funcDef *engine.ScalarFunctionDefinition) *executable {
 	return &executable{
 		Name: funcName,
 		Func: func(e *executionContext, args []Value, fn resultFunc) error {
@@ -260,7 +283,7 @@ func funcDefToExecutable(funcName string, funcDef *parse.ScalarFunctionDefinitio
 			// if the function name is notice, then we need to get write the notice to our logs locally,
 			// instead of executing a query. This is the functional eqauivalent of Kwil's console.log().
 			if funcName == "notice" {
-				e.logs = append(e.logs, args[0].RawValue().(string))
+				*e.logs = append(*e.logs, args[0].RawValue().(string))
 				return nil
 			}
 
@@ -280,7 +303,7 @@ func funcDefToExecutable(funcName string, funcDef *parse.ScalarFunctionDefinitio
 			// Since for now we are more concerned about expanding functionality than scalability,
 			// we will use the roundtrip.
 			iters := 0
-			err = query(e.txCtx.Ctx, e.db, "SELECT "+pgFormat+";", []Value{zeroVal}, func() error {
+			err = query(e.engineCtx.TxContext.Ctx, e.db, "SELECT "+pgFormat+";", []Value{zeroVal}, func() error {
 				iters++
 				return nil
 			}, args)
@@ -301,7 +324,7 @@ func funcDefToExecutable(funcName string, funcDef *parse.ScalarFunctionDefinitio
 }
 
 // Execute executes a statement against the database.
-func (i *BaseInterpreter) Execute(ctx *common.TxContext, db sql.DB, statement string, params map[string]any, fn func(*common.Row) error) error {
+func (i *baseInterpreter) execute(ctx *common.EngineContext, db sql.DB, statement string, params map[string]any, fn func(*common.Row) error, toplevel bool) error {
 	if fn == nil {
 		fn = func(*common.Row) error { return nil }
 	}
@@ -309,14 +332,14 @@ func (i *BaseInterpreter) Execute(ctx *common.TxContext, db sql.DB, statement st
 	// parse the statement
 	ast, err := parse.Parse(statement)
 	if err != nil {
-		return err
+		return fmt.Errorf("%w: %w", engine.ErrParse, err)
 	}
 
 	if len(ast) == 0 {
 		return fmt.Errorf("no valid statements provided: %s", statement)
 	}
 
-	execCtx, err := i.newExecCtx(ctx, db, DefaultNamespace)
+	execCtx, err := i.newExecCtx(ctx, db, DefaultNamespace, toplevel)
 	if err != nil {
 		return err
 	}
@@ -377,13 +400,20 @@ func isValidVarName(s string) error {
 
 // Call executes an action against the database.
 // The resultFn is called with the result of the action, if any.
-func (i *BaseInterpreter) Call(ctx *common.TxContext, db sql.DB, namespace, action string, args []any, resultFn func(*common.Row) error) (*common.CallResult, error) {
+func (i *baseInterpreter) call(ctx *common.EngineContext, db sql.DB, namespace, action string, args []any, resultFn func(*common.Row) error, toplevel bool) (*common.CallResult, error) {
 	if resultFn == nil {
 		resultFn = func(*common.Row) error { return nil }
 	}
 
 	if namespace == "" {
 		namespace = DefaultNamespace
+	}
+	namespace = strings.ToLower(namespace)
+	action = strings.ToLower(action)
+
+	execCtx, err := i.newExecCtx(ctx, db, namespace, toplevel)
+	if err != nil {
+		return nil, err
 	}
 
 	ns, ok := i.namespaces[namespace]
@@ -395,13 +425,12 @@ func (i *BaseInterpreter) Call(ctx *common.TxContext, db sql.DB, namespace, acti
 	// (e.g. in case of a private action or owner action)
 	exec, ok := ns.availableFunctions[action]
 	if !ok {
-		// this should never happen
-		return nil, fmt.Errorf(`node bug: action "%s" does not exist in namespace "%s"`, action, namespace)
+		return nil, fmt.Errorf(`%w: action "%s" does not exist in namespace "%s"`, engine.ErrUnknownAction, action, namespace)
 	}
 
 	switch exec.Type {
 	case executableTypeFunction:
-		return nil, fmt.Errorf(`%w: action "%s" is a built-in function and cannot be called directly`, ErrCannotCall, action)
+		return nil, fmt.Errorf(`action "%s" is a built-in function and cannot be called directly`, action)
 	case executableTypeAction, executableTypePrecompile:
 		// do nothing, this is what we want
 	default:
@@ -418,11 +447,6 @@ func (i *BaseInterpreter) Call(ctx *common.TxContext, db sql.DB, namespace, acti
 		argVals[i] = val
 	}
 
-	execCtx, err := i.newExecCtx(ctx, db, namespace)
-	if err != nil {
-		return nil, err
-	}
-
 	err = exec.Func(execCtx, argVals, func(row *row) error {
 		return resultFn(rowToCommonRow(row))
 	})
@@ -431,7 +455,7 @@ func (i *BaseInterpreter) Call(ctx *common.TxContext, db sql.DB, namespace, acti
 	}
 
 	return &common.CallResult{
-		Logs: execCtx.logs,
+		Logs: *execCtx.logs,
 	}, nil
 }
 
@@ -453,39 +477,36 @@ func rowToCommonRow(row *row) *common.Row {
 }
 
 // newExecCtx creates a new execution context.
-func (i *BaseInterpreter) newExecCtx(txCtx *common.TxContext, db sql.DB, namespace string) (*executionContext, error) {
+func (i *baseInterpreter) newExecCtx(txCtx *common.EngineContext, db sql.DB, namespace string, toplevel bool) (*executionContext, error) {
 	am, ok := db.(sql.AccessModer)
 	if !ok {
 		return nil, fmt.Errorf("database does not implement AccessModer")
 	}
 
-	return &executionContext{
-		txCtx:          txCtx,
+	logs := make([]string, 0)
+
+	e := &executionContext{
+		engineCtx:      txCtx,
 		scope:          newScope(namespace),
 		canMutateState: am.AccessMode() == sql.ReadWrite,
 		db:             db,
 		interpreter:    i,
-	}, nil
-}
-
-// SetOwner initializes the interpreter's database by setting the owner.
-// It will overwrite the owner if it is already set.
-func (i *BaseInterpreter) SetOwner(ctx context.Context, db sql.DB, owner string) error {
-	err := i.accessController.SetOwnership(ctx, db, owner)
-	if err != nil {
-		return err
+		logs:           &logs,
 	}
-	return nil
+	e.scope.isTopLevel = toplevel
+
+	return e, nil
 }
 
 const (
 	DefaultNamespace = "main"
+	infoNamespace    = "info"
 )
 
 var builtInExecutables = func() map[string]*executable {
 	execs := make(map[string]*executable)
-	for funcName, impl := range parse.Functions {
-		if scalarImpl, ok := impl.(*parse.ScalarFunctionDefinition); ok {
+	for funcName, impl := range engine.Functions {
+		if scalarImpl, ok := impl.(*engine.ScalarFunctionDefinition); ok {
 			execs[funcName] = funcDefToExecutable(funcName, scalarImpl)
 		}
 	}

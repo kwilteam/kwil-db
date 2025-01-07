@@ -92,8 +92,20 @@ func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.
 		}
 	}
 
-	// set db owner
-	err := r.Engine.SetOwner(ctx, db, dbOwner)
+	// we set an initial owner as the initial creator of schemas, roles, etc.
+	err := r.Engine.Execute(&common.EngineContext{
+		OverrideAuthz: true,
+		TxContext: &common.TxContext{
+			Ctx:    ctx,
+			Caller: "genesis",
+			Signer: []byte("genesis"),
+			BlockContext: &common.BlockContext{
+				Height: initialHeight,
+			},
+		},
+	}, db, "GRANT owner TO $user", map[string]any{
+		"user": dbOwner,
+	}, nil)
 	if err != nil {
 		return err
 	}

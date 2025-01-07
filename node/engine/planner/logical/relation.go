@@ -153,7 +153,6 @@ type Field struct {
 
 func (f *Field) String() string {
 	if f.ReferenceID != "" {
-		// TODO: we should make a test that correlates on a reference
 		return fmt.Sprintf("[ref: %s]", f.ReferenceID)
 	}
 
@@ -290,7 +289,7 @@ func (f *Field) Object() (map[string]*types.DataType, error) {
 func joinRels(rels ...*Relation) *Relation {
 	joined := &Relation{}
 	for _, rel := range rels {
-		rel2 := rel.Copy() // TODO: do we need to copy? We should check after I have implemented everything and have tests
+		rel2 := rel.Copy()
 		joined.Fields = append(joined.Fields, rel2.Fields...)
 	}
 	return joined

@@ -1,6 +1,7 @@
 package interpreter
 
 import (
+	"errors"
 	"fmt"
 	"strconv"
 	"strings"
@@ -8,6 +9,7 @@ import (
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
+	"github.com/kwilteam/kwil-db/node/engine"
 )
 
 // ValueMapping maps Go types and Kwil native types.
@@ -380,12 +382,12 @@ func NewValue(v any) (Value, error) {
 }
 
 func makeTypeErr(left, right Value) error {
-	return fmt.Errorf("%w: left: %s right: %s", ErrTypeMismatch, left.Type(), right.Type())
+	return fmt.Errorf("%w: left: %s right: %s", engine.ErrType, left.Type(), right.Type())
 }
 
 // makeArrTypeErr returns an error for when an array operation is performed on a non-array type.
 func makeArrTypeErr(arrVal Value, newVal Value) error {
-	return fmt.Errorf("%w: cannot create an array of different types %s and %s", ErrArrayMixedTypes, arrVal.Type(), newVal.Type())
+	return fmt.Errorf("%w: cannot create an array of different types %s and %s", engine.ErrType, arrVal.Type(), newVal.Type())
 }
 
 func newInt(i int64) *IntValue {
@@ -426,7 +428,7 @@ func (v *IntValue) Compare(v2 Value, op ComparisonOp) (*BoolValue, error) {
 	case isDistinctFrom:
 		b = v.Int64 != val2.Int64
 	default:
-		return nil, fmt.Errorf("%w: cannot compare int with operator %s", ErrComparison, op)
+		return nil, fmt.Errorf("%w: cannot compare int with operator %s", engine.ErrComparison, op)
 	}
 
 	return newBool(b), nil
@@ -502,16 +504,16 @@ func (i *IntValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, erro
 		r = i.Int64 * val2.Int64
 	case div:
 		if val2.Int64 == 0 {
-			return nil, fmt.Errorf("%w: cannot divide by zero", ErrArithmetic)
+			return nil, fmt.Errorf("%w: cannot divide by zero", engine.ErrArithmetic)
 		}
 		r = i.Int64 / val2.Int64
 	case mod:
 		if val2.Int64 == 0 {
-			return nil, fmt.Errorf("%w: cannot modulo by zero", ErrArithmetic)
+			return nil, fmt.Errorf("%w: cannot modulo by zero", engine.ErrArithmetic)
 		}
 		r = i.Int64 % val2.Int64
 	default:
-		return nil, fmt.Errorf("%w: cannot perform arithmetic operation %s on type int", ErrArithmetic, op)
+		return nil, fmt.Errorf("%w: cannot perform arithmetic operation %s on type int", engine.ErrArithmetic, op)
 	}
 
 	return &IntValue{
@@ -531,11 +533,11 @@ func (i *IntValue) Unary(op UnaryOp) (ScalarValue, error) {
 	case neg:
 		return &IntValue{Int8: pgtype.Int8{Int64: -i.Int64, Valid: true}}, nil
 	case not:
-		return nil, fmt.Errorf("%w: cannot apply logical NOT to an integer", ErrUnary)
+		return nil, fmt.Errorf("%w: cannot apply logical NOT to an integer", engine.ErrUnary)
 	case pos:
 		return i, nil
 	default:
-		return nil, fmt.Errorf("%w: unknown unary operator: %s", ErrUnary, op)
+		return nil, fmt.Errorf("%w: unknown unary operator: %s", engine.ErrUnary, op)
 	}
 }
 
@@ -578,7 +580,7 @@ func (i *IntValue) Cast(t *types.DataType) (Value, error) {
 	// doesn't work, since it has precision and scale
 	if t.Name == types.DecimalStr {
 		if t.IsArray {
-			return nil, fmt.Errorf("%w: cannot cast int to decimal array", ErrCast)
+			return nil, castErr(errors.New("cannot cast int to decimal array"))
 		}
 
 		dec, err := decimal.NewFromString(fmt.Sprint(i.Int64))
@@ -597,7 +599,7 @@ func (i *IntValue) Cast(t *types.DataType) (Value, error) {
 	case *types.BoolType:
 		return newBool(i.Int64 != 0), nil
 	default:
-		return nil, fmt.Errorf("%w: cannot cast int to %s", ErrCast, t)
+		return nil, castErr(fmt.Errorf("cannot cast int to %s", t))
 	}
 }
 
@@ -703,7 +705,7 @@ func (s *TextValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	case isDistinctFrom:
 		b = s.String != val2.String
 	default:
-		return nil, fmt.Errorf("%w: cannot use comparison operator %s with type %s", ErrComparison, s.Type(), op)
+		return nil, fmt.Errorf("%w: cannot use comparison operator %s with type %s", engine.ErrComparison, s.Type(), op)
 	}
 
 	return newBool(b), nil
@@ -723,11 +725,11 @@ func (s *TextValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, err
 		return newText(s.String + val2.String), nil
 	}
 
-	return nil, fmt.Errorf("%w: cannot perform arithmetic operation %s on type string", ErrArithmetic, op)
+	return nil, fmt.Errorf("%w: cannot perform arithmetic operation %s on type string", engine.ErrArithmetic, op)
 }
 
 func (s *TextValue) Unary(op UnaryOp) (ScalarValue, error) {
-	return nil, fmt.Errorf("%w: cannot perform unary operation on string", ErrUnary)
+	return nil, fmt.Errorf("%w: cannot perform unary operation on string", engine.ErrUnary)
 }
 
 func (s *TextValue) Type() *types.DataType {
@@ -767,7 +769,7 @@ func (s *TextValue) Cast(t *types.DataType) (Value, error) {
 
 	if t.Name == types.DecimalStr {
 		if t.IsArray {
-			return nil, fmt.Errorf("%w: cannot cast text to decimal array", ErrCast)
+			return nil, castErr(errors.New("cannot cast text to decimal array"))
 		}
 
 		dec, err := decimal.NewFromString(s.String)
@@ -805,7 +807,7 @@ func (s *TextValue) Cast(t *types.DataType) (Value, error) {
 	case *types.BlobType:
 		return newBlob([]byte(s.String)), nil
 	default:
-		return nil, fmt.Errorf("%w: cannot cast text to %s", ErrCast, t)
+		return nil, castErr(fmt.Errorf("cannot cast text to %s", t))
 	}
 }
 
@@ -849,14 +851,14 @@ func (b *BoolValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	case is:
 		b2 = b.Bool.Bool == val2.Bool.Bool
 	default:
-		return nil, fmt.Errorf("%w: cannot use comparison operator %s with type %s", ErrComparison, b.Type(), op)
+		return nil, fmt.Errorf("%w: cannot use comparison operator %s with type %s", engine.ErrComparison, b.Type(), op)
 	}
 
 	return newBool(b2), nil
 }
 
 func (b *BoolValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error) {
-	return nil, fmt.Errorf("%w: cannot perform arithmetic operation on bool", ErrArithmetic)
+	return nil, fmt.Errorf("%w: cannot perform arithmetic operation on bool", engine.ErrArithmetic)
 }
 
 func (b *BoolValue) Unary(op UnaryOp) (ScalarValue, error) {
@@ -868,9 +870,9 @@ func (b *BoolValue) Unary(op UnaryOp) (ScalarValue, error) {
 	case not:
 		return newBool(!b.Bool.Bool), nil
 	case neg, pos:
-		return nil, fmt.Errorf("%w: cannot perform unary operation %s on bool", ErrUnary, op)
+		return nil, fmt.Errorf("%w: cannot perform unary operation %s on bool", engine.ErrUnary, op)
 	default:
-		return nil, fmt.Errorf("%w: unexpected operator id %s for bool", ErrUnary, op)
+		return nil, fmt.Errorf("%w: unexpected operator id %s for bool", engine.ErrUnary, op)
 	}
 }
 
@@ -921,7 +923,7 @@ func (b *BoolValue) Cast(t *types.DataType) (Value, error) {
 	case *types.BoolType:
 		return b, nil
 	default:
-		return nil, fmt.Errorf("%w: cannot cast bool to %s", ErrCast, t)
+		return nil, castErr(fmt.Errorf("cannot cast bool to %s", t))
 	}
 }
 
@@ -956,7 +958,7 @@ func (b *BlobValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	case isDistinctFrom:
 		b2 = string(b.bts) != string(val2.bts)
 	default:
-		return nil, fmt.Errorf("%w: cannot use comparison operator %s with type %s", ErrComparison, b.Type(), op)
+		return nil, fmt.Errorf("%w: cannot use comparison operator %s with type %s", engine.ErrComparison, b.Type(), op)
 	}
 
 	return newBool(b2), nil
@@ -976,11 +978,11 @@ func (b *BlobValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, err
 		return newBlob(append(b.bts, val2.bts...)), nil
 	}
 
-	return nil, fmt.Errorf("%w: cannot perform arithmetic operation %s on blob", ErrArithmetic, op)
+	return nil, fmt.Errorf("%w: cannot perform arithmetic operation %s on blob", engine.ErrArithmetic, op)
 }
 
 func (b *BlobValue) Unary(op UnaryOp) (ScalarValue, error) {
-	return nil, fmt.Errorf("%w: cannot perform unary operation on blob", ErrUnary)
+	return nil, fmt.Errorf("%w: cannot perform unary operation on blob", engine.ErrUnary)
 }
 
 func (b *BlobValue) Type() *types.DataType {
@@ -1023,7 +1025,7 @@ func (b *BlobValue) Cast(t *types.DataType) (Value, error) {
 	case *types.BlobType:
 		return b, nil
 	default:
-		return nil, fmt.Errorf("%w: cannot cast blob to %s", ErrCast, t)
+		return nil, castErr(fmt.Errorf("cannot cast blob to %s", t))
 	}
 }
 
@@ -1093,18 +1095,18 @@ func (u *UUIDValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	case isDistinctFrom:
 		b = u.Bytes != val2.Bytes
 	default:
-		return nil, fmt.Errorf("%w: cannot use comparison operator %s with type %s", ErrComparison, u.Type(), op)
+		return nil, fmt.Errorf("%w: cannot use comparison operator %s with type %s", engine.ErrComparison, u.Type(), op)
 	}
 
 	return newBool(b), nil
 }
 
 func (u *UUIDValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error) {
-	return nil, fmt.Errorf("%w: cannot perform arithmetic operation on uuid", ErrArithmetic)
+	return nil, fmt.Errorf("%w: cannot perform arithmetic operation on uuid", engine.ErrArithmetic)
 }
 
 func (u *UUIDValue) Unary(op UnaryOp) (ScalarValue, error) {
-	return nil, fmt.Errorf("%w: cannot perform unary operation on uuid", ErrUnary)
+	return nil, fmt.Errorf("%w: cannot perform unary operation on uuid", engine.ErrUnary)
 }
 
 func (u *UUIDValue) Type() *types.DataType {
@@ -1152,7 +1154,7 @@ func (u *UUIDValue) Cast(t *types.DataType) (Value, error) {
 	case *types.UUIDType:
 		return u, nil
 	default:
-		return nil, fmt.Errorf("%w: cannot cast uuid to %s", ErrCast, t)
+		return nil, castErr(fmt.Errorf("cannot cast uuid to %s", t))
 	}
 }
 
@@ -1302,7 +1304,7 @@ func (d *DecimalValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, 
 	case mod:
 		d2, err = decimal.Mod(dec1, dec2)
 	default:
-		return nil, fmt.Errorf("%w: unexpected operator id %d for decimal", ErrArithmetic, op)
+		return nil, fmt.Errorf("%w: unexpected operator id %d for decimal", engine.ErrArithmetic, op)
 	}
 	if err != nil {
 		return nil, err
@@ -1332,7 +1334,7 @@ func (d *DecimalValue) Unary(op UnaryOp) (ScalarValue, error) {
 	case pos:
 		return d, nil
 	default:
-		return nil, fmt.Errorf("%w: unexpected operator id %s for decimal", ErrUnary, op)
+		return nil, fmt.Errorf("%w: unexpected operator id %s for decimal", engine.ErrUnary, op)
 	}
 }
 
@@ -1385,7 +1387,7 @@ func (d *DecimalValue) Array(v ...ScalarValue) (ArrayValue, error) {
 func (d *DecimalValue) Cast(t *types.DataType) (Value, error) {
 	if t.Name == types.DecimalStr {
 		if t.IsArray {
-			return nil, fmt.Errorf("%w: cannot cast decimal to decimal array", ErrCast)
+			return nil, castErr(errors.New("cannot cast decimal to decimal array"))
 		}
 
 		// if no metadata, then its a noop
@@ -1430,7 +1432,7 @@ func (d *DecimalValue) Cast(t *types.DataType) (Value, error) {
 
 		return newText(dec.String()), nil
 	default:
-		return nil, fmt.Errorf("%w: cannot cast decimal to %s", ErrCast, t)
+		return nil, castErr(fmt.Errorf("cannot cast decimal to %s", t))
 	}
 }
 
@@ -1468,7 +1470,7 @@ func (a *IntArrayValue) Len() int32 {
 
 func (a *IntArrayValue) Index(i int32) (ScalarValue, error) {
 	if i < 1 || i > a.Len() {
-		return nil, fmt.Errorf("index out of bounds")
+		return nil, engine.ErrIndexOutOfBounds
 	}
 
 	return &IntValue{a.Elements[i-1]}, nil // indexing is 1-based
@@ -1477,7 +1479,7 @@ func (a *IntArrayValue) Index(i int32) (ScalarValue, error) {
 // allocArr checks that the array has index i, and if not, it allocates enough space to set the value.
 func allocArr[T any](p *pgtype.Array[T], i int32) error {
 	if i < 1 {
-		return fmt.Errorf("index out of bounds")
+		return engine.ErrIndexOutOfBounds
 	}
 
 	if i > int32(len(p.Elements)) {
@@ -1544,7 +1546,7 @@ func (a *IntArrayValue) Cast(t *types.DataType) (Value, error) {
 
 	if t.Name == types.DecimalStr {
 		if !t.IsArray {
-			return nil, fmt.Errorf("%w: cannot cast int array to decimal", ErrCast)
+			return nil, castErr(errors.New("cannot cast int array to decimal"))
 		}
 
 		return castArrWithPtr(a, func(i int64) (*decimal.Decimal, error) {
@@ -1564,7 +1566,7 @@ func (a *IntArrayValue) Cast(t *types.DataType) (Value, error) {
 	case *types.BoolArrayType:
 		return castArr(a, func(i int64) (bool, error) { return i != 0, nil }, newBoolArrayValue)
 	default:
-		return nil, fmt.Errorf("%w: cannot cast int array to %s", ErrCast, t)
+		return nil, castErr(fmt.Errorf("cannot cast int array to %s", t))
 	}
 }
 
@@ -1601,7 +1603,7 @@ func (a *TextArrayValue) Len() int32 {
 
 func (a *TextArrayValue) Index(i int32) (ScalarValue, error) {
 	if i < 1 || i > a.Len() {
-		return nil, fmt.Errorf("index out of bounds")
+		return nil, engine.ErrIndexOutOfBounds
 	}
 
 	return &TextValue{a.Elements[i-1]}, nil
@@ -1644,7 +1646,7 @@ func (a *TextArrayValue) RawValue() any {
 func (a *TextArrayValue) Cast(t *types.DataType) (Value, error) {
 	if t.Name == types.DecimalStr {
 		if !t.IsArray {
-			return nil, fmt.Errorf("%w: cannot cast text array to decimal", ErrCast)
+			return nil, castErr(errors.New("cannot cast text array to decimal"))
 		}
 
 		return castArrWithPtr(a, func(s string) (*decimal.Decimal, error) {
@@ -1668,7 +1670,7 @@ func (a *TextArrayValue) Cast(t *types.DataType) (Value, error) {
 	case *types.BlobArrayType:
 		return castArr(a, func(s string) ([]byte, error) { return []byte(s), nil }, newBlobArrayValue)
 	default:
-		return nil, fmt.Errorf("%w: cannot cast text array to %s", ErrCast, t)
+		return nil, castErr(fmt.Errorf("cannot cast text array to %s", t))
 	}
 }
 
@@ -1756,7 +1758,7 @@ func (a *BoolArrayValue) Len() int32 {
 
 func (a *BoolArrayValue) Index(i int32) (ScalarValue, error) {
 	if i < 1 || i > a.Len() {
-		return nil, fmt.Errorf("index out of bounds")
+		return nil, engine.ErrIndexOutOfBounds
 	}
 
 	return &BoolValue{a.Elements[i-1]}, nil
@@ -1811,7 +1813,7 @@ func (a *BoolArrayValue) Cast(t *types.DataType) (Value, error) {
 	case *types.BoolArrayType:
 		return a, nil
 	default:
-		return nil, fmt.Errorf("%w: cannot cast bool array to %s", ErrCast, t)
+		return nil, castErr(fmt.Errorf("cannot cast bool array to %s", t))
 	}
 }
 
@@ -1907,7 +1909,7 @@ func cmpArrs[M ArrayValue](a M, b Value, op ComparisonOp) (*BoolValue, error) {
 	case isDistinctFrom:
 		return newBool(!eq), nil
 	default:
-		return nil, fmt.Errorf("%w: only =, IS DISTINCT FROM are supported for array comparison", ErrComparison)
+		return nil, fmt.Errorf("%w: only =, IS DISTINCT FROM are supported for array comparison", engine.ErrComparison)
 	}
 }
 
@@ -1917,7 +1919,7 @@ func (a *DecimalArrayValue) Len() int32 {
 
 func (a *DecimalArrayValue) Index(i int32) (ScalarValue, error) {
 	if i < 1 || i > a.Len() {
-		return nil, fmt.Errorf("index out of bounds")
+		return nil, engine.ErrIndexOutOfBounds
 	}
 
 	return &DecimalValue{Numeric: a.Elements[i-1]}, nil
@@ -1965,7 +1967,7 @@ func (a *DecimalArrayValue) RawValue() any {
 func (a *DecimalArrayValue) Cast(t *types.DataType) (Value, error) {
 	if t.Name == types.DecimalStr {
 		if !t.IsArray {
-			return nil, fmt.Errorf("%w: cannot cast decimal array to decimal", ErrCast)
+			return nil, castErr(errors.New("cannot cast decimal array to decimal"))
 		}
 
 		// if no metadata, then its a noop
@@ -2005,7 +2007,7 @@ func (a *DecimalArrayValue) Cast(t *types.DataType) (Value, error) {
 	case *types.DecimalArrayType:
 		return a, nil
 	default:
-		return nil, fmt.Errorf("%w: cannot cast decimal array to %s", ErrCast, t)
+		return nil, castErr(fmt.Errorf("cannot cast decimal array to %s", t))
 	}
 }
 
@@ -2044,7 +2046,7 @@ func (a *BlobArrayValue) Len() int32 {
 
 func (a *BlobArrayValue) Index(i int32) (ScalarValue, error) {
 	if i < 1 || i > a.Len() {
-		return nil, fmt.Errorf("index out of bounds")
+		return nil, engine.ErrIndexOutOfBounds
 	}
 
 	return a.Elements[i-1], nil
@@ -2092,7 +2094,7 @@ func (a *BlobArrayValue) Cast(t *types.DataType) (Value, error) {
 	case *types.BlobArrayType:
 		return a, nil
 	default:
-		return nil, fmt.Errorf("%w: cannot cast blob array to %s", ErrCast, t)
+		return nil, castErr(fmt.Errorf("cannot cast blob array to %s", t))
 	}
 }
 
@@ -2129,7 +2131,7 @@ func (a *UuidArrayValue) Len() int32 {
 
 func (a *UuidArrayValue) Index(i int32) (ScalarValue, error) {
 	if i < 1 || i > a.Len() {
-		return nil, fmt.Errorf("index out of bounds")
+		return nil, engine.ErrIndexOutOfBounds
 	}
 
 	return &UUIDValue{a.Elements[i-1]}, nil
@@ -2179,7 +2181,7 @@ func (a *UuidArrayValue) Cast(t *types.DataType) (Value, error) {
 	case *types.BlobArrayType:
 		return castArr(a, func(u *types.UUID) ([]byte, error) { return u.Bytes(), nil }, newBlobArrayValue)
 	default:
-		return nil, fmt.Errorf("%w: cannot cast uuid array to %s", ErrCast, t)
+		return nil, castErr(fmt.Errorf("cannot cast uuid array to %s", t))
 	}
 }
 
@@ -2257,7 +2259,7 @@ func (o *RecordValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	case equal:
 		return newBool(isSame), nil
 	default:
-		return nil, fmt.Errorf("%w: cannot use comparison operator %s with record type", ErrComparison, op)
+		return nil, fmt.Errorf("%w: cannot use comparison operator %s with record type", engine.ErrComparison, op)
 	}
 }
 
@@ -2272,7 +2274,7 @@ func (o *RecordValue) RawValue() any {
 }
 
 func (o *RecordValue) Cast(t *types.DataType) (Value, error) {
-	return nil, fmt.Errorf("%w: cannot cast record to %s", ErrCast, t)
+	return nil, castErr(fmt.Errorf("cannot cast record to %s", t))
 }
 
 func cmpIntegers(a, b int, op ComparisonOp) (*BoolValue, error) {
@@ -2286,7 +2288,7 @@ func cmpIntegers(a, b int, op ComparisonOp) (*BoolValue, error) {
 	case isDistinctFrom:
 		return newBool(a != b), nil
 	default:
-		return nil, fmt.Errorf("%w: cannot use comparison operator %s with numeric types", ErrComparison, op)
+		return nil, fmt.Errorf("%w: cannot use comparison operator %s with numeric types", engine.ErrComparison, op)
 	}
 }
 
@@ -2439,4 +2441,8 @@ func parseArray(s string, t *types.DataType) (ArrayValue, error) {
 	}
 
 	return arrType, nil
+}
+
+func castErr(e error) error {
+	return fmt.Errorf("%w: %w", engine.ErrCast, e)
 }

@@ -81,8 +81,6 @@ func (s *schemaVisitor) VisitStatement(ctx *gen.StatementContext) any {
 		s2 = ctx.Grant_statement().Accept(s).(TopLevelStatement)
 	case ctx.Revoke_statement() != nil:
 		s2 = ctx.Revoke_statement().Accept(s).(TopLevelStatement)
-	case ctx.Transfer_ownership_statement() != nil:
-		s2 = ctx.Transfer_ownership_statement().Accept(s).(TopLevelStatement)
 	case ctx.Create_action_statement() != nil:
 		s3 := ctx.Create_action_statement().Accept(s).(*CreateActionStatement)
 		r := s.getTextFromStream(ctx.GetStart().GetStart(), ctx.GetStop().GetStop()) + ";"
@@ -125,7 +123,7 @@ func (s *schemaVisitor) VisitCreate_action_statement(ctx *gen.Create_action_stat
 	}
 
 	if cas.IfNotExists && cas.OrReplace {
-		s.errs.RuleErr(ctx, ErrSyntax, "cannot have both IF NOT EXISTS and OR REPLACE")
+		s.errs.RuleErr(ctx, ErrSyntax, `cannot have both "OR REPLACE" and "IF NOT EXISTS" clauses`)
 		return cas
 	}
 
@@ -143,7 +141,7 @@ func (s *schemaVisitor) VisitCreate_action_statement(ctx *gen.Create_action_stat
 
 	paramSet := make(map[string]struct{})
 	for i, t := range ctx.AllType_() {
-		name := s.cleanStringIdent(ctx.VARIABLE(i))
+		name := s.cleanStringIdent(ctx, ctx.VARIABLE(i).GetText())
 
 		// check for duplicate parameters
 		if _, ok := paramSet[name]; ok {
@@ -366,14 +364,20 @@ func (s *schemaVisitor) VisitBinary_literal(ctx *gen.Binary_literalContext) any 
 func (s *schemaVisitor) VisitIdentifier_list(ctx *gen.Identifier_listContext) any {
 	var ident []string
 	for _, i := range ctx.AllIdentifier() {
-		ident = append(ident, i.Accept(s).(string))
+		ident = append(ident, s.getIdent(i))
 	}
 
 	return ident
 }
 
+func (s *schemaVisitor) VisitAllowed_identifier(ctx *gen.Allowed_identifierContext) any {
+	// is directly visited by VisitIdentifier (see the next method)
+	panic("Allowed_identifier should not be visited directly. This is a bug in the parser")
+}
+
 func (s *schemaVisitor) VisitIdentifier(ctx *gen.IdentifierContext) any {
-	return s.getIdent(ctx)
+	// this is to ensure we are properly calling getIdent on every instance of identifier
+	panic("Identifier should not be visited directly. This is a bug in the parser")
 }
 
 func (s *schemaVisitor) VisitType(ctx *gen.TypeContext) any {
@@ -418,20 +422,20 @@ func (s *schemaVisitor) VisitType_cast(ctx *gen.Type_castContext) any {
 
 func (s *schemaVisitor) VisitVariable(ctx *gen.VariableContext) any {
 	var e *ExpressionVariable
-	var tok antlr.Token
+	var tok antlr.ParserRuleContext
 	switch {
 	case ctx.VARIABLE() != nil:
 		e = &ExpressionVariable{
 			Name:   strings.ToLower(ctx.GetText()),
 			Prefix: VariablePrefixDollar,
 		}
-		tok = ctx.VARIABLE().GetSymbol()
+		tok = ctx
 	case ctx.CONTEXTUAL_VARIABLE() != nil:
 		e = &ExpressionVariable{
 			Name:   strings.ToLower(ctx.GetText()),
 			Prefix: VariablePrefixAt,
 		}
-		tok = ctx.CONTEXTUAL_VARIABLE().GetSymbol()
+		tok = ctx
 	default:
 		panic("unknown variable")
 	}
@@ -587,12 +591,12 @@ func (s *schemaVisitor) VisitSql_statement(ctx *gen.Sql_statementContext) any {
 func (s *schemaVisitor) VisitCommon_table_expression(ctx *gen.Common_table_expressionContext) any {
 	// first identifier is the table name, the rest are the columns
 	cte := &CommonTableExpression{
-		Name:  ctx.Identifier(0).Accept(s).(string),
+		Name:  s.getIdent(ctx.Identifier(0)),
 		Query: ctx.Select_statement().Accept(s).(*SelectStatement),
 	}
 
 	for _, id := range ctx.AllIdentifier()[1:] {
-		cte.Columns = append(cte.Columns, id.Accept(s).(string))
+		cte.Columns = append(cte.Columns, s.getIdent(id))
 	}
 
 	cte.Set(ctx)
@@ -846,7 +850,7 @@ func (s *schemaVisitor) VisitOpt_drop_behavior(ctx *gen.Opt_drop_behaviorContext
 
 func (s *schemaVisitor) VisitAlter_table_statement(ctx *gen.Alter_table_statementContext) any {
 	stmt := &AlterTableStatement{
-		Table:  ctx.Identifier().Accept(s).(string),
+		Table:  s.getIdent(ctx.Identifier()),
 		Action: ctx.Alter_table_action().Accept(s).(AlterTableAction),
 	}
 
@@ -856,7 +860,7 @@ func (s *schemaVisitor) VisitAlter_table_statement(ctx *gen.Alter_table_statemen
 
 func (s *schemaVisitor) VisitAdd_column_constraint(ctx *gen.Add_column_constraintContext) any {
 	a := &AlterColumnSet{
-		Column: ctx.Identifier().Accept(s).(string),
+		Column: s.getIdent(ctx.Identifier()),
 	}
 
 	if ctx.NULL() != nil {
@@ -878,7 +882,7 @@ func (s *schemaVisitor) VisitAdd_column_constraint(ctx *gen.Add_column_constrain
 
 func (s *schemaVisitor) VisitDrop_column_constraint(ctx *gen.Drop_column_constraintContext) any {
 	a := &AlterColumnDrop{
-		Column: ctx.Identifier().Accept(s).(string),
+		Column: s.getIdent(ctx.Identifier()),
 	}
 
 	switch {
@@ -896,7 +900,7 @@ func (s *schemaVisitor) VisitDrop_column_constraint(ctx *gen.Drop_column_constra
 
 func (s *schemaVisitor) VisitAdd_column(ctx *gen.Add_columnContext) any {
 	a := &AddColumn{
-		Name: ctx.Identifier().Accept(s).(string),
+		Name: s.getIdent(ctx.Identifier()),
 		Type: ctx.Type_().Accept(s).(*types.DataType),
 	}
 
@@ -906,7 +910,7 @@ func (s *schemaVisitor) VisitAdd_column(ctx *gen.Add_columnContext) any {
 
 func (s *schemaVisitor) VisitDrop_column(ctx *gen.Drop_columnContext) any {
 	a := &DropColumn{
-		Name: ctx.Identifier().Accept(s).(string),
+		Name: s.getIdent(ctx.Identifier()),
 	}
 
 	a.Set(ctx)
@@ -915,8 +919,8 @@ func (s *schemaVisitor) VisitDrop_column(ctx *gen.Drop_columnContext) any {
 
 func (s *schemaVisitor) VisitRename_column(ctx *gen.Rename_columnContext) any {
 	a := &RenameColumn{
-		OldName: ctx.GetOld_column().Accept(s).(string),
-		NewName: ctx.GetNew_column().Accept(s).(string),
+		OldName: s.getIdent(ctx.GetOld_column()),
+		NewName: s.getIdent(ctx.GetNew_column()),
 	}
 
 	a.Set(ctx)
@@ -925,7 +929,7 @@ func (s *schemaVisitor) VisitRename_column(ctx *gen.Rename_columnContext) any {
 
 func (s *schemaVisitor) VisitRename_table(ctx *gen.Rename_tableContext) any {
 	a := &RenameTable{
-		Name: ctx.Identifier().Accept(s).(string),
+		Name: s.getIdent(ctx.Identifier()),
 	}
 
 	a.Set(ctx)
@@ -943,7 +947,7 @@ func (s *schemaVisitor) VisitAdd_table_constraint(ctx *gen.Add_table_constraintC
 
 func (s *schemaVisitor) VisitDrop_table_constraint(ctx *gen.Drop_table_constraintContext) any {
 	a := &DropTableConstraint{
-		Name: ctx.Identifier().Accept(s).(string),
+		Name: s.getIdent(ctx.Identifier()),
 	}
 
 	a.Set(ctx)
@@ -952,7 +956,7 @@ func (s *schemaVisitor) VisitDrop_table_constraint(ctx *gen.Drop_table_constrain
 
 func (s *schemaVisitor) VisitCreate_index_statement(ctx *gen.Create_index_statementContext) any {
 	a := &CreateIndexStatement{
-		On:      ctx.GetTable().Accept(s).(string),
+		On:      s.getIdent(ctx.GetTable()),
 		Columns: ctx.GetColumns().Accept(s).([]string),
 		Type:    IndexTypeBTree,
 	}
@@ -962,7 +966,7 @@ func (s *schemaVisitor) VisitCreate_index_statement(ctx *gen.Create_index_statem
 	}
 
 	if ctx.GetName() != nil {
-		a.Name = ctx.GetName().Accept(s).(string)
+		a.Name = s.getIdent(ctx.GetName())
 	}
 
 	if ctx.UNIQUE() != nil {
@@ -975,7 +979,7 @@ func (s *schemaVisitor) VisitCreate_index_statement(ctx *gen.Create_index_statem
 
 func (s *schemaVisitor) VisitDrop_index_statement(ctx *gen.Drop_index_statementContext) interface{} {
 	a := &DropIndexStatement{
-		Name: ctx.Identifier().Accept(s).(string),
+		Name: s.getIdent(ctx.Identifier()),
 	}
 
 	if ctx.EXISTS() != nil {
@@ -988,7 +992,7 @@ func (s *schemaVisitor) VisitDrop_index_statement(ctx *gen.Drop_index_statementC
 
 func (s *schemaVisitor) VisitCreate_role_statement(ctx *gen.Create_role_statementContext) any {
 	stmt := &CreateRoleStatement{
-		Role: ctx.Role_name().Accept(s).(string),
+		Role: s.getIdent(ctx.Identifier()),
 	}
 	if ctx.EXISTS() != nil {
 		stmt.IfNotExists = true
@@ -1000,7 +1004,7 @@ func (s *schemaVisitor) VisitCreate_role_statement(ctx *gen.Create_role_statemen
 
 func (s *schemaVisitor) VisitDrop_role_statement(ctx *gen.Drop_role_statementContext) any {
 	stmt := &DropRoleStatement{
-		Role: ctx.Role_name().Accept(s).(string),
+		Role: s.getIdent(ctx.Identifier()),
 	}
 	if ctx.EXISTS() != nil {
 		stmt.IfExists = true
@@ -1026,11 +1030,13 @@ func (s *schemaVisitor) VisitRevoke_statement(ctx *gen.Revoke_statementContext) 
 // It is the responsibility of the caller to set the correct IsGrant field.
 func (s *schemaVisitor) parseGrantOrRevoke(ctx interface {
 	antlr.ParserRuleContext
+	IF() antlr.TerminalNode
 	Privilege_list() gen.IPrivilege_listContext
-	GetGrant_role() gen.IRole_nameContext
-	GetRole() gen.IRole_nameContext
+	GetGrant_role() gen.IIdentifierContext
+	GetRole() gen.IIdentifierContext
 	GetUser() antlr.Token
 	GetNamespace() gen.IIdentifierContext
+	GetUser_var() gen.IAction_exprContext
 }) *GrantOrRevokeStatement {
 	// can be:
 	// GRANT/REVOKE privilege_list/role TO/FROM role/user
@@ -1040,7 +1046,7 @@ func (s *schemaVisitor) parseGrantOrRevoke(ctx interface {
 	case ctx.Privilege_list() != nil:
 		c.Privileges = ctx.Privilege_list().Accept(s).([]string)
 	case ctx.GetGrant_role() != nil:
-		c.GrantRole = ctx.GetGrant_role().Accept(s).(string)
+		c.GrantRole = s.getIdent(ctx.GetGrant_role())
 	default:
 		// should not happen, as this would suggest a bug in the parser
 		panic("invalid grant/revoke statement")
@@ -1048,9 +1054,11 @@ func (s *schemaVisitor) parseGrantOrRevoke(ctx interface {
 
 	switch {
 	case ctx.GetRole() != nil:
-		c.ToRole = ctx.GetRole().Accept(s).(string)
+		c.ToRole = s.getIdent(ctx.GetRole())
 	case ctx.GetUser() != nil:
 		c.ToUser = parseStringLiteral(ctx.GetUser().GetText())
+	case ctx.GetUser_var() != nil:
+		c.ToVariable = ctx.GetUser_var().Accept(s).(Expression)
 	default:
 		// should not happen, as this would suggest a bug in the parser
 		panic("invalid grant/revoke statement")
@@ -1061,6 +1069,8 @@ func (s *schemaVisitor) parseGrantOrRevoke(ctx interface {
 		ns := s.getIdent(ctx.GetNamespace())
 		c.Namespace = &ns
 	}
+
+	c.If = ctx.IF() != nil
 
 	// either privileges can be granted to roles, or roles can be granted to users.
 	// Other permutations are invalid.
@@ -1077,19 +1087,12 @@ func (s *schemaVisitor) parseGrantOrRevoke(ctx interface {
 		}
 	} else {
 		// if granting privileges, then recipient must be a role
-		if c.ToUser != "" {
+		if c.ToUser != "" || c.ToVariable != nil {
 			s.errs.RuleErr(ctx, ErrGrantOrRevoke, "cannot grant or revoke privileges to a user")
 		}
 	}
 
 	return c
-}
-
-func (s *schemaVisitor) VisitRole_name(ctx *gen.Role_nameContext) any {
-	if ctx.DEFAULT() != nil {
-		return "default"
-	}
-	return s.getIdent(ctx.Identifier())
 }
 
 func (s *schemaVisitor) VisitPrivilege_list(ctx *gen.Privilege_listContext) any {
@@ -1104,15 +1107,6 @@ func (s *schemaVisitor) VisitPrivilege_list(ctx *gen.Privilege_listContext) any 
 func (s *schemaVisitor) VisitPrivilege(ctx *gen.PrivilegeContext) any {
 	// since there is only one token, we can just get all text
 	return ctx.GetText()
-}
-
-func (s *schemaVisitor) VisitTransfer_ownership_statement(ctx *gen.Transfer_ownership_statementContext) any {
-	stmt := &TransferOwnershipStatement{
-		To: ctx.STRING_().GetText(),
-	}
-
-	stmt.Set(ctx)
-	return stmt
 }
 
 func (s *schemaVisitor) VisitSelect_statement(ctx *gen.Select_statementContext) any {
@@ -1263,7 +1257,7 @@ func (s *schemaVisitor) VisitSubquery_relation(ctx *gen.Subquery_relationContext
 	// alias is technially required here, but we allow it in the grammar
 	// to throw a better error message here.
 	if ctx.Identifier() != nil {
-		t.Alias = ctx.Identifier().Accept(s).(string)
+		t.Alias = s.getIdent(ctx.Identifier())
 	}
 
 	t.Set(ctx)
@@ -1299,7 +1293,7 @@ func (s *schemaVisitor) VisitExpression_result_column(ctx *gen.Expression_result
 	}
 
 	if ctx.Identifier() != nil {
-		col.Alias = ctx.Identifier().Accept(s).(string)
+		col.Alias = s.getIdent(ctx.Identifier())
 	}
 
 	col.Set(ctx)
@@ -1310,7 +1304,7 @@ func (s *schemaVisitor) VisitWildcard_result_column(ctx *gen.Wildcard_result_col
 	col := &ResultColumnWildcard{}
 
 	if ctx.Identifier() != nil {
-		col.Table = ctx.Identifier().Accept(s).(string)
+		col.Table = s.getIdent(ctx.Identifier())
 	}
 
 	col.Set(ctx)
@@ -1319,13 +1313,13 @@ func (s *schemaVisitor) VisitWildcard_result_column(ctx *gen.Wildcard_result_col
 
 func (s *schemaVisitor) VisitUpdate_statement(ctx *gen.Update_statementContext) any {
 	up := &UpdateStatement{
-		Table:     ctx.GetTable_name().Accept(s).(string),
+		Table:     s.getIdent(ctx.GetTable_name()),
 		SetClause: arr[*UpdateSetClause](len(ctx.AllUpdate_set_clause())),
 		Joins:     arr[*Join](len(ctx.AllJoin())),
 	}
 
 	if ctx.GetAlias() != nil {
-		up.Alias = ctx.GetAlias().Accept(s).(string)
+		up.Alias = s.getIdent(ctx.GetAlias())
 	}
 
 	for i, set := range ctx.AllUpdate_set_clause() {
@@ -1350,7 +1344,7 @@ func (s *schemaVisitor) VisitUpdate_statement(ctx *gen.Update_statementContext) 
 
 func (s *schemaVisitor) VisitUpdate_set_clause(ctx *gen.Update_set_clauseContext) any {
 	u := &UpdateSetClause{
-		Column: ctx.GetColumn().Accept(s).(string),
+		Column: s.getIdent(ctx.GetColumn()),
 		Value:  ctx.Sql_expr().Accept(s).(Expression),
 	}
 
@@ -1360,7 +1354,7 @@ func (s *schemaVisitor) VisitUpdate_set_clause(ctx *gen.Update_set_clauseContext
 
 func (s *schemaVisitor) VisitInsert_statement(ctx *gen.Insert_statementContext) any {
 	ins := &InsertStatement{
-		Table: ctx.GetTable_name().Accept(s).(string),
+		Table: s.getIdent(ctx.GetTable_name()),
 	}
 
 	// can either be INSERT INTO table VALUES (1, 2, 3) or
@@ -1374,7 +1368,7 @@ func (s *schemaVisitor) VisitInsert_statement(ctx *gen.Insert_statementContext) 
 	}
 
 	if ctx.GetAlias() != nil {
-		ins.Alias = ctx.GetAlias().Accept(s).(string)
+		ins.Alias = s.getIdent(ctx.GetAlias())
 	}
 
 	if ctx.Identifier_list() != nil {
@@ -1416,11 +1410,11 @@ func (s *schemaVisitor) VisitUpsert_clause(ctx *gen.Upsert_clauseContext) any {
 
 func (s *schemaVisitor) VisitDelete_statement(ctx *gen.Delete_statementContext) any {
 	d := &DeleteStatement{
-		Table: ctx.GetTable_name().Accept(s).(string),
+		Table: s.getIdent(ctx.GetTable_name()),
 	}
 
 	if ctx.GetAlias() != nil {
-		d.Alias = ctx.GetAlias().Accept(s).(string)
+		d.Alias = s.getIdent(ctx.GetAlias())
 	}
 
 	if ctx.GetWhere() != nil {
@@ -1433,11 +1427,11 @@ func (s *schemaVisitor) VisitDelete_statement(ctx *gen.Delete_statementContext) 
 
 func (s *schemaVisitor) VisitColumn_sql_expr(ctx *gen.Column_sql_exprContext) any {
 	e := &ExpressionColumn{
-		Column: ctx.GetColumn().Accept(s).(string),
+		Column: s.getIdent(ctx.GetColumn()),
 	}
 
 	if ctx.GetTable() != nil {
-		e.Table = ctx.GetTable().Accept(s).(string)
+		e.Table = s.getIdent(ctx.GetTable())
 	}
 
 	if ctx.Type_cast() != nil {
@@ -1505,7 +1499,7 @@ func (s *schemaVisitor) makeArray(e *ExpressionArrayAccess, single, left, right 
 func (s *schemaVisitor) VisitField_access_sql_expr(ctx *gen.Field_access_sql_exprContext) any {
 	e := &ExpressionFieldAccess{
 		Record: ctx.Sql_expr().Accept(s).(Expression),
-		Field:  ctx.Identifier().Accept(s).(string),
+		Field:  s.getIdent(ctx.Identifier()),
 	}
 
 	if ctx.Type_cast() != nil {
@@ -1591,7 +1585,7 @@ func (s *schemaVisitor) VisitWindow_function_call_sql_expr(ctx *gen.Window_funct
 		wr := &WindowReference{
 			Name: name,
 		}
-		wr.SetToken(ctx.Identifier().IDENTIFIER().GetSymbol())
+		wr.Set(ctx.Identifier().Allowed_identifier())
 		e.Window = wr
 	} else {
 		e.Window = ctx.Window().Accept(s).(*WindowImpl)
@@ -1620,7 +1614,7 @@ func (s *schemaVisitor) VisitParen_sql_expr(ctx *gen.Paren_sql_exprContext) any 
 func (s *schemaVisitor) VisitCollate_sql_expr(ctx *gen.Collate_sql_exprContext) any {
 	e := &ExpressionCollate{
 		Expression: ctx.Sql_expr().Accept(s).(Expression),
-		Collation:  ctx.Identifier().Accept(s).(string),
+		Collation:  s.getIdent(ctx.Identifier()),
 	}
 
 	e.Set(ctx)
@@ -1841,7 +1835,7 @@ func (s *schemaVisitor) VisitSql_expr_list(ctx *gen.Sql_expr_listContext) any {
 
 func (s *schemaVisitor) VisitNormal_call_sql(ctx *gen.Normal_call_sqlContext) any {
 	call := &ExpressionFunctionCall{
-		Name: ctx.Identifier().Accept(s).(string),
+		Name: s.getIdent(ctx.Identifier()),
 	}
 
 	// function calls can have either of these types for args,
@@ -2178,7 +2172,7 @@ func (s *schemaVisitor) VisitVariable_or_underscore(ctx *gen.Variable_or_undersc
 		return nil
 	}
 
-	str := s.cleanStringIdent(ctx.VARIABLE())
+	str := s.cleanStringIdent(ctx, ctx.VARIABLE().GetText())
 	return &str
 }
 
@@ -2211,29 +2205,19 @@ func (s *schemaVisitor) VisitStmt_for_loop(ctx *gen.Stmt_for_loopContext) any {
 	switch {
 	case ctx.Range_() != nil:
 		stmt.LoopTerm = ctx.Range_().Accept(s).(*LoopTermRange)
-	case ctx.GetTarget_variable() != nil:
-		v := ctx.GetTarget_variable().Accept(s).(*ExpressionVariable)
-		stmt.LoopTerm = &LoopTermVariable{
-			Variable: v,
+	case ctx.Action_expr() != nil:
+		expr := ctx.Action_expr().Accept(s).(Expression)
+		stmt.LoopTerm = &LoopTermExpression{
+			Array:      ctx.ARRAY() != nil,
+			Expression: expr,
 		}
-
-		if v.GetTypeCast() != nil {
-			s.errs.RuleErr(ctx.GetTarget_variable(), ErrSyntax, "cannot typecast loop variable")
-		}
-
-		stmt.LoopTerm.Set(ctx.GetTarget_variable())
+		stmt.LoopTerm.Set(ctx.Action_expr())
 	case ctx.Sql_statement() != nil:
 		sqlStmt := ctx.Sql_statement().Accept(s).(*SQLStatement)
 		stmt.LoopTerm = &LoopTermSQL{
 			Statement: sqlStmt,
 		}
 		stmt.LoopTerm.Set(ctx.Sql_statement())
-	case ctx.Action_function_call() != nil:
-		call := ctx.Action_function_call().Accept(s).(*ExpressionFunctionCall)
-		stmt.LoopTerm = &LoopTermFunctionCall{
-			Call: call,
-		}
-		stmt.LoopTerm.Set(ctx.Action_function_call())
 	default:
 		panic("unknown loop term")
 	}
@@ -2384,20 +2368,19 @@ func (s *schemaVisitor) Visit(tree antlr.ParseTree) interface {
 // It checks that the identifier is not too long.
 // It also converts the identifier to lowercase.
 func (s *schemaVisitor) getIdent(i gen.IIdentifierContext) string {
-	return strings.ToLower(s.cleanStringIdent(i.IDENTIFIER()))
+	return strings.ToLower(s.cleanStringIdent(i, i.Allowed_identifier().GetText()))
 }
 
-func (s *schemaVisitor) cleanStringIdent(i antlr.TerminalNode) string {
-	ident := i.GetText()
-	s.validateVariableIdentifier(i.GetSymbol(), ident)
-	return strings.ToLower(ident)
+func (s *schemaVisitor) cleanStringIdent(t antlr.ParserRuleContext, i string) string {
+	s.validateVariableIdentifier(t, i)
+	return strings.ToLower(i)
 }
 
 // validateVariableIdentifier validates that a variable's identifier is not too long.
 // It doesn't check if it is a keyword, since variables have $ prefixes.
-func (s *schemaVisitor) validateVariableIdentifier(i antlr.Token, str string) {
+func (s *schemaVisitor) validateVariableIdentifier(i antlr.ParserRuleContext, str string) {
 	if len(str) > validation.MAX_IDENT_NAME_LENGTH {
-		s.errs.TokenErr(i, ErrIdentifier, "maximum identifier length is %d", maxIdentifierLength)
+		s.errs.RuleErr(i, ErrIdentifier, "maximum identifier length is %d", maxIdentifierLength)
 	}
 }
 

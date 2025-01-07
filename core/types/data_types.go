@@ -115,6 +115,21 @@ var ZeroMetadata = [2]uint16{}
 
 // PGString returns the string representation of the type in Postgres.
 func (c *DataType) PGString() (string, error) {
+	scalar, err := c.PGScalar()
+	if err != nil {
+		return "", err
+	}
+
+	if c.IsArray {
+		return scalar + "[]", nil
+	}
+
+	return scalar, nil
+}
+
+// PGScalar returns the scalar representation of the type in Postgres.
+// For example, if this is of type DECIMAL(100,5)[], it will return NUMERIC(100,5).
+func (c *DataType) PGScalar() (string, error) {
 	var scalar string
 	switch strings.ToLower(c.Name) {
 	case intStr:
@@ -141,10 +156,6 @@ func (c *DataType) PGString() (string, error) {
 		return "", errors.New("cannot have unknown column type")
 	default:
 		return "", fmt.Errorf("unknown column type: %s", c.Name)
-	}
-
-	if c.IsArray {
-		return scalar + "[]", nil
 	}
 
 	return scalar, nil

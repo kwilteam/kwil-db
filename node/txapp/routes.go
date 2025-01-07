@@ -13,7 +13,7 @@ import (
 	"github.com/kwilteam/kwil-db/extensions/consensus"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/node/accounts"
-	"github.com/kwilteam/kwil-db/node/engine/interpreter"
+	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
 )
@@ -202,10 +202,10 @@ func codeForEngineError(err error) types.TxCode {
 	if err == nil {
 		return types.CodeOk
 	}
-	if errors.Is(err, interpreter.ErrNamespaceExists) {
+	if errors.Is(err, engine.ErrNamespaceExists) {
 		return types.CodeDatasetExists
 	}
-	if errors.Is(err, interpreter.ErrNamespaceNotFound) {
+	if errors.Is(err, engine.ErrNamespaceNotFound) {
 		return types.CodeDatasetMissing
 	}
 
@@ -249,7 +249,7 @@ func (d *rawStatementRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx
 }
 
 func (d *rawStatementRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
-	err := app.Engine.Execute(ctx, app.DB, d.statement, d.params, func(r *common.Row) error {
+	err := app.Engine.Execute(makeEngineCtx(ctx), app.DB, d.statement, d.params, func(r *common.Row) error {
 		// we throw away all results for raw statements in a block
 		return nil
 	})
@@ -257,6 +257,13 @@ func (d *rawStatementRoute) InTx(ctx *common.TxContext, app *common.App, tx *typ
 		return codeForEngineError(err), err
 	}
 	return 0, nil
+}
+
+func makeEngineCtx(ctx *common.TxContext) *common.EngineContext {
+	return &common.EngineContext{
+		TxContext:     ctx,
+		OverrideAuthz: false,
+	}
 }
 
 type executeActionRoute struct {
@@ -313,7 +320,7 @@ func (d *executeActionRoute) InTx(ctx *common.TxContext, app *common.App, tx *ty
 	for i := range d.args {
 		// TODO: once we are able to store execution logs in the block store, we should propagate the discarded
 		// return value here.
-		_, err := app.Engine.Call(ctx, app.DB, d.namespace, d.action, d.args[i], func(r *common.Row) error {
+		_, err := app.Engine.Call(makeEngineCtx(ctx), app.DB, d.namespace, d.action, d.args[i], func(r *common.Row) error {
 			// we throw away all results for execute actions
 			return nil
 		})

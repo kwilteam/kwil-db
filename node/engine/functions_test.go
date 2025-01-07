@@ -1,16 +1,16 @@
-package parse_test
+package engine_test
 
 import (
 	"testing"
 
-	"github.com/kwilteam/kwil-db/node/engine/parse"
+	"github.com/kwilteam/kwil-db/node/engine"
 )
 
 // tests that we have implemented all functions
 func Test_AllFunctionsImplemented(t *testing.T) {
-	for name, fn := range parse.Functions {
+	for name, fn := range engine.Functions {
 		switch fnt := fn.(type) {
-		case *parse.ScalarFunctionDefinition:
+		case *engine.ScalarFunctionDefinition:
 			if fnt.PGFormatFunc == nil {
 				t.Errorf("function %s has no PGFormatFunc", name)
 			}
@@ -18,7 +18,7 @@ func Test_AllFunctionsImplemented(t *testing.T) {
 			if fnt.ValidateArgsFunc == nil {
 				t.Errorf("function %s has no ValidateArgsFunc", name)
 			}
-		case *parse.AggregateFunctionDefinition:
+		case *engine.AggregateFunctionDefinition:
 			if fnt.PGFormatFunc == nil {
 				t.Errorf("function %s has no PGFormatFunc", name)
 			}
@@ -26,7 +26,7 @@ func Test_AllFunctionsImplemented(t *testing.T) {
 			if fnt.ValidateArgsFunc == nil {
 				t.Errorf("function %s has no ValidateArgsFunc", name)
 			}
-		case *parse.WindowFunctionDefinition:
+		case *engine.WindowFunctionDefinition:
 			if fnt.PGFormatFunc == nil {
 				t.Errorf("function %s has no PGFormatFunc", name)
 			}
