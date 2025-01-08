@@ -205,7 +205,7 @@ func (c *GatewayClient) authenticate(ctx context.Context) error {
 	if c.Signer == nil {
 		return fmt.Errorf("cannot authenticate to gateway without a signer")
 	}
-	sig, err := c.gatewaySigner(msg, c.Signer)
+	sig, err := c.gatewaySigner(msg, c.Signer())
 	if err != nil {
 		return fmt.Errorf("sign message: %w", err)
 	}
@@ -213,7 +213,7 @@ func (c *GatewayClient) authenticate(ctx context.Context) error {
 	// send the auth request
 	err = c.gatewayClient.Authn(ctx, &gateway.AuthnRequest{
 		Nonce:     authParam.Nonce,
-		Sender:    c.Signer.Identity(),
+		Sender:    c.Signer().Identity(),
 		Signature: sig,
 	})
 	if err != nil {

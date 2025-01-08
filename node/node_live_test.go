@@ -424,7 +424,7 @@ func (d *dummyTxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*k
 	return nil
 }
 
-func (d *dummyTxApp) AccountInfo(ctx context.Context, dbTx sql.DB, identifier []byte, pending bool) (*big.Int, int64, error) {
+func (d *dummyTxApp) AccountInfo(ctx context.Context, dbTx sql.DB, identifier string, pending bool) (*big.Int, int64, error) {
 	return big.NewInt(0), 0, nil
 }
 

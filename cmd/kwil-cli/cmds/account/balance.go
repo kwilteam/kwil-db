@@ -2,15 +2,14 @@ package account
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
-	"strings"
 
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/client"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	clientType "github.com/kwilteam/kwil-db/core/client/types"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/spf13/cobra"
 )
@@ -23,21 +22,24 @@ func balanceCmd() *cobra.Command {
 		Long:  `Gets an account's balance and nonce.`,
 		Args:  cobra.MaximumNArgs(1), // no args means own account
 		RunE: func(cmd *cobra.Command, args []string) error {
-			var err error
-			var acctID []byte
+			var acctID string
 			var clientFlags uint8
 			if len(args) > 0 {
 				clientFlags = client.WithoutPrivateKey
-				acctIDStr, _ := strings.CutPrefix(args[0], "0x")
-				acctID, err = hex.DecodeString(acctIDStr) // identifier bytes
-				if err != nil {
-					return display.PrintErr(cmd, err)
-				}
+				acctID = args[0]
 			} // else use our account from the signer
 
 			return client.DialClient(cmd.Context(), cmd, clientFlags, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
-				if len(acctID) == 0 {
-					acctID = conf.Identity()
+				if len(args) == 0 {
+					if cl.Signer() == nil {
+						return display.PrintErr(cmd, errors.New("no account ID provided and no signer set"))
+					}
+
+					ident, err := auth.Secp25k1Authenticator{}.Identifier(cl.Signer().Identity())
+					if err != nil {
+						return display.PrintErr(cmd, fmt.Errorf("failed to get identifier: %w", err))
+					}
+					acctID = ident
 					if len(acctID) == 0 {
 						return display.PrintErr(cmd, errors.New("empty account ID"))
 					}

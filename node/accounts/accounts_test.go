@@ -2,7 +2,6 @@ package accounts
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"math/big"
 	"testing"
@@ -46,7 +45,7 @@ func (m *mockDB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Re
 	// mock some expected queries from internal functions
 	switch stmt {
 	case sqlCreateAccount: // via createAccount and createAccountWithNonce
-		id := args[0].([]byte)
+		id := args[0].(string)
 		bal, ok := big.NewInt(0).SetString(args[1].(string), 10)
 		if !ok {
 			return nil, errors.New("not a string balance")
@@ -115,8 +114,8 @@ type counter interface {
 }
 
 var (
-	account1 = []byte("account1")
-	account2 = []byte("account2")
+	account1 = "account1"
+	account2 = "account2"
 )
 
 type acctsTestCase struct {
@@ -149,10 +148,10 @@ var acctsTestCases = []acctsTestCase{
 			// first credit, access db
 			verifyDBAccessCount(t, c, 1, skip)
 
-			_, ok := a.records[hex.EncodeToString(account1)]
+			_, ok := a.records[account1]
 			require.False(t, ok)
 
-			acct, ok := a.updates[hex.EncodeToString(account1)]
+			acct, ok := a.updates[account1]
 			require.True(t, ok)
 			assert.Equal(t, int64(100), acct.Balance.Int64())
 

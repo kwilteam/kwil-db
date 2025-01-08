@@ -84,7 +84,7 @@ func NewVersionCmd() *cobra.Command {
 				},
 			}
 
-			return display.Print(resp, nil, "text")
+			return display.PrintCmd(cmd, resp)
 		},
 	}
 

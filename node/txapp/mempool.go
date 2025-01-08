@@ -28,7 +28,7 @@ type mempool struct {
 }
 
 // accountInfo retrieves the account info from the mempool state or the account store.
-func (m *mempool) accountInfo(ctx context.Context, tx sql.Executor, acctID []byte) (*types.Account, error) {
+func (m *mempool) accountInfo(ctx context.Context, tx sql.Executor, acctID string) (*types.Account, error) {
 	if acctInfo, ok := m.accounts[string(acctID)]; ok {
 		return acctInfo, nil // there are unconfirmed txs for this account
 	}
@@ -40,13 +40,13 @@ func (m *mempool) accountInfo(ctx context.Context, tx sql.Executor, acctID []byt
 	}
 
 	m.accounts[string(acctID)] = acct
-	m.log.Info("added new account to mempool records", "account", hex.EncodeToString(acctID), "nonce", acct.Nonce, "balance", acct.Balance)
+	m.log.Info("added new account to mempool records", "account", acctID, "nonce", acct.Nonce, "balance", acct.Balance)
 
 	return acct, nil
 }
 
 // accountInfoSafe is wraps accountInfo in a mutex lock.
-func (m *mempool) accountInfoSafe(ctx context.Context, tx sql.Executor, acctID []byte) (*types.Account, error) {
+func (m *mempool) accountInfoSafe(ctx context.Context, tx sql.Executor, acctID string) (*types.Account, error) {
 	m.acctsMtx.Lock()
 	defer m.acctsMtx.Unlock()
 
@@ -144,7 +144,7 @@ func (m *mempool) applyTransaction(ctx *common.TxContext, tx *types.Transaction,
 	}
 
 	// get account info from mempool state or account store
-	acct, err := m.accountInfo(ctx.Ctx, dbTx, tx.Sender)
+	acct, err := m.accountInfo(ctx.Ctx, dbTx, ctx.Caller)
 	if err != nil {
 		return err
 	}

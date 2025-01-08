@@ -184,6 +184,7 @@ func (s *Secp256k1Signer) Sign(msg []byte) (*Signature, error) {
 
 // Identity returns the identity of the signer (public key for this signer).
 func (s *Secp256k1Signer) Identity() []byte {
+	// TODO:: this seems wrong. It should be equal to the auth.Identifier method right (which returns a string)?
 	return s.Secp256k1PrivateKey.Public().Bytes()
 }
 

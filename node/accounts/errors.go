@@ -1,7 +1,6 @@
 package accounts
 
 import (
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -17,7 +16,7 @@ var (
 )
 
 // errInsufficientFunds formats an error message for insufficient funds
-func errInsufficientFunds(account []byte, amount *big.Int, balance *big.Int) error {
+func errInsufficientFunds(account string, amount *big.Int, balance *big.Int) error {
 	return fmt.Errorf("%w: account %s tried to use %s, but only has balance %s",
-		ErrInsufficientFunds, hex.EncodeToString(account), amount.String(), balance.String())
+		ErrInsufficientFunds, account, amount.String(), balance.String())
 }

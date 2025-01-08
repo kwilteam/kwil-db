@@ -21,6 +21,8 @@ signing.
 */
 package auth
 
+import "fmt"
+
 // Authenticator is an interface for verifying signatures and
 // deriving a string identifier from the sender bytes. Custom
 // asymmetric signature algorithms may be implemented by developers
@@ -51,4 +53,14 @@ func GetAuthenticator(authType string) Authenticator {
 	default:
 		return nil
 	}
+}
+
+// GetIdentifier returns the identifier for a given sender and authType.
+func GetIdentifier(authType string, sender []byte) (string, error) {
+	auth := GetAuthenticator(authType)
+	if auth == nil {
+		return "", fmt.Errorf("authenticator not found: %s", authType)
+	}
+
+	return auth.Identifier(sender)
 }

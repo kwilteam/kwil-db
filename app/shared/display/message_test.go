@@ -219,10 +219,9 @@ func Test_TxHashAndExecResponse(t *testing.T) {
 	qr := getExampleTxQueryResponse()
 	qr.Hash = hash
 	resp := &TxHashAndExecResponse{
-		Hash:      RespTxHash(hash),
-		QueryResp: &RespTxQuery{Msg: qr},
+		Res: qr,
 	}
-	expectJSON := `{"tx_hash":"0102030405000000000000000000000000000000000000000000000000000000","exec_result":{"hash":"0102030405000000000000000000000000000000000000000000000000000000","height":10,"tx":{"signature":{"sig":"yz/tf2/zblkFTASoMbIV5RQFJ1PuNT5v4x1LTvc2rNYVUSfbVV0wBroU/LTHm7rVbI5juBqYljGbsFOp4lNHWAA=","type":"secp256k1_ep"},"body":{"desc":"This is a test transaction for cli","payload":"AAH4Wbg5eGY2MTdhZjFjYTc3NGViYmQ2ZDIzZThmZTEyYzU2ZDQxZDI1YTIyZDgxZTg4ZjY3YzZjNmVlMGQ0i2NyZWF0ZV91c2Vy0dDPyYR0ZXh0gMKAgMSDZm9v","type":"execute","fee":"100","nonce":10,"chain_id":"asdf"},"serialization":"concat","sender":""},"result":{"code":0,"gas":10,"log":"This is log","events":null},"warning":"HASH MISMATCH: requested 0102030405000000000000000000000000000000000000000000000000000000; received a9e1f559c5ec1246078f5b9f362ee59ee4113946305d41448f917cdd96a0c883"}}`
+	expectJSON := `{"hash":"0102030405000000000000000000000000000000000000000000000000000000","height":10,"tx":{"signature":{"sig":"yz/tf2/zblkFTASoMbIV5RQFJ1PuNT5v4x1LTvc2rNYVUSfbVV0wBroU/LTHm7rVbI5juBqYljGbsFOp4lNHWAA=","type":"secp256k1_ep"},"body":{"desc":"This is a test transaction for cli","payload":"AAH4Wbg5eGY2MTdhZjFjYTc3NGViYmQ2ZDIzZThmZTEyYzU2ZDQxZDI1YTIyZDgxZTg4ZjY3YzZjNmVlMGQ0i2NyZWF0ZV91c2Vy0dDPyYR0ZXh0gMKAgMSDZm9v","type":"execute","fee":"100","nonce":10,"chain_id":"asdf"},"serialization":"concat","sender":""},"tx_result":{"code":0,"gas":10,"log":"This is log","events":null}}`
 	expectText := "TxHash: 0102030405000000000000000000000000000000000000000000000000000000\nStatus: success\nHeight: 10\nLog: This is log"
 
 	outText, err := resp.MarshalText()

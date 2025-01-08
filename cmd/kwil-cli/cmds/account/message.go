@@ -1,7 +1,6 @@
 package account
 
 import (
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 
@@ -16,7 +15,7 @@ func (r *respAccount) MarshalJSON() ([]byte, error) {
 		Balance    string `json:"balance"`
 		Nonce      int64  `json:"nonce"`
 	}{
-		Identifier: hex.EncodeToString(r.Identifier),
+		Identifier: r.Identifier,
 		Balance:    r.Balance.String(),
 		Nonce:      r.Nonce,
 	})

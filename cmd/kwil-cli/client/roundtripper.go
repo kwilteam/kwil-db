@@ -9,12 +9,14 @@ import (
 	"github.com/manifoldco/promptui"
 	"github.com/spf13/cobra"
 
+	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/helpers"
 	"github.com/kwilteam/kwil-db/core/client"
 	clientType "github.com/kwilteam/kwil-db/core/client/types"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/gatewayclient"
+	"github.com/kwilteam/kwil-db/core/log"
 )
 
 // These are bit flags used signal certain client features.
@@ -63,6 +65,10 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 		// private key checks for call messages are done after creating the client
 		// as this requires whether the Kwild node is in private mode or not.
 		return errors.New("private key not provided")
+	}
+
+	if !display.ShouldSilence(cmd) {
+		clientConfig.Logger = log.New()
 	}
 
 	// if not using the gateway, then we can simply create a regular client and return

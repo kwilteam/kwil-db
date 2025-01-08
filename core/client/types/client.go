@@ -10,20 +10,22 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
 // Client defines methods are used to talk to a Kwil provider.
 type Client interface {
-	Call(ctx context.Context, dbid string, procedure string, inputs []any) (*types.CallResult, error)
+	Call(ctx context.Context, dbid string, action string, inputs []any) (*types.CallResult, error)
 	ChainID() string
 	ChainInfo(ctx context.Context) (*types.ChainInfo, error)
 	Execute(ctx context.Context, dbid string, action string, tuples [][]any, opts ...TxOpt) (types.Hash, error)
 	ExecuteSQL(ctx context.Context, sql string, params map[string]any, opts ...TxOpt) (types.Hash, error)
-	GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error)
+	GetAccount(ctx context.Context, ident string, status types.AccountStatus) (*types.Account, error)
 	Ping(ctx context.Context) (string, error)
 	Query(ctx context.Context, query string, params map[string]any) (*types.QueryResult, error)
 	TxQuery(ctx context.Context, txHash types.Hash) (*types.TxQueryResponse, error)
 	WaitTx(ctx context.Context, txHash types.Hash, interval time.Duration) (*types.TxQueryResponse, error)
-	Transfer(ctx context.Context, to []byte, amount *big.Int, opts ...TxOpt) (types.Hash, error)
+	Transfer(ctx context.Context, to string, amount *big.Int, opts ...TxOpt) (types.Hash, error)
+	Signer() auth.Signer
 }
