@@ -18,6 +18,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	adminTypes "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
+	nodeConsensus "github.com/kwilteam/kwil-db/node/consensus"
 	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/ident"
 	"github.com/kwilteam/kwil-db/node/migrations"
@@ -349,6 +350,14 @@ func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 		userjson.MethodMigrationStatus: rpcserver.MakeMethodDef(svc.MigrationStatus,
 			"get the migration status",
 			"the status of the migration",
+		),
+		userjson.MethodListUpdateProposals: rpcserver.MakeMethodDef(svc.ListPendingConsensusUpdates,
+			"list active consensus parameter update proposals",
+			"the list of all the active consensus parameter update proposals",
+		),
+		userjson.MethodUpdateProposalStatus: rpcserver.MakeMethodDef(svc.ListPendingConsensusUpdates,
+			"list active consensus parameter update proposals",
+			"the list of all the active consensus parameter update proposals",
 		),
 
 		// Challenge method
@@ -895,6 +904,34 @@ func (svc *Service) MigrationStatus(ctx context.Context, req *userjson.Migration
 			EndHeight:     metadata.MigrationState.EndHeight,
 			CurrentHeight: chainStatus.Sync.BestBlockHeight,
 		},
+	}, nil
+}
+
+func (svc *Service) ListPendingConsensusUpdates(ctx context.Context, req *userjson.ListPendingConsensusUpdatesRequest) (*userjson.ListPendingConsensusUpdatesResponse, *jsonrpc.Error) {
+	readTx := svc.db.BeginDelayedReadTx()
+	defer readTx.Rollback(ctx)
+
+	resolutions, err := voting.GetResolutionsByType(ctx, readTx, nodeConsensus.ParamUpdatesResolutionType)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorDBInternal, "failed to get consensus updates resolutions", nil)
+	}
+
+	var pendingMigrations []*types.ConsensusParamUpdateProposal
+
+	for _, res := range resolutions {
+		up := &nodeConsensus.ParamUpdatesDeclaration{}
+		if err := up.UnmarshalBinary(res.Body); err != nil {
+			return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to consensus parameter update declaration", nil)
+		}
+		pendingMigrations = append(pendingMigrations, &types.ConsensusParamUpdateProposal{
+			ID:          *res.ID,
+			Description: up.Description,
+			Updates:     up.ParamUpdates,
+		})
+	}
+
+	return &userjson.ListPendingConsensusUpdatesResponse{
+		Proposals: pendingMigrations,
 	}, nil
 }
 

@@ -61,6 +61,9 @@ func (k *Ed25519PrivateKey) pubKeyBytes() []byte {
 
 // Equals compares two ed25519 private keys.
 func (k *Ed25519PrivateKey) Equals(o Key) bool {
+	if o == nil {
+		return false
+	}
 	edk, ok := o.(*Ed25519PrivateKey)
 	if !ok { // if different concrete type, test based on returns form the interface's Type and Bytes
 		return keyEquals(k, o)
@@ -95,6 +98,9 @@ func (k *Ed25519PublicKey) Bytes() []byte {
 
 // Equals compares two ed25519 public keys.
 func (k *Ed25519PublicKey) Equals(o Key) bool {
+	if o == nil {
+		return false
+	}
 	edk, ok := o.(*Ed25519PublicKey)
 	if !ok {
 		return keyEquals(k, o)

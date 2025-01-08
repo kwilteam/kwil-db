@@ -85,6 +85,10 @@ type MigrationStatusResponse struct {
 	Status *types.MigrationState `json:"status"`
 }
 
+type ListPendingConsensusUpdatesResponse struct {
+	Proposals []*types.ConsensusParamUpdateProposal `json:"proposals"`
+}
+
 type ChallengeResponse struct {
 	Challenge types.HexBytes `json:"challenge"`
 }

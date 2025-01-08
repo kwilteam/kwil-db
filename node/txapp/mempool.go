@@ -24,8 +24,8 @@ type mempool struct {
 	accounts map[string]*types.Account
 	acctsMtx sync.Mutex // protects accounts
 
-	nodeAddr []byte
-	log      log.Logger
+	nodeIdent auth.Signer
+	log       log.Logger
 }
 
 // accountInfo retrieves the account info from the mempool state or the account store.
@@ -64,7 +64,7 @@ func (m *mempool) applyTransaction(ctx *common.TxContext, tx *types.Transaction,
 	// see [internal/migrations/migrations.go] for more info
 	status := ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus
 	inMigration := status == types.MigrationInProgress || status == types.MigrationCompleted
-	activeMigration := status != types.NoActiveMigration
+	activeMigration := status.Active()
 	genesisMigration := status == types.GenesisMigration
 
 	if inMigration {
@@ -170,7 +170,9 @@ func (m *mempool) applyTransaction(ctx *common.TxContext, tx *types.Transaction,
 		// then mark the events for rebroadcast before discarding the transaction
 		// as the votes for these events are not yet received by the network.
 
-		fromLocalValidator := bytes.Equal(tx.Sender, m.nodeAddr) // Check if the transaction is from the local node
+		// Check if the transaction is from the local node
+		fromLocalValidator := bytes.Equal(tx.Sender, m.nodeIdent.CompactID()) &&
+			tx.Signature.Type == m.nodeIdent.AuthType()
 
 		if tx.Body.PayloadType == types.PayloadTypeValidatorVoteIDs && fromLocalValidator {
 			// Mark these ids for rebroadcast

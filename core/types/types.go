@@ -68,6 +68,12 @@ type DatasetIdentifier struct {
 	DBID  string   `json:"dbid"`
 }
 
+// VotableEventID returns the ID of an event that can be voted on. This may be
+// used to determine the ID of an event prior to the event being created.
+func VotableEventID(ty string, body []byte) UUID {
+	return *NewUUIDV5(append([]byte(ty), body...))
+}
+
 // VotableEvent is an event that can be voted.
 // It contains an event type and a body.
 // An ID can be generated from the event type and body.
@@ -77,7 +83,8 @@ type VotableEvent struct {
 }
 
 func (e *VotableEvent) ID() *UUID {
-	return NewUUIDV5(append([]byte(e.Type), e.Body...))
+	id := VotableEventID(e.Type, e.Body)
+	return &id
 }
 
 const veVersion = 0
@@ -116,6 +123,7 @@ func (e *VotableEvent) UnmarshalBinary(b []byte) error {
 }
 
 type PendingResolution struct {
+	Type         string     `json:"type"`
 	ResolutionID *UUID      `json:"resolution_id"` // Resolution ID
 	ExpiresAt    int64      `json:"expires_at"`    // ExpiresAt is the block height at which the resolution expires
 	Board        []HexBytes `json:"board"`         // Board is the list of validators who are eligible to vote on the resolution
@@ -131,8 +139,32 @@ type Migration struct {
 	Timestamp        string `json:"timestamp"`          // Timestamp when the migration was proposed
 }
 
+type ConsensusParamUpdateProposal struct {
+	ID          UUID         `json:"id"`
+	Description string       `json:"description"`
+	Updates     ParamUpdates `json:"updates"`
+}
+
 // MigrationStatus represents the status of the nodes in the zero downtime migration process.
 type MigrationStatus string
+
+func (ms MigrationStatus) NoneActive() bool {
+	return ms == NoActiveMigration || ms == ""
+}
+
+func (ms MigrationStatus) Active() bool {
+	return !ms.NoneActive()
+}
+
+func (ms MigrationStatus) Valid() bool {
+	switch ms {
+	case NoActiveMigration, ActivationPeriod, MigrationInProgress,
+		MigrationCompleted, GenesisMigration:
+		return true
+	default:
+		return false
+	}
+}
 
 const (
 	// NoActiveMigration indicates there is currently no migration process happening on the network.

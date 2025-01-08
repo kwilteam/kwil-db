@@ -212,8 +212,10 @@ func newGenesis(t *testing.T, nodekeys [][]byte) ([]crypto.PrivateKey, *config.G
 	}
 
 	genCfg := config.GenesisConfig{
-		Leader:     config.EncodePubKeyAndType(privKeys[0].Public().Bytes(), privKeys[0].Type()),
 		Validators: []*ktypes.Validator{},
+		NetworkParameters: ktypes.NetworkParameters{
+			Leader: ktypes.PublicKey{PublicKey: privKeys[0].Public()},
+		},
 	}
 	for _, priv := range privKeys {
 		genCfg.Validators = append(genCfg.Validators, &ktypes.Validator{
@@ -329,7 +331,7 @@ func (ce *dummyCE) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync
 	return nil, nil
 }
 
-func (ce *dummyCE) ConsensusParams() *ktypes.ConsensusParams {
+func (ce *dummyCE) ConsensusParams() *ktypes.NetworkParameters {
 	return nil
 }
 

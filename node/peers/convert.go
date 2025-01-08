@@ -218,6 +218,10 @@ func ResolveHost(addr string) (ip, ipv string, err error) {
 	if err != nil {
 		return
 	}
+	if len(ipAddr.IP) == 0 {
+		err = fmt.Errorf("invalid IP address: %v", addr)
+		return
+	}
 	ip = ipAddr.IP.String()
 	ipv = "ip4"
 	if ipAddr.IP.To4() == nil {

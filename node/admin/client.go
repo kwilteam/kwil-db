@@ -50,6 +50,10 @@ type adminSvcClient interface {
 	// TxQuery queries a transaction by hash.
 	TxQuery(ctx context.Context, txHash types.Hash) (*types.TxQueryResponse, error)
 
+	ListUpdateProposals(ctx context.Context) ([]*types.ConsensusParamUpdateProposal, error)
+
+	ConsensusParams(ctx context.Context) (*types.NetworkParameters, error)
+
 	// migration methods
 	ListMigrations(ctx context.Context) ([]*types.Migration, error)
 	MigrationStatus(ctx context.Context) (*types.MigrationState, error)

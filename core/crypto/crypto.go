@@ -164,6 +164,35 @@ func WireDecodePrivateKey(b []byte) (PrivateKey, error) {
 	}
 }
 
+// WireEncodePublicKey encodes public key and key type into a byte slice.
+// This is different than using the key's Bytes method, which returns the
+// raw bytes of the key; this is a serialization of the key type and the
+// raw bytes that is suitable for transmitting on the wire or storing on
+// disk.
+func WireEncodePublicKey(key PublicKey) []byte {
+	b := binary.LittleEndian.AppendUint32(nil, uint32(key.Type()))
+	return append(b, key.Bytes()...)
+}
+
+// WireDecodePubKey decodes a public key from a network or disk source.
+func WireDecodePubKey(b []byte) (PublicKey, error) {
+	if len(b) <= 4 {
+		return nil, errors.New("insufficient data for public key")
+	}
+
+	keyType := KeyType(binary.LittleEndian.Uint32(b))
+
+	// unmarshal the bytes of the specific key type
+	switch keyType {
+	case KeyTypeSecp256k1:
+		return UnmarshalSecp256k1PublicKey(b[4:])
+	case KeyTypeEd25519:
+		return UnmarshalEd25519PublicKey(b[4:])
+	default:
+		return nil, fmt.Errorf("invalid key type %v", keyType)
+	}
+}
+
 func UnmarshalPublicKey(data []byte, keyType KeyType) (PublicKey, error) {
 	switch keyType {
 	case KeyTypeSecp256k1:

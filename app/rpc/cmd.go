@@ -2,8 +2,6 @@ package rpc
 
 import (
 	"github.com/spf13/cobra"
-
-	"github.com/kwilteam/kwil-db/app/shared/display"
 )
 
 const adminExplain = "The `admin` command is used to get information about a running Kwil node."
@@ -24,7 +22,7 @@ func NewAdminCmd() *cobra.Command {
 	)
 
 	BindRPCFlags(adminCmd)
-	display.BindOutputFormatFlag(adminCmd)
+	// display.BindOutputFormatFlag(adminCmd)
 
 	return adminCmd
 }

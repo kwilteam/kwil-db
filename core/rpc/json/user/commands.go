@@ -112,6 +112,8 @@ type MigrationSnapshotChunkRequest struct {
 type MigrationMetadataRequest struct{}
 type ListMigrationsRequest struct{}
 
+type ListPendingConsensusUpdatesRequest struct{}
+
 type MigrationStatusRequest struct{}
 
 type ChallengeRequest struct{}

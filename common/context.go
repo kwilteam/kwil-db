@@ -1,6 +1,9 @@
 package common
 
-import "github.com/kwilteam/kwil-db/core/crypto"
+import (
+	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/types"
+)
 
 // ChainContext provides context for all chain operations.
 // Fields in ChainContext should never be mutated, except
@@ -13,7 +16,9 @@ type ChainContext struct {
 
 	// NetworkParams holds network level parameters that can be evolved
 	// over the lifetime of a network.
-	NetworkParameters *NetworkParameters
+	NetworkParameters *types.NetworkParameters
+
+	NetworkUpdates types.ParamUpdates
 
 	// MigrationParams holds the context for all migration operations such as
 	// block info to poll for the changesets from the old chain during migration.

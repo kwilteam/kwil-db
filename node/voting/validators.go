@@ -28,6 +28,9 @@ func init() {
 				return fmt.Errorf("failed to unmarshal join request: %w", err)
 			}
 
+			app.Service.Logger.Info("Updating validator power", "pubKey", joinReq.PubKey,
+				"pubKeyType", joinReq.PubKeyType, "power", joinReq.Power)
+
 			return app.Validators.SetValidatorPower(ctx, app.DB, joinReq.PubKey, joinReq.PubKeyType, joinReq.Power)
 		},
 	})
@@ -47,6 +50,8 @@ func init() {
 				// between modules. Removes are sent from the client in a separate message.
 				return errors.New("remove request with non-zero power")
 			}
+
+			app.Service.Logger.Info("Removing validator", "pubKey", removeReq.PubKey, "pubKeyType", removeReq.PubKeyType)
 
 			return app.Validators.SetValidatorPower(ctx, app.DB, removeReq.PubKey, removeReq.PubKeyType, 0)
 		},

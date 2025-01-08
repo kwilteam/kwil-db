@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/meta"
 	"github.com/kwilteam/kwil-db/node/pg"
@@ -47,7 +48,10 @@ func Test_NetworkParams(t *testing.T) {
 	_, err = meta.LoadParams(ctx, tx)
 	require.Equal(t, meta.ErrParamsNotFound, err)
 
+	_, pubkey, _ := crypto.GenerateSecp256k1Key(nil)
+
 	param := &common.NetworkParameters{
+		Leader:           types.PublicKey{PublicKey: pubkey},
 		MaxBlockSize:     1000,
 		JoinExpiry:       100,
 		VoteExpiry:       100,
@@ -69,7 +73,7 @@ func Test_NetworkParams(t *testing.T) {
 	param2.DisabledGasCosts = false
 	param2.MigrationStatus = types.NoActiveMigration
 
-	err = meta.StoreDiff(ctx, tx, param, param2)
+	err = meta.StoreParams(ctx, tx, param2)
 	require.NoError(t, err)
 
 	param3, err := meta.LoadParams(ctx, tx)

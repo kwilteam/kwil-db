@@ -3,6 +3,7 @@ package credit
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"math/big"
 
@@ -89,6 +90,9 @@ var resolutionConfig = resolutions.ResolutionConfig{
 		if credit.Amount.Sign() < 0 {
 			return errors.New("credit amount cannot be negative")
 		}
+
+		app.Service.Logger.Infof("crediting account", "account", credit.Account, "amount", credit.Amount,
+			"eth_tx", hex.EncodeToString(credit.TxHash))
 
 		// Credit the account with the given amount
 		return app.Accounts.Credit(ctx, app.DB, credit.Account, credit.Amount)

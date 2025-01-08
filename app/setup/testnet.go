@@ -15,6 +15,7 @@ import (
 	"github.com/kwilteam/kwil-db/app/shared/bind"
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/types"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node"
 
@@ -144,18 +145,11 @@ func GenerateTestnetConfigs(cfg *TestnetConfig, opts *ConfigOpts) error {
 		chainID = "kwil-testnet"
 	}
 
-	leader := config.EncodePubKeyAndType(leaderPub.Bytes(), leaderPub.Type())
-	genConfig := &config.GenesisConfig{
-		ChainID:          chainID,
-		Leader:           leader,
-		Validators:       make([]*ktypes.Validator, cfg.NumVals),
-		DisabledGasCosts: true,
-		JoinExpiry:       14400,
-		VoteExpiry:       108000,
-		MaxBlockSize:     6 * 1024 * 1024,
-		MaxVotesPerTx:    200,
-		DBOwner:          cfg.Owner,
-	}
+	genConfig := config.DefaultGenesisConfig()
+	genConfig.ChainID = chainID
+	genConfig.Leader = types.PublicKey{PublicKey: leaderPub}
+	genConfig.Validators = make([]*ktypes.Validator, cfg.NumVals)
+	genConfig.DBOwner = cfg.Owner
 
 	for i := range cfg.NumVals {
 		genConfig.Validators[i] = &ktypes.Validator{

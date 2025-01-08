@@ -176,6 +176,17 @@ func (cl *Client) TxQuery(ctx context.Context, txHash types.Hash) (*types.TxQuer
 	return res, nil
 }
 
+// ListUpdateProposals lists all consensus parameter update proposals that have been proposed that are still in the pending state.
+func (cl *Client) ListUpdateProposals(ctx context.Context) ([]*types.ConsensusParamUpdateProposal, error) {
+	cmd := &userjson.ListPendingConsensusUpdatesRequest{}
+	res := &userjson.ListPendingConsensusUpdatesResponse{}
+	err := cl.CallMethod(ctx, string(userjson.MethodListUpdateProposals), cmd, res)
+	if err != nil {
+		return nil, err
+	}
+	return res.Proposals, nil
+}
+
 // ListMigrations lists all migrations that have been proposed that are still in the pending state.
 func (cl *Client) ListMigrations(ctx context.Context) ([]*types.Migration, error) {
 	cmd := &userjson.ListMigrationsRequest{}

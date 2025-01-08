@@ -32,18 +32,18 @@ import (
 // asymmetric signature algorithms may be implemented by developers
 // by implementing this interface.
 type Authenticator interface {
-	// Verify verifies whether a signature is valid for a given
-	// message and sender. It is meant to be used with asymmetric
-	// signature algorithms such as ECDSA, Ed25519 RSA, etc. If the
-	// signature is invalid, the method should return an error. If
-	// the signature is valid, the method should return nil.
-	Verify(sender, msg, signature []byte) error
+	// Verify verifies whether a signature is valid for a given message and
+	// "sender", which is the compactID from a Signer. It is meant to be used
+	// with asymmetric signature algorithms such as ECDSA, Ed25519 RSA, etc. If
+	// the signature is invalid, the method should return an error. If the
+	// signature is valid, the method should return nil.
+	Verify(compactID, msg, signature []byte) error
 
 	// Identifier returns a string identifier for a given sender.
 	// This string identifier is used to identify the sender when
 	// interacting with the Kuneiform engine, and will be used as
 	// the `@caller` variable in the engine.
-	Identifier(sender []byte) (string, error)
+	Identifier(compactID []byte) (string, error)
 }
 
 func GetAuthenticator(authType string) Authenticator {
@@ -57,6 +57,10 @@ func GetAuthenticator(authType string) Authenticator {
 	default:
 		return nil
 	}
+}
+
+func GetIdentifierFromSigner(signer Signer) (string, error) {
+	return GetIdentifier(signer.AuthType(), signer.CompactID())
 }
 
 // GetIdentifier returns the identifier for a given sender and authType.

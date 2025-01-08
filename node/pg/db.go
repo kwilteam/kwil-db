@@ -563,6 +563,8 @@ func (db *DB) precommit(ctx context.Context, changes chan<- any) ([]byte, error)
 	}
 	db.txid = txid
 
+	db.txid = txid
+
 	logger.Debugf("prepared transaction %q", db.txid)
 
 	// Wait for the "commit id" from the replication monitor.

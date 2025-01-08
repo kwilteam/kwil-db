@@ -144,7 +144,7 @@ func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs []*t
 			}
 		}
 
-		if bytes.Equal(tx.Sender, bp.signer.Identity()) {
+		if bytes.Equal(tx.Sender, bp.signer.CompactID()) && tx.Signature.Type == bp.signer.AuthType() {
 			proposerNonce = tx.Body.Nonce
 			propTxs = append(propTxs, tx)
 		} else {
@@ -218,7 +218,7 @@ func (bp *BlockProcessor) prepareValidatorVoteBodyTx(ctx context.Context, nonce 
 	}
 	defer readTx.Rollback(ctx)
 
-	ident, err := auth.GetIdentifier(bp.signer.AuthType(), bp.signer.Identity())
+	ident, err := auth.GetIdentifierFromSigner(bp.signer)
 	if err != nil {
 		return nil, err
 	}
@@ -372,9 +372,10 @@ func (bp *BlockProcessor) PrepareValidatorVoteIDTx(ctx context.Context, db sql.D
 	defer readTx.Rollback(ctx)
 
 	// Only validators can issue voteID transactions not the leader or sentry nodes
+	myPubKey := bp.signer.PubKey()
 
 	// check if the node is a leader
-	if bytes.Equal(bp.signer.Identity(), bp.leader.Bytes()) {
+	if myPubKey.Equals(bp.chainCtx.NetworkParameters.Leader.PublicKey) {
 		bp.log.Debug("Leader node is not allowed to propose voteID transactions")
 		return nil, nil, nil
 	}
@@ -383,7 +384,8 @@ func (bp *BlockProcessor) PrepareValidatorVoteIDTx(ctx context.Context, db sql.D
 	vals := bp.GetValidators()
 	found := false
 	for _, val := range vals {
-		if bytes.Equal(val.PubKey, bp.signer.Identity()) {
+		if bytes.Equal(val.PubKey, myPubKey.Bytes()) &&
+			val.PubKeyType == myPubKey.Type() {
 			found = true
 		}
 	}
@@ -410,7 +412,7 @@ func (bp *BlockProcessor) PrepareValidatorVoteIDTx(ctx context.Context, db sql.D
 		ids = ids[:bp.chainCtx.NetworkParameters.MaxVotesPerTx]
 	}
 
-	ident, err := auth.GetIdentifier(bp.signer.AuthType(), bp.signer.Identity())
+	ident, err := auth.GetIdentifierFromSigner(bp.signer)
 	if err != nil {
 		return nil, nil, err
 	}

@@ -19,7 +19,6 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 	if ce.role.Load() != types.RoleValidator {
 		return false
 	}
-	ce.updateNetworkHeight(height - 1)
 
 	ce.stateInfo.mtx.RLock()
 	defer ce.stateInfo.mtx.RUnlock()
@@ -28,6 +27,7 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 
 	if height != ce.stateInfo.height+1 {
 		ce.log.Debug("Block proposal is not for the next height", "blkPropHeight", height, "expected", ce.stateInfo.height+1)
+		// but we already did ce.updateNetworkHeight... (?)
 		return false
 	}
 
@@ -68,8 +68,6 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, ci *ktyp
 	if ce.role.Load() == types.RoleLeader {
 		return false
 	}
-
-	ce.updateNetworkHeight(height)
 
 	ce.stateInfo.mtx.RLock()
 	defer ce.stateInfo.mtx.RUnlock()
@@ -178,6 +176,7 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 		return err
 	}
 	ce.state.blkProp = blkPropMsg
+	ce.state.blockRes = nil
 
 	// Update the stateInfo
 	ce.stateInfo.mtx.Lock()
@@ -272,13 +271,18 @@ func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, c
 		return nil
 	}
 
+	if !ce.state.blockRes.paramUpdates.Equals(ci.ParamUpdates) { // this is absorbed in apphash anyway, but helps diagnostics
+		haltR := fmt.Sprintf("Incorrect ParamUpdates, halting the node. received: %s, computed: %s", ci.ParamUpdates, ce.state.blockRes.paramUpdates)
+		ce.haltChan <- haltR
+		return nil
+	}
 	if ce.state.blockRes.appHash != ci.AppHash {
-		haltR := fmt.Sprintf("Incorrect AppHash, halting the node. received: %s, computed: %s", ci.AppHash.String(), ce.state.blockRes.appHash.String())
+		haltR := fmt.Sprintf("Incorrect AppHash, halting the node. received: %s, computed: %s", ci.AppHash, ce.state.blockRes.appHash)
 		ce.haltChan <- haltR
 		return nil
 	}
 
-	if err := ce.validateCommitInfo(ci, ce.state.blkProp.blkHash); err != nil {
+	if err := ce.acceptCommitInfo(ci, ce.state.blkProp.blkHash); err != nil {
 		ce.log.Error("Error validating commitInfo", "error", err)
 		return err
 	}
@@ -304,8 +308,8 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Blo
 
 	ce.log.Info("Processing committed block", "height", blk.Header.Height, "hash", blkID, "appHash", ci.AppHash)
 	if err := ce.validateBlock(blk); err != nil {
-		ce.log.Errorf("Error validating block: %v", err)
-		return err // who gets this error?
+		// ce.log.Errorf("Error validating block: %v", err)
+		return err
 	}
 
 	ce.state.blkProp = &blockProposal{
@@ -324,14 +328,19 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Blo
 		return fmt.Errorf("error executing block: %v", err)
 	}
 
-	if ce.state.blockRes.appHash != ci.AppHash {
-		haltR := fmt.Sprintf("processAndCommit: Incorrect AppHash, halting the node. received: %s, computed: %s", ci.AppHash.String(), ce.state.blockRes.appHash.String())
+	if !ce.state.blockRes.paramUpdates.Equals(ci.ParamUpdates) { // this is absorbed in apphash anyway, but helps diagnostics
+		haltR := fmt.Sprintf("processAndCommit: Incorrect ParamUpdates, halting the node. received: %s, computed: %s", ci.ParamUpdates, ce.state.blockRes.paramUpdates)
+		ce.haltChan <- haltR
+		return fmt.Errorf("paramUpdates mismatch, expected: %v, received: %v", ce.state.blockRes.paramUpdates, ci.ParamUpdates)
+	}
+	if ce.state.blockRes.appHash != ci.AppHash { // do in acceptCommitInfo?
+		haltR := fmt.Sprintf("processAndCommit: Incorrect AppHash, halting the node. received: %s, computed: %s", ci.AppHash, ce.state.blockRes.appHash)
 		ce.haltChan <- haltR
 		return fmt.Errorf("appHash mismatch, expected: %s, received: %s", ci.AppHash, ce.state.blockRes.appHash)
 	}
 
 	// Commit the block if the appHash and commitInfo is valid
-	if err := ce.validateCommitInfo(ci, blkID); err != nil {
+	if err := ce.acceptCommitInfo(ci, blkID); err != nil {
 		return fmt.Errorf("error validating commitInfo: %v", err)
 	}
 
@@ -343,7 +352,7 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Blo
 	return nil
 }
 
-func (ce *ConsensusEngine) validateCommitInfo(ci *ktypes.CommitInfo, blkID ktypes.Hash) error {
+func (ce *ConsensusEngine) acceptCommitInfo(ci *ktypes.CommitInfo, blkID ktypes.Hash) error {
 	if ci == nil {
 		return fmt.Errorf("commitInfo is nil")
 	}
@@ -359,6 +368,10 @@ func (ce *ConsensusEngine) validateCommitInfo(ci *ktypes.CommitInfo, blkID ktype
 		if vote.AckStatus == ktypes.AckStatusAgree {
 			acks++
 		}
+	}
+
+	if err := ktypes.ValidateUpdates(ci.ParamUpdates); err != nil {
+		return fmt.Errorf("paramUpdates failed validation: %v", err)
 	}
 
 	if !ce.hasMajorityCeil(acks) {

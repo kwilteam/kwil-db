@@ -14,9 +14,9 @@ import (
 	"github.com/kwilteam/kwil-db/core/client"
 	clientType "github.com/kwilteam/kwil-db/core/client/types"
 	rpcclient "github.com/kwilteam/kwil-db/core/rpc/client"
+	userClient "github.com/kwilteam/kwil-db/core/rpc/client/chain/jsonrpc"
 	"github.com/kwilteam/kwil-db/core/rpc/client/gateway"
 	gwClient "github.com/kwilteam/kwil-db/core/rpc/client/gateway/jsonrpc"
-	userClient "github.com/kwilteam/kwil-db/core/rpc/client/user/jsonrpc"
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	"github.com/kwilteam/kwil-db/core/types"
 )
@@ -213,7 +213,7 @@ func (c *GatewayClient) authenticate(ctx context.Context) error {
 	// send the auth request
 	err = c.gatewayClient.Authn(ctx, &gateway.AuthnRequest{
 		Nonce:     authParam.Nonce,
-		Sender:    c.Signer().Identity(),
+		Sender:    c.Signer().CompactID(),
 		Signature: sig,
 	})
 	if err != nil {

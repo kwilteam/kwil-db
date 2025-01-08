@@ -15,14 +15,20 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	rpcclient "github.com/kwilteam/kwil-db/core/rpc/client"
+	chainrpc "github.com/kwilteam/kwil-db/core/rpc/client/chain"
+	userClient "github.com/kwilteam/kwil-db/core/rpc/client/chain/jsonrpc"
 	"github.com/kwilteam/kwil-db/core/rpc/client/user"
-	userClient "github.com/kwilteam/kwil-db/core/rpc/client/user/jsonrpc"
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
+type RPCClient interface {
+	user.TxSvcClient
+	chainrpc.Client
+}
+
 // Client is a client that interacts with a public Kwil provider.
 type Client struct {
-	txClient user.TxSvcClient
+	txClient RPCClient
 	signer   auth.Signer
 	logger   log.Logger
 	// chainID is used when creating transactions as replay protection since the
@@ -95,7 +101,7 @@ func NewClient(ctx context.Context, target string, options *clientType.Options) 
 
 // WrapClient wraps a TxSvcClient with a Kwil client.
 // It provides a way to use a custom rpc client with the Kwil client.
-func WrapClient(ctx context.Context, client user.TxSvcClient, options *clientType.Options) (*Client, error) {
+func WrapClient(ctx context.Context, client RPCClient, options *clientType.Options) (*Client, error) {
 	clientOptions := clientType.DefaultOptions()
 	clientOptions.Apply(options)
 
@@ -193,8 +199,7 @@ func (c *Client) Transfer(ctx context.Context, to string, amount *big.Int, opts 
 	// Get account balance to ensure we can afford the transfer, and use the
 	// nonce to avoid a second GetAccount in newTx.
 
-	authr := auth.GetAuthenticator(c.signer.AuthType())
-	ident, err := authr.Identifier(c.signer.Identity())
+	ident, err := auth.GetIdentifierFromSigner(c.signer)
 	if err != nil {
 		return types.Hash{}, fmt.Errorf("failed to get identifier: %w", err)
 	}

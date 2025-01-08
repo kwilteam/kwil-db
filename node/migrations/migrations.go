@@ -57,7 +57,7 @@ type MigrationDeclaration struct {
 }
 
 // MarshalBinary marshals the MigrationDeclaration into a binary format.
-func (md *MigrationDeclaration) MarshalBinary() ([]byte, error) {
+func (md MigrationDeclaration) MarshalBinary() ([]byte, error) {
 	return serialize.Encode(md)
 }
 

@@ -169,7 +169,8 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext,
 
 	if block.Height == m.activeMigration.StartHeight-1 {
 		// set the migration in progress, so that we record the changesets starting from the next block
-		block.ChainContext.NetworkParameters.MigrationStatus = types.MigrationInProgress
+		block.ChainContext.NetworkUpdates[types.ParamNameMigrationStatus] = types.MigrationInProgress
+		// block.ChainContext.NetworkParameters.MigrationStatus = types.MigrationInProgress
 		return nil
 	}
 
@@ -221,7 +222,8 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext,
 
 	if block.Height == m.activeMigration.EndHeight {
 		// starting from here, no more transactions of any kind will be accepted or mined.
-		block.ChainContext.NetworkParameters.MigrationStatus = types.MigrationCompleted
+		// block.ChainContext.NetworkParameters.MigrationStatus = types.MigrationCompleted
+		block.ChainContext.NetworkUpdates[types.ParamNameMigrationStatus] = types.MigrationCompleted
 		m.Logger.Info("migration to chain completed, no new transactions will be accepted")
 	}
 
@@ -278,7 +280,7 @@ func (m *Migrator) GetMigrationMetadata(ctx context.Context, status types.Migrat
 	}
 
 	// if there is no planned migration, return
-	if status == types.NoActiveMigration {
+	if status.NoneActive() {
 		if m.genesisMigrationParams.StartHeight != 0 && m.genesisMigrationParams.EndHeight != 0 {
 			metadata.MigrationState.StartHeight = m.genesisMigrationParams.StartHeight
 			metadata.MigrationState.EndHeight = m.genesisMigrationParams.EndHeight

@@ -33,8 +33,7 @@ func (c *Client) newTx(ctx context.Context, data types.Payload, txOpts *clientTy
 	if txOpts.Nonce > 0 {
 		nonce = uint64(txOpts.Nonce)
 	} else {
-		authr := auth.GetAuthenticator(c.Signer().AuthType())
-		ident, err := authr.Identifier(c.Signer().Identity())
+		ident, err := auth.GetIdentifierFromSigner(c.Signer())
 		if err != nil {
 			return nil, fmt.Errorf("failed to get identifier: %w", err)
 		}

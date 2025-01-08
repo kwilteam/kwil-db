@@ -300,25 +300,25 @@ func (svc *Service) sendTx(ctx context.Context, payload ktypes.Payload) (*userjs
 	readTx := svc.db.BeginDelayedReadTx()
 	defer readTx.Rollback(ctx)
 
-	ident, err := auth.GetIdentifier(svc.signer.AuthType(), svc.signer.Identity())
+	ident, err := auth.GetIdentifierFromSigner(svc.signer)
 	if err != nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to get identifier", nil)
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to get identifier: "+err.Error(), nil)
 	}
 
 	// Get the latest nonce for the account, if it exists.
 	_, nonce, err := svc.app.AccountInfo(ctx, readTx, ident, true)
 	if err != nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorAccountInternal, "account info error", nil)
+		return nil, jsonrpc.NewError(jsonrpc.ErrorAccountInternal, "account info error: "+err.Error(), nil)
 	}
 
 	tx, err := ktypes.CreateNodeTransaction(payload, svc.chainID, uint64(nonce+1))
 	if err != nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "unable to create transaction "+err.Error(), nil)
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "unable to create transaction: "+err.Error(), nil)
 	}
 
 	fee, err := svc.app.Price(ctx, readTx, tx)
 	if err != nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, "unable to price transaction", nil)
+		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, "unable to price transaction: "+err.Error(), nil)
 	}
 
 	tx.Body.Fee = fee
@@ -326,13 +326,13 @@ func (svc *Service) sendTx(ctx context.Context, payload ktypes.Payload) (*userjs
 	// Sign the transaction.
 	err = tx.Sign(svc.signer)
 	if err != nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "signing transaction failed", nil)
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "signing transaction failed: "+err.Error(), nil)
 	}
 
 	res, err := svc.blockchain.BroadcastTx(ctx, tx, uint8(userjson.BroadcastSyncSync))
 	if err != nil {
 		svc.log.Error("failed to broadcast tx", "error", err)
-		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, "failed to broadcast transaction", nil)
+		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, "failed to broadcast transaction: "+err.Error(), nil)
 	}
 
 	code, txHash := res.Code, res.Hash
@@ -566,7 +566,6 @@ func (svc *Service) ResolutionStatus(ctx context.Context, req *adminjson.Resolut
 	readTx := svc.db.BeginDelayedReadTx()
 	defer readTx.Rollback(ctx)
 
-	svc.voting.GetValidators()
 	uuid := req.ResolutionID
 	resolution, err := voting.GetResolutionInfo(ctx, readTx, uuid)
 	if err != nil {
@@ -579,6 +578,7 @@ func (svc *Service) ResolutionStatus(ctx context.Context, req *adminjson.Resolut
 
 	return &adminjson.ResolutionStatusResponse{
 		Status: &ktypes.PendingResolution{
+			Type:         resolution.Type,
 			ResolutionID: req.ResolutionID,
 			ExpiresAt:    resolution.ExpirationHeight,
 			Board:        board,

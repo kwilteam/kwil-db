@@ -61,7 +61,7 @@ func NewTxApp(ctx context.Context, db sql.Executor, engine common.Engine, signer
 			accounts:     make(map[string]*types.Account),
 			accountMgr:   accounts,
 			validatorMgr: validators,
-			nodeAddr:     signer.Identity(),
+			nodeIdent:    signer,
 			log:          service.Logger.New("mempool"),
 		},
 		signer:   signer,
@@ -156,15 +156,12 @@ func (r *TxApp) Execute(ctx *common.TxContext, db sql.DB, tx *types.Transaction)
 }
 
 // Finalize signals that a block has been finalized. No more changes can be
-// applied to the database. It returns the apphash and the validator set. And
-// state modifications specified by hardforks activating at this height are
-// applied. It is given the old and new network parameters, and is expected to
-// use them to store any changes to the network parameters in the database.
+// applied to the database.
+// Use ValidatorUpdates to get the pending validator updates *before* Commit is called.
 // TODO: Also send updates, so that the CE doesn't have to regenerate the updates.
-func (r *TxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) (finalValidators []*types.Validator, err error) {
-	err = r.processVotes(ctx, db, block)
-	if err != nil {
-		return nil, err
+func (r *TxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) error {
+	if err := r.processVotes(ctx, db, block); err != nil {
+		return err
 	}
 
 	// end block hooks
@@ -177,11 +174,11 @@ func (r *TxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockCont
 			Validators: r.Validators,
 		}, block)
 		if err != nil {
-			return nil, fmt.Errorf("error running end block hook: %w", err)
+			return fmt.Errorf("error running end block hook: %w", err)
 		}
 	}
 
-	return r.Validators.GetValidators(), nil
+	return nil
 }
 
 // Commit signals that a block's state changes should be committed.
@@ -264,12 +261,12 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 		}
 
 		err = resolveFunc.ResolveFunc(ctx, &common.App{
-			Service:    r.service.NamedLogger(resolveFunc.Resolution.Type),
+			Service:    r.service.NamedLogger("RESOLVE[" + resolveFunc.Resolution.Type + "]"),
 			DB:         tx,
 			Engine:     r.Engine,
 			Accounts:   r.Accounts,
 			Validators: r.Validators,
-		}, resolveFunc.Resolution, block)
+		}, resolveFunc.Resolution, block) // block context include chain context, and thus network params and param updates
 		if err != nil {
 			err2 := tx.Rollback(ctx)
 			if err2 != nil {

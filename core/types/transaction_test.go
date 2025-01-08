@@ -314,7 +314,7 @@ func TestTransactionMarshalUnmarshal(t *testing.T) {
 	require.NoError(t, err)
 
 	signer := secp256k1Signer(t)
-	sender := signer.Identity()
+	sender := signer.CompactID()
 
 	require.NoError(t, err)
 

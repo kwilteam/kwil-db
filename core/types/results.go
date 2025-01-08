@@ -51,7 +51,7 @@ type TxResult struct {
 }
 
 // txResultsVer is the results structure or serialization version known presently
-const txResultsVer uint16 = 0
+const txResultsVer uint16 = 0 // v0 has events with no data a future v1 will change how events are decoded
 
 func (tr TxResult) MarshalBinary() ([]byte, error) {
 	data := make([]byte, 2+4+4, 2+4+4+2+2) // put 10 bytes, append the rest

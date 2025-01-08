@@ -32,7 +32,6 @@ import (
 	"github.com/kwilteam/kwil-db/node/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
-	"github.com/libp2p/go-libp2p/core/peer"
 
 	"github.com/kwilteam/kwil-db/core/log"
 
@@ -97,7 +96,7 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) []*Config {
 
 	// txapp, err := txapp.NewTxApp(ctx, db, nil, signer, nil, service, accounts, v)
 	// assert.NoError(t, err)
-	txapp := newDummyTxApp(valSet)
+	txapp := newDummyTxApp( /*valSet*/ )
 
 	db := dbtest.NewTestDB(t, func(db *pg.DB) {
 		db.AutoCommit(true)
@@ -126,10 +125,11 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) []*Config {
 	ss := &snapshotStore{}
 
 	genCfg := config.DefaultGenesisConfig()
-	genCfg.Leader = config.EncodePubKeyAndType(pubKeys[0].Bytes(), pubKeys[0].Type())
+	genCfg.Leader = ktypes.PublicKey{PublicKey: pubKeys[0]}
+	genCfg.DisabledGasCosts = true
 
 	for i := range nodes {
-		nodeStr := fmt.Sprintf("NODE%d", i)
+		nodeStr := fmt.Sprintf("CE%d", i)
 		nodeDir := filepath.Join(tempDir, nodeStr)
 
 		logger := log.New(log.WithName(nodeStr), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
@@ -143,15 +143,8 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) []*Config {
 		ev := &mockEventStore{}
 		m := &mockMigrator{}
 
-		bp, err := blockprocessor.NewBlockProcessor(ctx, db, txapp, accounts, v, ss, ev, m, bs, genCfg, signer, log.New(log.WithName("BP")))
+		bp, err := blockprocessor.NewBlockProcessor(ctx, db, txapp, accounts, v, ss, ev, m, bs, genCfg, signer, logger.New(fmt.Sprintf("BP%d", i)))
 		assert.NoError(t, err)
-		bp.SetNetworkParameters(&common.NetworkParameters{
-			MaxBlockSize:     genCfg.MaxBlockSize,
-			JoinExpiry:       genCfg.JoinExpiry,
-			VoteExpiry:       genCfg.VoteExpiry,
-			DisabledGasCosts: true,
-			MaxVotesPerTx:    genCfg.MaxVotesPerTx,
-		})
 
 		ceConfigs[i] = &Config{
 			PrivateKey:            privKeys[i],
@@ -190,7 +183,7 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) []*Config {
 var blockAppHash = nextHash()
 
 func nextHash() types.Hash {
-	newHash, err := ktypes.NewHashFromString("2bf6a0d3cd2cce6a2ff0d67f2f252842aa5541eb2b870792b29f5bac699ac7ec")
+	newHash, err := ktypes.NewHashFromString("2d8f3ceeff2c836527da823d7b654d33d3e44b6159b172235c160001e0c9b4db")
 	if err != nil {
 		panic(err)
 	}
@@ -725,7 +718,7 @@ func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
 	// ensure that the block is committed
 	require.Eventually(t, func() bool {
 		height := n1.lastCommitHeight()
-		fmt.Printf("Height: %d\n", height)
+		t.Logf("Height: %d", height)
 		return height == 1
 	}, 6*time.Second, 100*time.Millisecond)
 }
@@ -810,7 +803,7 @@ func mockVoteBroadcaster(ack bool, height int64, blkID types.Hash, appHash *type
 
 func mockBlkAnnouncer(_ context.Context, blk *ktypes.Block, ci *ktypes.CommitInfo) {}
 
-func mockTxAnnouncer(ctx context.Context, txHash types.Hash, rawTx []byte, from peer.ID) {}
+func mockTxAnnouncer(ctx context.Context, txHash types.Hash, rawTx []byte) {}
 
 func mockResetStateBroadcaster(_ int64, _ []ktypes.Hash) error {
 	return nil
@@ -825,12 +818,12 @@ func nextAppHash(prevHash types.Hash) types.Hash {
 }
 
 type dummyTxApp struct {
-	vals []*ktypes.Validator
+	// vals []*ktypes.Validator
 }
 
-func newDummyTxApp(valset []*ktypes.Validator) *dummyTxApp {
+func newDummyTxApp( /*valset []*ktypes.Validator*/ ) *dummyTxApp {
 	return &dummyTxApp{
-		vals: valset,
+		// vals: valset,
 	}
 }
 func (d *dummyTxApp) Begin(ctx context.Context, height int64) error {
@@ -841,8 +834,8 @@ func (d *dummyTxApp) Execute(ctx *common.TxContext, db sql.DB, tx *ktypes.Transa
 	return &txapp.TxResponse{}
 }
 
-func (d *dummyTxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) ([]*ktypes.Validator, error) {
-	return d.vals, nil
+func (d *dummyTxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) error {
+	return nil
 }
 
 func (d *dummyTxApp) Price(ctx context.Context, dbTx sql.DB, tx *ktypes.Transaction, chainContext *common.ChainContext) (*big.Int, error) {

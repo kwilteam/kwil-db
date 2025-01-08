@@ -18,6 +18,10 @@ func (hb HexBytes) String() string {
 // UnmarshalText satisfies the json.Unmarshaler interface.
 func (hb *HexBytes) UnmarshalJSON(b []byte) error {
 	if len(b) < 2 || b[0] != '"' || b[len(b)-1] != '"' {
+		if bytes.Equal(b, []byte("null")) {
+			*hb = nil
+			return nil
+		}
 		return fmt.Errorf("invalid hex string: %s", b)
 	}
 	sub := b[1 : len(b)-1] // strip the quotes
@@ -32,6 +36,9 @@ func (hb *HexBytes) UnmarshalJSON(b []byte) error {
 
 // MarshalJSON satisfies the json.Marshaler interface.
 func (hb HexBytes) MarshalJSON() ([]byte, error) {
+	if hb == nil {
+		return []byte("null"), nil
+	}
 	s := make([]byte, 2+hex.EncodedLen(len(hb)))
 	s[0], s[len(s)-1] = '"', '"'
 	hex.Encode(s[1:], hb)

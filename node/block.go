@@ -187,8 +187,8 @@ func (n *Node) announceRawBlk(ctx context.Context, blkHash types.Hash, height in
 		if peerID == from {
 			continue
 		}
-		n.log.Debugf("advertising block %s (height %d / sz %d) to peer %v",
-			blkHash, height, len(rawBlk), peerID)
+		n.log.Infof("advertising block %s (height %d / sz %d / updates %v) to peer %v",
+			blkHash, height, len(rawBlk), ci.ParamUpdates, peerID)
 		resID, err := blockAnnMsg{
 			Hash:       blkHash,
 			Height:     height,

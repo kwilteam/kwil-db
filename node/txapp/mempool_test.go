@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -16,10 +17,13 @@ import (
 
 func Test_MempoolWithoutGas(t *testing.T) {
 	accounts := mockAccount{}
+	privkey, pubkey, _ := crypto.GenerateSecp256k1Key(nil)
+	nodeIdent := auth.GetNodeSigner(privkey)
 	m := &mempool{
 		accounts:   make(map[string]*types.Account),
 		accountMgr: &accounts,
 		log:        log.DiscardLogger,
+		nodeIdent:  nodeIdent,
 	}
 
 	ctx := context.Background()
@@ -32,6 +36,7 @@ func Test_MempoolWithoutGas(t *testing.T) {
 		BlockContext: &common.BlockContext{
 			ChainContext: &common.ChainContext{
 				NetworkParameters: &common.NetworkParameters{
+					Leader:           types.PublicKey{PublicKey: pubkey},
 					DisabledGasCosts: true,
 				},
 			},

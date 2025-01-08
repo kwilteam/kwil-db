@@ -261,7 +261,7 @@ func Test_Routes(t *testing.T) {
 				if app.service == nil {
 					app.service = &common.Service{
 						Logger:   log.DiscardLogger,
-						Identity: app.signer.Identity(),
+						Identity: app.signer.CompactID(),
 					}
 				}
 

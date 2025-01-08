@@ -71,7 +71,7 @@ func (ce *ConsensusEngine) BroadcastTx(ctx context.Context, tx *ktypes.Transacti
 	// Announce the transaction to the network
 	if ce.txAnnouncer != nil {
 		ce.log.Infof("broadcasting new tx %v", txHash)
-		go ce.txAnnouncer(ctx, txHash, rawTx, ce.peerID)
+		go ce.txAnnouncer(ctx, txHash, rawTx)
 	}
 
 	res := &ktypes.ResultBroadcastTx{
@@ -103,10 +103,12 @@ func (ce *ConsensusEngine) BroadcastTx(ctx context.Context, tx *ktypes.Transacti
 	return res, nil
 }
 
-func (ce *ConsensusEngine) ConsensusParams() *ktypes.ConsensusParams {
+func (ce *ConsensusEngine) ConsensusParams() *ktypes.NetworkParameters {
 	return ce.blockProcessor.ConsensusParams()
 }
 
+// executeBlock uses the block processor to execute the block and stores the
+// results in the state field.
 func (ce *ConsensusEngine) executeBlock(ctx context.Context, blkProp *blockProposal) error {
 	defer func() {
 		ce.stateInfo.mtx.Lock()
@@ -130,6 +132,8 @@ func (ce *ConsensusEngine) executeBlock(ctx context.Context, blkProp *blockPropo
 		ack:       true,
 		appHash:   results.AppHash,
 		txResults: results.TxResults,
+		// vote is set in processBlockProposal
+		paramUpdates: results.ParamUpdates,
 	}
 
 	ce.log.Info("Executed block", "height", blkProp.height, "blkID", blkProp.blkHash, "numTxs", blkProp.blk.Header.NumTxns, "appHash", results.AppHash.String())
@@ -181,7 +185,8 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 	// update the role of the node based on the final validator set at the end of the commit.
 	ce.updateValidatorSetAndRole()
 
-	ce.log.Info("Committed Block", "height", height, "hash", blkProp.blkHash.String(), "appHash", appHash.String())
+	ce.log.Info("Committed Block", "height", height, "hash", blkProp.blkHash.String(),
+		"appHash", appHash.String(), "updates", ce.state.blockRes.paramUpdates)
 	return nil
 }
 

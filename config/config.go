@@ -46,55 +46,42 @@ type GenesisAlloc map[string]*big.Int
 type GenesisConfig struct {
 	ChainID       string `json:"chain_id"`
 	InitialHeight int64  `json:"initial_height"`
-	// Leader is the leader's public key. It is of the format "pubkey#pubkeyType".
-	// PubkeyType is 0 for Secp256k1 and 1 for Ed25519.
-	Leader string `json:"leader"`
 	// Validators is the list of genesis validators (including the leader).
 	Validators []*types.Validator `json:"validators"`
-	// DBOwner is the owner of the database.
-	// This should be either a public key or address.
-	DBOwner string `json:"db_owner"`
-	// Alloc is the initial allocation of balances.
-	Allocs GenesisAlloc `json:"alloc,omitempty"`
-	// MaxBlockSize is the maximum size of a block in bytes.
-	MaxBlockSize int64 `json:"max_block_size"`
-	// JoinExpiry is the number of blocks after which the validators
-	// join request expires if not approved.
-	JoinExpiry int64 `json:"join_expiry"`
-	// VoteExpiry is the default number of blocks after which the validators
-	// vote expires if not approved.
-	VoteExpiry int64 `json:"vote_expiry"`
-	// DisabledGasCosts dictates whether gas costs are disabled.
-	DisabledGasCosts bool `json:"disabled_gas_costs"`
-	// MaxVotesPerTx is the maximum number of votes that can be included in a
-	// single transaction.
-	MaxVotesPerTx int64 `json:"max_votes_per_tx"`
+
 	// StateHash is the hash of the initial state of the chain, used when bootstrapping
 	// the chain with a network snapshot during migration.
-	StateHash []byte `json:"state_hash"`
+	StateHash types.HexBytes `json:"state_hash,omitempty"` // TODO: make it a *types.Hash
+	// StateHash *types.Hash `json:"state_hash,omitempty"`
+
+	// Alloc is the initial allocation of balances.
+	Allocs GenesisAlloc `json:"alloc,omitempty"`
+
 	// Migration specifies the migration configuration required for zero downtime migration.
 	Migration MigrationParams `json:"migration"`
+
+	// NetworkParameters are network level configurations that can be
+	// evolved over the lifetime of a network.
+	types.NetworkParameters
 }
 
 func (gc *GenesisConfig) SanityChecks() error {
-	// Vote expiry shouldn't be 0
-	if gc.VoteExpiry == 0 {
-		return errors.New("vote expiry should be greater than 0")
+	switch len(gc.StateHash) {
+	case 0, types.HashLen:
+	default:
+		return errors.New("invalid state hash, must be empty or 32 bytes")
 	}
 
-	// MaxVotesPerTx shouldn't be 0
-	if gc.MaxVotesPerTx == 0 {
-		return errors.New("max votes per tx should be greater than 0")
+	if len(gc.Validators) == 0 {
+		return errors.New("no validators provided")
 	}
 
-	// join expiry shouldn't be 0
-	if gc.JoinExpiry == 0 {
-		return errors.New("join expiry should be greater than 0")
+	if gc.InitialHeight < 0 {
+		return errors.New("initial height must be greater than or equal to 0")
 	}
 
-	// Block params
-	if gc.MaxBlockSize == 0 {
-		return errors.New("max bytes should be greater than 0")
+	if err := gc.NetworkParameters.SanityChecks(); err != nil {
+		return err
 	}
 
 	// Migration params should be both set or both unset
@@ -106,7 +93,7 @@ func (gc *GenesisConfig) SanityChecks() error {
 	return nil
 }
 
-func DecodeLeader(leader string) (crypto.PublicKey, error) {
+/*func DecodeLeader(leader string) (crypto.PublicKey, error) {
 	pubKeyBts, pubKeyType, err := DecodePubKeyAndType(leader)
 	if err != nil {
 		return nil, err
@@ -118,7 +105,7 @@ func DecodeLeader(leader string) (crypto.PublicKey, error) {
 	}
 
 	return pubKey, nil
-}
+}*/
 
 func DecodePubKeyAndType(encodedPubKey string) ([]byte, crypto.KeyType, error) {
 	parts := strings.Split(encodedPubKey, "#")
@@ -143,6 +130,8 @@ func EncodePubKeyAndType(pubKey []byte, pubKeyType crypto.KeyType) string {
 	return fmt.Sprintf("%s#%d", hex.EncodeToString(pubKey), pubKeyType)
 }
 
+// MigrationParams is the migration configuration required for zero downtime
+// migration. The height values refer to the height of the old/from chain.
 type MigrationParams struct {
 	// StartHeight is the height from which the state from the old chain is to be migrated.
 	StartHeight int64 `json:"start_height"`
@@ -179,24 +168,24 @@ func LoadGenesisConfig(filename string) (*GenesisConfig, error) {
 
 func DefaultGenesisConfig() *GenesisConfig {
 	return &GenesisConfig{
-		ChainID:          "kwil-test-chain",
-		InitialHeight:    0,
-		Leader:           "",
-		Validators:       []*types.Validator{},
-		Allocs:           make(map[string]*big.Int),
-		DisabledGasCosts: true,
-		JoinExpiry:       14400,
-		VoteExpiry:       108000,
-		MaxBlockSize:     6 * 1024 * 1024,
-		MaxVotesPerTx:    200,
+		ChainID:       "kwil-test-chain",
+		InitialHeight: 0,
+		Validators:    []*types.Validator{},
+		Allocs:        make(map[string]*big.Int),
+		StateHash:     nil,
+		Migration:     MigrationParams{},
+		NetworkParameters: types.NetworkParameters{
+			Leader:           types.PublicKey{},
+			DBOwner:          "",
+			MaxBlockSize:     6 * 1024 * 1024,
+			JoinExpiry:       14400,
+			VoteExpiry:       108000,
+			DisabledGasCosts: true,
+			MaxVotesPerTx:    200,
+			MigrationStatus:  types.NoActiveMigration,
+		},
 	}
 }
-
-// const (
-// 	defaultUserRPCPort  = 8484
-// 	defaultAdminRPCPort = 8584
-// 	defaultP2PRPCPort   = 6600
-// )
 
 // DefaultConfig generates an instance of the default config.
 func DefaultConfig() *Config {
@@ -211,8 +200,6 @@ func DefaultConfig() *Config {
 		},
 		Consensus: ConsensusConfig{
 			ProposeTimeout:        Duration(1000 * time.Millisecond),
-			MaxBlockSize:          50_000_000,
-			MaxTxsPerBlock:        20_000,
 			BlockProposalInterval: Duration(1 * time.Second),
 			BlockAnnInterval:      Duration(3 * time.Second),
 		},
@@ -310,8 +297,6 @@ type DBConfig struct {
 
 type ConsensusConfig struct {
 	ProposeTimeout Duration `toml:"propose_timeout" comment:"timeout for proposing a block (applies to leader)"`
-	MaxBlockSize   uint64   `toml:"max_block_size" comment:"max size of a block in bytes"`
-	MaxTxsPerBlock uint64   `toml:"max_txs_per_block" comment:"max number of transactions per block"`
 	// reannounce intervals
 
 	// BlockProposalInterval is the interval between block proposal reannouncements by the leader.
@@ -362,7 +347,7 @@ type MigrationConfig struct {
 	MigrateFrom string `toml:"migrate_from" comment:"JSON-RPC listening address of the node to replicate the state from"`
 }
 
-// ConfigToTOML marshals the config to TOML. The `toml` struct field tag
+// ToTOML marshals the config to TOML. The `toml` struct field tag
 // specifies the field names. For example:
 //
 //	Enable  bool  `toml:"enable,commented" comment:"enable the thing"`
