@@ -409,6 +409,7 @@ type kwilNode struct {
 	nodeTestConfig *NodeConfig
 	testCtx        *testingContext
 	generatedInfo  *generatedNodeInfo
+	client         JSONRPCClient
 }
 
 type testingContext struct {
@@ -432,16 +433,22 @@ func (k *kwilNode) Config() *config.Config {
 	return k.config
 }
 
-func (k *kwilNode) JSONRPCClient(t *testing.T, ctx context.Context, usingGateway bool) (JSONRPCClient, error) {
+func (k *kwilNode) JSONRPCClient(t *testing.T, ctx context.Context, usingGateway bool) JSONRPCClient {
+	if k.client != nil {
+		return k.client
+	}
+
 	container, ok := k.testCtx.containers[k.generatedInfo.KwilNodeServiceName]
 	if !ok {
-		return nil, fmt.Errorf("container not found")
+		t.Fatalf("container %s not found", k.generatedInfo.KwilNodeServiceName)
 	}
 
 	endpoint, err := kwildJSONRPCEndpoints(container, ctx)
-	if err != nil {
-		return nil, err
-	}
+	require.NoError(t, err)
 
-	return getNewClientFn(k.testCtx.config.ClientDriver)(ctx, endpoint, usingGateway, t.Logf)
+	client, err := getNewClientFn(k.testCtx.config.ClientDriver)(ctx, endpoint, usingGateway, t.Logf)
+	require.NoError(t, err)
+
+	k.client = client
+	return client
 }

@@ -13,7 +13,7 @@ type KwilNode interface {
 	PublicKey() *crypto.Secp256k1PublicKey
 	IsValidator() bool
 	Config() *config.Config
-	JSONRPCClient(t *testing.T, ctx context.Context, usingGateway bool) (JSONRPCClient, error)
+	JSONRPCClient(t *testing.T, ctx context.Context, usingGateway bool) JSONRPCClient
 }
 
 type JSONRPCClient interface {

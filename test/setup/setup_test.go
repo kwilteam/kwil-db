@@ -38,10 +38,7 @@ func Test_Setup(t *testing.T) {
 
 	ctx := context.Background()
 
-	client, err := p.Nodes[0].JSONRPCClient(t, ctx, false)
-	require.NoError(t, err)
-
-	ping, err := client.Ping(ctx)
+	ping, err := p.Nodes[0].JSONRPCClient(t, ctx, false).Ping(ctx)
 	require.NoError(t, err)
 
 	require.Equal(t, "pong", ping)
