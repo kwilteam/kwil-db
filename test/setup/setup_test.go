@@ -14,7 +14,7 @@ import (
 // It is just here while I test this out
 func Test_Setup(t *testing.T) {
 	p := setup.SetupTests(t, &setup.TestConfig{
-		ClientDriver: setup.Go,
+		ClientDriver: setup.CLI,
 		Network: &setup.NetworkConfig{
 			Nodes: []*setup.NodeConfig{
 				setup.DefaultNodeConfig(),
@@ -25,14 +25,6 @@ func Test_Setup(t *testing.T) {
 				}),
 			},
 			DBOwner: "0xabc",
-			ExtraServices: []*setup.CustomService{
-				{
-					ServiceName:  "eth",
-					DockerImage:  "kwildb/hardhat:latest",
-					ExposedPort:  "8545",
-					InternalPort: "8545",
-				},
-			},
 		},
 	})
 

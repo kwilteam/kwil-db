@@ -638,7 +638,7 @@ type mockTxApp struct{}
 
 var accountBalance = big.NewInt(0)
 
-func (m *mockTxApp) AccountInfo(ctx context.Context, db sql.DB, acctID []byte, getUncommitted bool) (balance *big.Int, nonce int64, err error) {
+func (m *mockTxApp) AccountInfo(ctx context.Context, db sql.DB, acctID string, getUncommitted bool) (balance *big.Int, nonce int64, err error) {
 	return accountBalance, 0, nil
 }
 

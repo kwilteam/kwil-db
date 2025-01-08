@@ -47,7 +47,7 @@ type App interface {
 	// AccountInfo returns the unconfirmed account info for the given identifier.
 	// If unconfirmed is true, the account found in the mempool is returned.
 	// Otherwise, the account found in the blockchain is returned.
-	AccountInfo(ctx context.Context, db sql.DB, identifier []byte, unconfirmed bool) (balance *big.Int, nonce int64, err error)
+	AccountInfo(ctx context.Context, db sql.DB, identifier string, unconfirmed bool) (balance *big.Int, nonce int64, err error)
 	Price(ctx context.Context, db sql.DB, tx *ktypes.Transaction) (*big.Int, error)
 	BlockExecutionStatus() *ktypes.BlockExecutionStatus
 }
@@ -299,8 +299,13 @@ func (svc *Service) sendTx(ctx context.Context, payload ktypes.Payload) (*userjs
 	readTx := svc.db.BeginDelayedReadTx()
 	defer readTx.Rollback(ctx)
 
+	ident, err := auth.GetIdentifier(svc.signer.AuthType(), svc.signer.Identity())
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to get identifier", nil)
+	}
+
 	// Get the latest nonce for the account, if it exists.
-	_, nonce, err := svc.app.AccountInfo(ctx, readTx, svc.signer.Identity(), true)
+	_, nonce, err := svc.app.AccountInfo(ctx, readTx, ident, true)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorAccountInternal, "account info error", nil)
 	}

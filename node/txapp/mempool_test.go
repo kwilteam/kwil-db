@@ -99,7 +99,7 @@ func Test_MempoolWithGas(t *testing.T) {
 
 	// Credit account A
 	m.accounts["A"] = &types.Account{
-		Identifier: []byte("A"),
+		Identifier: "A",
 		Balance:    big.NewInt(100),
 		Nonce:      0,
 	}

@@ -5,7 +5,6 @@ package client
 import (
 	"context"
 	"encoding/base64"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -24,7 +23,7 @@ import (
 // Client is a client that interacts with a public Kwil provider.
 type Client struct {
 	txClient user.TxSvcClient
-	Signer   auth.Signer
+	signer   auth.Signer
 	logger   log.Logger
 	// chainID is used when creating transactions as replay protection since the
 	// signatures will only be valid on this network.
@@ -102,7 +101,7 @@ func WrapClient(ctx context.Context, client user.TxSvcClient, options *clientTyp
 
 	c := &Client{
 		txClient:          client,
-		Signer:            clientOptions.Signer,
+		signer:            clientOptions.Signer,
 		logger:            clientOptions.Logger,
 		chainID:           clientOptions.ChainID,
 		noWarnings:        clientOptions.Silence,
@@ -175,6 +174,12 @@ func (c *Client) PrivateMode() bool {
 	return c.authCallRPC
 }
 
+// Signer returns the signer used by the client.
+// It can be nil if the client is not configured with a signer.
+func (c *Client) Signer() auth.Signer {
+	return c.signer
+}
+
 func syncBcastFlag(syncBcast bool) rpcclient.BroadcastWait {
 	syncFlag := rpcclient.BroadcastWaitSync
 	if syncBcast { // the bool really means wait for commit in cometbft terms
@@ -184,10 +189,17 @@ func syncBcastFlag(syncBcast bool) rpcclient.BroadcastWait {
 }
 
 // Transfer transfers balance to a given address.
-func (c *Client) Transfer(ctx context.Context, to []byte, amount *big.Int, opts ...clientType.TxOpt) (types.Hash, error) {
+func (c *Client) Transfer(ctx context.Context, to string, amount *big.Int, opts ...clientType.TxOpt) (types.Hash, error) {
 	// Get account balance to ensure we can afford the transfer, and use the
 	// nonce to avoid a second GetAccount in newTx.
-	acct, err := c.txClient.GetAccount(ctx, c.Signer.Identity(), types.AccountStatusPending)
+
+	authr := auth.GetAuthenticator(c.signer.AuthType())
+	ident, err := authr.Identifier(c.signer.Identity())
+	if err != nil {
+		return types.Hash{}, fmt.Errorf("failed to get identifier: %w", err)
+	}
+
+	acct, err := c.txClient.GetAccount(ctx, ident, types.AccountStatusPending)
 	if err != nil {
 		return types.Hash{}, err
 	}
@@ -209,7 +221,7 @@ func (c *Client) Transfer(ctx context.Context, to []byte, amount *big.Int, opts 
 		return types.Hash{}, fmt.Errorf("send amount plus fees (%v) larger than balance (%v)", totalSpend, acct.Balance)
 	}
 
-	c.logger.Debug("transfer", "to", hex.EncodeToString(to),
+	c.logger.Debug("transfer", "to", to,
 		"amount", amount.String())
 
 	return c.txClient.Broadcast(ctx, tx, syncBcastFlag(txOpts.SyncBcast))
@@ -308,7 +320,7 @@ func (c *Client) Call(ctx context.Context, dbid string, procedure string, inputs
 	// signed message text.
 	var challenge []byte
 	if c.authCallRPC {
-		if c.Signer == nil {
+		if c.Signer() == nil {
 			return nil, errors.New("a signer is required with authenticated call RPCs")
 		}
 		challenge, err = c.challenge(ctx)
@@ -317,7 +329,7 @@ func (c *Client) Call(ctx context.Context, dbid string, procedure string, inputs
 		}
 	}
 
-	msg, err := types.CreateCallMessage(payload, challenge, c.Signer)
+	msg, err := types.CreateCallMessage(payload, challenge, c.signer)
 	if err != nil {
 		return nil, fmt.Errorf("create signed message: %w", err)
 	}
@@ -335,7 +347,17 @@ func (c *Client) Query(ctx context.Context, query string, params map[string]any)
 	if params == nil {
 		params = make(map[string]any)
 	}
-	res, err := c.txClient.Query(ctx, query, params)
+
+	encodedParams := make(map[string]*types.EncodedValue)
+	for k, v := range params {
+		var err error
+		encodedParams[k], err = types.EncodeValue(v)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	res, err := c.txClient.Query(ctx, query, encodedParams)
 	if err != nil {
 		return nil, err
 	}
@@ -350,7 +372,7 @@ func (c *Client) Ping(ctx context.Context) (string, error) {
 
 // GetAccount gets account info by account ID.
 // If status is AccountStatusPending, it will include the pending info.
-func (c *Client) GetAccount(ctx context.Context, acctID []byte, status types.AccountStatus) (*types.Account, error) {
+func (c *Client) GetAccount(ctx context.Context, acctID string, status types.AccountStatus) (*types.Account, error) {
 	return c.txClient.GetAccount(ctx, acctID, status)
 }
 
@@ -376,10 +398,16 @@ func (c *Client) TxQuery(ctx context.Context, txHash types.Hash) (*types.TxQuery
 // WaitTx repeatedly queries at a given interval for the status of a transaction
 // until it is confirmed (is included in a block).
 func (c *Client) WaitTx(ctx context.Context, txHash types.Hash, interval time.Duration) (*types.TxQueryResponse, error) {
+	return WaitForTx(ctx, c.TxQuery, txHash, interval)
+}
+
+// WaitForTx waits for a transaction to be included in a block.
+func WaitForTx(ctx context.Context, txQuery func(context.Context, types.Hash) (*types.TxQueryResponse, error),
+	txHash types.Hash, interval time.Duration) (*types.TxQueryResponse, error) {
 	tick := time.NewTicker(interval)
 	defer tick.Stop()
 	for {
-		resp, err := c.TxQuery(ctx, txHash)
+		resp, err := txQuery(ctx, txHash)
 		if err != nil {
 			// Only error out if it's something other than not found.
 			if !errors.Is(err, rpcclient.ErrNotFound) {

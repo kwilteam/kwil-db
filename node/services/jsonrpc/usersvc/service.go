@@ -42,7 +42,7 @@ type BlockchainTransactor interface {
 }
 
 type NodeApp interface {
-	AccountInfo(ctx context.Context, db sql.DB, identifier []byte, pending bool) (balance *big.Int, nonce int64, err error)
+	AccountInfo(ctx context.Context, db sql.DB, identifier string, pending bool) (balance *big.Int, nonce int64, err error)
 	Price(ctx context.Context, dbTx sql.DB, tx *types.Transaction) (*big.Int, error)
 	GetMigrationMetadata(ctx context.Context) (*types.MigrationMetadata, error)
 }
@@ -511,6 +511,15 @@ func (svc *Service) Query(ctx context.Context, req *userjson.QueryRequest) (*use
 	readTx := svc.db.BeginDelayedReadTx()
 	defer readTx.Rollback(ctx)
 
+	params := make(map[string]any)
+	for k, v := range req.Params {
+		var err error
+		params[k], err = v.Decode()
+		if err != nil {
+			return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "failed to decode parameter: "+err.Error(), nil)
+		}
+	}
+
 	r := &rowReader{}
 	err := svc.engine.Execute(&common.EngineContext{
 		TxContext: &common.TxContext{
@@ -518,7 +527,7 @@ func (svc *Service) Query(ctx context.Context, req *userjson.QueryRequest) (*use
 			BlockContext: &common.BlockContext{
 				Height: -1, // cannot know the height here.
 			},
-		}}, readTx, req.Query, req.Params, r.read)
+		}}, readTx, req.Query, params, r.read)
 	if err != nil {
 		// We don't know for sure that it's an invalid argument, but an invalid
 		// user-provided query isn't an internal server error.
@@ -548,7 +557,7 @@ func (svc *Service) Account(ctx context.Context, req *userjson.AccountRequest) (
 		return nil, jsonrpc.NewError(jsonrpc.ErrorAccountInternal, "account info error", nil)
 	}
 
-	ident := []byte(nil)
+	ident := ""
 	if nonce > 0 { // return nil pubkey for non-existent account
 		ident = req.Identifier
 	}

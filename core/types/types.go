@@ -8,7 +8,7 @@ import (
 // TODO: doc it all
 
 type Account struct {
-	Identifier HexBytes `json:"identifier"`
+	Identifier string   `json:"identifier"`
 	Balance    *big.Int `json:"balance"`
 	Nonce      int64    `json:"nonce"`
 }

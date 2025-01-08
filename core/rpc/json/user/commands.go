@@ -26,7 +26,7 @@ type SchemaRequest struct {
 
 // AccountRequest contains the request parameters for MethodAccount.
 type AccountRequest struct {
-	Identifier types.HexBytes `json:"identifier" desc:"account identifier"`
+	Identifier string         `json:"identifier" desc:"account identifier"`
 	Status     *AccountStatus `json:"status,omitempty" desc:"blockchain status (confirmed or unconfirmed)"` // Mapped to URL query parameter `status`.
 }
 
@@ -88,8 +88,8 @@ type EstimatePriceRequest struct {
 
 // QueryRequest contains the request parameters for MethodQuery.
 type QueryRequest struct {
-	Query  string                 `json:"query"`
-	Params map[string]interface{} `json:"params"`
+	Query  string                         `json:"query"`
+	Params map[string]*types.EncodedValue `json:"params"`
 }
 
 // TxQueryRequest contains the request parameters for MethodTxQuery.

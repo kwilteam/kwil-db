@@ -1648,6 +1648,14 @@ func Test_Extensions(t *testing.T) {
 		err = adminExec("{test_ext}DROP INDEX IF EXISTS test_index;", nil)
 		require.NoError(t, err)
 
+		// insert
+
+		err = execFromUser(defaultCaller, "{test_ext}INSERT INTO test_table (id) VALUES (1);", nil)
+		require.ErrorIs(t, err, engine.ErrCannotMutateExtension)
+
+		err = adminExec("{test_ext}INSERT INTO test_table (id) VALUES (1);", nil)
+		require.NoError(t, err)
+
 		// drop table
 
 		err = execFromUser(defaultCaller, "{test_ext}DROP TABLE IF EXISTS test_table;", nil)
@@ -1669,6 +1677,7 @@ func Test_Extensions(t *testing.T) {
 
 		err = adminExec("{test_ext}DROP ACTION IF EXISTS test_action;", nil)
 		require.NoError(t, err)
+
 	}
 
 	// first run: new interpreter

@@ -181,7 +181,7 @@ func buildExecutionInputs(ctx context.Context, client clientType.Client, namespa
 
 func GetParamList(ctx context.Context,
 	query func(ctx context.Context, query string, args map[string]any) (*types.QueryResult, error),
-	namespace, action string) ([]ParamList, error) {
+	namespace, action string) ([]NamedParameter, error) {
 	if namespace == "" {
 		namespace = interpreter.DefaultNamespace
 	}
@@ -220,14 +220,14 @@ func GetParamList(ctx context.Context,
 		return nil, err
 	}
 
-	params := make([]ParamList, len(p))
+	params := make([]NamedParameter, len(p))
 	for i, param := range p {
 		dt, err := types.ParseDataType(param.DataType)
 		if err != nil {
 			return nil, err
 		}
 
-		params[i] = ParamList{
+		params[i] = NamedParameter{
 			Name: param.Name,
 			Type: dt,
 		}
@@ -236,7 +236,7 @@ func GetParamList(ctx context.Context,
 	return params, nil
 }
 
-type ParamList struct {
+type NamedParameter struct {
 	Name string
 	Type *types.DataType
 }
@@ -263,6 +263,11 @@ func decodeMany(inputs []string) ([][]byte, bool) {
 	}
 
 	return b64Arr, b64Ok
+}
+
+// FormatByteEncoding formats bytes to be read on the CLI.
+func FormatByteEncoding(b []byte) string {
+	return base64.StdEncoding.EncodeToString(b) + "#b64"
 }
 
 // encodeBasedOnType will encode the input value based on the type of the input.

@@ -128,7 +128,7 @@ func decodeCreditEvent(l *types.Log) (*credit.AccountCreditResolution, error) {
 	}
 
 	return &credit.AccountCreditResolution{
-		Account: address.Bytes(),
+		Account: address.Hex(),
 		Amount:  amount,
 		TxHash:  l.TxHash.Bytes(),
 	}, nil

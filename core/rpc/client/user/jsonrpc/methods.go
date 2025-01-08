@@ -119,9 +119,9 @@ func (cl *Client) EstimateCost(ctx context.Context, tx *types.Transaction) (*big
 	return price, nil
 }
 
-func (cl *Client) GetAccount(ctx context.Context, pubKey []byte, status types.AccountStatus) (*types.Account, error) {
+func (cl *Client) GetAccount(ctx context.Context, identifier string, status types.AccountStatus) (*types.Account, error) {
 	cmd := &userjson.AccountRequest{
-		Identifier: pubKey,
+		Identifier: identifier,
 		Status:     &status,
 	}
 	res := &userjson.AccountResponse{}
@@ -143,13 +143,13 @@ func (cl *Client) GetAccount(ctx context.Context, pubKey []byte, status types.Ac
 	// }
 
 	return &types.Account{
-		Identifier: pubKey,
+		Identifier: identifier,
 		Balance:    balance,
 		Nonce:      res.Nonce,
 	}, nil
 }
 
-func (cl *Client) Query(ctx context.Context, query string, params map[string]any) (*types.QueryResult, error) {
+func (cl *Client) Query(ctx context.Context, query string, params map[string]*types.EncodedValue) (*types.QueryResult, error) {
 	cmd := &userjson.QueryRequest{
 		Query:  query,
 		Params: params,

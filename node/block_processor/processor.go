@@ -1,7 +1,6 @@
 package blockprocessor
 
 import (
-	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/hex"
@@ -10,6 +9,7 @@ import (
 	"math/big"
 	"slices"
 	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -636,11 +636,11 @@ func txResultsHash(results []ktypes.TxResult) types.Hash {
 func (bp *BlockProcessor) accountsHash() types.Hash {
 	accounts := bp.accounts.Updates()
 	slices.SortFunc(accounts, func(a, b *ktypes.Account) int {
-		return bytes.Compare(a.Identifier, b.Identifier)
+		return strings.Compare(a.Identifier, b.Identifier)
 	})
 	hasher := ktypes.NewHasher()
 	for _, acc := range accounts {
-		hasher.Write(acc.Identifier)
+		hasher.Write([]byte(acc.Identifier))
 		binary.Write(hasher, binary.BigEndian, acc.Balance.Bytes())
 		binary.Write(hasher, binary.BigEndian, acc.Nonce)
 	}
@@ -713,7 +713,7 @@ func (bp *BlockProcessor) Price(ctx context.Context, dbTx sql.DB, tx *ktypes.Tra
 	return bp.txapp.Price(ctx, dbTx, tx, bp.chainCtx)
 }
 
-func (bp *BlockProcessor) AccountInfo(ctx context.Context, db sql.DB, identifier []byte, pending bool) (balance *big.Int, nonce int64, err error) {
+func (bp *BlockProcessor) AccountInfo(ctx context.Context, db sql.DB, identifier string, pending bool) (balance *big.Int, nonce int64, err error) {
 	return bp.txapp.AccountInfo(ctx, db, identifier, pending)
 }
 

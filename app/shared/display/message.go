@@ -11,26 +11,18 @@ import (
 // TxHashAndExecResponse is meant to combine the "tx_hash" marshalling of
 // RespTxHash with a RespTxQuery in an "exec_result" field.
 type TxHashAndExecResponse struct {
-	Hash      RespTxHash   // embedding breaks MarshalJSON of composing types
-	QueryResp *RespTxQuery `json:"exec_result"`
+	Res *types.TxQueryResponse
 }
 
 // NewTxHashAndExecResponse makes a TxHashAndExecResponse from a TcTxQueryResponse.
 func NewTxHashAndExecResponse(resp *types.TxQueryResponse) *TxHashAndExecResponse {
 	return &TxHashAndExecResponse{
-		Hash:      RespTxHash(resp.Hash),
-		QueryResp: &RespTxQuery{Msg: resp},
+		Res: resp,
 	}
 }
 
 func (h *TxHashAndExecResponse) MarshalJSON() ([]byte, error) {
-	return json.Marshal(struct {
-		TxHash    string       `json:"tx_hash"`
-		QueryResp *RespTxQuery `json:"exec_result"`
-	}{
-		TxHash:    h.Hash.Hex(),
-		QueryResp: h.QueryResp,
-	})
+	return json.Marshal(h.Res)
 }
 
 // MarshalText deduplicates the tx hash for a compact readable output, unlike
@@ -40,10 +32,10 @@ func (h TxHashAndExecResponse) MarshalText() ([]byte, error) {
 	return []byte(fmt.Sprintf(`TxHash: %s
 Status: %s
 Height: %d
-Log: %s`, h.Hash.Hex(),
-		heightStatus(h.QueryResp.Msg),
-		h.QueryResp.Msg.Height,
-		h.QueryResp.Msg.Result.Log,
+Log: %s`, hex.EncodeToString(h.Res.Hash[:]),
+		heightStatus(h.Res),
+		h.Res.Height,
+		h.Res.Result.Log,
 	),
 	), nil
 }

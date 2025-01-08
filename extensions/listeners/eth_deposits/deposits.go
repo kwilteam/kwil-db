@@ -153,7 +153,7 @@ func processEvents(ctx context.Context, from, to int64, client *ethClient, event
 		}
 
 		logger.Info("Flagging new account credit event for approval (to broadcast)",
-			"account", hex.EncodeToString(event.Account), "amount", event.Amount, "txHash", hex.EncodeToString(event.TxHash))
+			"account", event.Account, "amount", event.Amount, "txHash", hex.EncodeToString(event.TxHash))
 		err = eventStore.Broadcast(ctx, credit.CreditAccountEventType, bts)
 		if err != nil {
 			return fmt.Errorf("failed to mark new event for broadcast: %w", err)

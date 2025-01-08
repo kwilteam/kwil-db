@@ -81,6 +81,12 @@ type MsgFormatter interface {
 	encoding.TextMarshaler
 }
 
+// MessageReader is a utility to help unmarshal a message from a reader.
+type MessageReader[T any] struct {
+	Result T      `json:"result"`
+	Error  string `json:"error"`
+}
+
 type wrappedMsg struct {
 	Result MsgFormatter `json:"result"`
 	Error  string       `json:"error"`
@@ -141,6 +147,7 @@ func prettyPrint(msg *wrappedMsg, format OutputFormat, stdout io.Writer, stderr 
 }
 
 // Print is a helper function to wrap and print message in given format.
+// THIS SHOULD NOT BE USED IN COMMANDS. Use PrintCmd instead.
 func Print(msg MsgFormatter, err error, format OutputFormat) error {
 	wrappedMsg := wrapMsg(msg, err)
 	return prettyPrint(wrappedMsg, format, os.Stdout, os.Stderr)
@@ -149,10 +156,6 @@ func Print(msg MsgFormatter, err error, format OutputFormat) error {
 // PrintCmd prints output based on the commands output format flag.
 // If not format flag is provided, it will default to text in stdout.
 func PrintCmd(cmd *cobra.Command, msg MsgFormatter) error {
-	if ShouldSilence(cmd) {
-		return nil
-	}
-
 	wrappedMsg := &wrappedMsg{
 		Result: msg,
 		Error:  "",
@@ -172,24 +175,30 @@ func PrintCmd(cmd *cobra.Command, msg MsgFormatter) error {
 		return fmt.Errorf("invalid output format: %s", format)
 	}
 
-	return prettyPrint(wrappedMsg, OutputFormat(format), os.Stdout, os.Stderr)
+	// if silencing but output is json, we should still print the json
+	if ShouldSilence(cmd) && format != outputFormatJSON.string() {
+		return nil
+	}
+
+	return prettyPrint(wrappedMsg, OutputFormat(format), cmd.OutOrStdout(), cmd.OutOrStderr())
 }
 
 // PrintErr prints the error according to the commands output format flag.
 func PrintErr(cmd *cobra.Command, err error) error {
-	if ShouldSilence(cmd) {
-		return nil
-	}
-
 	outputFormat, err2 := getOutputFormat(cmd)
 	if err2 != nil {
 		return err2
 	}
 
+	// if silencing but output is json, we should still print the json
+	if ShouldSilence(cmd) && outputFormat != outputFormatJSON {
+		return nil
+	}
+
 	return prettyPrint(&wrappedMsg{
 		Result: &emptyResult{},
 		Error:  err.Error(),
-	}, outputFormat, os.Stdout, os.Stderr)
+	}, outputFormat, cmd.OutOrStdout(), cmd.OutOrStderr())
 }
 
 func getOutputFormat(cmd *cobra.Command) (OutputFormat, error) {
