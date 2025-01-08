@@ -14,7 +14,6 @@ import (
 	"github.com/kwilteam/kwil-db/app/setup"
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
-	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node"
 	"github.com/stretchr/testify/require"
@@ -58,26 +57,8 @@ type NetworkConfig struct {
 	// REQUIRED: DBOwner is the initial wallet address that owns the database.
 	DBOwner string
 
-	// OPTIONAL: GasCostsEnabled is true if gas costs are enabled.
-	// By default, gas costs are disabled.
-	GasCostsEnabled bool
-
-	// OPTIONAL: MaxBlockSize is the maximum block size in bytes.
-	// Cannot be 0.
-	MaxBlockSize int64
-
-	// OPTIONAL: JoinExpiry is the number of blocks before a join expires
-	// Cannot be 0.
-	JoinExpiry int64
-
-	// OPTIONAL: VoteExpiry is the number of blocks before a vote expires
-	// Cannot be 0.
-	VoteExpiry int64
-
-	// OPTIONAL: MaxVotesPerTx is the maximum number of votes that can be included
-	// in a single transaction
-	// Cannot be 0.
-	MaxVotesPerTx int64
+	// OPTIONAL: ConfigureGenesis is a function that alters the genesis configuration
+	ConfigureGenesis func(*config.GenesisConfig)
 
 	// OPTIONAL: ExtraServices are services that should be run with the test. The test
 	// Automatically runs kwild and Postgres, but this allows for geth, kgw,
@@ -87,18 +68,8 @@ type NetworkConfig struct {
 }
 
 func (n *NetworkConfig) ensureDefaults(t *testing.T) {
-	def := config.DefaultGenesisConfig()
-	if n.MaxBlockSize == 0 {
-		n.MaxBlockSize = def.MaxBlockSize
-	}
-	if n.JoinExpiry == 0 {
-		n.JoinExpiry = def.JoinExpiry
-	}
-	if n.VoteExpiry == 0 {
-		n.VoteExpiry = def.VoteExpiry
-	}
-	if n.MaxVotesPerTx == 0 {
-		n.MaxVotesPerTx = def.MaxVotesPerTx
+	if n.ConfigureGenesis == nil {
+		n.ConfigureGenesis = func(*config.GenesisConfig) {}
 	}
 
 	if n.DBOwner == "" {
@@ -112,22 +83,12 @@ func (n *NetworkConfig) ensureDefaults(t *testing.T) {
 
 // NodeConfig is a configuration that allows external users to specify properties of the node
 type NodeConfig struct {
-	// OPTIONAL: LogLevel is the log level to use.
-	// By default, it is "info".
-	LogLevel string
 	// OPTIONAL: DockerImage is the docker image to use
 	// By default, it is "kwild:latest"
 	DockerImage string
 	// OPTIONAL: Validator is true if the node is a validator
 	// By default, it is true.
 	Validator bool
-	// OPTIONAL: PrivateJSONRPC is true if the node should not expose the JSONRPC server
-	// By default, it is false.
-	PrivateJSONRPC bool
-	// OPTIONAL: PeerFilteringEnabled is true if the node should filter peers
-	// By default, it is false.
-	PeerFilteringEnabled bool
-	// TODO: add whitelist peers
 
 	// OPTIONAL: PrivateKey is the private key to use for the node.
 	// If not set, a random key will be generated.
@@ -143,13 +104,10 @@ func DefaultNodeConfig() *NodeConfig {
 		panic(err)
 	}
 	return &NodeConfig{
-		LogLevel:             "info",
-		DockerImage:          "kwild:latest",
-		Validator:            true,
-		PrivateJSONRPC:       false,
-		PeerFilteringEnabled: false,
-		PrivateKey:           pk.(*crypto.Secp256k1PrivateKey),
-		Configure:            func(*config.Config) {},
+		DockerImage: "kwild:latest",
+		Validator:   true,
+		PrivateKey:  pk.(*crypto.Secp256k1PrivateKey),
+		Configure:   func(*config.Config) {},
 	}
 }
 
@@ -212,16 +170,8 @@ func SetupTests(t *testing.T, testConfig *TestConfig) *Testnet {
 		t.Fatal("at least one node is required")
 	}
 
-	genesisConfig := &config.GenesisConfig{
-		ChainID:          "kwil_test_chain",
-		InitialHeight:    0,
-		DBOwner:          testConfig.Network.DBOwner,
-		MaxBlockSize:     testConfig.Network.MaxBlockSize,
-		JoinExpiry:       testConfig.Network.JoinExpiry,
-		VoteExpiry:       testConfig.Network.VoteExpiry,
-		MaxVotesPerTx:    testConfig.Network.MaxVotesPerTx,
-		DisabledGasCosts: !testConfig.Network.GasCostsEnabled,
-	}
+	genesisConfig := config.DefaultGenesisConfig()
+	testConfig.Network.ConfigureGenesis(genesisConfig)
 
 	generatedNodes := make([]*kwilNode, len(testConfig.Network.Nodes))
 	testnetNodeConfigs := make([]*setup.TestnetNodeConfig, len(testConfig.Network.Nodes))
@@ -413,6 +363,7 @@ func (c *NodeConfig) makeNode(generated *generatedNodeInfo, isFirstNode bool, fi
 	// --db.user
 	// --db.password
 	// --db.name
+	// --p2p.bootnodes
 	ensureEq := func(name string, a, b interface{}) error {
 		if a != b {
 			return fmt.Errorf("configuration %s cannot be custom configured in tests", name)
@@ -429,6 +380,7 @@ func (c *NodeConfig) makeNode(generated *generatedNodeInfo, isFirstNode bool, fi
 		ensureEq("db.user", conf.DB.User, defaultConf.DB.User),
 		ensureEq("db.password", conf.DB.Pass, defaultConf.DB.Pass),
 		ensureEq("db.name", conf.DB.DBName, defaultConf.DB.DBName),
+		ensureEq("p2p.bootnodes", conf.P2P.BootNodes, defaultConf.P2P.BootNodes),
 	)
 	if err != nil {
 		return nil, err
@@ -443,18 +395,6 @@ func (c *NodeConfig) makeNode(generated *generatedNodeInfo, isFirstNode bool, fi
 	if !isFirstNode {
 		// if this is not the first node, we should set the first node as the bootnode
 		conf.P2P.BootNodes = []string{node.FormatPeerString(firstNode.nodeTestConfig.PrivateKey.Public().Bytes(), firstNode.nodeTestConfig.PrivateKey.Public().Type(), firstNode.generatedInfo.KwilNodeServiceName, p2pPort)}
-	}
-	conf.P2P.Pex = true
-	conf.P2P.PrivateMode = c.PeerFilteringEnabled
-	// TODO: revisit how we add whitelist peers
-
-	// setting rpc configs
-	conf.RPC.Private = c.PrivateJSONRPC
-
-	// other
-	conf.LogLevel, err = log.ParseLevel(c.LogLevel)
-	if err != nil {
-		return nil, err
 	}
 
 	return &kwilNode{
@@ -488,12 +428,8 @@ func (k *kwilNode) IsValidator() bool {
 	return k.nodeTestConfig.Validator
 }
 
-func (k *kwilNode) PeerFilteringEnabled() bool {
-	return k.nodeTestConfig.PeerFilteringEnabled
-}
-
-func (k *kwilNode) PrivateRPCsEnabled() bool {
-	return k.nodeTestConfig.PrivateJSONRPC
+func (k *kwilNode) Config() *config.Config {
+	return k.config
 }
 
 func (k *kwilNode) JSONRPCClient(t *testing.T, ctx context.Context, usingGateway bool) (JSONRPCClient, error) {
