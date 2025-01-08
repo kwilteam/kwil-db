@@ -1,0 +1,52 @@
+# this is not a full docker compose. It is a template which can be combined into a larger docker compose
+  {{ .NodeServicePrefix }}{{ .NodeNumber }}:
+    {{ if .UserID }}user: "{{ .UserID }}:{{ .GroupID }}"{{ end }}
+    image: {{ .DockerImage }}
+    ports:
+      - "{{ .ExposedJSONRPCPort }}:8484"
+      - "{{ .ExposedP2PPort }}:6600"
+    environment:
+      GORACE: "halt_on_error=1 log_path=/app/kwil/datarace"
+    volumes:
+      - type: bind
+        source: {{ .TestnetDir }}/{{ .NodeServicePrefix }}{{ .NodeNumber }}
+        target: /app/kwil
+    networks:
+      - {{ .Network }}
+    depends_on:
+      {{ .PGServicePrefix }}{{ .NodeNumber }}:
+        condition: service_healthy
+    command: |
+      start
+      --root=/app/kwil
+      --log-format=plain
+      --admin.listen=/tmp/admin.socket
+      --rpc.listen=0.0.0.0:8484
+      --p2p.ip=0.0.0.0 #TODO: we should combine p2p.ip and p2p.port: https://github.com/kwilteam/kwil-db/issues/1201
+      --p2p.port=6600
+      --db.host={{ .PGServicePrefix }}{{ .NodeNumber }}
+      --db.port=5432
+      --db.user=kwild
+      --db.pass=kwild
+    healthcheck:
+      test: ["CMD", "curl", "--fail-with-body", "-s", "http://127.0.0.1:8484/api/v1/health/user"]
+      interval: 2s
+      timeout: 6s
+      retries: 10
+
+  {{ .PGServicePrefix }}{{ .NodeNumber }}:
+    image: kwildb/postgres:16.5-1
+    ports:
+      - "5432"
+    restart: always
+    user: postgres
+    environment:
+      POSTGRES_HOST_AUTH_METHOD: trust
+      POSTGRES_INITDB_ARGS: --data-checksums
+    networks:
+      - {{ .Network }}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 && sleep 1"]
+      interval: 2s
+      timeout: 6s
+      retries: 10

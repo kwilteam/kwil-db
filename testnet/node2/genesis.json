@@ -1,0 +1,30 @@
+{
+  "chain_id": "kwil-testnet",
+  "initial_height": 0,
+  "leader": "0226b3ff29216dac187cea393f8af685ad419ac9644e55dce83d145c8b1af213bd",
+  "validators": [
+    {
+      "pubkey": "0226b3ff29216dac187cea393f8af685ad419ac9644e55dce83d145c8b1af213bd",
+      "power": 1
+    },
+    {
+      "pubkey": "02c57268fc884fa88425c7e5c19d3af263d1c64dd8b8f3f8c0fb31bb622d1fdab8",
+      "power": 1
+    },
+    {
+      "pubkey": "021072159608e8bfa10102cc74d3e1b533dfdf1904538a61de42811cc3066de014",
+      "power": 1
+    }
+  ],
+  "db_owner": "",
+  "max_block_size": 6291456,
+  "join_expiry": 14400,
+  "vote_expiry": 108000,
+  "disabled_gas_costs": true,
+  "max_votes_per_tx": 200,
+  "state_hash": null,
+  "migration": {
+    "start_height": 0,
+    "end_height": 0
+  }
+}
