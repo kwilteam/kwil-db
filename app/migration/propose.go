@@ -8,6 +8,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/app/rpc"
 	"github.com/kwilteam/kwil-db/app/shared/display"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/migrations"
 	"github.com/kwilteam/kwil-db/node/voting"
 )
@@ -61,7 +62,12 @@ func proposeCmd() *cobra.Command {
 				return display.PrintErr(cmd, err)
 			}
 
-			return display.PrintCmd(cmd, display.RespTxHash(txHash))
+			id := types.VotableEventID(voting.StartMigrationEventType, proposalBts)
+
+			return display.PrintCmd(cmd, &display.RespResolutionBroadcast{
+				TxHash: txHash,
+				ID:     id,
+			})
 
 		},
 	}

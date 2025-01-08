@@ -89,7 +89,7 @@ func CreateCallMessage(ac *ActionCall, challenge []byte, signer auth.Signer) (*C
 
 	if signer != nil { // for @caller
 		msg.AuthType = signer.AuthType()
-		msg.Sender = signer.Identity()
+		msg.Sender = signer.CompactID()
 	}
 
 	if len(challenge) > 0 {

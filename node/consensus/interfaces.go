@@ -54,7 +54,7 @@ type BlockProcessor interface {
 	CheckTx(ctx context.Context, tx *ktypes.Transaction, recheck bool) error
 
 	GetValidators() []*ktypes.Validator
-	ConsensusParams() *ktypes.ConsensusParams
+	ConsensusParams() *ktypes.NetworkParameters
 
 	BlockExecutionStatus() *ktypes.BlockExecutionStatus
 }

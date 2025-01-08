@@ -72,6 +72,9 @@ func (k *Secp256k1PrivateKey) Bytes() []byte {
 // Equals compares two private keys. This accepts a Key to satisfy the
 // PrivateKey interface.
 func (k *Secp256k1PrivateKey) Equals(o Key) bool {
+	if o == nil {
+		return false
+	}
 	sk, ok := o.(*Secp256k1PrivateKey)
 	if !ok {
 		return keyEquals(k, o) // if different concrete type, test based on returns form the interface's Type and Bytes
@@ -131,6 +134,9 @@ func (k *Secp256k1PublicKey) BytesUncompressed() []byte {
 
 // Equals compares two public keys. This accepts a Key to satisfy the PublicKey interface.
 func (k *Secp256k1PublicKey) Equals(o Key) bool {
+	if o == nil {
+		return false
+	}
 	sk, ok := o.(*Secp256k1PublicKey)
 	if !ok {
 		return keyEquals(k, o)

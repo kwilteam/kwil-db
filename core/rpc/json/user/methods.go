@@ -15,6 +15,8 @@ const (
 	MethodQuery                 jsonrpc.Method = "user.query"
 	MethodTxQuery               jsonrpc.Method = "user.tx_query"
 	MethodSchema                jsonrpc.Method = "user.schema"
+	MethodUpdateProposalStatus  jsonrpc.Method = "user.update_proposal_status"
+	MethodListUpdateProposals   jsonrpc.Method = "user.list_update_proposals"
 	MethodMigrationStatus       jsonrpc.Method = "user.migration_status"
 	MethodListMigrations        jsonrpc.Method = "user.list_migrations"
 	MethodLoadChangeset         jsonrpc.Method = "user.changeset"

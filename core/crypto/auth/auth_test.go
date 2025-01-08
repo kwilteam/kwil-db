@@ -77,11 +77,11 @@ func Test_AuthSignAndVerify(t *testing.T) {
 			assert.NoError(t, err)
 
 			// verify the signature
-			err = tc.authenticator.Verify(tc.signer.Identity(), msg, sig.Data)
+			err = tc.authenticator.Verify(tc.signer.CompactID(), msg, sig.Data)
 			assert.NoError(t, err)
 
 			// check the address
-			identifier, err := tc.authenticator.Identifier(tc.signer.Identity())
+			identifier, err := tc.authenticator.Identifier(tc.signer.CompactID())
 			assert.NoError(t, err)
 
 			if tc.ident != identifier {
@@ -101,7 +101,7 @@ func TestSecp256k1PlainIdentifier(t *testing.T) {
 	signer := &auth.Secp256k1Signer{Secp256k1PrivateKey: *k}
 	authenticator := auth.Secp25k1Authenticator{}
 
-	identifier, err := authenticator.Identifier(signer.Identity())
+	identifier, err := authenticator.Identifier(signer.CompactID())
 	require.NoError(t, err)
 
 	assert.Equal(t, secp256k1PubKey, identifier)
@@ -117,7 +117,7 @@ func TestSecp256k1Identifier(t *testing.T) {
 	signer := &auth.EthPersonalSigner{Key: *k}
 	authenticator := auth.EthSecp256k1Authenticator{}
 
-	address, err := authenticator.Identifier(signer.Identity())
+	address, err := authenticator.Identifier(signer.CompactID())
 	require.NoError(t, err)
 
 	assert.Equal(t, secp256k1Addr, address)
@@ -133,7 +133,7 @@ func TestEd25519Identifier(t *testing.T) {
 	signer := &auth.Ed25519Signer{Ed25519PrivateKey: *pk}
 	authenticator := auth.Ed25519Authenticator{}
 
-	address, err := authenticator.Identifier(signer.Identity())
+	address, err := authenticator.Identifier(signer.CompactID())
 	require.NoError(t, err)
 
 	assert.Equal(t, ed25519Addr, address)

@@ -19,7 +19,7 @@ import (
 
 const (
 	apiVerMajor = 0
-	apiVerMinor = 1 // should it be 2 ?
+	apiVerMinor = 2
 	apiVerPatch = 0
 
 	serviceName = "chain"
@@ -27,7 +27,10 @@ const (
 
 // API version log
 //
-// apiVerMinor = 1 initial api
+// apiVerMinor = 1 initial api in v0.9
+// apiVerMinor = 2 v0.10
+//
+// NOTE: we haven't stabilized the API, but it will bump major for breaking changes
 
 var (
 	apiSemver = fmt.Sprintf("%d.%d.%d", apiVerMajor, apiVerMinor, apiVerPatch)
@@ -42,7 +45,7 @@ type Node interface {
 	ChainTx(hash ktypes.Hash) (*chaintypes.Tx, error)
 	BlockHeight() int64
 	ChainUnconfirmedTx(limit int) (int, []nodetypes.NamedTx)
-	ConsensusParams() *ktypes.ConsensusParams
+	ConsensusParams() *ktypes.NetworkParameters
 }
 
 type Validators interface {
@@ -254,7 +257,7 @@ func (svc *Service) Genesis(ctx context.Context, _ *chainjson.GenesisRequest) (*
 }
 
 func (svc *Service) ConsensusParams(_ context.Context, _ *chainjson.ConsensusParamsRequest) (*chainjson.ConsensusParamsResponse, *jsonrpc.Error) {
-	return (*chainjson.ConsensusParamsResponse)(svc.blockchain.ConsensusParams()), nil
+	return svc.blockchain.ConsensusParams(), nil
 }
 
 // Validators returns validator set at certain height. Default to latest height.

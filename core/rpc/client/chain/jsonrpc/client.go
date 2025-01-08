@@ -101,14 +101,14 @@ func (c *Client) Genesis(ctx context.Context) (*chaintypes.Genesis, error) {
 	return (*chaintypes.Genesis)(res), err
 }
 
-func (c *Client) ConsensusParams(ctx context.Context) (*types.ConsensusParams, error) {
+func (c *Client) ConsensusParams(ctx context.Context) (*types.NetworkParameters, error) {
 	req := &chainjson.ConsensusParamsRequest{}
 	res := &chainjson.ConsensusParamsResponse{}
 	err := c.CallMethod(ctx, string(chainjson.MethodConsensusParams), req, res)
 	if err != nil {
 		return nil, err
 	}
-	return (*types.ConsensusParams)(res), nil
+	return res, nil
 }
 
 func (c *Client) Validators(ctx context.Context) (int64, []*types.Validator, error) {

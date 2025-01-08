@@ -3,8 +3,10 @@ package types
 import (
 	"testing"
 
-	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 )
 
 func TestCreateCallMessage(t *testing.T) {
@@ -97,6 +99,10 @@ func (m *mockSigner) AuthType() string {
 	return m.authType
 }
 
-func (m *mockSigner) Identity() []byte {
+func (m *mockSigner) CompactID() []byte {
 	return m.identity
+}
+
+func (m *mockSigner) PubKey() crypto.PublicKey {
+	return nil
 }

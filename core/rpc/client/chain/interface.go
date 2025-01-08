@@ -15,7 +15,7 @@ type Client interface {
 	BlockResultByHash(ctx context.Context, hash types.Hash) (*chaintypes.BlockResult, error)
 	Tx(ctx context.Context, hash types.Hash) (*chaintypes.Tx, error)
 	Genesis(ctx context.Context) (*chaintypes.Genesis, error)
-	ConsensusParams(ctx context.Context) (*types.ConsensusParams, error)
+	ConsensusParams(ctx context.Context) (*types.NetworkParameters, error)
 	Validators(ctx context.Context) (height int64, validators []*types.Validator, err error)
 	UnconfirmedTxs(ctx context.Context) (total int, txs []chaintypes.NamedTx, err error)
 }

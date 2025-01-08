@@ -81,12 +81,11 @@ func TestPrepareMempoolTxns(t *testing.T) {
 		},
 	}
 
-	pk, signer := genNodeKeyAndSigner(t)
+	_, signer := genNodeKeyAndSigner(t)
 	bp := &BlockProcessor{
 		db:       &mockDB{},
 		log:      log.DiscardLogger,
 		signer:   signer,
-		leader:   pk.Public(),
 		chainCtx: chainCtx,
 		txapp:    &mockTxApp{},
 	}
@@ -135,7 +134,8 @@ func TestPrepareMempoolTxns(t *testing.T) {
 
 	// proposer party
 	tProposer := cloneTx(tA)
-	tProposer.Sender = bp.signer.Identity()
+	tProposer.Sender = bp.signer.CompactID()
+	tProposer.Signature.Type = bp.signer.AuthType()
 	// tProposerb := marshalTx(t, tProposer)
 
 	zeroFeeTx := cloneTx(tA)
@@ -296,20 +296,16 @@ func TestPrepareVoteIDTx(t *testing.T) {
 		},
 	}
 	genCfg := config.DefaultGenesisConfig()
-	genCfg.Leader = config.EncodePubKeyAndType(leaderPrivKey.Public().Bytes(), leaderPrivKey.Type())
+	genCfg.Leader = types.PublicKey{PublicKey: leaderPrivKey.Public()}
+	netParams := genCfg.NetworkParameters
 
 	bp := &BlockProcessor{
 		db:     &mockDB{},
 		log:    log.DiscardLogger,
 		signer: leaderSigner,
-		leader: leaderPrivKey.Public(),
 		chainCtx: &common.ChainContext{
-			ChainID: "test",
-			NetworkParameters: &common.NetworkParameters{
-				MaxBlockSize:     6 * 1024 * 1024,
-				MaxVotesPerTx:    100,
-				DisabledGasCosts: true,
-			},
+			ChainID:           "test",
+			NetworkParameters: &netParams,
 		},
 		txapp:         &mockTxApp{},
 		genesisParams: genCfg,
@@ -320,13 +316,13 @@ func TestPrepareVoteIDTx(t *testing.T) {
 		signer  auth.Signer
 		events  []*types.VotableEvent
 		cleanup func()
-		fn      func(context.Context, *BlockProcessor, sql.DB, *mockEventStore) error
+		fn      func(*testing.T, context.Context, *BlockProcessor, sql.DB, *mockEventStore) error
 	}{
 		{
 			name:   "no voteIDs to broadcast",
 			events: []*types.VotableEvent{}, // no events
 			signer: valSigner,
-			fn: func(ctx context.Context, bp *BlockProcessor, db sql.DB, es *mockEventStore) error {
+			fn: func(t *testing.T, ctx context.Context, bp *BlockProcessor, db sql.DB, es *mockEventStore) error {
 				bp.signer = valSigner
 				tx, ids, err := bp.PrepareValidatorVoteIDTx(ctx, db)
 				require.NoError(t, err)
@@ -339,7 +335,7 @@ func TestPrepareVoteIDTx(t *testing.T) {
 			name:   "leader not allowed to broadcast voteIDs",
 			events: []*types.VotableEvent{evt1, evt2},
 			signer: leaderSigner,
-			fn: func(ctx context.Context, bp *BlockProcessor, db sql.DB, es *mockEventStore) error {
+			fn: func(t *testing.T, ctx context.Context, bp *BlockProcessor, db sql.DB, es *mockEventStore) error {
 				tx, ids, err := bp.PrepareValidatorVoteIDTx(ctx, db)
 				require.NoError(t, err)
 				require.Nil(t, tx)
@@ -351,7 +347,7 @@ func TestPrepareVoteIDTx(t *testing.T) {
 			name:   "sentry node not allowed to broadcast voteIDs",
 			events: []*types.VotableEvent{evt1, evt2},
 			signer: sentrySigner,
-			fn: func(ctx context.Context, bp *BlockProcessor, db sql.DB, es *mockEventStore) error {
+			fn: func(t *testing.T, ctx context.Context, bp *BlockProcessor, db sql.DB, es *mockEventStore) error {
 				tx, ids, err := bp.PrepareValidatorVoteIDTx(ctx, db)
 				require.NoError(t, err)
 				require.Nil(t, tx)
@@ -363,7 +359,7 @@ func TestPrepareVoteIDTx(t *testing.T) {
 			name:   "validator broadcasts voteIDs in gasless mode",
 			signer: valSigner,
 			events: []*types.VotableEvent{evt1, evt2},
-			fn: func(ctx context.Context, bp *BlockProcessor, db sql.DB, es *mockEventStore) error {
+			fn: func(t *testing.T, ctx context.Context, bp *BlockProcessor, db sql.DB, es *mockEventStore) error {
 				tx, ids, err := bp.PrepareValidatorVoteIDTx(ctx, db)
 				require.NoError(t, err)
 				require.NotNil(t, tx)
@@ -376,7 +372,7 @@ func TestPrepareVoteIDTx(t *testing.T) {
 			name:   "insufficient gas to broadcast voteIDs",
 			signer: valSigner,
 			events: []*types.VotableEvent{evt1, evt2},
-			fn: func(ctx context.Context, bp *BlockProcessor, db sql.DB, es *mockEventStore) error {
+			fn: func(t *testing.T, ctx context.Context, bp *BlockProcessor, db sql.DB, es *mockEventStore) error {
 				bp.chainCtx.NetworkParameters.DisabledGasCosts = false
 				// set price of tx high: 1000
 				price = big.NewInt(1000)
@@ -396,7 +392,7 @@ func TestPrepareVoteIDTx(t *testing.T) {
 			name:   "validator has sufficient gas to broadcast voteIDs",
 			signer: valSigner,
 			events: []*types.VotableEvent{evt1, evt2},
-			fn: func(ctx context.Context, bp *BlockProcessor, db sql.DB, es *mockEventStore) error {
+			fn: func(t *testing.T, ctx context.Context, bp *BlockProcessor, db sql.DB, es *mockEventStore) error {
 				bp.chainCtx.NetworkParameters.DisabledGasCosts = false
 				// set price of tx low: 1
 				price = big.NewInt(1000)
@@ -419,7 +415,7 @@ func TestPrepareVoteIDTx(t *testing.T) {
 			name:   "mark broadcasted for broadcasted voteIDs",
 			signer: valSigner,
 			events: []*types.VotableEvent{evt1, evt2},
-			fn: func(ctx context.Context, bp *BlockProcessor, db sql.DB, es *mockEventStore) error {
+			fn: func(t *testing.T, ctx context.Context, bp *BlockProcessor, db sql.DB, es *mockEventStore) error {
 				tx, ids, err := bp.PrepareValidatorVoteIDTx(ctx, db)
 				require.NoError(t, err)
 				require.NotNil(t, tx)
@@ -463,7 +459,7 @@ func TestPrepareVoteIDTx(t *testing.T) {
 			bp.validators = newValidatorStore(valSet)
 
 			ctx := context.Background()
-			err := tc.fn(ctx, bp, db, es) // run the test function
+			err := tc.fn(t, ctx, bp, db, es) // run the test function
 			require.NoError(t, err)
 		})
 	}
@@ -472,7 +468,7 @@ func TestPrepareVoteIDTx(t *testing.T) {
 func TestPrepareVoteBodyTx(t *testing.T) {
 	privKey, signer := genNodeKeyAndSigner(t)
 	genCfg := config.DefaultGenesisConfig()
-	genCfg.Leader = config.EncodePubKeyAndType(privKey.Public().Bytes(), privKey.Type())
+	genCfg.Leader = types.PublicKey{PublicKey: privKey.Public()}
 
 	bp := &BlockProcessor{
 		db:     &mockDB{},
@@ -683,8 +679,8 @@ func (m *mockTxApp) Execute(ctx *common.TxContext, db sql.DB, tx *types.Transact
 	return nil
 }
 
-func (m *mockTxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) (validatorUpgrades []*types.Validator, err error) {
-	return nil, nil
+func (m *mockTxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) error {
+	return nil
 }
 
 func (m *mockTxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.Validator, accounts []*types.Account,

@@ -120,7 +120,7 @@ type Hardfork struct {
 	// go into affect at after the activation height (returned to the consensus
 	// engine when finalizing the block at this height). For example, a block
 	// size change.
-	ParamsUpdates *ParamUpdates
+	ParamsUpdates types.ParamUpdates
 
 	// StateMod is triggered at activation. It can do anything, one time. For
 	// instance, arbitrary change to application state via the Engine or more
@@ -133,11 +133,6 @@ type Hardfork struct {
 	// needed if there are other changes (either baked in to kwild or in the
 	// above fields) that should be done in concert with the fork.
 	StateMod func(context.Context, *common.App) error
-}
-
-// ParamUpdates is much like common/chain.BaseConsensusParams, but uses
-// pointer fields since updates are typically sparse.
-type ParamUpdates struct {
 }
 
 // VersionParams contains an update to the application protocol version to give
@@ -171,12 +166,4 @@ type AuthMod struct {
 	Name      string
 	Operation authExt.ModOperation
 	Authn     auth.Authenticator
-}
-
-// MergeConsensusUpdates combines the specified parameter updates. Both inputs
-// represent *updates* rather than the current set of active parameters, and any
-// fields of each input may be nil. Each value is only updated if it is not the
-// zero value. Any exceptions should be noted.
-func MergeConsensusUpdates(params, update *ParamUpdates) {
-
 }

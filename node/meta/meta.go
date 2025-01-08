@@ -5,13 +5,11 @@ package meta
 
 import (
 	"context"
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"slices"
 
 	"github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/versioning"
 )
@@ -19,7 +17,9 @@ import (
 const (
 	chainSchemaName = `kwild_chain`
 
-	chainStoreVersion = 1
+	chainStoreVersion = 0
+
+	// chain state table
 
 	initChainTable = `CREATE TABLE IF NOT EXISTS ` + chainSchemaName + `.chain (
 		height INT8 NOT NULL,
@@ -27,12 +27,7 @@ const (
 		dirty BOOLEAN DEFAULT FALSE
 	);` // no primary key, only one row
 
-	initConsensusParamsTable = `CREATE TABLE IF NOT EXISTS ` + chainSchemaName + `.consensus_params (
-		param_name TEXT PRIMARY KEY,
-		param_value BYTEA
-	)`
-
-	insertChainState = `INSERT INTO ` + chainSchemaName + `.chain ` +
+	insertChainState = `INSERT INTO ` + chainSchemaName + `.chain(height, app_hash, dirty) ` +
 		`VALUES ($1, $2, $3);`
 
 	setChainState = `UPDATE ` + chainSchemaName + `.chain ` +
@@ -40,15 +35,25 @@ const (
 
 	getChainState = `SELECT height, app_hash, dirty FROM ` + chainSchemaName + `.chain;`
 
-	upsertParam = `INSERT INTO ` + chainSchemaName + `.consensus_params ` +
-		`VALUES ($1, $2) ` +
-		`ON CONFLICT (param_name) DO UPDATE SET param_value = $2;`
+	// network parameters table (TODO: combine with chain table)
 
-	getParams = `SELECT param_name, param_value FROM ` + chainSchemaName + `.consensus_params;`
+	initParamsTable = `CREATE TABLE IF NOT EXISTS ` + chainSchemaName + `.params (
+		params BYTEA
+	);` // no primary key, only one row
+
+	insertParams = `INSERT INTO ` + chainSchemaName + `.params VALUES ($1);`
+
+	setParams = `UPDATE ` + chainSchemaName + `.params SET params = $1;`
+
+	getParams = `SELECT params FROM ` + chainSchemaName + `.params;`
 )
 
 func initTables(ctx context.Context, tx sql.DB) error {
 	_, err := tx.Execute(ctx, initChainTable)
+	if err != nil {
+		return err
+	}
+	_, err = tx.Execute(ctx, initParamsTable)
 	return err
 }
 
@@ -56,10 +61,6 @@ func initTables(ctx context.Context, tx sql.DB) error {
 func InitializeMetaStore(ctx context.Context, db sql.DB) error {
 	upgradeFns := map[int64]versioning.UpgradeFunc{
 		0: initTables,
-		1: func(ctx context.Context, db sql.DB) error {
-			_, err := db.Execute(ctx, initConsensusParamsTable)
-			return err
-		},
 	}
 
 	return versioning.Upgrade(ctx, db, chainSchemaName, upgradeFns, chainStoreVersion)
@@ -84,7 +85,7 @@ func GetChainState(ctx context.Context, db sql.Executor) (height int64, appHash 
 
 	row := res.Rows[0]
 	if len(row) != 3 {
-		return 0, nil, false, fmt.Errorf("expected two columns, got %d", len(row))
+		return 0, nil, false, fmt.Errorf("expected 3 columns, got %d", len(row))
 	}
 
 	var ok bool
@@ -125,74 +126,19 @@ func SetChainState(ctx context.Context, db sql.TxMaker, height int64, appHash []
 	// If no rows updated, meaning empty table, do INSERT
 	if res.Status.RowsAffected == 0 {
 		_, err = tx.Execute(ctx, insertChainState, height, appHash, dirty)
-	}
-
-	if err != nil {
-		return err
+		if err != nil {
+			return err
+		}
 	}
 
 	return tx.Commit(ctx)
 }
 
-// TODO: Filter out params as needed
-// StoreParams stores the consensus params in the store.
+// StoreParams stores the current consensus params in the store.
 func StoreParams(ctx context.Context, db sql.TxMaker, params *common.NetworkParameters) error {
-	tx, err := db.BeginTx(ctx)
+	paramBts, err := params.MarshalBinary()
 	if err != nil {
 		return err
-	}
-	defer tx.Rollback(ctx)
-
-	buf := make([]byte, 8)
-	binary.LittleEndian.PutUint64(buf, uint64(params.MaxBlockSize))
-	_, err = tx.Execute(ctx, upsertParam, maxBlockSizeKey, buf)
-	if err != nil {
-		return err
-	}
-
-	binary.LittleEndian.PutUint64(buf, uint64(params.JoinExpiry))
-	_, err = tx.Execute(ctx, upsertParam, joinExpiryKey, buf)
-	if err != nil {
-		return err
-	}
-
-	binary.LittleEndian.PutUint64(buf, uint64(params.VoteExpiry))
-	_, err = tx.Execute(ctx, upsertParam, voteExpiryKey, buf)
-	if err != nil {
-		return err
-	}
-
-	buf = make([]byte, 1)
-	if params.DisabledGasCosts {
-		buf[0] = 1
-	}
-	_, err = tx.Execute(ctx, upsertParam, disabledGasKey, buf)
-	if err != nil {
-		return err
-	}
-
-	// migration status
-	_, err = tx.Execute(ctx, upsertParam, migrationStatus, []byte(params.MigrationStatus))
-	if err != nil {
-		return err
-	}
-
-	buf = make([]byte, 8)
-	binary.LittleEndian.PutUint64(buf, uint64(params.MaxVotesPerTx))
-	_, err = tx.Execute(ctx, upsertParam, maxVotesPerTx, buf)
-	if err != nil {
-		return err
-	}
-
-	return tx.Commit(ctx)
-}
-
-// StoreDiff stores the difference between two sets of consensus params.
-// If the parameters are equal, no action is taken.
-func StoreDiff(ctx context.Context, db sql.TxMaker, original, new *common.NetworkParameters) error {
-	diff := diff(original, new)
-	if len(diff) == 0 {
-		return nil
 	}
 
 	tx, err := db.BeginTx(ctx)
@@ -201,8 +147,15 @@ func StoreDiff(ctx context.Context, db sql.TxMaker, original, new *common.Networ
 	}
 	defer tx.Rollback(ctx)
 
-	for param, value := range diff {
-		_, err = tx.Execute(ctx, upsertParam, param, value)
+	// attempt UPDATE
+	res, err := tx.Execute(ctx, setParams, paramBts)
+	if err != nil {
+		return err
+	}
+
+	// If no rows updated, meaning empty table, do INSERT
+	if res.Status.RowsAffected == 0 {
+		_, err = tx.Execute(ctx, insertParams, paramBts)
 		if err != nil {
 			return err
 		}
@@ -220,99 +173,29 @@ func LoadParams(ctx context.Context, db sql.Executor) (*common.NetworkParameters
 		return nil, err
 	}
 
-	if len(res.Rows) == 0 {
+	switch n := len(res.Rows); n {
+	case 0:
 		return nil, ErrParamsNotFound
-	}
-
-	if len(res.Rows) != 6 {
-		return nil, fmt.Errorf("internal bug: expected 6 rows, got %d", len(res.Rows))
+	case 1:
+	default:
+		return nil, fmt.Errorf("expected at most one row, got %d", n)
 	}
 
 	params := &common.NetworkParameters{}
-	for _, row := range res.Rows {
-		if len(row) != 2 {
-			return nil, fmt.Errorf("expected two columns, got %d", len(row))
-		}
+	row := res.Rows[0]
+	if len(row) != 1 {
+		return nil, fmt.Errorf("expected one column, got %d", len(row))
+	}
 
-		param, ok := row[0].(string)
-		if !ok {
-			return nil, fmt.Errorf("expected string for param name, got %T", row[0])
-		}
+	paramsBts, ok := row[0].([]byte)
+	if !ok {
+		return nil, fmt.Errorf("expected BYTEA for params, got %T", row[0])
+	}
 
-		value, ok := row[1].([]byte)
-		if !ok {
-			return nil, fmt.Errorf("expected bytes for param value, got %T", row[1])
-		}
-
-		switch param {
-		case maxBlockSizeKey:
-			params.MaxBlockSize = int64(binary.LittleEndian.Uint64(value))
-		case joinExpiryKey:
-			params.JoinExpiry = int64(binary.LittleEndian.Uint64(value))
-		case voteExpiryKey:
-			params.VoteExpiry = int64(binary.LittleEndian.Uint64(value))
-		case disabledGasKey:
-			params.DisabledGasCosts = value[0] == 1
-		case migrationStatus:
-			params.MigrationStatus = types.MigrationStatus(value)
-		case maxVotesPerTx:
-			params.MaxVotesPerTx = int64(binary.LittleEndian.Uint64(value))
-		default:
-			return nil, fmt.Errorf("internal bug: unknown param name: %s", param)
-		}
+	err = params.UnmarshalBinary(paramsBts)
+	if err != nil {
+		return nil, fmt.Errorf("failed to unmarshal params: %w", err)
 	}
 
 	return params, nil
 }
-
-// diff returns the difference between two sets of consensus params.
-func diff(original, new *common.NetworkParameters) map[string][]byte {
-	d := make(map[string][]byte)
-	if original.MaxBlockSize != new.MaxBlockSize {
-		buf := make([]byte, 8)
-		binary.LittleEndian.PutUint64(buf, uint64(new.MaxBlockSize))
-		d[maxBlockSizeKey] = buf
-	}
-
-	if original.JoinExpiry != new.JoinExpiry {
-		buf := make([]byte, 8)
-		binary.LittleEndian.PutUint64(buf, uint64(new.JoinExpiry))
-		d[joinExpiryKey] = buf
-	}
-
-	if original.VoteExpiry != new.VoteExpiry {
-		buf := make([]byte, 8)
-		binary.LittleEndian.PutUint64(buf, uint64(new.VoteExpiry))
-		d[voteExpiryKey] = buf
-	}
-
-	if original.DisabledGasCosts != new.DisabledGasCosts {
-		buf := make([]byte, 1)
-		if new.DisabledGasCosts {
-			buf[0] = 1
-		}
-		d[disabledGasKey] = buf
-	}
-
-	if original.MigrationStatus != new.MigrationStatus {
-		fmt.Println("Migration status changed", original.MigrationStatus, new.MigrationStatus)
-		d[migrationStatus] = []byte(new.MigrationStatus)
-	}
-
-	if original.MaxVotesPerTx != new.MaxVotesPerTx {
-		buf := make([]byte, 8)
-		binary.LittleEndian.PutUint64(buf, uint64(new.MaxVotesPerTx))
-		d[maxVotesPerTx] = buf
-	}
-
-	return d
-}
-
-const (
-	maxBlockSizeKey = `max_block_size`
-	joinExpiryKey   = `join_expiry`
-	voteExpiryKey   = `vote_expiry`
-	disabledGasKey  = `disabled_gas_costs`
-	migrationStatus = `migration_status`
-	maxVotesPerTx   = `max_votes_per_tx`
-)

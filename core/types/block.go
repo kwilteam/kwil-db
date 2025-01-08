@@ -46,8 +46,9 @@ type Block struct {
 // CommitInfo includes the information about the commit of the block.
 // Such as the signatures of the validators aggreeing to the block.
 type CommitInfo struct {
-	AppHash Hash
-	Votes   []*VoteInfo
+	AppHash      Hash
+	Votes        []*VoteInfo
+	ParamUpdates ParamUpdates
 }
 
 type AckStatus int
@@ -644,6 +645,14 @@ func (ci *CommitInfo) MarshalBinary() ([]byte, error) {
 		}
 	}
 
+	puBts, err := ci.ParamUpdates.MarshalBinary()
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal param updates: %w", err)
+	}
+	if err := WriteBytes(&buf, puBts); err != nil {
+		return nil, fmt.Errorf("failed to write param updates: %w", err)
+	}
+
 	return buf.Bytes(), nil
 }
 
@@ -672,6 +681,14 @@ func (ci *CommitInfo) UnmarshalBinary(data []byte) error {
 		}
 
 		ci.Votes[i] = &vote
+	}
+
+	puBts, err := ReadBytes(rd)
+	if err != nil {
+		return fmt.Errorf("failed to read param updates: %w", err)
+	}
+	if err := ci.ParamUpdates.UnmarshalBinary(puBts); err != nil {
+		return fmt.Errorf("failed to unmarshal param updates: %w", err)
 	}
 
 	return nil

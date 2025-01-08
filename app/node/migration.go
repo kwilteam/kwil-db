@@ -147,7 +147,7 @@ func (m *migrationClient) downloadGenesisState(ctx context.Context) error {
 	}
 
 	// Check if the genesis state is ready
-	if metadata.MigrationState.Status == types.NoActiveMigration || metadata.MigrationState.Status == types.ActivationPeriod {
+	if metadata.MigrationState.Status.NoneActive() || metadata.MigrationState.Status == types.ActivationPeriod {
 		return fmt.Errorf("status %s", metadata.MigrationState.Status)
 	}
 

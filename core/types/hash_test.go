@@ -69,6 +69,18 @@ func TestHashJSONMarshaling(t *testing.T) {
 			t.Errorf("got %s, want %s", string(data), expected)
 		}
 	})
+
+	t.Run("unmarshal null to *Hash", func(t *testing.T) {
+		h := new(Hash)
+		input := `null`
+		err := json.Unmarshal([]byte(input), &h)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if h != nil {
+			t.Errorf("got %v, want nil", h)
+		}
+	})
 }
 
 func TestNewHashFromBytes(t *testing.T) {

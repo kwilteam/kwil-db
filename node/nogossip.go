@@ -7,8 +7,6 @@ import (
 	"io"
 	"time"
 
-	"github.com/kwilteam/kwil-db/core/crypto"
-	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/peers"
 	"github.com/kwilteam/kwil-db/node/types"
@@ -179,12 +177,12 @@ func randBytes(n int) []byte {
 // startTxAnns handles periodic reannouncement. It can also be modified to
 // regularly create dummy transactions.
 func (n *Node) startTxAnns(ctx context.Context, reannouncePeriod time.Duration) {
-	signer := secp256k1Signer()
+	/*signer := secp256k1Signer()
 	if signer == nil {
 		panic("failed to create secp256k1 signer")
 	}
 
-	/*n.wg.Add(1)
+	n.wg.Add(1)
 	go func() {
 		defer n.wg.Done()
 
@@ -240,7 +238,7 @@ func (n *Node) startTxAnns(ctx context.Context, reannouncePeriod time.Duration) 
 	}()
 }
 
-func secp256k1Signer() *auth.EthPersonalSigner {
+/*func secp256k1Signer() *auth.EthPersonalSigner {
 	privKey, _, err := crypto.GenerateSecp256k1Key(nil)
 	if err != nil {
 		return nil
@@ -253,4 +251,4 @@ func secp256k1Signer() *auth.EthPersonalSigner {
 	}
 
 	return &auth.EthPersonalSigner{Key: *k}
-}
+}*/

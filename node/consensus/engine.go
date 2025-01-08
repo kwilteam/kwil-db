@@ -17,10 +17,8 @@ import (
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	blockprocessor "github.com/kwilteam/kwil-db/node/block_processor"
 	"github.com/kwilteam/kwil-db/node/meta"
-	"github.com/kwilteam/kwil-db/node/peers"
 	"github.com/kwilteam/kwil-db/node/pg"
 	"github.com/kwilteam/kwil-db/node/types"
-	"github.com/libp2p/go-libp2p/core/peer"
 )
 
 const (
@@ -44,8 +42,6 @@ type ConsensusEngine struct {
 	role    atomic.Value // types.Role, role can change over the lifetime of the node
 	privKey crypto.PrivateKey
 	pubKey  crypto.PublicKey
-	peerID  peer.ID
-	leader  crypto.PublicKey
 	log     log.Logger
 
 	// proposeTimeout specifies the time duration to wait before proposing a new block for the next height.
@@ -63,8 +59,8 @@ type ConsensusEngine struct {
 	// broadcastTxTimeout specifies the time duration to wait for a transaction to be included in the block.
 	broadcastTxTimeout time.Duration
 
-	genesisHeight int64 // height of the genesis block
-	networkHeight atomic.Int64
+	genesisHeight int64                       // height of the genesis block
+	leader        crypto.PublicKey            // TODO: update with network param updates touching it
 	validatorSet  map[string]ktypes.Validator // key: hex encoded pubkey
 
 	// stores state machine state for the consensus engine
@@ -163,7 +159,7 @@ type ProposalBroadcaster func(ctx context.Context, blk *ktypes.Block)
 type BlkAnnouncer func(ctx context.Context, blk *ktypes.Block, ci *ktypes.CommitInfo)
 
 // TxAnnouncer broadcasts the new transaction to the network
-type TxAnnouncer func(ctx context.Context, txHash types.Hash, rawTx []byte, from peer.ID)
+type TxAnnouncer func(ctx context.Context, txHash types.Hash, rawTx []byte)
 
 // AckBroadcaster gossips the ack/nack messages to the network
 type AckBroadcaster func(ack bool, height int64, blkID types.Hash, appHash *types.Hash, Signature []byte) error
@@ -200,7 +196,7 @@ type StateInfo struct {
 	blkProp *blockProposal
 }
 
-// Consensus state that is applicable for processing the blioc at a speociifc height.
+// Consensus state that is applicable for processing the block at a specific height.
 type state struct {
 	mtx sync.RWMutex
 
@@ -216,10 +212,11 @@ type state struct {
 }
 
 type blockResult struct {
-	ack       bool
-	appHash   ktypes.Hash
-	txResults []ktypes.TxResult
-	vote      *vote
+	ack          bool
+	appHash      ktypes.Hash
+	txResults    []ktypes.TxResult
+	vote         *vote
+	paramUpdates ktypes.ParamUpdates
 }
 
 type lastCommit struct {
@@ -259,15 +256,10 @@ func New(cfg *Config) *ConsensusEngine {
 		}
 	}
 
-	peerID, err := peers.PeerIDFromPubKey(pubKey)
-	if err != nil {
-		logger.Error("Error getting peer ID from public key", "error", err)
-	}
 	// rethink how this state is initialized
 	ce := &ConsensusEngine{
 		pubKey:              pubKey,
 		privKey:             cfg.PrivateKey,
-		peerID:              peerID,
 		leader:              cfg.Leader,
 		proposeTimeout:      cfg.ProposeTimeout,
 		blkProposalInterval: cfg.BlockProposalInterval,
@@ -305,7 +297,6 @@ func New(cfg *Config) *ConsensusEngine {
 	}
 
 	ce.role.Store(role)
-	ce.networkHeight.Store(0)
 
 	return ce
 }
@@ -330,13 +321,14 @@ func (ce *ConsensusEngine) Start(ctx context.Context, fns BroadcastFns) error {
 		return fmt.Errorf("error catching up: %w", err)
 	}
 
-	// start mining
-	ce.wg.Add(1)
-	go func() {
-		defer ce.wg.Done()
-
-		ce.startMining(ctx)
-	}()
+	// Start the mining process if the node is a leader. Validators and sentry
+	// nodes are activated when they receive a block proposal or block announce msg.
+	if ce.role.Load() == types.RoleLeader {
+		ce.log.Infof("Starting the leader node")
+		ce.newRound <- struct{}{} // recv by runConsensusEventLoop, buffered
+	} else {
+		ce.log.Infof("Starting the validator/sentry node")
+	}
 
 	// start the event loop
 	ce.wg.Add(1)
@@ -344,7 +336,7 @@ func (ce *ConsensusEngine) Start(ctx context.Context, fns BroadcastFns) error {
 		defer ce.wg.Done()
 		defer cancel() // stop CE in case event loop terminated early e.g. halt
 
-		ce.runConsensusEventLoop(ctx)
+		ce.runConsensusEventLoop(ctx) // error return not needed?
 		ce.log.Info("Consensus event loop stopped...")
 	}()
 
@@ -412,7 +404,7 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 		case <-catchUpTicker.C:
 			err := ce.doCatchup(ctx) // better name??
 			if err != nil {
-				panic(err) // TODO: should we panic here?
+				return err
 			}
 
 		case <-reannounceTicker.C:
@@ -428,30 +420,16 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 }
 
 // resetEventLoop listens for the reset event and rollbacks the current block processing.
-func (ce *ConsensusEngine) resetEventLoop(ctx context.Context) error {
+func (ce *ConsensusEngine) resetEventLoop(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
 			ce.log.Info("Shutting down the reset event loop")
-			return nil
+			return
 		case msg := <-ce.resetChan:
 			ce.resetBlockProp(ctx, msg.height, msg.txIDs)
 		}
 	}
-}
-
-// startMining starts the mining process based on the role of the node.
-func (ce *ConsensusEngine) startMining(_ context.Context) error {
-	// Start the mining process if the node is a leader
-	// validators and sentry nodes get activated when they receive a block proposal or block announce msgs.
-	if ce.role.Load() == types.RoleLeader {
-		ce.log.Infof("Starting the leader node")
-		ce.newRound <- struct{}{}
-	} else {
-		ce.log.Infof("Starting the validator/sentry node")
-	}
-
-	return nil
 }
 
 // handleConsensusMessages handles the consensus messages based on the message type.
@@ -557,7 +535,7 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 
 // updateRole updates the validator set and role of the node based on the final state of the validator set.
 // This is called at the end of the commit phase or at the end of the catchup phase during bootstrapping.
-func (ce *ConsensusEngine) updateValidatorSetAndRole() error {
+func (ce *ConsensusEngine) updateValidatorSetAndRole() {
 	valset := ce.blockProcessor.GetValidators()
 	pubKey := ce.privKey.Public()
 
@@ -574,7 +552,7 @@ func (ce *ConsensusEngine) updateValidatorSetAndRole() error {
 
 	if pubKey.Equals(ce.leader) {
 		ce.role.Store(types.RoleLeader)
-		return nil
+		return
 	}
 
 	_, ok := ce.validatorSet[hex.EncodeToString(pubKey.Bytes())]
@@ -589,13 +567,15 @@ func (ce *ConsensusEngine) updateValidatorSetAndRole() error {
 	if currentRole != finalRole {
 		ce.log.Info("Role updated", "from", currentRole, "to", finalRole)
 	}
-	return nil
 }
 
 func (ce *ConsensusEngine) setLastCommitInfo(height int64, blkHash []byte, appHash []byte) {
 	ce.state.lc.height = height
 	copy(ce.state.lc.appHash[:], appHash)
 	copy(ce.state.lc.blkHash[:], blkHash)
+	//
+	// ce.state.lc.blk ?
+	// ce.state.lc.commitInfo set in acceptCommitInfo (from commitBlock or processAndCommit)
 
 	ce.stateInfo.height = height
 	ce.stateInfo.status = Committed
@@ -671,7 +651,7 @@ func (ce *ConsensusEngine) rebroadcastBlkProposal(ctx context.Context) {
 func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 	// status check, nodes halt here if the migration is completed
 	params := ce.blockProcessor.ConsensusParams()
-	if params != nil && params.MigrationStatus == ktypes.MigrationCompleted {
+	if params.MigrationStatus == ktypes.MigrationCompleted {
 		ce.haltChan <- "Network halted due to migration"
 		return nil
 	}
@@ -680,10 +660,6 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 	defer ce.state.mtx.Unlock()
 
 	if ce.role.Load() == types.RoleLeader {
-		return nil
-	}
-
-	if ce.state.lc.height >= ce.networkHeight.Load() {
 		return nil
 	}
 
@@ -713,23 +689,22 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 				if err := ce.processAndCommit(ctx, blk, ci); err != nil {
 					return fmt.Errorf("failed to replay the block: blkHeight: %d, blkID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
 				}
-			} else {
-				if ci.AppHash == ce.state.blockRes.appHash {
-					// commit the block
-					if err := ce.validateCommitInfo(ci, blkHash); err != nil {
-						return fmt.Errorf("failed to validate the commit info: height: %d, error: %w", ce.state.blkProp.height, err)
-					}
-
-					if err := ce.commit(ctx); err != nil {
-						return fmt.Errorf("failed to commit the block: height: %d, error: %w", ce.state.blkProp.height, err)
-					}
-
-					ce.nextState()
-				} else {
-					// halt the network
-					haltR := fmt.Sprintf("Incorrect AppHash, received: %v, has: %v", ci.AppHash, ce.state.blockRes.appHash)
-					ce.haltChan <- haltR
+				// continue to replay blocks from network
+			} else if ci.AppHash == ce.state.blockRes.appHash {
+				// commit the block
+				if err := ce.acceptCommitInfo(ci, blkHash); err != nil {
+					return fmt.Errorf("failed to validate the commit info: height: %d, error: %w", ce.state.blkProp.height, err)
 				}
+
+				if err := ce.commit(ctx); err != nil {
+					return fmt.Errorf("failed to commit the block: height: %d, error: %w", ce.state.blkProp.height, err)
+				}
+
+				ce.nextState()
+			} else {
+				// halt the network
+				haltR := fmt.Sprintf("Incorrect AppHash, received: %v, have: %v", ci.AppHash, ce.state.blockRes.appHash)
+				ce.haltChan <- haltR
 			}
 		}
 	}
@@ -755,31 +730,34 @@ func (ce *ConsensusEngine) cancelBlock(height int64) bool {
 	// We will only honor the reset request if it's from the leader (already verified by now)
 	// and the height is same as the last committed block height and the
 	// block is still executing or waiting for the block commit message.
-	if ce.stateInfo.height == height {
-		if ce.stateInfo.blkProp != nil {
-			ce.log.Info("Resetting the block proposal", "height", height)
-			// cancel the context
-			ce.cancelFnMtx.Lock()
-			if ce.blkExecCancelFn != nil {
-				ce.blkExecCancelFn()
-			}
-			ce.cancelFnMtx.Unlock()
-			return true
-		} else {
-			ce.log.Info("Block already committed or executed, nothing to reset", "height", height)
-		}
-	} else {
+	if ce.stateInfo.height != height {
 		ce.log.Warn("Invalid reset request", "height", height, "lastCommittedHeight", ce.state.lc.height)
+		return false
 	}
-	return false
+
+	if ce.stateInfo.blkProp == nil {
+		ce.log.Info("Block already committed or executed, nothing to reset", "height", height)
+		return false
+	}
+
+	ce.log.Info("Resetting the block proposal", "height", height)
+	// cancel the context
+	ce.cancelFnMtx.Lock()
+	defer ce.cancelFnMtx.Unlock()
+	if ce.blkExecCancelFn != nil {
+		ce.blkExecCancelFn()
+	}
+
+	return true
 }
 
 // resetBlockProp aborts the block execution and resets the state to the last committed block.
 func (ce *ConsensusEngine) resetBlockProp(ctx context.Context, height int64, txIDs []ktypes.Hash) {
 	ce.log.Info("Reset msg: ", "height", height)
 
-	rollback := ce.cancelBlock(height)
-	// // context is already cancelled, so try the lock
+	rollback := ce.cancelBlock(height) // return here if false?
+
+	// context is already cancelled, so try the lock
 	ce.state.mtx.Lock() // block execution is cancelled by now
 	defer ce.state.mtx.Unlock()
 
@@ -806,12 +784,6 @@ func (ce *ConsensusEngine) resetBlockProp(ctx context.Context, height int64, txI
 
 func (ce *ConsensusEngine) Role() types.Role {
 	return ce.role.Load().(types.Role)
-}
-
-func (ce *ConsensusEngine) updateNetworkHeight(height int64) {
-	if height > ce.networkHeight.Load() {
-		ce.networkHeight.Store(height)
-	}
 }
 
 func (ce *ConsensusEngine) hasMajorityCeil(cnt int) bool {

@@ -120,7 +120,7 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 		},
 		AuthCookieHandler: func(c *http.Cookie) error {
 			// persist the cookie
-			return SaveCookie(KGWAuthTokenFilePath(), providerDomain, clientConfig.Signer.Identity(), c)
+			return SaveCookie(KGWAuthTokenFilePath(), providerDomain, clientConfig.Signer.CompactID(), c)
 		},
 	})
 	if err != nil {
@@ -131,14 +131,14 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 		return fn(ctx, client, conf)
 	}
 
-	cookie, err := LoadPersistedCookie(KGWAuthTokenFilePath(), providerDomain, clientConfig.Signer.Identity())
+	cookie, err := LoadPersistedCookie(KGWAuthTokenFilePath(), providerDomain, clientConfig.Signer.CompactID())
 	if err == nil && cookie != nil {
 		// if setting fails, then don't do fail usage- failure likely means that the client has
 		// switched providers, and the cookie is no longer valid.  The gatewayclient will re-authenticate.
 		// delete the cookie if it is invalid
 		err = client.SetAuthCookie(cookie)
 		if err != nil {
-			err2 := DeleteCookie(KGWAuthTokenFilePath(), providerDomain, clientConfig.Signer.Identity())
+			err2 := DeleteCookie(KGWAuthTokenFilePath(), providerDomain, clientConfig.Signer.CompactID())
 			if err2 != nil {
 				return fmt.Errorf("failed to delete cookie: %w", err2)
 			}

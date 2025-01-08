@@ -125,6 +125,10 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	jsonRPCServer.RegisterSvc(jsonRPCTxSvc)
 	jsonRPCServer.RegisterSvc(&funcsvc.Service{})
 
+	chainRpcSvcLogger := d.logger.New("CHAIN")
+	jsonChainSvc := chainsvc.NewService(chainRpcSvcLogger, node, vs, d.genesisCfg)
+	jsonRPCServer.RegisterSvc(jsonChainSvc)
+
 	var jsonRPCAdminServer *rpcserver.Server
 	if d.cfg.Admin.Enable {
 		// admin service and server
@@ -139,11 +143,8 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 		jsonRPCAdminServer.RegisterSvc(jsonAdminSvc)
 		jsonRPCAdminServer.RegisterSvc(jsonRPCTxSvc)
 		jsonRPCAdminServer.RegisterSvc(&funcsvc.Service{})
+		jsonRPCAdminServer.RegisterSvc(jsonChainSvc)
 	}
-
-	chainRpcSvcLogger := d.logger.New("CHAIN")
-	jsonChainSvc := chainsvc.NewService(chainRpcSvcLogger, node, vs, d.genesisCfg)
-	jsonRPCServer.RegisterSvc(jsonChainSvc)
 
 	s := &server{
 		cfg:                d.cfg,
@@ -343,7 +344,7 @@ func (c *coreDependencies) service(loggerName string) *common.Service {
 		Logger:        c.logger.New(loggerName),
 		GenesisConfig: c.genesisCfg,
 		LocalConfig:   c.cfg,
-		Identity:      signer.Identity(),
+		Identity:      signer.CompactID(),
 	}
 }
 
@@ -405,15 +406,9 @@ func buildMigrator(d *coreDependencies, db *pg.DB, accounts *accounts.Accounts, 
 
 func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB,
 	mempool *mempool.Mempool, bs *store.BlockStore, bp *blockprocessor.BlockProcessor, valSet map[string]ktypes.Validator) *consensus.ConsensusEngine {
-
-	leaderPubKey, err := config.DecodeLeader(d.genesisCfg.Leader)
-	if err != nil {
-		failBuild(err, "failed to decode leader public key")
-	}
-
 	ceCfg := &consensus.Config{
 		PrivateKey:            d.privKey,
-		Leader:                leaderPubKey,
+		Leader:                d.genesisCfg.Leader.PublicKey,
 		DB:                    db,
 		BlockStore:            bs,
 		BlockProcessor:        bp,

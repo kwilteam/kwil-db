@@ -25,7 +25,7 @@ type Service struct {
 	LocalConfig *config.Config
 
 	// Identity is the node/validator identity (pubkey).
-	Identity []byte
+	Identity []byte // maybe this actuall needs to be crypto.PubKey???
 }
 
 // NameLogger returns a new Service with the logger named.
@@ -172,28 +172,6 @@ type Validators interface {
 	SetValidatorPower(ctx context.Context, tx sql.Executor, pubKey []byte, pubKeyType crypto.KeyType, power int64) error
 }
 
-// NetworkParameters are network level configurations that can be
-// evolved over the lifetime of a network.
-type NetworkParameters struct {
-	// MaxBlockSize is the maximum size of a block in bytes.
-	MaxBlockSize int64
-	// JoinExpiry is the number of blocks after which the validators
-	// join request expires if not approved.
-	JoinExpiry int64
-	// VoteExpiry is the default number of blocks after which the validators
-	// vote expires if not approved.
-	VoteExpiry int64
-	// DisabledGasCosts dictates whether gas costs are disabled.
-	DisabledGasCosts bool
-
-	// MigrationStatus determines the status of the migration.
-	MigrationStatus types.MigrationStatus
-
-	// MaxVotesPerTx is the maximum number of votes that can be included in a
-	// single transaction.
-	MaxVotesPerTx int64
-}
-
 // EngineValue is a value pass or returned from the engine.
 type EngineValue interface {
 	// Type returns the type of the variable.
@@ -205,3 +183,5 @@ type EngineValue interface {
 	// Null returns true if the variable is null.
 	Null() bool
 }
+
+type NetworkParameters = types.NetworkParameters

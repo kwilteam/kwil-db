@@ -1,21 +1,21 @@
 package blockprocessor
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"maps"
 	"math/big"
 	"slices"
-	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/config"
-	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
@@ -37,8 +37,8 @@ import (
 type BlockProcessor struct {
 	// config
 	genesisParams *config.GenesisConfig
-	signer        auth.Signer
-	leader        crypto.PublicKey
+	// netParams     *config.NetworkParameters // in chainCtx
+	signer auth.Signer
 
 	mtx sync.RWMutex // mutex to protect the consensus params
 	// consensus params
@@ -71,7 +71,9 @@ type BlockProcessor struct {
 
 type BroadcastTxFn func(ctx context.Context, tx *ktypes.Transaction, sync uint8) (*ktypes.ResultBroadcastTx, error)
 
-func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Accounts, vs ValidatorModule, sp SnapshotModule, es EventStore, migrator MigratorModule, bs BlockStore, genesisCfg *config.GenesisConfig, signer auth.Signer, logger log.Logger) (*BlockProcessor, error) {
+func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Accounts, vs ValidatorModule,
+	sp SnapshotModule, es EventStore, migrator MigratorModule, bs BlockStore,
+	genesisCfg *config.GenesisConfig, signer auth.Signer, logger log.Logger) (*BlockProcessor, error) {
 	// get network parameters from the chain context
 	bp := &BlockProcessor{
 		db:          db,
@@ -87,13 +89,6 @@ func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Account
 
 	bp.genesisParams = genesisCfg
 
-	leader, err := config.DecodeLeader(genesisCfg.Leader)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decode the leader: %w", err)
-	}
-
-	bp.leader = leader
-
 	tx, err := db.BeginTx(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to begin outer tx: %w", err)
@@ -105,6 +100,7 @@ func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Account
 		return nil, fmt.Errorf("failed to get chain state: %w", err)
 	}
 	if dirty {
+		logger.Warn("Chain state is dirty, recovering...")
 		// app state is in a partially committed state, recover the chain state.
 		_, _, ci, err := bs.GetByHeight(height)
 		if err != nil || ci == nil {
@@ -138,20 +134,16 @@ func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Account
 	}
 
 	networkParams, err := meta.LoadParams(ctx, tx)
-	if errors.Is(err, meta.ErrParamsNotFound) {
+	if errors.Is(err, meta.ErrParamsNotFound) { // eh, genesis?
+		// infer migration status from the genesis config's migration parameters (why? could it be wrong?)
 		status := ktypes.NoActiveMigration
 		if migrationParams != nil {
 			status = ktypes.GenesisMigration
 		}
 
-		networkParams = &common.NetworkParameters{
-			MaxBlockSize:     genesisCfg.MaxBlockSize,
-			JoinExpiry:       genesisCfg.JoinExpiry,
-			VoteExpiry:       genesisCfg.VoteExpiry,
-			DisabledGasCosts: genesisCfg.DisabledGasCosts,
-			MigrationStatus:  status,
-			MaxVotesPerTx:    genesisCfg.MaxVotesPerTx,
-		}
+		genesisNetParams := genesisCfg.NetworkParameters
+		networkParams = &genesisNetParams
+		networkParams.MigrationStatus = status
 
 		if err := meta.StoreParams(ctx, tx, networkParams); err != nil {
 			return nil, fmt.Errorf("failed to store the network parameters: %w", err)
@@ -323,7 +315,7 @@ func (bp *BlockProcessor) CheckTx(ctx context.Context, tx *ktypes.Transaction, r
 		BlockContext: &common.BlockContext{
 			ChainContext: bp.chainCtx,
 			Height:       bp.height.Load() + 1,
-			Proposer:     bp.leader,
+			Proposer:     bp.chainCtx.NetworkParameters.Leader,
 		},
 		TxID:          hex.EncodeToString(txHash[:]),
 		Signer:        tx.Sender,
@@ -371,6 +363,10 @@ func (bp *BlockProcessor) InitChain(ctx context.Context) (int64, []byte, error) 
 		return -1, nil, fmt.Errorf("error storing the genesis state: %w", err)
 	}
 
+	if err := meta.StoreParams(ctx, genesisTx, &genCfg.NetworkParameters); err != nil {
+		return -1, nil, fmt.Errorf("error storing the genesis network parameters: %w", err)
+	}
+
 	if err := bp.txapp.Commit(); err != nil {
 		return -1, nil, fmt.Errorf("txapp commit failed: %w", err)
 	}
@@ -382,7 +378,11 @@ func (bp *BlockProcessor) InitChain(ctx context.Context) (int64, []byte, error) 
 	bp.announceValidators()
 
 	bp.height.Store(genCfg.InitialHeight)
-	copy(bp.appHash[:], genCfg.StateHash)
+	if genCfg.StateHash != nil { // TODO: make it a *types.Hash
+		copy(bp.appHash[:], genCfg.StateHash)
+	} else {
+		bp.appHash = ktypes.Hash{}
+	}
 
 	bp.log.Infof("Initialized chain: height %d, appHash: %s", genCfg.InitialHeight, hex.EncodeToString(genCfg.StateHash))
 
@@ -404,17 +404,8 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 		return nil, fmt.Errorf("failed to begin the consensus transaction: %w", err)
 	}
 
-	// we copy the Kwil consensus params to ensure we persist any changes
-	// made during the block execution
-	networkParams := &common.NetworkParameters{
-		MaxBlockSize:     bp.chainCtx.NetworkParameters.MaxBlockSize,
-		JoinExpiry:       bp.chainCtx.NetworkParameters.JoinExpiry,
-		VoteExpiry:       bp.chainCtx.NetworkParameters.VoteExpiry,
-		DisabledGasCosts: bp.chainCtx.NetworkParameters.DisabledGasCosts,
-		MaxVotesPerTx:    bp.chainCtx.NetworkParameters.MaxVotesPerTx,
-		MigrationStatus:  bp.chainCtx.NetworkParameters.MigrationStatus,
-	}
-	oldNetworkParams := *networkParams
+	inMigration := bp.chainCtx.NetworkParameters.MigrationStatus == ktypes.MigrationInProgress
+	haltNetwork := bp.chainCtx.NetworkParameters.MigrationStatus == ktypes.MigrationCompleted
 
 	blockCtx := &common.BlockContext{
 		Height:       req.Height,
@@ -423,9 +414,7 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 		Proposer:     req.Proposer,
 	}
 
-	inMigration := blockCtx.ChainContext.NetworkParameters.MigrationStatus == ktypes.MigrationInProgress
-	haltNetwork := blockCtx.ChainContext.NetworkParameters.MigrationStatus == ktypes.MigrationCompleted
-
+	// Begin executing transactions. The chain context may be updated during the block execution.
 	txResults := make([]ktypes.TxResult, len(req.Block.Txns))
 
 	txHashes := bp.initBlockExecutionStatus(req.Block)
@@ -490,24 +479,30 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 		}
 	}
 
-	_, err = bp.txapp.Finalize(ctx, bp.consensusTx, blockCtx)
+	// Process resolutions and end-block hooks.
+	err = bp.txapp.Finalize(ctx, bp.consensusTx, blockCtx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to finalize the block execution: %w", err)
 	}
 
 	// migrator can be updated here within notify height
-	err = bp.migrator.NotifyHeight(ctx, blockCtx, bp.db, bp.consensusTx)
+	err = bp.migrator.NotifyHeight(ctx, blockCtx, bp.db, bp.consensusTx) // can modify bp.chainCtx.NetworkParameters.MigrationStatus !!!
 	if err != nil {
 		return nil, fmt.Errorf("failed to notify the migrator about the block height: %w", err)
 	}
 
-	networkParams.MigrationStatus = bp.chainCtx.NetworkParameters.MigrationStatus
+	// merge params here first
+	newNetworkParams := bp.chainCtx.NetworkParameters.Clone()
+	if err := ktypes.MergeUpdates(newNetworkParams, bp.chainCtx.NetworkUpdates); err != nil {
+		return nil, err
+	} // NOTE: we could store remember newNetworkParams for Commit(), or run MergeUpdates again
 
+	// store new chain height, but with prev apphash
 	if err := meta.SetChainState(ctx, bp.consensusTx, req.Height, bp.appHash[:], true); err != nil {
 		return nil, fmt.Errorf("failed to set the chain state: %w", err)
 	}
 
-	if err := meta.StoreDiff(ctx, bp.consensusTx, &oldNetworkParams, bp.chainCtx.NetworkParameters); err != nil {
+	if err := meta.StoreParams(ctx, bp.consensusTx, newNetworkParams); err != nil {
 		return nil, fmt.Errorf("failed to store the network parameters: %w", err)
 	}
 
@@ -531,37 +526,56 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 
 	go csp.BroadcastChangesets(ctx)
 
-	appHash, err := bp.consensusTx.Precommit(ctx, csp.csChan)
+	changesetID, err := bp.consensusTx.Precommit(ctx, csp.csChan)
 	if err != nil {
 		return nil, fmt.Errorf("failed to precommit the changeset: %w", err)
 	}
 
 	valUpdates := bp.validators.ValidatorUpdates()
-	valUpdatesList := make([]*ktypes.Validator, 0) // TODO: maybe change the validatorUpdates API to return a list instead of map
-	valUpdatesHash := validatorUpdatesHash(valUpdates)
-	for _, v := range valUpdates {
-		valUpdatesList = append(valUpdatesList, v)
+	valUpdatesHash, valUpdatesList := validatorUpdatesHash(valUpdates)
+
+	if len(valUpdates) > 0 {
+		bp.log.Info("Validator updates", "updates", valUpdatesList)
 	}
 
 	accountsHash := bp.accountsHash()
 	txResultsHash := txResultsHash(txResults)
 
-	nextHash := bp.nextAppHash(bp.appHash, types.Hash(appHash), valUpdatesHash, accountsHash, txResultsHash)
+	paramUpdatesHash, err := bp.consensusUpdatesHash()
+	if err != nil {
+		return nil, fmt.Errorf("failed to compute the consensus updates hash: %w", err)
+	}
+	bp.log.Info("Consensus updates", "hash", paramUpdatesHash, "updates", bp.chainCtx.NetworkUpdates)
+
+	nextHash := bp.nextAppHash(stateHashes{
+		prevApp:      bp.appHash,
+		changeset:    types.Hash(changesetID),
+		accounts:     accountsHash,
+		valUpdates:   valUpdatesHash,
+		txResults:    txResultsHash,
+		paramUpdates: paramUpdatesHash,
+	})
 
 	if inMigration && !haltNetwork {
 		// wait for the migrator to finish storing the changesets
-		err = <-csErrChan
-		if err != nil {
-			return nil, fmt.Errorf("failed to store changesets during migration: %w", err)
+		select {
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case err := <-csErrChan:
+			if err != nil {
+				return nil, fmt.Errorf("failed to store changesets during migration: %w", err)
+			}
 		}
 	}
 
 	bp.log.Info("Executed Block", "height", req.Height, "blkHash", req.BlockID, "appHash", nextHash)
+	bp.log.Infoln("network param updates:", bp.chainCtx.NetworkUpdates)
 
 	return &ktypes.BlockExecResult{
 		TxResults:        txResults,
 		AppHash:          nextHash,
 		ValidatorUpdates: valUpdatesList,
+		ParamUpdates:     maps.Clone(bp.chainCtx.NetworkUpdates),
 	}, nil
 
 }
@@ -578,8 +592,20 @@ func (bp *BlockProcessor) Commit(ctx context.Context, req *ktypes.CommitRequest)
 	}
 	bp.consensusTx = nil
 
-	// Update the chain meta store with the new height and the dirty
-	// we need to re-open a new transaction just to write the apphash
+	// Update the active network parameters for the updates that were just committed.
+	ktypes.MergeUpdates(bp.chainCtx.NetworkParameters, bp.chainCtx.NetworkUpdates) // noop if no updates
+	bp.chainCtx.NetworkUpdates = ktypes.ParamUpdates{}
+
+	// Commit pending changes to txapp state i.e. validators, accounts, mempool acct cache.
+	if err := bp.txapp.Commit(); err != nil {
+		return err
+	}
+
+	bp.height.Store(req.Height)
+	bp.appHash = req.AppHash
+
+	// Update the chain meta store with the new height, clearing the dirty flag.
+	// We need to re-open a new transaction just to write the apphash
 	// TODO: it would be great to have a way to commit the apphash without
 	// opening a new transaction. This could leave us in a state where data is
 	// committed but the apphash is not, which would essentially nuke the chain.
@@ -611,10 +637,6 @@ func (bp *BlockProcessor) Commit(ctx context.Context, req *ktypes.CommitRequest)
 		return err
 	}
 
-	if err := bp.txapp.Commit(); err != nil {
-		return err
-	}
-
 	// Snapshots:
 	if err := bp.snapshotDB(ctx, req.Height, req.Syncing); err != nil {
 		bp.log.Warn("Failed to create snapshot of the database", "err", err)
@@ -622,11 +644,8 @@ func (bp *BlockProcessor) Commit(ctx context.Context, req *ktypes.CommitRequest)
 
 	bp.clearBlockExecutionStatus() // TODO: not very sure where to clear this
 
-	bp.height.Store(req.Height)
-	copy(bp.appHash[:], req.AppHash[:])
-
 	// Announce final validators to subscribers
-	bp.announceValidators()
+	bp.announceValidators() // can be in goroutine?
 
 	bp.log.Info("Committed Block", "height", req.Height, "appHash", req.AppHash.String())
 	return nil
@@ -673,18 +692,32 @@ func (bp *BlockProcessor) snapshotDB(ctx context.Context, height int64, syncing 
 	return nil
 }
 
+type stateHashes struct {
+	prevApp      types.Hash
+	changeset    types.Hash
+	valUpdates   types.Hash
+	accounts     types.Hash
+	txResults    types.Hash
+	paramUpdates types.Hash
+}
+
 // nextAppHash calculates the appHash that encapsulates the state changes occurred during the block execution.
 // sha256(prevAppHash || changesetHash || valUpdatesHash || accountsHash || txResultsHash)
-func (bp *BlockProcessor) nextAppHash(prevAppHash, changesetHash, valUpdatesHash, accountsHash, txResultsHash types.Hash) types.Hash {
+func (bp *BlockProcessor) nextAppHash(sh stateHashes) types.Hash {
 	hasher := ktypes.NewHasher()
 
-	hasher.Write(prevAppHash[:])
-	hasher.Write(changesetHash[:])
-	hasher.Write(valUpdatesHash[:])
-	hasher.Write(accountsHash[:])
-	hasher.Write(txResultsHash[:])
+	hasher.Write(sh.prevApp[:])
+	hasher.Write(sh.changeset[:])
+	hasher.Write(sh.valUpdates[:])
+	hasher.Write(sh.accounts[:])
+	hasher.Write(sh.txResults[:])
+	hasher.Write(sh.paramUpdates[:])
 
-	bp.log.Info("AppState updates: ", "prevAppHash", prevAppHash, "changesetsHash", changesetHash, "valUpdatesHash", valUpdatesHash, "accountsHash", accountsHash, "txResultsHash", txResultsHash)
+	bp.log.Info("AppState updates: ",
+		"prevAppHash", sh.prevApp, "changesetsHash", sh.changeset,
+		"valUpdatesHash", sh.valUpdates, "accountsHash", sh.accounts,
+		"txResultsHash", sh.txResults, "paramUpdatesHash", sh.paramUpdates)
+
 	return hasher.Sum(nil)
 }
 
@@ -713,25 +746,38 @@ func (bp *BlockProcessor) accountsHash() types.Hash {
 	return hasher.Sum(nil)
 }
 
-func validatorUpdatesHash(updates map[string]*ktypes.Validator) types.Hash {
-	// sort the updates by the validator address
+func (bp *BlockProcessor) consensusUpdatesHash() (types.Hash, error) {
+	pu := bp.chainCtx.NetworkUpdates
+	bts, err := pu.MarshalBinary()
+	if err != nil {
+		return types.Hash{}, err
+	}
+	return ktypes.HashBytes(bts), nil
+}
+
+func validatorUpdatesHash(updates map[string]*ktypes.Validator) (types.Hash, []*ktypes.Validator) {
+	// Go 1.23 note:
+	// for _, key := range slices.Sorted(maps.Keys(m)) {}
+
+	// sort the updates by the validator pubkey
+	updatesList := make([]*ktypes.Validator, 0, len(updates))
+	for _, v := range updates {
+		updatesList = append(updatesList, v)
+	}
+	slices.SortFunc(updatesList, func(a, b *ktypes.Validator) int {
+		return bytes.Compare(a.PubKey, b.PubKey)
+	})
+
 	// hash the validator address and the validator struct
-
-	keys := make([]string, 0, len(updates))
-	for k := range updates {
-		keys = append(keys, k)
-	}
-	sort.Strings(keys)
-
 	hash := ktypes.NewHasher()
-	for _, k := range keys {
+	for _, up := range updatesList {
 		// hash the validator address
-		hash.Write(updates[k].PubKey)
+		hash.Write(up.PubKey)
 		// hash the validator power
-		binary.Write(hash, binary.BigEndian, updates[k].Power)
+		binary.Write(hash, binary.BigEndian, up.Power)
 	}
 
-	return hash.Sum(nil)
+	return hash.Sum(nil), updatesList
 }
 
 // SubscribeValidators creates and returns a new channel on which the current
@@ -786,32 +832,11 @@ func (bp *BlockProcessor) GetValidators() []*ktypes.Validator {
 	return bp.validators.GetValidators()
 }
 
-func (bp *BlockProcessor) ConsensusParams() *ktypes.ConsensusParams {
+func (bp *BlockProcessor) ConsensusParams() *ktypes.NetworkParameters {
 	bp.mtx.RLock()
 	defer bp.mtx.RUnlock()
 
-	return &ktypes.ConsensusParams{
-		MaxBlockSize:     bp.chainCtx.NetworkParameters.MaxBlockSize,
-		JoinExpiry:       bp.chainCtx.NetworkParameters.JoinExpiry,
-		VoteExpiry:       bp.chainCtx.NetworkParameters.VoteExpiry,
-		DisabledGasCosts: bp.chainCtx.NetworkParameters.DisabledGasCosts,
-		MaxVotesPerTx:    bp.chainCtx.NetworkParameters.MaxVotesPerTx,
-		MigrationStatus:  bp.chainCtx.NetworkParameters.MigrationStatus,
-	}
-}
-
-func (bp *BlockProcessor) SetNetworkParameters(params *common.NetworkParameters) {
-	bp.mtx.Lock()
-	defer bp.mtx.Unlock()
-
-	bp.chainCtx.NetworkParameters = &common.NetworkParameters{
-		MaxBlockSize:     params.MaxBlockSize,
-		JoinExpiry:       params.JoinExpiry,
-		VoteExpiry:       params.VoteExpiry,
-		DisabledGasCosts: params.DisabledGasCosts,
-		MaxVotesPerTx:    params.MaxVotesPerTx,
-		MigrationStatus:  params.MigrationStatus,
-	}
+	return bp.chainCtx.NetworkParameters.Clone()
 }
 
 func (bp *BlockProcessor) GetMigrationMetadata(ctx context.Context) (*ktypes.MigrationMetadata, error) {

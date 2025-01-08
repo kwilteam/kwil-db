@@ -678,8 +678,9 @@ func TestCommitInfo(t *testing.T) {
 
 	t.Run("Zero Votes With Valid AppHash", func(t *testing.T) {
 		commit := &CommitInfo{
-			AppHash: appHash,
-			Votes:   make([]*VoteInfo, 0),
+			AppHash:      appHash,
+			Votes:        make([]*VoteInfo, 0),
+			ParamUpdates: ParamUpdates{},
 		}
 		data, err := commit.MarshalBinary()
 		require.NoError(t, err)
@@ -692,7 +693,8 @@ func TestCommitInfo(t *testing.T) {
 
 	t.Run("Zero Votes Without AppHash", func(t *testing.T) {
 		commit := &CommitInfo{
-			Votes: make([]*VoteInfo, 0),
+			Votes:        make([]*VoteInfo, 0),
+			ParamUpdates: ParamUpdates{},
 		}
 		data, err := commit.MarshalBinary()
 		require.NoError(t, err)
@@ -713,8 +715,9 @@ func TestCommitInfo(t *testing.T) {
 		}
 
 		commitInfo := &CommitInfo{
-			AppHash: appHash,
-			Votes:   make([]*VoteInfo, 0),
+			AppHash:      appHash,
+			Votes:        make([]*VoteInfo, 0),
+			ParamUpdates: ParamUpdates{},
 		}
 		commitInfo.Votes = append(commitInfo.Votes, vote)
 
@@ -745,8 +748,9 @@ func TestCommitInfo(t *testing.T) {
 		}
 
 		commitInfo := &CommitInfo{
-			AppHash: appHash,
-			Votes:   make([]*VoteInfo, 0),
+			AppHash:      appHash,
+			Votes:        make([]*VoteInfo, 0),
+			ParamUpdates: ParamUpdates{},
 		}
 		commitInfo.Votes = append(commitInfo.Votes, vote1, vote2)
 

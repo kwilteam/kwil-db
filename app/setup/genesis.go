@@ -181,7 +181,15 @@ func mergeGenesisFlags(conf *config.GenesisConfig, cmd *cobra.Command, flagCfg *
 	}
 
 	if cmd.Flags().Changed("leader") {
-		conf.Leader = flagCfg.leader
+		pubkeyBts, keyType, err := config.DecodePubKeyAndType(flagCfg.leader)
+		if err != nil {
+			return nil, makeErr(err)
+		}
+		pubkey, err := crypto.UnmarshalPublicKey(pubkeyBts, keyType)
+		if err != nil {
+			return nil, makeErr(err)
+		}
+		conf.Leader = types.PublicKey{PublicKey: pubkey}
 	}
 
 	if cmd.Flags().Changed("db-owner") {

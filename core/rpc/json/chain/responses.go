@@ -1,8 +1,6 @@
 package chain
 
 import (
-	"encoding/json"
-
 	"github.com/kwilteam/kwil-db/core/types"
 	chaintypes "github.com/kwilteam/kwil-db/core/types/chain"
 )
@@ -24,9 +22,9 @@ type TxResponse chaintypes.Tx
 // GenesisResponse is the same as kwil-db/config.GenesisConfig, with JSON tags.
 type GenesisResponse chaintypes.Genesis
 
-type ConsensusParamsResponse types.ConsensusParams
+type ConsensusParamsResponse = types.NetworkParameters
 
-func (r ConsensusParamsResponse) MarshalJSON() ([]byte, error) {
+/*func (r ConsensusParamsResponse) MarshalJSON() ([]byte, error) {
 	return json.Marshal(&struct {
 		// MaxBlockSize is the maximum size of a block in bytes.
 		MaxBlockSize int64 `json:"max_block_size"`
@@ -53,7 +51,7 @@ func (r ConsensusParamsResponse) MarshalJSON() ([]byte, error) {
 		MigrationStatus:  string(r.MigrationStatus),
 		MaxVotesPerTx:    r.MaxVotesPerTx,
 	})
-}
+}*/
 
 type ValidatorsResponse struct {
 	Height     int64              `json:"height"`

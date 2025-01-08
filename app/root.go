@@ -10,10 +10,12 @@ import (
 	"github.com/kwilteam/kwil-db/app/migration"
 	"github.com/kwilteam/kwil-db/app/node"
 	"github.com/kwilteam/kwil-db/app/node/conf"
+	"github.com/kwilteam/kwil-db/app/params"
 	"github.com/kwilteam/kwil-db/app/rpc"
 	"github.com/kwilteam/kwil-db/app/seed"
 	"github.com/kwilteam/kwil-db/app/setup"
 	"github.com/kwilteam/kwil-db/app/shared/bind"
+	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/app/snapshot"
 	"github.com/kwilteam/kwil-db/app/validator"
 	"github.com/kwilteam/kwil-db/app/whitelist"
@@ -57,11 +59,14 @@ func RootCmd() *cobra.Command {
 
 	bind.BindRootDir(cmd, defaultRoot, "root directory") // --root/-r accessible with bind.RootDir from *any* subcommand
 
+	display.BindOutputFormatFlag(cmd) // --output/-o
+
 	// There is a virtual "node" command grouping, but no actual "node" command yet.
 	cmd.AddCommand(node.StartCmd())
 	cmd.AddCommand(node.PrintConfigCmd())
 	cmd.AddCommand(rpc.NewAdminCmd())
 	cmd.AddCommand(validator.NewValidatorsCmd())
+	cmd.AddCommand(params.NewConsensusCmd())
 	cmd.AddCommand(setup.SetupCmd())
 	cmd.AddCommand(whitelist.WhitelistCmd())
 	cmd.AddCommand(key.KeyCmd())

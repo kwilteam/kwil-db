@@ -35,7 +35,7 @@ func balanceCmd() *cobra.Command {
 						return display.PrintErr(cmd, errors.New("no account ID provided and no signer set"))
 					}
 
-					ident, err := auth.Secp25k1Authenticator{}.Identifier(cl.Signer().Identity())
+					ident, err := auth.Secp25k1Authenticator{}.Identifier(cl.Signer().CompactID())
 					if err != nil {
 						return display.PrintErr(cmd, fmt.Errorf("failed to get identifier: %w", err))
 					}

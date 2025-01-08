@@ -19,7 +19,6 @@ import (
 	"github.com/kwilteam/kwil-db/app/shared/bind"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/helpers"
 	"github.com/kwilteam/kwil-db/core/crypto"
-	"github.com/kwilteam/kwil-db/core/crypto/auth"
 )
 
 const (
@@ -179,14 +178,14 @@ type KwilCliConfig struct {
 }
 
 // Identity returns the account ID, or nil if no private key is set. These are
-// the bytes of the ethereum address.
-func (c *KwilCliConfig) Identity() []byte {
-	if c.PrivateKey == nil {
-		return nil
-	}
-	signer := &auth.EthPersonalSigner{Key: *c.PrivateKey}
-	return signer.Identity()
-}
+// the bytes of the ethereum address. UNUSED?
+// func (c *KwilCliConfig) Identity() []byte {
+// 	if c.PrivateKey == nil {
+// 		return nil
+// 	}
+// 	signer := &auth.EthPersonalSigner{Key: *c.PrivateKey}
+// 	return signer.CompactID()
+// }
 
 func (c *KwilCliConfig) ToPersistedConfig() *kwilCliPersistedConfig {
 	var privKeyHex string

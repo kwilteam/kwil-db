@@ -53,7 +53,7 @@ func (m *migrationStatus) MarshalJSON() ([]byte, error) {
 }
 
 func (m *migrationStatus) MarshalText() ([]byte, error) {
-	if m.Status == types.NoActiveMigration {
+	if m.Status.NoneActive() {
 		if m.StartHeight == 0 && m.EndHeight == 0 {
 			return []byte("No active migration on the network."), nil
 		}

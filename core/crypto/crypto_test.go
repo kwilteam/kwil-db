@@ -698,3 +698,115 @@ func TestUnmarshalPrivateKey(t *testing.T) {
 		})
 	}
 }
+
+func TestWireEncodeDecodePublicKey(t *testing.T) {
+	tests := []struct {
+		name    string
+		genKey  func() PublicKey
+		keyType KeyType
+		mutate  func([]byte) []byte
+		wantErr bool
+	}{
+		{
+			name: "encode decode secp256k1 public key",
+			genKey: func() PublicKey {
+				_, pub, _ := GenerateSecp256k1Key(rand.Reader)
+				return pub
+			},
+			keyType: KeyTypeSecp256k1,
+			wantErr: false,
+		},
+		{
+			name: "encode decode ed25519 public key",
+			genKey: func() PublicKey {
+				_, pub, _ := GenerateEd25519Key(rand.Reader)
+				return pub
+			},
+			keyType: KeyTypeEd25519,
+			wantErr: false,
+		},
+		{
+			name: "truncated key bytes",
+			genKey: func() PublicKey {
+				_, pub, _ := GenerateSecp256k1Key(rand.Reader)
+				return pub
+			},
+			mutate: func(b []byte) []byte {
+				return b[:len(b)-1]
+			},
+			wantErr: true,
+		},
+		{
+			name: "extra key bytes",
+			genKey: func() PublicKey {
+				_, pub, _ := GenerateSecp256k1Key(rand.Reader)
+				return pub
+			},
+			mutate: func(b []byte) []byte {
+				return append(b, 0x00)
+			},
+			wantErr: true,
+		},
+		{
+			name: "corrupted key type",
+			genKey: func() PublicKey {
+				_, pub, _ := GenerateSecp256k1Key(rand.Reader)
+				return pub
+			},
+			mutate: func(b []byte) []byte {
+				b[0] = 0xFF
+				b[1] = 0xFF
+				b[2] = 0xFF
+				b[3] = 0xFF
+				return b
+			},
+			wantErr: true,
+		},
+		{
+			name: "exactly 4 bytes",
+			genKey: func() PublicKey {
+				_, pub, _ := GenerateSecp256k1Key(rand.Reader)
+				return pub
+			},
+			mutate: func(b []byte) []byte {
+				return b[:4]
+			},
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			originalKey := tt.genKey()
+			encoded := WireEncodePublicKey(originalKey)
+
+			if tt.mutate != nil {
+				encoded = tt.mutate(encoded)
+			}
+
+			decoded, err := WireDecodePubKey(encoded)
+			if tt.wantErr {
+				if err == nil {
+					t.Error("expected error, got nil")
+				}
+				return
+			}
+
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+
+			if !KeyEquals(originalKey, decoded) {
+				t.Error("decoded key does not match original")
+			}
+
+			if decoded.Type() != originalKey.Type() {
+				t.Errorf("key type mismatch: got %v, want %v", decoded.Type(), originalKey.Type())
+			}
+
+			if !bytes.Equal(decoded.Bytes(), originalKey.Bytes()) {
+				t.Error("key bytes do not match")
+			}
+		})
+	}
+}

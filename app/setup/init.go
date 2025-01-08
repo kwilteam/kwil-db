@@ -125,8 +125,7 @@ func InitCmd() *cobra.Command {
 					return display.PrintErr(cmd, err)
 				}
 
-				leader := config.EncodePubKeyAndType(privKey.Public().Bytes(), privKey.Type())
-				genCfg.Leader = leader
+				genCfg.Leader = types.PublicKey{PublicKey: privKey.Public()}
 				genCfg.Validators = append(genCfg.Validators, &types.Validator{
 					PubKey:     privKey.Public().Bytes(),
 					PubKeyType: privKey.Type(),

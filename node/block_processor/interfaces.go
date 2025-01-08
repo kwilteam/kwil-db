@@ -37,7 +37,7 @@ type ValidatorModule interface {
 type TxApp interface {
 	Begin(ctx context.Context, height int64) error
 	Execute(ctx *common.TxContext, db sql.DB, tx *ktypes.Transaction) *txapp.TxResponse
-	Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) (finalValidators []*ktypes.Validator, err error)
+	Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) error
 	Commit() error
 	Rollback()
 	GenesisInit(ctx context.Context, db sql.DB, validators []*ktypes.Validator, genesisAccounts []*ktypes.Account, initialHeight int64, initialDBOwner string, chain *common.ChainContext) error

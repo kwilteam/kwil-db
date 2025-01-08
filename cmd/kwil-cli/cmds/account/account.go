@@ -1,7 +1,6 @@
 package account
 
 import (
-	"encoding/hex"
 	"errors"
 
 	"github.com/kwilteam/kwil-db/app/shared/display"
@@ -27,7 +26,11 @@ var idCmd = &cobra.Command{
 		}
 
 		signer := &auth.EthPersonalSigner{Key: *conf.PrivateKey}
-		return display.PrintCmd(cmd, display.RespString(hex.EncodeToString(signer.Identity())))
+		addr, err := auth.EthSecp256k1Authenticator{}.Identifier(signer.CompactID())
+		if err != nil {
+			return display.PrintErr(cmd, err)
+		}
+		return display.PrintCmd(cmd, display.RespString(addr))
 	},
 }
 

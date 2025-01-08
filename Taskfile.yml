@@ -21,11 +21,12 @@ tasks:
   fmt:
     desc: Format the code
     cmds:
-      # goimports does not allow to ignore certain paths with modules,
-      # so we have to list all the folders that are adjacent generated code.
+      # goimports does not allow to ignore certain paths with modules.
+      # we need to ignore /node/engine/parse/gen but can't yet:
+      # https://github.com/golang/go/issues/42965
+      # for now, we do all folders
       - |
-        goimports -format-only -w ./app ./cmd ./common ./core ./node ./testing \
-          ./extensions
+        goimports -format-only -w .
 
   tidy:
     desc: go mod tidy each module

@@ -62,7 +62,7 @@ func genesisStateCmd() *cobra.Command {
 			}
 			// If there is no active migration or if the migration has not started yet, return the migration state
 			// indicating that there is no genesis state to download.
-			if metadata.MigrationState.Status == types.NoActiveMigration ||
+			if metadata.MigrationState.Status.NoneActive() ||
 				metadata.MigrationState.Status == types.ActivationPeriod ||
 				metadata.GenesisInfo == nil || metadata.SnapshotMetadata == nil {
 				return display.PrintCmd(cmd, &MigrationState{

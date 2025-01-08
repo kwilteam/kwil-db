@@ -76,6 +76,26 @@ func (s RespString) MarshalText() ([]byte, error) {
 	return []byte(s), nil
 }
 
+// RespResolutionBroadcast is used to represent the result of creating a new
+// resolution with the CLI. This includes the transaction hash and the ID of the
+// resolution as computed from the resolution body and resolution type. This
+// does not mean it is a unique resolution, and it is important to check that
+// the transaction referenced by the returned hash was executed without error.
+type RespResolutionBroadcast struct {
+	TxHash types.Hash `json:"tx_hash"`
+	ID     types.UUID `json:"id"`
+}
+
+func (r *RespResolutionBroadcast) MarshalText() ([]byte, error) {
+	return []byte(fmt.Sprintf(`Transaction Hash: %s
+Resolution ID: %s`, r.TxHash, r.ID)), nil
+}
+
+func (r *RespResolutionBroadcast) MarshalJSON() ([]byte, error) {
+	type alias RespResolutionBroadcast
+	return json.Marshal((*alias)(r))
+}
+
 // RespTxQuery is used to represent a transaction response in cli
 type RespTxQuery struct {
 	Msg     *types.TxQueryResponse

@@ -277,8 +277,9 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 		}
 
 		ci := &ktypes.CommitInfo{
-			AppHash: ce.state.blockRes.appHash,
-			Votes:   votes,
+			AppHash:      ce.state.blockRes.appHash,
+			Votes:        votes,
+			ParamUpdates: ce.state.blockRes.paramUpdates,
 		}
 		ce.state.commitInfo = ci
 
@@ -288,7 +289,8 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 			return err
 		}
 
-		ce.log.Infoln("Announce committed block", ce.state.blkProp.blk.Header.Height, ce.state.blkProp.blkHash)
+		ce.log.Infoln("Announce committed block", ce.state.blkProp.blk.Header.Height, ce.state.blkProp.blkHash,
+			ce.state.blockRes.paramUpdates)
 		// Broadcast the blockAnn message
 		go ce.blkAnnouncer(ctx, ce.state.blkProp.blk, ce.state.commitInfo)
 

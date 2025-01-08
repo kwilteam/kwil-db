@@ -31,7 +31,7 @@ type ConsensusEngine interface {
 	CheckTx(ctx context.Context, tx *ktypes.Transaction) error
 	BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (*ktypes.ResultBroadcastTx, error)
 
-	ConsensusParams() *ktypes.ConsensusParams
+	ConsensusParams() *ktypes.NetworkParameters
 	CancelBlockExecution(height int64, txIDs []types.Hash) error
 }
 

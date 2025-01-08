@@ -253,7 +253,7 @@ func (t *Transaction) Sign(signer auth.Signer) error {
 	}
 
 	t.Signature = signature
-	t.Sender = signer.Identity()
+	t.Sender = signer.CompactID()
 
 	return nil
 }

@@ -180,6 +180,9 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid P2P listen address: %w", err)
 		}
+		if ip == "" { // handle ":6600" to mean listen on all interfaces
+			ip = "0.0.0.0"
+		}
 
 		port, err := strconv.ParseUint(portStr, 10, 64)
 		if err != nil {
@@ -469,8 +472,10 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 		defer cancel()
 
 		broadcastFns := consensus.BroadcastFns{
-			ProposalBroadcaster:     n.announceBlkProp,
-			TxAnnouncer:             n.announceTx,
+			ProposalBroadcaster: n.announceBlkProp,
+			TxAnnouncer: func(ctx context.Context, txHash types.Hash, rawTx []byte) {
+				n.announceTx(ctx, txHash, rawTx, n.host.ID())
+			},
 			BlkAnnouncer:            n.announceBlk,
 			AckBroadcaster:          n.sendACK,
 			BlkRequester:            n.getBlkHeight,
@@ -715,7 +720,7 @@ func (n *Node) BlockHeight() int64 {
 	return height
 }
 
-func (n *Node) ConsensusParams() *ktypes.ConsensusParams {
+func (n *Node) ConsensusParams() *ktypes.NetworkParameters {
 	return n.ce.ConsensusParams()
 }
 
@@ -799,7 +804,10 @@ func newHost(ip string, port uint64, chainID string, privKey crypto.PrivateKey, 
 		return nil, fmt.Errorf("unable to resolve %v: %w", ip, err)
 	}
 
-	sourceMultiAddr, _ := multiaddr.NewMultiaddr(fmt.Sprintf("/%s/%s/tcp/%d", ipv, ip, port))
+	sourceMultiAddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/%s/%s/tcp/%d", ipv, ip, port))
+	if err != nil {
+		return nil, fmt.Errorf("unable to create multiaddr: %w", err)
+	}
 
 	// listenAddrs := libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0", "/ip4/0.0.0.0/tcp/0/ws")
 
