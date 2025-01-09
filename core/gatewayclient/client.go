@@ -202,7 +202,7 @@ func (c *GatewayClient) authenticate(ctx context.Context) error {
 	// use what KGW returned
 	msg := composeGatewayAuthMessage(authParam, targetDomain, authParam.URI, kgwAuthVersion, c.Client.ChainID())
 
-	if c.Signer == nil {
+	if c.Signer() == nil {
 		return fmt.Errorf("cannot authenticate to gateway without a signer")
 	}
 	sig, err := c.gatewaySigner(msg, c.Signer())

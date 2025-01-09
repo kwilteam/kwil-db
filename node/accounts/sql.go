@@ -16,7 +16,7 @@ const (
 	accountStoreVersion = 0
 
 	sqlInitTables = `CREATE TABLE IF NOT EXISTS ` + schemaName + `.accounts (
-		identifier string PRIMARY KEY,
+		identifier TEXT PRIMARY KEY,
 		balance TEXT NOT NULL, -- consider: NUMERIC(32) for uint256 and pgx.Numeric will handle it and provide a *big.Int field
 		nonce BIGINT NOT NULL -- a.k.a. INT8
 	);`

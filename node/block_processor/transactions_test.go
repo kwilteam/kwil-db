@@ -1,7 +1,9 @@
 package blockprocessor
 
 import (
+	"bytes"
 	"context"
+	"crypto/sha256"
 	"math/big"
 	"testing"
 
@@ -11,7 +13,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
-	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/txapp"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/stretchr/testify/require"
@@ -56,6 +57,23 @@ func secp256k1Signer(t *testing.T) *auth.EthPersonalSigner {
 	return &auth.EthPersonalSigner{Key: *k}
 }
 
+// genEd25519Key generates a deterministic ed25519 key
+func genEd25519Key(seed []byte) crypto.PrivateKey {
+	// seed must be 32 bytes
+	hash := sha256.Sum256(seed)
+	privKey, _, err := crypto.GenerateEd25519Key(bytes.NewBuffer(hash[:]))
+	if err != nil {
+		panic(err)
+	}
+	return privKey
+}
+
+// edPubKey generates a deterministic ed25519 public key
+func edPubKey(seed []byte) []byte {
+	privKey := genEd25519Key(seed)
+	return privKey.Public().Bytes()
+}
+
 func TestPrepareMempoolTxns(t *testing.T) {
 	// To make these tests deterministic, we manually craft certain misorderings
 	// and the known expected orderings. Also include some malformed
@@ -92,7 +110,7 @@ func TestPrepareMempoolTxns(t *testing.T) {
 			Fee:         big.NewInt(900),
 			Nonce:       0,
 		},
-		Sender: []byte(`guy`),
+		Sender: edPubKey([]byte(`guy`)),
 	}
 	// tAb := marshalTx(t, tA)
 
@@ -109,7 +127,7 @@ func TestPrepareMempoolTxns(t *testing.T) {
 
 	// second party
 	tOtherSenderA := cloneTx(tA)
-	tOtherSenderA.Sender = []byte(`otherguy`)
+	tOtherSenderA.Sender = edPubKey([]byte(`otherguy`))
 	// tOtherSenderAb := marshalTx(t, tOtherSenderA)
 
 	// Same nonce tx, different body (diff bytes)
@@ -133,86 +151,86 @@ func TestPrepareMempoolTxns(t *testing.T) {
 
 	tests := []struct {
 		name string
-		txs  []*ktypes.Transaction
-		want []*ktypes.Transaction
+		txs  []*types.Transaction
+		want []*types.Transaction
 		gas  bool
 	}{
 		{
 			"empty",
-			[]*ktypes.Transaction{},
-			[]*ktypes.Transaction{},
+			[]*types.Transaction{},
+			[]*types.Transaction{},
 			false,
 		},
 		{
 			"one and only low gas",
-			[]*ktypes.Transaction{zeroFeeTx},
-			[]*ktypes.Transaction{},
+			[]*types.Transaction{zeroFeeTx},
+			[]*types.Transaction{},
 			true,
 		},
 		{
 			"one valid",
-			[]*ktypes.Transaction{tA},
-			[]*ktypes.Transaction{tA},
+			[]*types.Transaction{tA},
+			[]*types.Transaction{tA},
 			false,
 		},
 		{
 			"two valid",
-			[]*ktypes.Transaction{tA, tB},
-			[]*ktypes.Transaction{tA, tB},
+			[]*types.Transaction{tA, tB},
+			[]*types.Transaction{tA, tB},
 			false,
 		},
 		{
 			"two valid misordered",
-			[]*ktypes.Transaction{tB, tA},
-			[]*ktypes.Transaction{tA, tB},
+			[]*types.Transaction{tB, tA},
+			[]*types.Transaction{tA, tB},
 			false,
 		},
 		{
 			"multi-party, one misordered, stable",
-			[]*ktypes.Transaction{tOtherSenderA, tB, tOtherSenderB, tA},
-			[]*ktypes.Transaction{tOtherSenderA, tA, tOtherSenderB, tB},
+			[]*types.Transaction{tOtherSenderA, tB, tOtherSenderB, tA},
+			[]*types.Transaction{tOtherSenderA, tA, tOtherSenderB, tB},
 			false,
 		},
 		{
 			"multi-party, one misordered, one dup nonce, stable",
-			[]*ktypes.Transaction{tOtherSenderA, tOtherSenderAbDup, tB, tA},
-			[]*ktypes.Transaction{tOtherSenderA, tA, tB},
+			[]*types.Transaction{tOtherSenderA, tOtherSenderAbDup, tB, tA},
+			[]*types.Transaction{tOtherSenderA, tA, tB},
 			false,
 		},
 		{
 			"multi-party, both misordered, stable",
-			[]*ktypes.Transaction{tOtherSenderB, tB, tOtherSenderA, tA},
-			[]*ktypes.Transaction{tOtherSenderA, tA, tOtherSenderB, tB},
+			[]*types.Transaction{tOtherSenderB, tB, tOtherSenderA, tA},
+			[]*types.Transaction{tOtherSenderA, tA, tOtherSenderB, tB},
 			false,
 		},
 		{
 			"multi-party, both misordered, alt. stable",
-			[]*ktypes.Transaction{tB, tOtherSenderB, tOtherSenderA, tA},
-			[]*ktypes.Transaction{tA, tOtherSenderA, tOtherSenderB, tB},
+			[]*types.Transaction{tB, tOtherSenderB, tOtherSenderA, tA},
+			[]*types.Transaction{tA, tOtherSenderA, tOtherSenderB, tB},
 			false,
 		},
 		// { // can't mix fee...
 		// 	"multi-party, big, with invalid in middle",
-		// 	[]*ktypes.Transaction{tOtherSenderC, tB, zeroFeeTx, tOtherSenderB, tOtherSenderA, tA},
-		// 	[]*ktypes.Transaction{tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB},
+		// 	[]*types.Transaction{tOtherSenderC, tB, zeroFeeTx, tOtherSenderB, tOtherSenderA, tA},
+		// 	[]*types.Transaction{tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB},
 		// 	true,
 		// },
 		{
 			"multi-party, big, already correct",
-			[]*ktypes.Transaction{tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB},
-			[]*ktypes.Transaction{tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB},
+			[]*types.Transaction{tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB},
+			[]*types.Transaction{tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB},
 			false,
 		},
 		{
 			"multi-party,proposer in the last, reorder",
-			[]*ktypes.Transaction{tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB, tProposer},
-			[]*ktypes.Transaction{tProposer, tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB},
+			[]*types.Transaction{tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB, tProposer},
+			[]*types.Transaction{tProposer, tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB},
 			false,
 		},
 		{
 			"multi-party,proposer in the middle, reorder",
-			[]*ktypes.Transaction{tOtherSenderA, tA, tOtherSenderB, tProposer, tOtherSenderC, tB},
-			[]*ktypes.Transaction{tProposer, tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB},
+			[]*types.Transaction{tOtherSenderA, tA, tOtherSenderB, tProposer, tOtherSenderC, tB},
+			[]*types.Transaction{tProposer, tOtherSenderA, tA, tOtherSenderB, tOtherSenderC, tB},
 			false,
 		},
 	}
@@ -263,7 +281,7 @@ func TestPrepareVoteIDTx(t *testing.T) {
 	leader := secp256k1Signer(t)
 	validator := secp256k1Signer(t)
 	sentry := secp256k1Signer(t)
-	valSet := []*ktypes.Validator{
+	valSet := []*types.Validator{
 		{
 			PubKey: validator.Identity(),
 			Power:  1,
@@ -508,7 +526,7 @@ func TestPrepareVoteBodyTx(t *testing.T) {
 				require.NoError(t, err)
 				require.NotNil(t, tx)
 
-				var payload = &ktypes.ValidatorVoteBodies{}
+				var payload = &types.ValidatorVoteBodies{}
 				err = payload.UnmarshalBinary(tx.Body.Payload)
 				require.NoError(t, err)
 
@@ -526,7 +544,7 @@ func TestPrepareVoteBodyTx(t *testing.T) {
 				require.NoError(t, err)
 				require.NotNil(t, tx)
 
-				var payload = &ktypes.ValidatorVoteBodies{}
+				var payload = &types.ValidatorVoteBodies{}
 				err = payload.UnmarshalBinary(tx.Body.Payload)
 				require.NoError(t, err)
 
@@ -553,7 +571,7 @@ func TestPrepareVoteBodyTx(t *testing.T) {
 				require.NoError(t, err)
 				require.NotNil(t, tx)
 
-				var payload = &ktypes.ValidatorVoteBodies{}
+				var payload = &types.ValidatorVoteBodies{}
 				err = payload.UnmarshalBinary(tx.Body.Payload)
 				require.NoError(t, err)
 
@@ -595,7 +613,7 @@ func TestPrepareVoteBodyTx(t *testing.T) {
 				require.NoError(t, err)
 				require.NotNil(t, tx)
 
-				var payload = &ktypes.ValidatorVoteBodies{}
+				var payload = &types.ValidatorVoteBodies{}
 				err = payload.UnmarshalBinary(tx.Body.Payload)
 				require.NoError(t, err)
 
@@ -673,7 +691,7 @@ func (m *mockTxApp) GetValidators(ctx context.Context, db sql.DB) ([]*types.Vali
 	return nil, nil
 }
 
-func (m *mockTxApp) ProposerTxs(ctx context.Context, db sql.DB, txNonce uint64, maxTxSz int64, block *common.BlockContext) ([]*ktypes.Transaction, error) {
+func (m *mockTxApp) ProposerTxs(ctx context.Context, db sql.DB, txNonce uint64, maxTxSz int64, block *common.BlockContext) ([]*types.Transaction, error) {
 	return nil, nil
 }
 
@@ -790,19 +808,19 @@ func (m *mockEventStore) MarkBroadcasted(ctx context.Context, ids []*types.UUID)
 }
 
 type mockValidatorStore struct {
-	valSet []*ktypes.Validator
+	valSet []*types.Validator
 }
 
-func newValidatorStore(valSet []*ktypes.Validator) *mockValidatorStore {
+func newValidatorStore(valSet []*types.Validator) *mockValidatorStore {
 	return &mockValidatorStore{
 		valSet: valSet,
 	}
 }
 
-func (v *mockValidatorStore) GetValidators() []*ktypes.Validator {
+func (v *mockValidatorStore) GetValidators() []*types.Validator {
 	return v.valSet
 }
 
-func (v *mockValidatorStore) ValidatorUpdates() map[string]*ktypes.Validator {
+func (v *mockValidatorStore) ValidatorUpdates() map[string]*types.Validator {
 	return nil
 }

@@ -66,9 +66,9 @@ func (m *mockDB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Re
 		if !ok {
 			return nil, errors.New("not a string balance")
 		}
-		id, nonce := args[2].([]byte), args[1].(int64)
+		id, nonce := args[2].(string), args[1].(int64)
 
-		acct, ok := m.accts[string(id)]
+		acct, ok := m.accts[id]
 		if !ok {
 			return &sql.ResultSet{
 				Status: sql.CommandTag{
@@ -89,8 +89,8 @@ func (m *mockDB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Re
 		}, nil
 	case sqlGetAccount: // via getAccount
 		m.accessCnt++
-		id := args[0].([]byte)
-		acct, ok := m.accts[string(id)]
+		id := args[0].(string)
+		acct, ok := m.accts[id]
 		if !ok {
 			return &sql.ResultSet{}, nil // not ErrNoRows since we don't use Scan in pg
 		}

@@ -29,7 +29,7 @@ type mempool struct {
 
 // accountInfo retrieves the account info from the mempool state or the account store.
 func (m *mempool) accountInfo(ctx context.Context, tx sql.Executor, acctID string) (*types.Account, error) {
-	if acctInfo, ok := m.accounts[string(acctID)]; ok {
+	if acctInfo, ok := m.accounts[acctID]; ok {
 		return acctInfo, nil // there are unconfirmed txs for this account
 	}
 
@@ -39,7 +39,7 @@ func (m *mempool) accountInfo(ctx context.Context, tx sql.Executor, acctID strin
 		return nil, err
 	}
 
-	m.accounts[string(acctID)] = acct
+	m.accounts[acctID] = acct
 	m.log.Info("added new account to mempool records", "account", acctID, "nonce", acct.Nonce, "balance", acct.Balance)
 
 	return acct, nil

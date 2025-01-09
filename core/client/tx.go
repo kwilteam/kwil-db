@@ -22,7 +22,7 @@ func (c *Client) NewSignedTx(ctx context.Context, data types.Payload, txOpts *cl
 
 // newTx creates a new Transaction signed by the Client's Signer
 func (c *Client) newTx(ctx context.Context, data types.Payload, txOpts *clientType.TxOptions) (*types.Transaction, error) {
-	if c.Signer == nil {
+	if c.Signer() == nil {
 		return nil, fmt.Errorf("signer must be set to create a transaction")
 	}
 	if txOpts == nil {
