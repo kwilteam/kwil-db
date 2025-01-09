@@ -50,7 +50,7 @@ func (m *mockDB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Re
 		if !ok {
 			return nil, errors.New("not a string balance")
 		}
-		m.accts[string(id)] = &types.Account{
+		m.accts[id] = &types.Account{
 			Identifier: id,
 			Nonce:      args[2].(int64),
 			Balance:    bal,
