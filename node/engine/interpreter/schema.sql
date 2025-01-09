@@ -254,7 +254,7 @@ ORDER BY 1, 2;
 
 -- info.columns is a public view that provides a list of all columns in the database
 CREATE VIEW info.columns AS
-SELECT 
+SELECT DISTINCT
     c.table_schema::TEXT AS namespace,
     c.table_name::TEXT AS table_name,
     c.column_name::TEXT AS name,
@@ -294,9 +294,10 @@ JOIN
     kwild_engine.namespaces us ON n.nspname::TEXT = us.name
 WHERE cl.relkind IN ('r', 'v') -- only tables and views
 ORDER BY 
-    c.table_name, 
-    c.ordinal_position,
+    table_name, 
+    ordinal_position,
     1, 2, 3, 4, 5, 6, 7, 8;
+    
 
 -- info.indexes is a public view that provides a list of all indexes in the database
 CREATE VIEW info.indexes AS

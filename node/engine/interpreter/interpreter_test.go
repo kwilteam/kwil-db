@@ -632,6 +632,35 @@ func Test_SQL(t *testing.T) {
 			execSQL: `SELECT ARRAY[ARRAY[1,2], ARRAY[3,4]];`,
 			err:     engine.ErrArrayDimensionality,
 		},
+		{
+			// this tests for a bug gavin found where foreign keys are read as columns
+			// from the info schema, and then incorrectly create ambiguous column errors
+			// in the query planner
+			name: "select against foreign key",
+			sql: []string{
+				`CREATE TABLE IF NOT EXISTS erc20rw_contracts (
+					id UUID PRIMARY KEY,
+					chain_id INT8 NOT NULL, -- the chain ID of the contract.
+					address TEXT NOT NULL, -- the reward escrow contract address.
+					nonce INT8 NOT NULL, -- the last known nonce of the contract
+					threshold INT8 NOT NULL,
+					safe_address TEXT NOT NULL, -- the GnosisSafe address.
+					safe_nonce INT8 NOT NULL, -- the last known nonce of the safe. NOTE: unless we force the safe can only be updated through KWIL, which is not practical, so the nonce may change without the ext knowing.
+					unique (chain_id, address) -- unique per chain and address
+				);`,
+				`CREATE TABLE IF NOT EXISTS erc20rw_signers (
+					id UUID PRIMARY KEY,
+					address TEXT NOT NULL, -- eth address
+					contract_id UUID NOT NULL REFERENCES erc20rw_contracts(id) ON UPDATE CASCADE ON DELETE CASCADE,
+					UNIQUE (address, contract_id),
+					foreign key (address) references deleteme (id)
+				);`,
+			},
+			execSQL: `SELECT * FROM erc20rw_signers WHERE contract_id = $contract_id;`,
+			execVars: map[string]any{
+				"contract_id": mustUUID("d3b3b3b3-3b3b-3b3b-3b3b-3b3b3b3b3b3b"),
+			},
+		},
 	}
 
 	db, err := newTestDB()
