@@ -47,12 +47,12 @@ func TestPeerIDPubKeyRoundTrip(t *testing.T) {
 				return
 			}
 
-			if peerID != tt.expectedPeerID {
+			if peerID.String() != tt.expectedPeerID {
 				t.Errorf("PeerIDFromPubKey() = %v, want %v", peerID, tt.expectedPeerID)
 			}
 
 			// Test round trip back to PubKeyFromPeerID
-			recoveredPubKey, err := PubKeyFromPeerID(peerID)
+			recoveredPubKey, err := PubKeyFromPeerID(peerID.String())
 			if err != nil {
 				t.Errorf("PubKeyFromPeerID() error = %v", err)
 				return

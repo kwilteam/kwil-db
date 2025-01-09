@@ -54,15 +54,12 @@ type BroadcastSync uint8
 
 // These are the recognized BroadcastSync values used with BroadcastRequest.
 const (
-	// BroadcastSyncAsync does not wait for acceptance into mempool, only
-	// computing the transaction hash.
-	BroadcastSyncAsync BroadcastSync = 0
 	// BroadcastSyncSync ensures the transaction is accepted to mempool before
-	// responding. Ths should be preferred to BroadcastSyncAsync in most cases.
-	BroadcastSyncSync BroadcastSync = 1
+	// responding. This is the default behavior.
+	BroadcastSyncSync BroadcastSync = 0
 	// BroadcastSyncCommit will wait for the transaction to be included in a
 	// block.
-	BroadcastSyncCommit BroadcastSync = 2
+	BroadcastSyncCommit BroadcastSync = 1
 )
 
 // CallRequest contains the request parameters for MethodCall.

@@ -118,7 +118,7 @@ func NewTestDBNamed(t *testing.T, dbName string, port int, cleanUp func(*pg.DB))
 	return db
 }
 
-func NewTestDBWithCfg(t *testing.T, dbCfg *config.DBConfig) (db *pg.DB, err error) {
+func NewTestDBWithCfg(t *testing.T, dbCfg *config.DBConfig, cleanUp func(*pg.DB)) (db *pg.DB, err error) {
 	cfg := &pg.DBConfig{
 		PoolConfig: pg.PoolConfig{
 			ConnConfig: pg.ConnConfig{
@@ -134,5 +134,15 @@ func NewTestDBWithCfg(t *testing.T, dbCfg *config.DBConfig) (db *pg.DB, err erro
 			return strings.Contains(s, pg.DefaultSchemaFilterPrefix)
 		},
 	}
-	return pg.NewDB(context.Background(), cfg)
+	db, err = pg.NewDB(context.Background(), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Cleanup(func() {
+		defer db.Close()
+		cleanUp(db)
+	})
+
+	return db, nil
 }

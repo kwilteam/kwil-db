@@ -4,7 +4,6 @@ import (
 	"context"
 
 	ktypes "github.com/kwilteam/kwil-db/core/types"
-	blockprocessor "github.com/kwilteam/kwil-db/node/block_processor"
 	"github.com/kwilteam/kwil-db/node/consensus"
 	"github.com/kwilteam/kwil-db/node/snapshotter"
 	"github.com/kwilteam/kwil-db/node/types"
@@ -27,11 +26,10 @@ type ConsensusEngine interface {
 
 	NotifyDiscoveryMessage(validatorPK []byte, height int64)
 
-	Start(ctx context.Context, proposerBroadcaster consensus.ProposalBroadcaster,
-		blkAnnouncer consensus.BlkAnnouncer, ackBroadcaster consensus.AckBroadcaster,
-		blkRequester consensus.BlkRequester, stateResetter consensus.ResetStateBroadcaster, discoveryBroadcaster consensus.DiscoveryReqBroadcaster, txBroadcaster blockprocessor.BroadcastTxFn) error
+	Start(ctx context.Context, fns consensus.BroadcastFns) error
 
 	CheckTx(ctx context.Context, tx *ktypes.Transaction) error
+	BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (*ktypes.ResultBroadcastTx, error)
 
 	ConsensusParams() *ktypes.ConsensusParams
 	CancelBlockExecution(height int64, txIDs []types.Hash) error
