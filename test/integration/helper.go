@@ -454,15 +454,14 @@ func (r *IntHelper) GenerateTestnetConfigs(homeDir string) {
 	}*/
 
 	testnetCfg := &setup.TestnetConfig{
-		RootDir:        homeDir,
-		NumVals:        r.cfg.NValidator,
-		NumNVals:       r.cfg.NNonValidator,
-		ChainID:        testChainID,
-		NoPex:          false,
-		StartingPort:   6600,
-		HostnamePrefix: "kwil-",
-		DnsNamePrefix:  "node",
-		Owner:          OwnerAddress,
+		RootDir:       homeDir,
+		NumVals:       r.cfg.NValidator,
+		NumNVals:      r.cfg.NNonValidator,
+		ChainID:       testChainID,
+		NoPex:         false,
+		StartingPort:  6600,
+		DnsNamePrefix: "node",
+		Owner:         OwnerAddress,
 		// StartingIP:     "172.10.100.2",
 	}
 

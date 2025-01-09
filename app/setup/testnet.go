@@ -64,15 +64,14 @@ func TestnetCmd() *cobra.Command {
 }
 
 type TestnetConfig struct {
-	RootDir        string
-	ChainID        string
-	NumVals        int
-	NumNVals       int
-	NoPex          bool
-	StartingPort   uint64
-	StartingIP     string
-	HostnamePrefix string
-	DnsNamePrefix  string // optional and only used if DnsHost is true (default: node)
+	RootDir       string
+	ChainID       string
+	NumVals       int
+	NumNVals      int
+	NoPex         bool
+	StartingPort  uint64
+	StartingIP    string
+	DnsNamePrefix string // optional and only used if DnsHost is true (default: node)
 
 	Owner string
 }
@@ -91,6 +90,7 @@ type ConfigOpts struct {
 	DnsHost bool
 }
 
+// TODO: once changes to the tests are complete, this may not be needed
 func GenerateTestnetConfigs(cfg *TestnetConfig, opts *ConfigOpts) error {
 	// ensure that the directory exists
 	// expand the directory path
@@ -103,7 +103,7 @@ func GenerateTestnetConfigs(cfg *TestnetConfig, opts *ConfigOpts) error {
 		return err
 	}
 
-	var keys []crypto.PrivateKey
+	var keys []*crypto.Secp256k1PrivateKey
 	// generate the configuration for the nodes
 	for i := range cfg.NumVals + cfg.NumNVals {
 		// generate Keys, so that the connection strings and the validator set can be generated before the node config files are generated
@@ -191,7 +191,7 @@ type NodeGenConfig struct {
 	DBPort     uint16 // leave zero for default plus any offset
 	IP         string
 	NoPEX      bool
-	NodeKey    crypto.PrivateKey
+	NodeKey    *crypto.Secp256k1PrivateKey
 	Genesis    *config.GenesisConfig
 
 	// TODO: gasEnabled, private p2p, auth RPC, join expiry, allocs, etc.
@@ -199,15 +199,11 @@ type NodeGenConfig struct {
 }
 
 func GenerateNodeRoot(ncfg *NodeGenConfig) error {
-	if err := os.MkdirAll(ncfg.RootDir, 0755); err != nil {
-		return err
-	}
-
 	cfg := custom.DefaultConfig() // not config.DefaultConfig(), so custom command config is used
 
 	// P2P
 	cfg.P2P.Port = uint64(ncfg.PortOffset + 6600)
-	cfg.P2P.IP = "127.0.0.1"
+	cfg.P2P.IP = "0.0.0.0"
 	if ncfg.IP != "" {
 		cfg.P2P.IP = ncfg.IP
 	}
@@ -228,17 +224,7 @@ func GenerateNodeRoot(ncfg *NodeGenConfig) error {
 	// Admin RPC
 	cfg.Admin.ListenAddress = net.JoinHostPort("127.0.0.1", strconv.FormatUint(uint64(8584+ncfg.PortOffset), 10))
 
-	if err := cfg.SaveAs(filepath.Join(ncfg.RootDir, config.ConfigFileName)); err != nil {
-		return err
-	}
-
-	// save the genesis configuration to the root directory
-	genFile := filepath.Join(ncfg.RootDir, config.GenesisFileName)
-	if err := ncfg.Genesis.SaveAs(genFile); err != nil {
-		return err
-	}
-
-	return key.SaveNodeKey(filepath.Join(ncfg.RootDir, "nodekey.json"), ncfg.NodeKey)
+	return GenerateNodeDir(ncfg.RootDir, ncfg.Genesis, cfg, ncfg.NodeKey)
 }
 
 type deterministicPRNG struct {
@@ -266,4 +252,51 @@ func (dr *deterministicPRNG) Read(p []byte) (n int, err error) {
 		dr.readLen = 8 - len(p)
 	}
 	return n, nil
+}
+
+type TestnetNodeConfig struct {
+	// Config is the node configuration.
+	Config *config.Config
+	// DirName is the directory name of the node.
+	// If the testnetDir is "testnet" and the DirName is "node0",
+	// the full path of the node is "testnet/node0".
+	DirName string
+	// PrivateKey is the private key of the node.
+	PrivateKey *crypto.Secp256k1PrivateKey
+}
+
+// GenerateTestnetDir generates a testnet configuration for multiple nodes.
+// It is a minimal function that takes full configurations.
+// Most users should use GenerateTestnetConfigs instead.
+func GenerateTestnetDir(testnetDir string, genesis *config.GenesisConfig, nodes []*TestnetNodeConfig) error {
+	if err := os.MkdirAll(testnetDir, 0755); err != nil {
+		return err
+	}
+
+	for _, node := range nodes {
+		if err := GenerateNodeDir(filepath.Join(testnetDir, node.DirName), genesis, node.Config, node.PrivateKey); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// GenerateNodeDir generates a node configuration directory.
+// It is a minimal function that takes a full configuration.
+// Most users should use GenerateNodeRoot instead.
+func GenerateNodeDir(rootDir string, genesis *config.GenesisConfig, node *config.Config, privateKey *crypto.Secp256k1PrivateKey) error {
+	if err := os.MkdirAll(rootDir, 0755); err != nil {
+		return err
+	}
+
+	if err := node.SaveAs(filepath.Join(rootDir, config.ConfigFileName)); err != nil {
+		return err
+	}
+
+	if err := genesis.SaveAs(filepath.Join(rootDir, config.GenesisFileName)); err != nil {
+		return err
+	}
+
+	return key.SaveNodeKey(filepath.Join(rootDir, config.NodeKeyFileName), privateKey)
 }
