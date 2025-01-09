@@ -27,7 +27,8 @@ func Test_MempoolWithoutGas(t *testing.T) {
 	rebroadcast := &mockRebroadcast{}
 
 	txCtx := &common.TxContext{
-		Ctx: ctx,
+		Ctx:    ctx,
+		Caller: "A",
 		BlockContext: &common.BlockContext{
 			ChainContext: &common.ChainContext{
 				NetworkParameters: &common.NetworkParameters{
@@ -75,7 +76,8 @@ func Test_MempoolWithGas(t *testing.T) {
 	}
 
 	txCtx := &common.TxContext{
-		Ctx: context.Background(),
+		Ctx:    context.Background(),
+		Caller: "A",
 		BlockContext: &common.BlockContext{
 			ChainContext: &common.ChainContext{
 				NetworkParameters: &common.NetworkParameters{
@@ -99,7 +101,7 @@ func Test_MempoolWithGas(t *testing.T) {
 
 	// Credit account A
 	m.accounts["A"] = &types.Account{
-		Identifier: []byte("A"),
+		Identifier: "A",
 		Balance:    big.NewInt(100),
 		Nonce:      0,
 	}

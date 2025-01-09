@@ -332,7 +332,7 @@ func (d *executeActionRoute) InTx(ctx *common.TxContext, app *common.App, tx *ty
 }
 
 type transferRoute struct {
-	to  []byte
+	to  string
 	amt *big.Int
 }
 
@@ -375,7 +375,7 @@ func (d *transferRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *ty
 }
 
 func (d *transferRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
-	err := app.Accounts.Transfer(ctx.Ctx, app.DB, tx.Sender, d.to, d.amt)
+	err := app.Accounts.Transfer(ctx.Ctx, app.DB, ctx.Caller, d.to, d.amt)
 	if err != nil {
 		if errors.Is(err, accounts.ErrInsufficientFunds) {
 			return types.CodeInsufficientBalance, err

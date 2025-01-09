@@ -11,16 +11,16 @@ import (
 	"github.com/kwilteam/kwil-db/core/gatewayclient"
 )
 
-// clientDriver uses the Go client to interact with the kwil node
-type clientDriver struct {
+// jsonrpcGoDriver uses the Go client to interact with the kwil node
+type jsonrpcGoDriver struct {
+	cTypes.Client
 	privateKey crypto.PrivateKey
-	c          cTypes.Client
 	log        logFunc
 }
 
-var _ JSONRPCClient = (*clientDriver)(nil)
+var _ JSONRPCClient = (*jsonrpcGoDriver)(nil)
 
-func newClient(ctx context.Context, endpoint string, usingGateway bool, l logFunc) (Client, error) {
+func newClient(ctx context.Context, endpoint string, usingGateway bool, l logFunc) (JSONRPCClient, error) {
 	priv, _, err := crypto.GenerateSecp256k1Key(rand.Reader)
 	if err != nil {
 		return nil, err
@@ -43,21 +43,17 @@ func newClient(ctx context.Context, endpoint string, usingGateway bool, l logFun
 		return nil, err
 	}
 
-	return &clientDriver{
+	return &jsonrpcGoDriver{
 		privateKey: priv,
-		c:          cl,
+		Client:     cl,
 		log:        l,
 	}, nil
 }
 
-func (c *clientDriver) PrivateKey() crypto.PrivateKey {
+func (c *jsonrpcGoDriver) PrivateKey() crypto.PrivateKey {
 	return c.privateKey
 }
 
-func (c *clientDriver) PublicKey() crypto.PublicKey {
+func (c *jsonrpcGoDriver) PublicKey() crypto.PublicKey {
 	return c.privateKey.Public()
-}
-
-func (c *clientDriver) Ping(ctx context.Context) (string, error) {
-	return c.c.Ping(ctx)
 }

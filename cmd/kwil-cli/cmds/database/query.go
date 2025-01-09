@@ -34,11 +34,26 @@ func queryCmd() *cobra.Command {
 		Short:   "Query a database using an ad-hoc SQL SELECT statement.",
 		Long:    queryLong,
 		Example: queryExample,
-		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return client.DialClient(cmd.Context(), cmd, client.WithoutPrivateKey,
 				func(ctx context.Context, client clientType.Client, conf *config.KwilCliConfig) error {
-					data, err := client.Query(ctx, args[0], nil)
+					if len(args) == 0 {
+						return display.PrintErr(cmd, fmt.Errorf("no query provided"))
+					}
+
+					params := make(map[string]any)
+					if len(args) > 1 {
+						ins, err := parseInputs(args[1:])
+						if err != nil {
+							return display.PrintErr(cmd, fmt.Errorf("error parsing inputs: %w", err))
+						}
+
+						for k, v := range ins {
+							params[k] = v
+						}
+					}
+
+					data, err := client.Query(ctx, args[0], params)
 					if err != nil {
 						return display.PrintErr(cmd, fmt.Errorf("error querying database: %w", err))
 					}

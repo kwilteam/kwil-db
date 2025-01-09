@@ -857,7 +857,7 @@ func (d *dummyTxApp) Rollback() {}
 func (d *dummyTxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*ktypes.Validator, genesisAccounts []*ktypes.Account, initialHeight int64, dbOwner string, chain *common.ChainContext) error {
 	return nil
 }
-func (d *dummyTxApp) AccountInfo(ctx context.Context, dbTx sql.DB, identifier []byte, pending bool) (balance *big.Int, nonce int64, err error) {
+func (d *dummyTxApp) AccountInfo(ctx context.Context, dbTx sql.DB, identifier string, pending bool) (balance *big.Int, nonce int64, err error) {
 	return big.NewInt(0), 0, nil
 }
 

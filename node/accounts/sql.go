@@ -16,7 +16,7 @@ const (
 	accountStoreVersion = 0
 
 	sqlInitTables = `CREATE TABLE IF NOT EXISTS ` + schemaName + `.accounts (
-		identifier BYTEA PRIMARY KEY,
+		identifier TEXT PRIMARY KEY,
 		balance TEXT NOT NULL, -- consider: NUMERIC(32) for uint256 and pgx.Numeric will handle it and provide a *big.Int field
 		nonce BIGINT NOT NULL -- a.k.a. INT8
 	);`
@@ -41,21 +41,21 @@ func initTables(ctx context.Context, tx sql.DB) error {
 }
 
 // updateAccount updates the balance and nonce of an account.
-func updateAccount(ctx context.Context, db sql.Executor, ident []byte, amount *big.Int, nonce int64) error {
+func updateAccount(ctx context.Context, db sql.Executor, ident string, amount *big.Int, nonce int64) error {
 	_, err := db.Execute(ctx, sqlUpdateAccount, amount.String(), nonce, ident)
 	return err
 }
 
 // createAccount creates an account with the given identifier and
 // initial balance. The nonce will be set to 0.
-func createAccount(ctx context.Context, db sql.Executor, ident []byte, amt *big.Int, nonce int64) error {
+func createAccount(ctx context.Context, db sql.Executor, ident string, amt *big.Int, nonce int64) error {
 	_, err := db.Execute(ctx, sqlCreateAccount, ident, amt.String(), nonce)
 	return err
 }
 
 // getAccount retrieves an account from the database.
 // if the account is not found, it returns nil, ErrAccountNotFound.
-func getAccount(ctx context.Context, db sql.Executor, ident []byte) (*types.Account, error) {
+func getAccount(ctx context.Context, db sql.Executor, ident string) (*types.Account, error) {
 	results, err := db.Execute(ctx, sqlGetAccount, ident)
 	if err != nil {
 		return nil, err

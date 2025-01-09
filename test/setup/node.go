@@ -380,7 +380,7 @@ func (c *NodeConfig) makeNode(generated *generatedNodeInfo, isFirstNode bool, fi
 		ensureEq("db.user", conf.DB.User, defaultConf.DB.User),
 		ensureEq("db.password", conf.DB.Pass, defaultConf.DB.Pass),
 		ensureEq("db.name", conf.DB.DBName, defaultConf.DB.DBName),
-		ensureEq("p2p.bootnodes", conf.P2P.BootNodes, defaultConf.P2P.BootNodes),
+		ensureEq("p2p.bootnodes", len(conf.P2P.BootNodes), len(defaultConf.P2P.BootNodes)), // []string is not comparable, but it should be empty anyways
 	)
 	if err != nil {
 		return nil, err
@@ -451,4 +451,12 @@ func (k *kwilNode) JSONRPCClient(t *testing.T, ctx context.Context, usingGateway
 
 	k.client = client
 	return client
+}
+
+type KwilNode interface {
+	PrivateKey() *crypto.Secp256k1PrivateKey
+	PublicKey() *crypto.Secp256k1PublicKey
+	IsValidator() bool
+	Config() *config.Config
+	JSONRPCClient(t *testing.T, ctx context.Context, usingKGW bool) JSONRPCClient
 }

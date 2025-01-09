@@ -479,7 +479,7 @@ func EncodeValue(v any) (*EncodedValue, error) {
 
 // Transfer transfers an amount of tokens from the sender to the receiver.
 type Transfer struct {
-	To     []byte `json:"to"`     // to be string as user identifier
+	To     string `json:"to"`     // to be string as user identifier
 	Amount string `json:"amount"` // big.Int
 }
 

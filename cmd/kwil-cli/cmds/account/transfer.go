@@ -2,7 +2,6 @@ package account
 
 import (
 	"context"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -23,17 +22,13 @@ func transferCmd() *cobra.Command {
 		Args:  cobra.ExactArgs(2), // recipient, amt
 		RunE: func(cmd *cobra.Command, args []string) error {
 			recipient, amt := args[0], args[1]
-			to, err := hex.DecodeString(recipient) // identifier bytes
-			if err != nil {
-				return display.PrintErr(cmd, err)
-			}
 			amount, ok := big.NewInt(0).SetString(amt, 10)
 			if !ok {
 				return display.PrintErr(cmd, errors.New("invalid decimal amount"))
 			}
 
 			return client.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
-				txHash, err := cl.Transfer(ctx, to, amount, clientType.WithNonce(nonceOverride),
+				txHash, err := cl.Transfer(ctx, recipient, amount, clientType.WithNonce(nonceOverride),
 					clientType.WithSyncBroadcast(syncBcast))
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("transfer failed: %w", err))

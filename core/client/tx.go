@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	clientType "github.com/kwilteam/kwil-db/core/client/types"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
@@ -21,7 +22,7 @@ func (c *Client) NewSignedTx(ctx context.Context, data types.Payload, txOpts *cl
 
 // newTx creates a new Transaction signed by the Client's Signer
 func (c *Client) newTx(ctx context.Context, data types.Payload, txOpts *clientType.TxOptions) (*types.Transaction, error) {
-	if c.Signer == nil {
+	if c.Signer() == nil {
 		return nil, fmt.Errorf("signer must be set to create a transaction")
 	}
 	if txOpts == nil {
@@ -32,8 +33,14 @@ func (c *Client) newTx(ctx context.Context, data types.Payload, txOpts *clientTy
 	if txOpts.Nonce > 0 {
 		nonce = uint64(txOpts.Nonce)
 	} else {
+		authr := auth.GetAuthenticator(c.Signer().AuthType())
+		ident, err := authr.Identifier(c.Signer().Identity())
+		if err != nil {
+			return nil, fmt.Errorf("failed to get identifier: %w", err)
+		}
+
 		// Get the latest nonce for the account, if it exists.
-		acc, err := c.txClient.GetAccount(ctx, c.Signer.Identity(), types.AccountStatusPending)
+		acc, err := c.txClient.GetAccount(ctx, ident, types.AccountStatusPending)
 		if err != nil {
 			return nil, err
 		}
@@ -66,7 +73,7 @@ func (c *Client) newTx(ctx context.Context, data types.Payload, txOpts *clientTy
 	tx.Body.Fee = price
 
 	// sign transaction
-	err = tx.Sign(c.Signer)
+	err = tx.Sign(c.Signer())
 	if err != nil {
 		return nil, fmt.Errorf("failed to sign transaction: %w", err)
 	}

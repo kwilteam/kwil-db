@@ -7,8 +7,8 @@ import (
 	"fmt"
 	"sort"
 
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
-	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )
 
@@ -65,10 +65,10 @@ type indexedTxn struct {
 // enforces block size limits, and applies the maxVotesPerTx limit for voteID transactions.
 // Additionally, it includes the ValidatorVoteBody transaction for unresolved events.
 // The final transaction order is: MempoolProposerTxns, ValidatorVoteBodyTx, Other MempoolTxns (Nonce ordered, stable sorted).
-func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs []*ktypes.Transaction) (finalTxs []*ktypes.Transaction, invalidTxs []*ktypes.Transaction, err error) {
+func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs []*types.Transaction) (finalTxs []*types.Transaction, invalidTxs []*types.Transaction, err error) {
 	// Unmarshal and index the transactions.
 	var okTxns []*indexedTxn
-	invalidTxs = make([]*ktypes.Transaction, 0, len(txs))
+	invalidTxs = make([]*types.Transaction, 0, len(txs))
 	var i int
 
 	for is, tx := range txs {
@@ -126,7 +126,12 @@ func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs []*k
 
 		// Drop transactions from unfunded accounts in gasEnabled mode
 		if !bp.chainCtx.NetworkParameters.DisabledGasCosts {
-			balance, nonce, err := bp.AccountInfo(ctx, readTx, tx.Sender, false)
+			ident, err := auth.GetIdentifier(tx.Signature.Type, tx.Sender)
+			if err != nil {
+				return nil, nil, fmt.Errorf("failed to get identifier: %w", err)
+			}
+
+			balance, nonce, err := bp.AccountInfo(ctx, readTx, ident, false)
 			if err != nil {
 				bp.log.Error("failed to get account info", "error", err)
 				continue
@@ -152,7 +157,7 @@ func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs []*k
 	// Enforce block size limits
 	// Txs order: MempoolProposerTxns, ProposerInjectedTxns, MempoolTxns
 
-	finalTxs = make([]*ktypes.Transaction, 0, len(otherTxns)+len(propTxs)+1)
+	finalTxs = make([]*types.Transaction, 0, len(otherTxns)+len(propTxs)+1)
 	maxTxBytes := bp.chainCtx.NetworkParameters.MaxBlockSize
 
 	for _, tx := range propTxs {
@@ -164,7 +169,7 @@ func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs []*k
 		finalTxs = append(finalTxs, tx.Transaction)
 	}
 
-	var voteBodyTx *ktypes.Transaction // TODO: check proposerNonce value again
+	var voteBodyTx *types.Transaction // TODO: check proposerNonce value again
 	voteBodyTx, err = bp.prepareValidatorVoteBodyTx(ctx, int64(proposerNonce), maxTxBytes)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to prepare validator vote body transaction: %w", err)
@@ -206,14 +211,19 @@ func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs []*k
 // The number of events to be included in a single transaction is limited either by MaxVotesPerTx or the maxTxSize
 // whichever is reached first. The estimated fee for validatorVOteBodies transaction is directly proportional to
 // the size of the event body. The transaction is signed by the leader and returned.
-func (bp *BlockProcessor) prepareValidatorVoteBodyTx(ctx context.Context, nonce int64, maxTxSize int64) (*ktypes.Transaction, error) {
+func (bp *BlockProcessor) prepareValidatorVoteBodyTx(ctx context.Context, nonce int64, maxTxSize int64) (*types.Transaction, error) {
 	readTx, err := bp.db.BeginReadTx(ctx)
 	if err != nil {
 		return nil, err
 	}
 	defer readTx.Rollback(ctx)
 
-	bal, n, err := bp.AccountInfo(ctx, readTx, bp.signer.Identity(), false)
+	ident, err := auth.GetIdentifier(bp.signer.AuthType(), bp.signer.Identity())
+	if err != nil {
+		return nil, err
+	}
+
+	bal, n, err := bp.AccountInfo(ctx, readTx, ident, false)
 	if err != nil {
 		return nil, err
 	}
@@ -353,7 +363,7 @@ func (bp *BlockProcessor) BroadcastVoteIDTx(ctx context.Context, db sql.DB) erro
 	return bp.events.MarkBroadcasted(ctx, ids)
 }
 
-func (bp *BlockProcessor) PrepareValidatorVoteIDTx(ctx context.Context, db sql.DB) (*ktypes.Transaction, []*types.UUID, error) {
+func (bp *BlockProcessor) PrepareValidatorVoteIDTx(ctx context.Context, db sql.DB) (*types.Transaction, []*types.UUID, error) {
 	readTx, err := bp.db.BeginReadTx(ctx)
 	if err != nil {
 		bp.log.Error("Failed to begin read transaction while preparing voteID Tx", "error", err)
@@ -400,7 +410,12 @@ func (bp *BlockProcessor) PrepareValidatorVoteIDTx(ctx context.Context, db sql.D
 		ids = ids[:bp.chainCtx.NetworkParameters.MaxVotesPerTx]
 	}
 
-	bal, nonce, err := bp.AccountInfo(ctx, readTx, bp.signer.Identity(), true)
+	ident, err := auth.GetIdentifier(bp.signer.AuthType(), bp.signer.Identity())
+	if err != nil {
+		return nil, nil, err
+	}
+
+	bal, nonce, err := bp.AccountInfo(ctx, readTx, ident, true)
 	if err != nil {
 		return nil, nil, err
 	}

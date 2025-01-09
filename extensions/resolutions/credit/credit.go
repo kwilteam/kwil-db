@@ -31,7 +31,7 @@ type AccountCreditResolution struct {
 	// Account is the account to be credited.
 	// This can be an Ethereum address (decoded from hex), a validator ed25519 public key,
 	// or any other custom account identifier implemented in an auth extension.
-	Account []byte
+	Account string
 	// Amount is the amount to be credited to the account.
 	// It uses a big.Int to allow for arbitrary precision, and to allow for uint256 values,
 	// which are commonly used in token contracts on Ethereum.

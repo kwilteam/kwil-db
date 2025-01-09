@@ -340,7 +340,7 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 	// Since it is a map, we need to order it for deterministic results.
 	if !block.ChainContext.NetworkParameters.DisabledGasCosts {
 		for _, kv := range order.OrderMap(credits) {
-			err = r.Accounts.Credit(ctx, db, []byte(kv.Key), kv.Value)
+			err = r.Accounts.Credit(ctx, db, kv.Key, kv.Value)
 			if err != nil {
 				return err
 			}
@@ -455,7 +455,7 @@ func (r *TxApp) checkAndSpend(ctx *common.TxContext, tx *types.Transaction, pric
 	}
 
 	// Get account info
-	account, err := r.Accounts.GetAccount(ctx.Ctx, dbTx, tx.Sender)
+	account, err := r.Accounts.GetAccount(ctx.Ctx, dbTx, ctx.Caller)
 	if err == nil {
 		r.service.Logger.Info("account info", "account", tx.Sender, "balance", account.Balance, "nonce", account.Nonce)
 	}
@@ -464,15 +464,15 @@ func (r *TxApp) checkAndSpend(ctx *common.TxContext, tx *types.Transaction, pric
 	if tx.Body.Fee.Cmp(amt) < 0 {
 		// If the transaction does not consent to spending required tokens for the transaction execution,
 		// spend the approved tx fee and terminate the transaction
-		err = r.Accounts.Spend(ctx.Ctx, dbTx, tx.Sender, tx.Body.Fee, int64(tx.Body.Nonce))
+		err = r.Accounts.Spend(ctx.Ctx, dbTx, ctx.Caller, tx.Body.Fee, int64(tx.Body.Nonce))
 		if errors.Is(err, accounts.ErrInsufficientFunds) {
 			// spend as much as possible
-			account, err := r.Accounts.GetAccount(ctx.Ctx, dbTx, tx.Sender)
+			account, err := r.Accounts.GetAccount(ctx.Ctx, dbTx, ctx.Caller)
 			if err != nil { // account will just be empty if not found
 				return nil, types.CodeUnknownError, err
 			}
 
-			err2 := r.Accounts.Spend(ctx.Ctx, dbTx, tx.Sender, account.Balance, int64(tx.Body.Nonce))
+			err2 := r.Accounts.Spend(ctx.Ctx, dbTx, ctx.Caller, account.Balance, int64(tx.Body.Nonce))
 			if err2 != nil {
 				if errors.Is(err2, accounts.ErrAccountNotFound) {
 					return nil, types.CodeInsufficientBalance, errors.New("account has zero balance")
@@ -494,15 +494,15 @@ func (r *TxApp) checkAndSpend(ctx *common.TxContext, tx *types.Transaction, pric
 	}
 
 	// spend the tokens
-	err = r.Accounts.Spend(ctx.Ctx, dbTx, tx.Sender, amt, int64(tx.Body.Nonce))
+	err = r.Accounts.Spend(ctx.Ctx, dbTx, ctx.Caller, amt, int64(tx.Body.Nonce))
 	if errors.Is(err, accounts.ErrInsufficientFunds) {
 		// spend as much as possible
-		account, err := r.Accounts.GetAccount(ctx.Ctx, dbTx, tx.Sender)
+		account, err := r.Accounts.GetAccount(ctx.Ctx, dbTx, ctx.Caller)
 		if err != nil {
 			return nil, types.CodeUnknownError, err
 		}
 
-		err2 := r.Accounts.Spend(ctx.Ctx, dbTx, tx.Sender, account.Balance, int64(tx.Body.Nonce))
+		err2 := r.Accounts.Spend(ctx.Ctx, dbTx, ctx.Caller, account.Balance, int64(tx.Body.Nonce))
 		if err2 != nil {
 			return nil, types.CodeUnknownError, err2
 		}
@@ -532,7 +532,7 @@ func (r *TxApp) ApplyMempool(ctx *common.TxContext, db sql.DB, tx *types.Transac
 
 // AccountInfo gets account info from either the mempool or the account store.
 // It takes a flag to indicate whether it should check the mempool first.
-func (r *TxApp) AccountInfo(ctx context.Context, db sql.DB, acctID []byte, getUnconfirmed bool) (balance *big.Int, nonce int64, err error) {
+func (r *TxApp) AccountInfo(ctx context.Context, db sql.DB, acctID string, getUnconfirmed bool) (balance *big.Int, nonce int64, err error) {
 	var a *types.Account
 	if getUnconfirmed {
 		a, err = r.mempool.accountInfoSafe(ctx, db, acctID)
