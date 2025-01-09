@@ -1,0 +1,5 @@
+networks:
+  {{ .Network }}:
+    external: true
+
+services:

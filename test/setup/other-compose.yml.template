@@ -1,0 +1,10 @@
+# this is not a full docker compose. It is used to add other arbitrary containers as part of a network.
+  {{ .ServiceName }}:
+    {{ if .UserID }}user: "{{ .UserID }}:{{ .GroupID }}"{{ end }}
+    image: {{ .DockerImage }}
+    {{ if .ExposedPort }}ports:
+      - "{{ .ExposedPort }}:{{ .InternalPort }}" {{ end }}
+    networks:
+      - {{ .Network }}
+    {{ if .Command }}command: |
+      {{ .Command }}{{ end }}

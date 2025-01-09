@@ -3,9 +3,15 @@ package acceptance_test
 import (
 	"context"
 	"flag"
+	"math/big"
+	"strings"
 	"testing"
+	"time"
 
 	"github.com/kwilteam/kwil-db/test/acceptance"
+	"github.com/kwilteam/kwil-db/test/specifications"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
@@ -31,87 +37,87 @@ func TestLocalDevSetup(t *testing.T) {
 	helper.WaitUntilInterrupt()
 }
 
-// func TestKwildTransferAcceptance(t *testing.T) {
-// 	if testing.Short() {
-// 		t.Skip()
-// 	}
+func TestKwildTransferAcceptance(t *testing.T) {
+	if testing.Short() {
+		t.Skip()
+	}
 
-// 	if *parallelMode {
-// 		t.Parallel()
-// 	}
+	if *parallelMode {
+		t.Parallel()
+	}
 
-// 	ctx := context.Background()
-// 	testDrivers := strings.Split(*drivers, ",")
-// 	for _, driverType := range testDrivers {
-// 		// NOTE: those tests should not be run concurrently
-// 		t.Run(driverType+"_driver", func(t *testing.T) {
-// 			// setup for each driver
-// 			helper := acceptance.NewActHelper(t)
-// 			cfg := helper.LoadConfig()
-// 			cfg.GasEnabled = true
-// 			if !*remote {
-// 				helper.Setup(ctx)
-// 			}
-// 			// Ensure that the fee for a transfer transaction is as expected.
-// 			var transferPrice = big.NewInt(210_000)
-// 			senderIdentity := helper.GetConfig().CreatorIdent()
-// 			receiverIdentity := helper.GetConfig().VisitorIdent()
-// 			t.Log("creator private key: ", helper.GetConfig().CreatorRawPk)
+	ctx := context.Background()
+	testDrivers := strings.Split(*drivers, ",")
+	for _, driverType := range testDrivers {
+		// NOTE: those tests should not be run concurrently
+		t.Run(driverType+"_driver", func(t *testing.T) {
+			// setup for each driver
+			helper := acceptance.NewActHelper(t)
+			cfg := helper.LoadConfig()
+			cfg.GasEnabled = true
+			if !*remote {
+				helper.Setup(ctx)
+			}
+			// Ensure that the fee for a transfer transaction is as expected.
+			var transferPrice = big.NewInt(210_000)
+			senderIdentity := helper.GetConfig().CreatorIdent()
+			receiverIdentity := helper.GetConfig().VisitorIdent()
+			t.Log("creator private key: ", helper.GetConfig().CreatorRawPk)
 
-// 			// =================
+			// =================
 
-// 			// Wait for Genesis allocs to get credited at the end of 1st block, before issuing any transactions.
-// 			time.Sleep(2 * time.Second)
+			// Wait for Genesis allocs to get credited at the end of 1st block, before issuing any transactions.
+			time.Sleep(2 * time.Second)
 
-// 			senderDriver := helper.GetDriver(driverType, "creator")
-// 			sender := specifications.TransferAmountDsl(senderDriver)
+			senderDriver := helper.GetDriver(driverType, "creator")
+			sender := specifications.TransferAmountDsl(senderDriver)
 
-// 			receiverDriver := helper.GetDriver(driverType, "visitor")
-// 			receiver := specifications.TransferAmountDsl(receiverDriver)
+			receiverDriver := helper.GetDriver(driverType, "visitor")
+			receiver := specifications.TransferAmountDsl(receiverDriver)
 
-// 			bal0Sender, err := sender.AccountBalance(ctx, senderIdentity)
-// 			assert.NoError(t, err)
-// 			bal0Receiver, err := sender.AccountBalance(ctx, receiverIdentity)
-// 			assert.NoError(t, err)
+			bal0Sender, err := sender.AccountBalance(ctx, senderIdentity)
+			assert.NoError(t, err)
+			bal0Receiver, err := sender.AccountBalance(ctx, receiverIdentity)
+			assert.NoError(t, err)
 
-// 			// An unfunded account can't send (should check balance first)
-// 			amt := big.NewInt(0).Add(transferPrice, transferPrice) // 2 x fee -- enough to ensure they can send back
-// 			_, err = receiver.TransferAmt(ctx, senderIdentity, amt)
-// 			require.Error(t, err, "should have failed to send")
+			// An unfunded account can't send (should check balance first)
+			amt := big.NewInt(0).Add(transferPrice, transferPrice) // 2 x fee -- enough to ensure they can send back
+			_, err = receiver.TransferAmt(ctx, senderIdentity, amt)
+			require.Error(t, err, "should have failed to send")
 
-// 			// When I transfer to an account
-// 			txHash, err := sender.TransferAmt(ctx, receiverIdentity, amt)
-// 			require.NoError(t, err, "failed to send transfer tx")
+			// When I transfer to an account
+			txHash, err := sender.TransferAmt(ctx, receiverIdentity, amt)
+			require.NoError(t, err, "failed to send transfer tx")
 
-// 			// Then I expect success
-// 			specifications.ExpectTxSuccess(t, sender, ctx, txHash)
+			// Then I expect success
+			specifications.ExpectTxSuccess(t, sender, ctx, txHash)
 
-// 			gotBal, err := sender.AccountBalance(ctx, senderIdentity)
-// 			assert.NoError(t, err)
+			gotBal, err := sender.AccountBalance(ctx, senderIdentity)
+			assert.NoError(t, err)
 
-// 			// Sender balance should be reduced by amt+fees
-// 			expectSpent := big.NewInt(0).Add(amt, transferPrice)
-// 			expectBal := big.NewInt(0).Sub(bal0Sender, expectSpent)
-// 			assert.EqualValues(t, expectBal, gotBal)
+			// Sender balance should be reduced by amt+fees
+			expectSpent := big.NewInt(0).Add(amt, transferPrice)
+			expectBal := big.NewInt(0).Sub(bal0Sender, expectSpent)
+			assert.EqualValues(t, expectBal, gotBal)
 
-// 			// The receiver balance should be increased by the amount sent
-// 			gotBal, err = sender.AccountBalance(ctx, receiverIdentity)
-// 			assert.NoError(t, err)
-// 			expectBal = big.NewInt(0).Add(bal0Receiver, amt)
-// 			assert.EqualValues(t, expectBal, gotBal)
+			// The receiver balance should be increased by the amount sent
+			gotBal, err = sender.AccountBalance(ctx, receiverIdentity)
+			assert.NoError(t, err)
+			expectBal = big.NewInt(0).Add(bal0Receiver, amt)
+			assert.EqualValues(t, expectBal, gotBal)
 
-// 			// Receiver should be able to send back
-// 			amt = big.NewInt(0).Set(transferPrice) // should leave us at exactly zero
-// 			txHash, err = receiver.TransferAmt(ctx, senderIdentity, amt)
-// 			require.NoError(t, err, "failed to send transfer tx")
-// 			specifications.ExpectTxSuccess(t, sender, ctx, txHash)
-// 			gotBal, err = receiver.AccountBalance(ctx, receiverIdentity)
-// 			assert.NoError(t, err)
-// 			expectBal = big.NewInt(0)
-// 			assert.EqualValues(t, expectBal, gotBal)
-// 		})
-// 	}
-// }
+			// Receiver should be able to send back
+			amt = big.NewInt(0).Set(transferPrice) // should leave us at exactly zero
+			txHash, err = receiver.TransferAmt(ctx, senderIdentity, amt)
+			require.NoError(t, err, "failed to send transfer tx")
+			specifications.ExpectTxSuccess(t, sender, ctx, txHash)
+			gotBal, err = receiver.AccountBalance(ctx, receiverIdentity)
+			assert.NoError(t, err)
+			expectBal = big.NewInt(0)
+			assert.EqualValues(t, expectBal, gotBal)
+		})
+	}
+}
 
 // // TestKwildProcedures runs acceptance tests against a single kwild node,
 // // testing Kuneiforms procedural language.

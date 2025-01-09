@@ -749,13 +749,18 @@ func (n *Node) peers() []peer.ID {
 }
 
 // NewKey generates a new private key from a reader, which should provide random data.
-func NewKey(r io.Reader) crypto.PrivateKey {
+func NewKey(r io.Reader) *crypto.Secp256k1PrivateKey {
 	privKey, _, err := crypto.GenerateSecp256k1Key(r)
 	if err != nil {
 		panic(err)
 	}
 
-	return privKey
+	pk, ok := privKey.(*crypto.Secp256k1PrivateKey)
+	if !ok {
+		panic("invalid private key type")
+	}
+
+	return pk
 }
 
 func newHost(ip string, port uint64, chainID string, privKey crypto.PrivateKey, wl connmgr.ConnectionGater, logger log.Logger) (host.Host, error) {
