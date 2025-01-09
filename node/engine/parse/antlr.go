@@ -380,26 +380,44 @@ func (s *schemaVisitor) VisitIdentifier(ctx *gen.IdentifierContext) any {
 	panic("Identifier should not be visited directly. This is a bug in the parser")
 }
 
+var maxPrecisionOrScale = int64(1000)
+
 func (s *schemaVisitor) VisitType(ctx *gen.TypeContext) any {
 	dt := &types.DataType{
 		Name: s.getIdent(ctx.Identifier()),
 	}
 
 	if ctx.LPAREN() != nil {
-		// there should be 2 digits
-		prec, err := strconv.ParseInt(ctx.DIGITS_(0).GetText(), 10, 64)
+		// there should be 1-2 digits
+		prec, err := strconv.ParseInt(ctx.GetPrecision().GetText(), 10, 64)
 		if err != nil {
 			s.errs.RuleErr(ctx, ErrSyntax, "invalid precision: %s", ctx.DIGITS_(0).GetText())
 			return types.UnknownType
 		}
 
-		scale, err := strconv.ParseInt(ctx.DIGITS_(1).GetText(), 10, 64)
-		if err != nil {
-			s.errs.RuleErr(ctx, ErrSyntax, "invalid scale: %s", ctx.DIGITS_(1).GetText())
+		if prec > maxPrecisionOrScale {
+			s.errs.RuleErr(ctx, ErrSyntax, "precision too large: %d", prec)
 			return types.UnknownType
 		}
 
-		met := [2]uint16{uint16(prec), uint16(scale)}
+		var scale uint16
+		if ctx.GetScale() == nil {
+			scale = 0
+		} else {
+			scaleint64, err := strconv.ParseInt(ctx.GetScale().GetText(), 10, 64)
+			if err != nil {
+				s.errs.RuleErr(ctx, ErrSyntax, "invalid scale: %s", ctx.DIGITS_(1).GetText())
+				return types.UnknownType
+			}
+			if scaleint64 > maxPrecisionOrScale {
+				s.errs.RuleErr(ctx, ErrSyntax, "scale too large: %d", scaleint64)
+				return types.UnknownType
+			}
+
+			scale = uint16(scaleint64)
+		}
+
+		met := [2]uint16{uint16(prec), scale}
 		dt.Metadata = met
 	}
 
