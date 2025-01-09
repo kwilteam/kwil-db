@@ -652,8 +652,7 @@ func Test_SQL(t *testing.T) {
 					id UUID PRIMARY KEY,
 					address TEXT NOT NULL, -- eth address
 					contract_id UUID NOT NULL REFERENCES erc20rw_contracts(id) ON UPDATE CASCADE ON DELETE CASCADE,
-					UNIQUE (address, contract_id),
-					foreign key (address) references deleteme (id)
+					UNIQUE (address, contract_id)
 				);`,
 			},
 			execSQL: `SELECT * FROM erc20rw_signers WHERE contract_id = $contract_id;`,
