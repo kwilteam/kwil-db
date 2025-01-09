@@ -12,7 +12,8 @@ import (
 )
 
 // initializeExtension initializes an extension.
-func initializeExtension(ctx context.Context, svc *common.Service, db sql.DB, i precompiles.Initializer, alias string, metadata map[string]Value) (*namespace, error) {
+func initializeExtension(ctx context.Context, svc *common.Service, db sql.DB, i precompiles.Initializer, alias string,
+	metadata map[string]Value) (*namespace, precompiles.Instance, error) {
 	convertedMetadata := make(map[string]any)
 	for k, v := range metadata {
 		convertedMetadata[k] = v.RawValue()
@@ -20,7 +21,7 @@ func initializeExtension(ctx context.Context, svc *common.Service, db sql.DB, i 
 
 	inst, err := i(ctx, svc, db, alias, convertedMetadata)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// we construct a map of executables
@@ -81,5 +82,5 @@ func initializeExtension(ctx context.Context, svc *common.Service, db sql.DB, i 
 		},
 		namespaceType: namespaceTypeExtension,
 		methods:       methods,
-	}, nil
+	}, inst, nil
 }

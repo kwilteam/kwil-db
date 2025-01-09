@@ -22,9 +22,11 @@ import (
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/node/accounts"
 	"github.com/kwilteam/kwil-db/node/engine/interpreter"
 	"github.com/kwilteam/kwil-db/node/pg"
 	"github.com/kwilteam/kwil-db/node/types/sql"
+	"github.com/kwilteam/kwil-db/node/voting"
 )
 
 // RunSchemaTest runs a SchemaTest.
@@ -167,11 +169,21 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 					logger = log.New(log.WithLevel(log.LevelInfo))
 				}
 
+				accs, err := accounts.InitializeAccountStore(ctx, outerTx, logger)
+				if err != nil {
+					return err
+				}
+
+				votes, err := voting.InitializeVoteStore(ctx, outerTx)
+				if err != nil {
+					return err
+				}
+
 				interp, err := interpreter.NewInterpreter(ctx, outerTx, &common.Service{
 					Logger:      logger,
 					LocalConfig: &config.Config{},
 					Identity:    []byte("node"),
-				})
+				}, accs, votes)
 				if err != nil {
 					return err
 				}

@@ -69,16 +69,18 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	// BlockStore
 	bs := buildBlockStore(d, closers)
 
-	e := buildEngine(d, db)
-
-	// Mempool
-	mp := mempool.New()
-
 	// accounts
 	accounts := buildAccountStore(ctx, d, db)
 
 	// eventstore, votestore
 	es, vs := buildVoteStore(ctx, d, closers) // ev, vs
+
+	// engine
+
+	e := buildEngine(d, db, accounts, vs)
+
+	// Mempool
+	mp := mempool.New()
 
 	// TxAPP
 	txApp := buildTxApp(ctx, d, db, accounts, vs, e)
@@ -475,7 +477,7 @@ func failBuild(err error, msg string) {
 	})
 }
 
-func buildEngine(d *coreDependencies, db *pg.DB) *interpreter.ThreadSafeInterpreter {
+func buildEngine(d *coreDependencies, db *pg.DB, accounts common.Accounts, validators common.Validators) *interpreter.ThreadSafeInterpreter {
 	extensions := precompiles.RegisteredPrecompiles()
 	for name := range extensions {
 		d.logger.Info("registered extension", "name", name)
@@ -487,7 +489,7 @@ func buildEngine(d *coreDependencies, db *pg.DB) *interpreter.ThreadSafeInterpre
 	}
 	defer tx.Rollback(d.ctx)
 
-	interp, err := interpreter.NewInterpreter(d.ctx, tx, d.service("engine"))
+	interp, err := interpreter.NewInterpreter(d.ctx, tx, d.service("engine"), accounts, validators)
 	if err != nil {
 		failBuild(err, "failed to initialize engine")
 	}

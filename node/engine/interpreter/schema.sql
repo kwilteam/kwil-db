@@ -392,6 +392,7 @@ ORDER BY
     table_name, constraint_name,
     1, 2, 3, 4, 5, 6;
 
+
 -- actions is a public view that provides a list of all actions in the database
 CREATE VIEW info.actions AS
 SELECT 

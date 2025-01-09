@@ -68,6 +68,21 @@ func Test_SQL(t *testing.T) {
 			},
 		},
 		{
+			// this is a bug that previously existed where the composite
+			// unique constraint caused an issue when querying views
+			name: "create table with multi-dimensional constraint",
+			execSQL: `CREATE TABLE IF NOT EXISTS erc20rw_contracts (
+				id UUID PRIMARY KEY,
+				chain_id INT8 NOT NULL,
+				address TEXT NOT NULL,
+				nonce INT8 NOT NULL,
+				threshold INT8 NOT NULL,
+				safe_address TEXT NOT NULL,
+				safe_nonce INT8 NOT NULL,
+				unique (chain_id, address)
+		);`,
+		},
+		{
 			name: "create namespace, add table, add record, alter table, select",
 			sql: []string{
 				"CREATE NAMESPACE test;",
@@ -97,6 +112,15 @@ func Test_SQL(t *testing.T) {
 			results: [][]any{
 				{int64(2), int64(2), "World", int64(1)},
 			},
+		},
+		{
+			name: "alter table create composite foreign key",
+			sql: []string{
+				// pretty non-sensical schema, but it tests the logic I want
+				"CREATE TABLE cars (id INT PRIMARY KEY, make TEXT, model TEXT, UNIQUE(make, model));",
+				"CREATE TABLE drivers (id INT PRIMARY KEY, name TEXT, car_make TEXT, car_model TEXT);",
+			},
+			execSQL: `ALTER TABLE drivers ADD CONSTRAINT fk_car FOREIGN KEY (car_make, car_model) REFERENCES cars (make, model);`,
 		},
 		{
 			name: "update and delete",
@@ -603,6 +627,11 @@ func Test_SQL(t *testing.T) {
 			execSQL: `GRANT USE ON main TO test_role;`,
 			err:     engine.ErrCannotBeNamespaced,
 		},
+		{
+			name:    "2d array",
+			execSQL: `SELECT ARRAY[ARRAY[1,2], ARRAY[3,4]];`,
+			err:     engine.ErrArrayDimensionality,
+		},
 	}
 
 	db, err := newTestDB()
@@ -674,7 +703,7 @@ func Test_CreateAndDelete(t *testing.T) {
 		},
 		{
 			name:   "create and drop index",
-			create: "CREATE INDEX idx ON users (name);",
+			create: "CREATE INDEX idx ON users (name, age);",
 			drop:   "DROP INDEX idx;",
 			verify: "SELECT * FROM info.indexes where name = 'idx' AND namespace = 'main';",
 		},
@@ -1922,7 +1951,7 @@ func newTestDB() (*pg.DB, error) {
 // newTestInterp creates a new interpreter for testing purposes.
 // It is seeded with the default tables.
 func newTestInterp(t *testing.T, tx sql.DB, seeds []string) *interpreter.ThreadSafeInterpreter {
-	interp, err := interpreter.NewInterpreter(context.Background(), tx, &common.Service{})
+	interp, err := interpreter.NewInterpreter(context.Background(), tx, &common.Service{}, nil, nil)
 	require.NoError(t, err)
 
 	engCtx := newEngineCtx(defaultCaller)

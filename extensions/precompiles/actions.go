@@ -26,6 +26,10 @@ type Initializer func(ctx context.Context, service *common.Service, db sql.DB, a
 // dataset, and a single dataset can have multiple instances of the
 // same precompile.
 type Instance interface {
+	// OnStart is called when the node starts, or when the extension is
+	// first used. It is called right after Initialize, and before any
+	// other methods are called.
+	OnStart(ctx context.Context, app *common.App) error
 	// OnUse is called when a `USE ... AS ...` statement is executed.
 	// It is only called once per "USE" function, and is called after the
 	// initializer.
@@ -42,6 +46,8 @@ type Instance interface {
 type PrecompileExtension[T any] struct {
 	// Initialize is the function that creates a new instance of the extension.
 	Initialize func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]any) (*T, error)
+	// OnStart is called when the node starts, or when the extension is first used
+	OnStart func(ctx context.Context, app *common.App, t *T) error
 	// OnUse is called when a `USE ... AS ...` statement is executed
 	OnUse func(ctx *common.EngineContext, app *common.App, t *T) error
 	// Methods is a map of method names to method implementations.
@@ -72,6 +78,13 @@ func (p *PrecompileExtension[T]) Export() Initializer {
 		}
 
 		return &ExportedExtension{
+			onStart: func(ctx context.Context, app *common.App) error {
+				if p.OnStart == nil {
+					return nil
+				}
+
+				return p.OnStart(ctx, app, t)
+			},
 			onUse: func(ctx *common.EngineContext, app *common.App) error {
 				if p.OnUse == nil {
 					return nil
@@ -91,8 +104,13 @@ func (p *PrecompileExtension[T]) Export() Initializer {
 
 type ExportedExtension struct {
 	methods []*ExportedMethod
+	onStart func(ctx context.Context, app *common.App) error
 	onUse   func(ctx *common.EngineContext, app *common.App) error
 	onUnuse func(ctx *common.EngineContext, app *common.App) error
+}
+
+func (e *ExportedExtension) OnStart(ctx context.Context, app *common.App) error {
+	return e.onStart(ctx, app)
 }
 
 func (e *ExportedExtension) OnUse(ctx *common.EngineContext, app *common.App) error {

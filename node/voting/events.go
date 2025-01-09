@@ -146,7 +146,7 @@ type EventStore struct {
 // functions that are passed the consensus DB connection.
 func NewResolutionStore(ctx context.Context, eventWriterDB DB) (*EventStore, *VoteStore, error) {
 	// Initialize the vote store with the consensus database connection.
-	vs, err := initializeVoteStore(ctx, eventWriterDB) // doesn't keep the db instance
+	vs, err := InitializeVoteStore(ctx, eventWriterDB) // doesn't keep the db instance
 	if err != nil {
 		return nil, nil, err
 	}

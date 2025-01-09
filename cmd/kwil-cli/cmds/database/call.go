@@ -201,34 +201,39 @@ func GetParamList(ctx context.Context,
 		return nil, errors.New(`action "%s" is ambiguous in namespace "%s"`)
 	}
 
-	var strVal string
+	var strVal []string
 	switch res.Values[0][0].(type) {
 	case nil:
 		return nil, nil // no inputs
-	case string:
-		strVal = res.Values[0][0].(string)
+	case []string:
+		strVal = res.Values[0][0].([]string)
+	case []any:
+		for _, v := range res.Values[0][0].([]any) {
+			strVal = append(strVal, v.(string))
+		}
 	default:
-		return nil, errors.New("unexpected type for action parameters. this is a bug")
+		return nil, fmt.Errorf("unexpected type %T when querying action parameters. this is a bug", res.Values[0][0])
 	}
 
-	p := []struct {
+	type param struct {
 		Name     string `json:"name"`
 		DataType string `json:"data_type"`
-	}{}
-
-	if err := json.Unmarshal([]byte(strVal), &p); err != nil {
-		return nil, err
 	}
 
-	params := make([]ParamList, len(p))
-	for i, param := range p {
-		dt, err := types.ParseDataType(param.DataType)
+	params := make([]ParamList, len(strVal))
+	for i, s := range strVal {
+		var p param
+		if err := json.Unmarshal([]byte(s), &p); err != nil {
+			return nil, err
+		}
+
+		dt, err := types.ParseDataType(p.DataType)
 		if err != nil {
 			return nil, err
 		}
 
 		params[i] = ParamList{
-			Name: param.Name,
+			Name: p.Name,
 			Type: dt,
 		}
 	}

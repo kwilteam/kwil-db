@@ -99,7 +99,7 @@ func init() {
 			KwilType: types.IntArrayType,
 			ZeroValue: func() (Value, error) {
 				return &IntArrayValue{
-					Array: newValidArr([]pgtype.Int8{}),
+					OneDArray: newValidArr([]pgtype.Int8{}),
 				}, nil
 			},
 		},
@@ -107,7 +107,7 @@ func init() {
 			KwilType: types.TextArrayType,
 			ZeroValue: func() (Value, error) {
 				return &TextArrayValue{
-					Array: newValidArr([]pgtype.Text{}),
+					OneDArray: newValidArr([]pgtype.Text{}),
 				}, nil
 			},
 		},
@@ -115,7 +115,7 @@ func init() {
 			KwilType: types.BoolArrayType,
 			ZeroValue: func() (Value, error) {
 				return &BoolArrayValue{
-					Array: newValidArr([]pgtype.Bool{}),
+					OneDArray: newValidArr([]pgtype.Bool{}),
 				}, nil
 			},
 		},
@@ -123,7 +123,7 @@ func init() {
 			KwilType: types.BlobArrayType,
 			ZeroValue: func() (Value, error) {
 				return &BlobArrayValue{
-					Array: newValidArr([]*BlobValue{}),
+					OneDArray: newValidArr([]*BlobValue{}),
 				}, nil
 			},
 		},
@@ -131,7 +131,7 @@ func init() {
 			KwilType: types.DecimalArrayType,
 			ZeroValue: func() (Value, error) {
 				return &DecimalArrayValue{
-					Array: newValidArr([]pgtype.Numeric{}),
+					OneDArray: newValidArr([]pgtype.Numeric{}),
 				}, nil
 			},
 		},
@@ -200,11 +200,13 @@ type ArrayValue interface {
 	Set(i int32, v ScalarValue) error
 }
 
-func newValidArr[T any](a []T) pgtype.Array[T] {
-	return pgtype.Array[T]{
-		Elements: a,
-		Dims:     []pgtype.ArrayDimension{{Length: int32(len(a)), LowerBound: 1}},
-		Valid:    true,
+func newValidArr[T any](a []T) OneDArray[T] {
+	return OneDArray[T]{
+		Array: pgtype.Array[T]{
+			Elements: a,
+			Dims:     []pgtype.ArrayDimension{{Length: int32(len(a)), LowerBound: 1}},
+			Valid:    true,
+		},
 	}
 }
 
@@ -239,7 +241,7 @@ func NewValue(v any) (Value, error) {
 		}
 
 		return &IntArrayValue{
-			Array: newValidArr(pgInts),
+			OneDArray: newValidArr(pgInts),
 		}, nil
 	case []*int64:
 		pgInts := make([]pgtype.Int8, len(v))
@@ -252,7 +254,7 @@ func NewValue(v any) (Value, error) {
 			}
 		}
 		return &IntArrayValue{
-			Array: newValidArr(pgInts),
+			OneDArray: newValidArr(pgInts),
 		}, nil
 	case []int:
 		pgInts := make([]pgtype.Int8, len(v))
@@ -262,7 +264,7 @@ func NewValue(v any) (Value, error) {
 		}
 
 		return &IntArrayValue{
-			Array: newValidArr(pgInts),
+			OneDArray: newValidArr(pgInts),
 		}, nil
 	case []*int:
 		pgInts := make([]pgtype.Int8, len(v))
@@ -275,7 +277,7 @@ func NewValue(v any) (Value, error) {
 			}
 		}
 		return &IntArrayValue{
-			Array: newValidArr(pgInts),
+			OneDArray: newValidArr(pgInts),
 		}, nil
 	case []string:
 		pgTexts := make([]pgtype.Text, len(v))
@@ -285,7 +287,7 @@ func NewValue(v any) (Value, error) {
 		}
 
 		return &TextArrayValue{
-			Array: newValidArr(pgTexts),
+			OneDArray: newValidArr(pgTexts),
 		}, nil
 	case []*string:
 		pgTexts := make([]pgtype.Text, len(v))
@@ -299,7 +301,7 @@ func NewValue(v any) (Value, error) {
 		}
 
 		return &TextArrayValue{
-			Array: newValidArr(pgTexts),
+			OneDArray: newValidArr(pgTexts),
 		}, nil
 	case []bool:
 		pgBools := make([]pgtype.Bool, len(v))
@@ -309,7 +311,7 @@ func NewValue(v any) (Value, error) {
 		}
 
 		return &BoolArrayValue{
-			Array: newValidArr(pgBools),
+			OneDArray: newValidArr(pgBools),
 		}, nil
 	case []*bool:
 		pgBools := make([]pgtype.Bool, len(v))
@@ -323,7 +325,7 @@ func NewValue(v any) (Value, error) {
 		}
 
 		return &BoolArrayValue{
-			Array: newValidArr(pgBools),
+			OneDArray: newValidArr(pgBools),
 		}, nil
 	case [][]byte:
 		pgBlobs := make([]*BlobValue, len(v))
@@ -332,7 +334,7 @@ func NewValue(v any) (Value, error) {
 		}
 
 		return &BlobArrayValue{
-			Array: newValidArr(pgBlobs),
+			OneDArray: newValidArr(pgBlobs),
 		}, nil
 	case []*[]byte:
 		pgBlobs := make([]*BlobValue, len(v))
@@ -345,7 +347,7 @@ func NewValue(v any) (Value, error) {
 		}
 
 		return &BlobArrayValue{
-			Array: newValidArr(pgBlobs),
+			OneDArray: newValidArr(pgBlobs),
 		}, nil
 	case []*decimal.Decimal:
 		pgDecs := make([]pgtype.Numeric, len(v))
@@ -354,7 +356,7 @@ func NewValue(v any) (Value, error) {
 		}
 
 		return &DecimalArrayValue{
-			Array: newValidArr(pgDecs),
+			OneDArray: newValidArr(pgDecs),
 		}, nil
 	case []*types.UUID:
 		pgUUIDs := make([]pgtype.UUID, len(v))
@@ -368,7 +370,7 @@ func NewValue(v any) (Value, error) {
 		}
 
 		return &UuidArrayValue{
-			Array: newValidArr(pgUUIDs),
+			OneDArray: newValidArr(pgUUIDs),
 		}, nil
 	case nil:
 		return &TextValue{
@@ -564,10 +566,8 @@ func (i *IntValue) Array(v ...ScalarValue) (ArrayValue, error) {
 		}
 	}
 
-	arr := newValidArr(pgtArr)
-
 	return &IntArrayValue{
-		Array: arr,
+		OneDArray: newValidArr(pgtArr),
 	}, nil
 }
 
@@ -644,26 +644,34 @@ func newNull(t *types.DataType) Value {
 		return newDec(nil)
 	case *types.IntArrayType:
 		return &IntArrayValue{
-			Array: pgtype.Array[pgtype.Int8]{Valid: false},
+			OneDArray: newNullArray[pgtype.Int8](),
 		}
 	case *types.TextArrayType:
 		return &TextArrayValue{
-			Array: pgtype.Array[pgtype.Text]{Valid: false},
+			OneDArray: newNullArray[pgtype.Text](),
 		}
 	case *types.BoolArrayType:
 		return &BoolArrayValue{
-			Array: pgtype.Array[pgtype.Bool]{Valid: false},
+			OneDArray: newNullArray[pgtype.Bool](),
 		}
 	case *types.BlobArrayType:
 		return &BlobArrayValue{
-			Array: pgtype.Array[*BlobValue]{Valid: false},
+			OneDArray: newNullArray[*BlobValue](),
 		}
 	case *types.UUIDArrayType:
 		return &UuidArrayValue{
-			Array: pgtype.Array[pgtype.UUID]{Valid: false},
+			OneDArray: newNullArray[pgtype.UUID](),
 		}
 	default:
 		panic(fmt.Sprintf("tried to create null with unexpected type %s", t.Name))
+	}
+}
+
+func newNullArray[T any]() OneDArray[T] {
+	return OneDArray[T]{
+		Array: pgtype.Array[T]{
+			Valid: false,
+		},
 	}
 }
 
@@ -758,7 +766,7 @@ func (s *TextValue) Array(v ...ScalarValue) (ArrayValue, error) {
 	arr := newValidArr(pgtArr)
 
 	return &TextArrayValue{
-		Array: arr,
+		OneDArray: arr,
 	}, nil
 }
 
@@ -902,7 +910,7 @@ func (b *BoolValue) Array(v ...ScalarValue) (ArrayValue, error) {
 	arr := newValidArr(pgtArr)
 
 	return &BoolArrayValue{
-		Array: arr,
+		OneDArray: arr,
 	}, nil
 }
 
@@ -1007,7 +1015,7 @@ func (b *BlobValue) Array(v ...ScalarValue) (ArrayValue, error) {
 	arr := newValidArr(pgtArr)
 
 	return &BlobArrayValue{
-		Array: arr,
+		OneDArray: arr,
 	}, nil
 }
 
@@ -1137,7 +1145,7 @@ func (u *UUIDValue) Array(v ...ScalarValue) (ArrayValue, error) {
 	arr := newValidArr(pgtArr)
 
 	return &UuidArrayValue{
-		Array: arr,
+		OneDArray: arr,
 	}, nil
 }
 
@@ -1377,10 +1385,8 @@ func (d *DecimalValue) Array(v ...ScalarValue) (ArrayValue, error) {
 		}
 	}
 
-	arr := newValidArr(pgtArr)
-
 	return &DecimalArrayValue{
-		Array: arr,
+		OneDArray: newValidArr(pgtArr),
 	}, nil
 }
 
@@ -1448,12 +1454,26 @@ func newIntArr(v []*int64) *IntArrayValue {
 	}
 
 	return &IntArrayValue{
-		Array: newValidArr(pgInts),
+		OneDArray: newValidArr(pgInts),
 	}
 }
 
+// OneDArray array intercepts the pgtype SetDimensions method to ensure that all arrays we scan are
+// 1D arrays. This is because we do not support multi-dimensional arrays.
+type OneDArray[T any] struct {
+	pgtype.Array[T]
+}
+
+func (a *OneDArray[T]) SetDimensions(dims []pgtype.ArrayDimension) error {
+	if len(dims) != 1 {
+		return fmt.Errorf("%w: expected 1 dimension, got %d", engine.ErrArrayDimensionality, len(dims))
+	}
+
+	return a.Array.SetDimensions(dims)
+}
+
 type IntArrayValue struct {
-	pgtype.Array[pgtype.Int8]
+	OneDArray[pgtype.Int8]
 }
 
 func (a *IntArrayValue) Null() bool {
@@ -1581,12 +1601,12 @@ func newTextArrayValue(s []*string) *TextArrayValue {
 	}
 
 	return &TextArrayValue{
-		Array: newValidArr(vals),
+		OneDArray: newValidArr(vals),
 	}
 }
 
 type TextArrayValue struct {
-	pgtype.Array[pgtype.Text]
+	OneDArray[pgtype.Text]
 }
 
 func (a *TextArrayValue) Null() bool {
@@ -1736,12 +1756,12 @@ func newBoolArrayValue(b []*bool) *BoolArrayValue {
 	}
 
 	return &BoolArrayValue{
-		Array: newValidArr(vals),
+		OneDArray: newValidArr(vals),
 	}
 }
 
 type BoolArrayValue struct {
-	pgtype.Array[pgtype.Bool]
+	OneDArray[pgtype.Bool]
 }
 
 func (a *BoolArrayValue) Null() bool {
@@ -1819,7 +1839,9 @@ func (a *BoolArrayValue) Cast(t *types.DataType) (Value, error) {
 
 func newNullDecArr() *DecimalArrayValue {
 	return &DecimalArrayValue{
-		Array: pgtype.Array[pgtype.Numeric]{Valid: false},
+		OneDArray: OneDArray[pgtype.Numeric]{
+			Array: pgtype.Array[pgtype.Numeric]{Valid: false},
+		},
 	}
 }
 
@@ -1834,12 +1856,12 @@ func newDecimalArrayValue(d []*decimal.Decimal) *DecimalArrayValue {
 	}
 
 	return &DecimalArrayValue{
-		Array: newValidArr(vals),
+		OneDArray: newValidArr(vals),
 	}
 }
 
 type DecimalArrayValue struct {
-	pgtype.Array[pgtype.Numeric]
+	OneDArray[pgtype.Numeric]
 }
 
 func (a *DecimalArrayValue) Null() bool {
@@ -2022,14 +2044,14 @@ func newBlobArrayValue(b []*[]byte) *BlobArrayValue {
 	}
 
 	return &BlobArrayValue{
-		Array: newValidArr(vals),
+		OneDArray: newValidArr(vals),
 	}
 }
 
 type BlobArrayValue struct {
 	// we embed BlobValue because unlike other types, there is no native pgtype embedded within
 	// blob value that allows pgx to scan the value into the struct.
-	pgtype.Array[*BlobValue]
+	OneDArray[*BlobValue]
 }
 
 func (a *BlobArrayValue) Null() bool {
@@ -2109,12 +2131,12 @@ func newUUIDArrayValue(u []*types.UUID) *UuidArrayValue {
 	}
 
 	return &UuidArrayValue{
-		Array: newValidArr(vals),
+		OneDArray: newValidArr(vals),
 	}
 }
 
 type UuidArrayValue struct {
-	pgtype.Array[pgtype.UUID]
+	OneDArray[pgtype.UUID]
 }
 
 func (a *UuidArrayValue) Null() bool {
