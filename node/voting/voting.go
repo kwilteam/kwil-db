@@ -250,7 +250,7 @@ func DeleteResolution(ctx context.Context, db sql.TxMaker, id *types.UUID) error
 // fromRow converts a row from the database into a resolutions.Resolution
 // It expects there to be 7 columns in the row, in the following order:
 // id, body, type, expiration, approved_power, voters, voteBodyProposer
-func fromRow(db sql.Executor, row []any) (*resolutions.Resolution, error) {
+func fromRow(ctx context.Context, db sql.Executor, row []any) (*resolutions.Resolution, error) {
 	if len(row) != 7 {
 		return nil, fmt.Errorf("expected 7 columns, got %d", len(row))
 	}
@@ -310,7 +310,7 @@ func fromRow(db sql.Executor, row []any) (*resolutions.Resolution, error) {
 			return nil, fmt.Errorf("failed to decode pubKey from voteBodyProposer: %w", err)
 		}
 
-		proposer, err := getValidator(context.Background(), db, pubKey, keyType)
+		proposer, err := getValidator(ctx, db, pubKey, keyType)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get proposer: %w", err)
 		}
@@ -373,7 +373,7 @@ func GetResolutionInfo(ctx context.Context, db sql.Executor, id *types.UUID) (*r
 		return nil, fmt.Errorf("expected 7 columns, got %d", len(res.Rows[0]))
 	}
 
-	return fromRow(db, res.Rows[0])
+	return fromRow(ctx, db, res.Rows[0])
 }
 
 // GetExpired returns all resolutions with an expiration
@@ -386,7 +386,7 @@ func GetExpired(ctx context.Context, db sql.Executor, blockHeight int64) ([]*res
 
 	ids := make([]*resolutions.Resolution, len(res.Rows))
 	for i, row := range res.Rows {
-		ids[i], err = fromRow(db, row)
+		ids[i], err = fromRow(ctx, db, row)
 		if err != nil {
 			return nil, fmt.Errorf("internal bug: %w", err)
 		}
@@ -413,7 +413,7 @@ func GetResolutionsByThresholdAndType(ctx context.Context, db sql.TxMaker, thres
 
 	results := make([]*resolutions.Resolution, len(res.Rows))
 	for i, row := range res.Rows {
-		results[i], err = fromRow(tx, row)
+		results[i], err = fromRow(ctx, tx, row)
 		if err != nil {
 			return nil, fmt.Errorf("fromRow: %w", err)
 		}
@@ -431,7 +431,7 @@ func GetResolutionsByType(ctx context.Context, db sql.Executor, resType string) 
 
 	results := make([]*resolutions.Resolution, len(res.Rows))
 	for i, row := range res.Rows {
-		results[i], err = fromRow(db, row)
+		results[i], err = fromRow(ctx, db, row)
 		if err != nil {
 			return nil, fmt.Errorf("internal bug: %w", err)
 		}
@@ -652,7 +652,7 @@ func getValidators(ctx context.Context, db sql.Executor) ([]*types.Validator, er
 		return nil, nil
 	}
 
-	if len(res.Rows[0]) != 3 {
+	if len(res.Rows[0]) != 2 {
 		// this should never happen, just for safety
 		return nil, errors.New("invalid number of columns returned. this is an internal bug")
 	}
