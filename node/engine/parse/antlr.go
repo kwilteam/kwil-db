@@ -417,7 +417,7 @@ func (s *schemaVisitor) VisitType(ctx *gen.TypeContext) any {
 			scale = uint16(scaleint64)
 		}
 
-		met := [2]uint16{uint16(prec), uint16(scale)}
+		met := [2]uint16{uint16(prec), scale}
 		dt.Metadata = met
 	}
 
