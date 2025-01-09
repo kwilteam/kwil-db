@@ -8,11 +8,14 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/utils"
 )
+
+var SerializationByteOrder = binary.LittleEndian
 
 type ResultBroadcastTx struct {
 	Code uint32
@@ -370,7 +373,7 @@ func (tb TransactionBody) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	// serialized Payload
-	if err := WriteBytes(cw, tb.Payload); err != nil {
+	if err := WriteBytes(cw, EmptyIfNil(tb.Payload)); err != nil {
 		return cw.Written(), fmt.Errorf("failed to write transaction body payload: %w", err)
 	}
 
@@ -386,7 +389,7 @@ func (tb TransactionBody) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	// Nonce
-	if err := binary.Write(cw, binary.LittleEndian, tb.Nonce); err != nil {
+	if err := binary.Write(cw, SerializationByteOrder, tb.Nonce); err != nil {
 		return cw.Written(), fmt.Errorf("failed to write transaction body nonce: %w", err)
 	}
 
@@ -431,7 +434,7 @@ func (tb *TransactionBody) ReadFrom(r io.Reader) (int64, error) {
 	tb.Fee = b // may be nil
 
 	// Nonce
-	if err := binary.Read(cr, binary.LittleEndian, &tb.Nonce); err != nil {
+	if err := binary.Read(cr, SerializationByteOrder, &tb.Nonce); err != nil {
 		return cr.ReadCount(), fmt.Errorf("failed to read transaction body nonce: %w", err)
 	}
 
@@ -472,7 +475,7 @@ const txVersion uint16 = 0
 
 func (t *Transaction) serialize(w io.Writer) (err error) {
 	// version
-	if err := binary.Write(w, binary.LittleEndian, txVersion); err != nil {
+	if err := binary.Write(w, SerializationByteOrder, txVersion); err != nil {
 		return fmt.Errorf("failed to write transaction version: %w", err)
 	}
 
@@ -481,7 +484,7 @@ func (t *Transaction) serialize(w io.Writer) (err error) {
 	if t.Signature != nil {
 		sigBytes = t.Signature.Bytes()
 	}
-	if err := WriteBytes(w, sigBytes); err != nil {
+	if err := WriteBytes(w, EmptyIfNil(sigBytes)); err != nil {
 		return fmt.Errorf("failed to write transaction signature: %w", err)
 	}
 
@@ -490,7 +493,7 @@ func (t *Transaction) serialize(w io.Writer) (err error) {
 	if t.Body != nil {
 		bodyBytes = t.Body.Bytes()
 	}
-	if err := WriteBytes(w, bodyBytes); err != nil {
+	if err := WriteBytes(w, EmptyIfNil(bodyBytes)); err != nil {
 		return fmt.Errorf("failed to write transaction body: %w", err)
 	}
 
@@ -500,7 +503,7 @@ func (t *Transaction) serialize(w io.Writer) (err error) {
 	}
 
 	// Sender
-	if err := WriteBytes(w, t.Sender); err != nil {
+	if err := WriteBytes(w, EmptyIfNil(t.Sender)); err != nil {
 		return fmt.Errorf("failed to write transaction sender: %w", err)
 	}
 
@@ -512,7 +515,7 @@ func (t *Transaction) deserialize(r io.Reader) (int64, error) {
 
 	// version
 	var ver uint16
-	err := binary.Read(cr, binary.LittleEndian, &ver)
+	err := binary.Read(cr, SerializationByteOrder, &ver)
 	if err != nil {
 		return cr.ReadCount(), fmt.Errorf("failed to read transaction version: %w", err)
 	}
@@ -567,8 +570,25 @@ func (t *Transaction) deserialize(r io.Reader) (int64, error) {
 	return cr.ReadCount(), nil
 }
 
+func NilIfEmpty(b []byte) []byte {
+	if len(b) == 0 {
+		return nil
+	}
+	return b
+}
+
+func EmptyIfNil(b []byte) []byte {
+	if b == nil {
+		return []byte{}
+	}
+	return b
+}
+
 func WriteBytes(w io.Writer, data []byte) error {
-	if err := binary.Write(w, binary.LittleEndian, uint32(len(data))); err != nil {
+	if data == nil {
+		return binary.Write(w, SerializationByteOrder, uint32(math.MaxUint32))
+	}
+	if err := binary.Write(w, SerializationByteOrder, uint32(len(data))); err != nil {
 		return err
 	}
 	_, err := w.Write(data)
@@ -581,12 +601,16 @@ func WriteString(w io.Writer, s string) error {
 
 func ReadBytes(r io.Reader) ([]byte, error) {
 	var length uint32
-	if err := binary.Read(r, binary.LittleEndian, &length); err != nil {
+	if err := binary.Read(r, SerializationByteOrder, &length); err != nil {
 		return nil, err
 	}
 
-	if length == 0 {
+	switch length {
+	case 0:
+		return []byte{}, nil
+	case math.MaxUint32:
 		return nil, nil
+	default:
 	}
 
 	var data []byte
