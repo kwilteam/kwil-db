@@ -323,12 +323,12 @@ func BindPostgresFlags(cmd *cobra.Command) {
 
 // getPostgresFlags returns the postgres flags from the given command.
 func GetPostgresFlags(cmd *cobra.Command) (*pg.ConnConfig, error) {
-	return mergePostgresFlags(defaultPostgresConnConfig(), cmd)
+	return MergePostgresFlags(defaultPostgresConnConfig(), cmd)
 }
 
-// mergePostgresFlags merges the given connection config with the flags from the given command.
+// MergePostgresFlags merges the given connection config with the flags from the given command.
 // It only sets the fields that are set in the flags.
-func mergePostgresFlags(conf *pg.ConnConfig, cmd *cobra.Command) (*pg.ConnConfig, error) {
+func MergePostgresFlags(conf *pg.ConnConfig, cmd *cobra.Command) (*pg.ConnConfig, error) {
 	var err error
 	if cmd.Flags().Changed("dbname") {
 		conf.DBName, err = cmd.Flags().GetString("dbname")

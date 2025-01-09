@@ -176,7 +176,17 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 	var err error
 	host := options.host
 	if host == nil {
-		host, err = newHost(cfg.P2P.IP, cfg.P2P.Port, cfg.ChainID, cfg.PrivKey, cg, logger)
+		ip, portStr, err := net.SplitHostPort(cfg.P2P.ListenAddress)
+		if err != nil {
+			return nil, fmt.Errorf("invalid P2P listen address: %w", err)
+		}
+
+		port, err := strconv.ParseUint(portStr, 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("invalid P2P listen port: %s, %w", portStr, err)
+		}
+
+		host, err = newHost(ip, port, cfg.ChainID, cfg.PrivKey, cg, logger)
 		if err != nil {
 			return nil, fmt.Errorf("cannot create host: %w", err)
 		}

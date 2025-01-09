@@ -73,3 +73,7 @@ func MigrationDir(rootDir string) string {
 func GenesisFilePath(rootDir string) string {
 	return filepath.Join(rootDir, genesisFileName)
 }
+
+func NodeKeyFilePath(rootDir string) string {
+	return filepath.Join(rootDir, NodeKeyFileName)
+}

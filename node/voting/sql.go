@@ -5,6 +5,10 @@ package voting
 */
 
 /*
+NOTE: Voter pubkey(name) in the voting table is the embedded pubkey with its type using the encodePubkey functions.
+So the pubkeys read from the postgres database should be decoded using decodePubKey into the pubkey bytes and keytype
+before consuming.
+
 Final schema after all the upgrades:
 resolutions:
 - id: uuid
@@ -128,6 +132,12 @@ const (
 	// getVoterPower is the sql statement used to get the power and name of a voter
 	getVoterPower = `SELECT power FROM ` + votingSchemaName + `.voters WHERE id = $1;` //nolint
 
+	// allVoters is the sql statement used to get all voters in the voters table
+	allVoters = `SELECT name, power FROM ` + votingSchemaName + `.voters;`
+
+	// getVoter is the sql statement used to get a voter in the voters table
+	getVoter = `SELECT name, power FROM ` + votingSchemaName + `.voters WHERE id = $1;`
+
 	// addVote adds a vote for a resolution
 	addVote = `INSERT INTO ` + votingSchemaName + `.votes (resolution_id, voter_id) VALUES ($1, $2)
 		ON CONFLICT(resolution_id, voter_id) DO NOTHING;`
@@ -219,7 +229,6 @@ const (
 	GROUP BY r.id, r.body, t.name, r.expiration, r.vote_body_proposer
 	ORDER BY r.id;` // order by not necessary since only one result?
 
-	allVoters                      = `SELECT name, power FROM ` + votingSchemaName + `.voters;`
 	getResolutionByTypeAndProposer = `SELECT r.id FROM ` + votingSchemaName + `.resolutions AS r
 	INNER JOIN ` + votingSchemaName + `.resolution_types AS t ON r.type = t.id
 	WHERE t.name = $1 AND vote_body_proposer = $2

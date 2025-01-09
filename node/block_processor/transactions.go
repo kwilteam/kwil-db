@@ -374,7 +374,7 @@ func (bp *BlockProcessor) PrepareValidatorVoteIDTx(ctx context.Context, db sql.D
 	// Only validators can issue voteID transactions not the leader or sentry nodes
 
 	// check if the node is a leader
-	if bytes.Equal(bp.signer.Identity(), bp.genesisParams.Leader) {
+	if bytes.Equal(bp.signer.Identity(), bp.leader.Bytes()) {
 		bp.log.Debug("Leader node is not allowed to propose voteID transactions")
 		return nil, nil, nil
 	}

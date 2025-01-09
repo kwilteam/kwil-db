@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"time"
 
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
 	adminclient "github.com/kwilteam/kwil-db/node/admin"
 	"github.com/kwilteam/kwil-db/node/migrations"
@@ -38,12 +39,12 @@ func (a *AdminClientDriver) TxSuccess(ctx context.Context, txHash types.Hash) er
 	return nil
 }
 
-func (a *AdminClientDriver) ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*types.JoinRequest, error) {
-	return a.Client.JoinStatus(ctx, pubKey)
+func (a *AdminClientDriver) ValidatorJoinStatus(ctx context.Context, pubKey []byte, pubKeyType crypto.KeyType) (*types.JoinRequest, error) {
+	return a.Client.JoinStatus(ctx, pubKey, pubKeyType)
 }
 
-func (a *AdminClientDriver) ValidatorNodeApprove(ctx context.Context, joinerPubKey []byte) (types.Hash, error) {
-	return a.Client.Approve(ctx, joinerPubKey)
+func (a *AdminClientDriver) ValidatorNodeApprove(ctx context.Context, joinerPubKey []byte, pubKeyType crypto.KeyType) (types.Hash, error) {
+	return a.Client.Approve(ctx, joinerPubKey, pubKeyType)
 }
 
 func (a *AdminClientDriver) ValidatorNodeJoin(ctx context.Context) (types.Hash, error) {
@@ -54,8 +55,8 @@ func (a *AdminClientDriver) ValidatorNodeLeave(ctx context.Context) (types.Hash,
 	return a.Client.Leave(ctx)
 }
 
-func (a *AdminClientDriver) ValidatorNodeRemove(ctx context.Context, target []byte) (types.Hash, error) {
-	return a.Client.Remove(ctx, target)
+func (a *AdminClientDriver) ValidatorNodeRemove(ctx context.Context, target []byte, pubKeyType crypto.KeyType) (types.Hash, error) {
+	return a.Client.Remove(ctx, target, pubKeyType)
 }
 
 func (a *AdminClientDriver) ValidatorsList(ctx context.Context) ([]*types.Validator, error) {

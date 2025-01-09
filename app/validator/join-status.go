@@ -3,7 +3,6 @@ package validator
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -13,13 +12,14 @@ import (
 
 	"github.com/kwilteam/kwil-db/app/rpc"
 	"github.com/kwilteam/kwil-db/app/shared/display"
+	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
 var (
 	joinStatusLong    = `Query the status of a pending validator join request.`
-	joinStatusExample = `# Query the status of a pending validator join request, by hex public key
+	joinStatusExample = `# Query the status of a pending validator join request, by providing the validator info in format <hexPubkey#pubkeytype>
 kwil-admin validators join-status 6ecaca8e9394c939a858c2c7b47acb1db26a96d7ab38bd702fa3820c5034e9d0`
 )
 
@@ -38,12 +38,12 @@ func joinStatusCmd() *cobra.Command {
 				return display.PrintErr(cmd, err)
 			}
 
-			pubkeyBts, err := hex.DecodeString(args[0])
+			pubkeyBts, pubKeyType, err := config.DecodePubKeyAndType(args[0])
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
 
-			data, err := clt.JoinStatus(ctx, pubkeyBts)
+			data, err := clt.JoinStatus(ctx, pubkeyBts, pubKeyType)
 			if err != nil {
 				if errors.Is(err, client.ErrNotFound) {
 					return display.PrintErr(cmd, errors.New("no active join request for that validator"))

@@ -5,6 +5,7 @@ import (
 	"crypto/ecdsa"
 	"math/big"
 
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
@@ -80,21 +81,21 @@ type InfoDsl interface {
 // current validator set and active join requests.
 type ValidatorStatusDsl interface {
 	TxQueryDsl
-	ValidatorJoinStatus(ctx context.Context, pubKey []byte) (*types.JoinRequest, error)
+	ValidatorJoinStatus(ctx context.Context, pubKey []byte, pubKeyType crypto.KeyType) (*types.JoinRequest, error)
 	ValidatorsList(ctx context.Context) ([]*types.Validator, error)
 }
 
 // ValidatorRemoveDsl is the dsl for the validator remove procedure.
 type ValidatorRemoveDsl interface {
 	ValidatorStatusDsl
-	ValidatorNodeRemove(ctx context.Context, target []byte) (types.Hash, error)
+	ValidatorNodeRemove(ctx context.Context, target []byte, pubKeyType crypto.KeyType) (types.Hash, error)
 }
 
 // ValidatorOpsDsl is a DSL for validator set updates specification such as
 // join, leave, approve, etc. TODO: split this up?
 type ValidatorOpsDsl interface {
 	ValidatorStatusDsl
-	ValidatorNodeApprove(ctx context.Context, joinerPubKey []byte) (types.Hash, error)
+	ValidatorNodeApprove(ctx context.Context, joinerPubKey []byte, pubKeyType crypto.KeyType) (types.Hash, error)
 	ValidatorNodeJoin(ctx context.Context) (types.Hash, error)
 	ValidatorNodeLeave(ctx context.Context) (types.Hash, error)
 }

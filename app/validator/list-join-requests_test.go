@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/stretchr/testify/require"
 )
@@ -20,6 +21,7 @@ func Test_respJoinList_MarshalJSON(t *testing.T) {
 				Joins: []*types.JoinRequest{
 					{
 						Candidate: types.HexBytes{0x12, 0x34},
+						KeyType:   crypto.KeyTypeEd25519,
 						Power:     100,
 						ExpiresAt: 900,
 						Board:     []types.HexBytes{{0xAB, 0xCD}},
@@ -27,6 +29,7 @@ func Test_respJoinList_MarshalJSON(t *testing.T) {
 					},
 					{
 						Candidate: types.HexBytes{0x56, 0x78},
+						KeyType:   crypto.KeyTypeSecp256k1,
 						Power:     200,
 						ExpiresAt: 1000,
 						Board:     []types.HexBytes{{0xEF, 0x12}},
@@ -34,7 +37,7 @@ func Test_respJoinList_MarshalJSON(t *testing.T) {
 					},
 				},
 			},
-			want: `[{"candidate":"1234","power":100,"expires_at":900,"board":["abcd"],"approved":[true]},{"candidate":"5678","expires_at":1000,"power":200,"board":["ef12"],"approved":[false]}]`,
+			want: `[{"candidate":"1234","key_type":1,"power":100,"expires_at":900,"board":["abcd"],"approved":[true]},{"candidate":"5678","key_type":0,"expires_at":1000,"power":200,"board":["ef12"],"approved":[false]}]`,
 		},
 		{
 			name: "empty joins",
@@ -73,6 +76,7 @@ func Test_respJoinList_MarshalText(t *testing.T) {
 				Joins: []*types.JoinRequest{
 					{
 						Candidate: types.HexBytes{0x12, 0x34},
+						KeyType:   crypto.KeyTypeEd25519,
 						Power:     100,
 						ExpiresAt: 1000,
 						Board:     []types.HexBytes{{0xAB}},
@@ -88,6 +92,7 @@ func Test_respJoinList_MarshalText(t *testing.T) {
 				Joins: []*types.JoinRequest{
 					{
 						Candidate: types.HexBytes{0x12, 0x34},
+						KeyType:   crypto.KeyTypeEd25519,
 						Power:     100,
 						ExpiresAt: 1000,
 						Board:     []types.HexBytes{{0xAB}, {0xCD}, {0xEF}},
@@ -95,6 +100,7 @@ func Test_respJoinList_MarshalText(t *testing.T) {
 					},
 					{
 						Candidate: types.HexBytes{0x56, 0x78},
+						KeyType:   crypto.KeyTypeSecp256k1,
 						Power:     200,
 						ExpiresAt: 2000,
 						Board:     []types.HexBytes{{0xAB}, {0xCD}, {0xEF}},

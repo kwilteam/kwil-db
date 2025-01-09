@@ -13,18 +13,30 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	resetLong = `To delete all of a Kwil node's data files, use the ` + "`" + `reset` + "`" + ` command. If the root directory is not specified, the node's default root directory will be used.
+
+WARNING: This command should not be used on production systems. This should only be used to reset disposable test nodes.`
+
+	resetExample = `# Delete all of a Kwil node's data files
+kwild setup reset -r "~/.kwild"`
+)
+
 func ResetCmd() *cobra.Command {
 	var all bool
 
 	cmd := &cobra.Command{
-		Use:   "reset",
-		Short: "Reset the blockchain and the application state",
-		Args:  cobra.NoArgs,
+		Use:     "reset",
+		Short:   "Reset the blockchain and the application state",
+		Long:    resetLong,
+		Example: resetExample,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rootDir, err := bind.RootDir(cmd)
 			if err != nil {
 				return err // the parent command needs to set a persistent flag named "root"
 			}
+
 			rootDir, err = node.ExpandPath(rootDir)
 			if err != nil {
 				return err
@@ -33,7 +45,7 @@ func ResetCmd() *cobra.Command {
 				return fmt.Errorf("root directory %s does not exist", rootDir)
 			}
 
-			pgConf, err := bind.GetPostgresFlags(cmd)
+			pgConf, err := loadPGConfigFromTOML(cmd, rootDir)
 			if err != nil {
 				return err
 			}

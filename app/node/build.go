@@ -18,7 +18,6 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/config"
-	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
@@ -55,8 +54,9 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	valSet := make(map[string]ktypes.Validator)
 	for _, v := range d.genesisCfg.Validators {
 		valSet[hex.EncodeToString(v.PubKey)] = ktypes.Validator{
-			PubKey: v.PubKey,
-			Power:  v.Power,
+			PubKey:     v.PubKey,
+			PubKeyType: v.PubKeyType,
+			Power:      v.Power,
 		}
 	}
 
@@ -405,9 +405,10 @@ func buildMigrator(d *coreDependencies, db *pg.DB, accounts *accounts.Accounts, 
 
 func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB,
 	mempool *mempool.Mempool, bs *store.BlockStore, bp *blockprocessor.BlockProcessor, valSet map[string]ktypes.Validator) *consensus.ConsensusEngine {
-	leaderPubKey, err := crypto.UnmarshalSecp256k1PublicKey(d.genesisCfg.Leader)
+
+	leaderPubKey, err := config.DecodeLeader(d.genesisCfg.Leader)
 	if err != nil {
-		failBuild(err, "failed to parse leader public key")
+		failBuild(err, "failed to decode leader public key")
 	}
 
 	ceCfg := &consensus.Config{

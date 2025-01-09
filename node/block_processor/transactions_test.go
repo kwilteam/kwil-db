@@ -46,17 +46,6 @@ func cloneTx(tx *types.Transaction) *types.Transaction {
 	}
 }
 
-func secp256k1Signer(t *testing.T) *auth.EthPersonalSigner {
-	privKey, _, err := crypto.GenerateSecp256k1Key(nil)
-	require.NoError(t, err)
-
-	privKeyBytes := privKey.Bytes()
-	k, err := crypto.UnmarshalSecp256k1PrivateKey(privKeyBytes)
-	require.NoError(t, err)
-
-	return &auth.EthPersonalSigner{Key: *k}
-}
-
 // genEd25519Key generates a deterministic ed25519 key
 func genEd25519Key(seed []byte) crypto.PrivateKey {
 	// seed must be 32 bytes
@@ -91,10 +80,13 @@ func TestPrepareMempoolTxns(t *testing.T) {
 			DisabledGasCosts: true,
 		},
 	}
+
+	pk, signer := genNodeKeyAndSigner(t)
 	bp := &BlockProcessor{
 		db:       &mockDB{},
 		log:      log.DiscardLogger,
-		signer:   secp256k1Signer(t),
+		signer:   signer,
+		leader:   pk.Public(),
 		chainCtx: chainCtx,
 		txapp:    &mockTxApp{},
 	}
@@ -277,27 +269,40 @@ var (
 	}
 )
 
+func genNodeKeyAndSigner(t *testing.T) (crypto.PrivateKey, auth.Signer) {
+	nodePrivKey, err := crypto.GeneratePrivateKey(crypto.KeyTypeSecp256k1)
+	require.NoError(t, err)
+
+	nodeSigner := auth.GetNodeSigner(nodePrivKey)
+	require.NotNil(t, nodeSigner)
+
+	return nodePrivKey, nodeSigner
+}
+
 func TestPrepareVoteIDTx(t *testing.T) {
-	leader := secp256k1Signer(t)
-	validator := secp256k1Signer(t)
-	sentry := secp256k1Signer(t)
+	leaderPrivKey, leaderSigner := genNodeKeyAndSigner(t)
+	valPriv, valSigner := genNodeKeyAndSigner(t)
+	_, sentrySigner := genNodeKeyAndSigner(t)
 	valSet := []*types.Validator{
 		{
-			PubKey: validator.Identity(),
-			Power:  1,
+			PubKey:     valPriv.Public().Bytes(),
+			PubKeyType: crypto.KeyTypeSecp256k1,
+			Power:      1,
 		},
 		{
-			PubKey: leader.Identity(),
-			Power:  1,
+			PubKey:     leaderPrivKey.Public().Bytes(),
+			PubKeyType: crypto.KeyTypeSecp256k1,
+			Power:      1,
 		},
 	}
 	genCfg := config.DefaultGenesisConfig()
-	genCfg.Leader = leader.Identity()
+	genCfg.Leader = config.EncodePubKeyAndType(leaderPrivKey.Public().Bytes(), leaderPrivKey.Type())
 
 	bp := &BlockProcessor{
 		db:     &mockDB{},
 		log:    log.DiscardLogger,
-		signer: secp256k1Signer(t),
+		signer: leaderSigner,
+		leader: leaderPrivKey.Public(),
 		chainCtx: &common.ChainContext{
 			ChainID: "test",
 			NetworkParameters: &common.NetworkParameters{
@@ -320,9 +325,9 @@ func TestPrepareVoteIDTx(t *testing.T) {
 		{
 			name:   "no voteIDs to broadcast",
 			events: []*types.VotableEvent{}, // no events
-			signer: validator,
+			signer: valSigner,
 			fn: func(ctx context.Context, bp *BlockProcessor, db sql.DB, es *mockEventStore) error {
-				bp.signer = validator
+				bp.signer = valSigner
 				tx, ids, err := bp.PrepareValidatorVoteIDTx(ctx, db)
 				require.NoError(t, err)
 				require.Nil(t, tx)
@@ -333,7 +338,7 @@ func TestPrepareVoteIDTx(t *testing.T) {
 		{
 			name:   "leader not allowed to broadcast voteIDs",
 			events: []*types.VotableEvent{evt1, evt2},
-			signer: leader,
+			signer: leaderSigner,
 			fn: func(ctx context.Context, bp *BlockProcessor, db sql.DB, es *mockEventStore) error {
 				tx, ids, err := bp.PrepareValidatorVoteIDTx(ctx, db)
 				require.NoError(t, err)
@@ -345,7 +350,7 @@ func TestPrepareVoteIDTx(t *testing.T) {
 		{
 			name:   "sentry node not allowed to broadcast voteIDs",
 			events: []*types.VotableEvent{evt1, evt2},
-			signer: sentry,
+			signer: sentrySigner,
 			fn: func(ctx context.Context, bp *BlockProcessor, db sql.DB, es *mockEventStore) error {
 				tx, ids, err := bp.PrepareValidatorVoteIDTx(ctx, db)
 				require.NoError(t, err)
@@ -356,7 +361,7 @@ func TestPrepareVoteIDTx(t *testing.T) {
 		},
 		{
 			name:   "validator broadcasts voteIDs in gasless mode",
-			signer: validator,
+			signer: valSigner,
 			events: []*types.VotableEvent{evt1, evt2},
 			fn: func(ctx context.Context, bp *BlockProcessor, db sql.DB, es *mockEventStore) error {
 				tx, ids, err := bp.PrepareValidatorVoteIDTx(ctx, db)
@@ -369,7 +374,7 @@ func TestPrepareVoteIDTx(t *testing.T) {
 		},
 		{
 			name:   "insufficient gas to broadcast voteIDs",
-			signer: validator,
+			signer: valSigner,
 			events: []*types.VotableEvent{evt1, evt2},
 			fn: func(ctx context.Context, bp *BlockProcessor, db sql.DB, es *mockEventStore) error {
 				bp.chainCtx.NetworkParameters.DisabledGasCosts = false
@@ -389,7 +394,7 @@ func TestPrepareVoteIDTx(t *testing.T) {
 		},
 		{
 			name:   "validator has sufficient gas to broadcast voteIDs",
-			signer: validator,
+			signer: valSigner,
 			events: []*types.VotableEvent{evt1, evt2},
 			fn: func(ctx context.Context, bp *BlockProcessor, db sql.DB, es *mockEventStore) error {
 				bp.chainCtx.NetworkParameters.DisabledGasCosts = false
@@ -412,7 +417,7 @@ func TestPrepareVoteIDTx(t *testing.T) {
 		},
 		{
 			name:   "mark broadcasted for broadcasted voteIDs",
-			signer: validator,
+			signer: valSigner,
 			events: []*types.VotableEvent{evt1, evt2},
 			fn: func(ctx context.Context, bp *BlockProcessor, db sql.DB, es *mockEventStore) error {
 				tx, ids, err := bp.PrepareValidatorVoteIDTx(ctx, db)
@@ -465,9 +470,9 @@ func TestPrepareVoteIDTx(t *testing.T) {
 }
 
 func TestPrepareVoteBodyTx(t *testing.T) {
-	signer := secp256k1Signer(t)
+	privKey, signer := genNodeKeyAndSigner(t)
 	genCfg := config.DefaultGenesisConfig()
-	genCfg.Leader = signer.Identity()
+	genCfg.Leader = config.EncodePubKeyAndType(privKey.Public().Bytes(), privKey.Type())
 
 	bp := &BlockProcessor{
 		db:     &mockDB{},
@@ -695,7 +700,7 @@ func (m *mockTxApp) ProposerTxs(ctx context.Context, db sql.DB, txNonce uint64, 
 	return nil, nil
 }
 
-func (m *mockTxApp) UpdateValidator(ctx context.Context, db sql.DB, validator []byte, power int64) error {
+func (m *mockTxApp) UpdateValidator(ctx context.Context, db sql.DB, pubKey []byte, pubKeyType crypto.KeyType, power int64) error {
 	return nil
 }
 

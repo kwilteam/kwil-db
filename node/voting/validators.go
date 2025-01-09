@@ -8,6 +8,7 @@ import (
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 )
 
@@ -27,7 +28,7 @@ func init() {
 				return fmt.Errorf("failed to unmarshal join request: %w", err)
 			}
 
-			return app.Validators.SetValidatorPower(ctx, app.DB, joinReq.PubKey, joinReq.Power)
+			return app.Validators.SetValidatorPower(ctx, app.DB, joinReq.PubKey, joinReq.PubKeyType, joinReq.Power)
 		},
 	})
 	if err != nil {
@@ -47,7 +48,7 @@ func init() {
 				return errors.New("remove request with non-zero power")
 			}
 
-			return app.Validators.SetValidatorPower(ctx, app.DB, removeReq.PubKey, 0)
+			return app.Validators.SetValidatorPower(ctx, app.DB, removeReq.PubKey, removeReq.PubKeyType, 0)
 		},
 	})
 	if err != nil {
@@ -57,8 +58,9 @@ func init() {
 
 // UpdatePowerRequest is a request to update a validator's power.
 type UpdatePowerRequest struct {
-	PubKey []byte
-	Power  int64
+	PubKey     []byte
+	PubKeyType crypto.KeyType
+	Power      int64
 }
 
 // MarshalBinary returns the binary representation of the join request

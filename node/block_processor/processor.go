@@ -15,6 +15,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/config"
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
@@ -37,6 +38,7 @@ type BlockProcessor struct {
 	// config
 	genesisParams *config.GenesisConfig
 	signer        auth.Signer
+	leader        crypto.PublicKey
 
 	mtx sync.RWMutex // mutex to protect the consensus params
 	// consensus params
@@ -83,11 +85,14 @@ func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Account
 		log:         logger,
 	}
 
-	if genesisCfg == nil { // TODO: remove this
-		genesisCfg = config.DefaultGenesisConfig()
+	bp.genesisParams = genesisCfg
+
+	leader, err := config.DecodeLeader(genesisCfg.Leader)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode the leader: %w", err)
 	}
 
-	bp.genesisParams = genesisCfg
+	bp.leader = leader
 
 	tx, err := db.BeginTx(ctx)
 	if err != nil {
@@ -266,7 +271,7 @@ func (bp *BlockProcessor) CheckTx(ctx context.Context, tx *ktypes.Transaction, r
 		BlockContext: &common.BlockContext{
 			ChainContext: bp.chainCtx,
 			Height:       bp.height.Load() + 1,
-			Proposer:     bp.genesisParams.Leader, // always the leader?
+			Proposer:     bp.leader,
 		},
 		TxID:          hex.EncodeToString(txHash[:]),
 		Signer:        tx.Sender,
@@ -298,7 +303,15 @@ func (bp *BlockProcessor) InitChain(ctx context.Context) (int64, []byte, error) 
 
 	genCfg := bp.genesisParams
 
-	if err := bp.txapp.GenesisInit(ctx, genesisTx, genCfg.Validators, nil, genCfg.InitialHeight, genCfg.DBOwner, bp.chainCtx); err != nil {
+	genesisAllocs := make([]*ktypes.Account, 0, len(genCfg.Allocs))
+	for acct, bal := range genCfg.Allocs {
+		genesisAllocs = append(genesisAllocs, &ktypes.Account{
+			Identifier: acct, // no need to be removing the prefix 0x anymore
+			Balance:    bal,
+		})
+	}
+
+	if err := bp.txapp.GenesisInit(ctx, genesisTx, genCfg.Validators, genesisAllocs, genCfg.InitialHeight, genCfg.DBOwner, bp.chainCtx); err != nil {
 		return -1, nil, err
 	}
 

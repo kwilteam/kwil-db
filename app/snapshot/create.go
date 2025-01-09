@@ -236,6 +236,7 @@ func PGDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 				return -1, nil, nil, fmt.Errorf("failed to parse power: %w", err)
 			}
 
+			// TODO: update this once the keytype is added to the voters table
 			genCfg.Validators = append(genCfg.Validators, &types.Validator{
 				PubKey: voterID,
 				Power:  power,

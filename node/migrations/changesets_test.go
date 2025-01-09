@@ -10,6 +10,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/config"
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/accounts"
@@ -226,11 +227,11 @@ func (v *validatorStore) GetValidators() []*types.Validator {
 	return v.valSet
 }
 
-func (v *validatorStore) GetValidatorPower(ctx context.Context, validator []byte) (int64, error) {
+func (v *validatorStore) GetValidatorPower(ctx context.Context, validator []byte, keyType crypto.KeyType) (int64, error) {
 	return 0, nil
 }
 
-func (v *validatorStore) SetValidatorPower(ctx context.Context, tx sql.Executor, validator []byte, power int64) error {
+func (v *validatorStore) SetValidatorPower(ctx context.Context, tx sql.Executor, pubKey []byte, pubKeyType crypto.KeyType, power int64) error {
 	return nil
 }
 

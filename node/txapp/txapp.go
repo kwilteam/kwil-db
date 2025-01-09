@@ -10,6 +10,7 @@ import (
 	"slices"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -78,7 +79,7 @@ func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.
 
 	// Add Genesis Validators
 	for _, validator := range validators {
-		err := r.Validators.SetValidatorPower(ctx, db, validator.PubKey, validator.Power)
+		err := r.Validators.SetValidatorPower(ctx, db, validator.PubKey, validator.PubKeyType, validator.Power)
 		if err != nil {
 			return err
 		}
@@ -355,7 +356,7 @@ var (
 	ValidatorVoteIDPrice             = big.NewInt(1000 * 16) // 16 bytes for the UUID
 )
 
-// creditMap maps string(public_keys) to big.Int amounts that should be credited
+// creditMap maps string(public_keys#keytype) to big.Int amounts that should be credited
 type creditMap map[string]*big.Int
 
 // applyResolution will calculate the rewards for the proposer and voters of a resolution.
@@ -366,26 +367,30 @@ func (c creditMap) applyResolution(res *resolutions.Resolution) {
 	for _, voter := range res.Voters {
 		// if the voter is the proposer, then we will reward them below,
 		// since extra logic is required if they did not submit a vote id
-		if bytes.Equal(voter.PubKey, res.Proposer) {
+		if bytes.Equal(voter.PubKey, res.Proposer.PubKey) {
 			continue
 		}
 
-		currentBalance, ok := c[string(voter.PubKey)]
+		key := string(voter.PubKey) + "#" + voter.PubKeyType.String()
+
+		currentBalance, ok := c[key]
 		if !ok {
 			currentBalance = big.NewInt(0)
 		}
 
-		c[string(voter.PubKey)] = big.NewInt(0).Add(currentBalance, ValidatorVoteIDPrice)
+		c[key] = big.NewInt(0).Add(currentBalance, ValidatorVoteIDPrice)
 	}
 
 	bodyCost := big.NewInt(ValidatorVoteBodyBytePrice * int64(len(res.Body)))
-	currentBalance, ok := c[string(res.Proposer)]
+	propKey := string(res.Proposer.PubKey) + "#" + res.Proposer.PubKeyType.String()
+
+	currentBalance, ok := c[propKey]
 	if !ok {
 		currentBalance = big.NewInt(0)
 	}
 
 	// reward proposer
-	c[string(res.Proposer)] = big.NewInt(0).Add(currentBalance, bodyCost)
+	c[propKey] = big.NewInt(0).Add(currentBalance, bodyCost)
 }
 
 // TxResponse is the response from a transaction.
@@ -549,8 +554,8 @@ func (r *TxApp) AccountInfo(ctx context.Context, db sql.DB, acctID string, getUn
 // UpdateValidator updates a validator's power.
 // It can only be called in between Begin and Finalize.
 // The value passed as power will simply replace the current power.
-func (r *TxApp) UpdateValidator(ctx context.Context, db sql.DB, validator []byte, power int64) error {
-	return r.Validators.SetValidatorPower(ctx, db, validator, power)
+func (r *TxApp) UpdateValidator(ctx context.Context, db sql.DB, pubKey []byte, pubKeyType crypto.KeyType, power int64) error {
+	return r.Validators.SetValidatorPower(ctx, db, pubKey, pubKeyType, power)
 }
 
 func (r *TxApp) GetValidators() []*types.Validator {

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
 	dbtest "github.com/kwilteam/kwil-db/node/pg/test"
 	"github.com/kwilteam/kwil-db/node/types/sql"
@@ -162,7 +163,7 @@ func Test_EventStore(t *testing.T) {
 				require.Len(t, events, 3)
 
 				// create resolutions for 1 events
-				err = voting.CreateResolution(ctx, db, events[0], 10, []byte("a"))
+				err = voting.CreateResolution(ctx, db, events[0], 10, []byte("a"), crypto.KeyTypeEd25519)
 				require.NoError(t, err)
 
 				// Get events which have no resolutions
