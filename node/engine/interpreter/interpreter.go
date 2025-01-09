@@ -93,6 +93,10 @@ type baseInterpreter struct {
 	accessController *accessController
 	// service is the base application
 	service *common.Service
+	// validators is the validator manager for the application
+	validators common.Validators
+	// accounts is the account manager for the application
+	accounts common.Accounts
 }
 
 // a namespace is a collection of tables and actions.
@@ -142,7 +146,7 @@ func (n namespaceType) valid() bool {
 
 // NewInterpreter creates a new interpreter.
 // It reads currently stored namespaces and loads them into memory.
-func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service) (*ThreadSafeInterpreter, error) {
+func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service, accounts common.Accounts, validators common.Validators) (*ThreadSafeInterpreter, error) {
 	var exists bool
 	count := 0
 	// we need to check if it is initialized. We will do this by checking if the schema kwild_engine exists
@@ -224,16 +228,18 @@ func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service) (*T
 	}
 
 	systemExtensions := precompiles.RegisteredPrecompiles()
+	var instances []precompiles.Instance // we must call OnStart after all instances have been initialized
 	for _, ext := range storedExts {
 		sysExt, ok := systemExtensions[ext.ExtName]
 		if !ok {
 			return nil, fmt.Errorf("the database has an extension in use that is unknown to the system: %s", ext.ExtName)
 		}
 
-		namespace, err := initializeExtension(ctx, service, db, sysExt, ext.Alias, ext.Metadata)
+		namespace, inst, err := initializeExtension(ctx, service, db, sysExt, ext.Alias, ext.Metadata)
 		if err != nil {
 			return nil, err
 		}
+		instances = append(instances, inst)
 
 		// if a namespace already exists, we should use it instead, since it might have been read earlier, and contain
 		// kuneiform actions and tables
@@ -251,9 +257,21 @@ func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service) (*T
 		interpreter.accessController.registerNamespace(ext.Alias)
 	}
 
-	return &ThreadSafeInterpreter{
-		i: interpreter,
-	}, nil
+	threadSafe := &ThreadSafeInterpreter{i: interpreter}
+	for _, inst := range instances {
+		err = inst.OnStart(ctx, &common.App{
+			Service:    service,
+			DB:         db,
+			Engine:     threadSafe,
+			Accounts:   accounts,
+			Validators: validators,
+		})
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return threadSafe, nil
 }
 
 // funcDefToExecutable converts a Postgres function definition to an executable.

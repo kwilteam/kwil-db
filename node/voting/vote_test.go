@@ -316,7 +316,7 @@ func Test_Voting(t *testing.T) {
 			require.NoError(t, err)
 			defer dbTx.Rollback(ctx) // always rollback to ensure cleanup
 
-			v, err := initializeVoteStore(ctx, dbTx)
+			v, err := InitializeVoteStore(ctx, dbTx)
 			require.NoError(t, err)
 
 			for addr, power := range tt.startingPower {

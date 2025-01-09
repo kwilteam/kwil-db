@@ -1565,8 +1565,12 @@ func (i *interpreterPlanner) VisitUseExtensionStatement(p0 *parse.UseExtensionSt
 			return fmt.Errorf(`extension "%s" does not exist`, p0.ExtName)
 		}
 
-		extNamespace, err := initializeExtension(exec.engineCtx.TxContext.Ctx, exec.interpreter.service, exec.db, initializer, p0.Alias, config)
+		extNamespace, inst, err := initializeExtension(exec.engineCtx.TxContext.Ctx, exec.interpreter.service, exec.db, initializer, p0.Alias, config)
 		if err != nil {
+			return err
+		}
+
+		if err := inst.OnStart(exec.engineCtx.TxContext.Ctx, exec.app()); err != nil {
 			return err
 		}
 

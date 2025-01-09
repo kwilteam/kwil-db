@@ -158,7 +158,6 @@ func listTablesInNamespace(ctx context.Context, db sql.DB, namespace string) ([]
 	var colNames, dataTypes, indexNames, constraintNames, constraintTypes, fkNames, fkOnUpdate, fkOnDelete []string
 	var indexCols, constraintCols, fkCols [][]string
 	var isNullables, isPrimaryKeys, isPKs, isUniques []bool
-
 	scans := []any{
 		&schemaName,
 		&tblName,
@@ -178,37 +177,39 @@ func listTablesInNamespace(ctx context.Context, db sql.DB, namespace string) ([]
 		&fkOnUpdate,
 		&fkOnDelete,
 	}
+	// we use json_agg here instead of array_agg because we are aggregationg single dimensional arrays into
+	// 2d arrays. Array agg requires all incoming 1d arrays to be of the same length, but json_agg does not.
 	err := queryRowFunc(ctx, db, `
 	WITH columns AS (
 		SELECT c.namespace, c.table_name,
-			array_agg(c.name ORDER BY c.ordinal_position) AS column_names,
-			array_agg(c.data_type ORDER BY c.ordinal_position) AS data_types,
-			array_agg(c.is_nullable ORDER BY c.ordinal_position) AS is_nullables,
-			array_agg(c.is_primary_key ORDER BY c.ordinal_position) AS is_primary_keys
+			json_agg(c.name ORDER BY c.ordinal_position) AS column_names,
+			json_agg(c.data_type ORDER BY c.ordinal_position) AS data_types,
+			json_agg(c.is_nullable ORDER BY c.ordinal_position) AS is_nullables,
+			json_agg(c.is_primary_key ORDER BY c.ordinal_position) AS is_primary_keys
 		FROM info.columns c
 		GROUP BY c.namespace, c.table_name
 	),
 	indexes AS (
 		SELECT i.namespace, i.table_name,
-			array_agg(i.name ORDER BY i.name) AS names,
-			array_agg(i.is_pk ORDER BY i.name) AS is_pks,
-			array_agg(i.is_unique ORDER BY i.name) AS is_uniques,
-			array_agg(i.column_names ORDER BY i.name) AS column_names
+			json_agg(i.name ORDER BY i.name) AS names,
+			json_agg(i.is_pk ORDER BY i.name) AS is_pks,
+			json_agg(i.is_unique ORDER BY i.name) AS is_uniques,
+			json_agg(i.column_names ORDER BY i.name) AS column_names
 		FROM info.indexes i
 		GROUP BY i.namespace, i.table_name
 	), constraints AS (
 		SELECT c.namespace, c.table_name,
-			array_agg(c.constraint_name ORDER BY c.constraint_name) AS constraint_names,
-			array_agg(c.constraint_type ORDER BY c.constraint_name) AS constraint_types,
-			array_agg(c.columns ORDER BY c.constraint_name) AS columns
+			json_agg(c.constraint_name ORDER BY c.constraint_name) AS constraint_names,
+			json_agg(c.constraint_type ORDER BY c.constraint_name) AS constraint_types,
+			json_agg(c.columns ORDER BY c.constraint_name) AS columns
 		FROM info.constraints c
 		GROUP BY c.namespace, c.table_name
 	), foreign_keys AS (
 		SELECT f.namespace, f.table_name,
-			array_agg(f.constraint_name ORDER BY f.constraint_name) AS constraint_names,
-			array_agg(f.columns ORDER BY f.constraint_name) AS columns,
-			array_agg(f.on_update ORDER BY f.constraint_name) AS on_updates,
-			array_agg(f.on_delete ORDER BY f.constraint_name) AS on_deletes
+			json_agg(f.constraint_name ORDER BY f.constraint_name) AS constraint_names,
+			json_agg(f.columns ORDER BY f.constraint_name) AS columns,
+			json_agg(f.on_update ORDER BY f.constraint_name) AS on_updates,
+			json_agg(f.on_delete ORDER BY f.constraint_name) AS on_deletes
 		FROM info.foreign_keys f
 		GROUP BY f.namespace, f.table_name
 	)

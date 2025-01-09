@@ -5,15 +5,16 @@ import "errors"
 var (
 	// Errors that suggest a bug in a user's executing code. These are type errors,
 	// issues in arithmetic, array indexing, etc.
-	ErrType             = errors.New("type error")
-	ErrReturnShape      = errors.New("unexpected action/function return shape")
-	ErrUnknownVariable  = errors.New("unknown variable")
-	ErrLoop             = errors.New("loop error")
-	ErrArithmetic       = errors.New("arithmetic error")
-	ErrComparison       = errors.New("comparison error")
-	ErrCast             = errors.New("type cast error")
-	ErrUnary            = errors.New("unary operation error")
-	ErrIndexOutOfBounds = errors.New("index out of bounds")
+	ErrType                = errors.New("type error")
+	ErrReturnShape         = errors.New("unexpected action/function return shape")
+	ErrUnknownVariable     = errors.New("unknown variable")
+	ErrLoop                = errors.New("loop error")
+	ErrArithmetic          = errors.New("arithmetic error")
+	ErrComparison          = errors.New("comparison error")
+	ErrCast                = errors.New("type cast error")
+	ErrUnary               = errors.New("unary operation error")
+	ErrIndexOutOfBounds    = errors.New("index out of bounds")
+	ErrArrayDimensionality = errors.New("array dimensionality error")
 
 	// Errors that signal the existence or non-existence of an object.
 	ErrUnknownAction     = errors.New("unknown action")

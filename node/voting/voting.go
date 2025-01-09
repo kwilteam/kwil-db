@@ -41,11 +41,11 @@ type VoteStore struct {
 	// resUUIDs? to fail fast on invalid resolutions?
 }
 
-// initializeVoteStore initializes the vote store with the required tables. It
+// InitializeVoteStore initializes the vote store with the required tables. It
 // will also create any resolution types that have been registered. NOTE: the
 // provided DB is used only for initialization. The store is stateless in the
 // application, and this DB connection is not assumed as a dependency.
-func initializeVoteStore(ctx context.Context, db sql.TxMaker) (*VoteStore, error) {
+func InitializeVoteStore(ctx context.Context, db sql.TxMaker) (*VoteStore, error) {
 	logger := log.New(log.WithName("VOTESTORE"), log.WithLevel(log.LevelDebug),
 		log.WithWriter(os.Stdout), log.WithFormat(log.FormatUnstructured))
 

@@ -314,7 +314,7 @@ func Test_built_in_sql(t *testing.T) {
 			require.NoError(t, err)
 			defer tx.Rollback(ctx) // always rollback to avoid cleanup
 
-			interp, err := NewInterpreter(ctx, tx, &common.Service{})
+			interp, err := NewInterpreter(ctx, tx, &common.Service{}, nil, nil)
 			require.NoError(t, err)
 			_ = interp
 

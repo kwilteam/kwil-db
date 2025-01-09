@@ -396,6 +396,8 @@ func (e *executionContext) app() *common.App {
 			i:    e.interpreter,
 			logs: e.logs,
 		},
+		Accounts:   e.interpreter.accounts,
+		Validators: e.interpreter.validators,
 	}
 }
 
