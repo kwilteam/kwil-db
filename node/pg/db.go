@@ -556,11 +556,12 @@ func (db *DB) precommit(ctx context.Context, changes chan<- any) ([]byte, error)
 		return nil, errors.New("replication connection is down")
 	}
 
-	db.txid = random.String(10)
-	sqlPrepareTx := fmt.Sprintf(`PREPARE TRANSACTION '%s'`, db.txid)
+	txid := random.String(10)
+	sqlPrepareTx := fmt.Sprintf(`PREPARE TRANSACTION '%s'`, txid)
 	if _, err := db.tx.Exec(ctx, sqlPrepareTx); err != nil {
 		return nil, err
 	}
+	db.txid = txid
 
 	logger.Debugf("prepared transaction %q", db.txid)
 
