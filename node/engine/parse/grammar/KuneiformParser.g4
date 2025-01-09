@@ -100,7 +100,7 @@ identifier_list:
 ;
 
 type:
-    identifier (LPAREN DIGITS_ COMMA DIGITS_ RPAREN)? (LBRACKET RBRACKET)? // Handles arrays of any type, including nested arrays
+    identifier (LPAREN precision=DIGITS_ (COMMA scale=DIGITS_)? RPAREN)? (LBRACKET RBRACKET)? // Handles arrays of any type, including nested arrays
 ;
 
 type_cast:
