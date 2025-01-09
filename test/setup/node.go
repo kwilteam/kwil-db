@@ -452,10 +452,22 @@ func (k *kwilNode) JSONRPCClient(t *testing.T, ctx context.Context, usingGateway
 	return client
 }
 
+func (k *kwilNode) AdminClient(t *testing.T, ctx context.Context) *AdminClient {
+	container, ok := k.testCtx.containers[k.generatedInfo.KwilNodeServiceName]
+	if !ok {
+		t.Fatalf("container %s not found", k.generatedInfo.KwilNodeServiceName)
+	}
+
+	return &AdminClient{
+		container: container,
+	}
+}
+
 type KwilNode interface {
 	PrivateKey() *crypto.Secp256k1PrivateKey
 	PublicKey() *crypto.Secp256k1PublicKey
 	IsValidator() bool
 	Config() *config.Config
 	JSONRPCClient(t *testing.T, ctx context.Context, usingKGW bool) JSONRPCClient
+	AdminClient(t *testing.T, ctx context.Context) *AdminClient
 }
