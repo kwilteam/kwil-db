@@ -151,7 +151,21 @@ func NewZeroValue(t *types.DataType) (Value, error) {
 		return nil, fmt.Errorf("type %s not found", t.Name)
 	}
 
-	return m.ZeroValue()
+	zv, err := m.ZeroValue()
+	if err != nil {
+		return nil, err
+	}
+
+	if t.Name == types.DecimalStr && t.HasMetadata() {
+		precCopy := t.Metadata[0]
+		if !t.IsArray {
+			zv.(*DecimalValue).precision = &precCopy
+		} else {
+			zv.(*DecimalArrayValue).precision = &precCopy
+		}
+	}
+
+	return zv, nil
 }
 
 // Value is a value that can be compared, used in arithmetic operations,
@@ -607,7 +621,7 @@ func (i *IntValue) Cast(t *types.DataType) (Value, error) {
 func newNull(t *types.DataType) Value {
 	if t.Name == types.DecimalStr {
 		if t.IsArray {
-			return newNullDecArr()
+			return newNullDecArr(t)
 		}
 
 		return newDec(nil)
@@ -1215,13 +1229,16 @@ func newDec(d *decimal.Decimal) *DecimalValue {
 		}
 	}
 
+	prec := d.Precision()
 	return &DecimalValue{
-		Numeric: pgTypeFromDec(d),
+		Numeric:   pgTypeFromDec(d),
+		precision: &prec,
 	}
 }
 
 type DecimalValue struct {
 	pgtype.Numeric
+	precision *uint16 // can be nil
 }
 
 func (d *DecimalValue) Null() bool {
@@ -1240,6 +1257,13 @@ func (d *DecimalValue) dec() (*decimal.Decimal, error) {
 	d2, err := decimal.NewFromBigInt(d.Int, d.Exp)
 	if err != nil {
 		return nil, err
+	}
+
+	if d.precision != nil {
+		err = d2.SetPrecisionAndScale(*d.precision, d2.Scale())
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return d2, nil
@@ -1314,6 +1338,11 @@ func (d *DecimalValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, 
 	default:
 		return nil, fmt.Errorf("%w: unexpected operator id %d for decimal", engine.ErrArithmetic, op)
 	}
+	if err != nil {
+		return nil, err
+	}
+
+	err = d2.SetPrecisionAndScale(dec1.Precision(), dec1.Scale())
 	if err != nil {
 		return nil, err
 	}
@@ -1575,7 +1604,7 @@ func (a *IntArrayValue) Cast(t *types.DataType) (Value, error) {
 			}
 
 			return decimal.NewExplicit(strconv.FormatInt(i, 10), t.Metadata[0], t.Metadata[1])
-		}, newDecimalArrayValue)
+		}, newDecArrFn(t))
 	}
 
 	switch *t {
@@ -1675,7 +1704,7 @@ func (a *TextArrayValue) Cast(t *types.DataType) (Value, error) {
 			}
 
 			return decimal.NewExplicit(s, t.Metadata[0], t.Metadata[1])
-		}, newDecimalArrayValue)
+		}, newDecArrFn(t))
 	}
 
 	switch *t {
@@ -1837,7 +1866,7 @@ func (a *BoolArrayValue) Cast(t *types.DataType) (Value, error) {
 	}
 }
 
-func newNullDecArr() *DecimalArrayValue {
+func newNullDecArr(t *types.DataType) *DecimalArrayValue {
 	return &DecimalArrayValue{
 		OneDArray: OneDArray[pgtype.Numeric]{
 			Array: pgtype.Array[pgtype.Numeric]{Valid: false},
@@ -1845,23 +1874,42 @@ func newNullDecArr() *DecimalArrayValue {
 	}
 }
 
-func newDecimalArrayValue(d []*decimal.Decimal) *DecimalArrayValue {
+// newDecArrFn returns a function that creates a new DecimalArrayValue.
+// It is used for type casting.
+func newDecArrFn(t *types.DataType) func(d []*decimal.Decimal) *DecimalArrayValue {
+	return func(d []*decimal.Decimal) *DecimalArrayValue {
+		return newDecimalArrayValue(d, t)
+	}
+}
+
+func newDecimalArrayValue(d []*decimal.Decimal, t *types.DataType) *DecimalArrayValue {
 	vals := make([]pgtype.Numeric, len(d))
 	for i, v := range d {
+		var newDec pgtype.Numeric
 		if v == nil {
-			vals[i] = pgtype.Numeric{Valid: false}
+			newDec = pgtype.Numeric{Valid: false}
 		} else {
-			vals[i] = pgTypeFromDec(v)
+			newDec = pgTypeFromDec(v)
 		}
+
+		vals[i] = newDec
+	}
+
+	var prec *uint16
+	if t.HasMetadata() {
+		precCopy := t.Metadata[0]
+		prec = &precCopy
 	}
 
 	return &DecimalArrayValue{
 		OneDArray: newValidArr(vals),
+		precision: prec,
 	}
 }
 
 type DecimalArrayValue struct {
-	OneDArray[pgtype.Numeric]
+	OneDArray[pgtype.Numeric]         // we embed decimal value here because we need to track the precision and scale
+	precision                 *uint16 // can be nil
 }
 
 func (a *DecimalArrayValue) Null() bool {
@@ -1958,6 +2006,10 @@ func (a *DecimalArrayValue) Set(i int32, v ScalarValue) error {
 		return fmt.Errorf("cannot set non-decimal value in decimal array")
 	}
 
+	if val.precision != nil && a.precision != nil && *val.precision != *a.precision {
+		return fmt.Errorf("cannot set decimal with precision %d in array with precision %d", *val.precision, *a.precision)
+	}
+
 	a.Elements[i-1] = val.Numeric
 	return nil
 }
@@ -2010,7 +2062,14 @@ func (a *DecimalArrayValue) Cast(t *types.DataType) (Value, error) {
 				return nil, err
 			}
 
-			err = dec.SetPrecisionAndScale(t.Metadata[0], t.Metadata[1])
+			// we need to make a copy of the decimal because SetPrecisionAndScale
+			// will modify the decimal in place.
+			dec2, err := decimal.NewExplicit(dec.String(), dec.Precision(), dec.Scale())
+			if err != nil {
+				return nil, err
+			}
+
+			err = dec2.SetPrecisionAndScale(t.Metadata[0], t.Metadata[1])
 			if err != nil {
 				return nil, err
 			}
@@ -2018,7 +2077,7 @@ func (a *DecimalArrayValue) Cast(t *types.DataType) (Value, error) {
 			res[i-1] = dec
 		}
 
-		return newDecimalArrayValue(res), nil
+		return newDecimalArrayValue(res, t), nil
 	}
 
 	switch *t {

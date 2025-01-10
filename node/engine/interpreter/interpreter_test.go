@@ -665,23 +665,24 @@ func Test_SQL(t *testing.T) {
 			},
 		},
 		{
-			name: "precision and scale",
+			name: "insert numeric",
 			sql: []string{
-				`CREATE TABLE IF NOT EXISTS erc20rw_pending_rewards (
-					id UUID PRIMARY KEY,
-					recipient TEXT NOT NULL,
-					amount NUMERIC(78,0) NOT NULL, -- allows uint256
-					created_at INT8 NOT NULL, -- kwil block height
-					contract_id UUID NOT NULL
-				);`,
+				`CREATE TABLE nums ( amt numeric(70,5) primary key );`,
 			},
-			execSQL: `INSERT INTO erc20rw_pending_rewards (id, recipient, amount, created_at, contract_id) VALUES ($id, $recipient, $amount::numeric(78,0), $created_at, $contract_id);`,
+			execSQL: `INSERT INTO nums (amt) VALUES ($num);`,
 			execVars: map[string]any{
-				"id":          mustUUID("d3b3b3b3-3b3b-3b3b-3b3b-3b3b3b3b3b3b"),
-				"recipient":   "0x1234567890123456789012345678901234567890",
-				"amount":      mustDecimal("100"),
-				"created_at":  int64(1),
-				"contract_id": mustUUID("d3b3b3b3-3b3b-3b3b-3b3b-3b3b3b3b3b3b"),
+				"$num": mustExplicitDecimal("100", 70, 5),
+			},
+		},
+		{
+			name: "query numeric",
+			sql: []string{
+				`CREATE TABLE nums ( amt numeric(70,5) primary key );`,
+				`INSERT INTO nums (amt) VALUES (100.101::numeric(70,5));`,
+			},
+			execSQL: `SELECT * FROM nums;`,
+			results: [][]any{
+				{mustExplicitDecimal("100.101", 70, 5)},
 			},
 		},
 	}
@@ -717,6 +718,16 @@ func Test_SQL(t *testing.T) {
 			for i, row := range values {
 				require.Equal(t, len(test.results[i]), len(row))
 				for j, val := range row {
+					// if it is a numeric, we should do a special comparison
+					if test.results[i][j] != nil {
+						if decVal, ok := test.results[i][j].(*decimal.Decimal); ok {
+							cmp, err := decVal.Cmp(val.(*decimal.Decimal))
+							require.NoError(t, err)
+
+							require.Equal(t, 0, cmp)
+						}
+					}
+
 					require.EqualValues(t, test.results[i][j], val)
 				}
 			}
@@ -1976,6 +1987,14 @@ func exact(val any) func(*common.Row) error {
 
 func mustDecimal(s string) *decimal.Decimal {
 	d, err := decimal.NewFromString(s)
+	if err != nil {
+		panic(err)
+	}
+	return d
+}
+
+func mustExplicitDecimal(s string, prec, scale uint16) *decimal.Decimal {
+	d, err := decimal.NewExplicit(s, prec, scale)
 	if err != nil {
 		panic(err)
 	}
