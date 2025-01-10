@@ -60,9 +60,9 @@ type valInfo struct {
 }
 
 func (r *respValSets) MarshalJSON() ([]byte, error) {
-	valInfos := make([]valInfo, len(r.Data))
+	valInfos := make([]*valInfo, len(r.Data))
 	for i, v := range r.Data {
-		valInfos[i] = valInfo{
+		valInfos[i] = &valInfo{
 			PubKey:     v.Identifier.String(),
 			Power:      v.Power,
 			PubKeyType: v.KeyType.String(),

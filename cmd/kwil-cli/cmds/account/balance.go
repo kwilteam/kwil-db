@@ -75,7 +75,17 @@ func balanceCmd() *cobra.Command {
 				// NOTE: empty acct.Identifier means it doesn't even have a record
 				// on the network. Perhaps we convey that to the caller? Their
 				// balance is zero regardless, assuming it's the correct acct ID.
-				resp := (*respAccount)(acct)
+
+				resp := &respAccount{
+					Balance: acct.Balance.String(),
+					Nonce:   acct.Nonce,
+				}
+
+				if acct.ID != nil { // only add identifier for the existing accounts
+					resp.Identifier = acct.ID.Identifier
+					resp.KeyType = acct.ID.KeyType.String()
+				}
+
 				return display.PrintCmd(cmd, resp)
 			})
 

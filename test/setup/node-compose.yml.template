@@ -20,10 +20,9 @@
       start
       --root=/app/kwil
       --log-format=plain
-      --admin.listen=/tmp/admin.socket
+      --admin.listen=/tmp/kwild.socket
       --rpc.listen=0.0.0.0:8484
-      --p2p.ip=0.0.0.0 #TODO: we should combine p2p.ip and p2p.port: https://github.com/kwilteam/kwil-db/issues/1201
-      --p2p.port=6600
+      --p2p.listen=0.0.0.0:6600
       --db.host={{ .PGServicePrefix }}{{ .NodeNumber }}
       --db.port=5432
       --db.user=kwild

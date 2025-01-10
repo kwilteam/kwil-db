@@ -169,6 +169,8 @@ func LoadGenesisConfig(filename string) (*GenesisConfig, error) {
 		return nil, err // can be os.ErrNotExist
 	}
 
+	fmt.Println("GenesisConfig: ", string(bts))
+
 	var nc GenesisConfig
 	if err := json.Unmarshal(bts, &nc); err != nil {
 		return nil, err

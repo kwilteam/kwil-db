@@ -5,12 +5,14 @@ import (
 
 	client "github.com/kwilteam/kwil-db/core/client/types"
 	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/types"
 )
 
 type JSONRPCClient interface {
 	client.Client
 	PrivateKey() crypto.PrivateKey
 	PublicKey() crypto.PublicKey
+	TxSuccess(ctx context.Context, txHash types.Hash) error
 }
 
 type ClientDriver string
@@ -20,7 +22,7 @@ const (
 	CLI ClientDriver = "cli"
 )
 
-type newClientFunc func(ctx context.Context, endpoint string, usingGateway bool, log logFunc) (JSONRPCClient, error)
+type newClientFunc func(ctx context.Context, endpoint string, usingGateway bool, log logFunc, privKey string) (JSONRPCClient, error)
 
 func getNewClientFn(driver ClientDriver) newClientFunc {
 	switch driver {

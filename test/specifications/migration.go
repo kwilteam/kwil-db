@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"math/big"
 	"os"
 	"path/filepath"
 	"strings"
@@ -14,50 +15,72 @@ import (
 	"github.com/kwilteam/kwil-db/config"
 )
 
-// // Trigger migration
-// func SubmitMigrationProposal(ctx context.Context, t *testing.T, netops MigrationOpsDsl) {
-// 	t.Log("Executing migration trigger specification")
+// Trigger migration
+func SubmitMigrationProposal(ctx context.Context, t *testing.T, netops MigrationOpsDsl) {
+	t.Log("Executing migration trigger specification")
 
-// 	// Trigger migration"
-// 	txHash, err := netops.SubmitMigrationProposal(ctx, big.NewInt(1), big.NewInt(100))
-// 	require.NoError(t, err)
+	// Trigger migration"
+	txHash, err := netops.SubmitMigrationProposal(ctx, big.NewInt(1), big.NewInt(100))
+	require.NoError(t, err)
 
-// 	// Ensure that the Tx is mined.
-// 	expectTxSuccess(t, netops, ctx, txHash, defaultTxQueryTimeout)()
+	// Ensure that the Tx is mined.
+	expectTxSuccess(t, netops, ctx, txHash, defaultTxQueryTimeout)()
 
-// 	// Check migration status
-// 	migrations, err := netops.ListMigrations(ctx)
-// 	require.NoError(t, err)
-// 	require.Equal(t, 1, len(migrations))
-// }
+	// Check migration status
+	migrations, err := netops.ListMigrations(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(migrations))
+}
 
-// // Approve Migration
-// func ApproveMigration(ctx context.Context, t *testing.T, netops MigrationOpsDsl, pending bool) {
-// 	t.Log("Executing migration approve specification")
+// Approve Migration
+func ApproveMigration(ctx context.Context, t *testing.T, netops MigrationOpsDsl, pending bool) {
+	t.Log("Executing migration approve specification")
 
-// 	// Ensure that the migration is waiting for approval
-// 	migrations, err := netops.ListMigrations(ctx)
-// 	require.NoError(t, err)
-// 	require.Equal(t, 1, len(migrations))
+	// Ensure that the migration is waiting for approval
+	migrations, err := netops.ListMigrations(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(migrations))
 
-// 	// Approve migration
-// 	txHash, err := netops.ApproveMigration(ctx, migrations[0].ID)
-// 	require.NoError(t, err)
+	// Approve migration
+	txHash, err := netops.ApproveMigration(ctx, migrations[0].ID)
+	require.NoError(t, err)
 
-// 	// Ensure that the Tx is mined.
-// 	expectTxSuccess(t, netops, ctx, txHash, defaultTxQueryTimeout)()
+	// Ensure that the Tx is mined.
+	expectTxSuccess(t, netops, ctx, txHash, defaultTxQueryTimeout)()
 
-// 	// Check migration status
-// 	migrations, err = netops.ListMigrations(ctx)
-// 	require.NoError(t, err)
+	// Check migration status
+	migrations, err = netops.ListMigrations(ctx)
+	require.NoError(t, err)
 
-// 	if pending {
-// 		require.Equal(t, 1, len(migrations))
-// 	} else {
+	if pending {
+		require.Equal(t, 1, len(migrations))
+	} else {
 
-// 		require.Equal(t, 0, len(migrations))
-// 	}
-// }
+		require.Equal(t, 0, len(migrations))
+	}
+}
+
+func NonValidatorApproveMigration(ctx context.Context, t *testing.T, netops MigrationOpsDsl) {
+	t.Log("Executing non-validator approve migration specification")
+
+	// Ensure that the migration is waiting for approval
+	migrations, err := netops.ListMigrations(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(migrations))
+
+	// Approve migration
+	txHash, err := netops.ApproveMigration(ctx, migrations[0].ID)
+	require.NoError(t, err)
+
+	// Ensure that the Tx is mined.
+	expectTxFail(t, netops, ctx, txHash, defaultTxQueryTimeout)()
+
+	// Check migration status
+	migrations, err = netops.ListMigrations(ctx)
+	require.NoError(t, err)
+
+	require.Greater(t, len(migrations), 0)
+}
 
 func ConfigureNewNetwork(ctx context.Context, t *testing.T, netops MigrationOpsDsl, rootDir string, numNodes int, listenAddresses []string) {
 	// Set the MigrationConfig to true and migrate_from

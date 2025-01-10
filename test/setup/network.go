@@ -72,7 +72,8 @@ func getEndpoints(ctr *testcontainers.DockerContainer, ctx context.Context,
 	return
 }
 
-func kwildJSONRPCEndpoints(ctr *testcontainers.DockerContainer, ctx context.Context) (string, error) {
-	exposed, _, err := getEndpoints(ctr, ctx, nat.Port(fmt.Sprint(jsonRPCPort)), "http")
-	return exposed, err
+func kwildJSONRPCEndpoints(ctr *testcontainers.DockerContainer, ctx context.Context) (string, string, error) {
+	exposed, unexposed, err := getEndpoints(ctr, ctx, nat.Port(fmt.Sprint(jsonRPCPort)), "http")
+	fmt.Printf("kwild JSONRPC exposed at %s, unexposed at %s\n", exposed, unexposed)
+	return exposed, unexposed, err
 }

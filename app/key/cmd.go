@@ -7,6 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/core/crypto"
 )
 
@@ -23,6 +24,7 @@ func KeyCmd() *cobra.Command {
 		GenCmd(),
 		InfoCmd(),
 	)
+	display.BindOutputFormatFlag(keyCmd)
 	return keyCmd
 }
 

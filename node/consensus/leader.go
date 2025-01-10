@@ -36,7 +36,6 @@ import (
 func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
-
 	// Check if the network is halted due to migration or other reasons
 	params := ce.blockProcessor.ConsensusParams()
 	if params.MigrationStatus == ktypes.MigrationCompleted {

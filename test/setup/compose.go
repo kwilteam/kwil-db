@@ -68,7 +68,7 @@ type headerTemplate struct {
 // generateCompose generates a full docker-compose.yml file for a given number of nodes.
 // It takes a network name, docker image, and node count.
 // Optionally, it can also be given a user and group, which if set, will be used to run the nodes as.
-func generateCompose(dockerNetwork string, testnetDir string, nodeConfs []*NodeConfig, otherSvcs []*CustomService, userAndGroupIDs *[2]string,
+func generateCompose(dockerNetwork string, testnetDir string, nodeConfs []*NodeConfig, otherSvcs []*CustomService, userAndGroupIDs *[2]string, networkPrefix string, portsOffset int,
 ) (composeFilepath string, nodeGeneratedInfo []*generatedNodeInfo, err error) {
 	var res bytes.Buffer
 	err = headerComposeTemplate.Execute(&res, &headerTemplate{Network: dockerNetwork})
@@ -76,8 +76,8 @@ func generateCompose(dockerNetwork string, testnetDir string, nodeConfs []*NodeC
 		return "", nil, err
 	}
 
-	nodePrefix := "node"
-	pgPrefix := "pg"
+	nodePrefix := networkPrefix + "node"
+	pgPrefix := networkPrefix + "pg"
 
 	var nodes []*generatedNodeInfo
 	for i, nodeConf := range nodeConfs {
@@ -87,8 +87,8 @@ func generateCompose(dockerNetwork string, testnetDir string, nodeConfs []*NodeC
 			NodeServicePrefix:  nodePrefix,
 			PGServicePrefix:    pgPrefix,
 			TestnetDir:         testnetDir,
-			ExposedJSONRPCPort: 8484 + i,
-			ExposedP2PPort:     6600 + i,
+			ExposedJSONRPCPort: 8484 + i + portsOffset,
+			ExposedP2PPort:     6600 + i + portsOffset,
 			DockerImage:        nodeConf.DockerImage,
 		}
 

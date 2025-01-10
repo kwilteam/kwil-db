@@ -9,7 +9,7 @@ import (
 	"syscall"
 
 	ethLog "github.com/ethereum/go-ethereum/log"
-	"github.com/kwilteam/kwil-db/common/config"
+	"github.com/kwilteam/kwil-db/config"
 	deposits "github.com/kwilteam/kwil-db/extensions/listeners/eth_deposits"
 
 	"github.com/kwilteam/kwil-db/common"
@@ -62,11 +62,9 @@ func mainReal(ctx context.Context) error {
 		deposits.ListenerName: cfg.Map(),
 	}
 	svc := &common.Service{
-		Logger: log.NewStdOut(log.DebugLevel).Sugar(),
-		LocalConfig: &config.KwildConfig{
-			AppConfig: &config.AppConfig{
-				Extensions: extensionConfig,
-			},
+		Logger: log.DiscardLogger,
+		LocalConfig: &config.Config{
+			Extensions: extensionConfig,
 		},
 	}
 	es := &memEvtStore{svc.Logger, make(map[string][]byte)}
@@ -79,12 +77,12 @@ func mainReal(ctx context.Context) error {
 
 // memEvtStore is for debugging. modify as needed.
 type memEvtStore struct {
-	logger log.SugaredLogger
+	logger log.Logger
 	kv     map[string][]byte
 }
 
 func (es *memEvtStore) Broadcast(ctx context.Context, eventType string, data []byte) error {
-	es.logger.S.Infof("mark for broadcast event %v, data %x", eventType, data)
+	es.logger.Infof("mark for broadcast event %v, data %x", eventType, data)
 	return nil
 }
 
