@@ -107,7 +107,7 @@ func (r *RespTxQuery) MarshalJSON() ([]byte, error) {
 		Hash   string             `json:"hash"` // HEX
 		Height int64              `json:"height"`
 		Tx     *types.Transaction `json:"tx"`
-		Result types.TxResult     `json:"result"`
+		Result types.TxResult     `json:"tx_result"`
 		Raw    string             `json:"raw,omitempty"`
 		Warn   string             `json:"warning,omitempty"`
 	}{

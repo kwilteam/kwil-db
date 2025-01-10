@@ -4,6 +4,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kwilteam/kwil-db/app/rpc"
+	"github.com/kwilteam/kwil-db/app/shared/display"
 )
 
 var migrationCmd = &cobra.Command{
@@ -23,5 +24,7 @@ func NewMigrationCmd() *cobra.Command {
 	)
 
 	rpc.BindRPCFlags(migrationCmd)
+	display.BindOutputFormatFlag(migrationCmd)
+
 	return migrationCmd
 }

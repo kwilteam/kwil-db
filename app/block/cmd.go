@@ -2,6 +2,7 @@ package block
 
 import (
 	"github.com/kwilteam/kwil-db/app/rpc"
+	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/spf13/cobra"
 )
 
@@ -18,5 +19,6 @@ func NewBlockExecCmd() *cobra.Command {
 	)
 
 	rpc.BindRPCFlags(blockCmd)
+	display.BindOutputFormatFlag(blockCmd)
 	return blockCmd
 }

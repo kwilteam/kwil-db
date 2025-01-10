@@ -17,8 +17,11 @@ import (
 	"github.com/kwilteam/kwil-db/app/shared/bind"
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/app/snapshot"
+	"github.com/kwilteam/kwil-db/app/utils"
 	"github.com/kwilteam/kwil-db/app/validator"
 	"github.com/kwilteam/kwil-db/app/whitelist"
+	_ "github.com/kwilteam/kwil-db/extensions" // a base location where all extensions can be registered
+	_ "github.com/kwilteam/kwil-db/extensions/auth"
 	"github.com/kwilteam/kwil-db/version"
 
 	"github.com/spf13/cobra"
@@ -74,6 +77,7 @@ func RootCmd() *cobra.Command {
 	cmd.AddCommand(migration.NewMigrationCmd())
 	cmd.AddCommand(block.NewBlockExecCmd())
 	cmd.AddCommand(seed.SeedCmd())
+	cmd.AddCommand(utils.NewCmdUtils())
 
 	return cmd
 }

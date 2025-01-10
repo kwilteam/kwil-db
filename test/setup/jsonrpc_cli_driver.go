@@ -3,9 +3,9 @@ package setup
 import (
 	"bytes"
 	"context"
-	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"reflect"
@@ -16,7 +16,6 @@ import (
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	root "github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/database"
-	"github.com/kwilteam/kwil-db/config"
 	clientImpl "github.com/kwilteam/kwil-db/core/client"
 	client "github.com/kwilteam/kwil-db/core/client/types"
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -33,12 +32,13 @@ type jsonRPCCLIDriver struct {
 	cobraCmd     *cobra.Command
 }
 
-func newKwilCI(ctx context.Context, endpoint string, usingGateway bool, l logFunc) (JSONRPCClient, error) {
-	priv, _, err := crypto.GenerateSecp256k1Key(rand.Reader)
+func newKwilCI(ctx context.Context, endpoint string, usingGateway bool, l logFunc, privKey string) (JSONRPCClient, error) {
+	var secp256k1Priv *crypto.Secp256k1PrivateKey
+
+	secp256k1Priv, err := generatePrivKey(privKey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to generate private key: %w", err)
 	}
-	secp256k1Priv := priv.(*crypto.Secp256k1PrivateKey)
 
 	return &jsonRPCCLIDriver{
 		provider:     endpoint,
@@ -52,7 +52,7 @@ func newKwilCI(ctx context.Context, endpoint string, usingGateway bool, l logFun
 // cmd executes a kwil-cli command and unmarshals the result into res.
 // It logically should be a method on jsonRPCCLIDriver, but it can't because of the generic type T.
 func cmd[T any](j *jsonRPCCLIDriver, ctx context.Context, res T, args ...string) error {
-	flags := []string{"--provider", j.provider, "--private-key", hex.EncodeToString(j.privateKey.Bytes()), "--output", "json", "--assume-yes", "--silence"}
+	flags := []string{"--provider", j.provider, "--private-key", hex.EncodeToString(j.privateKey.Bytes()), "--output", "json", "--assume-yes", "--silence", "--chain-id", "kwil-test-chain"}
 
 	buf := new(bytes.Buffer)
 	j.cobraCmd.SetOut(buf)
@@ -66,11 +66,14 @@ func cmd[T any](j *jsonRPCCLIDriver, ctx context.Context, res T, args ...string)
 		return fmt.Errorf("no output from command")
 	}
 
+	fmt.Println("Running Command ", `/app/kwil-cli `+strings.Join(args, " "), " with output ", buf.String())
+
 	d := display.MessageReader[T]{
 		Result: res,
 	}
 
-	err = json.Unmarshal(buf.Bytes(), &d)
+	bts := buf.Bytes()
+	err = json.Unmarshal(bts, &d)
 	if err != nil {
 		return fmt.Errorf("unmarshal error: %w", err)
 	}
@@ -242,22 +245,27 @@ func (j *jsonRPCCLIDriver) exec(ctx context.Context, args []string, opts ...clie
 	}
 
 	// otherwise, we have a different structure
-	r := types.TxQueryResponse{}
+	r := display.TxHashResponse{}
 	err := cmd(j, ctx, &r, args...)
 	if err != nil {
 		return types.Hash{}, err
 	}
 
-	return r.Hash, nil
+	return r.TxHash, nil
 }
 
 // printWithSync will
+type respAccount struct {
+	Identifier types.HexBytes `json:"identifier"`
+	KeyType    string         `json:"key_type"`
+	Balance    string         `json:"balance"`
+	Nonce      int64          `json:"nonce"`
+}
 
-func (j *jsonRPCCLIDriver) GetAccount(ctx context.Context, identifier *types.AccountID, status types.AccountStatus) (*types.Account, error) {
-	r := &types.Account{}
-	acctID := config.FormatAccountID(identifier)
+func (j *jsonRPCCLIDriver) GetAccount(ctx context.Context, acct *types.AccountID, status types.AccountStatus) (*types.Account, error) {
+	r := &respAccount{}
 
-	args := []string{"account", "balance", acctID}
+	args := []string{"account", "balance", hex.EncodeToString(acct.Identifier), acct.KeyType.String()}
 	if status == types.AccountStatusPending {
 		args = append(args, "--pending")
 	}
@@ -267,7 +275,16 @@ func (j *jsonRPCCLIDriver) GetAccount(ctx context.Context, identifier *types.Acc
 		return nil, err
 	}
 
-	return r, nil
+	bal, ok := big.NewInt(0).SetString(r.Balance, 10)
+	if !ok {
+		return nil, errors.New("invalid decimal string balance")
+	}
+
+	return &types.Account{
+		ID:      acct,
+		Balance: bal,
+		Nonce:   r.Nonce,
+	}, nil
 }
 
 func (j *jsonRPCCLIDriver) Ping(ctx context.Context) (string, error) {
@@ -301,11 +318,45 @@ func (j *jsonRPCCLIDriver) TxQuery(ctx context.Context, txHash types.Hash) (*typ
 	return r, nil
 }
 
+func (j *jsonRPCCLIDriver) TxSuccess(ctx context.Context, txHash types.Hash) error {
+	res, err := j.TxQuery(ctx, txHash)
+	if err != nil {
+		return err
+	}
+
+	if res.Height < 0 {
+		return ErrTxNotConfirmed
+	}
+
+	if res.Result != nil && res.Result.Code != 0 {
+		return fmt.Errorf("tx failed: %v", res.Result)
+	}
+
+	return nil
+}
+
 func (j *jsonRPCCLIDriver) WaitTx(ctx context.Context, txHash types.Hash, interval time.Duration) (*types.TxQueryResponse, error) {
 	return clientImpl.WaitForTx(ctx, j.TxQuery, txHash, interval)
 }
 
 func (j *jsonRPCCLIDriver) Transfer(ctx context.Context, to *types.AccountID, amount *big.Int, opts ...client.TxOpt) (types.Hash, error) {
-	toAcct := config.FormatAccountID(to)
-	return j.exec(ctx, []string{"account", "transfer", toAcct, amount.String()}, opts...)
+	return j.exec(ctx, []string{"account", "transfer", to.Identifier.String(), to.KeyType.String(), amount.String()})
+}
+
+func (j *jsonRPCCLIDriver) TransferAmt(ctx context.Context, to *types.AccountID, amt *big.Int, opts ...client.TxOpt) (types.Hash, error) {
+	return j.Transfer(ctx, to, amt, opts...)
+}
+
+func (j *jsonRPCCLIDriver) AccountBalance(ctx context.Context, identifier string) (*big.Int, error) {
+	r := &respAccount{}
+	err := cmd(j, ctx, r, "account", "balance", identifier)
+	if err != nil {
+		return nil, err
+	}
+
+	bal, ok := big.NewInt(0).SetString(r.Balance, 10)
+	if !ok {
+		return nil, errors.New("invalid decimal string balance")
+	}
+	return bal, nil
 }

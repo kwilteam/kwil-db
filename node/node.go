@@ -598,12 +598,10 @@ func (n *Node) doStatesync(ctx context.Context) error {
 	if err := n.bki.Store(blk, ci); err != nil {
 		return fmt.Errorf("failed to store statesync block to the blockstore %d: %w", height, err)
 	}
-
 	// update block processor
 	if err := n.bp.LoadFromDBState(ctx); err != nil {
 		return fmt.Errorf("failed to load block processor from the snapshot state: %w", err)
 	}
-
 	return nil
 }
 

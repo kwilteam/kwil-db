@@ -16,10 +16,17 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node"
+	ethdeployer "github.com/kwilteam/kwil-db/test/integration/eth-deployer"
 	"github.com/stretchr/testify/require"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/compose"
 	"github.com/testcontainers/testcontainers-go/wait"
+)
+
+var (
+	UserPubKey1  = "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"
+	UserPubKey2  = "43f149de89d64bf9a9099be19e1b1f7a4db784af8fa07caf6f08dc86ba65636b"
+	OwnerAddress = "0xc89D42189f0450C2b2c3c61f58Ec5d628176A1E7"
 )
 
 // TestConfig is the configuration for the test
@@ -31,6 +38,15 @@ type TestConfig struct {
 	// OPTIONAL: ContainerStartTimeout is the timeout for starting a container.
 	// If not set, it will default to 30 seconds.
 	ContainerStartTimeout time.Duration
+	// OPTIONAL: InitialServices are the services that should be run during setup
+	InitialServices []string
+	// OPTIONAL: DockerNetwork is the name of the docker network to use, if not set,
+	// creates a new network with a random name
+	DockerNetwork string
+	// ServicesPrefix is the prefix to use for the kwild and pg services
+	ServicesPrefix string
+	// PortOffset is the offset to use for the kwild and pg service ports
+	PortOffset int
 }
 
 func (c *TestConfig) ensureDefaults(t *testing.T) {
@@ -64,7 +80,6 @@ type NetworkConfig struct {
 	// Automatically runs kwild and Postgres, but this allows for geth, kgw,
 	// etc. to run as well.
 	ExtraServices []*CustomService // TODO: we need more in this service definition struct. Will come back when I am farther along
-	// TODO: we will probably need to add StateHash and MigrationParams when we add ZDT migration tests
 }
 
 func (n *NetworkConfig) ensureDefaults(t *testing.T) {
@@ -86,6 +101,7 @@ type NodeConfig struct {
 	// OPTIONAL: DockerImage is the docker image to use
 	// By default, it is "kwild:latest"
 	DockerImage string
+
 	// OPTIONAL: Validator is true if the node is a validator
 	// By default, it is true.
 	Validator bool
@@ -93,6 +109,7 @@ type NodeConfig struct {
 	// OPTIONAL: PrivateKey is the private key to use for the node.
 	// If not set, a random key will be generated.
 	PrivateKey *crypto.Secp256k1PrivateKey
+
 	// OPTIONAL: Configure is a function that alter's the node's configuration
 	Configure func(*config.Config)
 }
@@ -121,6 +138,7 @@ func CustomNodeConfig(f func(*NodeConfig)) *NodeConfig {
 type Testnet struct {
 	Nodes   []KwilNode
 	testCtx *testingContext
+	EthNode *EthNode
 }
 
 // ExtraServiceEndpoint gets the endpoint for an extra service that was configured in the testnet
@@ -130,8 +148,89 @@ func (t *Testnet) ExtraServiceEndpoint(ctx context.Context, serviceName string, 
 		return "", fmt.Errorf("container not found")
 	}
 
-	exposed, _, err := getEndpoints(ct, ctx, nat.Port(port), protocol)
+	exposed, unexposed, err := getEndpoints(ct, ctx, nat.Port(port), protocol)
+	fmt.Printf("exposed: %s, unexposed: %s\n", exposed, unexposed)
 	return exposed, err
+}
+
+func CreateDockerNetwork(ctx context.Context, t *testing.T) (*testcontainers.DockerNetwork, error) {
+	dockerNetwork, err := ensureNetworkExist(ctx, t.Name())
+	require.NoError(t, err)
+
+	// the network will be removed by the testSetup that created it
+	t.Cleanup(func() {
+		if !t.Failed() {
+			t.Logf("teardown docker network %s from %s", dockerNetwork.Name, t.Name())
+			err := dockerNetwork.Remove(ctx)
+			require.NoErrorf(t, err, "failed to teardown network %s", dockerNetwork.Name)
+		}
+	})
+
+	return dockerNetwork, nil
+}
+
+func DeployETHNode(t *testing.T, ctx context.Context, dockerName string) *EthNode {
+	tmpDir, err := os.MkdirTemp("", "TestKwilInt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Logf("using temp dir for deploying Eth node %v", tmpDir)
+
+	t.Cleanup(func() {
+		if t.Failed() {
+			t.Logf("Retaining data for failed test at path %v", tmpDir)
+			return
+		}
+		os.RemoveAll(tmpDir)
+	})
+
+	hardHatService := &CustomService{
+		ServiceName:  "hardhat",
+		DockerImage:  "kwildb/hardhat:latest",
+		ExposedPort:  "8545",
+		InternalPort: "8545",
+	}
+	services := []*CustomService{hardHatService}
+
+	composePath, _, err := generateCompose(dockerName, tmpDir, nil, services, nil, "", 0)
+	require.NoError(t, err)
+
+	testCtx := &testingContext{
+		containers:  make(map[string]*testcontainers.DockerContainer),
+		networkName: dockerName,
+		composePath: composePath,
+	}
+
+	runDockerCompose(ctx, t, testCtx, composePath, []*ServiceDefinition{{Name: "hardhat"}})
+
+	// check if the hardhat service is running
+	ctr, ok := testCtx.containers["hardhat"]
+	require.True(t, ok, "hardhat service not found")
+
+	// get the endpoint for the hardhat service
+	exposedChainRPC, unexposedChainRPC, err := getEndpoints(ctr, ctx, "8545", "ws")
+	require.NoError(t, err, "failed to get endpoints for hardhat service")
+
+	var deployers []*ethdeployer.Deployer
+
+	// Deploy 2 escrow contracts
+	for i := range 2 {
+		ethDeployer, err := ethdeployer.NewDeployer(exposedChainRPC, UserPubKey1, 5)
+		require.NoError(t, err, "failed to get eth deployer")
+
+		// Deploy Token and Escrow contracts
+		err = ethDeployer.Deploy()
+		require.NoError(t, err, "failed to deploy contracts")
+
+		deployers = append(deployers, ethDeployer)
+		t.Logf("Deployed escrow contract %d at address %s", i, ethDeployer.EscrowAddress())
+	}
+
+	return &EthNode{
+		ExposedChainRPC:   exposedChainRPC,
+		UnexposedChainRPC: unexposedChainRPC,
+		Deployers:         deployers,
+	}
 }
 
 func SetupTests(t *testing.T, testConfig *TestConfig) *Testnet {
@@ -142,6 +241,8 @@ func SetupTests(t *testing.T, testConfig *TestConfig) *Testnet {
 	if err != nil {
 		t.Fatal(err)
 	}
+	t.Logf("using temp dir %v", tmpDir)
+
 	t.Cleanup(func() {
 		if t.Failed() {
 			t.Logf("Retaining data for failed test at path %v", tmpDir)
@@ -151,18 +252,16 @@ func SetupTests(t *testing.T, testConfig *TestConfig) *Testnet {
 	})
 	ctx := context.Background()
 
-	dockerNetwork, err := ensureNetworkExist(ctx, t.Name())
-	require.NoError(t, err)
+	var dockerNetworkName string
+	if testConfig.DockerNetwork == "" {
+		dockerNetwork, err := CreateDockerNetwork(ctx, t)
+		require.NoError(t, err)
+		dockerNetworkName = dockerNetwork.Name
+	} else {
+		dockerNetworkName = testConfig.DockerNetwork
+	}
 
-	t.Cleanup(func() {
-		if !t.Failed() {
-			t.Logf("teardown docker network %s from %s", dockerNetwork.Name, t.Name())
-			err := dockerNetwork.Remove(ctx)
-			require.NoErrorf(t, err, "failed to teardown network %s", dockerNetwork.Name)
-		}
-	})
-
-	composePath, nodeInfo, err := generateCompose(dockerNetwork.Name, tmpDir, testConfig.Network.Nodes, testConfig.Network.ExtraServices, nil) //TODO: need user id and groups
+	composePath, nodeInfo, err := generateCompose(dockerNetworkName, tmpDir, testConfig.Network.Nodes, testConfig.Network.ExtraServices, nil, testConfig.ServicesPrefix, testConfig.PortOffset) //TODO: need user id and groups
 	require.NoError(t, err)
 
 	require.Equal(t, len(testConfig.Network.Nodes), len(nodeInfo)) // ensure that the number of nodes is the same as the number of node info
@@ -170,13 +269,33 @@ func SetupTests(t *testing.T, testConfig *TestConfig) *Testnet {
 		t.Fatal("at least one node is required")
 	}
 
+	testCtx := &testingContext{
+		config:          testConfig,
+		containers:      make(map[string]*testcontainers.DockerContainer),
+		composePath:     composePath, // used if we need to add more services later
+		generatedConfig: nil,
+		networkName:     dockerNetworkName,
+	}
+
 	genesisConfig := config.DefaultGenesisConfig()
+	genesisConfig.DBOwner = testConfig.Network.DBOwner
 	testConfig.Network.ConfigureGenesis(genesisConfig)
 
 	generatedNodes := make([]*kwilNode, len(testConfig.Network.Nodes))
 	testnetNodeConfigs := make([]*setup.TestnetNodeConfig, len(testConfig.Network.Nodes))
 	serviceSet := map[string]struct{}{}
-	servicesToRun := []*serviceDefinition{}
+	servicesToRun := []*ServiceDefinition{}
+
+	serviceFilter := make(map[string]struct{})
+	for _, node := range testConfig.InitialServices {
+		serviceFilter[node] = struct{}{}
+	}
+	filterServices := len(serviceFilter) > 0
+
+	generatedConfig := &generatedNodeConfig{
+		nodeConfigs: make(map[string]*config.Config),
+	}
+
 	for i, nodeCfg := range testConfig.Network.Nodes {
 		var firstNode *kwilNode
 		if i == 0 {
@@ -199,15 +318,20 @@ func SetupTests(t *testing.T, testConfig *TestConfig) *Testnet {
 
 		// we append two services for each node: kwild and Postgres
 		// kwild:
-		servicesToRun = append(servicesToRun, &serviceDefinition{
-			Name:    nodeInfo[i].KwilNodeServiceName,
-			WaitMsg: &kwildWaitMsg,
-		})
+		if _, ok := serviceFilter[nodeInfo[i].KwilNodeServiceName]; ok || !filterServices {
+			servicesToRun = append(servicesToRun, &ServiceDefinition{
+				Name:    nodeInfo[i].KwilNodeServiceName,
+				WaitMsg: &kwildWaitMsg,
+			})
+		}
+
 		// Postgres:
-		servicesToRun = append(servicesToRun, &serviceDefinition{
-			Name:    nodeInfo[i].PostgresServiceName,
-			WaitMsg: &postgresWaitMsg,
-		})
+		if _, ok := serviceFilter[nodeInfo[i].PostgresServiceName]; ok || !filterServices {
+			servicesToRun = append(servicesToRun, &ServiceDefinition{
+				Name:    nodeInfo[i].PostgresServiceName,
+				WaitMsg: &postgresWaitMsg,
+			})
+		}
 
 		// if i == 0, then it is the first node and will be the leader.
 		// All nodes that are validators, including the leader, will be added to the Validator list
@@ -234,8 +358,11 @@ func SetupTests(t *testing.T, testConfig *TestConfig) *Testnet {
 			DirName:    generatedNodes[i].generatedInfo.KwilNodeServiceName,
 			Config:     generatedNodes[i].config,
 		}
+
+		generatedConfig.nodeConfigs[nodeInfo[i].KwilNodeServiceName] = generatedNodes[i].config
 	}
 
+	generatedConfig.genesisConfig = genesisConfig
 	require.NoError(t, genesisConfig.SanityChecks())
 
 	// validate the user-provided services
@@ -249,7 +376,7 @@ func SetupTests(t *testing.T, testConfig *TestConfig) *Testnet {
 			waitMsg = &svc.WaitMsg
 		}
 
-		servicesToRun = append(servicesToRun, &serviceDefinition{
+		servicesToRun = append(servicesToRun, &ServiceDefinition{
 			Name:    svc.ServiceName,
 			WaitMsg: waitMsg,
 		})
@@ -258,16 +385,14 @@ func SetupTests(t *testing.T, testConfig *TestConfig) *Testnet {
 	err = setup.GenerateTestnetDir(tmpDir, genesisConfig, testnetNodeConfigs)
 	require.NoError(t, err)
 
-	testCtx := &testingContext{
-		config:     testConfig,
-		containers: make(map[string]*testcontainers.DockerContainer),
-	}
+	testCtx.generatedConfig = generatedConfig
 
 	runDockerCompose(ctx, t, testCtx, composePath, servicesToRun)
 
 	tp := &Testnet{
 		testCtx: testCtx,
 	}
+
 	for _, node := range generatedNodes {
 		node.testCtx = testCtx
 		tp.Nodes = append(tp.Nodes, node)
@@ -276,19 +401,31 @@ func SetupTests(t *testing.T, testConfig *TestConfig) *Testnet {
 	return tp
 }
 
+func (tt *Testnet) ServiceContainer(t *testing.T, serviceName string) (*testcontainers.DockerContainer, error) {
+	ct, ok := tt.testCtx.containers[serviceName]
+	if !ok {
+		return nil, fmt.Errorf("container %s not found", serviceName)
+	}
+	return ct, nil
+}
+
+func (t *Testnet) NetworkName() string {
+	return t.testCtx.networkName
+}
+
 var (
 	kwildWaitMsg    string = "Committed Block"
 	postgresWaitMsg string = `listening on IPv4 address "0.0.0.0", port 5432`
 )
 
-// serviceDefinition is a definition of a service in a docker-compose file
-type serviceDefinition struct {
+// ServiceDefinition is a definition of a service in a docker-compose file
+type ServiceDefinition struct {
 	Name    string
 	WaitMsg *string // if nil, no wait
 }
 
 // runDockerCompose runs docker-compose with the given compose file
-func runDockerCompose(ctx context.Context, t *testing.T, testCtx *testingContext, composePath string, services []*serviceDefinition) {
+func runDockerCompose(ctx context.Context, t *testing.T, testCtx *testingContext, composePath string, services []*ServiceDefinition) {
 	var dc compose.ComposeStack
 	var err error
 	dc, err = compose.NewDockerCompose(composePath)
@@ -299,8 +436,8 @@ func runDockerCompose(ctx context.Context, t *testing.T, testCtx *testingContext
 	t.Cleanup(func() {
 		if t.Failed() {
 			t.Logf("Stopping but keeping containers for inspection after failed test: %v", dc.Services())
-			cancel() // Stop, not Down, which would remove the containers too --- this doesn't work, dang
-			time.Sleep(5 * time.Second)
+			// cancel() // Stop, not Down, which would remove the containers too --- this doesn't work, dang
+			time.Sleep(10 * time.Minute)
 
 			// There is no dc.Stop, but there should be! Do this instead:
 			svcs := dc.Services()
@@ -360,8 +497,7 @@ func (c *NodeConfig) makeNode(generated *generatedNodeInfo, isFirstNode bool, fi
 	// These are:
 	// --admin.listen
 	// --rpc.listen
-	// --p2p.ip
-	// --p2p.port
+	// --p2p.listen
 	// --db.host
 	// --db.port
 	// --db.user
@@ -398,6 +534,10 @@ func (c *NodeConfig) makeNode(generated *generatedNodeInfo, isFirstNode bool, fi
 	if !isFirstNode {
 		// if this is not the first node, we should set the first node as the bootnode
 		conf.P2P.BootNodes = []string{node.FormatPeerString(firstNode.nodeTestConfig.PrivateKey.Public().Bytes(), firstNode.nodeTestConfig.PrivateKey.Public().Type(), firstNode.generatedInfo.KwilNodeServiceName, p2pPort)}
+
+		if conf.StateSync.Enable {
+			conf.StateSync.TrustedProviders = conf.P2P.BootNodes
+		}
 	}
 
 	return &kwilNode{
@@ -407,6 +547,43 @@ func (c *NodeConfig) makeNode(generated *generatedNodeInfo, isFirstNode bool, fi
 	}, nil
 }
 
+func KwildServiceDefinition(name string) *ServiceDefinition {
+	return &ServiceDefinition{
+		Name:    name,
+		WaitMsg: &kwildWaitMsg,
+	}
+}
+
+func PostgresServiceDefinition(name string) *ServiceDefinition {
+	return &ServiceDefinition{
+		Name:    name,
+		WaitMsg: &postgresWaitMsg,
+	}
+}
+
+func NewServiceDefinition(name string, waitMsg string) *ServiceDefinition {
+	return &ServiceDefinition{
+		Name:    name,
+		WaitMsg: &waitMsg,
+	}
+}
+
+func (tt *Testnet) RunServices(t *testing.T, ctx context.Context, services []*ServiceDefinition) {
+	runDockerCompose(ctx, t, tt.testCtx, tt.testCtx.composePath, services)
+}
+
+type generatedNodeConfig struct {
+	genesisConfig *config.GenesisConfig
+	nodeConfigs   map[string]*config.Config // string is the kwild node service name
+}
+
+type testingContext struct {
+	config          *TestConfig
+	composePath     string
+	containers      map[string]*testcontainers.DockerContainer
+	generatedConfig *generatedNodeConfig
+	networkName     string
+}
 type kwilNode struct {
 	config         *config.Config
 	nodeTestConfig *NodeConfig
@@ -415,9 +592,11 @@ type kwilNode struct {
 	client         JSONRPCClient
 }
 
-type testingContext struct {
-	config     *TestConfig
-	containers map[string]*testcontainers.DockerContainer
+type EthNode struct {
+	ExposedChainRPC   string
+	UnexposedChainRPC string
+
+	Deployers []*ethdeployer.Deployer
 }
 
 func (k *kwilNode) PrivateKey() *crypto.Secp256k1PrivateKey {
@@ -436,7 +615,7 @@ func (k *kwilNode) Config() *config.Config {
 	return k.config
 }
 
-func (k *kwilNode) JSONRPCClient(t *testing.T, ctx context.Context, usingGateway bool) JSONRPCClient {
+func (k *kwilNode) JSONRPCClient(t *testing.T, ctx context.Context, usingGateway bool, privKey string) JSONRPCClient {
 	if k.client != nil {
 		return k.client
 	}
@@ -446,10 +625,10 @@ func (k *kwilNode) JSONRPCClient(t *testing.T, ctx context.Context, usingGateway
 		t.Fatalf("container %s not found", k.generatedInfo.KwilNodeServiceName)
 	}
 
-	endpoint, err := kwildJSONRPCEndpoints(container, ctx)
+	endpoint, _, err := kwildJSONRPCEndpoints(container, ctx)
 	require.NoError(t, err)
 
-	client, err := getNewClientFn(k.testCtx.config.ClientDriver)(ctx, endpoint, usingGateway, t.Logf)
+	client, err := getNewClientFn(k.testCtx.config.ClientDriver)(ctx, endpoint, usingGateway, t.Logf, privKey)
 	require.NoError(t, err)
 
 	k.client = client
@@ -467,11 +646,21 @@ func (k *kwilNode) AdminClient(t *testing.T, ctx context.Context) *AdminClient {
 	}
 }
 
+func (k *kwilNode) JSONRPCEndpoint(t *testing.T, ctx context.Context) (string, string, error) {
+	container, ok := k.testCtx.containers[k.generatedInfo.KwilNodeServiceName]
+	if !ok {
+		t.Fatalf("container %s not found", k.generatedInfo.KwilNodeServiceName)
+	}
+
+	return kwildJSONRPCEndpoints(container, ctx)
+}
+
 type KwilNode interface {
 	PrivateKey() *crypto.Secp256k1PrivateKey
 	PublicKey() *crypto.Secp256k1PublicKey
 	IsValidator() bool
 	Config() *config.Config
-	JSONRPCClient(t *testing.T, ctx context.Context, usingKGW bool) JSONRPCClient
+	JSONRPCEndpoint(t *testing.T, ctx context.Context) (string, string, error)
+	JSONRPCClient(t *testing.T, ctx context.Context, usingKGW bool, privKey string) JSONRPCClient
 	AdminClient(t *testing.T, ctx context.Context) *AdminClient
 }

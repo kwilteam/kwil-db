@@ -290,6 +290,7 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 		return err
 	}
 
+	fmt.Println("expired resolutions", expired)
 	expiredIDs := make([]*types.UUID, 0, len(expired))
 	requiredPowerMap := make(map[string]int64) // map of resolution type to required power
 
@@ -315,7 +316,7 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 			credits.applyResolution(resolution)
 		}
 
-		r.service.Logger.Debug("expiring resolution", "type", resolution.Type, "id", resolution.ID.String(), "refunded", refunded)
+		r.service.Logger.Info("expiring resolution", "type", resolution.Type, "id", resolution.ID.String(), "refunded", refunded)
 	}
 
 	allIDs := append(finalizedIDs, expiredIDs...)
@@ -366,32 +367,25 @@ type creditMap map[string]*big.Int
 
 // applyResolution will calculate the rewards for the proposer and voters of a resolution.
 // it will add the rewards to the credit map.
-func (c creditMap) applyResolution(res *resolutions.Resolution) error {
+func (c creditMap) applyResolution(res *resolutions.Resolution) {
 	// reward voters.
 	// this will include the proposer, even if they did not submit a vote id
+	fmt.Println("crediting the resolution", res)
+
 	for _, voter := range res.Voters {
 		// if the voter is the proposer, then we will reward them below,
 		// since extra logic is required if they did not submit a vote id
 		if bytes.Equal(voter.Identifier, res.Proposer.Identifier) {
 			continue
 		}
+		id := fmt.Sprintf("%s#%d", voter.Identifier.String(), voter.KeyType)
 
-		voterID := &types.AccountID{
-			Identifier: voter.Identifier,
-			KeyType:    voter.KeyType,
-		}
-
-		id, err := voterID.MarshalBinary()
-		if err != nil {
-			return err
-		}
-
-		currentBalance, ok := c[string(id)]
+		currentBalance, ok := c[id]
 		if !ok {
 			currentBalance = big.NewInt(0)
 		}
 
-		c[string(id)] = big.NewInt(0).Add(currentBalance, ValidatorVoteIDPrice)
+		c[id] = big.NewInt(0).Add(currentBalance, ValidatorVoteIDPrice)
 	}
 
 	bodyCost := big.NewInt(ValidatorVoteBodyBytePrice * int64(len(res.Body)))
@@ -403,8 +397,6 @@ func (c creditMap) applyResolution(res *resolutions.Resolution) error {
 
 	// reward proposer
 	c[proposerKey] = big.NewInt(0).Add(currentBalance, bodyCost)
-
-	return nil
 }
 
 // TxResponse is the response from a transaction.

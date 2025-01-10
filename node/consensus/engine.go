@@ -291,6 +291,9 @@ func (ce *ConsensusEngine) Start(ctx context.Context, fns BroadcastFns) error {
 
 	ce.blockProcessor.SetBroadcastTxFn(fns.TxBroadcaster)
 
+	// set it to sentry by default, will be updated in the catchup phase below
+	ce.role.Store(types.RoleSentry)
+
 	ce.log.Info("Starting the consensus engine")
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -375,6 +378,11 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 			return nil
 
 		case <-ce.newRound:
+			params := ce.blockProcessor.ConsensusParams()
+			if params.MigrationStatus == ktypes.MigrationCompleted {
+				ce.log.Info("Network halted due to migration, no more blocks will be produced")
+			}
+
 			if err := ce.startNewRound(ctx); err != nil {
 				ce.log.Error("Error starting a new round", "error", err)
 				return err
@@ -486,11 +494,11 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 		ce.setLastCommitInfo(appHeight, nil, appHash)
 
 	} else if appHeight > 0 {
+		// restart or statesync init or zdt init
 		if appHeight == storeHeight && !bytes.Equal(appHash, storeAppHash[:]) {
 			// This is not possible, PG mismatches with the Blockstore return error
 			return fmt.Errorf("AppHash mismatch, appHash: %x, storeAppHash: %v", appHash, storeAppHash)
 		}
-
 		ce.setLastCommitInfo(appHeight, blkHash[:], appHash)
 	}
 
@@ -520,6 +528,9 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 func (ce *ConsensusEngine) updateValidatorSetAndRole() {
 	valset := ce.blockProcessor.GetValidators()
 	pubKey := ce.privKey.Public()
+
+	fmt.Println("Current Validator set: ", ce.validatorSet)
+	fmt.Println("New Validator set: ", valset)
 
 	ce.validatorSet = make(map[string]ktypes.Validator)
 	for _, v := range valset {
@@ -636,7 +647,7 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 	// status check, nodes halt here if the migration is completed
 	params := ce.blockProcessor.ConsensusParams()
 	if params.MigrationStatus == ktypes.MigrationCompleted {
-		ce.haltChan <- "Network halted due to migration"
+		ce.log.Info("Network halted due to migration, no more blocks will be produced")
 		return nil
 	}
 

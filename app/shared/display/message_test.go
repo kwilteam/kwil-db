@@ -166,7 +166,7 @@ func Example_respTxQuery_json() {
 	//       "serialization": "concat",
 	//       "sender": null
 	//     },
-	//     "result": {
+	//     "tx_result": {
 	//       "code": 0,
 	//       "gas": 10,
 	//       "log": "This is log",
@@ -201,7 +201,7 @@ func Example_respTxQuery_WithRaw_json() {
 	//       "serialization": "concat",
 	//       "sender": null
 	//     },
-	//     "result": {
+	//     "tx_result": {
 	//       "code": 0,
 	//       "gas": 10,
 	//       "log": "This is log",

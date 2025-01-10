@@ -3,12 +3,15 @@ package setup
 import (
 	"context"
 	"crypto/rand"
+	"encoding/hex"
+	"fmt"
 
 	"github.com/kwilteam/kwil-db/core/client"
 	cTypes "github.com/kwilteam/kwil-db/core/client/types"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/gatewayclient"
+	"github.com/kwilteam/kwil-db/core/types"
 )
 
 // jsonrpcGoDriver uses the Go client to interact with the kwil node
@@ -20,12 +23,14 @@ type jsonrpcGoDriver struct {
 
 var _ JSONRPCClient = (*jsonrpcGoDriver)(nil)
 
-func newClient(ctx context.Context, endpoint string, usingGateway bool, l logFunc) (JSONRPCClient, error) {
-	priv, _, err := crypto.GenerateSecp256k1Key(rand.Reader)
+func newClient(ctx context.Context, endpoint string, usingGateway bool, l logFunc, privKey string) (JSONRPCClient, error) {
+	var secp256k1Priv *crypto.Secp256k1PrivateKey
+	var err error
+
+	secp256k1Priv, err = generatePrivKey(privKey)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to generate private key: %w", err)
 	}
-	secp256k1Priv := priv.(*crypto.Secp256k1PrivateKey)
 
 	opts := &cTypes.Options{
 		Signer: &auth.Secp256k1Signer{
@@ -44,10 +49,31 @@ func newClient(ctx context.Context, endpoint string, usingGateway bool, l logFun
 	}
 
 	return &jsonrpcGoDriver{
-		privateKey: priv,
+		privateKey: secp256k1Priv,
 		Client:     cl,
 		log:        l,
 	}, nil
+}
+
+func generatePrivKey(privKey string) (secp256k1Priv *crypto.Secp256k1PrivateKey, err error) {
+	if privKey == "" {
+		priv, _, err := crypto.GenerateSecp256k1Key(rand.Reader)
+		if err != nil {
+			return nil, err
+		}
+		secp256k1Priv = priv.(*crypto.Secp256k1PrivateKey)
+	} else {
+		bz, err := hex.DecodeString(privKey)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode private key: %w", err)
+		}
+		secp256k1Priv, err = crypto.UnmarshalSecp256k1PrivateKey(bz)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal private key: %w", err)
+		}
+	}
+
+	return secp256k1Priv, nil
 }
 
 func (c *jsonrpcGoDriver) PrivateKey() crypto.PrivateKey {
@@ -56,4 +82,23 @@ func (c *jsonrpcGoDriver) PrivateKey() crypto.PrivateKey {
 
 func (c *jsonrpcGoDriver) PublicKey() crypto.PublicKey {
 	return c.privateKey.Public()
+}
+
+// TxSuccess checks if the transaction was successful
+func (c *jsonrpcGoDriver) TxSuccess(ctx context.Context, txHash types.Hash) error {
+	resp, err := c.TxQuery(ctx, txHash)
+	if err != nil {
+		return fmt.Errorf("failed to query: %w", err)
+	}
+
+	if resp.Result.Code != uint32(types.CodeOk) {
+		return fmt.Errorf("transaction not ok: %s", resp.Result.Log)
+	}
+
+	// NOTE: THIS should not be considered a failure, should retry
+	if resp.Height < 0 {
+		return ErrTxNotConfirmed
+	}
+
+	return nil
 }

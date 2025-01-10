@@ -189,6 +189,8 @@ func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext,
 	// and will instead need to be recorded as the first changeset of the migration.
 
 	if block.Height == m.activeMigration.StartHeight {
+		block.ChainContext.NetworkParameters.MigrationStatus = types.MigrationInProgress
+
 		tx, snapshotId, err := db.BeginSnapshotTx(ctx)
 		if err != nil {
 			return err
@@ -258,6 +260,10 @@ func (m *Migrator) generateGenesisConfig(snapshotHash []byte, logger log.Logger)
 func (m *Migrator) PersistLastChangesetHeight(ctx context.Context, tx sql.Executor, height int64) error {
 	m.mu.RLock()
 	defer m.mu.RUnlock()
+
+	if m.activeMigration == nil {
+		return nil
+	}
 
 	m.lastChangeset = height // safety update for inconsistent bootup. it should already be updated by the writer
 	return setLastStoredChangeset(ctx, tx, height)

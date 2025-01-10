@@ -242,6 +242,7 @@ func DeleteResolution(ctx context.Context, db sql.TxMaker, id *types.UUID) error
 // It expects there to be 7 columns in the row, in the following order:
 // id, body, type, expiration, approved_power, voters, voteBodyProposer
 func fromRow(ctx context.Context, db sql.Executor, row []any) (*resolutions.Resolution, error) {
+	fmt.Println("fromROW: ", row)
 	if len(row) != 7 {
 		return nil, fmt.Errorf("expected 7 columns, got %d", len(row))
 	}
@@ -312,7 +313,7 @@ func fromRow(ctx context.Context, db sql.Executor, row []any) (*resolutions.Reso
 		// retrieve the power of the proposer if it's issued by the Validator
 		proposer, err := getValidator(ctx, db, pubKey, keyType)
 		if err != nil {
-			return nil, fmt.Errorf("failed to get proposer: %w", err)
+			return nil, fmt.Errorf("failed to get proposer validator: %w", err)
 		}
 		if proposer != nil {
 			v.Proposer.Power = proposer.Power
@@ -386,6 +387,7 @@ func GetExpired(ctx context.Context, db sql.Executor, blockHeight int64) ([]*res
 
 	ids := make([]*resolutions.Resolution, len(res.Rows))
 	for i, row := range res.Rows {
+		fmt.Println("Expired ROW: ", row)
 		ids[i], err = fromRow(ctx, db, row)
 		if err != nil {
 			return nil, fmt.Errorf("internal bug: %w", err)
@@ -739,6 +741,7 @@ func getValidator(ctx context.Context, db sql.Executor, pubKey []byte, keyType c
 	}
 
 	row := res.Rows[0]
+	fmt.Println("Voter Row: ", row)
 	voterBts, ok := row[0].([]byte)
 	if !ok {
 		return nil, errors.New("invalid type for voter")

@@ -1,6 +1,9 @@
 package whitelist
 
-import "github.com/spf13/cobra"
+import (
+	"github.com/kwilteam/kwil-db/app/shared/display"
+	"github.com/spf13/cobra"
+)
 
 var peersCmd = &cobra.Command{
 	Use:   "whitelist",
@@ -13,5 +16,7 @@ func WhitelistCmd() *cobra.Command {
 		removeCmd(),
 		listCmd(),
 	)
+	display.BindOutputFormatFlag(peersCmd)
+
 	return peersCmd
 }

@@ -5,6 +5,8 @@ import (
 	"crypto/ecdsa"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
+	client "github.com/kwilteam/kwil-db/core/client/types"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
 )
@@ -13,16 +15,10 @@ import (
 // Whoever writes a Dsl doesn't need to know what is the underlying implementation
 // When in testing, need to translate the DSL to driver protocol
 
-type DatabaseExister interface {
-	// DatabaseExists checks if a database exists, impl should check
-	// two APIs: ListDatabases and GetSchema
-	DatabaseExists(ctx context.Context, dbid string) error
-}
-
 // AccountBalanceDsl is the dsl for checking an confirmed account balance. This
 // is likely to be useful for most other specifications when gas is enabled.
 type AccountBalanceDsl interface {
-	AccountBalance(ctx context.Context, acctID []byte) (*big.Int, error)
+	GetAccount(ctx context.Context, acct *types.AccountID, status types.AccountStatus) (*types.Account, error)
 }
 
 // TransferAmountDsl is the dsl for the account-to-account transfer
@@ -30,29 +26,29 @@ type AccountBalanceDsl interface {
 type TransferAmountDsl interface {
 	TxQueryDsl
 	AccountBalanceDsl
-	TransferAmt(ctx context.Context, to []byte, amt *big.Int) (txHash types.Hash, err error)
+	Transfer(ctx context.Context, to *types.AccountID, amt *big.Int, opts ...client.TxOpt) (txHash types.Hash, err error)
 }
 
 // ExecuteCallDsl is dsl for call specification
 type ExecuteCallDsl interface {
-	Call(ctx context.Context, dbid, action string, inputs []any) (*types.CallResult, error)
+	Call(ctx context.Context, namespace, action string, inputs []any) (*types.CallResult, error)
 }
 
 // ExecuteExtensionDsl is dsl for extension specification
 type ExecuteExtensionDsl interface {
 	TxQueryDsl
 	ExecuteCallDsl
-	Execute(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) (types.Hash, error)
+	Execute(ctx context.Context, namespace string, actionName string, actionInputs ...[]any) (types.Hash, error)
 }
 
 // ExecuteQueryDsl is dsl for query specification
 type ExecuteQueryDsl interface {
 	TxQueryDsl
 	// ExecuteAction executes QUERY to a database
-	Execute(ctx context.Context, dbid string, actionName string, actionInputs ...[]any) (types.Hash, error)
-	ExecuteSQL(ctx context.Context, sql string, params map[string]any) (types.Hash, error)
-	QueryDatabase(ctx context.Context, query string) (*types.QueryResult, error)
-	SupportBatch() bool
+	Execute(ctx context.Context, namespace string, actionName string, actionInputs [][]any, opts ...client.TxOpt) (types.Hash, error)
+	ExecuteSQL(ctx context.Context, sql string, params map[string]any, opts ...client.TxOpt) (types.Hash, error)
+	Query(ctx context.Context, query string, params map[string]any) (*types.QueryResult, error)
+	// SupportBatch() bool
 }
 
 // ExecuteActionsDsl is dsl for executing any sort of action
@@ -100,15 +96,22 @@ type ValidatorOpsDsl interface {
 	ValidatorNodeLeave(ctx context.Context) (types.Hash, error)
 }
 
-type DeployerDsl interface {
+type AccountsDsl interface {
 	AccountBalanceDsl
 	TransferAmountDsl
+}
 
+type DeployerDsl interface {
 	Approve(ctx context.Context, sender *ecdsa.PrivateKey, amount *big.Int) error
 	Deposit(ctx context.Context, sender *ecdsa.PrivateKey, amount *big.Int) error
-	EscrowBalance(ctx context.Context, sender *ecdsa.PrivateKey) (*big.Int, error)
-	UserBalance(ctx context.Context, sender *ecdsa.PrivateKey) (*big.Int, error)
-	Allowance(ctx context.Context, sender *ecdsa.PrivateKey) (*big.Int, error)
+	EscrowBalance(ctx context.Context, sender common.Address) (*big.Int, error)
+	UserBalance(ctx context.Context, sender common.Address) (*big.Int, error)
+	Allowance(ctx context.Context, sender common.Address) (*big.Int, error)
+}
+
+type ExecutorDsl interface {
+	ExecuteQueryDsl
+	AccountsDsl
 }
 
 type TxInfoer interface {
@@ -134,6 +137,6 @@ type MigrationOpsDsl interface {
 	SubmitMigrationProposal(ctx context.Context, activationHeight *big.Int, migrationDuration *big.Int) (types.Hash, error)
 	ApproveMigration(ctx context.Context, migrationResolutionID *types.UUID) (types.Hash, error)
 	ListMigrations(ctx context.Context) ([]*types.Migration, error)
-	GenesisState(ctx context.Context) (*types.MigrationMetadata, error)
-	GenesisSnapshotChunk(ctx context.Context, height uint64, chunkIdx uint32) ([]byte, error)
+	// GenesisState(ctx context.Context) (*types.MigrationMetadata, error)
+	// GenesisSnapshotChunk(ctx context.Context, height uint64, chunkIdx uint32) ([]byte, error)
 }

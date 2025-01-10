@@ -37,7 +37,7 @@ func (id *AccountID) MarshalBinary() ([]byte, error) {
 	}
 
 	buf := new(bytes.Buffer)
-	if err := WriteBytes(buf, id.Identifier); err != nil {
+	if err := WriteBytes(buf, id.Identifier[:]); err != nil {
 		return nil, fmt.Errorf("failed to write account identifier: %w", err)
 	}
 

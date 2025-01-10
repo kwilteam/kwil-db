@@ -71,7 +71,7 @@ func (ce *ConsensusEngine) BroadcastTx(ctx context.Context, tx *ktypes.Transacti
 	// Announce the transaction to the network
 	if ce.txAnnouncer != nil {
 		ce.log.Infof("broadcasting new tx %v", txHash)
-		go ce.txAnnouncer(ctx, txHash, rawTx)
+		go ce.txAnnouncer(context.Background(), txHash, rawTx)
 	}
 
 	res := &ktypes.ResultBroadcastTx{
