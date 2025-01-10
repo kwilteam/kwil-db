@@ -103,7 +103,7 @@ func Test_Arithmetic(t *testing.T) {
 			a := makeVal(tt.a)
 			b := makeVal(tt.b)
 
-			isErrOrResult := func(a, b ScalarValue, op ArithmeticOp, want any) {
+			isErrOrResult := func(a, b ScalarValue, op arithmeticOp, want any) {
 				res, err := a.Arithmetic(b, op)
 				if wantErr, ok := want.(error); ok {
 					require.Error(t, err)
@@ -359,7 +359,7 @@ func Test_Comparison(t *testing.T) {
 			a := makeVal(tt.a)
 			b := makeVal(tt.b)
 
-			isErrOrResult := func(a, b Value, op ComparisonOp, want any) {
+			isErrOrResult := func(a, b Value, op comparisonOp, want any) {
 				t.Log(op.String())
 				res, err := a.Compare(b, op)
 				if wantErr, ok := want.(error); ok {
@@ -665,7 +665,7 @@ func Test_Unary(t *testing.T) {
 			scal, ok := val.(ScalarValue)
 			require.True(t, ok)
 
-			check := func(op UnaryOp, want any) {
+			check := func(op unaryOp, want any) {
 				if want == nil {
 					want = engine.ErrUnary
 				}

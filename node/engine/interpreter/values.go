@@ -159,7 +159,7 @@ func NewZeroValue(t *types.DataType) (Value, error) {
 type Value interface {
 	// Compare compares the variable with another variable using the given comparison operator.
 	// It will return a boolean value or null, depending on the comparison and the values.
-	Compare(v Value, op ComparisonOp) (*BoolValue, error)
+	Compare(v Value, op comparisonOp) (*BoolValue, error)
 	// Type returns the type of the variable.
 	Type() *types.DataType
 	// RawValue returns the value of the variable.
@@ -177,9 +177,9 @@ type Value interface {
 type ScalarValue interface {
 	Value
 	// Arithmetic performs an arithmetic operation on the variable with another variable.
-	Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error)
+	Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, error)
 	// Unary applies a unary operation to the variable.
-	Unary(op UnaryOp) (ScalarValue, error)
+	Unary(op unaryOp) (ScalarValue, error)
 	// Array creates an array from this scalar value and any other scalar values.
 	Array(v ...ScalarValue) (ArrayValue, error)
 }
@@ -409,7 +409,7 @@ func (i *IntValue) Null() bool {
 	return !i.Valid
 }
 
-func (v *IntValue) Compare(v2 Value, op ComparisonOp) (*BoolValue, error) {
+func (v *IntValue) Compare(v2 Value, op comparisonOp) (*BoolValue, error) {
 	if res, early := nullCmp(v, v2, op); early {
 		return res, nil
 	}
@@ -442,7 +442,7 @@ func (v *IntValue) Compare(v2 Value, op ComparisonOp) (*BoolValue, error) {
 // based on the comparison of the two values.
 // If the operator is any other operator and either of the values is null,
 // it will return a null value.
-func nullCmp(a, b Value, op ComparisonOp) (*BoolValue, bool) {
+func nullCmp(a, b Value, op comparisonOp) (*BoolValue, bool) {
 	// if it is isDistinctFrom or is, we should handle nulls
 	// Otherwise, if either is a null, we return early because we cannot compare
 	// a null value with a non-null value.
@@ -485,7 +485,7 @@ func checkScalarNulls(v ...ScalarValue) (ScalarValue, bool) {
 	return nil, false
 }
 
-func (i *IntValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error) {
+func (i *IntValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, error) {
 	if res, early := checkScalarNulls(i, v); early {
 		return res, nil
 	}
@@ -526,7 +526,7 @@ func (i *IntValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, erro
 	}, nil
 }
 
-func (i *IntValue) Unary(op UnaryOp) (ScalarValue, error) {
+func (i *IntValue) Unary(op unaryOp) (ScalarValue, error) {
 	if i.Null() {
 		return i, nil
 	}
@@ -692,7 +692,7 @@ func (t *TextValue) Null() bool {
 	return !t.Valid
 }
 
-func (s *TextValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
+func (s *TextValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	if res, early := nullCmp(s, v, op); early {
 		return res, nil
 	}
@@ -719,7 +719,7 @@ func (s *TextValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	return newBool(b), nil
 }
 
-func (s *TextValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error) {
+func (s *TextValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, error) {
 	if res, early := checkScalarNulls(s, v); early {
 		return res, nil
 	}
@@ -736,7 +736,7 @@ func (s *TextValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, err
 	return nil, fmt.Errorf("%w: cannot perform arithmetic operation %s on type string", engine.ErrArithmetic, op)
 }
 
-func (s *TextValue) Unary(op UnaryOp) (ScalarValue, error) {
+func (s *TextValue) Unary(op unaryOp) (ScalarValue, error) {
 	return nil, fmt.Errorf("%w: cannot perform unary operation on string", engine.ErrUnary)
 }
 
@@ -836,7 +836,7 @@ func (b *BoolValue) Null() bool {
 	return !b.Valid
 }
 
-func (b *BoolValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
+func (b *BoolValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	if res, early := nullCmp(b, v, op); early {
 		return res, nil
 	}
@@ -865,11 +865,11 @@ func (b *BoolValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	return newBool(b2), nil
 }
 
-func (b *BoolValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error) {
+func (b *BoolValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, error) {
 	return nil, fmt.Errorf("%w: cannot perform arithmetic operation on bool", engine.ErrArithmetic)
 }
 
-func (b *BoolValue) Unary(op UnaryOp) (ScalarValue, error) {
+func (b *BoolValue) Unary(op unaryOp) (ScalarValue, error) {
 	if b.Null() {
 		return b, nil
 	}
@@ -949,7 +949,7 @@ func (b *BlobValue) Null() bool {
 	return b.bts == nil
 }
 
-func (b *BlobValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
+func (b *BlobValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	if res, early := nullCmp(b, v, op); early {
 		return res, nil
 	}
@@ -972,7 +972,7 @@ func (b *BlobValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	return newBool(b2), nil
 }
 
-func (b *BlobValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error) {
+func (b *BlobValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, error) {
 	if res, early := checkScalarNulls(b, v); early {
 		return res, nil
 	}
@@ -989,7 +989,7 @@ func (b *BlobValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, err
 	return nil, fmt.Errorf("%w: cannot perform arithmetic operation %s on blob", engine.ErrArithmetic, op)
 }
 
-func (b *BlobValue) Unary(op UnaryOp) (ScalarValue, error) {
+func (b *BlobValue) Unary(op unaryOp) (ScalarValue, error) {
 	return nil, fmt.Errorf("%w: cannot perform unary operation on blob", engine.ErrUnary)
 }
 
@@ -1086,7 +1086,7 @@ func (u *UUIDValue) Null() bool {
 	return !u.Valid
 }
 
-func (u *UUIDValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
+func (u *UUIDValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	if res, early := nullCmp(u, v, op); early {
 		return res, nil
 	}
@@ -1109,11 +1109,11 @@ func (u *UUIDValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	return newBool(b), nil
 }
 
-func (u *UUIDValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error) {
+func (u *UUIDValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, error) {
 	return nil, fmt.Errorf("%w: cannot perform arithmetic operation on uuid", engine.ErrArithmetic)
 }
 
-func (u *UUIDValue) Unary(op UnaryOp) (ScalarValue, error) {
+func (u *UUIDValue) Unary(op unaryOp) (ScalarValue, error) {
 	return nil, fmt.Errorf("%w: cannot perform unary operation on uuid", engine.ErrUnary)
 }
 
@@ -1245,7 +1245,7 @@ func (d *DecimalValue) dec() (*decimal.Decimal, error) {
 	return d2, nil
 }
 
-func (d *DecimalValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
+func (d *DecimalValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	if res, early := nullCmp(d, v, op); early {
 		return res, nil
 	}
@@ -1273,7 +1273,7 @@ func (d *DecimalValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	return cmpIntegers(res, 0, op)
 }
 
-func (d *DecimalValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error) {
+func (d *DecimalValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, error) {
 	if res, early := checkScalarNulls(d, v); early {
 		return res, nil
 	}
@@ -1321,7 +1321,7 @@ func (d *DecimalValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, 
 	return newDec(d2), nil
 }
 
-func (d *DecimalValue) Unary(op UnaryOp) (ScalarValue, error) {
+func (d *DecimalValue) Unary(op unaryOp) (ScalarValue, error) {
 	if d.Null() {
 		return d, nil
 	}
@@ -1480,7 +1480,7 @@ func (a *IntArrayValue) Null() bool {
 	return !a.Valid
 }
 
-func (a *IntArrayValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
+func (a *IntArrayValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
@@ -1613,7 +1613,7 @@ func (a *TextArrayValue) Null() bool {
 	return !a.Valid
 }
 
-func (a *TextArrayValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
+func (a *TextArrayValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
@@ -1768,7 +1768,7 @@ func (a *BoolArrayValue) Null() bool {
 	return !a.Valid
 }
 
-func (a *BoolArrayValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
+func (a *BoolArrayValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
@@ -1868,12 +1868,12 @@ func (a *DecimalArrayValue) Null() bool {
 	return !a.Valid
 }
 
-func (a *DecimalArrayValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
+func (a *DecimalArrayValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
 // cmpArrs compares two Kwil array types.
-func cmpArrs[M ArrayValue](a M, b Value, op ComparisonOp) (*BoolValue, error) {
+func cmpArrs[M ArrayValue](a M, b Value, op comparisonOp) (*BoolValue, error) {
 	if res, early := nullCmp(a, b, op); early {
 		return res, nil
 	}
@@ -2058,7 +2058,7 @@ func (a *BlobArrayValue) Null() bool {
 	return !a.Valid
 }
 
-func (a *BlobArrayValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
+func (a *BlobArrayValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
@@ -2143,7 +2143,7 @@ func (a *UuidArrayValue) Null() bool {
 	return !a.Valid
 }
 
-func (a *UuidArrayValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
+func (a *UuidArrayValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
@@ -2236,7 +2236,7 @@ func (r *RecordValue) AddValue(k string, v Value) error {
 	return nil
 }
 
-func (o *RecordValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
+func (o *RecordValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	if res, early := nullCmp(o, v, op); early {
 		return res, nil
 	}
@@ -2299,7 +2299,7 @@ func (o *RecordValue) Cast(t *types.DataType) (Value, error) {
 	return nil, castErr(fmt.Errorf("cannot cast record to %s", t))
 }
 
-func cmpIntegers(a, b int, op ComparisonOp) (*BoolValue, error) {
+func cmpIntegers(a, b int, op comparisonOp) (*BoolValue, error) {
 	switch op {
 	case equal:
 		return newBool(a == b), nil

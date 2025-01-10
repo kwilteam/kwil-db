@@ -6,25 +6,25 @@ import (
 	"github.com/kwilteam/kwil-db/node/engine/parse"
 )
 
-type ComparisonOp uint8
+type comparisonOp uint8
 
 const (
-	equal ComparisonOp = iota
+	equal comparisonOp = iota
 	lessThan
 	greaterThan
 	is
 	isDistinctFrom
 )
 
-type UnaryOp uint8
+type unaryOp uint8
 
 const (
-	not UnaryOp = iota
+	not unaryOp = iota
 	neg
 	pos
 )
 
-func (op UnaryOp) String() string {
+func (op unaryOp) String() string {
 	switch op {
 	case not:
 		return "NOT"
@@ -37,10 +37,10 @@ func (op UnaryOp) String() string {
 	panic(fmt.Sprintf("unknown unary operator: %d", op))
 }
 
-type ArithmeticOp uint8
+type arithmeticOp uint8
 
 const (
-	add ArithmeticOp = iota
+	add arithmeticOp = iota
 	sub
 	mul
 	div
@@ -48,7 +48,7 @@ const (
 	concat
 )
 
-func (op ArithmeticOp) String() string {
+func (op arithmeticOp) String() string {
 	switch op {
 	case add:
 		return "+"
@@ -67,7 +67,7 @@ func (op ArithmeticOp) String() string {
 	panic(fmt.Sprintf("unknown arithmetic operator: %d", op))
 }
 
-func (op ComparisonOp) String() string {
+func (op comparisonOp) String() string {
 	switch op {
 	case equal:
 		return "="
@@ -88,27 +88,27 @@ func (op ComparisonOp) String() string {
 // Since the interpreter has a restricted subset of comparison operators compared to the parser,
 // it is possible that one parser operator maps to multiple interpreter operators (which should be
 // combined using OR). It also returns a boolean indicating if the operator should be negated.
-func getComparisonOps(op parse.ComparisonOperator) (ops []ComparisonOp, negate bool) {
+func getComparisonOps(op parse.ComparisonOperator) (ops []comparisonOp, negate bool) {
 	switch op {
 	case parse.ComparisonOperatorEqual:
-		return []ComparisonOp{equal}, false
+		return []comparisonOp{equal}, false
 	case parse.ComparisonOperatorNotEqual:
-		return []ComparisonOp{equal}, true
+		return []comparisonOp{equal}, true
 	case parse.ComparisonOperatorLessThan:
-		return []ComparisonOp{lessThan}, false
+		return []comparisonOp{lessThan}, false
 	case parse.ComparisonOperatorLessThanOrEqual:
-		return []ComparisonOp{lessThan, equal}, false
+		return []comparisonOp{lessThan, equal}, false
 	case parse.ComparisonOperatorGreaterThan:
-		return []ComparisonOp{greaterThan}, false
+		return []comparisonOp{greaterThan}, false
 	case parse.ComparisonOperatorGreaterThanOrEqual:
-		return []ComparisonOp{greaterThan, equal}, false
+		return []comparisonOp{greaterThan, equal}, false
 	}
 
 	panic(fmt.Sprintf("unknown ast comparison operator: %v", op))
 }
 
 // ConvertArithmeticOp converts an arithmetic operator from the parser to the interpreter.
-func convertArithmeticOp(op parse.ArithmeticOperator) ArithmeticOp {
+func convertArithmeticOp(op parse.ArithmeticOperator) arithmeticOp {
 	ar, ok := arithmeticOps[op]
 	if !ok {
 		panic(fmt.Sprintf("unknown ast arithmetic operator: %v", op))
@@ -117,7 +117,7 @@ func convertArithmeticOp(op parse.ArithmeticOperator) ArithmeticOp {
 }
 
 // ConvertUnaryOp converts a unary operator from the parser to the interpreter.
-func convertUnaryOp(op parse.UnaryOperator) UnaryOp {
+func convertUnaryOp(op parse.UnaryOperator) unaryOp {
 	ar, ok := unaryOps[op]
 	if !ok {
 		panic(fmt.Sprintf("unknown ast unary operator: %v", op))
@@ -126,7 +126,7 @@ func convertUnaryOp(op parse.UnaryOperator) UnaryOp {
 	return ar
 }
 
-var arithmeticOps = map[parse.ArithmeticOperator]ArithmeticOp{
+var arithmeticOps = map[parse.ArithmeticOperator]arithmeticOp{
 	parse.ArithmeticOperatorAdd:      add,
 	parse.ArithmeticOperatorSubtract: sub,
 	parse.ArithmeticOperatorMultiply: mul,
@@ -135,7 +135,7 @@ var arithmeticOps = map[parse.ArithmeticOperator]ArithmeticOp{
 	parse.ArithmeticOperatorConcat:   concat,
 }
 
-var unaryOps = map[parse.UnaryOperator]UnaryOp{
+var unaryOps = map[parse.UnaryOperator]unaryOp{
 	parse.UnaryOperatorNot: not,
 	parse.UnaryOperatorNeg: neg,
 	parse.UnaryOperatorPos: pos,

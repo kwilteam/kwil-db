@@ -1007,7 +1007,7 @@ func (i *interpreterPlanner) VisitExpressionComparison(p0 *parse.ExpressionCompa
 }
 
 // makeComparisonFunc returns a function that compares two values.
-func makeComparisonFunc(left, right exprFunc, cmpOps ComparisonOp) exprFunc {
+func makeComparisonFunc(left, right exprFunc, cmpOps comparisonOp) exprFunc {
 	return func(exec *executionContext) (Value, error) {
 		leftVal, err := left(exec)
 		if err != nil {
@@ -1102,7 +1102,7 @@ func (i *interpreterPlanner) VisitExpressionUnary(p0 *parse.ExpressionUnary) any
 }
 
 // makeUnaryFunc returns a function that performs a unary operation.
-func makeUnaryFunc(val exprFunc, op UnaryOp) exprFunc {
+func makeUnaryFunc(val exprFunc, op unaryOp) exprFunc {
 	return exprFunc(func(exec *executionContext) (Value, error) {
 		v, err := val(exec)
 		if err != nil {
