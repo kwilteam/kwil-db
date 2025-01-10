@@ -359,11 +359,16 @@ func ParseDataType(s string) (*DataType, error) {
 	rawMetadata := matches[3]
 	isArray := matches[4] == "[]"
 
+	baseName, ok := typeAlias[baseType]
+	if !ok {
+		return nil, fmt.Errorf("unknown data type: %s", baseType)
+	}
+
 	var metadata [2]uint16
 	if rawMetadata != "" {
 		metadata = [2]uint16{}
 		// only decimal types can have metadata
-		if baseType != DecimalStr {
+		if baseName != DecimalStr {
 			return nil, fmt.Errorf("metadata is only allowed for decimal type")
 		}
 
@@ -379,11 +384,6 @@ func ParseDataType(s string) (*DataType, error) {
 			}
 			metadata[i] = uint16(num)
 		}
-	}
-
-	baseName, ok := typeAlias[baseType]
-	if !ok {
-		return nil, fmt.Errorf("unknown data type: %s", baseType)
 	}
 
 	dt := &DataType{

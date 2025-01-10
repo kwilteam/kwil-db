@@ -56,6 +56,10 @@ func Test_SQL(t *testing.T) {
 		caller      string         // caller to use for the action, will default to defaultCaller
 	}
 
+	// this is for debugging.
+	// It helps me skip the users and posts table creation
+	skipInitTables := false
+
 	tests := []testcase{
 		{
 			name: "insert and select",
@@ -660,6 +664,26 @@ func Test_SQL(t *testing.T) {
 				"contract_id": mustUUID("d3b3b3b3-3b3b-3b3b-3b3b-3b3b3b3b3b3b"),
 			},
 		},
+		{
+			name: "precision and scale",
+			sql: []string{
+				`CREATE TABLE IF NOT EXISTS erc20rw_pending_rewards (
+					id UUID PRIMARY KEY,
+					recipient TEXT NOT NULL,
+					amount NUMERIC(78,0) NOT NULL, -- allows uint256
+					created_at INT8 NOT NULL, -- kwil block height
+					contract_id UUID NOT NULL
+				);`,
+			},
+			execSQL: `INSERT INTO erc20rw_pending_rewards (id, recipient, amount, created_at, contract_id) VALUES ($id, $recipient, $amount::numeric(78,0), $created_at, $contract_id);`,
+			execVars: map[string]any{
+				"id":          mustUUID("d3b3b3b3-3b3b-3b3b-3b3b-3b3b3b3b3b3b"),
+				"recipient":   "0x1234567890123456789012345678901234567890",
+				"amount":      mustDecimal("100"),
+				"created_at":  int64(1),
+				"contract_id": mustUUID("d3b3b3b3-3b3b-3b3b-3b3b-3b3b3b3b3b3b"),
+			},
+		},
 	}
 
 	db, err := newTestDB()
@@ -673,7 +697,7 @@ func Test_SQL(t *testing.T) {
 			require.NoError(t, err)
 			defer tx.Rollback(ctx) // always rollback
 
-			interp := newTestInterp(t, tx, test.sql)
+			interp := newTestInterp(t, tx, test.sql, !skipInitTables)
 
 			var values [][]any
 			err = interp.Execute(newEngineCtx(test.caller), tx, test.execSQL, test.execVars, func(v *common.Row) error {
@@ -755,7 +779,7 @@ func Test_CreateAndDelete(t *testing.T) {
 			require.NoError(t, err)
 			defer tx.Rollback(ctx) // always rollback
 
-			interp := newTestInterp(t, tx, nil)
+			interp := newTestInterp(t, tx, nil, true)
 
 			err = interp.Execute(newEngineCtx(defaultCaller), tx, test.create, nil, nil)
 			require.NoError(t, err)
@@ -779,12 +803,12 @@ func Test_CreateAndDelete(t *testing.T) {
 			require.NoError(t, err)
 			defer tx.Rollback(ctx) // always rollback
 
-			interp := newTestInterp(t, tx, nil)
+			interp := newTestInterp(t, tx, nil, true)
 
 			err = interp.Execute(newEngineCtx(defaultCaller), tx, test.create, nil, nil)
 			require.NoError(t, err)
 
-			interp = newTestInterp(t, tx, nil)
+			interp = newTestInterp(t, tx, nil, true)
 
 			err = interp.Execute(newEngineCtx(defaultCaller), tx, test.drop, nil, nil)
 			require.NoError(t, err)
@@ -1388,7 +1412,7 @@ func Test_Actions(t *testing.T) {
 			require.NoError(t, err)
 			defer tx.Rollback(ctx) // always rollback
 
-			interp := newTestInterp(t, tx, test.stmt)
+			interp := newTestInterp(t, tx, test.stmt, true)
 
 			var results [][]any
 			_, err = interp.Call(newEngineCtx(test.caller), tx, test.namespace, test.action, test.values, func(v *common.Row) error {
@@ -1738,12 +1762,12 @@ func Test_Extensions(t *testing.T) {
 	}
 
 	// first run: new interpreter
-	interp := newTestInterp(t, tx, nil)
+	interp := newTestInterp(t, tx, nil, true)
 	do(interp)
 
 	// second run: restart interpreter
 	// It will read in all previous data from the database.
-	interp = newTestInterp(t, tx, nil)
+	interp = newTestInterp(t, tx, nil, true)
 	do(interp)
 }
 
@@ -1776,7 +1800,7 @@ func Test_NamingOverwrites(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	interp := newTestInterp(t, tx, nil)
+	interp := newTestInterp(t, tx, nil, true)
 
 	err = interp.Execute(newEngineCtx(defaultCaller), tx, `USE IF NOT EXISTS test2 AS test_ext;`, nil, nil)
 	require.NoError(t, err)
@@ -1800,7 +1824,7 @@ func Test_NamingOverwrites(t *testing.T) {
 	assert.False(t, absCalled)
 
 	// we will make a new interpreter to ensure that they are loaded correctly
-	interp = newTestInterp(t, tx, nil)
+	interp = newTestInterp(t, tx, nil, true)
 
 	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "test_ext", "use_abs", nil, exact(int64(2)))
 	require.NoError(t, err)
@@ -1878,7 +1902,7 @@ func Test_Notice(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	interp := newTestInterp(t, tx, nil)
+	interp := newTestInterp(t, tx, nil, true)
 
 	err = interp.Execute(newEngineCtx(defaultCaller), tx, `USE log AS log_ext;`, nil, nil)
 	require.NoError(t, err)
@@ -1987,7 +2011,7 @@ func newTestDB() (*pg.DB, error) {
 
 // newTestInterp creates a new interpreter for testing purposes.
 // It is seeded with the default tables.
-func newTestInterp(t *testing.T, tx sql.DB, seeds []string) *interpreter.ThreadSafeInterpreter {
+func newTestInterp(t *testing.T, tx sql.DB, seeds []string, includeTestTables bool) *interpreter.ThreadSafeInterpreter {
 	interp, err := interpreter.NewInterpreter(context.Background(), tx, &common.Service{}, nil, nil)
 	require.NoError(t, err)
 
@@ -1998,7 +2022,13 @@ func newTestInterp(t *testing.T, tx sql.DB, seeds []string) *interpreter.ThreadS
 	}, nil)
 	require.NoError(t, err)
 
-	for i, stmt := range append([]string{createUsersTable, createPostsTable}, seeds...) {
+	seedStmts := []string{}
+	if includeTestTables {
+		seedStmts = append(seedStmts, createUsersTable, createPostsTable)
+	}
+	seedStmts = append(seedStmts, seeds...)
+
+	for i, stmt := range seedStmts {
 		err := interp.Execute(newEngineCtx(defaultCaller), tx, stmt, nil, nil)
 		require.NoErrorf(t, err, "failed to execute seed statement %d: %s", i-1, stmt) // -1 to account for the two tables
 	}

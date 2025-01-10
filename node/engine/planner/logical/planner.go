@@ -13,14 +13,14 @@ import (
 )
 
 // GetVarTypeFunc is a function that gets the type of a variable.
-type GetVarTypeFunc = func(varName string) (dataType *types.DataType, found bool)
+type GetVarTypeFunc = func(varName string) (dataType *types.DataType, err error)
 
 // GetObjectFieldTypeFunc is a function that gets the type of a field in an object.
-type GetObjectFunc = func(objName string) (obj map[string]*types.DataType, found bool)
+type GetObjectFunc = func(objName string) (obj map[string]*types.DataType, err error)
 
 // GetTableFunc is a function that gets a table by name.
 // It can also be given a namespace to search in. If no namespace is given (passed as ""), it will search in the default namespace.
-type GetTableFunc = func(namespace string, tableName string) (table *engine.Table, found bool)
+type GetTableFunc = func(namespace string, tableName string) (table *engine.Table, err error)
 
 // CreateLogicalPlan creates a logical plan from a SQL statement.
 // If applyDefaultOrdering is true, it will rewrite the query to apply default ordering.
@@ -1274,15 +1274,17 @@ func (s *scopeContext) exprWithAggRewrite(node parse.Expression, currentRel *Rel
 		return cast(wind, field)
 	case *parse.ExpressionVariable:
 		var val any // can be a data type or object
-		dt, ok := s.plan.Variables(node.Name)
-		if !ok {
+		dt, err := s.plan.Variables(node.Name)
+		if errors.Is(err, engine.ErrUnknownVariable) {
 			// might be an object
-			obj, ok := s.plan.Objects(node.Name)
-			if !ok {
-				return nil, nil, false, fmt.Errorf(`unknown variable "%s"`, node.Name)
+			obj, err := s.plan.Objects(node.Name)
+			if err != nil {
+				return nil, nil, false, err
 			}
 
 			val = obj
+		} else if err != nil {
+			return nil, nil, false, err
 		} else {
 			val = dt
 		}
@@ -2095,9 +2097,9 @@ func (s *scopeContext) table(node parse.Table) (*Scan, *Relation, error) {
 				node.Namespace = s.plan.defaultNamespace
 			}
 
-			physicalTbl, ok := s.plan.Tables(node.Namespace, node.Table)
-			if !ok {
-				return nil, nil, fmt.Errorf(`%w: "%s"`, ErrUnknownTable, formatTableRef(node.Namespace, node.Table))
+			physicalTbl, err := s.plan.Tables(node.Namespace, node.Table)
+			if err != nil {
+				return nil, nil, err
 			}
 
 			scanTblType = TableSourcePhysical
@@ -2178,15 +2180,6 @@ func (s *scopeContext) join(child Plan, childRel *Relation, join *parse.Join) (P
 	return plan, newRel, nil
 }
 
-// formatTableRef formats a table reference.
-func formatTableRef(namespace, name string) string {
-	if namespace == "" {
-		return fmt.Sprintf(`"%s"`, name)
-	}
-
-	return fmt.Sprintf(`"%s"."%s"`, namespace, name)
-}
-
 // update builds a plan for an update
 func (s *scopeContext) update(node *parse.UpdateStatement) (*Update, error) {
 	plan, targetRel, cartesianRel, err := s.cartesian(node.Table, node.Alias, node.From, node.Joins, node.Where)
@@ -2226,9 +2219,9 @@ func (s *scopeContext) insert(node *parse.InsertStatement) (*Insert, error) {
 		ReferencedAs: node.Alias,
 	}
 
-	tbl, found := s.plan.Tables("", node.Table)
-	if !found {
-		return nil, fmt.Errorf(`%w: "%s"`, ErrUnknownTable, node.Table)
+	tbl, err := s.plan.Tables("", node.Table)
+	if err != nil {
+		return nil, err
 	}
 
 	// orderAndFillNulls is a helper function that orders logical expressions
@@ -2626,9 +2619,9 @@ func checkNullableColumns(tbl *engine.Table, cols []string) ([]*types.DataType, 
 // between the target and the FROM + JOIN tables, and an error if one occurred.
 func (s *scopeContext) cartesian(targetTable, alias string, from parse.Table, joins []*parse.Join,
 	filter parse.Expression) (plan Plan, targetRel *Relation, cartesianRel *Relation, err error) {
-	tbl, ok := s.plan.Tables("", targetTable)
-	if !ok {
-		return nil, nil, nil, fmt.Errorf(`unknown table "%s"`, targetTable)
+	tbl, err := s.plan.Tables("", targetTable)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 	if alias == "" {
 		alias = targetTable

@@ -86,19 +86,6 @@ func (r *recursiveInterpreter) Execute(ctx *common.EngineContext, db sql.DB, sta
 	return r.i.execute(ctx, db, statement, params, fn, false)
 }
 
-// baseInterpreter interprets Kwil SQL statements.
-type baseInterpreter struct {
-	namespaces map[string]*namespace
-	// accessController is used to check if a user has access to a namespace
-	accessController *accessController
-	// service is the base application
-	service *common.Service
-	// validators is the validator manager for the application
-	validators common.Validators
-	// accounts is the account manager for the application
-	accounts common.Accounts
-}
-
 // a namespace is a collection of tables and actions.
 // It is conceptually equivalent to Postgres's schema, but is given a
 // different name to avoid confusion.
@@ -339,6 +326,19 @@ func funcDefToExecutable(funcName string, funcDef *engine.ScalarFunctionDefiniti
 		},
 		Type: executableTypeFunction,
 	}
+}
+
+// baseInterpreter interprets Kwil SQL statements.
+type baseInterpreter struct {
+	namespaces map[string]*namespace
+	// accessController is used to check if a user has access to a namespace
+	accessController *accessController
+	// service is the base application
+	service *common.Service
+	// validators is the validator manager for the application
+	validators common.Validators
+	// accounts is the account manager for the application
+	accounts common.Accounts
 }
 
 // Execute executes a statement against the database.

@@ -787,9 +787,9 @@ func (i *interpreterPlanner) VisitExpressionFunctionCall(p0 *parse.ExpressionFun
 
 func (i *interpreterPlanner) VisitExpressionVariable(p0 *parse.ExpressionVariable) any {
 	return cast(p0, func(exec *executionContext) (Value, error) {
-		val, found := exec.getVariable(p0.Name)
-		if !found {
-			return nil, fmt.Errorf("%w: %s", engine.ErrUnknownVariable, p0.Name)
+		val, err := exec.getVariable(p0.Name)
+		if err != nil {
+			return nil, err
 		}
 
 		return val, nil
@@ -1363,9 +1363,9 @@ func (i *interpreterPlanner) VisitAlterTableStatement(p0 *parse.AlterTableStatem
 		}
 
 		// ensure the table exists
-		_, found := exec.getTable("", p0.Table)
-		if !found {
-			return fmt.Errorf("table %s does not exist", p0.Table)
+		_, err = exec.getTable("", p0.Table)
+		if err != nil {
+			return err
 		}
 
 		// instead of handling every case and how it should change the in-memory objects, we just
@@ -1399,13 +1399,16 @@ func (i *interpreterPlanner) VisitCreateTableStatement(p0 *parse.CreateTableStat
 		}
 
 		// ensure the table does not already exist
-		_, found := exec.getTable("", p0.Name)
-		if found {
+		_, err = exec.getTable("", p0.Name)
+		if err == nil {
+			// the table already exists
 			if p0.IfNotExists {
 				return nil
 			}
 
 			return fmt.Errorf(`table "%s" already exists`, p0.Name)
+		} else if !errors.Is(err, engine.ErrUnknownTable) {
+			return err
 		}
 
 		err = genAndExec(exec, p0)
@@ -1436,13 +1439,17 @@ func (i *interpreterPlanner) VisitDropTableStatement(p0 *parse.DropTableStatemen
 
 		for _, table := range p0.Tables {
 			// ensure the table exists
-			_, found := exec.getTable("", table)
-			if !found {
-				if p0.IfExists {
-					continue
+			_, err := exec.getTable("", table)
+			if err != nil {
+				if errors.Is(err, engine.ErrUnknownTable) {
+					if p0.IfExists {
+						continue
+					}
+
+					return fmt.Errorf(`table "%s" does not exist`, table)
 				}
 
-				return fmt.Errorf(`table "%s" does not exist`, table)
+				return err
 			}
 		}
 
@@ -1472,9 +1479,9 @@ func (i *interpreterPlanner) VisitCreateIndexStatement(p0 *parse.CreateIndexStat
 		}
 
 		// ensure the table exists
-		tbl, found := exec.getTable("", p0.On)
-		if !found {
-			return fmt.Errorf(`table "%s" does not exist`, p0.On)
+		tbl, err := exec.getTable("", p0.On)
+		if err != nil {
+			return err
 		}
 
 		// ensure the columns exist

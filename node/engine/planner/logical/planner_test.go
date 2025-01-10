@@ -628,16 +628,30 @@ func Test_Planner(t *testing.T) {
 			require.True(t, ok)
 
 			plan, err := logical.CreateLogicalPlan(sqlPlan,
-				func(namespace, tableName string) (table *engine.Table, found bool) {
-					table, found = testTables[tableName]
-					return table, found
-				}, func(varName string) (dataType *types.DataType, found bool) {
-					dataType, found = test.vars[varName]
-					return dataType, found
+				func(namespace, tableName string) (table *engine.Table, err error) {
+					table, found := testTables[tableName]
+
+					if !found {
+						return nil, fmt.Errorf("table %s not found", tableName)
+					}
+
+					return table, nil
 				},
-				func(objName string) (obj map[string]*types.DataType, found bool) {
+				func(varName string) (dataType *types.DataType, err error) {
+					dataType, found := test.vars[varName]
+					if !found {
+						return nil, engine.ErrUnknownVariable
+					}
+
+					return dataType, nil
+				},
+				func(objName string) (obj map[string]*types.DataType, err error) {
 					obj, ok := test.objects[objName]
-					return obj, ok
+					if !ok {
+						return nil, engine.ErrUnknownVariable
+					}
+
+					return obj, nil
 				},
 				false, "")
 			if test.err != nil {

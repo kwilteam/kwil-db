@@ -8,6 +8,7 @@ var (
 	ErrType                = errors.New("type error")
 	ErrReturnShape         = errors.New("unexpected action/function return shape")
 	ErrUnknownVariable     = errors.New("unknown variable")
+	ErrInvalidVariable     = errors.New("invalid variable name")
 	ErrLoop                = errors.New("loop error")
 	ErrArithmetic          = errors.New("arithmetic error")
 	ErrComparison          = errors.New("comparison error")
@@ -18,6 +19,7 @@ var (
 
 	// Errors that signal the existence or non-existence of an object.
 	ErrUnknownAction     = errors.New("unknown action")
+	ErrUnknownTable      = errors.New("unknown table")
 	ErrNamespaceNotFound = errors.New("namespace not found")
 	ErrNamespaceExists   = errors.New("namespace already exists")
 
@@ -32,6 +34,7 @@ var (
 	ErrCannotMutateInfoNamespace  = errors.New(`cannot mutate the "info" namespace directly`)
 	ErrCannotDropBuiltinNamespace = errors.New("cannot drop a built-in namespace")
 	ErrBuiltInRole                = errors.New("invalid operation on built-in role")
+	ErrInvalidTxCtx               = errors.New("invalid transaction context")
 
 	// Errors that are the result of not having proper permissions or failing to meet a condition
 	// that was programmed by the user.
@@ -39,6 +42,7 @@ var (
 	ErrActionPrivate        = errors.New("action is private")
 	ErrActionSystemOnly     = errors.New("action is system-only")
 	ErrDoesNotHavePrivilege = errors.New("user does not have privilege")
+
 	// Errors that signal an error in a deeper layer, and originate from
 	// somewhere deeper than the interpreter.
 	ErrParse        = errors.New("parse error")

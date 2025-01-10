@@ -340,3 +340,58 @@ func mustNewVal(v any) Value {
 	}
 	return val
 }
+
+// // This tests how the engine stores and queries all sorts of different DDL.
+// // It tests by:
+// // 1. Creating a bunch of different types of metadata
+// // 2. Querying the metadata from the info schema
+// // 3. Ensuring that the interpreter's in-memory metadata matches the database's metadata
+// func Test_Metadata(t *testing.T) {
+// 	ctx := context.Background()
+
+// 	db, err := pg.NewDB(ctx, &pg.DBConfig{
+// 		PoolConfig: pg.PoolConfig{
+// 			ConnConfig: pg.ConnConfig{
+// 				Host:   "127.0.0.1",
+// 				Port:   "5432",
+// 				User:   "kwild",
+// 				Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
+// 				DBName: "kwil_test_db",
+// 			},
+// 			MaxConns: 11,
+// 		},
+// 	})
+// 	require.NoError(t, err)
+// 	defer db.Close()
+// 	tx, err := db.BeginTx(ctx)
+// 	require.NoError(t, err)
+// 	defer tx.Rollback(ctx) // always rollback to avoid cleanup
+
+// 	interp, err := NewInterpreter(ctx, tx, &common.Service{}, nil, nil)
+// 	require.NoError(t, err)
+// 	_ = interp
+
+// 	require.NoError(t, err)
+
+// 	// 1. Create a bunch of different types of metadata
+
+// 	// 1.1 Tables: one with a composite foreign key, and one with a composite primary key. both have indexes
+// 	_, err = db.Execute(ctx, `
+// 	CREATE TABLE students (
+// 		id UUID PRIMARY KEY,
+// 		name TEXT NOT NULL,
+// 		age INT CHECK (age >= 0),
+// 		CONSTRAINT students_name_check CHECK (name <> '' AND length(name) <= 100)
+// 	);
+
+// 	CREATE INDEX student_ages ON students (age);
+
+// 	CREATE TABLE enrollment (
+//     	student_id INT NOT NULL,
+//     	course_id  INT NOT NULL,
+//     	PRIMARY KEY (student_id, course_id)
+// 	);
+
+// 	CREATE TA
+// 	`)
+// }

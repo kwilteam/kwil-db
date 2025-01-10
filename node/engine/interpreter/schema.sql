@@ -213,6 +213,30 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- format_pg_type formats a function read from postgres's information_schema.columns
+CREATE OR REPLACE FUNCTION kwild_engine.format_pg_type (type oid, typemod integer)
+RETURNS TEXT AS $$
+DECLARE
+    result TEXT;
+BEGIN
+    result := pg_catalog.format_type(type, typemod);
+    -- we can usually just return this, however there are a few times that we need to format it
+    -- to Kwil's native type
+    if result = 'character varying' THEN
+        result := 'text';
+    END IF;
+    if result = 'bigint' THEN
+        result := 'int8';
+    END IF;
+    if result = 'character' THEN
+        result := 'text';
+    END IF;
+    if result = 'decimal' THEN
+        result := 'numeric';
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
 /*
     This section creates the schema the `kwild` schema, which is the public user-facing schema.
     End users can access the views in this schema to get information about the database.
@@ -258,11 +282,12 @@ SELECT DISTINCT
     c.table_schema::TEXT AS namespace,
     c.table_name::TEXT AS table_name,
     c.column_name::TEXT AS name,
-    (CASE 
-        WHEN t.typcategory = 'A'
-            THEN (pg_catalog.format_type(a.atttypid, a.atttypmod))
-        ELSE c.data_type
-    END)::TEXT AS data_type,
+    -- (CASE 
+    --     WHEN t.typcategory = 'A'
+    --         THEN (pg_catalog.format_type(a.atttypid, a.atttypmod))
+    --     ELSE c.data_type
+    -- END)::TEXT AS data_type,
+    pg_catalog.format_type(a.atttypid, a.atttypmod)::TEXT AS data_type,
     c.is_nullable::bool AS is_nullable,
     c.column_default::TEXT AS default_value,
     CASE
@@ -270,7 +295,7 @@ SELECT DISTINCT
             THEN true
         ELSE false
     END AS is_primary_key,
-    c.ordinal_position AS ordinal_position
+    c.ordinal_position::int AS ordinal_position
 FROM information_schema.columns c
 JOIN pg_namespace n
     ON c.table_schema = n.nspname::TEXT
