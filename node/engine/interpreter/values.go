@@ -92,7 +92,9 @@ func init() {
 				if err != nil {
 					return nil, err
 				}
-				return newDec(dec), nil
+				dec2 := newDec(dec)
+				dec2.precision = nil // zero value has no precision
+				return dec2, nil
 			},
 		},
 		ValueMapping{
@@ -1397,7 +1399,7 @@ func (d *DecimalValue) RawValue() any {
 	}
 	dec, err := d.dec()
 	if err != nil {
-		return nil
+		panic(err)
 	}
 
 	return dec

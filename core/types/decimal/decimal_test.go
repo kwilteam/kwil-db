@@ -533,7 +533,8 @@ func Test_BigAndExp(t *testing.T) {
 			name:    "positive exp",
 			big:     "123",
 			exp:     4,
-			wantErr: true,
+			out:     "1230000",
+			outPrec: 7,
 		},
 		{
 			name:     "exp less than precision properly adjusts precision",
