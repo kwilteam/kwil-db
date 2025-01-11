@@ -2,6 +2,7 @@ package optimizer
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types"
@@ -106,12 +107,17 @@ func Test_Pushdown(t *testing.T) {
 			require.NoError(t, err)
 
 			plan, err := logical.CreateLogicalPlan(parsedSql[0].(*parse.SQLStatement),
-				func(namespace, tableName string) (table *engine.Table, found bool) {
+				func(namespace, tableName string) (table *engine.Table, err error) {
 					t, found := testTables[tableName]
-					return t, found
+					if !found {
+						return nil, fmt.Errorf("table %s not found", tableName)
+					}
+					return t, nil
 				},
-				func(varName string) (dataType *types.DataType, found bool) { return nil, false },
-				func(objName string) (obj map[string]*types.DataType, found bool) { return nil, false },
+				func(varName string) (dataType *types.DataType, err error) { return nil, engine.ErrUnknownVariable },
+				func(objName string) (obj map[string]*types.DataType, err error) {
+					return nil, engine.ErrUnknownVariable
+				},
 				false, "")
 			require.NoError(t, err)
 

@@ -92,7 +92,9 @@ func init() {
 				if err != nil {
 					return nil, err
 				}
-				return newDec(dec), nil
+				dec2 := newDec(dec)
+				dec2.precision = nil // zero value has no precision
+				return dec2, nil
 			},
 		},
 		ValueMapping{
@@ -151,7 +153,21 @@ func NewZeroValue(t *types.DataType) (Value, error) {
 		return nil, fmt.Errorf("type %s not found", t.Name)
 	}
 
-	return m.ZeroValue()
+	zv, err := m.ZeroValue()
+	if err != nil {
+		return nil, err
+	}
+
+	if t.Name == types.DecimalStr && t.HasMetadata() {
+		precCopy := t.Metadata[0]
+		if !t.IsArray {
+			zv.(*DecimalValue).precision = &precCopy
+		} else {
+			zv.(*DecimalArrayValue).precision = &precCopy
+		}
+	}
+
+	return zv, nil
 }
 
 // Value is a value that can be compared, used in arithmetic operations,
@@ -159,7 +175,7 @@ func NewZeroValue(t *types.DataType) (Value, error) {
 type Value interface {
 	// Compare compares the variable with another variable using the given comparison operator.
 	// It will return a boolean value or null, depending on the comparison and the values.
-	Compare(v Value, op ComparisonOp) (*BoolValue, error)
+	Compare(v Value, op comparisonOp) (*BoolValue, error)
 	// Type returns the type of the variable.
 	Type() *types.DataType
 	// RawValue returns the value of the variable.
@@ -177,9 +193,9 @@ type Value interface {
 type ScalarValue interface {
 	Value
 	// Arithmetic performs an arithmetic operation on the variable with another variable.
-	Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error)
+	Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, error)
 	// Unary applies a unary operation to the variable.
-	Unary(op UnaryOp) (ScalarValue, error)
+	Unary(op unaryOp) (ScalarValue, error)
 	// Array creates an array from this scalar value and any other scalar values.
 	Array(v ...ScalarValue) (ArrayValue, error)
 }
@@ -409,7 +425,7 @@ func (i *IntValue) Null() bool {
 	return !i.Valid
 }
 
-func (v *IntValue) Compare(v2 Value, op ComparisonOp) (*BoolValue, error) {
+func (v *IntValue) Compare(v2 Value, op comparisonOp) (*BoolValue, error) {
 	if res, early := nullCmp(v, v2, op); early {
 		return res, nil
 	}
@@ -442,7 +458,7 @@ func (v *IntValue) Compare(v2 Value, op ComparisonOp) (*BoolValue, error) {
 // based on the comparison of the two values.
 // If the operator is any other operator and either of the values is null,
 // it will return a null value.
-func nullCmp(a, b Value, op ComparisonOp) (*BoolValue, bool) {
+func nullCmp(a, b Value, op comparisonOp) (*BoolValue, bool) {
 	// if it is isDistinctFrom or is, we should handle nulls
 	// Otherwise, if either is a null, we return early because we cannot compare
 	// a null value with a non-null value.
@@ -485,7 +501,7 @@ func checkScalarNulls(v ...ScalarValue) (ScalarValue, bool) {
 	return nil, false
 }
 
-func (i *IntValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error) {
+func (i *IntValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, error) {
 	if res, early := checkScalarNulls(i, v); early {
 		return res, nil
 	}
@@ -526,7 +542,7 @@ func (i *IntValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, erro
 	}, nil
 }
 
-func (i *IntValue) Unary(op UnaryOp) (ScalarValue, error) {
+func (i *IntValue) Unary(op unaryOp) (ScalarValue, error) {
 	if i.Null() {
 		return i, nil
 	}
@@ -607,7 +623,7 @@ func (i *IntValue) Cast(t *types.DataType) (Value, error) {
 func newNull(t *types.DataType) Value {
 	if t.Name == types.DecimalStr {
 		if t.IsArray {
-			return newNullDecArr()
+			return newNullDecArr(t)
 		}
 
 		return newDec(nil)
@@ -692,7 +708,7 @@ func (t *TextValue) Null() bool {
 	return !t.Valid
 }
 
-func (s *TextValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
+func (s *TextValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	if res, early := nullCmp(s, v, op); early {
 		return res, nil
 	}
@@ -719,7 +735,7 @@ func (s *TextValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	return newBool(b), nil
 }
 
-func (s *TextValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error) {
+func (s *TextValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, error) {
 	if res, early := checkScalarNulls(s, v); early {
 		return res, nil
 	}
@@ -736,7 +752,7 @@ func (s *TextValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, err
 	return nil, fmt.Errorf("%w: cannot perform arithmetic operation %s on type string", engine.ErrArithmetic, op)
 }
 
-func (s *TextValue) Unary(op UnaryOp) (ScalarValue, error) {
+func (s *TextValue) Unary(op unaryOp) (ScalarValue, error) {
 	return nil, fmt.Errorf("%w: cannot perform unary operation on string", engine.ErrUnary)
 }
 
@@ -836,7 +852,7 @@ func (b *BoolValue) Null() bool {
 	return !b.Valid
 }
 
-func (b *BoolValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
+func (b *BoolValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	if res, early := nullCmp(b, v, op); early {
 		return res, nil
 	}
@@ -865,11 +881,11 @@ func (b *BoolValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	return newBool(b2), nil
 }
 
-func (b *BoolValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error) {
+func (b *BoolValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, error) {
 	return nil, fmt.Errorf("%w: cannot perform arithmetic operation on bool", engine.ErrArithmetic)
 }
 
-func (b *BoolValue) Unary(op UnaryOp) (ScalarValue, error) {
+func (b *BoolValue) Unary(op unaryOp) (ScalarValue, error) {
 	if b.Null() {
 		return b, nil
 	}
@@ -949,7 +965,7 @@ func (b *BlobValue) Null() bool {
 	return b.bts == nil
 }
 
-func (b *BlobValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
+func (b *BlobValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	if res, early := nullCmp(b, v, op); early {
 		return res, nil
 	}
@@ -972,7 +988,7 @@ func (b *BlobValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	return newBool(b2), nil
 }
 
-func (b *BlobValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error) {
+func (b *BlobValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, error) {
 	if res, early := checkScalarNulls(b, v); early {
 		return res, nil
 	}
@@ -989,7 +1005,7 @@ func (b *BlobValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, err
 	return nil, fmt.Errorf("%w: cannot perform arithmetic operation %s on blob", engine.ErrArithmetic, op)
 }
 
-func (b *BlobValue) Unary(op UnaryOp) (ScalarValue, error) {
+func (b *BlobValue) Unary(op unaryOp) (ScalarValue, error) {
 	return nil, fmt.Errorf("%w: cannot perform unary operation on blob", engine.ErrUnary)
 }
 
@@ -1086,7 +1102,7 @@ func (u *UUIDValue) Null() bool {
 	return !u.Valid
 }
 
-func (u *UUIDValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
+func (u *UUIDValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	if res, early := nullCmp(u, v, op); early {
 		return res, nil
 	}
@@ -1109,11 +1125,11 @@ func (u *UUIDValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	return newBool(b), nil
 }
 
-func (u *UUIDValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error) {
+func (u *UUIDValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, error) {
 	return nil, fmt.Errorf("%w: cannot perform arithmetic operation on uuid", engine.ErrArithmetic)
 }
 
-func (u *UUIDValue) Unary(op UnaryOp) (ScalarValue, error) {
+func (u *UUIDValue) Unary(op unaryOp) (ScalarValue, error) {
 	return nil, fmt.Errorf("%w: cannot perform unary operation on uuid", engine.ErrUnary)
 }
 
@@ -1215,13 +1231,16 @@ func newDec(d *decimal.Decimal) *DecimalValue {
 		}
 	}
 
+	prec := d.Precision()
 	return &DecimalValue{
-		Numeric: pgTypeFromDec(d),
+		Numeric:   pgTypeFromDec(d),
+		precision: &prec,
 	}
 }
 
 type DecimalValue struct {
 	pgtype.Numeric
+	precision *uint16 // can be nil
 }
 
 func (d *DecimalValue) Null() bool {
@@ -1242,10 +1261,17 @@ func (d *DecimalValue) dec() (*decimal.Decimal, error) {
 		return nil, err
 	}
 
+	if d.precision != nil {
+		err = d2.SetPrecisionAndScale(*d.precision, d2.Scale())
+		if err != nil {
+			return nil, err
+		}
+	}
+
 	return d2, nil
 }
 
-func (d *DecimalValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
+func (d *DecimalValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	if res, early := nullCmp(d, v, op); early {
 		return res, nil
 	}
@@ -1273,7 +1299,7 @@ func (d *DecimalValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
 	return cmpIntegers(res, 0, op)
 }
 
-func (d *DecimalValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, error) {
+func (d *DecimalValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, error) {
 	if res, early := checkScalarNulls(d, v); early {
 		return res, nil
 	}
@@ -1318,10 +1344,15 @@ func (d *DecimalValue) Arithmetic(v ScalarValue, op ArithmeticOp) (ScalarValue, 
 		return nil, err
 	}
 
+	err = d2.SetPrecisionAndScale(dec1.Precision(), dec1.Scale())
+	if err != nil {
+		return nil, err
+	}
+
 	return newDec(d2), nil
 }
 
-func (d *DecimalValue) Unary(op UnaryOp) (ScalarValue, error) {
+func (d *DecimalValue) Unary(op unaryOp) (ScalarValue, error) {
 	if d.Null() {
 		return d, nil
 	}
@@ -1368,7 +1399,7 @@ func (d *DecimalValue) RawValue() any {
 	}
 	dec, err := d.dec()
 	if err != nil {
-		return nil
+		panic(err)
 	}
 
 	return dec
@@ -1480,7 +1511,7 @@ func (a *IntArrayValue) Null() bool {
 	return !a.Valid
 }
 
-func (a *IntArrayValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
+func (a *IntArrayValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
@@ -1575,7 +1606,7 @@ func (a *IntArrayValue) Cast(t *types.DataType) (Value, error) {
 			}
 
 			return decimal.NewExplicit(strconv.FormatInt(i, 10), t.Metadata[0], t.Metadata[1])
-		}, newDecimalArrayValue)
+		}, newDecArrFn(t))
 	}
 
 	switch *t {
@@ -1613,7 +1644,7 @@ func (a *TextArrayValue) Null() bool {
 	return !a.Valid
 }
 
-func (a *TextArrayValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
+func (a *TextArrayValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
@@ -1675,7 +1706,7 @@ func (a *TextArrayValue) Cast(t *types.DataType) (Value, error) {
 			}
 
 			return decimal.NewExplicit(s, t.Metadata[0], t.Metadata[1])
-		}, newDecimalArrayValue)
+		}, newDecArrFn(t))
 	}
 
 	switch *t {
@@ -1768,7 +1799,7 @@ func (a *BoolArrayValue) Null() bool {
 	return !a.Valid
 }
 
-func (a *BoolArrayValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
+func (a *BoolArrayValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
@@ -1837,7 +1868,7 @@ func (a *BoolArrayValue) Cast(t *types.DataType) (Value, error) {
 	}
 }
 
-func newNullDecArr() *DecimalArrayValue {
+func newNullDecArr(t *types.DataType) *DecimalArrayValue {
 	return &DecimalArrayValue{
 		OneDArray: OneDArray[pgtype.Numeric]{
 			Array: pgtype.Array[pgtype.Numeric]{Valid: false},
@@ -1845,35 +1876,54 @@ func newNullDecArr() *DecimalArrayValue {
 	}
 }
 
-func newDecimalArrayValue(d []*decimal.Decimal) *DecimalArrayValue {
+// newDecArrFn returns a function that creates a new DecimalArrayValue.
+// It is used for type casting.
+func newDecArrFn(t *types.DataType) func(d []*decimal.Decimal) *DecimalArrayValue {
+	return func(d []*decimal.Decimal) *DecimalArrayValue {
+		return newDecimalArrayValue(d, t)
+	}
+}
+
+func newDecimalArrayValue(d []*decimal.Decimal, t *types.DataType) *DecimalArrayValue {
 	vals := make([]pgtype.Numeric, len(d))
 	for i, v := range d {
+		var newDec pgtype.Numeric
 		if v == nil {
-			vals[i] = pgtype.Numeric{Valid: false}
+			newDec = pgtype.Numeric{Valid: false}
 		} else {
-			vals[i] = pgTypeFromDec(v)
+			newDec = pgTypeFromDec(v)
 		}
+
+		vals[i] = newDec
+	}
+
+	var prec *uint16
+	if t.HasMetadata() {
+		precCopy := t.Metadata[0]
+		prec = &precCopy
 	}
 
 	return &DecimalArrayValue{
 		OneDArray: newValidArr(vals),
+		precision: prec,
 	}
 }
 
 type DecimalArrayValue struct {
-	OneDArray[pgtype.Numeric]
+	OneDArray[pgtype.Numeric]         // we embed decimal value here because we need to track the precision and scale
+	precision                 *uint16 // can be nil
 }
 
 func (a *DecimalArrayValue) Null() bool {
 	return !a.Valid
 }
 
-func (a *DecimalArrayValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
+func (a *DecimalArrayValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
 // cmpArrs compares two Kwil array types.
-func cmpArrs[M ArrayValue](a M, b Value, op ComparisonOp) (*BoolValue, error) {
+func cmpArrs[M ArrayValue](a M, b Value, op comparisonOp) (*BoolValue, error) {
 	if res, early := nullCmp(a, b, op); early {
 		return res, nil
 	}
@@ -1958,6 +2008,10 @@ func (a *DecimalArrayValue) Set(i int32, v ScalarValue) error {
 		return fmt.Errorf("cannot set non-decimal value in decimal array")
 	}
 
+	if val.precision != nil && a.precision != nil && *val.precision != *a.precision {
+		return fmt.Errorf("cannot set decimal with precision %d in array with precision %d", *val.precision, *a.precision)
+	}
+
 	a.Elements[i-1] = val.Numeric
 	return nil
 }
@@ -2010,7 +2064,14 @@ func (a *DecimalArrayValue) Cast(t *types.DataType) (Value, error) {
 				return nil, err
 			}
 
-			err = dec.SetPrecisionAndScale(t.Metadata[0], t.Metadata[1])
+			// we need to make a copy of the decimal because SetPrecisionAndScale
+			// will modify the decimal in place.
+			dec2, err := decimal.NewExplicit(dec.String(), dec.Precision(), dec.Scale())
+			if err != nil {
+				return nil, err
+			}
+
+			err = dec2.SetPrecisionAndScale(t.Metadata[0], t.Metadata[1])
 			if err != nil {
 				return nil, err
 			}
@@ -2018,7 +2079,7 @@ func (a *DecimalArrayValue) Cast(t *types.DataType) (Value, error) {
 			res[i-1] = dec
 		}
 
-		return newDecimalArrayValue(res), nil
+		return newDecimalArrayValue(res, t), nil
 	}
 
 	switch *t {
@@ -2058,7 +2119,7 @@ func (a *BlobArrayValue) Null() bool {
 	return !a.Valid
 }
 
-func (a *BlobArrayValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
+func (a *BlobArrayValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
@@ -2143,7 +2204,7 @@ func (a *UuidArrayValue) Null() bool {
 	return !a.Valid
 }
 
-func (a *UuidArrayValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
+func (a *UuidArrayValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
@@ -2236,7 +2297,7 @@ func (r *RecordValue) AddValue(k string, v Value) error {
 	return nil
 }
 
-func (o *RecordValue) Compare(v Value, op ComparisonOp) (*BoolValue, error) {
+func (o *RecordValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	if res, early := nullCmp(o, v, op); early {
 		return res, nil
 	}
@@ -2299,7 +2360,7 @@ func (o *RecordValue) Cast(t *types.DataType) (Value, error) {
 	return nil, castErr(fmt.Errorf("cannot cast record to %s", t))
 }
 
-func cmpIntegers(a, b int, op ComparisonOp) (*BoolValue, error) {
+func cmpIntegers(a, b int, op comparisonOp) (*BoolValue, error) {
 	switch op {
 	case equal:
 		return newBool(a == b), nil

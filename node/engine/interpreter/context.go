@@ -90,14 +90,18 @@ func (e *executionContext) getNamespace(namespace string) (*namespace, error) {
 // getTable gets a table from the interpreter.
 // It can optionally be given a namespace to search in.
 // If the namespace is empty, it will search the current namespace.
-func (e *executionContext) getTable(namespace, tableName string) (*engine.Table, bool) {
+func (e *executionContext) getTable(namespace, tableName string) (*engine.Table, error) {
 	ns, err := e.getNamespace(namespace)
 	if err != nil {
-		panic(err) // we should never hit an error here
+		return nil, err
 	}
 
 	table, ok := ns.tables[tableName]
-	return table, ok
+	if !ok {
+		return nil, fmt.Errorf(`%w: table "%s" not found in namespace "%s"`, engine.ErrUnknownTable, tableName, namespace)
+	}
+
+	return table, nil
 }
 
 // checkNamespaceMutatbility checks if the current namespace is mutable.
@@ -152,23 +156,23 @@ func (e *executionContext) query(sql string, fn func(*row) error) error {
 	analyzed, err := logical.CreateLogicalPlan(
 		sqlStmt,
 		e.getTable,
-		func(varName string) (dataType *types.DataType, found bool) {
-			val, found := e.getVariable(varName)
-			if !found {
-				return nil, false
+		func(varName string) (dataType *types.DataType, err2 error) {
+			val, err := e.getVariable(varName)
+			if err != nil {
+				return nil, err
 			}
 
 			// if it is a record, then return nil
 			if _, ok := val.(*RecordValue); ok {
-				return nil, false
+				return nil, engine.ErrUnknownVariable
 			}
 
-			return val.Type(), true
+			return val.Type(), nil
 		},
-		func(objName string) (obj map[string]*types.DataType, found bool) {
-			val, found := e.getVariable(objName)
-			if !found {
-				return nil, false
+		func(objName string) (obj map[string]*types.DataType, err2 error) {
+			val, err := e.getVariable(objName)
+			if err != nil {
+				return nil, err
 			}
 
 			if rec, ok := val.(*RecordValue); ok {
@@ -177,10 +181,10 @@ func (e *executionContext) query(sql string, fn func(*row) error) error {
 					dt[field] = rec.Fields[field].Type()
 				}
 
-				return dt, true
+				return dt, nil
 			}
 
-			return nil, false
+			return nil, engine.ErrUnknownVariable
 		},
 		e.canMutateState,
 		e.scope.namespace,
@@ -197,9 +201,9 @@ func (e *executionContext) query(sql string, fn func(*row) error) error {
 	// get the params we will pass
 	var args []Value
 	for _, param := range params {
-		val, found := e.getVariable(param)
-		if !found {
-			return fmt.Errorf("%w: %s", engine.ErrUnknownVariable, param)
+		val, err := e.getVariable(param)
+		if err != nil {
+			return err
 		}
 
 		args = append(args, val)
@@ -295,39 +299,62 @@ func (e *executionContext) allocateVariable(name string, value Value) error {
 // getVariable gets a variable from the current scope.
 // It searches the parent scopes if the variable is not found.
 // It returns the value and a boolean indicating if the variable was found.
-func (e *executionContext) getVariable(name string) (Value, bool) {
+func (e *executionContext) getVariable(name string) (Value, error) {
 	if len(name) == 0 {
-		return nil, false
+		return nil, fmt.Errorf("%w: variable name is empty", engine.ErrInvalidVariable)
 	}
 
 	switch name[0] {
 	case '$':
 		v, _, f := getVarFromScope(name, e.scope)
-		return v, f
+		if !f {
+			return nil, fmt.Errorf("%w: %s", engine.ErrUnknownVariable, name)
+		}
+		return v, nil
 	case '@':
 		switch name[1:] {
 		case "caller":
-			return newText(e.engineCtx.TxContext.Caller), true
+			if e.engineCtx.InvalidTxCtx {
+				return nil, engine.ErrInvalidTxCtx
+			}
+			return newText(e.engineCtx.TxContext.Caller), nil
 		case "txid":
-			return newText(e.engineCtx.TxContext.TxID), true
+			if e.engineCtx.InvalidTxCtx {
+				return nil, engine.ErrInvalidTxCtx
+			}
+			return newText(e.engineCtx.TxContext.TxID), nil
 		case "signer":
-			return newBlob(e.engineCtx.TxContext.Signer), true
+			if e.engineCtx.InvalidTxCtx {
+				return nil, engine.ErrInvalidTxCtx
+			}
+			return newBlob(e.engineCtx.TxContext.Signer), nil
 		case "height":
-			return newInt(e.engineCtx.TxContext.BlockContext.Height), true
+			if e.engineCtx.InvalidTxCtx {
+				return nil, engine.ErrInvalidTxCtx
+			}
+			return newInt(e.engineCtx.TxContext.BlockContext.Height), nil
 		case "foreign_caller":
 			if e.scope.parent != nil {
-				return newText(e.scope.parent.namespace), true
+				return newText(e.scope.parent.namespace), nil
 			} else {
-				return newText(""), true
+				return newText(""), nil
 			}
 		case "block_timestamp":
-			return newInt(e.engineCtx.TxContext.BlockContext.Timestamp), true
+			if e.engineCtx.InvalidTxCtx {
+				return nil, engine.ErrInvalidTxCtx
+			}
+			return newInt(e.engineCtx.TxContext.BlockContext.Timestamp), nil
 		case "authenticator":
-			return newText(e.engineCtx.TxContext.Authenticator), true
+			if e.engineCtx.InvalidTxCtx {
+				return nil, engine.ErrInvalidTxCtx
+			}
+			return newText(e.engineCtx.TxContext.Authenticator), nil
+		default:
+			return nil, fmt.Errorf("%w: %s", engine.ErrInvalidVariable, name)
 		}
+	default:
+		return nil, fmt.Errorf("%w: %s", engine.ErrInvalidVariable, name)
 	}
-
-	return nil, false
 }
 
 // reloadTables reloads the cached tables from the database for the current namespace.

@@ -83,6 +83,11 @@ type EngineContext struct {
 	// owner-level operations on the database, even if the caller is not
 	// the owner.
 	OverrideAuthz bool
+	// InvalidTxCtx is a flag that indicates whether the transaction context
+	// is valid / can be used. There are times when the engine is called
+	// while not within a transaction (e.g. by extensions to read in metadata)
+	// on startup. In these cases, the transaction context is not valid.
+	InvalidTxCtx bool
 }
 
 type Engine interface {

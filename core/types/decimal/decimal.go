@@ -70,12 +70,16 @@ func NewFromString(s string) (*Decimal, error) {
 // NewFromBigInt creates a new Decimal from a big.Int and an exponent.
 // The negative of the exponent is the scale of the decimal.
 func NewFromBigInt(i *big.Int, exp int32) (*Decimal, error) {
+	if exp > 0 {
+		i2 := big.NewInt(10)
+		i2.Exp(i2, big.NewInt(int64(exp)), nil)
+		i2.Mul(i, i2)
+		i = i2
+		exp = 0
+	}
+
 	b := &apd.BigInt{}
 	b.SetMathBigInt(i)
-
-	if exp > 0 {
-		return nil, fmt.Errorf("exponent must be negative: %d", exp)
-	}
 
 	apdDec := apd.NewWithBigInt(b, exp)
 
