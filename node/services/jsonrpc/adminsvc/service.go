@@ -313,7 +313,7 @@ func (svc *Service) sendTx(ctx context.Context, payload ktypes.Payload) (*userjs
 
 	tx, err := ktypes.CreateNodeTransaction(payload, svc.chainID, uint64(nonce+1))
 	if err != nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "unable to create transaction", nil)
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "unable to create transaction "+err.Error(), nil)
 	}
 
 	fee, err := svc.app.Price(ctx, readTx, tx)

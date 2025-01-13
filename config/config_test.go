@@ -1,13 +1,16 @@
 package config
 
 import (
+	"encoding/hex"
 	"fmt"
 	"slices"
 	"testing"
 	"time"
 
 	gotoml "github.com/pelletier/go-toml/v2"
+	"github.com/stretchr/testify/require"
 
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 )
 
@@ -147,4 +150,77 @@ func TestLoadConfigErrors(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestEncodeDecodePubKeyType(t *testing.T) {
+	testCases := []struct {
+		name          string
+		encodedPubKey string
+		decodedPubKey string
+		keyType       crypto.KeyType
+		wantErr       bool
+		typeErr       bool
+	}{
+		{
+			name:          "valid encoded public key",
+			encodedPubKey: "021072159608e8bfa10102cc74d3e1b533dfdf1904538a61de42811cc3066de014#0",
+			decodedPubKey: "021072159608e8bfa10102cc74d3e1b533dfdf1904538a61de42811cc3066de014",
+			keyType:       crypto.KeyTypeSecp256k1,
+			wantErr:       false,
+		},
+		{
+			name:          "invalid encoded public key format, missing key type and delimiter",
+			encodedPubKey: "021072159608e8bfa10102cc74d3e1b533dfdf1904538a61de42811cc3066de014",
+			decodedPubKey: "",
+			keyType:       crypto.KeyTypeSecp256k1,
+			wantErr:       true,
+		},
+		{
+			name:          "invalid encoded public key format, missing key type",
+			encodedPubKey: "021072159608e8bfa10102cc74d3e1b533dfdf1904538a61de42811cc3066de014#",
+			decodedPubKey: "",
+			keyType:       crypto.KeyTypeSecp256k1,
+			wantErr:       true,
+		},
+		{
+			name:          "invalid encoded public key",
+			encodedPubKey: "0abcd#0",
+			decodedPubKey: "",
+			keyType:       crypto.KeyTypeSecp256k1,
+			wantErr:       true,
+		},
+		{
+			name:          "invalid key type",
+			encodedPubKey: "021072159608e8bfa10102cc74d3e1b533dfdf1904538a61de42811cc3066de014#2",
+			decodedPubKey: "021072159608e8bfa10102cc74d3e1b533dfdf1904538a61de42811cc3066de014",
+			keyType:       crypto.KeyTypeSecp256k1,
+			wantErr:       false,
+			typeErr:       true,
+		},
+	}
+
+	for _, tt := range testCases {
+		t.Run(tt.name, func(t *testing.T) {
+			pubKeyBts, keyType, err := DecodePubKeyAndType(tt.encodedPubKey)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			} else {
+				require.NoError(t, err)
+			}
+
+			require.Equal(t, tt.decodedPubKey, hex.EncodeToString(pubKeyBts))
+
+			parsedType, err := crypto.ParseKeyType(keyType.String())
+			if tt.typeErr {
+				require.Error(t, err)
+				return
+			} else {
+				require.NoError(t, err)
+			}
+
+			require.Equal(t, tt.keyType, parsedType)
+		})
+	}
+
 }

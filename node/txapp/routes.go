@@ -10,6 +10,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/consensus"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
@@ -124,9 +125,9 @@ type baseRoute struct {
 
 func (d *baseRoute) Price(ctx context.Context, router *TxApp, db sql.DB, tx *types.Transaction) (*big.Int, error) {
 	return d.Route.Price(ctx, &common.App{
-		Service: router.service.NamedLogger("route_" + d.Name()),
-		DB:      db,
-		// Engine:     router.Engine,
+		Service:    router.service.NamedLogger("route_" + d.Name()),
+		DB:         db,
+		Engine:     router.Engine,
 		Accounts:   router.Accounts,
 		Validators: router.Validators,
 	}, tx)
@@ -428,7 +429,7 @@ func (d *validatorJoinRoute) PreTx(ctx *common.TxContext, svc *common.Service, t
 
 func (d *validatorJoinRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
 	// ensure this candidate is not already a validator
-	keyType, err := crypto.ParseKeyType(tx.Signature.Type)
+	keyType, err := auth.GetAuthenticatorKeyType(tx.Signature.Type)
 	if err != nil {
 		return types.CodeInvalidSender, fmt.Errorf("failed to parse key type: %w", err)
 	}
@@ -528,7 +529,7 @@ func (d *validatorApproveRoute) InTx(ctx *common.TxContext, app *common.App, tx 
 		return types.CodeUnknownError, errors.New("validator has more than one pending join request. this is an internal bug")
 	}
 
-	keyType, err := crypto.ParseKeyType(tx.Signature.Type)
+	keyType, err := auth.GetAuthenticatorKeyType(tx.Signature.Type)
 	if err != nil {
 		return types.CodeUnknownError, fmt.Errorf("failed to parse key type: %w", err)
 	}
@@ -588,6 +589,11 @@ func (d *validatorRemoveRoute) InTx(ctx *common.TxContext, app *common.App, tx *
 		PubKey: d.target,
 		Power:  0,
 	}
+
+	if bytes.Equal(removeReq.PubKey, ctx.BlockContext.Proposer.Bytes()) {
+		return types.CodeInvalidSender, errors.New("leader cannot be removed from validator set")
+	}
+
 	bts, err := removeReq.MarshalBinary()
 	if err != nil {
 		return types.CodeUnknownError, err
@@ -598,7 +604,7 @@ func (d *validatorRemoveRoute) InTx(ctx *common.TxContext, app *common.App, tx *
 		Type: voting.ValidatorRemoveEventType,
 	}
 
-	senderKeyType, err := crypto.ParseKeyType(tx.Signature.Type)
+	senderKeyType, err := auth.GetAuthenticatorKeyType(tx.Signature.Type)
 	if err != nil {
 		return types.CodeUnknownError, fmt.Errorf("failed to parse key type: %w", err)
 	}
@@ -669,9 +675,13 @@ func (d *validatorLeaveRoute) PreTx(ctx *common.TxContext, svc *common.Service, 
 }
 
 func (d *validatorLeaveRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
-	keyType, err := crypto.ParseKeyType(tx.Signature.Type)
+	if bytes.Equal(tx.Sender, ctx.BlockContext.Proposer.Bytes()) {
+		return types.CodeInvalidSender, errors.New("leader cannot leave validator set")
+	}
+
+	keyType, err := auth.GetAuthenticatorKeyType(tx.Signature.Type)
 	if err != nil {
-		return types.CodeUnknownError, fmt.Errorf("failed to parse key type: %w", err)
+		return types.CodeInvalidSender, fmt.Errorf("failed to parse key type: %w", err)
 	}
 
 	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender, keyType)
@@ -721,7 +731,7 @@ func (d *validatorVoteIDsRoute) PreTx(ctx *common.TxContext, svc *common.Service
 
 func (d *validatorVoteIDsRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
 	// if the caller has 0 power, they are not a validator, and should not be able to vote
-	keyType, err := crypto.ParseKeyType(tx.Signature.Type)
+	keyType, err := auth.GetAuthenticatorKeyType(tx.Signature.Type)
 	if err != nil {
 		return types.CodeInvalidSender, fmt.Errorf("failed to parse key type: %w", err)
 	}
@@ -836,7 +846,7 @@ func (d *validatorVoteBodiesRoute) InTx(ctx *common.TxContext, app *common.App, 
 			Body: event.Body,
 		}
 
-		keyType, err := crypto.ParseKeyType(tx.Signature.Type)
+		keyType, err := auth.GetAuthenticatorKeyType(tx.Signature.Type)
 		if err != nil {
 			return types.CodeInvalidSender, fmt.Errorf("failed to parse key type: %w", err)
 		}
@@ -926,7 +936,7 @@ func (d *createResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx 
 	// ensure the sender is a validator
 	// only validators can create resolutions
 
-	keyType, err := crypto.ParseKeyType(tx.Signature.Type)
+	keyType, err := auth.GetAuthenticatorKeyType(tx.Signature.Type)
 	if err != nil {
 		return types.CodeInvalidSender, err
 	}
@@ -988,7 +998,7 @@ func (d *approveResolutionRoute) PreTx(ctx *common.TxContext, svc *common.Servic
 func (d *approveResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
 	// ensure the sender is a validator
 
-	keyType, err := crypto.ParseKeyType(tx.Signature.Type)
+	keyType, err := auth.GetAuthenticatorKeyType(tx.Signature.Type)
 	if err != nil {
 		return types.CodeInvalidSender, err
 	}

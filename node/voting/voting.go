@@ -112,17 +112,8 @@ func InitializeVoteStore(ctx context.Context, db sql.TxMaker) (*VoteStore, error
 		return nil, fmt.Errorf("failed to create insert resolution function: %w", err)
 	}
 
-	vals, err := getValidators(ctx, tx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get validators: %w", err)
-	}
-
-	for _, v := range vals {
-		vs.validatorSet = append(vs.validatorSet, &types.Validator{
-			PubKey:     slices.Clone(v.PubKey),
-			PubKeyType: v.PubKeyType,
-			Power:      v.Power,
-		})
+	if err = vs.LoadValidatorSet(ctx, tx); err != nil {
+		return nil, fmt.Errorf("failed to load validator set: %w", err)
 	}
 
 	return vs, tx.Commit(ctx)
@@ -298,7 +289,8 @@ func fromRow(ctx context.Context, db sql.Executor, row []any) (*resolutions.Reso
 	}
 
 	if row[6] == nil {
-		v.Proposer = nil
+		// This can never happen as we always create the resolutions first before approving the resolutions.
+		return nil, errors.New("resolution proposer is empty")
 	} else {
 		vProposer, ok := row[6].([]byte)
 		if !ok {
@@ -310,12 +302,19 @@ func fromRow(ctx context.Context, db sql.Executor, row []any) (*resolutions.Reso
 			return nil, fmt.Errorf("failed to decode pubKey from voteBodyProposer: %w", err)
 		}
 
+		v.Proposer = &types.Validator{
+			PubKey:     slices.Clone(pubKey),
+			PubKeyType: keyType,
+		}
+
+		// retrieve the power of the proposer if it's issued by the Validator
 		proposer, err := getValidator(ctx, db, pubKey, keyType)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get proposer: %w", err)
 		}
-
-		v.Proposer = proposer
+		if proposer != nil {
+			v.Proposer.Power = proposer.Power
+		}
 	}
 
 	var voters [][]byte
@@ -618,7 +617,8 @@ func (v *VoteStore) GetValidatorPower(ctx context.Context, pubKey []byte, keyTyp
 
 	val := v.getValidator(pubKey, keyType)
 	if val == nil {
-		return 0, fmt.Errorf("voter %s not found", hex.EncodeToString(pubKey))
+		v.logger.Debug("validator not found", "pubKey", hex.EncodeToString(pubKey))
+		return 0, nil
 	}
 
 	// No need to check the db as v.validatorSet is always in sync with the db
@@ -639,6 +639,29 @@ func (v *VoteStore) GetValidators() []*types.Validator {
 	}
 
 	return vals
+}
+
+// LoadValidatorSet loads the validator set from the database. This should be used only in the initialization phases
+// such as in the VoteStore constructor or right after the statesync.
+func (v *VoteStore) LoadValidatorSet(ctx context.Context, db sql.Executor) error {
+	vals, err := getValidators(ctx, db)
+	if err != nil {
+		return err
+	}
+
+	v.mtx.Lock()
+	defer v.mtx.Unlock()
+
+	v.validatorSet = make([]*types.Validator, 0, len(vals))
+	for _, val := range vals {
+		v.validatorSet = append(v.validatorSet, &types.Validator{
+			PubKey:     slices.Clone(val.PubKey),
+			PubKeyType: val.PubKeyType,
+			Power:      val.Power,
+		})
+	}
+
+	return nil
 }
 
 // getValidators gets all voters in the vote store, along with their power.
@@ -747,7 +770,7 @@ func (v *VoteStore) Commit() error {
 		}
 	}
 
-	v.valUpdates = nil
+	v.valUpdates = make(map[string]*types.Validator)
 	return nil
 }
 
@@ -762,7 +785,7 @@ func (v *VoteStore) Rollback() {
 	v.mtx.Lock()
 	defer v.mtx.Unlock()
 
-	v.valUpdates = nil
+	v.valUpdates = make(map[string]*types.Validator)
 }
 
 // EncodePubKey encodes public key and key type into a byte slice.

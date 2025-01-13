@@ -38,6 +38,7 @@ type ConsensusEngine interface {
 type BlockProcessor interface {
 	GetValidators() []*ktypes.Validator
 	SubscribeValidators() <-chan []*ktypes.Validator
+	LoadFromDBState(ctx context.Context) error
 }
 
 type SnapshotStore interface {

@@ -123,17 +123,17 @@ func DecodeLeader(leader string) (crypto.PublicKey, error) {
 func DecodePubKeyAndType(encodedPubKey string) ([]byte, crypto.KeyType, error) {
 	parts := strings.Split(encodedPubKey, "#")
 	if len(parts) != 2 {
-		return nil, 0, errors.New("invalid leader config in genesis, expected pubkey#pubkeyType")
+		return nil, 0, errors.New("invalid pubkey format, expected <pubkey#pubkeytype>")
 	}
 
 	pubKey, err := hex.DecodeString(parts[0])
 	if err != nil {
-		return nil, 0, fmt.Errorf("error decoding leader public key: %s error: %s", parts[0], err)
+		return nil, 0, fmt.Errorf("error decoding public key: %s error: %s", parts[0], err)
 	}
 
 	pubKeyType, err := strconv.ParseInt(parts[1], 10, 64)
 	if err != nil {
-		return nil, 0, fmt.Errorf("error parsing leader public key type: %s error: %s", parts[1], err)
+		return nil, 0, fmt.Errorf("error parsing public key type: %s error: %s", parts[1], err)
 	}
 
 	return pubKey, crypto.KeyType(pubKeyType), nil

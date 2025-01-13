@@ -10,6 +10,7 @@ import (
 	"slices"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
@@ -263,9 +264,11 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 		}
 
 		err = resolveFunc.ResolveFunc(ctx, &common.App{
-			Service: r.service.NamedLogger(resolveFunc.Resolution.Type),
-			DB:      tx,
-			// Engine:  r.Engine,
+			Service:    r.service.NamedLogger(resolveFunc.Resolution.Type),
+			DB:         tx,
+			Engine:     r.Engine,
+			Accounts:   r.Accounts,
+			Validators: r.Validators,
 		}, resolveFunc.Resolution, block)
 		if err != nil {
 			err2 := tx.Rollback(ctx)
@@ -342,7 +345,12 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 	// Since it is a map, we need to order it for deterministic results.
 	if !block.ChainContext.NetworkParameters.DisabledGasCosts {
 		for _, kv := range order.OrderMap(credits) {
-			err = r.Accounts.Credit(ctx, db, kv.Key, kv.Value)
+			key, _, err := config.DecodePubKeyAndType(kv.Key)
+			if err != nil {
+				return err
+			}
+
+			err = r.Accounts.Credit(ctx, db, string(key), kv.Value) // TODO: verify if correct key is used here
 			if err != nil {
 				return err
 			}
@@ -372,7 +380,7 @@ func (c creditMap) applyResolution(res *resolutions.Resolution) {
 			continue
 		}
 
-		key := string(voter.PubKey) + "#" + voter.PubKeyType.String()
+		key := config.EncodePubKeyAndType(voter.PubKey, voter.PubKeyType)
 
 		currentBalance, ok := c[key]
 		if !ok {
@@ -383,15 +391,14 @@ func (c creditMap) applyResolution(res *resolutions.Resolution) {
 	}
 
 	bodyCost := big.NewInt(ValidatorVoteBodyBytePrice * int64(len(res.Body)))
-	propKey := string(res.Proposer.PubKey) + "#" + res.Proposer.PubKeyType.String()
-
-	currentBalance, ok := c[propKey]
+	proposerKey := config.EncodePubKeyAndType(res.Proposer.PubKey, res.Proposer.PubKeyType)
+	currentBalance, ok := c[proposerKey]
 	if !ok {
 		currentBalance = big.NewInt(0)
 	}
 
 	// reward proposer
-	c[propKey] = big.NewInt(0).Add(currentBalance, bodyCost)
+	c[proposerKey] = big.NewInt(0).Add(currentBalance, bodyCost)
 }
 
 // TxResponse is the response from a transaction.

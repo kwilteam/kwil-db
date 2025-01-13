@@ -884,6 +884,10 @@ func (v *validatorStore) ValidatorUpdates() map[string]*ktypes.Validator {
 	return nil
 }
 
+func (v *validatorStore) LoadValidatorSet(ctx context.Context, db sql.Executor) error {
+	return nil
+}
+
 type mockAccounts struct{}
 
 func (m *mockAccounts) Updates() []*ktypes.Account {
@@ -953,7 +957,7 @@ func (m *mockEventStore) GetUnbroadcastedEvents(ctx context.Context) ([]*ktypes.
 
 type mockMigrator struct{}
 
-func (m *mockMigrator) NotifyHeight(ctx context.Context, block *common.BlockContext, db migrations.Database) error {
+func (m *mockMigrator) NotifyHeight(ctx context.Context, block *common.BlockContext, db migrations.Database, tx sql.Executor) error {
 	return nil
 }
 

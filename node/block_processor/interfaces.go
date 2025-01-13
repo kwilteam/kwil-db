@@ -31,6 +31,7 @@ type Accounts interface {
 type ValidatorModule interface {
 	GetValidators() []*ktypes.Validator
 	ValidatorUpdates() map[string]*ktypes.Validator
+	LoadValidatorSet(ctx context.Context, db sql.Executor) error
 }
 
 type TxApp interface {
@@ -85,7 +86,7 @@ var (
 )
 
 type MigratorModule interface {
-	NotifyHeight(ctx context.Context, block *common.BlockContext, db migrations.Database) error
+	NotifyHeight(ctx context.Context, block *common.BlockContext, db migrations.Database, tx sql.Executor) error
 	StoreChangesets(height int64, changes <-chan any) error
 	PersistLastChangesetHeight(ctx context.Context, tx sql.Executor, height int64) error
 	GetMigrationMetadata(ctx context.Context, status types.MigrationStatus) (*types.MigrationMetadata, error)

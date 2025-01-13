@@ -240,6 +240,10 @@ func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, c
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
+	if ce.state.lc.height+1 != blk.Header.Height { // only accept/process the block if it is for the next height
+		return nil
+	}
+
 	// Three different scenarios are possible here:
 	// 1. Sentry node: Execute the block, validate the appHash and commit the block.
 	// 2. Validator:

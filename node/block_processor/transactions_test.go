@@ -829,3 +829,7 @@ func (v *mockValidatorStore) GetValidators() []*types.Validator {
 func (v *mockValidatorStore) ValidatorUpdates() map[string]*types.Validator {
 	return nil
 }
+
+func (v *mockValidatorStore) LoadValidatorSet(ctx context.Context, db sql.Executor) error {
+	return nil
+}
