@@ -528,11 +528,11 @@ func Test_Metadata(t *testing.T) {
 	// This extension will also create a namespace
 }
 
-var testSchemaExt = precompiles.PrecompileExtension[struct{}]{
-	Methods: []precompiles.Method[struct{}]{
-		{
-			Name:            "test_schema",
-			AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
-		},
-	},
-}
+// var testSchemaExt = precompiles.PrecompileExtension[struct{}]{
+// 	Methods: []precompiles.Method[struct{}]{
+// 		{
+// 			Name:            "test_schema",
+// 			AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
+// 		},
+// 	},
+// }
