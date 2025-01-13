@@ -178,6 +178,7 @@ func (m *Method[T]) export(t *T) *ExportedMethod {
 		Call: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 			return m.Handler(ctx, app, inputs, resultFn, t)
 		},
+		ReturnColumns: m.ReturnColumns,
 	}
 }
 
