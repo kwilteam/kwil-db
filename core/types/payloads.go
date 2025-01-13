@@ -210,10 +210,10 @@ var _ encoding.BinaryMarshaler = (*ActionCall)(nil)
 // EncodedValue is used to encode a value with its type specified. This is used
 // as arguments for actions and procedures.
 type EncodedValue struct {
-	Type DataType
+	Type DataType `json:"type"`
 	// The double slice handles arrays of encoded values.
 	// If there is only one element, the outer slice will have length 1.
-	Data [][]byte `rlp:"optional"`
+	Data [][]byte `rlp:"optional" json:"data"`
 }
 
 // Decode decodes the encoded value to its native Go type.
