@@ -16,6 +16,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/utils/order"
 	"github.com/kwilteam/kwil-db/extensions/hooks"
+	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/node/accounts"
 	"github.com/kwilteam/kwil-db/node/types/sql"
@@ -104,8 +105,8 @@ func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.
 				Height: initialHeight,
 			},
 		},
-	}, db, "GRANT owner TO $user", map[string]any{
-		"user": dbOwner,
+	}, db, "GRANT owner TO $user", map[string]common.EngineValue{
+		"user": precompiles.MakeText(dbOwner),
 	}, nil)
 	if err != nil {
 		return err

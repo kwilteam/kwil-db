@@ -1,20 +1,23 @@
-package interpreter
+package precompiles
 
 import (
+	"database/sql/driver"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/node/engine"
 )
 
-// ValueMapping maps Go types and Kwil native types.
-type ValueMapping struct {
-	// KwilType is the Kwil type that the value maps to.
+// valueMapping maps Go types and Kwil native types.
+type valueMapping struct {
+	// KwilType engine.IS the Kwil type that the value maps to.
 	// It will ignore the metadata of the type.
 	KwilType *types.DataType
 	// ZeroValue creates a zero-value of the type.
@@ -25,10 +28,10 @@ var (
 	kwilTypeToValue = map[struct {
 		name    string
 		isArray bool
-	}]ValueMapping{}
+	}]valueMapping{}
 )
 
-func registerValueMapping(ms ...ValueMapping) {
+func registerValueMapping(ms ...valueMapping) {
 	for _, m := range ms {
 		k := struct {
 			name    string
@@ -49,55 +52,55 @@ func registerValueMapping(ms ...ValueMapping) {
 
 func init() {
 	registerValueMapping(
-		ValueMapping{
+		valueMapping{
 			KwilType: types.IntType,
 			ZeroValue: func() (Value, error) {
-				return newInt(0), nil
+				return MakeInt8(0), nil
 			},
 		},
-		ValueMapping{
+		valueMapping{
 			KwilType: types.NullType,
 			ZeroValue: func() (Value, error) {
-				return newNull(types.TextType), nil
+				return MakeNull(types.TextType), nil
 			},
 		},
-		ValueMapping{
+		valueMapping{
 			KwilType: types.TextType,
 			ZeroValue: func() (Value, error) {
-				return newText(""), nil
+				return MakeText(""), nil
 			},
 		},
-		ValueMapping{
+		valueMapping{
 			KwilType: types.BoolType,
 			ZeroValue: func() (Value, error) {
-				return newBool(false), nil
+				return MakeBool(false), nil
 			},
 		},
-		ValueMapping{
+		valueMapping{
 			KwilType: types.BlobType,
 			ZeroValue: func() (Value, error) {
-				return newBlob([]byte{}), nil
+				return MakeBlob([]byte{}), nil
 			},
 		},
-		ValueMapping{
+		valueMapping{
 			KwilType: types.UUIDType,
 			ZeroValue: func() (Value, error) {
-				return newUUID(&types.UUID{}), nil
+				return MakeUUID(&types.UUID{}), nil
 			},
 		},
-		ValueMapping{
+		valueMapping{
 			KwilType: types.DecimalType,
 			ZeroValue: func() (Value, error) {
 				dec, err := decimal.NewFromString("0")
 				if err != nil {
 					return nil, err
 				}
-				dec2 := newDec(dec)
+				dec2 := MakeDecimal(dec)
 				dec2.precision = nil // zero value has no precision
 				return dec2, nil
 			},
 		},
-		ValueMapping{
+		valueMapping{
 			KwilType: types.IntArrayType,
 			ZeroValue: func() (Value, error) {
 				return &IntArrayValue{
@@ -105,7 +108,7 @@ func init() {
 				}, nil
 			},
 		},
-		ValueMapping{
+		valueMapping{
 			KwilType: types.TextArrayType,
 			ZeroValue: func() (Value, error) {
 				return &TextArrayValue{
@@ -113,7 +116,7 @@ func init() {
 				}, nil
 			},
 		},
-		ValueMapping{
+		valueMapping{
 			KwilType: types.BoolArrayType,
 			ZeroValue: func() (Value, error) {
 				return &BoolArrayValue{
@@ -121,7 +124,7 @@ func init() {
 				}, nil
 			},
 		},
-		ValueMapping{
+		valueMapping{
 			KwilType: types.BlobArrayType,
 			ZeroValue: func() (Value, error) {
 				return &BlobArrayValue{
@@ -129,7 +132,7 @@ func init() {
 				}, nil
 			},
 		},
-		ValueMapping{
+		valueMapping{
 			KwilType: types.DecimalArrayType,
 			ZeroValue: func() (Value, error) {
 				return &DecimalArrayValue{
@@ -150,7 +153,7 @@ func NewZeroValue(t *types.DataType) (Value, error) {
 		isArray: t.IsArray,
 	}]
 	if !ok {
-		return nil, fmt.Errorf("type %s not found", t.Name)
+		return nil, fmt.Errorf("type %s engine.NOT found", t.Name)
 	}
 
 	zv, err := m.ZeroValue()
@@ -170,49 +173,42 @@ func NewZeroValue(t *types.DataType) (Value, error) {
 	return zv, nil
 }
 
-// Value is a value that can be compared, used in arithmetic operations,
+// Value engine.IS a value that can be compared, used in arithmetic operations,
 // and have unary operations applied to it.
 type Value interface {
+	common.EngineValue
 	// Compare compares the variable with another variable using the given comparison operator.
 	// It will return a boolean value or null, depending on the comparison and the values.
-	Compare(v Value, op comparisonOp) (*BoolValue, error)
-	// Type returns the type of the variable.
-	Type() *types.DataType
-	// RawValue returns the value of the variable.
-	// This is one of: nil, int64, string, bool, []byte, *types.UUID, *decimal.Decimal,
-	// []*int64, []*string, []*bool, [][]byte, []*decimal.Decimal, []*types.UUID
-	RawValue() any
+	Compare(v Value, op engine.ComparisonOp) (*BoolValue, error)
 	// Cast casts the variable to the given type.
-	// It is meant to mirror Postgres's type casting behavior.
+	// It engine.IS meant to mirror Postgres's type casting behavior.
 	Cast(t *types.DataType) (Value, error)
-	// Null returns true if the variable is null.
-	Null() bool
 }
 
-// ScalarValue is a scalar value that can be computed on and have unary operations applied to it.
+// ScalarValue engine.IS a scalar value that can be computed on and have unary operations applied to it.
 type ScalarValue interface {
 	Value
 	// Arithmetic performs an arithmetic operation on the variable with another variable.
-	Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, error)
+	Arithmetic(v ScalarValue, op engine.ArithmeticOp) (ScalarValue, error)
 	// Unary applies a unary operation to the variable.
-	Unary(op unaryOp) (ScalarValue, error)
+	Unary(op engine.UnaryOp) (ScalarValue, error)
 	// Array creates an array from this scalar value and any other scalar values.
 	Array(v ...ScalarValue) (ArrayValue, error)
 }
 
-// ArrayValue is an array value that can be compared and have unary operations applied to it.
+// ArrayValue engine.IS an array value that can be compared and have unary operations applied to it.
 type ArrayValue interface {
 	Value
 	// Len returns the length of the array.
 	Len() int32
 	// Index returns the value at the given index.
-	// If the index is out of bounds, an error is returned.
-	// All indexing is 1-based.
+	// If the index engine.IS out of bounds, an error engine.IS returned.
+	// All indexing engine.IS 1-based.
 	Index(i int32) (ScalarValue, error)
 	// Set sets the value at the given index.
-	// If the index is out of bounds, enough space is allocated to set the value.
+	// If the index engine.IS out of bounds, enough space engine.IS allocated to set the value.
 	// This matches the behavior of Postgres.
-	// All indexing is 1-based.
+	// All indexing engine.IS 1-based.
 	Set(i int32, v ScalarValue) error
 }
 
@@ -232,23 +228,23 @@ func NewValue(v any) (Value, error) {
 	case Value:
 		return v, nil
 	case int64:
-		return newInt(v), nil
+		return MakeInt8(v), nil
 	case int:
-		return newInt(int64(v)), nil
+		return MakeInt8(int64(v)), nil
 	case string:
-		return newText(v), nil
+		return MakeText(v), nil
 	case bool:
-		return newBool(v), nil
+		return MakeBool(v), nil
 	case []byte:
-		return newBlob(v), nil
+		return MakeBlob(v), nil
 	case *types.UUID:
-		return newUUID(v), nil
+		return MakeUUID(v), nil
 	case types.UUID:
-		return newUUID(&v), nil
+		return MakeUUID(&v), nil
 	case *decimal.Decimal:
-		return newDec(v), nil
+		return MakeDecimal(v), nil
 	case decimal.Decimal:
-		return newDec(&v), nil
+		return MakeDecimal(&v), nil
 	case []int64:
 		pgInts := make([]pgtype.Int8, len(v))
 		for i, val := range v {
@@ -346,7 +342,7 @@ func NewValue(v any) (Value, error) {
 	case [][]byte:
 		pgBlobs := make([]*BlobValue, len(v))
 		for i, val := range v {
-			pgBlobs[i] = newBlob(val)
+			pgBlobs[i] = MakeBlob(val)
 		}
 
 		return &BlobArrayValue{
@@ -358,7 +354,7 @@ func NewValue(v any) (Value, error) {
 			if val == nil {
 				pgBlobs[i] = &BlobValue{}
 			} else {
-				pgBlobs[i] = newBlob(*val)
+				pgBlobs[i] = MakeBlob(*val)
 			}
 		}
 
@@ -403,13 +399,13 @@ func makeTypeErr(left, right Value) error {
 	return fmt.Errorf("%w: left: %s right: %s", engine.ErrType, left.Type(), right.Type())
 }
 
-// makeArrTypeErr returns an error for when an array operation is performed on a non-array type.
+// makeArrTypeErr returns an error for when an array operation engine.IS performed on a non-array type.
 func makeArrTypeErr(arrVal Value, newVal Value) error {
 	return fmt.Errorf("%w: cannot create an array of different types %s and %s", engine.ErrType, arrVal.Type(), newVal.Type())
 }
 
-func newInt(i int64) *IntValue {
-	return &IntValue{
+func MakeInt8(i int64) *Int8Value {
+	return &Int8Value{
 		Int8: pgtype.Int8{
 			Int64: i,
 			Valid: true,
@@ -417,80 +413,80 @@ func newInt(i int64) *IntValue {
 	}
 }
 
-type IntValue struct {
+type Int8Value struct {
 	pgtype.Int8
 }
 
-func (i *IntValue) Null() bool {
+func (i *Int8Value) Null() bool {
 	return !i.Valid
 }
 
-func (v *IntValue) Compare(v2 Value, op comparisonOp) (*BoolValue, error) {
+func (v *Int8Value) Compare(v2 Value, op engine.ComparisonOp) (*BoolValue, error) {
 	if res, early := nullCmp(v, v2, op); early {
 		return res, nil
 	}
 
-	val2, ok := v2.(*IntValue)
+	val2, ok := v2.(*Int8Value)
 	if !ok {
 		return nil, makeTypeErr(v, v2)
 	}
 
 	var b bool
 	switch op {
-	case equal:
+	case engine.EQUAL:
 		b = v.Int64 == val2.Int64
-	case lessThan:
+	case engine.LESS_THAN:
 		b = v.Int64 < val2.Int64
-	case greaterThan:
+	case engine.GREATER_THAN:
 		b = v.Int64 > val2.Int64
-	case isDistinctFrom:
+	case engine.IS_DISTINCT_FROM:
 		b = v.Int64 != val2.Int64
 	default:
 		return nil, fmt.Errorf("%w: cannot compare int with operator %s", engine.ErrComparison, op)
 	}
 
-	return newBool(b), nil
+	return MakeBool(b), nil
 }
 
-// nullCmp is a helper function for comparing null values.
+// nullCmp engine.IS a helper function for comparing null values.
 // It takes two values and a comparison operator.
-// If the operator is IS or IS DISTINCT FROM, it will return a boolean value
+// If the operator engine.IS IS or IS DISTINCT FROM, it will return a boolean value
 // based on the comparison of the two values.
-// If the operator is any other operator and either of the values is null,
+// If the operator engine.IS any other operator and either of the values engine.IS null,
 // it will return a null value.
-func nullCmp(a, b Value, op comparisonOp) (*BoolValue, bool) {
-	// if it is isDistinctFrom or is, we should handle nulls
-	// Otherwise, if either is a null, we return early because we cannot compare
+func nullCmp(a, b Value, op engine.ComparisonOp) (*BoolValue, bool) {
+	// if it engine.IS engine.IS_DISTINCT_FROM or engine.IS, we should handle nulls
+	// Otherwise, if either engine.IS a null, we return early because we cannot compare
 	// a null value with a non-null value.
-	if op == isDistinctFrom {
+	if op == engine.IS_DISTINCT_FROM {
 		if a.Null() && b.Null() {
-			return newBool(false), true
+			return MakeBool(false), true
 		}
 		if a.Null() || b.Null() {
-			return newBool(true), true
+			return MakeBool(true), true
 		}
 
 		// otherwise, we let equality handle it
 	}
 
-	if op == is {
+	if op == engine.IS {
 		if a.Null() && b.Null() {
-			return newBool(true), true
+			return MakeBool(true), true
 		}
 		if a.Null() || b.Null() {
-			return newBool(false), true
+			return MakeBool(false), true
 		}
 	}
 
 	if a.Null() || b.Null() {
 		// the type of this null doesnt really matter.
-		return newNull(types.BoolType).(*BoolValue), true
+		return MakeNull(types.BoolType).(*BoolValue), true
 	}
 
 	return nil, false
 }
 
-// checks if any value is null. If so, it will return the null value.
+// checks if any value engine.IS null. If so, it will return the null value.
 func checkScalarNulls(v ...ScalarValue) (ScalarValue, bool) {
 	for _, val := range v {
 		if val.Null() {
@@ -501,12 +497,12 @@ func checkScalarNulls(v ...ScalarValue) (ScalarValue, bool) {
 	return nil, false
 }
 
-func (i *IntValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, error) {
+func (i *Int8Value) Arithmetic(v ScalarValue, op engine.ArithmeticOp) (ScalarValue, error) {
 	if res, early := checkScalarNulls(i, v); early {
 		return res, nil
 	}
 
-	val2, ok := v.(*IntValue)
+	val2, ok := v.(*Int8Value)
 	if !ok {
 		return nil, makeTypeErr(i, v)
 	}
@@ -514,27 +510,33 @@ func (i *IntValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, erro
 	var r int64
 
 	switch op {
-	case add:
+	case engine.ADD:
 		r = i.Int64 + val2.Int64
-	case sub:
+	case engine.SUB:
 		r = i.Int64 - val2.Int64
-	case mul:
+	case engine.MUL:
 		r = i.Int64 * val2.Int64
-	case div:
+	case engine.DIV:
 		if val2.Int64 == 0 {
 			return nil, fmt.Errorf("%w: cannot divide by zero", engine.ErrArithmetic)
 		}
 		r = i.Int64 / val2.Int64
-	case mod:
+	case engine.MOD:
 		if val2.Int64 == 0 {
 			return nil, fmt.Errorf("%w: cannot modulo by zero", engine.ErrArithmetic)
 		}
 		r = i.Int64 % val2.Int64
+	case engine.EXP:
+		p := math.Pow(float64(i.Int64), float64(val2.Int64))
+		if p > math.MaxInt64 {
+			return nil, fmt.Errorf("%w: result of exponentiation is too large", engine.ErrArithmetic)
+		}
+		r = int64(p)
 	default:
 		return nil, fmt.Errorf("%w: cannot perform arithmetic operation %s on type int", engine.ErrArithmetic, op)
 	}
 
-	return &IntValue{
+	return &Int8Value{
 		Int8: pgtype.Int8{
 			Int64: r,
 			Valid: true,
@@ -542,28 +544,28 @@ func (i *IntValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, erro
 	}, nil
 }
 
-func (i *IntValue) Unary(op unaryOp) (ScalarValue, error) {
+func (i *Int8Value) Unary(op engine.UnaryOp) (ScalarValue, error) {
 	if i.Null() {
 		return i, nil
 	}
 
 	switch op {
-	case neg:
-		return &IntValue{Int8: pgtype.Int8{Int64: -i.Int64, Valid: true}}, nil
-	case not:
+	case engine.NEG:
+		return &Int8Value{Int8: pgtype.Int8{Int64: -i.Int64, Valid: true}}, nil
+	case engine.NOT:
 		return nil, fmt.Errorf("%w: cannot apply logical NOT to an integer", engine.ErrUnary)
-	case pos:
+	case engine.POS:
 		return i, nil
 	default:
 		return nil, fmt.Errorf("%w: unknown unary operator: %s", engine.ErrUnary, op)
 	}
 }
 
-func (i *IntValue) Type() *types.DataType {
+func (i *Int8Value) Type() *types.DataType {
 	return types.IntType
 }
 
-func (i *IntValue) RawValue() any {
+func (i *Int8Value) RawValue() any {
 	if !i.Valid {
 		return nil
 	}
@@ -571,11 +573,11 @@ func (i *IntValue) RawValue() any {
 	return i.Int64
 }
 
-func (i *IntValue) Array(v ...ScalarValue) (ArrayValue, error) {
+func (i *Int8Value) Array(v ...ScalarValue) (ArrayValue, error) {
 	pgtArr := make([]pgtype.Int8, len(v)+1)
 	pgtArr[0] = i.Int8
 	for j, val := range v {
-		if intVal, ok := val.(*IntValue); !ok {
+		if intVal, ok := val.(*Int8Value); !ok {
 			return nil, makeArrTypeErr(i, val)
 		} else {
 			pgtArr[j+1] = intVal.Int8
@@ -587,9 +589,9 @@ func (i *IntValue) Array(v ...ScalarValue) (ArrayValue, error) {
 	}, nil
 }
 
-func (i *IntValue) Cast(t *types.DataType) (Value, error) {
+func (i *Int8Value) Cast(t *types.DataType) (Value, error) {
 	if i.Null() {
-		return newNull(t), nil
+		return MakeNull(t), nil
 	}
 
 	// we check for decimal first since type switching on it
@@ -604,34 +606,34 @@ func (i *IntValue) Cast(t *types.DataType) (Value, error) {
 			return nil, castErr(err)
 		}
 
-		return newDec(dec), nil
+		return MakeDecimal(dec), nil
 	}
 
 	switch *t {
 	case *types.IntType:
 		return i, nil
 	case *types.TextType:
-		return newText(fmt.Sprint(i.Int64)), nil
+		return MakeText(fmt.Sprint(i.Int64)), nil
 	case *types.BoolType:
-		return newBool(i.Int64 != 0), nil
+		return MakeBool(i.Int64 != 0), nil
 	default:
 		return nil, castErr(fmt.Errorf("cannot cast int to %s", t))
 	}
 }
 
-// newNull creates a new null value of the given type.
-func newNull(t *types.DataType) Value {
+// MakeNull creates a new null value of the given type.
+func MakeNull(t *types.DataType) Value {
 	if t.Name == types.DecimalStr {
 		if t.IsArray {
 			return newNullDecArr(t)
 		}
 
-		return newDec(nil)
+		return MakeDecimal(nil)
 	}
 
 	switch *t {
 	case *types.IntType:
-		return &IntValue{
+		return &Int8Value{
 			Int8: pgtype.Int8{
 				Valid: false,
 			},
@@ -657,7 +659,7 @@ func newNull(t *types.DataType) Value {
 			},
 		}
 	case *types.DecimalType:
-		return newDec(nil)
+		return MakeDecimal(nil)
 	case *types.IntArrayType:
 		return &IntArrayValue{
 			OneDArray: newNullArray[pgtype.Int8](),
@@ -691,7 +693,7 @@ func newNullArray[T any]() OneDArray[T] {
 	}
 }
 
-func newText(s string) *TextValue {
+func MakeText(s string) *TextValue {
 	return &TextValue{
 		Text: pgtype.Text{
 			String: s,
@@ -708,7 +710,7 @@ func (t *TextValue) Null() bool {
 	return !t.Valid
 }
 
-func (s *TextValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
+func (s *TextValue) Compare(v Value, op engine.ComparisonOp) (*BoolValue, error) {
 	if res, early := nullCmp(s, v, op); early {
 		return res, nil
 	}
@@ -720,22 +722,22 @@ func (s *TextValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 
 	var b bool
 	switch op {
-	case equal:
+	case engine.EQUAL:
 		b = s.String == val2.String
-	case lessThan:
+	case engine.LESS_THAN:
 		b = s.String < val2.String
-	case greaterThan:
+	case engine.GREATER_THAN:
 		b = s.String > val2.String
-	case isDistinctFrom:
+	case engine.IS_DISTINCT_FROM:
 		b = s.String != val2.String
 	default:
 		return nil, fmt.Errorf("%w: cannot use comparison operator %s with type %s", engine.ErrComparison, s.Type(), op)
 	}
 
-	return newBool(b), nil
+	return MakeBool(b), nil
 }
 
-func (s *TextValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, error) {
+func (s *TextValue) Arithmetic(v ScalarValue, op engine.ArithmeticOp) (ScalarValue, error) {
 	if res, early := checkScalarNulls(s, v); early {
 		return res, nil
 	}
@@ -745,14 +747,14 @@ func (s *TextValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, err
 		return nil, makeTypeErr(s, v)
 	}
 
-	if op == concat {
-		return newText(s.String + val2.String), nil
+	if op == engine.CONCAT {
+		return MakeText(s.String + val2.String), nil
 	}
 
 	return nil, fmt.Errorf("%w: cannot perform arithmetic operation %s on type string", engine.ErrArithmetic, op)
 }
 
-func (s *TextValue) Unary(op unaryOp) (ScalarValue, error) {
+func (s *TextValue) Unary(op engine.UnaryOp) (ScalarValue, error) {
 	return nil, fmt.Errorf("%w: cannot perform unary operation on string", engine.ErrUnary)
 }
 
@@ -788,7 +790,7 @@ func (s *TextValue) Array(v ...ScalarValue) (ArrayValue, error) {
 
 func (s *TextValue) Cast(t *types.DataType) (Value, error) {
 	if s.Null() {
-		return newNull(t), nil
+		return MakeNull(t), nil
 	}
 
 	if t.Name == types.DecimalStr {
@@ -801,7 +803,7 @@ func (s *TextValue) Cast(t *types.DataType) (Value, error) {
 			return nil, castErr(err)
 		}
 
-		return newDec(dec), nil
+		return MakeDecimal(dec), nil
 	}
 
 	switch *t {
@@ -811,7 +813,7 @@ func (s *TextValue) Cast(t *types.DataType) (Value, error) {
 			return nil, castErr(err)
 		}
 
-		return newInt(i), nil
+		return MakeInt8(i), nil
 	case *types.TextType:
 		return s, nil
 	case *types.BoolType:
@@ -820,22 +822,22 @@ func (s *TextValue) Cast(t *types.DataType) (Value, error) {
 			return nil, castErr(err)
 		}
 
-		return newBool(b), nil
+		return MakeBool(b), nil
 	case *types.UUIDType:
 		u, err := types.ParseUUID(s.String)
 		if err != nil {
 			return nil, castErr(err)
 		}
 
-		return newUUID(u), nil
+		return MakeUUID(u), nil
 	case *types.BlobType:
-		return newBlob([]byte(s.String)), nil
+		return MakeBlob([]byte(s.String)), nil
 	default:
 		return nil, castErr(fmt.Errorf("cannot cast text to %s", t))
 	}
 }
 
-func newBool(b bool) *BoolValue {
+func MakeBool(b bool) *BoolValue {
 	return &BoolValue{
 		Bool: pgtype.Bool{
 			Bool:  b,
@@ -852,7 +854,7 @@ func (b *BoolValue) Null() bool {
 	return !b.Valid
 }
 
-func (b *BoolValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
+func (b *BoolValue) Compare(v Value, op engine.ComparisonOp) (*BoolValue, error) {
 	if res, early := nullCmp(b, v, op); early {
 		return res, nil
 	}
@@ -864,36 +866,36 @@ func (b *BoolValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 
 	var b2 bool
 	switch op {
-	case equal:
+	case engine.EQUAL:
 		b2 = b.Bool.Bool == val2.Bool.Bool
-	case isDistinctFrom:
+	case engine.IS_DISTINCT_FROM:
 		b2 = b.Bool.Bool != val2.Bool.Bool
-	case lessThan:
+	case engine.LESS_THAN:
 		b2 = !b.Bool.Bool && val2.Bool.Bool
-	case greaterThan:
+	case engine.GREATER_THAN:
 		b2 = b.Bool.Bool && !val2.Bool.Bool
-	case is:
+	case engine.IS:
 		b2 = b.Bool.Bool == val2.Bool.Bool
 	default:
 		return nil, fmt.Errorf("%w: cannot use comparison operator %s with type %s", engine.ErrComparison, b.Type(), op)
 	}
 
-	return newBool(b2), nil
+	return MakeBool(b2), nil
 }
 
-func (b *BoolValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, error) {
+func (b *BoolValue) Arithmetic(v ScalarValue, op engine.ArithmeticOp) (ScalarValue, error) {
 	return nil, fmt.Errorf("%w: cannot perform arithmetic operation on bool", engine.ErrArithmetic)
 }
 
-func (b *BoolValue) Unary(op unaryOp) (ScalarValue, error) {
+func (b *BoolValue) Unary(op engine.UnaryOp) (ScalarValue, error) {
 	if b.Null() {
 		return b, nil
 	}
 
 	switch op {
-	case not:
-		return newBool(!b.Bool.Bool), nil
-	case neg, pos:
+	case engine.NOT:
+		return MakeBool(!b.Bool.Bool), nil
+	case engine.NEG, engine.POS:
 		return nil, fmt.Errorf("%w: cannot perform unary operation %s on bool", engine.ErrUnary, op)
 	default:
 		return nil, fmt.Errorf("%w: unexpected operator id %s for bool", engine.ErrUnary, op)
@@ -932,18 +934,18 @@ func (b *BoolValue) Array(v ...ScalarValue) (ArrayValue, error) {
 
 func (b *BoolValue) Cast(t *types.DataType) (Value, error) {
 	if b.Null() {
-		return newNull(t), nil
+		return MakeNull(t), nil
 	}
 
 	switch *t {
 	case *types.IntType:
 		if b.Bool.Bool {
-			return newInt(1), nil
+			return MakeInt8(1), nil
 		}
 
-		return newInt(0), nil
+		return MakeInt8(0), nil
 	case *types.TextType:
-		return newText(strconv.FormatBool(b.Bool.Bool)), nil
+		return MakeText(strconv.FormatBool(b.Bool.Bool)), nil
 	case *types.BoolType:
 		return b, nil
 	default:
@@ -951,7 +953,7 @@ func (b *BoolValue) Cast(t *types.DataType) (Value, error) {
 	}
 }
 
-func newBlob(b []byte) *BlobValue {
+func MakeBlob(b []byte) *BlobValue {
 	return &BlobValue{
 		bts: b,
 	}
@@ -965,7 +967,7 @@ func (b *BlobValue) Null() bool {
 	return b.bts == nil
 }
 
-func (b *BlobValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
+func (b *BlobValue) Compare(v Value, op engine.ComparisonOp) (*BoolValue, error) {
 	if res, early := nullCmp(b, v, op); early {
 		return res, nil
 	}
@@ -977,18 +979,18 @@ func (b *BlobValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 
 	var b2 bool
 	switch op {
-	case equal:
+	case engine.EQUAL:
 		b2 = string(b.bts) == string(val2.bts)
-	case isDistinctFrom:
+	case engine.IS_DISTINCT_FROM:
 		b2 = string(b.bts) != string(val2.bts)
 	default:
 		return nil, fmt.Errorf("%w: cannot use comparison operator %s with type %s", engine.ErrComparison, b.Type(), op)
 	}
 
-	return newBool(b2), nil
+	return MakeBool(b2), nil
 }
 
-func (b *BlobValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, error) {
+func (b *BlobValue) Arithmetic(v ScalarValue, op engine.ArithmeticOp) (ScalarValue, error) {
 	if res, early := checkScalarNulls(b, v); early {
 		return res, nil
 	}
@@ -998,14 +1000,14 @@ func (b *BlobValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, err
 		return nil, makeTypeErr(b, v)
 	}
 
-	if op == concat {
-		return newBlob(append(b.bts, val2.bts...)), nil
+	if op == engine.CONCAT {
+		return MakeBlob(append(b.bts, val2.bts...)), nil
 	}
 
 	return nil, fmt.Errorf("%w: cannot perform arithmetic operation %s on blob", engine.ErrArithmetic, op)
 }
 
-func (b *BlobValue) Unary(op unaryOp) (ScalarValue, error) {
+func (b *BlobValue) Unary(op engine.UnaryOp) (ScalarValue, error) {
 	return nil, fmt.Errorf("%w: cannot perform unary operation on blob", engine.ErrUnary)
 }
 
@@ -1043,9 +1045,9 @@ func (b *BlobValue) Cast(t *types.DataType) (Value, error) {
 			return nil, castErr(err)
 		}
 
-		return newInt(i), nil
+		return MakeInt8(i), nil
 	case *types.TextType:
-		return newText(string(b.bts)), nil
+		return MakeText(string(b.bts)), nil
 	case *types.BlobType:
 		return b, nil
 	default:
@@ -1069,6 +1071,15 @@ func (b *BlobValue) ScanBytes(src []byte) error {
 	return nil
 }
 
+// Value implements the driver.Valuer interface.
+func (b *BlobValue) Value() (driver.Value, error) {
+	if b.Null() {
+		return nil, nil
+	}
+
+	return b.bts, nil
+}
+
 // BytesValue implements the pgtype.BytesValuer interface.
 func (b *BlobValue) BytesValue() ([]byte, error) {
 	if b.Null() {
@@ -1078,7 +1089,7 @@ func (b *BlobValue) BytesValue() ([]byte, error) {
 	return b.bts, nil
 }
 
-func newUUID(u *types.UUID) *UUIDValue {
+func MakeUUID(u *types.UUID) *UUIDValue {
 	if u == nil {
 		return &UUIDValue{
 			UUID: pgtype.UUID{
@@ -1102,7 +1113,7 @@ func (u *UUIDValue) Null() bool {
 	return !u.Valid
 }
 
-func (u *UUIDValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
+func (u *UUIDValue) Compare(v Value, op engine.ComparisonOp) (*BoolValue, error) {
 	if res, early := nullCmp(u, v, op); early {
 		return res, nil
 	}
@@ -1114,22 +1125,22 @@ func (u *UUIDValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 
 	var b bool
 	switch op {
-	case equal:
+	case engine.EQUAL:
 		b = u.Bytes == val2.Bytes
-	case isDistinctFrom:
+	case engine.IS_DISTINCT_FROM:
 		b = u.Bytes != val2.Bytes
 	default:
 		return nil, fmt.Errorf("%w: cannot use comparison operator %s with type %s", engine.ErrComparison, u.Type(), op)
 	}
 
-	return newBool(b), nil
+	return MakeBool(b), nil
 }
 
-func (u *UUIDValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, error) {
+func (u *UUIDValue) Arithmetic(v ScalarValue, op engine.ArithmeticOp) (ScalarValue, error) {
 	return nil, fmt.Errorf("%w: cannot perform arithmetic operation on uuid", engine.ErrArithmetic)
 }
 
-func (u *UUIDValue) Unary(op unaryOp) (ScalarValue, error) {
+func (u *UUIDValue) Unary(op engine.UnaryOp) (ScalarValue, error) {
 	return nil, fmt.Errorf("%w: cannot perform unary operation on uuid", engine.ErrUnary)
 }
 
@@ -1167,14 +1178,14 @@ func (u *UUIDValue) Array(v ...ScalarValue) (ArrayValue, error) {
 
 func (u *UUIDValue) Cast(t *types.DataType) (Value, error) {
 	if u.Null() {
-		return newNull(t), nil
+		return MakeNull(t), nil
 	}
 
 	switch *t {
 	case *types.TextType:
-		return newText(types.UUID(u.Bytes).String()), nil
+		return MakeText(types.UUID(u.Bytes).String()), nil
 	case *types.BlobType:
-		return newBlob(u.Bytes[:]), nil
+		return MakeBlob(u.Bytes[:]), nil
 	case *types.UUIDType:
 		return u, nil
 	default:
@@ -1197,7 +1208,7 @@ func pgTypeFromDec(d *decimal.Decimal) pgtype.Numeric {
 
 	bigint := d.BigInt()
 	// cockroach's APD library tracks negativity outside of the BigInt,
-	// so here we need to check if the decimal is negative, and if so,
+	// so here we need to check if the decimal engine.IS negative, and if so,
 	// apply it to the big int we are putting into the pgtype.
 	if d.IsNegative() {
 		bigint = bigint.Neg(bigint)
@@ -1222,7 +1233,7 @@ func decFromPgType(n pgtype.Numeric) (*decimal.Decimal, error) {
 	return decimal.NewFromBigInt(n.Int, n.Exp)
 }
 
-func newDec(d *decimal.Decimal) *DecimalValue {
+func MakeDecimal(d *decimal.Decimal) *DecimalValue {
 	if d == nil {
 		return &DecimalValue{
 			Numeric: pgtype.Numeric{
@@ -1271,7 +1282,7 @@ func (d *DecimalValue) dec() (*decimal.Decimal, error) {
 	return d2, nil
 }
 
-func (d *DecimalValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
+func (d *DecimalValue) Compare(v Value, op engine.ComparisonOp) (*BoolValue, error) {
 	if res, early := nullCmp(d, v, op); early {
 		return res, nil
 	}
@@ -1299,7 +1310,7 @@ func (d *DecimalValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	return cmpIntegers(res, 0, op)
 }
 
-func (d *DecimalValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, error) {
+func (d *DecimalValue) Arithmetic(v ScalarValue, op engine.ArithmeticOp) (ScalarValue, error) {
 	if res, early := checkScalarNulls(d, v); early {
 		return res, nil
 	}
@@ -1327,15 +1338,17 @@ func (d *DecimalValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, 
 
 	var d2 *decimal.Decimal
 	switch op {
-	case add:
+	case engine.ADD:
 		d2, err = decimal.Add(dec1, dec2)
-	case sub:
+	case engine.SUB:
 		d2, err = decimal.Sub(dec1, dec2)
-	case mul:
+	case engine.MUL:
 		d2, err = decimal.Mul(dec1, dec2)
-	case div:
+	case engine.DIV:
 		d2, err = decimal.Div(dec1, dec2)
-	case mod:
+	case engine.EXP:
+		d2, err = decimal.Pow(dec1, dec2)
+	case engine.MOD:
 		d2, err = decimal.Mod(dec1, dec2)
 	default:
 		return nil, fmt.Errorf("%w: unexpected operator id %d for decimal", engine.ErrArithmetic, op)
@@ -1349,16 +1362,16 @@ func (d *DecimalValue) Arithmetic(v ScalarValue, op arithmeticOp) (ScalarValue, 
 		return nil, err
 	}
 
-	return newDec(d2), nil
+	return MakeDecimal(d2), nil
 }
 
-func (d *DecimalValue) Unary(op unaryOp) (ScalarValue, error) {
+func (d *DecimalValue) Unary(op engine.UnaryOp) (ScalarValue, error) {
 	if d.Null() {
 		return d, nil
 	}
 
 	switch op {
-	case neg:
+	case engine.NEG:
 		dec, err := d.dec()
 		if err != nil {
 			return nil, err
@@ -1369,8 +1382,8 @@ func (d *DecimalValue) Unary(op unaryOp) (ScalarValue, error) {
 			return nil, err
 		}
 
-		return newDec(dec), nil
-	case pos:
+		return MakeDecimal(dec), nil
+	case engine.POS:
 		return d, nil
 	default:
 		return nil, fmt.Errorf("%w: unexpected operator id %s for decimal", engine.ErrUnary, op)
@@ -1445,7 +1458,7 @@ func (d *DecimalValue) Cast(t *types.DataType) (Value, error) {
 			return nil, castErr(err)
 		}
 
-		return newDec(dec), nil
+		return MakeDecimal(dec), nil
 	}
 
 	switch *t {
@@ -1460,14 +1473,14 @@ func (d *DecimalValue) Cast(t *types.DataType) (Value, error) {
 			return nil, castErr(err)
 		}
 
-		return newInt(i), nil
+		return MakeInt8(i), nil
 	case *types.TextType:
 		dec, err := d.dec()
 		if err != nil {
 			return nil, castErr(err)
 		}
 
-		return newText(dec.String()), nil
+		return MakeText(dec.String()), nil
 	default:
 		return nil, castErr(fmt.Errorf("cannot cast decimal to %s", t))
 	}
@@ -1490,7 +1503,7 @@ func newIntArr(v []*int64) *IntArrayValue {
 }
 
 // OneDArray array intercepts the pgtype SetDimensions method to ensure that all arrays we scan are
-// 1D arrays. This is because we do not support multi-dimensional arrays.
+// 1D arrays. This engine.IS because we do engine.NOT support multi-dimensional arrays.
 type OneDArray[T any] struct {
 	pgtype.Array[T]
 }
@@ -1511,7 +1524,7 @@ func (a *IntArrayValue) Null() bool {
 	return !a.Valid
 }
 
-func (a *IntArrayValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
+func (a *IntArrayValue) Compare(v Value, op engine.ComparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
@@ -1524,10 +1537,10 @@ func (a *IntArrayValue) Index(i int32) (ScalarValue, error) {
 		return nil, engine.ErrIndexOutOfBounds
 	}
 
-	return &IntValue{a.Elements[i-1]}, nil // indexing is 1-based
+	return &Int8Value{a.Elements[i-1]}, nil // indexing engine.IS 1-based
 }
 
-// allocArr checks that the array has index i, and if not, it allocates enough space to set the value.
+// allocArr checks that the array has index i, and if engine.NOT, it allocates enough space to set the value.
 func allocArr[T any](p *pgtype.Array[T], i int32) error {
 	if i < 1 {
 		return engine.ErrIndexOutOfBounds
@@ -1549,8 +1562,8 @@ func allocArr[T any](p *pgtype.Array[T], i int32) error {
 }
 
 func (a *IntArrayValue) Set(i int32, v ScalarValue) error {
-	// we do not need to worry about nulls here. Postgres will automatically make an array
-	// not null if we set a value in it.
+	// we do engine.NOT need to worry about nulls here. Postgres will automatically make an array
+	// engine.NOT null if we set a value in it.
 	// to test it:
 	// CREATE TABLE test (arr int[]);
 	// INSERT INTO test VALUES (NULL);
@@ -1560,7 +1573,7 @@ func (a *IntArrayValue) Set(i int32, v ScalarValue) error {
 		return err
 	}
 
-	val, ok := v.(*IntValue)
+	val, ok := v.(*Int8Value)
 	if !ok {
 		return fmt.Errorf("cannot set non-int value in int array")
 	}
@@ -1592,7 +1605,7 @@ func (a *IntArrayValue) RawValue() any {
 
 func (a *IntArrayValue) Cast(t *types.DataType) (Value, error) {
 	if a.Null() {
-		return newNull(t), nil
+		return MakeNull(t), nil
 	}
 
 	if t.Name == types.DecimalStr {
@@ -1644,7 +1657,7 @@ func (a *TextArrayValue) Null() bool {
 	return !a.Valid
 }
 
-func (a *TextArrayValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
+func (a *TextArrayValue) Compare(v Value, op engine.ComparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
@@ -1727,10 +1740,10 @@ func (a *TextArrayValue) Cast(t *types.DataType) (Value, error) {
 
 // castArr casts an array of one type to an array of another type.
 // Generics:
-// A is the current scalar Kwil type
-// B is the desired scalar Kwil type
-// C is the current array Kwil type
-// D is the desired array Kwil type
+// A engine.IS the current scalar Kwil type
+// B engine.IS the desired scalar Kwil type
+// C engine.IS the current array Kwil type
+// D engine.IS the desired array Kwil type
 // Params:
 // c: the current array
 // get: a function that converts the current array's scalar type to the desired scalar type
@@ -1756,7 +1769,7 @@ func castArrWithPtr[A any, B any, C ArrayValue, D ArrayValue](c C, get func(a A)
 			return *new(D), castErr(err)
 		}
 
-		// if the value is nil, we dont need to do anything; a nil value is already
+		// if the value engine.IS nil, we dont need to do anything; a nil value engine.IS already
 		// in the array
 		if !v.Null() {
 			raw, ok := v.RawValue().(A)
@@ -1799,7 +1812,7 @@ func (a *BoolArrayValue) Null() bool {
 	return !a.Valid
 }
 
-func (a *BoolArrayValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
+func (a *BoolArrayValue) Compare(v Value, op engine.ComparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
@@ -1869,15 +1882,20 @@ func (a *BoolArrayValue) Cast(t *types.DataType) (Value, error) {
 }
 
 func newNullDecArr(t *types.DataType) *DecimalArrayValue {
+	var precCopy uint16
+	if t.HasMetadata() {
+		precCopy = t.Metadata[0]
+	}
 	return &DecimalArrayValue{
 		OneDArray: OneDArray[pgtype.Numeric]{
 			Array: pgtype.Array[pgtype.Numeric]{Valid: false},
 		},
+		precision: &precCopy,
 	}
 }
 
 // newDecArrFn returns a function that creates a new DecimalArrayValue.
-// It is used for type casting.
+// It engine.IS used for type casting.
 func newDecArrFn(t *types.DataType) func(d []*decimal.Decimal) *DecimalArrayValue {
 	return func(d []*decimal.Decimal) *DecimalArrayValue {
 		return newDecimalArrayValue(d, t)
@@ -1918,12 +1936,12 @@ func (a *DecimalArrayValue) Null() bool {
 	return !a.Valid
 }
 
-func (a *DecimalArrayValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
+func (a *DecimalArrayValue) Compare(v Value, op engine.ComparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
 // cmpArrs compares two Kwil array types.
-func cmpArrs[M ArrayValue](a M, b Value, op comparisonOp) (*BoolValue, error) {
+func cmpArrs[M ArrayValue](a M, b Value, op engine.ComparisonOp) (*BoolValue, error) {
 	if res, early := nullCmp(a, b, op); early {
 		return res, nil
 	}
@@ -1957,7 +1975,7 @@ func cmpArrs[M ArrayValue](a M, b Value, op comparisonOp) (*BoolValue, error) {
 				return false, nil
 			}
 
-			res, err := v1.Compare(v2, equal)
+			res, err := v1.Compare(v2, engine.EQUAL)
 			if err != nil {
 				return false, err
 			}
@@ -1976,10 +1994,10 @@ func cmpArrs[M ArrayValue](a M, b Value, op comparisonOp) (*BoolValue, error) {
 	}
 
 	switch op {
-	case equal:
-		return newBool(eq), nil
-	case isDistinctFrom:
-		return newBool(!eq), nil
+	case engine.EQUAL:
+		return MakeBool(eq), nil
+	case engine.IS_DISTINCT_FROM:
+		return MakeBool(!eq), nil
 	default:
 		return nil, fmt.Errorf("%w: only =, IS DISTINCT FROM are supported for array comparison", engine.ErrComparison)
 	}
@@ -2110,7 +2128,7 @@ func newBlobArrayValue(b []*[]byte) *BlobArrayValue {
 }
 
 type BlobArrayValue struct {
-	// we embed BlobValue because unlike other types, there is no native pgtype embedded within
+	// we embed BlobValue because unlike other types, there engine.IS no native pgtype embedded within
 	// blob value that allows pgx to scan the value into the struct.
 	OneDArray[*BlobValue]
 }
@@ -2119,7 +2137,7 @@ func (a *BlobArrayValue) Null() bool {
 	return !a.Valid
 }
 
-func (a *BlobArrayValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
+func (a *BlobArrayValue) Compare(v Value, op engine.ComparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
@@ -2204,7 +2222,7 @@ func (a *UuidArrayValue) Null() bool {
 	return !a.Valid
 }
 
-func (a *UuidArrayValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
+func (a *UuidArrayValue) Compare(v Value, op engine.ComparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
@@ -2268,13 +2286,14 @@ func (a *UuidArrayValue) Cast(t *types.DataType) (Value, error) {
 	}
 }
 
-func newRecordValue() *RecordValue {
+// EmptyRecordValue creates a new empty record value.
+func EmptyRecordValue() *RecordValue {
 	return &RecordValue{
 		Fields: make(map[string]Value),
 	}
 }
 
-// RecordValue is a special type that represents a row in a table.
+// RecordValue engine.IS a special type that represents a row in a table.
 type RecordValue struct {
 	Fields map[string]Value
 	Order  []string
@@ -2297,7 +2316,7 @@ func (r *RecordValue) AddValue(k string, v Value) error {
 	return nil
 }
 
-func (o *RecordValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
+func (o *RecordValue) Compare(v Value, op engine.ComparisonOp) (*BoolValue, error) {
 	if res, early := nullCmp(o, v, op); early {
 		return res, nil
 	}
@@ -2320,7 +2339,7 @@ func (o *RecordValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 				break
 			}
 
-			eq, err := o.Fields[field].Compare(v2, equal)
+			eq, err := o.Fields[field].Compare(v2, engine.EQUAL)
 			if err != nil {
 				return nil, err
 			}
@@ -2339,8 +2358,8 @@ func (o *RecordValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 	}
 
 	switch op {
-	case equal:
-		return newBool(isSame), nil
+	case engine.EQUAL:
+		return MakeBool(isSame), nil
 	default:
 		return nil, fmt.Errorf("%w: cannot use comparison operator %s with record type", engine.ErrComparison, op)
 	}
@@ -2348,7 +2367,7 @@ func (o *RecordValue) Compare(v Value, op comparisonOp) (*BoolValue, error) {
 
 func (o *RecordValue) Type() *types.DataType {
 	return &types.DataType{
-		Name: "record", // special type that is not in the types package
+		Name: "record", // special type that engine.IS engine.NOT in the types package
 	}
 }
 
@@ -2360,23 +2379,24 @@ func (o *RecordValue) Cast(t *types.DataType) (Value, error) {
 	return nil, castErr(fmt.Errorf("cannot cast record to %s", t))
 }
 
-func cmpIntegers(a, b int, op comparisonOp) (*BoolValue, error) {
+func cmpIntegers(a, b int, op engine.ComparisonOp) (*BoolValue, error) {
 	switch op {
-	case equal:
-		return newBool(a == b), nil
-	case lessThan:
-		return newBool(a < b), nil
-	case greaterThan:
-		return newBool(a > b), nil
-	case isDistinctFrom:
-		return newBool(a != b), nil
+	case engine.EQUAL:
+		return MakeBool(a == b), nil
+	case engine.LESS_THAN:
+		return MakeBool(a < b), nil
+	case engine.GREATER_THAN:
+		return MakeBool(a > b), nil
+	case engine.IS_DISTINCT_FROM:
+		return MakeBool(a != b), nil
 	default:
 		return nil, fmt.Errorf("%w: cannot use comparison operator %s with numeric types", engine.ErrComparison, op)
 	}
 }
 
-// valueToString converts a value to a string.
-func valueToString(v Value) (string, error) {
+// StringifyValue converts a value to a string.
+// It can be reversed using ParseValue.
+func StringifyValue(v Value) (string, error) {
 	if v.Null() {
 		return "NULL", nil
 	}
@@ -2391,7 +2411,7 @@ func valueToString(v Value) (string, error) {
 				return "", err
 			}
 
-			str, err := valueToString(val)
+			str, err := StringifyValue(val)
 			if err != nil {
 				return "", err
 			}
@@ -2405,7 +2425,7 @@ func valueToString(v Value) (string, error) {
 	switch val := v.(type) {
 	case *TextValue:
 		return val.Text.String, nil
-	case *IntValue:
+	case *Int8Value:
 		return strconv.FormatInt(val.Int64, 10), nil
 	case *BoolValue:
 		return strconv.FormatBool(val.Bool.Bool), nil
@@ -2427,10 +2447,11 @@ func valueToString(v Value) (string, error) {
 	}
 }
 
-// parseValue parses a string into a value.
-func parseValue(s string, t *types.DataType) (Value, error) {
+// ParseValue parses a string into a value.
+// It is the reverse of StringifyValue.
+func ParseValue(s string, t *types.DataType) (Value, error) {
 	if s == "NULL" {
-		return newNull(t), nil
+		return MakeNull(t), nil
 	}
 
 	if t.IsArray {
@@ -2443,35 +2464,35 @@ func parseValue(s string, t *types.DataType) (Value, error) {
 			return nil, err
 		}
 
-		return newDec(dec), nil
+		return MakeDecimal(dec), nil
 	}
 
 	switch *t {
 	case *types.TextType:
-		return newText(s), nil
+		return MakeText(s), nil
 	case *types.IntType:
 		i, err := strconv.ParseInt(s, 10, 64)
 		if err != nil {
 			return nil, err
 		}
 
-		return newInt(i), nil
+		return MakeInt8(i), nil
 	case *types.BoolType:
 		b, err := strconv.ParseBool(s)
 		if err != nil {
 			return nil, err
 		}
 
-		return newBool(b), nil
+		return MakeBool(b), nil
 	case *types.UUIDType:
 		u, err := types.ParseUUID(s)
 		if err != nil {
 			return nil, err
 		}
 
-		return newUUID(u), nil
+		return MakeUUID(u), nil
 	case *types.BlobType:
-		return newBlob([]byte(s)), nil
+		return MakeBlob([]byte(s)), nil
 	default:
 		return nil, fmt.Errorf("unexpected type %s", t)
 	}
@@ -2480,7 +2501,7 @@ func parseValue(s string, t *types.DataType) (Value, error) {
 // parseArray parses a string into an array value.
 func parseArray(s string, t *types.DataType) (ArrayValue, error) {
 	if s == "NULL" {
-		return newNull(t).(ArrayValue), nil
+		return MakeNull(t).(ArrayValue), nil
 	}
 
 	// we will parse the string into individual values and then cast them to the
@@ -2490,7 +2511,7 @@ func parseArray(s string, t *types.DataType) (ArrayValue, error) {
 	scalarType := t.Copy()
 	scalarType.IsArray = false
 	for i, str := range strs {
-		val, err := parseValue(str, scalarType)
+		val, err := ParseValue(str, scalarType)
 		if err != nil {
 			return nil, err
 		}

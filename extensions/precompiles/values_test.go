@@ -1,4 +1,4 @@
-package interpreter
+package precompiles
 
 import (
 	"testing"
@@ -21,6 +21,7 @@ func Test_Arithmetic(t *testing.T) {
 		div    any
 		mod    any
 		concat any
+		exp    any
 	}
 
 	tests := []testcase{
@@ -34,17 +35,19 @@ func Test_Arithmetic(t *testing.T) {
 			div:    int64(2),
 			mod:    int64(0),
 			concat: engine.ErrArithmetic,
+			exp:    int64(100000),
 		},
 		{
 			name:   "decimal",
-			a:      mustDec("10.00"),
-			b:      mustDec("5.00"),
+			a:      mustExplicitDecimal("10.00", 100, 50),
+			b:      mustExplicitDecimal("5.00", 100, 50),
 			add:    mustDec("15.00"),
 			sub:    mustDec("5.00"),
 			mul:    mustDec("50.00"),
 			div:    mustDec("2.00"),
 			mod:    mustDec("0.00"),
 			concat: engine.ErrArithmetic,
+			exp:    mustExplicitDecimal("100000.00", 100, 50),
 		},
 		{
 			name:   "text",
@@ -56,6 +59,7 @@ func Test_Arithmetic(t *testing.T) {
 			div:    engine.ErrArithmetic,
 			mod:    engine.ErrArithmetic,
 			concat: "helloworld",
+			exp:    engine.ErrArithmetic,
 		},
 		{
 			name:   "uuid",
@@ -67,6 +71,7 @@ func Test_Arithmetic(t *testing.T) {
 			div:    engine.ErrArithmetic,
 			mod:    engine.ErrArithmetic,
 			concat: engine.ErrArithmetic,
+			exp:    engine.ErrArithmetic,
 		},
 		{
 			name:   "blob",
@@ -78,6 +83,7 @@ func Test_Arithmetic(t *testing.T) {
 			div:    engine.ErrArithmetic,
 			mod:    engine.ErrArithmetic,
 			concat: []byte("helloworld"),
+			exp:    engine.ErrArithmetic,
 		},
 		{
 			name:   "bool",
@@ -89,6 +95,7 @@ func Test_Arithmetic(t *testing.T) {
 			div:    engine.ErrArithmetic,
 			mod:    engine.ErrArithmetic,
 			concat: engine.ErrArithmetic,
+			exp:    engine.ErrArithmetic,
 		},
 	}
 
@@ -103,7 +110,7 @@ func Test_Arithmetic(t *testing.T) {
 			a := makeVal(tt.a)
 			b := makeVal(tt.b)
 
-			isErrOrResult := func(a, b ScalarValue, op arithmeticOp, want any) {
+			isErrOrResult := func(a, b ScalarValue, op engine.ArithmeticOp, want any) {
 				res, err := a.Arithmetic(b, op)
 				if wantErr, ok := want.(error); ok {
 					require.Error(t, err)
@@ -117,7 +124,7 @@ func Test_Arithmetic(t *testing.T) {
 				eq(t, want, raw)
 
 				// operations on null values should always return null
-				null := newNull(a.Type()).(ScalarValue)
+				null := MakeNull(a.Type()).(ScalarValue)
 
 				res, err = a.Arithmetic(null, op)
 				require.NoError(t, err)
@@ -126,12 +133,13 @@ func Test_Arithmetic(t *testing.T) {
 				require.Nil(t, res.RawValue())
 			}
 
-			isErrOrResult(a, b, add, tt.add)
-			isErrOrResult(a, b, sub, tt.sub)
-			isErrOrResult(a, b, mul, tt.mul)
-			isErrOrResult(a, b, div, tt.div)
-			isErrOrResult(a, b, mod, tt.mod)
-			isErrOrResult(a, b, concat, tt.concat)
+			isErrOrResult(a, b, engine.ADD, tt.add)
+			isErrOrResult(a, b, engine.SUB, tt.sub)
+			isErrOrResult(a, b, engine.MUL, tt.mul)
+			isErrOrResult(a, b, engine.DIV, tt.div)
+			isErrOrResult(a, b, engine.MOD, tt.mod)
+			isErrOrResult(a, b, engine.EXP, tt.exp)
+			isErrOrResult(a, b, engine.CONCAT, tt.concat)
 
 			// test rountripping strings
 			testRoundTripParse(t, a)
@@ -359,7 +367,7 @@ func Test_Comparison(t *testing.T) {
 			a := makeVal(tt.a)
 			b := makeVal(tt.b)
 
-			isErrOrResult := func(a, b Value, op comparisonOp, want any) {
+			isErrOrResult := func(a, b Value, op engine.ComparisonOp, want any) {
 				t.Log(op.String())
 				res, err := a.Compare(b, op)
 				if wantErr, ok := want.(error); ok {
@@ -382,11 +390,11 @@ func Test_Comparison(t *testing.T) {
 				}
 			}
 
-			isErrOrResult(a, b, lessThan, tt.lt)
-			isErrOrResult(a, b, greaterThan, tt.gt)
-			isErrOrResult(a, b, equal, tt.eq)
-			isErrOrResult(a, b, is, tt.is)
-			isErrOrResult(a, b, isDistinctFrom, tt.distinctFrom)
+			isErrOrResult(a, b, engine.LESS_THAN, tt.lt)
+			isErrOrResult(a, b, engine.GREATER_THAN, tt.gt)
+			isErrOrResult(a, b, engine.EQUAL, tt.eq)
+			isErrOrResult(a, b, engine.IS, tt.is)
+			isErrOrResult(a, b, engine.IS_DISTINCT_FROM, tt.distinctFrom)
 
 			// test rountripping strings
 			testRoundTripParse(t, a)
@@ -665,7 +673,7 @@ func Test_Unary(t *testing.T) {
 			scal, ok := val.(ScalarValue)
 			require.True(t, ok)
 
-			check := func(op unaryOp, want any) {
+			check := func(op engine.UnaryOp, want any) {
 				if want == nil {
 					want = engine.ErrUnary
 				}
@@ -682,9 +690,9 @@ func Test_Unary(t *testing.T) {
 				eq(t, want, res.RawValue())
 			}
 
-			check(pos, tt.pos)
-			check(neg, tt.neg)
-			check(not, tt.not)
+			check(engine.POS, tt.pos)
+			check(engine.NEG, tt.neg)
+			check(engine.NOT, tt.not)
 
 			// test rountripping strings
 			testRoundTripParse(t, val)
@@ -764,7 +772,7 @@ func Test_Array(t *testing.T) {
 			// we will now set them all to nulls and test that the array is created successfully
 			dt := vals[0].Type()
 			for i := range vals {
-				err = res.Set(int32(i+1), newNull(dt).(ScalarValue))
+				err = res.Set(int32(i+1), MakeNull(dt).(ScalarValue))
 				require.NoError(t, err)
 			}
 
@@ -802,6 +810,15 @@ func mustDec(dec string) *decimal.Decimal {
 	return d
 }
 
+func mustExplicitDecimal(dec string, precision, scale uint16) *decimal.Decimal {
+	d, err := decimal.NewExplicit(dec, precision, scale)
+	if err != nil {
+		panic(err)
+	}
+
+	return d
+}
+
 func mustUUID(s string) *types.UUID {
 	u, err := types.ParseUUID(s)
 	if err != nil {
@@ -816,13 +833,13 @@ func testRoundTripParse(t *testing.T, v Value) {
 	if v.Null() {
 		return
 	}
-	str, err := valueToString(v)
+	str, err := StringifyValue(v)
 	require.NoError(t, err)
 
-	val2, err := parseValue(str, v.Type())
+	val2, err := ParseValue(str, v.Type())
 	require.NoError(t, err)
 
-	equal, err := v.Compare(val2, equal)
+	equal, err := v.Compare(val2, engine.EQUAL)
 	require.NoError(t, err)
 
 	if !equal.RawValue().(bool) {

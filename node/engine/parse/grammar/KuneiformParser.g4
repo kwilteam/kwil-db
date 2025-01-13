@@ -365,6 +365,7 @@ sql_expr:
         ) RBRACKET type_cast?                                                               # array_access_sql_expr
     | <assoc=right> (PLUS|MINUS) sql_expr                                                   # unary_sql_expr
     | sql_expr COLLATE identifier                                                           # collate_sql_expr
+    | left=sql_expr EXP right=sql_expr                                                      # arithmetic_sql_expr
     | left=sql_expr (STAR | DIV | MOD) right=sql_expr                                       # arithmetic_sql_expr
     | left=sql_expr (PLUS | MINUS) right=sql_expr                                           # arithmetic_sql_expr
 
@@ -433,6 +434,7 @@ action_expr:
             | (left=action_expr? COL right=action_expr?)
         ) RBRACKET type_cast?                                                                   # array_access_action_expr
     | <assoc=right> (PLUS|MINUS|EXCL) action_expr                                            # unary_action_expr
+    | action_expr EXP action_expr                                                            # action_expr_arithmetic
     | action_expr (STAR | DIV | MOD) action_expr                                          # action_expr_arithmetic
     | action_expr (PLUS | MINUS) action_expr                                              # action_expr_arithmetic
 

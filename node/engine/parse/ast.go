@@ -352,6 +352,7 @@ const (
 	ArithmeticOperatorMultiply ArithmeticOperator = "*"
 	ArithmeticOperatorDivide   ArithmeticOperator = "/"
 	ArithmeticOperatorModulo   ArithmeticOperator = "%"
+	ArithmeticOperatorExponent ArithmeticOperator = "^"
 	ArithmeticOperatorConcat   ArithmeticOperator = "||"
 )
 

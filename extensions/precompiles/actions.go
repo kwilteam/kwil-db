@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )
 
@@ -18,7 +19,7 @@ import (
 // It should be used for reading values into memory, creating
 // connections, and other setup that should only be done once per
 // extension instance.
-type Initializer func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]any) (Instance, error)
+type Initializer func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]Value) (Instance, error)
 
 // Instance is a named initialized instance of a precompile. It is
 // returned from the precompile initialization, as specified by the
@@ -45,7 +46,7 @@ type Instance interface {
 // ConcreteInstance is a concrete implementation of an extension instance.
 type PrecompileExtension[T any] struct {
 	// Initialize is the function that creates a new instance of the extension.
-	Initialize func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]any) (*T, error)
+	Initialize func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]Value) (*T, error)
 	// OnStart is called when the node starts, or when the extension is first used
 	OnStart func(ctx context.Context, app *common.App, t *T) error
 	// OnUse is called when a `USE ... AS ...` statement is executed
@@ -58,8 +59,8 @@ type PrecompileExtension[T any] struct {
 
 // Export exports the extension to a form that does not rely on generics, allowing the extension to be consumed by callers without forcing
 // the callers to know the generic type.
-func (p *PrecompileExtension[T]) Export() Initializer {
-	return func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]any) (Instance, error) {
+func (p *PrecompileExtension[T]) export() Initializer {
+	return func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]Value) (Instance, error) {
 		var t *T
 		if p.Initialize == nil {
 			t = new(T)
@@ -133,12 +134,65 @@ type Method[T any] struct {
 	// It must have exactly one of PUBLIC, PRIVATE, or SYSTEM,
 	// and can have any number of other modifiers.
 	AccessModifiers []Modifier
+	// Parameters is a list of parameters.
+	// The engine will enforce that anything calling the method
+	// provides the correct number of parameters, and in the correct
+	// types.
+	Parameters []*types.DataType
+	// Returns specifies the return structure of the method.
+	// If nil, the method does not return anything.
+	Returns *MethodReturn
 	// Handler is the function that is called when the method is invoked.
-	Handler func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error, t *T) error
-	// ReturnColumns is a list of the returned column names. It is optional. If it is set, its length must be
-	// equal to the length of the returned values passed to the resultFn. If it is not set, the returned column
-	// names will be generated based on their position in the returned values.
-	ReturnColumns []string
+	Handler func(ctx *common.EngineContext, app *common.App, inputs []Value, resultFn func([]Value) error, t *T) error
+}
+
+func (m *Method[T]) verify() error {
+	if strings.ToLower(m.Name) != m.Name {
+		return fmt.Errorf("method name %s must be lowercase", m.Name)
+	}
+
+	if len(m.AccessModifiers) == 0 {
+		return fmt.Errorf("method %s has no access modifiers", m.Name)
+	}
+
+	found := 0
+	for _, mod := range m.AccessModifiers {
+		if mod == PUBLIC || mod == PRIVATE || mod == SYSTEM {
+			found++
+		}
+	}
+
+	if found != 1 {
+		return fmt.Errorf("method %s must have exactly one of PUBLIC, PRIVATE, or SYSTEM", m.Name)
+	}
+
+	if m.Returns != nil {
+		if len(m.Returns.ColumnTypes) == 0 {
+			return fmt.Errorf("method %s has no return types", m.Name)
+		}
+
+		if len(m.Returns.ColumnNames) != 0 && len(m.Returns.ColumnNames) != len(m.Returns.ColumnTypes) {
+			return fmt.Errorf("method %s has %d return names, but %d return types", m.Name, len(m.Returns.ColumnNames), len(m.Returns.ColumnTypes))
+		}
+	}
+
+	return nil
+}
+
+// MethodReturn specifies the return structure of a method.
+type MethodReturn struct {
+	// If true, then the method returns any number of rows.
+	// If false, then the method returns exactly one row.
+	ReturnsTable bool
+	// ColumnTypes is a list of column types.
+	// It is required. If the extension returns types that are
+	// not matching the column types, the engine will return an error.
+	ColumnTypes []*types.DataType
+	// ColumnNames is a list of column names.
+	// It is optional. If it is set, its length must be equal to the length
+	// of the column types. If it is not set, the column names will be generated
+	// based on their position in the column types.
+	ColumnNames []string
 }
 
 // Modifier modifies the access to a procedure.
@@ -175,7 +229,9 @@ func (m *Method[T]) export(t *T) *ExportedMethod {
 	return &ExportedMethod{
 		Name:            m.Name,
 		AccessModifiers: m.AccessModifiers,
-		Call: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+		Parameters:      m.Parameters,
+		Returns:         m.Returns,
+		Call: func(ctx *common.EngineContext, app *common.App, inputs []Value, resultFn func([]Value) error) error {
 			return m.Handler(ctx, app, inputs, resultFn, t)
 		},
 	}
@@ -184,10 +240,9 @@ func (m *Method[T]) export(t *T) *ExportedMethod {
 type ExportedMethod struct {
 	Name            string
 	AccessModifiers []Modifier
-	Call            func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error
-	// ReturnColumns is a list of the returned column names. It is optional. If it is set, its length must be
-	// equal to the length of the returned values passed to the resultFn.
-	ReturnColumns []string
+	Parameters      []*types.DataType
+	Returns         *MethodReturn
+	Call            func(ctx *common.EngineContext, app *common.App, inputs []Value, resultFn func([]Value) error) error
 }
 
 var registeredPrecompiles = make(map[string]Initializer)
@@ -206,29 +261,18 @@ func RegisterPrecompile[T any](name string, ext PrecompileExtension[T]) error {
 
 	methodNames := make(map[string]struct{})
 	for _, method := range ext.Methods {
-		lowerName := strings.ToLower(method.Name)
-		if _, ok := methodNames[lowerName]; ok {
-			return fmt.Errorf("duplicate method %s", lowerName)
+		err := method.verify()
+		if err != nil {
+			return fmt.Errorf("method %s: %w", method.Name, err)
 		}
 
-		methodNames[lowerName] = struct{}{}
-
-		if len(method.AccessModifiers) == 0 {
-			return fmt.Errorf("method %s has no access modifiers", method.Name)
+		if _, ok := methodNames[method.Name]; ok {
+			return fmt.Errorf("duplicate method %s", method.Name)
 		}
 
-		found := 0
-		for _, mod := range method.AccessModifiers {
-			if mod == PUBLIC || mod == PRIVATE || mod == SYSTEM {
-				found++
-			}
-		}
-
-		if found != 1 {
-			return fmt.Errorf("method %s must have exactly one of PUBLIC, PRIVATE, or SYSTEM", method.Name)
-		}
+		methodNames[method.Name] = struct{}{}
 	}
 
-	registeredPrecompiles[name] = ext.Export()
+	registeredPrecompiles[name] = ext.export()
 	return nil
 }

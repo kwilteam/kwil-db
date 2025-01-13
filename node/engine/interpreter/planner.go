@@ -23,7 +23,7 @@ func makeActionToExecutable(namespace string, act *Action) *executable {
 		stmtFns[j] = stmt.Accept(planner).(stmtFunc)
 	}
 
-	validateArgs := func(v []Value) error {
+	validateArgs := func(v []precompiles.Value) error {
 		if len(v) != len(act.Parameters) {
 			return fmt.Errorf("expected %d arguments, got %d", len(act.Parameters), len(v))
 		}
@@ -39,7 +39,7 @@ func makeActionToExecutable(namespace string, act *Action) *executable {
 
 	return &executable{
 		Name: act.Name,
-		Func: func(exec *executionContext, args []Value, fn resultFunc) error {
+		Func: func(exec *executionContext, args []precompiles.Value, fn resultFunc) error {
 			if err := exec.canExecute(namespace, act.Name, act.Modifiers); err != nil {
 				return err
 			}
@@ -112,7 +112,7 @@ var (
 	errReturn = errors.New("return")
 )
 
-func makeRow(v []Value) *row {
+func makeRow(v []precompiles.Value) *row {
 	return &row{
 		Values: v,
 	}
@@ -124,12 +124,12 @@ type row struct {
 	// It can be nil and/or not match the length of values.
 	// The Columns() method should always be used.
 	columns []string
-	// Values is a list of values.
-	Values []Value
+	// precompiles.Values is a list of values.
+	Values []precompiles.Value
 }
 
-func (r *row) record() (*RecordValue, error) {
-	rec := newRecordValue()
+func (r *row) record() (*precompiles.RecordValue, error) {
+	rec := precompiles.EmptyRecordValue()
 	for i, name := range r.Columns() {
 		if name == unknownColName {
 			continue
@@ -176,7 +176,7 @@ type stmtFunc func(exec *executionContext, fn resultFunc) error
 
 func (i *interpreterPlanner) VisitActionStmtDeclaration(p0 *parse.ActionStmtDeclaration) any {
 	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
-		return exec.allocateVariable(p0.Variable.Name, newNull(p0.Type))
+		return exec.allocateVariable(p0.Variable.Name, precompiles.MakeNull(p0.Type))
 	})
 }
 
@@ -197,7 +197,7 @@ func (i *interpreterPlanner) VisitActionStmtAssignment(p0 *parse.ActionStmtAssig
 
 		// if the user specifies an expected type
 		// (e.g. $a text := 'a'), we should check that the type matches.
-		checkType := func(v Value) error {
+		checkType := func(v precompiles.Value) error {
 			if p0.Type != nil {
 				if !v.Type().EqualsStrict(p0.Type) {
 					return fmt.Errorf("%w: expected %s, got %s", engine.ErrType, p0.Type, v.Type())
@@ -215,7 +215,7 @@ func (i *interpreterPlanner) VisitActionStmtAssignment(p0 *parse.ActionStmtAssig
 
 			return exec.setVariable(a.Name, val)
 		case *parse.ExpressionArrayAccess:
-			scalarVal, ok := val.(ScalarValue)
+			scalarVal, ok := val.(precompiles.ScalarValue)
 			if !ok {
 				return fmt.Errorf("%w: expected scalar value, got %T", engine.ErrType, val)
 			}
@@ -225,7 +225,7 @@ func (i *interpreterPlanner) VisitActionStmtAssignment(p0 *parse.ActionStmtAssig
 				return err
 			}
 
-			arr, ok := arrVal.(ArrayValue)
+			arr, ok := arrVal.(precompiles.ArrayValue)
 			if !ok {
 				return fmt.Errorf("%w: expected array, got %T", engine.ErrType, arrVal)
 			}
@@ -286,7 +286,7 @@ func (i *interpreterPlanner) VisitActionStmtCall(p0 *parse.ActionStmtCall) any {
 			return fmt.Errorf(`unknown action "%s" in namespace "%s"`, p0.Call.Name, p0.Call.Namespace)
 		}
 
-		vals := make([]Value, len(args))
+		vals := make([]precompiles.Value, len(args))
 		for j, valFn := range args {
 			val, err := valFn(exec)
 			if err != nil {
@@ -361,7 +361,7 @@ func (i *interpreterPlanner) VisitActionStmtForLoop(p0 *parse.ActionStmtForLoop)
 	loopFn := p0.LoopTerm.Accept(i).(loopTermFunc)
 
 	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
-		err := loopFn(exec, func(term Value) error {
+		err := loopFn(exec, func(term precompiles.Value) error {
 			exec.scope.child()
 			defer exec.scope.popScope()
 			err := exec.allocateVariable(p0.Receiver.Name, term)
@@ -387,7 +387,7 @@ func (i *interpreterPlanner) VisitActionStmtForLoop(p0 *parse.ActionStmtForLoop)
 
 // loopTermFunc is a function that allows iterating over a loop term.
 // It calls the function passed to it with each value.
-type loopTermFunc func(exec *executionContext, fn func(Value) error) (err error)
+type loopTermFunc func(exec *executionContext, fn func(precompiles.Value) error) (err error)
 
 // handleLoopTermErr is a helper function that handles the error returned by a loop term.
 // If it is a continue, it will return nil. If it is a break, it will bubble it up.
@@ -403,7 +403,7 @@ func (i *interpreterPlanner) VisitLoopTermRange(p0 *parse.LoopTermRange) any {
 	startFn := p0.Start.Accept(i).(exprFunc)
 	endFn := p0.End.Accept(i).(exprFunc)
 
-	return loopTermFunc(func(exec *executionContext, fn func(Value) error) (err error) {
+	return loopTermFunc(func(exec *executionContext, fn func(precompiles.Value) error) (err error) {
 		start, err := startFn(exec)
 		if err != nil {
 			return err
@@ -423,7 +423,7 @@ func (i *interpreterPlanner) VisitLoopTermRange(p0 *parse.LoopTermRange) any {
 		}
 
 		for i := start.RawValue().(int64); i <= end.RawValue().(int64); i++ {
-			err = handleLoopTermErr(fn(newInt(i)))
+			err = handleLoopTermErr(fn(precompiles.MakeInt8(i)))
 			if err != nil {
 				return err
 			}
@@ -435,7 +435,7 @@ func (i *interpreterPlanner) VisitLoopTermRange(p0 *parse.LoopTermRange) any {
 
 func (i *interpreterPlanner) VisitLoopTermExpression(p0 *parse.LoopTermExpression) any {
 	expr := p0.Expression.Accept(i).(exprFunc)
-	return loopTermFunc(func(exec *executionContext, fn func(Value) error) error {
+	return loopTermFunc(func(exec *executionContext, fn func(precompiles.Value) error) error {
 		// there are two cases for expressions here.
 		// The first is that the expression is calling a table-returning function.
 		// The second is that the expression returns an array.
@@ -457,7 +457,7 @@ func (i *interpreterPlanner) VisitLoopTermExpression(p0 *parse.LoopTermExpressio
 				return fmt.Errorf(`unknown function "%s" in namespace "%s"`, functionCall.Name, functionCall.Namespace)
 			}
 
-			vals := make([]Value, len(functionCall.Args))
+			vals := make([]precompiles.Value, len(functionCall.Args))
 			for j, arg := range functionCall.Args {
 				val, err := arg.Accept(i).(exprFunc)(exec)
 				if err != nil {
@@ -493,7 +493,7 @@ func (i *interpreterPlanner) VisitLoopTermExpression(p0 *parse.LoopTermExpressio
 			return err
 		}
 
-		arr, ok := val.(ArrayValue)
+		arr, ok := val.(precompiles.ArrayValue)
 		if !ok {
 			return fmt.Errorf("%w: expected array, got %T", engine.ErrType, val)
 		}
@@ -515,7 +515,7 @@ func (i *interpreterPlanner) VisitLoopTermExpression(p0 *parse.LoopTermExpressio
 }
 
 func (i *interpreterPlanner) VisitLoopTermSQL(p0 *parse.LoopTermSQL) any {
-	return loopTermFunc(func(exec *executionContext, fn func(Value) error) error {
+	return loopTermFunc(func(exec *executionContext, fn func(precompiles.Value) error) error {
 		raw, err := p0.Statement.Raw()
 		if err != nil {
 			return err
@@ -574,7 +574,7 @@ func (i *interpreterPlanner) VisitActionStmtIf(p0 *parse.ActionStmtIf) any {
 				return err
 			}
 
-			if boolVal, ok := cond.(*BoolValue); ok {
+			if boolVal, ok := cond.(*precompiles.BoolValue); ok {
 				if boolVal.Null() {
 					continue
 				}
@@ -651,7 +651,7 @@ func (i *interpreterPlanner) VisitActionStmtReturn(p0 *parse.ActionStmtReturn) a
 
 	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
 		if len(valFns) > 0 {
-			vals := make([]Value, len(p0.Values))
+			vals := make([]precompiles.Value, len(p0.Values))
 			for j, valFn := range valFns {
 				val, err := valFn(exec)
 				if err != nil {
@@ -685,7 +685,7 @@ func (i *interpreterPlanner) VisitActionStmtReturnNext(p0 *parse.ActionStmtRetur
 	}
 
 	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
-		vals := make([]Value, len(p0.Values))
+		vals := make([]precompiles.Value, len(p0.Values))
 		for j, valFn := range valFns {
 			val, err := valFn(exec)
 			if err != nil {
@@ -713,7 +713,7 @@ func cast(t parse.Typecasted, s exprFunc) exprFunc {
 		return s
 	}
 
-	return exprFunc(func(exec *executionContext) (Value, error) {
+	return exprFunc(func(exec *executionContext) (precompiles.Value, error) {
 		val, err := s(exec)
 		if err != nil {
 			return nil, err
@@ -724,11 +724,11 @@ func cast(t parse.Typecasted, s exprFunc) exprFunc {
 }
 
 // exprFunc is a function that returns a value.
-type exprFunc func(exec *executionContext) (Value, error)
+type exprFunc func(exec *executionContext) (precompiles.Value, error)
 
 func (i *interpreterPlanner) VisitExpressionLiteral(p0 *parse.ExpressionLiteral) any {
-	return cast(p0, func(exec *executionContext) (Value, error) {
-		return NewValue(p0.Value)
+	return cast(p0, func(exec *executionContext) (precompiles.Value, error) {
+		return precompiles.NewValue(p0.Value)
 	})
 }
 
@@ -738,7 +738,7 @@ func (i *interpreterPlanner) VisitExpressionFunctionCall(p0 *parse.ExpressionFun
 		args[j] = arg.Accept(i).(exprFunc)
 	}
 
-	return cast(p0, func(exec *executionContext) (Value, error) {
+	return cast(p0, func(exec *executionContext) (precompiles.Value, error) {
 		ns, err := exec.getNamespace(p0.Namespace)
 		if err != nil {
 			return nil, err
@@ -749,7 +749,7 @@ func (i *interpreterPlanner) VisitExpressionFunctionCall(p0 *parse.ExpressionFun
 			return nil, fmt.Errorf(`unknown function "%s" in namespace "%s"`, p0.Name, p0.Namespace)
 		}
 
-		vals := make([]Value, len(args))
+		vals := make([]precompiles.Value, len(args))
 		for j, arg := range args {
 			val, err := arg(exec)
 			if err != nil {
@@ -759,7 +759,7 @@ func (i *interpreterPlanner) VisitExpressionFunctionCall(p0 *parse.ExpressionFun
 			vals[j] = val
 		}
 
-		var val Value
+		var val precompiles.Value
 		iters := 0
 		err = execute.Func(exec, vals, func(received *row) error {
 			iters++
@@ -786,7 +786,7 @@ func (i *interpreterPlanner) VisitExpressionFunctionCall(p0 *parse.ExpressionFun
 }
 
 func (i *interpreterPlanner) VisitExpressionVariable(p0 *parse.ExpressionVariable) any {
-	return cast(p0, func(exec *executionContext) (Value, error) {
+	return cast(p0, func(exec *executionContext) (precompiles.Value, error) {
 		val, err := exec.getVariable(p0.Name)
 		if err != nil {
 			return nil, err
@@ -814,18 +814,18 @@ func (i *interpreterPlanner) VisitExpressionArrayAccess(p0 *parse.ExpressionArra
 		panic("unexpected array access statement")
 	}
 
-	return cast(p0, func(exec *executionContext) (Value, error) {
+	return cast(p0, func(exec *executionContext) (precompiles.Value, error) {
 		arrVal, err := arrFn(exec)
 		if err != nil {
 			return nil, err
 		}
 
-		arr, ok := arrVal.(ArrayValue)
+		arr, ok := arrVal.(precompiles.ArrayValue)
 		if !ok {
 			return nil, fmt.Errorf("%w: expected array, got %T", engine.ErrType, arrVal)
 		}
 
-		checkArrIdx := func(v Value) error {
+		checkArrIdx := func(v precompiles.Value) error {
 			if !v.Type().EqualsStrict(types.IntType) {
 				return fmt.Errorf("array index must be integer, got %s", v.Type())
 			}
@@ -876,7 +876,7 @@ func (i *interpreterPlanner) VisitExpressionArrayAccess(p0 *parse.ExpressionArra
 
 		if start > end {
 			// in Postgres, if the start is greater than the end, it returns an empty array.
-			return NewZeroValue(arr.Type())
+			return precompiles.NewZeroValue(arr.Type())
 		}
 		// in Postgres, if the start is less than 1, it is treated as 1.
 		if start < 1 {
@@ -887,12 +887,12 @@ func (i *interpreterPlanner) VisitExpressionArrayAccess(p0 *parse.ExpressionArra
 			end = arr.Len()
 		}
 
-		zv, err := NewZeroValue(arr.Type())
+		zv, err := precompiles.NewZeroValue(arr.Type())
 		if err != nil {
 			return nil, err
 		}
 
-		arrZv, ok := zv.(ArrayValue)
+		arrZv, ok := zv.(precompiles.ArrayValue)
 		if !ok {
 			// should never happen
 			return nil, fmt.Errorf("%w: expected array, got %T", engine.ErrType, zv)
@@ -922,7 +922,7 @@ func (i *interpreterPlanner) VisitExpressionMakeArray(p0 *parse.ExpressionMakeAr
 		valFns[j] = v.Accept(i).(exprFunc)
 	}
 
-	return cast(p0, func(exec *executionContext) (Value, error) {
+	return cast(p0, func(exec *executionContext) (precompiles.Value, error) {
 		if len(valFns) == 0 {
 			return nil, fmt.Errorf("array must have at least one element")
 		}
@@ -932,12 +932,12 @@ func (i *interpreterPlanner) VisitExpressionMakeArray(p0 *parse.ExpressionMakeAr
 			return nil, err
 		}
 
-		scal, ok := val0.(ScalarValue)
+		scal, ok := val0.(precompiles.ScalarValue)
 		if !ok {
 			return nil, fmt.Errorf("%w: expected scalar value, got %T", engine.ErrType, val0)
 		}
 
-		var vals []ScalarValue
+		var vals []precompiles.ScalarValue
 		for j, valFn := range valFns {
 			if j == 0 {
 				continue
@@ -948,7 +948,7 @@ func (i *interpreterPlanner) VisitExpressionMakeArray(p0 *parse.ExpressionMakeAr
 				return nil, err
 			}
 
-			scal, ok := val.(ScalarValue)
+			scal, ok := val.(precompiles.ScalarValue)
 			if !ok {
 				return nil, fmt.Errorf("%w: expected scalar value, got %T", engine.ErrType, val)
 			}
@@ -963,13 +963,13 @@ func (i *interpreterPlanner) VisitExpressionMakeArray(p0 *parse.ExpressionMakeAr
 func (i *interpreterPlanner) VisitExpressionFieldAccess(p0 *parse.ExpressionFieldAccess) any {
 	recordFn := p0.Record.Accept(i).(exprFunc)
 
-	return cast(p0, func(exec *executionContext) (Value, error) {
+	return cast(p0, func(exec *executionContext) (precompiles.Value, error) {
 		objVal, err := recordFn(exec)
 		if err != nil {
 			return nil, err
 		}
 
-		obj, ok := objVal.(*RecordValue)
+		obj, ok := objVal.(*precompiles.RecordValue)
 		if !ok {
 			return nil, fmt.Errorf("%w: expected object, got %T", engine.ErrType, objVal)
 		}
@@ -988,7 +988,7 @@ func (i *interpreterPlanner) VisitExpressionParenthesized(p0 *parse.ExpressionPa
 }
 
 func (i *interpreterPlanner) VisitExpressionComparison(p0 *parse.ExpressionComparison) any {
-	cmpOps, negate := getComparisonOps(p0.Operator)
+	cmpOps, negate := engine.ConvertComparisonOps(p0.Operator)
 
 	left := p0.Left.Accept(i).(exprFunc)
 	right := p0.Right.Accept(i).(exprFunc)
@@ -1000,15 +1000,15 @@ func (i *interpreterPlanner) VisitExpressionComparison(p0 *parse.ExpressionCompa
 	}
 
 	if negate {
-		return makeUnaryFunc(retFn, not)
+		return makeUnaryFunc(retFn, engine.NOT)
 	}
 
 	return retFn
 }
 
 // makeComparisonFunc returns a function that compares two values.
-func makeComparisonFunc(left, right exprFunc, cmpOps comparisonOp) exprFunc {
-	return func(exec *executionContext) (Value, error) {
+func makeComparisonFunc(left, right exprFunc, cmpOps engine.ComparisonOp) exprFunc {
+	return func(exec *executionContext) (precompiles.Value, error) {
 		leftVal, err := left(exec)
 		if err != nil {
 			return nil, err
@@ -1034,7 +1034,7 @@ func (i *interpreterPlanner) VisitExpressionLogical(p0 *parse.ExpressionLogical)
 // makeLogicalFunc returns a function that performs a logical operation.
 // If and is true, it performs an AND operation, otherwise it performs an OR operation.
 func makeLogicalFunc(left, right exprFunc, and bool) exprFunc {
-	return func(exec *executionContext) (Value, error) {
+	return func(exec *executionContext) (precompiles.Value, error) {
 		leftVal, err := left(exec)
 		if err != nil {
 			return nil, err
@@ -1046,11 +1046,11 @@ func makeLogicalFunc(left, right exprFunc, and bool) exprFunc {
 		}
 
 		if leftVal.Null() {
-			return newNull(types.BoolType), nil
+			return precompiles.MakeNull(types.BoolType), nil
 		}
 
 		if rightVal.Null() {
-			return newNull(types.BoolType), nil
+			return precompiles.MakeNull(types.BoolType), nil
 		}
 
 		if leftVal.Type() != types.BoolType || rightVal.Type() != types.BoolType {
@@ -1058,19 +1058,19 @@ func makeLogicalFunc(left, right exprFunc, and bool) exprFunc {
 		}
 
 		if and {
-			return newBool(leftVal.RawValue().(bool) && rightVal.RawValue().(bool)), nil
+			return precompiles.MakeBool(leftVal.RawValue().(bool) && rightVal.RawValue().(bool)), nil
 		}
 
-		return newBool(leftVal.RawValue().(bool) || rightVal.RawValue().(bool)), nil
+		return precompiles.MakeBool(leftVal.RawValue().(bool) || rightVal.RawValue().(bool)), nil
 	}
 }
 
 func (i *interpreterPlanner) VisitExpressionArithmetic(p0 *parse.ExpressionArithmetic) any {
-	op := convertArithmeticOp(p0.Operator)
+	op := engine.ConvertArithmeticOp(p0.Operator)
 
 	leftFn := p0.Left.Accept(i).(exprFunc)
 	rightFn := p0.Right.Accept(i).(exprFunc)
-	return exprFunc(func(exec *executionContext) (Value, error) {
+	return exprFunc(func(exec *executionContext) (precompiles.Value, error) {
 		left, err := leftFn(exec)
 		if err != nil {
 			return nil, err
@@ -1081,12 +1081,12 @@ func (i *interpreterPlanner) VisitExpressionArithmetic(p0 *parse.ExpressionArith
 			return nil, err
 		}
 
-		leftScalar, ok := left.(ScalarValue)
+		leftScalar, ok := left.(precompiles.ScalarValue)
 		if !ok {
 			return nil, fmt.Errorf("%w: expected scalar, got %T", engine.ErrType, left)
 		}
 
-		rightScalar, ok := right.(ScalarValue)
+		rightScalar, ok := right.(precompiles.ScalarValue)
 		if !ok {
 			return nil, fmt.Errorf("%w: expected scalar, got %T", engine.ErrType, right)
 		}
@@ -1096,20 +1096,20 @@ func (i *interpreterPlanner) VisitExpressionArithmetic(p0 *parse.ExpressionArith
 }
 
 func (i *interpreterPlanner) VisitExpressionUnary(p0 *parse.ExpressionUnary) any {
-	op := convertUnaryOp(p0.Operator)
+	op := engine.ConvertUnaryOp(p0.Operator)
 	val := p0.Expression.Accept(i).(exprFunc)
 	return makeUnaryFunc(val, op)
 }
 
 // makeUnaryFunc returns a function that performs a unary operation.
-func makeUnaryFunc(val exprFunc, op unaryOp) exprFunc {
-	return exprFunc(func(exec *executionContext) (Value, error) {
+func makeUnaryFunc(val exprFunc, op engine.UnaryOp) exprFunc {
+	return exprFunc(func(exec *executionContext) (precompiles.Value, error) {
 		v, err := val(exec)
 		if err != nil {
 			return nil, err
 		}
 
-		vScalar, ok := v.(ScalarValue)
+		vScalar, ok := v.(precompiles.ScalarValue)
 		if !ok {
 			return nil, fmt.Errorf("%w: unary operations can only be performed on scalars, got %T", engine.ErrType, v)
 		}
@@ -1122,15 +1122,15 @@ func (i *interpreterPlanner) VisitExpressionIs(p0 *parse.ExpressionIs) any {
 	left := p0.Left.Accept(i).(exprFunc)
 	right := p0.Right.Accept(i).(exprFunc)
 
-	op := is
+	op := engine.IS
 	if p0.Distinct {
-		op = isDistinctFrom
+		op = engine.IS_DISTINCT_FROM
 	}
 
 	retFn := makeComparisonFunc(left, right, op)
 
 	if p0.Not {
-		return makeUnaryFunc(retFn, not)
+		return makeUnaryFunc(retFn, engine.NOT)
 	}
 
 	return retFn
@@ -1556,7 +1556,7 @@ func (i *interpreterPlanner) VisitUseExtensionStatement(p0 *parse.UseExtensionSt
 			return fmt.Errorf(`namespace "%s" already exists and is not an extension`, p0.Alias)
 		}
 
-		config := make(map[string]Value, len(p0.Config))
+		config := make(map[string]precompiles.Value, len(p0.Config))
 
 		for j, configValue := range configValues {
 			val, err := configValue(exec)

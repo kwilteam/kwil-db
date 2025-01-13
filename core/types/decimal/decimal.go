@@ -368,6 +368,15 @@ func (d *Decimal) Round(scale uint16) error {
 		return fmt.Errorf("scale too large: %d", scale)
 	}
 
+	// if the scale is greater than the current scale,
+	// we need to increase the precision to accommodate the scale
+	if scale > d.scale {
+		err := d.SetPrecisionAndScale(d.precision+(scale-d.scale), scale)
+		if err != nil {
+			return err
+		}
+	}
+
 	_, err := d.context().Quantize(&d.dec, &d.dec, -int32(scale))
 	return err
 }
@@ -487,6 +496,11 @@ func Div(x, y *Decimal) (*Decimal, error) {
 // It will return a decimal with maximum precision and scale.
 func Mod(x, y *Decimal) (*Decimal, error) {
 	return mathOp(x, y, context.Rem)
+}
+
+// Pow raises x to the power of y.
+func Pow(x, y *Decimal) (*Decimal, error) {
+	return mathOp(x, y, context.Pow)
 }
 
 // Cmp compares two decimals.

@@ -10,6 +10,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/utils/order"
+	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/engine/parse"
 	"github.com/kwilteam/kwil-db/node/pg"
@@ -353,7 +354,7 @@ func listActionsInNamespace(ctx context.Context, db sql.DB, namespace string) ([
 }
 
 // registerExtensionInitialization registers that an extension was initialized with some values.
-func registerExtensionInitialization(ctx context.Context, db sql.DB, name, baseExtName string, metadata map[string]Value) error {
+func registerExtensionInitialization(ctx context.Context, db sql.DB, name, baseExtName string, metadata map[string]precompiles.Value) error {
 	id, err := createNamespace(ctx, db, name, namespaceTypeExtension)
 	if err != nil {
 		return err
@@ -380,7 +381,7 @@ func registerExtensionInitialization(ctx context.Context, db sql.DB, name, baseE
 			insertMetaStmt += `,`
 		}
 
-		strVal, err := valueToString(v)
+		strVal, err := precompiles.StringifyValue(v)
 		if err != nil {
 			return err
 		}
@@ -406,7 +407,7 @@ type storedExtension struct {
 	// Alias is the alias of the extension.
 	Alias string
 	// Metadata is the metadata of the extension.
-	Metadata map[string]Value
+	Metadata map[string]precompiles.Value
 }
 
 // getExtensionInitializationMetadata gets all initialized extensions and their metadata.
@@ -427,7 +428,7 @@ func getExtensionInitializationMetadata(ctx context.Context, db sql.DB) ([]*stor
 				ext = &storedExtension{
 					Alias:    alias,
 					ExtName:  extName,
-					Metadata: make(map[string]Value),
+					Metadata: make(map[string]precompiles.Value),
 				}
 				extMap[alias] = ext
 			}
@@ -446,7 +447,7 @@ func getExtensionInitializationMetadata(ctx context.Context, db sql.DB) ([]*stor
 				return err
 			}
 
-			v, err := parseValue(*val, datatype)
+			v, err := precompiles.ParseValue(*val, datatype)
 			if err != nil {
 				return err
 			}
@@ -484,7 +485,7 @@ func getTypeMetadata(t *types.DataType) []byte {
 // query executes a SQL query with the given values.
 // It is a utility function to help reduce boilerplate when executing
 // SQL with Value types.
-func query(ctx context.Context, db sql.DB, query string, scanVals []Value, fn func() error, args []Value) error {
+func query(ctx context.Context, db sql.DB, query string, scanVals []precompiles.Value, fn func() error, args []precompiles.Value) error {
 	argVals := make([]any, len(args))
 	var err error
 	for i, v := range args {

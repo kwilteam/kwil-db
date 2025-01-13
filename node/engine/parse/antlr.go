@@ -1733,6 +1733,8 @@ func (s *schemaVisitor) VisitArithmetic_sql_expr(ctx *gen.Arithmetic_sql_exprCon
 		e.Operator = ArithmeticOperatorModulo
 	case ctx.CONCAT() != nil:
 		e.Operator = ArithmeticOperatorConcat
+	case ctx.EXP() != nil:
+		e.Operator = ArithmeticOperatorExponent
 	default:
 		panic("unknown arithmetic operator")
 	}
@@ -1999,6 +2001,8 @@ func (s *schemaVisitor) VisitAction_expr_arithmetic(ctx *gen.Action_expr_arithme
 		e.Operator = ArithmeticOperatorDivide
 	case ctx.MOD() != nil:
 		e.Operator = ArithmeticOperatorModulo
+	case ctx.EXP() != nil:
+		e.Operator = ArithmeticOperatorExponent
 	case ctx.CONCAT() != nil:
 		e.Operator = ArithmeticOperatorConcat
 	default:

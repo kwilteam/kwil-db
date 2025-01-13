@@ -9,6 +9,7 @@ import (
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
+	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/pg"
 	"github.com/kwilteam/kwil-db/node/types/sql"
@@ -253,8 +254,8 @@ func Test_built_in_sql(t *testing.T) {
 		{
 			name: "test store and load extensions",
 			fn: func(ctx context.Context, db sql.DB) {
-				vals := func() map[string]Value {
-					return map[string]Value{
+				vals := func() map[string]precompiles.Value {
+					return map[string]precompiles.Value{
 						"str":     mustNewVal("val1"),
 						"int":     mustNewVal(123),
 						"bool":    mustNewVal(true),
@@ -333,65 +334,205 @@ func namedTypesEq(t *testing.T, a, b []*NamedType) {
 	}
 }
 
-func mustNewVal(v any) Value {
-	val, err := NewValue(v)
+func mustNewVal(v any) precompiles.Value {
+	val, err := precompiles.NewValue(v)
 	if err != nil {
 		panic(err)
 	}
 	return val
 }
 
-// // This tests how the engine stores and queries all sorts of different DDL.
-// // It tests by:
-// // 1. Creating a bunch of different types of metadata
-// // 2. Querying the metadata from the info schema
-// // 3. Ensuring that the interpreter's in-memory metadata matches the database's metadata
-// func Test_Metadata(t *testing.T) {
-// 	ctx := context.Background()
+func mustDec(s string) *decimal.Decimal {
+	d, err := decimal.NewFromString(s)
+	if err != nil {
+		panic(err)
+	}
+	return d
+}
 
-// 	db, err := pg.NewDB(ctx, &pg.DBConfig{
-// 		PoolConfig: pg.PoolConfig{
-// 			ConnConfig: pg.ConnConfig{
-// 				Host:   "127.0.0.1",
-// 				Port:   "5432",
-// 				User:   "kwild",
-// 				Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
-// 				DBName: "kwil_test_db",
-// 			},
-// 			MaxConns: 11,
+func mustUUID(s string) *types.UUID {
+	u, err := types.ParseUUID(s)
+	if err != nil {
+		panic(err)
+	}
+	return u
+}
+
+// This tests how the engine stores and queries all sorts of different DDL.
+// It tests by:
+// 1. Creating a bunch of different types of metadata
+// 2. Querying the metadata from the info schema
+// 3. Ensuring that the interpreter's in-memory metadata matches the database's metadata
+func Test_Metadata(t *testing.T) {
+	ctx := context.Background()
+
+	db, err := pg.NewDB(ctx, &pg.DBConfig{
+		PoolConfig: pg.PoolConfig{
+			ConnConfig: pg.ConnConfig{
+				Host:   "127.0.0.1",
+				Port:   "5432",
+				User:   "kwild",
+				Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
+				DBName: "kwil_test_db",
+			},
+			MaxConns: 11,
+		},
+	})
+	require.NoError(t, err)
+	defer db.Close()
+	tx, err := db.BeginTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx) // always rollback to avoid cleanup
+
+	interp, err := NewInterpreter(ctx, tx, &common.Service{}, nil, nil)
+	require.NoError(t, err)
+	_ = interp
+
+	require.NoError(t, err)
+
+	// 1. Create a bunch of different types of metadata
+
+	// 1.1 Tables: one with a composite foreign key, and one with a composite primary key. both have indexes
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `
+		-- ========================
+		-- Table: users
+		-- - Single Primary Key (user_id)
+		-- - CHECK constraint on balance >= 0
+		-- - Single index on (email)
+		-- - Demonstrates usage of: int8, text, bool, numeric, uuid, bytea
+		-- ========================
+		CREATE TABLE users (
+		    user_id       UUID	PRIMARY KEY,
+		    first_name    TEXT	NOT NULL,
+		    last_name     TEXT	NOT NULL,
+		    email         TEXT	NOT NULL,
+		    is_active     BOOL	NOT NULL DEFAULT TRUE,
+		    balance       NUMERIC(10, 2) NOT NULL DEFAULT 0,
+		    avatar        BYTEA,
+		    CONSTRAINT check_balance CHECK (balance >= 0)
+		);
+		
+		-- Single index on email
+		CREATE INDEX idx_users_email
+		    ON users (email);
+		
+		-- ========================
+		-- Table: products
+		-- - Single Primary Key (product_id)
+		-- - Composite index on (name, price)
+		-- - Demonstrates usage of: int8 (BIGINT), text, numeric, uuid, bytea
+		-- ========================
+		CREATE TABLE products (
+		    product_id    UUID PRIMARY KEY,
+		    name          TEXT NOT NULL,
+		    description   TEXT,
+		    price         NUMERIC(10, 2) NOT NULL,
+		    product_uuid  UUID NOT NULL,
+		    product_image BYTEA,
+		    is_active     BOOL NOT NULL DEFAULT TRUE
+		);
+		
+		-- Composite index on (name, price)
+		CREATE INDEX idx_products_name_price
+		    ON products (name, price);
+		
+		-- ========================
+		-- Table: orders
+		-- - Single Primary Key (order_id)
+		-- - Single Foreign Key (user_id -> users.user_id)
+		-- - Demonstrates usage of: int8 (BIGINT), numeric
+		-- ========================
+		CREATE TABLE orders (
+		    order_id    UUID PRIMARY KEY,
+		    user_id     UUID NOT NULL,
+		    total_amt   NUMERIC(10, 2) NOT NULL DEFAULT 0,
+		    -- Single FK referencing users
+		    CONSTRAINT fk_orders_users
+		        FOREIGN KEY (user_id)
+		        REFERENCES users(user_id)
+		        ON DELETE CASCADE
+		);
+		
+		-- ========================
+		-- Table: order_details
+		-- - Composite Primary Key (order_id, line_item)
+		-- - Single Foreign Key on order_id -> orders(order_id)
+		-- - Single Foreign Key on product_id -> products(product_id)
+		-- - Demonstrates usage of: int8 (BIGINT), numeric
+		-- ========================
+		CREATE TABLE order_details (
+		    order_id   UUID NOT NULL,
+		    line_item  INT NOT NULL,
+		    product_id UUID NOT NULL,
+		
+		    -- Composite PK
+		    CONSTRAINT pk_order_details
+		        PRIMARY KEY (order_id, line_item),
+		
+		    -- Single FKs
+		    CONSTRAINT fk_order_details_orders
+		        FOREIGN KEY (order_id)
+		        REFERENCES orders(order_id)
+		        ON DELETE CASCADE,
+		    CONSTRAINT fk_order_details_products
+		        FOREIGN KEY (product_id)
+		        REFERENCES products(product_id)
+		        ON DELETE RESTRICT
+		);
+		
+		-- ========================
+		-- Table: shipment
+		-- - Single Primary Key (shipment_id)
+		-- - Composite Foreign Key (order_id, line_item -> order_details)
+		-- - Demonstrates usage of: int8 (BIGINT)
+		-- ========================
+		CREATE TABLE shipment (
+		    shipment_id  UUID PRIMARY KEY,
+		    order_id     UUID NOT NULL,
+		    line_item    INT NOT NULL,
+		
+		    -- Composite FK referencing order_details
+		    CONSTRAINT fk_shipment_order_details
+		        FOREIGN KEY (order_id, line_item)
+		        REFERENCES order_details(order_id, line_item)
+		        ON DELETE CASCADE
+		);
+	`, nil, nil)
+	require.NoError(t, err)
+
+	// 1.2 Actions:
+	// 	- one with no params and returns a single row
+	//	- one with many params no returns
+	//	- one that takes one params returns a table
+	//	- one that has neither params nor returns
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `
+	CREATE ACTION no_params_returns_single() public view returns (id int, name text) { return 1, 'hello'; };
+	CREATE ACTION many_params_no_returns($a int, $b text, $c bool, $d numeric) public view {};
+	CREATE ACTION one_param_returns_table($a int) system view returns table (id int, name text) { return select 1 as id, 'hello' as name; };
+	CREATE ACTION no_params_no_returns() private owner {};
+	`, nil, nil)
+	require.NoError(t, err)
+
+	// 1.3 Roles
+	// 	- one with no permissions
+	//	- one with some permissions
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `
+	CREATE ROLE no_perms;
+	CREATE ROLE some_perms;
+	GRANT INSERT TO some_perms;
+	GRANT SELECT TO some_perms;
+	`, nil, nil)
+	require.NoError(t, err)
+
+	// 1.4 Extensions
+	// This extension will also create a namespace
+}
+
+// var testSchemaExt = precompiles.PrecompileExtension[struct{}]{
+// 	Methods: []precompiles.Method[struct{}]{
+// 		{
+// 			Name:            "test_schema",
+// 			AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
 // 		},
-// 	})
-// 	require.NoError(t, err)
-// 	defer db.Close()
-// 	tx, err := db.BeginTx(ctx)
-// 	require.NoError(t, err)
-// 	defer tx.Rollback(ctx) // always rollback to avoid cleanup
-
-// 	interp, err := NewInterpreter(ctx, tx, &common.Service{}, nil, nil)
-// 	require.NoError(t, err)
-// 	_ = interp
-
-// 	require.NoError(t, err)
-
-// 	// 1. Create a bunch of different types of metadata
-
-// 	// 1.1 Tables: one with a composite foreign key, and one with a composite primary key. both have indexes
-// 	_, err = db.Execute(ctx, `
-// 	CREATE TABLE students (
-// 		id UUID PRIMARY KEY,
-// 		name TEXT NOT NULL,
-// 		age INT CHECK (age >= 0),
-// 		CONSTRAINT students_name_check CHECK (name <> '' AND length(name) <= 100)
-// 	);
-
-// 	CREATE INDEX student_ages ON students (age);
-
-// 	CREATE TABLE enrollment (
-//     	student_id INT NOT NULL,
-//     	course_id  INT NOT NULL,
-//     	PRIMARY KEY (student_id, course_id)
-// 	);
-
-// 	CREATE TA
-// 	`)
+// 	},
 // }
