@@ -43,7 +43,7 @@ func (t *ThreadSafeInterpreter) lock(db sql.DB) (unlock func(), err error) {
 	return t.mu.Unlock, nil
 }
 
-func (t *ThreadSafeInterpreter) Call(ctx *common.EngineContext, db sql.DB, namespace string, action string, args []any, resultFn func(*common.Row) error) (*common.CallResult, error) {
+func (t *ThreadSafeInterpreter) Call(ctx *common.EngineContext, db sql.DB, namespace string, action string, args []common.EngineValue, resultFn func(*common.Row) error) (*common.CallResult, error) {
 	unlock, err := t.lock(db)
 	if err != nil {
 		return nil, err
@@ -53,7 +53,7 @@ func (t *ThreadSafeInterpreter) Call(ctx *common.EngineContext, db sql.DB, names
 	return t.i.call(ctx, db, namespace, action, args, resultFn, true)
 }
 
-func (t *ThreadSafeInterpreter) Execute(ctx *common.EngineContext, db sql.DB, statement string, params map[string]any, fn func(*common.Row) error) error {
+func (t *ThreadSafeInterpreter) Execute(ctx *common.EngineContext, db sql.DB, statement string, params map[string]common.EngineValue, fn func(*common.Row) error) error {
 	unlock, err := t.lock(db)
 	if err != nil {
 		return err
@@ -61,6 +61,10 @@ func (t *ThreadSafeInterpreter) Execute(ctx *common.EngineContext, db sql.DB, st
 	defer unlock()
 
 	return t.i.execute(ctx, db, statement, params, fn, true)
+}
+
+func (t *ThreadSafeInterpreter) ExecuteWithoutEngineCtx(ctx context.Context, db sql.DB, statement string, params map[string]common.EngineValue, fn func(*common.Row) error) error {
+	return t.i.execute(newInvalidEngineCtx(ctx), db, statement, params, fn, false)
 }
 
 // recursiveInterpreter is an interpreter that can call itself.
@@ -72,7 +76,7 @@ type recursiveInterpreter struct {
 	logs *[]string
 }
 
-func (r *recursiveInterpreter) Call(ctx *common.EngineContext, db sql.DB, namespace string, action string, args []any, resultFn func(*common.Row) error) (*common.CallResult, error) {
+func (r *recursiveInterpreter) Call(ctx *common.EngineContext, db sql.DB, namespace string, action string, args []common.EngineValue, resultFn func(*common.Row) error) (*common.CallResult, error) {
 	res, err := r.i.call(ctx, db, namespace, action, args, resultFn, false)
 	if err != nil {
 		return nil, err
@@ -82,8 +86,31 @@ func (r *recursiveInterpreter) Call(ctx *common.EngineContext, db sql.DB, namesp
 	return res, nil
 }
 
-func (r *recursiveInterpreter) Execute(ctx *common.EngineContext, db sql.DB, statement string, params map[string]any, fn func(*common.Row) error) error {
+func (r *recursiveInterpreter) Execute(ctx *common.EngineContext, db sql.DB, statement string, params map[string]common.EngineValue, fn func(*common.Row) error) error {
 	return r.i.execute(ctx, db, statement, params, fn, false)
+}
+
+func (r *recursiveInterpreter) ExecuteWithoutEngineCtx(ctx context.Context, db sql.DB, statement string, params map[string]common.EngineValue, fn func(*common.Row) error) error {
+	return r.i.execute(newInvalidEngineCtx(ctx), db, statement, params, fn, false)
+}
+
+// newInvalidEngineCtx creates a new engine context that is invalid.
+// It is used with ExecuteWithoutEngineCtx to allow extensions to interact with the engine
+// without being in a transaction.
+func newInvalidEngineCtx(ctx context.Context) *common.EngineContext {
+	return &common.EngineContext{
+		TxContext: &common.TxContext{
+			Ctx: ctx,
+			BlockContext: &common.BlockContext{
+				ChainContext: &common.ChainContext{
+					NetworkParameters: &common.NetworkParameters{},
+					MigrationParams:   &common.MigrationContext{},
+				},
+			},
+		},
+		OverrideAuthz: true,
+		InvalidTxCtx:  true,
+	}
 }
 
 // a namespace is a collection of tables and actions.
@@ -270,7 +297,7 @@ func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service, acc
 func funcDefToExecutable(funcName string, funcDef *engine.ScalarFunctionDefinition) *executable {
 	return &executable{
 		Name: funcName,
-		Func: func(e *executionContext, args []Value, fn resultFunc) error {
+		Func: func(e *executionContext, args []precompiles.Value, fn resultFunc) error {
 			//convert args to any
 			params := make([]string, len(args))
 			argTypes := make([]*types.DataType, len(args))
@@ -292,7 +319,7 @@ func funcDefToExecutable(funcName string, funcDef *engine.ScalarFunctionDefiniti
 				return nil
 			}
 
-			zeroVal, err := NewZeroValue(retTyp)
+			zeroVal, err := precompiles.NewZeroValue(retTyp)
 			if err != nil {
 				return err
 			}
@@ -308,7 +335,7 @@ func funcDefToExecutable(funcName string, funcDef *engine.ScalarFunctionDefiniti
 			// Since for now we are more concerned about expanding functionality than scalability,
 			// we will use the roundtrip.
 			iters := 0
-			err = query(e.engineCtx.TxContext.Ctx, e.db, "SELECT "+pgFormat+";", []Value{zeroVal}, func() error {
+			err = query(e.engineCtx.TxContext.Ctx, e.db, "SELECT "+pgFormat+";", []precompiles.Value{zeroVal}, func() error {
 				iters++
 				return nil
 			}, args)
@@ -321,7 +348,7 @@ func funcDefToExecutable(funcName string, funcDef *engine.ScalarFunctionDefiniti
 
 			return fn(&row{
 				columns: []string{funcName},
-				Values:  []Value{zeroVal},
+				Values:  []precompiles.Value{zeroVal},
 			})
 		},
 		Type: executableTypeFunction,
@@ -342,7 +369,12 @@ type baseInterpreter struct {
 }
 
 // Execute executes a statement against the database.
-func (i *baseInterpreter) execute(ctx *common.EngineContext, db sql.DB, statement string, params map[string]any, fn func(*common.Row) error, toplevel bool) error {
+func (i *baseInterpreter) execute(ctx *common.EngineContext, db sql.DB, statement string, params map[string]common.EngineValue, fn func(*common.Row) error, toplevel bool) error {
+	err := ctx.Valid()
+	if err != nil {
+		return err
+	}
+
 	if fn == nil {
 		fn = func(*common.Row) error { return nil }
 	}
@@ -363,7 +395,8 @@ func (i *baseInterpreter) execute(ctx *common.EngineContext, db sql.DB, statemen
 	}
 
 	for _, param := range order.OrderMap(params) {
-		val, err := NewValue(param.Value)
+		// TODO: this will need to change when I re-arrange how values work
+		val, err := precompiles.NewValue(param.Value)
 		if err != nil {
 			return err
 		}
@@ -418,7 +451,11 @@ func isValidVarName(s string) error {
 
 // Call executes an action against the database.
 // The resultFn is called with the result of the action, if any.
-func (i *baseInterpreter) call(ctx *common.EngineContext, db sql.DB, namespace, action string, args []any, resultFn func(*common.Row) error, toplevel bool) (*common.CallResult, error) {
+func (i *baseInterpreter) call(ctx *common.EngineContext, db sql.DB, namespace, action string, args []common.EngineValue, resultFn func(*common.Row) error, toplevel bool) (*common.CallResult, error) {
+	err := ctx.Valid()
+	if err != nil {
+		return nil, err
+	}
 	if resultFn == nil {
 		resultFn = func(*common.Row) error { return nil }
 	}
@@ -455,9 +492,10 @@ func (i *baseInterpreter) call(ctx *common.EngineContext, db sql.DB, namespace, 
 		return nil, fmt.Errorf(`node bug: unknown executable type "%s"`, exec.Type)
 	}
 
-	argVals := make([]Value, len(args))
+	argVals := make([]precompiles.Value, len(args))
 	for i, arg := range args {
-		val, err := NewValue(arg)
+		// TODO: this will need to change when I re-arrange how values work
+		val, err := precompiles.NewValue(arg)
 		if err != nil {
 			return nil, err
 		}
@@ -480,17 +518,17 @@ func (i *baseInterpreter) call(ctx *common.EngineContext, db sql.DB, namespace, 
 // rowToCommonRow converts a row to a common.Row.
 func rowToCommonRow(row *row) *common.Row {
 	// convert the results to any
-	anyResults := make([]any, len(row.Values))
+	convertedResults := make([]common.EngineValue, len(row.Values))
 	dataTypes := make([]*types.DataType, len(row.Values))
 	for i, result := range row.Values {
-		anyResults[i] = result.RawValue()
+		convertedResults[i] = result
 		dataTypes[i] = result.Type()
 	}
 
 	return &common.Row{
 		ColumnNames: row.Columns(),
 		ColumnTypes: dataTypes,
-		Values:      anyResults,
+		Values:      convertedResults,
 	}
 }
 

@@ -13,13 +13,9 @@ import (
 
 // initializeExtension initializes an extension.
 func initializeExtension(ctx context.Context, svc *common.Service, db sql.DB, i precompiles.Initializer, alias string,
-	metadata map[string]Value) (*namespace, precompiles.Instance, error) {
-	convertedMetadata := make(map[string]any)
-	for k, v := range metadata {
-		convertedMetadata[k] = v.RawValue()
-	}
+	metadata map[string]precompiles.Value) (*namespace, precompiles.Instance, error) {
 
-	inst, err := i(ctx, svc, db, alias, convertedMetadata)
+	inst, err := i(ctx, svc, db, alias, metadata)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -32,7 +28,7 @@ func initializeExtension(ctx context.Context, svc *common.Service, db sql.DB, i 
 
 		exec := &executable{
 			Name: lowerName,
-			Func: func(exec *executionContext, args []Value, fn resultFunc) error {
+			Func: func(exec *executionContext, args []precompiles.Value, fn resultFunc) error {
 				if err := exec.canExecute(alias, lowerName, method.AccessModifiers); err != nil {
 					return err
 				}
@@ -44,23 +40,28 @@ func initializeExtension(ctx context.Context, svc *common.Service, db sql.DB, i 
 
 				exec2 := exec.subscope(alias)
 
-				return method.Call(exec2.engineCtx, exec2.app(), argVals, func(a []any) error {
-					resultVals := make([]Value, len(a))
-					for i, result := range a {
-						var err error
-						resultVals[i], err = NewValue(result)
-						if err != nil {
-							return err
+				return method.Call(exec2.engineCtx, exec2.app(), args, func(a []precompiles.Value) error {
+
+					var colNames []string
+					if method.Returns != nil {
+						if len(method.Returns.ColumnTypes) != len(a) {
+							return fmt.Errorf("method %s returned %d values, but expected %d", method.Name, len(a), len(method.Returns.ColumnTypes))
+						}
+
+						for i, result := range a {
+							if !result.Type().EqualsStrict(method.Returns.ColumnTypes[i]) {
+								return fmt.Errorf("method %s returned a value of type %s, but expected %s", method.Name, result.Type(), method.Returns.ColumnTypes[i])
+							}
+						}
+
+						if len(method.Returns.ColumnNames) > 0 {
+							colNames = method.Returns.ColumnNames
 						}
 					}
 
-					if len(method.ReturnColumns) != 0 && len(method.ReturnColumns) != len(resultVals) {
-						return fmt.Errorf("method %s returned %d values, but expected %d", method.Name, len(resultVals), len(method.ReturnColumns))
-					}
-
 					return fn(&row{
-						columns: method.ReturnColumns, // it is ok if this is nil
-						Values:  resultVals,
+						columns: colNames, // it is ok if this is nil
+						Values:  a,
 					})
 				})
 			},

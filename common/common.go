@@ -2,8 +2,8 @@ package common
 
 import (
 	"context"
+	"fmt"
 	"math/big"
-	"strings"
 
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -87,18 +87,31 @@ type EngineContext struct {
 	// is valid / can be used. There are times when the engine is called
 	// while not within a transaction (e.g. by extensions to read in metadata)
 	// on startup. In these cases, the transaction context is not valid.
+	// If InvalidTxCtx is set to true, OverrideAuthz should also be set to true.
 	InvalidTxCtx bool
+}
+
+func (e *EngineContext) Valid() error {
+	if e.InvalidTxCtx && !e.OverrideAuthz {
+		return fmt.Errorf("invalid transaction context: If InvalidTxCtx is set to true, OverrideAuthz should also be set to true")
+	}
+	return nil
 }
 
 type Engine interface {
 	// Call calls an action in the database. The resultFn callback is
 	// called for each row in the result set. If the resultFn returns
 	// an error, the call will be aborted and the error will be returned.
-	Call(ctx *EngineContext, db sql.DB, namespace, action string, args []any, resultFn func(*Row) error) (*CallResult, error)
+	Call(ctx *EngineContext, db sql.DB, namespace, action string, args []EngineValue, resultFn func(*Row) error) (*CallResult, error)
 	// Execute executes a statement in the database. The fn callback is
 	// called for each row in the result set. If the fn returns an error,
 	// the call will be aborted and the error will be returned.
-	Execute(ctx *EngineContext, db sql.DB, statement string, params map[string]any, fn func(*Row) error) error
+	Execute(ctx *EngineContext, db sql.DB, statement string, params map[string]EngineValue, fn func(*Row) error) error
+	// ExecuteWithoutEngineCtx executes a statement in the database without
+	// needing an engine context. This is useful for extensions that need to
+	// interact with the engine outside of a transaction. If possible, use
+	// Execute instead.
+	ExecuteWithoutEngineCtx(ctx context.Context, db sql.DB, statement string, params map[string]EngineValue, fn func(*Row) error) error
 }
 
 // CallResult is the result of a call to an action.
@@ -116,7 +129,7 @@ type Row struct {
 	// ColumnTypes are the types of the columns in the row.
 	ColumnTypes []*types.DataType
 	// Values are the values of the columns in the row.
-	Values []any
+	Values []EngineValue
 }
 
 // Accounts is an interface for managing accounts on the Kwil network. It
@@ -159,31 +172,6 @@ type Validators interface {
 	SetValidatorPower(ctx context.Context, tx sql.Executor, pubKey []byte, pubKeyType crypto.KeyType, power int64) error
 }
 
-// ExecutionOptions is contextual data that is passed to a procedure
-// during call / execution. It is scoped to the lifetime of a single
-// execution.
-type ExecutionData struct {
-	//TxCtx *TxContext
-	// Dataset is the DBID of the dataset that was called.
-	// Even if a procedure in another dataset is called, this will
-	// always be the original dataset.
-	Dataset string
-
-	// Procedure is the original procedure that was called.
-	// Even if a nested procedure is called, this will always be the
-	// original procedure.
-	Procedure string
-
-	// Args are the arguments that were passed to the procedure.
-	// Currently these are all string or untyped nil values.
-	Args []any
-}
-
-func (e *ExecutionData) Clean() error {
-	e.Procedure = strings.ToLower(e.Procedure)
-	return nil
-}
-
 // NetworkParameters are network level configurations that can be
 // evolved over the lifetime of a network.
 type NetworkParameters struct {
@@ -204,4 +192,16 @@ type NetworkParameters struct {
 	// MaxVotesPerTx is the maximum number of votes that can be included in a
 	// single transaction.
 	MaxVotesPerTx int64
+}
+
+// EngineValue is a value pass or returned from the engine.
+type EngineValue interface {
+	// Type returns the type of the variable.
+	Type() *types.DataType
+	// RawValue returns the value of the variable.
+	// This engine.IS one of: nil, int64, string, bool, []byte, *types.UUID, *decimal.Decimal,
+	// []*int64, []*string, []*bool, [][]byte, []*decimal.Decimal, []*types.UUID
+	RawValue() any
+	// Null returns true if the variable is null.
+	Null() bool
 }

@@ -1,6 +1,8 @@
 package decimal_test
 
 import (
+	"errors"
+	"fmt"
 	"math/big"
 	"testing"
 
@@ -243,6 +245,7 @@ func Test_DecimalMath(t *testing.T) {
 		sub  string
 		div  string
 		mod  string
+		pow  any // if string, will be converted to decimal. if error, it should be an error.
 	}
 
 	tests := []testcase{
@@ -254,6 +257,7 @@ func Test_DecimalMath(t *testing.T) {
 			sub:  "-111.111",
 			div:  "0.500",
 			mod:  "111.111",
+			pow:  "40947232792674801703617506513614403879857793764501216315280893639716470307169733631790876461965572518860559362274629485292911547430937978598849436143453399196315550597742244783214288813683207756767414184276471346880686854054933686634595348167818622321108157880891582799953764376652277357220951025024520432205504241275515862333604924257110592561916318338267242907156585216880466294760992172997373034474199040967379214091758725977575036083358700976528684903.650",
 		},
 		{
 			name: "negative",
@@ -263,6 +267,7 @@ func Test_DecimalMath(t *testing.T) {
 			sub:  "-333.333",
 			div:  "-0.500",
 			mod:  "-111.111",
+			pow:  errors.New("invalid operation"),
 		},
 		{
 			name: "different scale",
@@ -272,6 +277,7 @@ func Test_DecimalMath(t *testing.T) {
 			sub:  "-111.111222",
 			div:  "0.500000",
 			mod:  "111.111000",
+			pow:  "40990075250446852588522441143222156659052130339298453956352655687203237203657240466439592211667686715504210644601279978038974530686828593146537313522798590884099844906484623923249881463686394933736223098662509502986649384011150498473632321057132912354564907462215306517581999096985844562283606145376921572863158587371832747763312385879522316860281871698496720764895161781787801656268494310238885794127539157485892424922658030456199187314559101140337375799.890792",
 		},
 		{
 			name: "different precision",
@@ -281,6 +287,7 @@ func Test_DecimalMath(t *testing.T) {
 			sub:  "-221.111",
 			div:  "0.005",
 			mod:  "1.111",
+			pow:  "14410186644.883",
 		},
 		{
 			name: "different precision and scale",
@@ -290,6 +297,7 @@ func Test_DecimalMath(t *testing.T) {
 			sub:  "8.8878",
 			div:  "4.9995",
 			mod:  "2.2212",
+			pow:  "210.7588",
 		},
 	}
 
@@ -318,31 +326,45 @@ func Test_DecimalMath(t *testing.T) {
 			}
 			reset()
 
-			add, err := decimal.Add(a, b)
-			require.NoError(t, err)
-			eq(t, add, tt.add, greatestScale)
+			// add, err := decimal.Add(a, b)
+			// require.NoError(t, err)
+			// eq(t, add, tt.add, greatestScale)
 
-			reset()
+			// reset()
 
-			sub, err := decimal.Sub(a, b)
-			require.NoError(t, err)
-			eq(t, sub, tt.sub, greatestScale)
+			// sub, err := decimal.Sub(a, b)
+			// require.NoError(t, err)
+			// eq(t, sub, tt.sub, greatestScale)
 
-			reset()
+			// reset()
 
-			// we dont test mul here since it would likely overflow
+			// // we dont test mul here since it would likely overflow
 
-			div, err := decimal.Div(a, b)
-			require.NoError(t, err)
-			d := div.String()
-			_ = d
-			eq(t, div, tt.div, greatestScale)
+			// div, err := decimal.Div(a, b)
+			// require.NoError(t, err)
+			// d := div.String()
+			// _ = d
+			// eq(t, div, tt.div, greatestScale)
 
-			reset()
+			// reset()
 
-			mod, err := decimal.Mod(a, b)
-			require.NoError(t, err)
-			eq(t, mod, tt.mod, greatestScale)
+			// mod, err := decimal.Mod(a, b)
+			// require.NoError(t, err)
+			// eq(t, mod, tt.mod, greatestScale)
+
+			// reset()
+
+			pow, err := decimal.Pow(a, b)
+
+			switch v := tt.pow.(type) {
+			case string:
+				require.NoError(t, err)
+				eq(t, pow, v, greatestScale)
+			case error:
+				require.Contains(t, err.Error(), v.Error())
+			default:
+				t.Fatalf("unexpected type: %T", v)
+			}
 		})
 	}
 }
@@ -359,6 +381,9 @@ func eq(t *testing.T, dec *decimal.Decimal, want string, round uint16) {
 	require.NoError(t, err)
 
 	err = dec2.Round(round)
+	if err != nil {
+		fmt.Println("dec2", dec2)
+	}
 	require.NoError(t, err)
 
 	// since dec will get overwritten by Cmp

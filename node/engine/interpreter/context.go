@@ -163,7 +163,7 @@ func (e *executionContext) query(sql string, fn func(*row) error) error {
 			}
 
 			// if it is a record, then return nil
-			if _, ok := val.(*RecordValue); ok {
+			if _, ok := val.(*precompiles.RecordValue); ok {
 				return nil, engine.ErrUnknownVariable
 			}
 
@@ -175,7 +175,7 @@ func (e *executionContext) query(sql string, fn func(*row) error) error {
 				return nil, err
 			}
 
-			if rec, ok := val.(*RecordValue); ok {
+			if rec, ok := val.(*precompiles.RecordValue); ok {
 				dt := make(map[string]*types.DataType)
 				for _, field := range rec.Order {
 					dt[field] = rec.Fields[field].Type()
@@ -199,7 +199,7 @@ func (e *executionContext) query(sql string, fn func(*row) error) error {
 	}
 
 	// get the params we will pass
-	var args []Value
+	var args []precompiles.Value
 	for _, param := range params {
 		val, err := e.getVariable(param)
 		if err != nil {
@@ -210,14 +210,14 @@ func (e *executionContext) query(sql string, fn func(*row) error) error {
 	}
 
 	// get the scan values as well:
-	var scanValues []Value
+	var scanValues []precompiles.Value
 	for _, field := range analyzed.Plan.Relation().Fields {
 		scalar, err := field.Scalar()
 		if err != nil {
 			return err
 		}
 
-		zVal, err := NewZeroValue(scalar)
+		zVal, err := precompiles.NewZeroValue(scalar)
 		if err != nil {
 			return err
 		}
@@ -265,13 +265,13 @@ const (
 	executableTypePrecompile executableType = "precompile"
 )
 
-type execFunc func(exec *executionContext, args []Value, returnFn resultFunc) error
+type execFunc func(exec *executionContext, args []precompiles.Value, returnFn resultFunc) error
 
 // setVariable sets a variable in the current scope.
 // It will allocate the variable if it does not exist.
 // if we are setting a variable that was defined in an outer scope,
 // it will overwrite the variable in the outer scope.
-func (e *executionContext) setVariable(name string, value Value) error {
+func (e *executionContext) setVariable(name string, value precompiles.Value) error {
 	oldVal, foundScope, found := getVarFromScope(name, e.scope)
 	if !found {
 		return e.allocateVariable(name, value)
@@ -286,7 +286,7 @@ func (e *executionContext) setVariable(name string, value Value) error {
 }
 
 // allocateVariable allocates a variable in the current scope.
-func (e *executionContext) allocateVariable(name string, value Value) error {
+func (e *executionContext) allocateVariable(name string, value precompiles.Value) error {
 	_, ok := e.scope.variables[name]
 	if ok {
 		return fmt.Errorf(`variable "%s" already exists`, name)
@@ -299,7 +299,7 @@ func (e *executionContext) allocateVariable(name string, value Value) error {
 // getVariable gets a variable from the current scope.
 // It searches the parent scopes if the variable is not found.
 // It returns the value and a boolean indicating if the variable was found.
-func (e *executionContext) getVariable(name string) (Value, error) {
+func (e *executionContext) getVariable(name string) (precompiles.Value, error) {
 	if len(name) == 0 {
 		return nil, fmt.Errorf("%w: variable name is empty", engine.ErrInvalidVariable)
 	}
@@ -317,38 +317,38 @@ func (e *executionContext) getVariable(name string) (Value, error) {
 			if e.engineCtx.InvalidTxCtx {
 				return nil, engine.ErrInvalidTxCtx
 			}
-			return newText(e.engineCtx.TxContext.Caller), nil
+			return precompiles.MakeText(e.engineCtx.TxContext.Caller), nil
 		case "txid":
 			if e.engineCtx.InvalidTxCtx {
 				return nil, engine.ErrInvalidTxCtx
 			}
-			return newText(e.engineCtx.TxContext.TxID), nil
+			return precompiles.MakeText(e.engineCtx.TxContext.TxID), nil
 		case "signer":
 			if e.engineCtx.InvalidTxCtx {
 				return nil, engine.ErrInvalidTxCtx
 			}
-			return newBlob(e.engineCtx.TxContext.Signer), nil
+			return precompiles.MakeBlob(e.engineCtx.TxContext.Signer), nil
 		case "height":
 			if e.engineCtx.InvalidTxCtx {
 				return nil, engine.ErrInvalidTxCtx
 			}
-			return newInt(e.engineCtx.TxContext.BlockContext.Height), nil
+			return precompiles.MakeInt8(e.engineCtx.TxContext.BlockContext.Height), nil
 		case "foreign_caller":
 			if e.scope.parent != nil {
-				return newText(e.scope.parent.namespace), nil
+				return precompiles.MakeText(e.scope.parent.namespace), nil
 			} else {
-				return newText(""), nil
+				return precompiles.MakeText(""), nil
 			}
 		case "block_timestamp":
 			if e.engineCtx.InvalidTxCtx {
 				return nil, engine.ErrInvalidTxCtx
 			}
-			return newInt(e.engineCtx.TxContext.BlockContext.Timestamp), nil
+			return precompiles.MakeInt8(e.engineCtx.TxContext.BlockContext.Timestamp), nil
 		case "authenticator":
 			if e.engineCtx.InvalidTxCtx {
 				return nil, engine.ErrInvalidTxCtx
 			}
-			return newText(e.engineCtx.TxContext.Authenticator), nil
+			return precompiles.MakeText(e.engineCtx.TxContext.Authenticator), nil
 		default:
 			return nil, fmt.Errorf("%w: %s", engine.ErrInvalidVariable, name)
 		}
@@ -430,7 +430,7 @@ func (e *executionContext) app() *common.App {
 
 // getVarFromScope recursively searches the scopes for a variable.
 // It returns the value, as well as the scope it was found in.
-func getVarFromScope(variable string, scope *scopeContext) (Value, *scopeContext, bool) {
+func getVarFromScope(variable string, scope *scopeContext) (precompiles.Value, *scopeContext, bool) {
 	if v, ok := scope.variables[variable]; ok {
 		return v, scope, true
 	}
@@ -446,7 +446,7 @@ type scopeContext struct {
 	// if the parent is nil, this is the root
 	parent *scopeContext
 	// variables are the variables stored in memory.
-	variables map[string]Value
+	variables map[string]precompiles.Value
 	// namespace is the current namespace.
 	namespace string
 	// isTopLevel is true if this is the top level scope.
@@ -457,7 +457,7 @@ type scopeContext struct {
 // newScope creates a new scope.
 func newScope(namespace string) *scopeContext {
 	return &scopeContext{
-		variables: make(map[string]Value),
+		variables: make(map[string]precompiles.Value),
 		namespace: namespace,
 	}
 }
@@ -472,7 +472,7 @@ func (s *scopeContext) child() {
 		variables: s.variables,
 		namespace: s.namespace,
 	}
-	s.variables = make(map[string]Value)
+	s.variables = make(map[string]precompiles.Value)
 	s.namespace = s.parent.namespace
 }
 

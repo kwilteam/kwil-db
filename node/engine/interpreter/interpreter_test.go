@@ -664,6 +664,7 @@ func Test_SQL(t *testing.T) {
 				"contract_id": mustUUID("d3b3b3b3-3b3b-3b3b-3b3b-3b3b3b3b3b3b"),
 			},
 		},
+		// testing roundtripping each type
 		{
 			name: "insert numeric",
 			sql: []string{
@@ -685,6 +686,27 @@ func Test_SQL(t *testing.T) {
 				{mustExplicitDecimal("100.101", 70, 5)},
 			},
 		},
+		{
+			name: "insert blob",
+			sql: []string{
+				`CREATE TABLE blobs ( data bytea primary key );`,
+			},
+			execSQL: `INSERT INTO blobs (data) VALUES ($data);`,
+			execVars: map[string]any{
+				"$data": []byte("hello"),
+			},
+		},
+		{
+			name: "query blob",
+			sql: []string{
+				`CREATE TABLE blobs ( data bytea primary key );`,
+				`INSERT INTO blobs (data) VALUES ('hello'::bytea);`,
+			},
+			execSQL: `SELECT * FROM blobs;`,
+			results: [][]any{
+				{[]byte("hello")},
+			},
+		},
 	}
 
 	db, err := newTestDB()
@@ -701,8 +723,12 @@ func Test_SQL(t *testing.T) {
 			interp := newTestInterp(t, tx, test.sql, !skipInitTables)
 
 			var values [][]any
-			err = interp.Execute(newEngineCtx(test.caller), tx, test.execSQL, test.execVars, func(v *common.Row) error {
-				values = append(values, v.Values)
+			err = interp.Execute(newEngineCtx(test.caller), tx, test.execSQL, convMap(test.execVars), func(v *common.Row) error {
+				var row []any
+				for _, val := range v.Values {
+					row = append(row, val.RawValue())
+				}
+				values = append(values, row)
 				return nil
 			})
 			if test.err != nil {
@@ -733,6 +759,55 @@ func Test_SQL(t *testing.T) {
 			}
 		})
 	}
+}
+
+// // Test_Roundtrip tries roundtripping each data type
+// // to the database
+// func Test_Roundtrip(t *testing.T) {
+// 	type testcase struct {
+// 		name     string
+// 		datatype string
+// 		value    any
+// 	}
+
+// 	tests := []testcase{}
+
+// 	db, err := newTestDB()
+// 	require.NoError(t, err)
+// 	defer db.Close()
+
+// 	ctx := context.Background()
+// 	tx, err := db.BeginTx(ctx)
+// 	require.NoError(t, err)
+// 	defer tx.Rollback(ctx) // always rollback
+
+// 	interp := newTestInterp(t, tx, nil, false)
+
+// 	for _, test := range tests {
+// 		// we will create a table with the datatype
+// 		// and then insert the value into the table
+// 		err = interp.ExecuteWithoutEngineCtx(ctx, tx, fmt.Sprintf("CREATE TABLE tbl_%s (val %s);", test.datatype, test.datatype), nil, nil)
+// 		require.NoError(t, err)
+
+// 		// insert the value
+// 		err = interp.ExecuteWithoutEngineCtx(ctx, tx, fmt.Sprintf("INSERT INTO tbl_%s (val) VALUES ($val);", test.datatype), map[string]common.EngineValue{"$val": mustVal(test.value)}, nil)
+// 		require.NoError(t, err)
+
+// 		// select the value
+// 		var value precompiles.Value
+// 		err = interp.ExecuteWithoutEngineCtx(ctx, tx, fmt.Sprintf("SELECT val FROM tbl_%s;", test.datatype), nil, func(r *common.Row) error {
+// 			value = r.Values[0].(precompiles.Value)
+// 			return nil
+// 		})
+// 	}
+// }
+
+func mustVal(v any) precompiles.Value {
+	val, err := precompiles.NewValue(v)
+	if err != nil {
+		panic(err)
+	}
+	return val
 }
 
 // Test_CreateAndDelete tests creating and dropping different objects,
@@ -1426,8 +1501,13 @@ func Test_Actions(t *testing.T) {
 			interp := newTestInterp(t, tx, test.stmt, true)
 
 			var results [][]any
-			_, err = interp.Call(newEngineCtx(test.caller), tx, test.namespace, test.action, test.values, func(v *common.Row) error {
-				results = append(results, v.Values)
+			_, err = interp.Call(newEngineCtx(test.caller), tx, test.namespace, test.action, convArr(test.values), func(v *common.Row) error {
+				var row []any
+				for _, val := range v.Values {
+					row = append(row, val.RawValue())
+				}
+
+				results = append(results, row)
 				return nil
 			})
 			if test.err != nil {
@@ -1448,12 +1528,28 @@ func Test_Actions(t *testing.T) {
 	}
 }
 
+func convMap(m map[string]any) map[string]common.EngineValue {
+	res := make(map[string]common.EngineValue)
+	for k, v := range m {
+		res[k] = mustVal(v)
+	}
+	return res
+}
+
+func convArr(a []any) []common.EngineValue {
+	res := make([]common.EngineValue, len(a))
+	for i, v := range a {
+		res[i] = mustVal(v)
+	}
+	return res
+}
+
 // This function tests precompiles
 func Test_Extensions(t *testing.T) {
 	type testExtension struct {
 		alias string
 		i     int
-		meta  map[string]any
+		meta  map[string]precompiles.Value
 	}
 
 	// notifications track in which order the extension is initialized, used, and unused
@@ -1461,7 +1557,7 @@ func Test_Extensions(t *testing.T) {
 
 	// below we create a test precompile extension
 	err := precompiles.RegisterPrecompile("test", precompiles.PrecompileExtension[testExtension]{
-		Initialize: func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]any) (*testExtension, error) {
+		Initialize: func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]precompiles.Value) (*testExtension, error) {
 			te := &testExtension{
 				alias: alias,
 			}
@@ -1481,32 +1577,36 @@ func Test_Extensions(t *testing.T) {
 		Methods: []precompiles.Method[testExtension]{
 			{
 				Name: "concat",
-				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error, te *testExtension) error {
+				Handler: func(ctx *common.EngineContext, app *common.App, inputs []precompiles.Value, resultFn func([]precompiles.Value) error, te *testExtension) error {
 					te.i++
 					if len(inputs) != 2 {
 						return fmt.Errorf("expected 2 inputs, got %d", len(inputs))
 					}
 
-					if _, ok := inputs[0].(string); !ok {
+					if !inputs[0].Type().EqualsStrict(types.TextType) {
 						return errors.New("first input is not a string")
 					}
 
-					if _, ok := inputs[1].(string); !ok {
+					if !inputs[1].Type().EqualsStrict(types.TextType) {
 						return errors.New("second input is not a string")
 					}
 
-					return resultFn([]any{inputs[0].(string) + inputs[1].(string)})
+					if inputs[0].Null() || inputs[1].Null() {
+						return resultFn([]precompiles.Value{precompiles.MakeNull(types.TextType)})
+					}
+
+					return resultFn([]precompiles.Value{precompiles.MakeText(inputs[0].RawValue().(string) + inputs[1].RawValue().(string))})
 				},
 				AccessModifiers: []precompiles.Modifier{precompiles.SYSTEM},
 			},
 			{
 				Name: "get",
-				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error, te *testExtension) error {
+				Handler: func(ctx *common.EngineContext, app *common.App, inputs []precompiles.Value, resultFn func([]precompiles.Value) error, te *testExtension) error {
 					count := 0
 					ctx.OverrideAuthz = true
 					_, err := app.Engine.Call(ctx, app.DB, te.alias, "internal", nil, func(v *common.Row) error {
 						count++
-						if v.Values[0].(string) != "internal" {
+						if v.Values[0].RawValue().(string) != "internal" {
 							return errors.New("expected 'internal' message")
 						}
 						return nil
@@ -1522,9 +1622,15 @@ func Test_Extensions(t *testing.T) {
 					if len(inputs) != 1 {
 						return errors.New("expected 1 input")
 					}
-					str, ok := inputs[0].(string)
+
+					raw := inputs[0].RawValue()
+					if raw == nil {
+						return errors.New("expected non-nil input")
+					}
+
+					str, ok := raw.(string)
 					if !ok {
-						return errors.New("expected string input")
+						return errors.New("expected text input")
 					}
 
 					meta, ok := te.meta[str]
@@ -1533,26 +1639,26 @@ func Test_Extensions(t *testing.T) {
 					}
 
 					te.i++
-					return resultFn([]any{meta})
+					return resultFn([]precompiles.Value{meta})
 				},
 				AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
-				ReturnColumns:   []string{"response"},
 			},
 			{
 				Name: "owner_only",
-				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error, te *testExtension) error {
-					return resultFn([]any{"owner_only"})
+				Handler: func(ctx *common.EngineContext, app *common.App, inputs []precompiles.Value, resultFn func([]precompiles.Value) error, te *testExtension) error {
+					return resultFn([]precompiles.Value{precompiles.MakeText("owner_only")})
 				},
 				AccessModifiers: []precompiles.Modifier{precompiles.OWNER, precompiles.PUBLIC},
 			},
 			{
 				Name: "internal",
-				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error, te *testExtension) error {
+				Handler: func(ctx *common.EngineContext, app *common.App, inputs []precompiles.Value, resultFn func([]precompiles.Value) error, te *testExtension) error {
 					if len(inputs) != 0 {
 						return errors.New("expected 0 inputs")
 					}
 					te.i++
-					return resultFn([]any{"internal"})
+
+					return resultFn([]precompiles.Value{precompiles.MakeText("internal")})
 				},
 				AccessModifiers: []precompiles.Modifier{precompiles.PRIVATE},
 			},
@@ -1591,11 +1697,11 @@ func Test_Extensions(t *testing.T) {
 	do := func(interp *interpreter.ThreadSafeInterpreter) {
 
 		callFromUser := func(caller string, namespace, action string, values []any, fn func(*common.Row) error) error {
-			_, err := interp.Call(newEngineCtx(caller), tx, namespace, action, values, fn)
+			_, err := interp.Call(newEngineCtx(caller), tx, namespace, action, convArr(values), fn)
 			return err
 		}
 		adminCall := func(namespace, action string, values []any, fn func(*common.Row) error) error {
-			_, err := interp.Call(adminCtx(), tx, namespace, action, values, fn)
+			_, err := interp.Call(adminCtx(), tx, namespace, action, convArr(values), fn)
 			return err
 		}
 		execFromUser := func(caller string, sql string, fn func(*common.Row) error) error {
@@ -1801,9 +1907,14 @@ func Test_NamingOverwrites(t *testing.T) {
 		Methods: []precompiles.Method[struct{}]{
 			{
 				Name: "abs",
-				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error, _ *struct{}) error {
+				Handler: func(ctx *common.EngineContext, app *common.App, inputs []precompiles.Value, resultFn func([]precompiles.Value) error, _ *struct{}) error {
 					absCalled = true
-					return resultFn([]any{int64(math.Abs(float64(inputs[0].(int64))))})
+					raw, ok := inputs[0].RawValue().(int64)
+					if !ok {
+						return errors.New("expected int64 input")
+					}
+
+					return resultFn([]precompiles.Value{precompiles.MakeInt8(int64(math.Abs(float64(raw))))})
 				},
 				AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
 			},
@@ -1879,7 +1990,7 @@ func Test_Notice(t *testing.T) {
 	defer tx.Rollback(ctx) // always rollback
 
 	err = precompiles.RegisterPrecompile("log", precompiles.PrecompileExtension[string]{
-		Initialize: func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]any) (*string, error) {
+		Initialize: func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]precompiles.Value) (*string, error) {
 			return &alias, nil
 		},
 		OnUse: func(ctx *common.EngineContext, app *common.App, t *string) error {
@@ -1891,7 +2002,7 @@ func Test_Notice(t *testing.T) {
 		Methods: []precompiles.Method[string]{
 			{
 				Name: "method_log_notice",
-				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error, t *string) error {
+				Handler: func(ctx *common.EngineContext, app *common.App, inputs []precompiles.Value, resultFn func([]precompiles.Value) error, t *string) error {
 					res, err := app.Engine.Call(ctx, app.DB, *t, "log_notice", nil, nil)
 					if err != nil {
 						return err
@@ -1956,7 +2067,7 @@ func exact(val any) func(*common.Row) error {
 
 		switch t := val.(type) {
 		case []byte:
-			t2, ok := row.Values[0].([]byte)
+			t2, ok := row.Values[0].RawValue().([]byte)
 			if !ok {
 				return fmt.Errorf("expected []byte, got %T", row.Values[0])
 			}
@@ -1972,7 +2083,7 @@ func exact(val any) func(*common.Row) error {
 			}
 
 			// if row.Values[0] is a pointer, we need to dereference it
-			rowVal := row.Values[0]
+			rowVal := row.Values[0].RawValue()
 			if reflect.TypeOf(rowVal).Kind() == reflect.Ptr {
 				rowVal = reflect.ValueOf(rowVal).Elem().Interface()
 			}
@@ -2036,9 +2147,9 @@ func newTestInterp(t *testing.T, tx sql.DB, seeds []string, includeTestTables bo
 
 	engCtx := newEngineCtx(defaultCaller)
 	engCtx.OverrideAuthz = true
-	err = interp.Execute(engCtx, tx, "GRANT IF NOT GRANTED owner TO $user", map[string]any{
+	err = interp.Execute(engCtx, tx, "GRANT IF NOT GRANTED owner TO $user", convMap(map[string]any{
 		"user": defaultCaller,
-	}, nil)
+	}), nil)
 	require.NoError(t, err)
 
 	seedStmts := []string{}

@@ -235,6 +235,7 @@ func (c *DataType) EqualsStrict(other *DataType) bool {
 }
 
 // Equals returns true if the type is equal to the other type, or if either type is null.
+// TODO: delete this, in favor of EqualsStrict
 func (c *DataType) Equals(other *DataType) bool {
 	if c.Name == nullStr || other.Name == nullStr {
 		return true
