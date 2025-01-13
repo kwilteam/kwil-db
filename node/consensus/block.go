@@ -69,8 +69,10 @@ func (ce *ConsensusEngine) BroadcastTx(ctx context.Context, tx *ktypes.Transacti
 	ce.mempool.Store(txHash, tx)
 
 	// Announce the transaction to the network
-	ce.log.Infof("broadcasting new tx %v", txHash)
-	go ce.txAnnouncer(ctx, txHash, rawTx, ce.peerID)
+	if ce.txAnnouncer != nil {
+		ce.log.Infof("broadcasting new tx %v", txHash)
+		go ce.txAnnouncer(ctx, txHash, rawTx, ce.peerID)
+	}
 
 	res := &ktypes.ResultBroadcastTx{
 		Hash: txHash, // Code and Log are set only if sync is set to 1
@@ -130,7 +132,7 @@ func (ce *ConsensusEngine) executeBlock(ctx context.Context, blkProp *blockPropo
 		txResults: results.TxResults,
 	}
 
-	ce.log.Info("Executed block", "height", blkProp.height, "hash", blkProp.blkHash, "numTxs", blkProp.blk.Header.NumTxns, "appHash", results.AppHash.String())
+	ce.log.Info("Executed block", "height", blkProp.height, "blkID", blkProp.blkHash, "numTxs", blkProp.blk.Header.NumTxns, "appHash", results.AppHash.String())
 	return nil
 }
 

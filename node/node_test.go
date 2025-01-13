@@ -243,6 +243,7 @@ func (bp *dummyBP) GetValidators() []*ktypes.Validator { return bp.vals }
 func (bp *dummyBP) SubscribeValidators() <-chan []*ktypes.Validator {
 	return make(<-chan []*ktypes.Validator, 1)
 }
+func (bp *dummyBP) LoadFromDBState(ctx context.Context) error { return nil }
 
 // func hupStreamHandler(s network.Stream) { s.Close() }
 

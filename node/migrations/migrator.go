@@ -137,20 +137,15 @@ func SetupMigrator(ctx context.Context, db Database, snapshotter Snapshotter, ac
 // NotifyHeight notifies the migrator that a new block has been committed.
 // It is called at the end of the block being applied, but before the block is
 // committed to the database, in between tx.PreCommit and tx.Commit.
-func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext, db Database) error {
+// consensusTx is needed to read the migration state from the database if any migration is active.
+func (m *Migrator) NotifyHeight(ctx context.Context, block *common.BlockContext, db Database, consensusTx sql.Executor) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
 	if block.ChainContext.NetworkParameters.MigrationStatus == types.ActivationPeriod && m.activeMigration == nil {
 		// if the network is in activation period, but there is no active migration, then
 		// this is the block at which the migration is approved by the network.
-		tx, err := db.BeginReadTx(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to begin read tx: %w", err)
-		}
-		defer tx.Rollback(ctx)
-
-		activeM, err := getMigrationState(ctx, tx)
+		activeM, err := getMigrationState(ctx, consensusTx)
 		if err != nil {
 			return fmt.Errorf("failed to get migration state: %w", err)
 		}

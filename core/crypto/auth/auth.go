@@ -21,7 +21,11 @@ signing.
 */
 package auth
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/kwilteam/kwil-db/core/crypto"
+)
 
 // Authenticator is an interface for verifying signatures and
 // deriving a string identifier from the sender bytes. Custom
@@ -63,4 +67,16 @@ func GetIdentifier(authType string, sender []byte) (string, error) {
 	}
 
 	return auth.Identifier(sender)
+}
+
+// GetAuthenticatorKeyType returns the crypto.KeyType for a given authType.
+func GetAuthenticatorKeyType(authType string) (crypto.KeyType, error) {
+	switch authType {
+	case Secp256k1Auth, EthPersonalSignAuth:
+		return crypto.KeyTypeSecp256k1, nil
+	case Ed25519Auth:
+		return crypto.KeyTypeEd25519, nil
+	default:
+		return -1, fmt.Errorf("invalid auth type: %s", authType)
+	}
 }

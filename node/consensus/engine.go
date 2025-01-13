@@ -473,7 +473,7 @@ func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg cons
 
 	case *blockAnnounce:
 		if err := ce.commitBlock(ctx, v.blk, v.ci); err != nil {
-			ce.log.Error("Error processing committing block", "error", err)
+			ce.log.Error("Error processing committed block", "error", err)
 			return
 		}
 
@@ -548,9 +548,6 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 	if err := ce.doBlockSync(ctx); err != nil {
 		return err
 	}
-
-	// Update the role of the node based on the final state of the validator set
-	ce.updateValidatorSetAndRole()
 
 	// Done with the catchup
 	ce.inSync.Store(false)

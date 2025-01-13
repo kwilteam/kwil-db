@@ -18,7 +18,8 @@ import (
 type Accounts struct {
 	// protects records and updates fields
 	mtx sync.RWMutex
-	// records is an in-memory cache of account records.
+	// records is an in-memory cache of account records. Any available record in this cache
+	// is always upto date with the database.
 	records map[string]*types.Account
 	// updates is a map of account identifiers (hex-encoded) used to record
 	// account updates made by the transactions within a block.(spends, credits, transfers, etc.)
