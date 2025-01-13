@@ -3,6 +3,7 @@ package types
 import (
 	"database/sql"
 	"database/sql/driver"
+	"encoding"
 	"encoding/json"
 	"errors"
 
@@ -13,6 +14,25 @@ var namespace = uuid.MustParse("cc1cd90f-b4db-47f4-b6df-4bbe5fca88eb")
 
 // UUID is a rfc4122 compliant uuidv5
 type UUID [16]byte
+
+// MarshalBinary and UnmarshalBinary for UUID
+
+var _ encoding.BinaryMarshaler = UUID{}
+var _ encoding.BinaryMarshaler = (*UUID)(nil)
+
+func (u UUID) MarshalBinary() ([]byte, error) {
+	return u[:], nil
+}
+
+var _ encoding.BinaryUnmarshaler = (*UUID)(nil)
+
+func (u *UUID) UnmarshalBinary(b []byte) error {
+	if len(b) != 16 {
+		return errors.New("invalid UUID length")
+	}
+	copy(u[:], b)
+	return nil
+}
 
 // NewUUIDV5 generates a uuidv5 from a byte slice.
 // This is used to deterministically generate uuids.

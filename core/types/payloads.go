@@ -196,7 +196,7 @@ type ActionCall struct {
 	Arguments []*EncodedValue
 }
 
-func (a *ActionCall) MarshalBinary() ([]byte, error) {
+func (a ActionCall) MarshalBinary() ([]byte, error) {
 	return serialize.Encode(a)
 }
 
@@ -215,6 +215,77 @@ type EncodedValue struct {
 	// If there is only one element, the outer slice will have length 1.
 	Data [][]byte `rlp:"optional" json:"data"`
 }
+
+func (e EncodedValue) MarshalBinary() ([]byte, error) {
+	return serialize.Encode(e)
+}
+
+func (e *EncodedValue) UnmarshalBinary(b []byte) error {
+	return serialize.Decode(b, e)
+}
+
+/*const evVersion = 0
+
+func (e EncodedValue) MarshalBinary() ([]byte, error) {
+	buf := &bytes.Buffer{}
+	// version uint16
+	if err := binary.Write(buf, binary.LittleEndian, uint16(evVersion)); err != nil {
+		return nil, err
+	}
+	bts, err := e.Type.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+	if err := WriteBytes(buf, bts); err != nil {
+		return nil, err
+	}
+	dataLen := len(e.Data)
+	if err := binary.Write(buf, binary.LittleEndian, uint16(dataLen)); err != nil {
+		return nil, err
+	}
+	for _, data := range e.Data {
+		err = WriteBytes(buf, data)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return buf.Bytes(), nil
+}
+
+func (e *EncodedValue) UnmarshalBinary(bts []byte) error {
+	buf := bytes.NewBuffer(bts)
+	// version uint16
+	var version uint16
+	if err := binary.Read(buf, binary.LittleEndian, &version); err != nil {
+		return err
+	}
+	if version != evVersion {
+		return fmt.Errorf("unknown version %d", version)
+	}
+
+	typeBytes, err := ReadBytes(buf)
+	if err != nil {
+		return err
+	}
+	err = e.Type.UnmarshalBinary(typeBytes)
+	if err != nil {
+		return err
+	}
+
+	var dataLen uint16
+	if err := binary.Read(buf, binary.LittleEndian, &dataLen); err != nil {
+		return err
+	}
+	e.Data = make([][]byte, dataLen)
+	for i := range dataLen {
+		data, err := ReadBytes(buf)
+		if err != nil {
+			return err
+		}
+		e.Data[i] = data
+	}
+	return nil
+}*/
 
 // Decode decodes the encoded value to its native Go type.
 func (e *EncodedValue) Decode() (any, error) {
@@ -512,12 +583,26 @@ func (v *ValidatorJoin) Type() PayloadType {
 var _ encoding.BinaryUnmarshaler = (*ValidatorJoin)(nil)
 var _ encoding.BinaryMarshaler = (*ValidatorJoin)(nil)
 
-func (v *ValidatorJoin) UnmarshalBinary(b []byte) error {
-	return serialize.Decode(b, v)
+const vjVersion = 0
+
+func (v ValidatorJoin) MarshalBinary() ([]byte, error) {
+	b := make([]byte, 2+8)
+	SerializationByteOrder.PutUint16(b, vjVersion)
+	SerializationByteOrder.PutUint64(b[2:], v.Power)
+	return b, nil
 }
 
-func (v *ValidatorJoin) MarshalBinary() ([]byte, error) {
-	return serialize.Encode(v)
+func (v *ValidatorJoin) UnmarshalBinary(b []byte) error {
+	if len(b) < 2+8 {
+		return fmt.Errorf("invalid length %d", len(b))
+	}
+
+	version := SerializationByteOrder.Uint16(b)
+	if version != vjVersion {
+		return fmt.Errorf("invalid version %d", version)
+	}
+	v.Power = SerializationByteOrder.Uint64(b[2:])
+	return nil
 }
 
 // ValidatorApprove is used to vote for a validators approval to join the network
@@ -533,12 +618,46 @@ func (v *ValidatorApprove) Type() PayloadType {
 var _ encoding.BinaryUnmarshaler = (*ValidatorApprove)(nil)
 var _ encoding.BinaryMarshaler = (*ValidatorApprove)(nil)
 
-func (v *ValidatorApprove) UnmarshalBinary(b []byte) error {
-	return serialize.Decode(b, v)
+// UnmarshalBinary and MarshalBinary in the same manner as ValidatorRemove
+
+const vaVersion = 0
+
+func (v ValidatorApprove) MarshalBinary() ([]byte, error) {
+	buf := &bytes.Buffer{}
+	binary.Write(buf, SerializationByteOrder, uint16(vaVersion))
+	WriteBytes(buf, v.Candidate)
+	binary.Write(buf, SerializationByteOrder, int32(v.KeyType))
+	return buf.Bytes(), nil
 }
 
-func (v *ValidatorApprove) MarshalBinary() ([]byte, error) {
-	return serialize.Encode(v)
+func (v *ValidatorApprove) UnmarshalBinary(b []byte) error {
+	rd := bytes.NewReader(b)
+	var version uint16
+	err := binary.Read(rd, SerializationByteOrder, &version)
+	if err != nil {
+		return err
+	}
+	if version != vrVersion {
+		return fmt.Errorf("invalid validator remove payload version")
+	}
+	candidate, err := ReadBytes(rd)
+	if err != nil {
+		return err
+	}
+	var keyType int32
+	err = binary.Read(rd, SerializationByteOrder, &keyType)
+	if err != nil {
+		return err
+	}
+	kt := crypto.KeyType(keyType)
+	if !kt.Valid() {
+		return fmt.Errorf("invalid key type")
+	}
+
+	v.Candidate = candidate
+	v.KeyType = kt
+
+	return nil
 }
 
 // ValidatorRemove is used to vote for a validators removal from the network
@@ -554,12 +673,48 @@ func (v *ValidatorRemove) Type() PayloadType {
 var _ encoding.BinaryUnmarshaler = (*ValidatorRemove)(nil)
 var _ encoding.BinaryMarshaler = (*ValidatorRemove)(nil)
 
-func (v *ValidatorRemove) UnmarshalBinary(b []byte) error {
-	return serialize.Decode(b, v)
+const vrVersion = 0
+
+func (v ValidatorRemove) MarshalBinary() ([]byte, error) {
+	buf := &bytes.Buffer{}
+	binary.Write(buf, SerializationByteOrder, uint16(vrVersion))
+
+	WriteBytes(buf, v.Validator)
+
+	binary.Write(buf, SerializationByteOrder, int32(v.KeyType))
+
+	return buf.Bytes(), nil
 }
 
-func (v *ValidatorRemove) MarshalBinary() ([]byte, error) {
-	return serialize.Encode(v)
+func (v *ValidatorRemove) UnmarshalBinary(b []byte) error {
+	rd := bytes.NewReader(b)
+	var version uint16
+	err := binary.Read(rd, SerializationByteOrder, &version)
+	if err != nil {
+		return err
+	}
+	if version != vrVersion {
+		return fmt.Errorf("invalid validator remove payload version")
+	}
+	val, err := ReadBytes(rd)
+	if err != nil {
+		return err
+	}
+
+	var keyType int32
+	err = binary.Read(rd, SerializationByteOrder, &keyType)
+	if err != nil {
+		return err
+	}
+	kt := crypto.KeyType(keyType)
+	if !kt.Valid() {
+		return fmt.Errorf("invalid key type")
+	}
+
+	v.Validator = val
+	v.KeyType = kt
+
+	return nil
 }
 
 // Validator leave is used to signal that the sending validator is leaving the network
@@ -571,13 +726,23 @@ func (v *ValidatorLeave) Type() PayloadType {
 
 var _ encoding.BinaryUnmarshaler = (*ValidatorLeave)(nil)
 var _ encoding.BinaryMarshaler = (*ValidatorLeave)(nil)
+var _ encoding.BinaryMarshaler = ValidatorLeave{}
 
-func (v *ValidatorLeave) UnmarshalBinary(b []byte) error {
-	return serialize.Decode(b, v)
+const vlVersion = 0
+
+func (v ValidatorLeave) MarshalBinary() ([]byte, error) {
+	// just a version uint16 and that's all
+	return binary.LittleEndian.AppendUint16(nil, vlVersion), nil
 }
 
-func (v *ValidatorLeave) MarshalBinary() ([]byte, error) {
-	return serialize.Encode(v)
+func (v *ValidatorLeave) UnmarshalBinary(b []byte) error {
+	if len(b) != 2 {
+		return fmt.Errorf("invalid validator leave payload")
+	}
+	if binary.LittleEndian.Uint16(b) != vlVersion {
+		return fmt.Errorf("invalid validator leave payload version")
+	}
+	return nil
 }
 
 // in the future, if/when we go to implement voting based on token weight (instead of validatorship),
@@ -591,16 +756,63 @@ type ValidatorVoteIDs struct {
 
 var _ Payload = (*ValidatorVoteIDs)(nil)
 
+const vvidVersion = 0
+
 func (v *ValidatorVoteIDs) MarshalBinary() ([]byte, error) {
-	return serialize.Encode(v)
+	buf := new(bytes.Buffer)
+
+	// version uint16
+	if err := binary.Write(buf, binary.LittleEndian, uint16(vvidVersion)); err != nil {
+		return nil, err
+	}
+
+	// Length of resolution IDs (uint32)
+	if err := binary.Write(buf, binary.LittleEndian, uint32(len(v.ResolutionIDs))); err != nil {
+		return nil, err
+	}
+
+	for _, id := range v.ResolutionIDs {
+		enc, err := id.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		if err := WriteBytes(buf, enc); err != nil {
+			return nil, err
+		}
+	}
+	return buf.Bytes(), nil
+}
+
+func (v *ValidatorVoteIDs) UnmarshalBinary(bts []byte) error {
+	buf := bytes.NewBuffer(bts)
+	var version uint16
+	if err := binary.Read(buf, binary.LittleEndian, &version); err != nil {
+		return err
+	}
+	if version != vvidVersion {
+		return fmt.Errorf("unknown version: %d", version)
+	}
+	var length uint32
+	if err := binary.Read(buf, binary.LittleEndian, &length); err != nil {
+		return err
+	}
+	v.ResolutionIDs = make([]*UUID, 0, length) // to match MArshalBinary
+	for range length {
+		idBts, err := ReadBytes(buf)
+		if err != nil {
+			return err
+		}
+		id := &UUID{}
+		if err := id.UnmarshalBinary(idBts); err != nil {
+			return err
+		}
+		v.ResolutionIDs = append(v.ResolutionIDs, id)
+	}
+	return nil
 }
 
 func (v *ValidatorVoteIDs) Type() PayloadType {
 	return PayloadTypeValidatorVoteIDs
-}
-
-func (v *ValidatorVoteIDs) UnmarshalBinary(p0 []byte) error {
-	return serialize.Decode(p0, v)
 }
 
 // ValidatorVoteBodies is a payload for submitting the full vote bodies for any resolution.
@@ -611,27 +823,29 @@ type ValidatorVoteBodies struct {
 
 var _ Payload = (*ValidatorVoteBodies)(nil)
 
-func (v *ValidatorVoteBodies) MarshalBinary() ([]byte, error) {
+func (v *ValidatorVoteBodies) Type() PayloadType {
+	return PayloadTypeValidatorVoteBodies
+}
+
+const vvbbVersion = 0
+
+func (v ValidatorVoteBodies) MarshalBinary() ([]byte, error) {
 	buf := new(bytes.Buffer)
+	// version uint16
+	if err := binary.Write(buf, binary.LittleEndian, uint16(vvbbVersion)); err != nil {
+		return nil, err
+	}
+
 	// Length of events (uint32)
 	if err := binary.Write(buf, binary.LittleEndian, uint32(len(v.Events))); err != nil {
 		return nil, err
 	}
 	for _, event := range v.Events {
-		// Length of event type (uint32)
-		if err := binary.Write(buf, binary.LittleEndian, uint32(len(event.Type))); err != nil {
+		evtBts, err := event.MarshalBinary()
+		if err != nil {
 			return nil, err
 		}
-		// Event type
-		if _, err := buf.WriteString(event.Type); err != nil {
-			return nil, err
-		}
-		// Length of event body (uint32)
-		if err := binary.Write(buf, binary.LittleEndian, uint32(len(event.Body))); err != nil {
-			return nil, err
-		}
-		// Event body
-		if _, err := buf.Write(event.Body); err != nil {
+		if err := WriteBytes(buf, evtBts); err != nil {
 			return nil, err
 		}
 	}
@@ -639,38 +853,33 @@ func (v *ValidatorVoteBodies) MarshalBinary() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (v *ValidatorVoteBodies) Type() PayloadType {
-	return PayloadTypeValidatorVoteBodies
-}
-
-func (v *ValidatorVoteBodies) UnmarshalBinary(p0 []byte) error {
-	buf := bytes.NewBuffer(p0)
+func (v *ValidatorVoteBodies) UnmarshalBinary(bts []byte) error {
+	buf := bytes.NewBuffer(bts)
+	var version uint16
+	if err := binary.Read(buf, binary.LittleEndian, &version); err != nil {
+		return err
+	}
+	if version != vvbbVersion {
+		return fmt.Errorf("unknown version: %d", version)
+	}
 	var numEvents uint32
 	if err := binary.Read(buf, binary.LittleEndian, &numEvents); err != nil {
 		return err
 	}
+	if int(numEvents) > min(500_000, buf.Len()) {
+		return fmt.Errorf("invalid event count: %d", numEvents)
+	}
 	v.Events = make([]*VotableEvent, numEvents)
 	for i := range v.Events {
-		var eventTypeLen uint32
-		if err := binary.Read(buf, binary.LittleEndian, &eventTypeLen); err != nil {
+		evtBts, err := ReadBytes(buf)
+		if err != nil {
 			return err
 		}
-		eventType := make([]byte, eventTypeLen)
-		if _, err := buf.Read(eventType); err != nil {
+		event := &VotableEvent{}
+		if err := event.UnmarshalBinary(evtBts); err != nil {
 			return err
 		}
-		var eventBodyLen uint32
-		if err := binary.Read(buf, binary.LittleEndian, &eventBodyLen); err != nil {
-			return err
-		}
-		eventBody := make([]byte, eventBodyLen)
-		if _, err := buf.Read(eventBody); err != nil {
-			return err
-		}
-		v.Events[i] = &VotableEvent{
-			Type: string(eventType),
-			Body: eventBody,
-		}
+		v.Events[i] = event
 	}
 	return nil
 }
@@ -682,16 +891,43 @@ type CreateResolution struct {
 
 var _ Payload = (*CreateResolution)(nil)
 
-func (v *CreateResolution) MarshalBinary() ([]byte, error) {
-	return serialize.Encode(v)
+const crVersion = 0
+
+func (v CreateResolution) MarshalBinary() ([]byte, error) {
+	// version uint16 and then the v.Resolution.MarshalBinary
+	buf := new(bytes.Buffer)
+	if err := binary.Write(buf, binary.LittleEndian, uint16(crVersion)); err != nil {
+		return nil, err
+	}
+	enc, err := v.Resolution.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+	if err := binary.Write(buf, binary.LittleEndian, enc); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func (v *CreateResolution) UnmarshalBinary(bts []byte) error {
+	if len(bts) <= 2 {
+		return fmt.Errorf("invalid payload")
+	}
+	version := binary.LittleEndian.Uint16(bts)
+	if version != crVersion {
+		return fmt.Errorf("unknown version: %d", version)
+	}
+	// use buf[2:] to unmarshal the Resolution
+	var resolution VotableEvent
+	if err := resolution.UnmarshalBinary(bts[2:]); err != nil {
+		return err
+	}
+	v.Resolution = &resolution
+	return nil
 }
 
 func (v *CreateResolution) Type() PayloadType {
 	return PayloadTypeCreateResolution
-}
-
-func (v *CreateResolution) UnmarshalBinary(p0 []byte) error {
-	return serialize.Decode(p0, v)
 }
 
 // ApproveResolution is a payload for approving on a resolution.
@@ -701,16 +937,50 @@ type ApproveResolution struct {
 
 var _ Payload = (*ApproveResolution)(nil)
 
-func (v *ApproveResolution) MarshalBinary() ([]byte, error) {
-	return serialize.Encode(v)
+const arVersion = 0
+
+func (v ApproveResolution) MarshalBinary() ([]byte, error) {
+	// uint16 version and then the v.ResolutionID.MarshalBinary
+	buf := new(bytes.Buffer)
+	if err := binary.Write(buf, binary.LittleEndian, uint16(arVersion)); err != nil {
+		return nil, err
+	}
+	// var resID UUID
+	// if v.ResolutionID != nil {
+	// 	resID = *v.ResolutionID
+	// }
+	if v.ResolutionID == nil {
+		return nil, fmt.Errorf("resolution ID is nil")
+	}
+	enc, err := v.ResolutionID.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+	if err := binary.Write(buf, binary.LittleEndian, enc); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
+
+func (v *ApproveResolution) UnmarshalBinary(bts []byte) error {
+	if len(bts) <= 2 {
+		return fmt.Errorf("invalid payload")
+	}
+	version := binary.LittleEndian.Uint16(bts)
+	if version != arVersion {
+		return fmt.Errorf("unknown version: %d", version)
+	}
+	// use buf[2:] to unmarshal the ResolutionID
+	var resolutionID UUID
+	if err := resolutionID.UnmarshalBinary(bts[2:]); err != nil {
+		return err
+	}
+	v.ResolutionID = &resolutionID
+	return nil
 }
 
 func (v *ApproveResolution) Type() PayloadType {
 	return PayloadTypeApproveResolution
-}
-
-func (v *ApproveResolution) UnmarshalBinary(p0 []byte) error {
-	return serialize.Decode(p0, v)
 }
 
 // DeleteResolution is a payload for deleting a resolution.
@@ -720,14 +990,43 @@ type DeleteResolution struct {
 
 var _ Payload = (*DeleteResolution)(nil)
 
-func (d *DeleteResolution) MarshalBinary() ([]byte, error) {
-	return serialize.Encode(d)
+const drVersion = 0
+
+func (d DeleteResolution) MarshalBinary() ([]byte, error) {
+	buf := new(bytes.Buffer)
+	if err := binary.Write(buf, binary.LittleEndian, uint16(drVersion)); err != nil {
+		return nil, err
+	}
+	if d.ResolutionID == nil {
+		return nil, fmt.Errorf("resolution ID is nil")
+	}
+	enc, err := d.ResolutionID.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+	if err := binary.Write(buf, binary.LittleEndian, enc); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 func (d *DeleteResolution) Type() PayloadType {
 	return PayloadTypeDeleteResolution
 }
 
-func (d *DeleteResolution) UnmarshalBinary(p0 []byte) error {
-	return serialize.Decode(p0, d)
+func (d *DeleteResolution) UnmarshalBinary(bts []byte) error {
+	if len(bts) <= 2 {
+		return fmt.Errorf("invalid payload")
+	}
+	version := binary.LittleEndian.Uint16(bts)
+	if version != drVersion {
+		return fmt.Errorf("unknown version: %d", version)
+	}
+	// use buf[2:] to unmarshal the ResolutionID
+	var resolutionID UUID
+	if err := resolutionID.UnmarshalBinary(bts[2:]); err != nil {
+		return err
+	}
+	d.ResolutionID = &resolutionID
+	return nil
 }

@@ -442,7 +442,7 @@ func TestTransactionMarshalUnmarshal(t *testing.T) {
 						Data: []byte("signature"),
 						Type: "secp256k1",
 					},
-					Sender:        nil,
+					Sender:        []byte{},
 					Serialization: DefaultSignedMsgSerType,
 				}
 			},
@@ -697,6 +697,7 @@ func (w *errorWriter) Write(p []byte) (n int, err error) {
 	}
 	return len(p), nil
 }
+
 func TestReadBytes(t *testing.T) {
 	t.Parallel()
 
@@ -709,6 +710,12 @@ func TestReadBytes(t *testing.T) {
 		{
 			name:        "read zero length",
 			input:       []byte{0, 0, 0, 0},
+			expected:    []byte{},
+			expectError: false,
+		},
+		{
+			name:        "read nil",
+			input:       []byte{0xff, 0xff, 0xff, 0xff},
 			expected:    nil,
 			expectError: false,
 		},
@@ -727,12 +734,6 @@ func TestReadBytes(t *testing.T) {
 		{
 			name:        "length exceeds available data",
 			input:       []byte{10, 0, 0, 0, 't', 'e', 's', 't'},
-			expected:    nil,
-			expectError: true,
-		},
-		{
-			name:        "max uint32 length",
-			input:       append([]byte{255, 255, 255, 255}, bytes.Repeat([]byte{1}, 5)...),
 			expected:    nil,
 			expectError: true,
 		},

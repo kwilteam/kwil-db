@@ -1,6 +1,8 @@
 package types
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"math/big"
 
@@ -76,6 +78,41 @@ type VotableEvent struct {
 
 func (e *VotableEvent) ID() *UUID {
 	return NewUUIDV5(append([]byte(e.Type), e.Body...))
+}
+
+const veVersion = 0
+
+func (e VotableEvent) MarshalBinary() ([]byte, error) {
+	buf := &bytes.Buffer{}
+	// version uint16 first
+	if err := binary.Write(buf, binary.BigEndian, uint16(veVersion)); err != nil {
+		return nil, err
+	}
+	WriteString(buf, e.Type)
+	WriteBytes(buf, e.Body) // could also buf.Write(e.Body) since this is the last field
+	return buf.Bytes(), nil
+}
+
+func (e *VotableEvent) UnmarshalBinary(b []byte) error {
+	buf := bytes.NewBuffer(b)
+	var version uint16
+	if err := binary.Read(buf, binary.BigEndian, &version); err != nil {
+		return err
+	}
+	if version != veVersion {
+		return fmt.Errorf("invalid version: %d", version)
+	}
+	eType, err := ReadString(buf)
+	if err != nil {
+		return err
+	}
+	eBody, err := ReadBytes(buf)
+	if err != nil {
+		return err
+	}
+	e.Type = eType
+	e.Body = eBody
+	return nil
 }
 
 type PendingResolution struct {

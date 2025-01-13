@@ -45,6 +45,15 @@ const (
 	// KeyTypeRSA       KeyType = 2
 )
 
+func (kt KeyType) Valid() bool {
+	switch kt {
+	case KeyTypeSecp256k1, KeyTypeEd25519:
+		return true
+	default:
+		return false
+	}
+}
+
 func (kt KeyType) String() string {
 	switch kt {
 	case KeyTypeSecp256k1:
