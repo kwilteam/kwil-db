@@ -107,10 +107,6 @@ func (c *DataType) String() string {
 	return str.String()
 }
 
-// func (c *DataType) HasMetadata() bool {
-// 	return c.Metadata != ZeroMetadata
-// }
-
 var ZeroMetadata = [2]uint16{}
 
 // PGString returns the string representation of the type in Postgres.
