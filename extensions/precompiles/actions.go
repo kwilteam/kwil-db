@@ -183,7 +183,7 @@ func (m *Method[T]) verify() error {
 type MethodReturn struct {
 	// If true, then the method returns any number of rows.
 	// If false, then the method returns exactly one row.
-	ReturnsTable bool
+	IsTable bool
 	// ColumnTypes is a list of column types.
 	// It is required. If the extension returns types that are
 	// not matching the column types, the engine will return an error.

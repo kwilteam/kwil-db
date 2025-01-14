@@ -82,14 +82,9 @@ func storeAction(ctx context.Context, db sql.DB, namespace string, action *Actio
 	}
 
 	for i, param := range action.Parameters {
-		dt, err := param.Type.PGString()
-		if err != nil {
-			return err
-		}
-
 		err = execute(ctx, db, `INSERT INTO kwild_engine.parameters (action_id, name, scalar_type, is_array, metadata, position)
 			VALUES ($1, $2, $3, $4, $5, $6)`,
-			actionID, param.Name, dt, param.Type.IsArray, getTypeMetadata(param.Type), i+1)
+			actionID, param.Name, strings.ToUpper(param.Type.Name), param.Type.IsArray, getTypeMetadata(param.Type), i+1)
 		if err != nil {
 			return err
 		}
@@ -97,14 +92,9 @@ func storeAction(ctx context.Context, db sql.DB, namespace string, action *Actio
 
 	if action.Returns != nil {
 		for i, field := range action.Returns.Fields {
-			dt, err := field.Type.PGScalar()
-			if err != nil {
-				return err
-			}
-
 			err = execute(ctx, db, `INSERT INTO kwild_engine.return_fields (action_id, name, scalar_type, is_array, metadata, position)
 			VALUES ($1, $2, $3, $4, $5, $6)`,
-				actionID, field.Name, dt, field.Type.IsArray, getTypeMetadata(field.Type), i+1)
+				actionID, field.Name, strings.ToUpper(field.Type.Name), field.Type.IsArray, getTypeMetadata(field.Type), i+1)
 			if err != nil {
 				return err
 			}
@@ -200,17 +190,17 @@ func listTablesInNamespace(ctx context.Context, db sql.DB, namespace string) ([]
 		GROUP BY i.namespace, i.table_name
 	), constraints AS (
 		SELECT c.namespace, c.table_name,
-			json_agg(c.constraint_name ORDER BY c.constraint_name) AS constraint_names,
-			json_agg(c.constraint_type ORDER BY c.constraint_name) AS constraint_types,
-			json_agg(c.columns ORDER BY c.constraint_name) AS columns
+			json_agg(c.name ORDER BY c.name) AS constraint_names,
+			json_agg(c.constraint_type ORDER BY c.name) AS constraint_types,
+			json_agg(c.columns ORDER BY c.name) AS columns
 		FROM info.constraints c
 		GROUP BY c.namespace, c.table_name
 	), foreign_keys AS (
 		SELECT f.namespace, f.table_name,
-			json_agg(f.constraint_name ORDER BY f.constraint_name) AS constraint_names,
-			json_agg(f.columns ORDER BY f.constraint_name) AS columns,
-			json_agg(f.on_update ORDER BY f.constraint_name) AS on_updates,
-			json_agg(f.on_delete ORDER BY f.constraint_name) AS on_deletes
+			json_agg(f.name ORDER BY f.name) AS constraint_names,
+			json_agg(f.columns ORDER BY f.name) AS columns,
+			json_agg(f.on_update ORDER BY f.name) AS on_updates,
+			json_agg(f.on_delete ORDER BY f.name) AS on_deletes
 		FROM info.foreign_keys f
 		GROUP BY f.namespace, f.table_name
 	)
@@ -373,7 +363,7 @@ func registerExtensionInitialization(ctx context.Context, db sql.DB, name, baseE
 		return nil
 	}
 
-	insertMetaStmt := `INSERT INTO kwild_engine.extension_initialization_parameters (extension_id, key, value, data_type) VALUES `
+	insertMetaStmt := `INSERT INTO kwild_engine.extension_initialization_parameters (extension_id, key, value, scalar_type, is_array, metadata) VALUES `
 	i := 2
 	rawVals := []any{extId}
 	for k, v := range metadata {
@@ -386,9 +376,9 @@ func registerExtensionInitialization(ctx context.Context, db sql.DB, name, baseE
 			return err
 		}
 
-		rawVals = append(rawVals, k, strVal, v.Type().String())
-		insertMetaStmt += fmt.Sprintf(`($1, $%d, $%d, $%d)`, i, i+1, i+2)
-		i += 3
+		rawVals = append(rawVals, k, strVal, strings.ToUpper(v.Type().Name), v.Type().IsArray, getTypeMetadata(v.Type()))
+		insertMetaStmt += fmt.Sprintf(`($1, $%d, $%d, $%d, $%d, $%d)`, i, i+1, i+2, i+3, i+4)
+		i += 5
 	}
 
 	return execute(ctx, db, insertMetaStmt, rawVals...)
@@ -417,7 +407,7 @@ func getExtensionInitializationMetadata(ctx context.Context, db sql.DB) ([]*stor
 	var extName, alias string
 	var key, val, dt *string
 	err := queryRowFunc(ctx, db, `
-	SELECT n.name AS alias, ie.base_extension AS ext_name, eip.key, eip.value, eip.data_type
+	SELECT n.name AS alias, ie.base_extension AS ext_name, eip.key, eip.value, kwild_engine.format_type(eip.scalar_type, eip.is_array, eip.metadata) AS data_type
 	FROM kwild_engine.initialized_extensions ie
 	JOIN kwild_engine.namespaces n ON ie.namespace_id = n.id
 	LEFT JOIN kwild_engine.extension_initialization_parameters eip ON ie.id = eip.extension_id`,
@@ -471,13 +461,13 @@ func getExtensionInitializationMetadata(ctx context.Context, db sql.DB) ([]*stor
 // getTypeMetadata gets the serialized type metadata.
 // If there is none, it returns nil.
 func getTypeMetadata(t *types.DataType) []byte {
-	if !t.HasMetadata() {
+	if t.Metadata == types.ZeroMetadata {
 		return nil
 	}
 
 	meta := make([]byte, 4)
-	binary.LittleEndian.PutUint16(meta[:2], t.Metadata[0])
-	binary.LittleEndian.PutUint16(meta[2:], t.Metadata[1])
+	binary.BigEndian.PutUint16(meta[:2], t.Metadata[0])
+	binary.BigEndian.PutUint16(meta[2:], t.Metadata[1])
 
 	return meta
 }

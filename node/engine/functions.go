@@ -15,7 +15,7 @@ var (
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
 
-				if !args[0].EqualsStrict(types.IntType) && args[0].Name != types.DecimalStr {
+				if !args[0].EqualsStrict(types.IntType) && args[0].Name != types.NumericStr {
 					return nil, fmt.Errorf("%w: expected argument to be int or decimal, got %s", ErrType, args[0].String())
 				}
 
@@ -704,7 +704,7 @@ var (
 				switch {
 				case args[0].EqualsStrict(types.IntType):
 					retType = decimal1000.Copy()
-				case args[0].Name == types.DecimalStr:
+				case args[0].Name == types.NumericStr:
 					retType = args[0].Copy()
 					retType.Metadata[0] = 1000 // max precision
 				case args[0].EqualsStrict(types.Uint256Type):
@@ -795,7 +795,7 @@ var (
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
 
-				if !strings.EqualFold(args[0].Name, types.DecimalStr) {
+				if !strings.EqualFold(args[0].Name, types.NumericStr) {
 					return nil, fmt.Errorf("%w: expected argument to be numeric, got %s", ErrType, args[0].String())
 				}
 

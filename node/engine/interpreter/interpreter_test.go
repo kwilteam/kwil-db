@@ -788,11 +788,6 @@ func Test_Roundtrip(t *testing.T) {
 		},
 		{
 			name:     "decimal",
-			datatype: "DECIMAL",
-			value:    mustDecimal("100.101"),
-		},
-		{
-			name:     "explicit_decimal",
 			datatype: "DECIMAL(70,5)",
 			value:    mustExplicitDecimal("100.101", 70, 5),
 		},
@@ -800,6 +795,41 @@ func Test_Roundtrip(t *testing.T) {
 			name:     "uuid",
 			datatype: "UUID",
 			value:    mustUUID("d3b3b3b3-3b3b-3b3b-3b3b-3b3b3b3b3b3b"),
+		},
+		{
+			name:     "bytea",
+			datatype: "BYTEA",
+			value:    []byte("hello"),
+		},
+		{
+			name:     "int_array",
+			datatype: "INT[]",
+			value:    []int64{1, 2},
+		},
+		{
+			name:     "text_array",
+			datatype: "TEXT[]",
+			value:    []string{"hello", "world"},
+		},
+		{
+			name:     "bool_array",
+			datatype: "BOOL[]",
+			value:    []bool{true, false},
+		},
+		{
+			name:     "decimal_array",
+			datatype: "DECIMAL(70,5)[]",
+			value:    []*decimal.Decimal{mustExplicitDecimal("100.101", 70, 5), mustExplicitDecimal("200.202", 70, 5)},
+		},
+		{
+			name:     "uuid_array",
+			datatype: "UUID[]",
+			value:    []*types.UUID{mustUUID("d3b3b3b3-3b3b-3b3b-3b3b-3b3b3b3b3b3b"), mustUUID("d3b3b3b3-3b3b-3b3b-3b3b-3b3b3b3b3b3b")},
+		},
+		{
+			name:     "bytea_array",
+			datatype: "BYTEA[]",
+			value:    [][]byte{[]byte("hello"), []byte("world")},
 		},
 	}
 
@@ -818,11 +848,11 @@ func Test_Roundtrip(t *testing.T) {
 		t.Run(test.name, func(t *testing.T) {
 			// we will create a table with the datatype
 			// and then insert the value into the table
-			err = interp.ExecuteWithoutEngineCtx(ctx, tx, fmt.Sprintf("CREATE TABLE tbl_%s (val %s primary key);", test.name, test.datatype), nil, nil)
+			err = interp.ExecuteWithoutEngineCtx(ctx, tx, fmt.Sprintf("CREATE TABLE tbl_%s (id int primary key, val %s);", test.name, test.datatype), nil, nil)
 			require.NoError(t, err)
 
 			// insert the value
-			err = interp.ExecuteWithoutEngineCtx(ctx, tx, fmt.Sprintf("INSERT INTO tbl_%s (val) VALUES ($val);", test.name), map[string]common.EngineValue{"$val": mustVal(test.value)}, nil)
+			err = interp.ExecuteWithoutEngineCtx(ctx, tx, fmt.Sprintf("INSERT INTO tbl_%s (id, val) VALUES (1, $val);", test.name), map[string]common.EngineValue{"$val": mustVal(test.value)}, nil)
 			require.NoError(t, err)
 
 			// select the value
@@ -837,6 +867,16 @@ func Test_Roundtrip(t *testing.T) {
 			require.NoError(t, err)
 
 			require.True(t, boolVal.Bool.Bool)
+
+			// roundtrip nulls as well
+			err = interp.ExecuteWithoutEngineCtx(ctx, tx, fmt.Sprintf("INSERT INTO tbl_%s (id, val) VALUES (2, NULL);", test.name), nil, nil)
+			require.NoError(t, err)
+
+			err = interp.ExecuteWithoutEngineCtx(ctx, tx, fmt.Sprintf("SELECT val FROM tbl_%s WHERE id = 2;", test.name), nil, func(r *common.Row) error {
+				assert.True(t, r.Values[0].Null())
+				return nil
+			})
+			require.NoError(t, err)
 		})
 	}
 }
@@ -1631,7 +1671,12 @@ func Test_Extensions(t *testing.T) {
 					}
 
 					if inputs[0].Null() || inputs[1].Null() {
-						return resultFn([]precompiles.Value{precompiles.MakeNull(types.TextType)})
+						nv, err := precompiles.NewValue(types.TextType)
+						if err != nil {
+							return err
+						}
+
+						return resultFn([]precompiles.Value{nv})
 					}
 
 					return resultFn([]precompiles.Value{precompiles.MakeText(inputs[0].RawValue().(string) + inputs[1].RawValue().(string))})

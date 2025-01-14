@@ -61,7 +61,9 @@ CREATE TABLE IF NOT EXISTS kwild_engine.extension_initialization_parameters (
     extension_id INT8 NOT NULL REFERENCES kwild_engine.initialized_extensions(id) ON UPDATE CASCADE ON DELETE CASCADE,
     key TEXT NOT NULL,
     value TEXT NOT NULL,
-    data_type TEXT NOT NULL,
+    scalar_type kwild_engine.scalar_data_type NOT NULL,
+    is_array BOOLEAN NOT NULL,
+    metadata BYTEA DEFAULT NULL,
     UNIQUE (extension_id, key)
 );
 
@@ -102,7 +104,8 @@ CREATE TABLE IF NOT EXISTS kwild_engine.return_fields (
 -- since Kwil uses it's own roles system that is in no way related to the Postgres roles system, we need to store this information
 CREATE TABLE IF NOT EXISTS kwild_engine.roles (
     id BIGSERIAL PRIMARY KEY,
-    name TEXT NOT NULL UNIQUE
+    name TEXT NOT NULL UNIQUE,
+    built_in BOOLEAN DEFAULT FALSE
 );
 
 CREATE TABLE IF NOT EXISTS kwild_engine.role_privileges (
@@ -123,7 +126,7 @@ CREATE TABLE IF NOT EXISTS kwild_engine.user_roles (
 CREATE INDEX IF NOT EXISTS user_roles_user_identifier_idx ON kwild_engine.user_roles(user_identifier);
 
 -- create a single default role that will be used for all users
-INSERT INTO kwild_engine.roles (name) VALUES ('default') ON CONFLICT DO NOTHING;
+INSERT INTO kwild_engine.roles (name, built_in) VALUES ('default', true) ON CONFLICT DO NOTHING;
 -- default role can select and call by default
 INSERT INTO kwild_engine.role_privileges (privilege_type, role_id) VALUES ('SELECT', (
     SELECT id
@@ -136,7 +139,7 @@ INSERT INTO kwild_engine.role_privileges (privilege_type, role_id) VALUES ('SELE
 )) ON CONFLICT DO NOTHING;
 
 -- create an owner role, which has all privileges
-INSERT INTO kwild_engine.roles (name) VALUES ('owner') ON CONFLICT DO NOTHING;
+INSERT INTO kwild_engine.roles (name, built_in) VALUES ('owner', true) ON CONFLICT DO NOTHING;
 
 -- owner role can do everything
 INSERT INTO kwild_engine.role_privileges (privilege_type, role_id) VALUES ('SELECT', (
@@ -196,7 +199,7 @@ BEGIN
             result := result || '(' ||
                 ((get_byte(meta, 0) << 8 | get_byte(meta, 1))::TEXT) || ',' ||
                 ((get_byte(meta, 2) << 8 | get_byte(meta, 3))::TEXT) || ')';
-        ELSIF octet_length(meta) != 0 THEN
+        ELSE
             -- should never happen, would suggest some sort of serious internal error
             RAISE EXCEPTION 'Invalid metadata length for numeric data type';
         END IF;
@@ -234,6 +237,8 @@ BEGIN
     if result = 'decimal' THEN
         result := 'numeric';
     END IF;
+
+    RETURN result;
 END;
 $$ LANGUAGE plpgsql;
 
@@ -277,51 +282,46 @@ JOIN kwild_engine.namespaces us
 ORDER BY 1, 2;
 
 -- info.columns is a public view that provides a list of all columns in the database
-CREATE VIEW info.columns AS
-SELECT DISTINCT
-    c.table_schema::TEXT AS namespace,
-    c.table_name::TEXT AS table_name,
-    c.column_name::TEXT AS name,
-    -- (CASE 
-    --     WHEN t.typcategory = 'A'
-    --         THEN (pg_catalog.format_type(a.atttypid, a.atttypmod))
-    --     ELSE c.data_type
-    -- END)::TEXT AS data_type,
-    pg_catalog.format_type(a.atttypid, a.atttypmod)::TEXT AS data_type,
-    c.is_nullable::bool AS is_nullable,
-    c.column_default::TEXT AS default_value,
+CREATE OR REPLACE VIEW info.columns AS
+SELECT
+    c.table_schema::text          AS namespace,
+    c.table_name::text            AS table_name,
+    c.column_name::text           AS name,
+    kwild_engine.format_pg_type(a.atttypid, a.atttypmod)::text  AS data_type,
+    c.is_nullable::bool           AS is_nullable,
+    c.column_default::text        AS default_value,
+    -- Instead of joining to table_constraints, do a subselect:
     CASE
-        WHEN tc.constraint_type = 'PRIMARY KEY'
-            THEN true
+        WHEN EXISTS (
+            SELECT 1
+            FROM information_schema.key_column_usage kc
+            JOIN information_schema.table_constraints tc
+                 ON kc.constraint_name = tc.constraint_name
+                AND kc.table_schema = tc.table_schema
+            WHERE
+                kc.table_schema = c.table_schema
+                AND kc.table_name  = c.table_name
+                AND kc.column_name = c.column_name
+                AND tc.constraint_type = 'PRIMARY KEY'
+        ) THEN true
         ELSE false
     END AS is_primary_key,
-    c.ordinal_position::int AS ordinal_position
+    c.ordinal_position::int       AS ordinal_position
 FROM information_schema.columns c
 JOIN pg_namespace n
-    ON c.table_schema = n.nspname::TEXT
+    ON c.table_schema = n.nspname::text
 JOIN pg_class cl
-    ON cl.relname = c.table_name
-        AND cl.relnamespace = n.oid
+    ON cl.relname      = c.table_name
+   AND cl.relnamespace = n.oid
 JOIN pg_attribute a
-    ON a.attname = c.column_name 
-        AND a.attrelid = cl.oid
+    ON a.attname  = c.column_name
+   AND a.attrelid = cl.oid
 JOIN pg_type t
     ON t.oid = a.atttypid
-LEFT JOIN information_schema.key_column_usage kcu
-    ON c.table_name = kcu.table_name 
-        AND c.column_name = kcu.column_name
-        AND c.table_schema = kcu.table_schema
-LEFT JOIN information_schema.table_constraints tc
-    ON kcu.constraint_name = tc.constraint_name
-        AND tc.constraint_type = 'PRIMARY KEY'
-        AND tc.table_schema = c.table_schema
 JOIN 
     kwild_engine.namespaces us ON n.nspname::TEXT = us.name
 WHERE cl.relkind IN ('r', 'v') -- only tables and views
-ORDER BY 
-    table_name, 
-    ordinal_position,
-    1, 2, 3, 4, 5, 6, 7, 8;
+ORDER BY table_name, ordinal_position;
     
 
 -- info.indexes is a public view that provides a list of all indexes in the database
@@ -343,20 +343,22 @@ JOIN LATERAL unnest(i.indkey) WITH ORDINALITY AS x(colnum, ordinality) ON x.coln
 JOIN 
     kwild_engine.namespaces us ON n.nspname::TEXT = us.name
 GROUP BY n.nspname, c.relname, ic.relname, i.indisprimary, i.indisunique
-ORDER BY 1,2,3,4,5,6;
+ORDER BY 
+    table_name, name,
+    1,2,3,4,5,6;
 
 -- info.constraints is a public view that provides a list of all constraints in the database
 CREATE VIEW info.constraints AS
 SELECT 
     pg_namespace.nspname::TEXT AS namespace,
-    conname::TEXT AS constraint_name,
     split_part(conrelid::regclass::text, '.', 2) AS table_name,
-    array_agg(attname)::TEXT[] AS columns,
-    pg_get_constraintdef(pg_constraint.oid) AS expression,
+    conname::TEXT AS name,
     CASE contype
         WHEN 'c' THEN 'CHECK'
         WHEN 'u' THEN 'UNIQUE'
-    END AS constraint_type
+    END AS constraint_type,
+    array_agg(attname)::TEXT[] AS columns,
+    pg_get_constraintdef(pg_constraint.oid) AS expression
 FROM 
     pg_constraint
 JOIN 
@@ -375,15 +377,18 @@ WHERE
 GROUP BY 
     pg_namespace.nspname, conname, conrelid, pg_constraint.oid
 ORDER BY 
+    namespace, table_name, name,
     1, 2, 3, 4, 5, 6;
 
 -- info.foreign_keys is a public view that provides a list of all foreign keys in the database
 CREATE VIEW info.foreign_keys AS
 SELECT 
     pg_namespace.nspname::TEXT AS namespace,
-    conname::TEXT AS constraint_name,
     split_part(conrelid::regclass::text, '.', 2) AS table_name,
-    array_agg(attname)::TEXT[] AS columns,
+    conname::TEXT AS name,
+    array_agg(pg_attribute.attname ORDER BY cols.colnum)::TEXT[] AS columns,
+    (SELECT split_part(confrelid::regclass::text, '.', 2)) AS ref_table,
+    array_agg(ref_attr.attname ORDER BY ref_cols.colnum)::TEXT[] AS ref_columns,
     CASE confupdtype
         WHEN 'a' THEN 'NO ACTION'
         WHEN 'r' THEN 'RESTRICT'
@@ -405,65 +410,75 @@ JOIN
 JOIN 
     pg_namespace ON pg_class.relnamespace = pg_namespace.oid
 LEFT JOIN 
-    unnest(conkey) AS cols(colnum) ON true
+    unnest(conkey) WITH ORDINALITY AS cols(colnum, ord) ON true
 LEFT JOIN 
     pg_attribute ON pg_attribute.attnum = cols.colnum AND pg_attribute.attrelid = pg_class.oid
+LEFT JOIN 
+    unnest(confkey) WITH ORDINALITY AS ref_cols(colnum, ord) ON ref_cols.ord = cols.ord
+LEFT JOIN 
+    pg_attribute ref_attr ON ref_attr.attnum = ref_cols.colnum AND ref_attr.attrelid = confrelid
 JOIN 
     kwild_engine.namespaces us ON pg_namespace.nspname::TEXT = us.name
 WHERE 
     contype = 'f'  -- Only foreign key constraints
 GROUP BY 
-    pg_namespace.nspname, conname, conrelid, confupdtype, confdeltype
+    pg_namespace.nspname, conname, conrelid, confrelid, confupdtype, confdeltype
 ORDER BY 
-    table_name, constraint_name,
-    1, 2, 3, 4, 5, 6;
+    namespace, table_name, name,
+    1, 2, 3, 4, 5, 6, 7, 8;
+
 
 
 -- actions is a public view that provides a list of all actions in the database
 CREATE VIEW info.actions AS
+WITH parameters AS (
+    SELECT 
+        action_id,
+        array_agg(p.name ORDER BY p.position, p.name, kwild_engine.format_type(p.scalar_type, p.is_array, p.metadata)) AS parameter_names,
+        array_agg(kwild_engine.format_type(p.scalar_type, p.is_array, p.metadata) ORDER BY p.position, p.name, kwild_engine.format_type(p.scalar_type, p.is_array, p.metadata)) AS parameter_types
+    FROM kwild_engine.parameters p
+    GROUP BY action_id
+), return_fields AS (
+    SELECT 
+        action_id,
+        array_agg(r.name ORDER BY r.position, r.name, kwild_engine.format_type(r.scalar_type, r.is_array, r.metadata)) AS return_names,
+        array_agg(kwild_engine.format_type(r.scalar_type, r.is_array, r.metadata) ORDER BY r.position, r.name, kwild_engine.format_type(r.scalar_type, r.is_array, r.metadata)) AS return_types
+    FROM kwild_engine.return_fields r
+    GROUP BY action_id
+)
 SELECT 
     a.namespace AS namespace,
     a.name::TEXT AS name,
-    a.raw_statement,
-    a.modifiers::TEXT[] AS modifiers,
-    a.returns_table,
-    array_agg(
-        json_build_object(
-            'name', p.name,
-            'data_type', kwild_engine.format_type(p.scalar_type, p.is_array, p.metadata)
-        )::TEXT
-        ORDER BY p.position, p.name, kwild_engine.format_type(p.scalar_type, p.is_array, p.metadata)
-    ) AS parameters,
-    array_agg(
-        json_build_object(
-            'name', r.name,
-            'data_type', kwild_engine.format_type(r.scalar_type, r.is_array, r.metadata)
-        )::TEXT
-        ORDER BY r.position, r.name, kwild_engine.format_type(r.scalar_type, r.is_array, r.metadata)
-    ) AS return_types
+    a.raw_statement AS raw_statement,
+    a.modifiers::TEXT[] AS access_modifiers,
+    COALESCE(p.parameter_names, ARRAY[]::TEXT[]) AS parameter_names,
+    COALESCE(p.parameter_types, ARRAY[]::TEXT[]) AS parameter_types,
+    COALESCE(r.return_names, ARRAY[]::TEXT[]) AS return_names,
+    COALESCE(r.return_types, ARRAY[]::TEXT[]) AS return_types,
+    a.returns_table AS returns_table
 FROM kwild_engine.actions a
-LEFT JOIN kwild_engine.parameters p
+LEFT JOIN parameters p
     ON a.id = p.action_id
-LEFT JOIN kwild_engine.return_fields r
+LEFT JOIN return_fields r
     ON a.id = r.action_id
-GROUP BY a.namespace, a.name, a.modifiers, a.raw_statement, a.returns_table
-ORDER BY a.name,
-    1, 2, 3, 4, 5
-;
+ORDER BY a.namespace, a.name,
+    1, 2, 3, 4, 5, 6, 7, 8, 9;
+
 
 -- roles is a public view that provides a list of all roles in the database
 CREATE VIEW info.roles AS
 SELECT 
-    name
+    name,
+    built_in
 FROM
     kwild_engine.roles
 ORDER BY
-    name;
+    1, 2;
 
 CREATE VIEW info.user_roles AS
 SELECT 
-    user_identifier,
-    r.name AS role
+    r.name AS role_name,
+    user_identifier
 FROM
     kwild_engine.user_roles ur
 JOIN
@@ -475,7 +490,7 @@ ORDER BY
 -- role_privileges is a public view that provides a list of all role privileges in the database
 CREATE VIEW info.role_privileges AS
 SELECT 
-    r.name AS role,
+    r.name AS role_name,
     p.privilege_type::text AS privilege,
     n.name AS namespace
 FROM
@@ -493,13 +508,8 @@ CREATE VIEW info.extensions AS
 SELECT 
     n.name AS namespace,
     ie.base_extension AS extension,
-    array_agg(
-        json_build_object(
-            'key', eip.key,
-            'value', eip.value
-        )::TEXT
-        ORDER BY eip.key, eip.value
-    ) AS parameters
+    array_agg(eip.key ORDER BY eip.key, eip.value) AS parameters,
+    array_agg(eip.value ORDER BY eip.key, eip.value) AS values
 FROM
     kwild_engine.initialized_extensions ie
 JOIN
