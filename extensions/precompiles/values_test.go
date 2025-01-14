@@ -739,7 +739,7 @@ func Test_Array(t *testing.T) {
 		{
 			name:    "mixed",
 			vals:    []any{int64(1), "hello"},
-			wantErr: engine.ErrType,
+			wantErr: engine.ErrCast,
 		},
 	}
 
@@ -756,12 +756,13 @@ func Test_Array(t *testing.T) {
 				vals = append(vals, val.(ScalarValue))
 			}
 
-			res, err := vals[0].Array(vals[1:]...)
+			res, err := MakeArray(vals, nil)
 			if tt.wantErr != nil {
 				require.Error(t, err)
 				require.ErrorIs(t, err, tt.wantErr)
 				return
 			}
+			require.NoError(t, err)
 
 			for i := range res.Len() {
 				s, err := res.Get(i + 1) // 1-indexed
