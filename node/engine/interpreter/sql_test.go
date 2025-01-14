@@ -4,6 +4,8 @@ package interpreter
 
 import (
 	"context"
+	"fmt"
+	"maps"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/common"
@@ -13,6 +15,7 @@ import (
 	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/pg"
 	"github.com/kwilteam/kwil-db/node/types/sql"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -283,7 +286,8 @@ func Test_built_in_sql(t *testing.T) {
 				require.Equal(t, 2, len(exts))
 				require.Equal(t, "ext1", exts[0].ExtName)
 				require.Equal(t, "ext1_init", exts[0].Alias)
-				require.EqualValues(t, vals(), exts[0].Metadata)
+				vs := vals()
+				require.EqualValues(t, vs, exts[0].Metadata)
 
 				require.Equal(t, "ext2", exts[1].ExtName)
 				require.Equal(t, "ext2_init", exts[1].Alias)
@@ -384,16 +388,23 @@ func Test_Metadata(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback(ctx) // always rollback to avoid cleanup
 
+	err = precompiles.RegisterPrecompile("store_test", testSchemaExt)
+	require.NoError(t, err)
+
 	interp, err := NewInterpreter(ctx, tx, &common.Service{}, nil, nil)
 	require.NoError(t, err)
 	_ = interp
+
+	// set owner
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `GRANT OWNER TO '0xUser';`, nil, nil)
 
 	require.NoError(t, err)
 
 	// 1. Create a bunch of different types of metadata
 
 	// 1.1 Tables: one with a composite foreign key, and one with a composite primary key. both have indexes
-	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `
+	createSchema := func(namespace string) {
+		tmpl := `
 		-- ========================
 		-- Table: users
 		-- - Single Primary Key (user_id)
@@ -401,19 +412,19 @@ func Test_Metadata(t *testing.T) {
 		-- - Single index on (email)
 		-- - Demonstrates usage of: int8, text, bool, numeric, uuid, bytea
 		-- ========================
-		CREATE TABLE users (
+		{%s}CREATE TABLE users (
 		    user_id       UUID	PRIMARY KEY,
 		    first_name    TEXT	NOT NULL,
 		    last_name     TEXT	NOT NULL,
 		    email         TEXT	NOT NULL,
 		    is_active     BOOL	NOT NULL DEFAULT TRUE,
-		    balance       NUMERIC(10, 2) NOT NULL DEFAULT 0,
+		    balance       NUMERIC(10,2) NOT NULL DEFAULT 0,
 		    avatar        BYTEA,
 		    CONSTRAINT check_balance CHECK (balance >= 0)
 		);
 		
 		-- Single index on email
-		CREATE INDEX idx_users_email
+		{%s}CREATE INDEX idx_users_email
 		    ON users (email);
 		
 		-- ========================
@@ -422,19 +433,17 @@ func Test_Metadata(t *testing.T) {
 		-- - Composite index on (name, price)
 		-- - Demonstrates usage of: int8 (BIGINT), text, numeric, uuid, bytea
 		-- ========================
-		CREATE TABLE products (
+		{%s}CREATE TABLE products (
 		    product_id    UUID PRIMARY KEY,
-		    name          TEXT NOT NULL,
+		    name          TEXT UNIQUE NOT NULL,
 		    description   TEXT,
-		    price         NUMERIC(10, 2) NOT NULL,
-		    product_uuid  UUID NOT NULL,
+		    price         NUMERIC(10,2) NOT NULL,
 		    product_image BYTEA,
-		    is_active     BOOL NOT NULL DEFAULT TRUE
+		    is_active     BOOLEAN NOT NULL DEFAULT TRUE
 		);
 		
 		-- Composite index on (name, price)
-		CREATE INDEX idx_products_name_price
-		    ON products (name, price);
+		{%s}CREATE INDEX ON products (name, price);
 		
 		-- ========================
 		-- Table: orders
@@ -442,10 +451,10 @@ func Test_Metadata(t *testing.T) {
 		-- - Single Foreign Key (user_id -> users.user_id)
 		-- - Demonstrates usage of: int8 (BIGINT), numeric
 		-- ========================
-		CREATE TABLE orders (
+		{%s}CREATE TABLE orders (
 		    order_id    UUID PRIMARY KEY,
 		    user_id     UUID NOT NULL,
-		    total_amt   NUMERIC(10, 2) NOT NULL DEFAULT 0,
+		    total_amt   NUMERIC(10,2) NOT NULL DEFAULT 0,
 		    -- Single FK referencing users
 		    CONSTRAINT fk_orders_users
 		        FOREIGN KEY (user_id)
@@ -460,7 +469,7 @@ func Test_Metadata(t *testing.T) {
 		-- - Single Foreign Key on product_id -> products(product_id)
 		-- - Demonstrates usage of: int8 (BIGINT), numeric
 		-- ========================
-		CREATE TABLE order_details (
+		{%s}CREATE TABLE order_details (
 		    order_id   UUID NOT NULL,
 		    line_item  INT NOT NULL,
 		    product_id UUID NOT NULL,
@@ -477,7 +486,10 @@ func Test_Metadata(t *testing.T) {
 		    CONSTRAINT fk_order_details_products
 		        FOREIGN KEY (product_id)
 		        REFERENCES products(product_id)
-		        ON DELETE RESTRICT
+		        ON DELETE RESTRICT,
+			
+			-- collide with constraint on users
+			CONSTRAINT check_balance CHECK (line_item >= 0)
 		);
 		
 		-- ========================
@@ -486,7 +498,7 @@ func Test_Metadata(t *testing.T) {
 		-- - Composite Foreign Key (order_id, line_item -> order_details)
 		-- - Demonstrates usage of: int8 (BIGINT)
 		-- ========================
-		CREATE TABLE shipment (
+		{%s}CREATE TABLE shipment (
 		    shipment_id  UUID PRIMARY KEY,
 		    order_id     UUID NOT NULL,
 		    line_item    INT NOT NULL,
@@ -497,21 +509,31 @@ func Test_Metadata(t *testing.T) {
 		        REFERENCES order_details(order_id, line_item)
 		        ON DELETE CASCADE
 		);
-	`, nil, nil)
-	require.NoError(t, err)
+	`
 
-	// 1.2 Actions:
-	// 	- one with no params and returns a single row
-	//	- one with many params no returns
-	//	- one that takes one params returns a table
-	//	- one that has neither params nor returns
-	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `
-	CREATE ACTION no_params_returns_single() public view returns (id int, name text) { return 1, 'hello'; };
-	CREATE ACTION many_params_no_returns($a int, $b text, $c bool, $d numeric) public view {};
-	CREATE ACTION one_param_returns_table($a int) system view returns table (id int, name text) { return select 1 as id, 'hello' as name; };
-	CREATE ACTION no_params_no_returns() private owner {};
-	`, nil, nil)
+		err = interp.ExecuteWithoutEngineCtx(ctx, tx, fmt.Sprintf(tmpl, namespace, namespace, namespace, namespace, namespace, namespace, namespace), nil, nil)
+		require.NoError(t, err)
+
+		// 1.2 Actions:
+		// 	- one with no params and returns a single row
+		//	- one with many params no returns
+		//	- one that takes one params returns a table
+		//	- one that has neither params nor returns
+		err = interp.ExecuteWithoutEngineCtx(ctx, tx, fmt.Sprintf(`
+	{%s}CREATE ACTION no_params_returns_single() public view returns (id int, name text) { return 1, 'hello'; };
+	{%s}CREATE ACTION many_params_no_returns($a int, $b text, $c bool, $d numeric(10,5)) public view {};
+	{%s}CREATE ACTION one_param_returns_table($a int) system view returns table (id int, name text) { return select 1 as id, 'hello' as name; };
+	{%s}CREATE ACTION no_params_no_returns() private owner {};
+	`, namespace, namespace, namespace, namespace), nil, nil)
+		require.NoError(t, err)
+	}
+
+	createSchema("main")
+
+	// we create another schema to test that our queries properly filter by namespace
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `CREATE namespace other;`, nil, nil)
 	require.NoError(t, err)
+	createSchema("other")
 
 	// 1.3 Roles
 	// 	- one with no permissions
@@ -520,19 +542,620 @@ func Test_Metadata(t *testing.T) {
 	CREATE ROLE no_perms;
 	CREATE ROLE some_perms;
 	GRANT INSERT TO some_perms;
-	GRANT SELECT TO some_perms;
+	GRANT SELECT ON info TO some_perms;
+	GRANT some_perms TO '0xUser';
+	GRANT no_perms TO '0xUser';
 	`, nil, nil)
 	require.NoError(t, err)
 
 	// 1.4 Extensions
 	// This extension will also create a namespace
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `
+	USE store_test { init: 'init', init2: 2 } AS ext1;
+	USE store_test { init: 'init2', init2: 3 } AS ext2;
+	`, nil, nil)
+	require.NoError(t, err)
+
+	// infoQuery is a helper function that runs a query and asserts that the result matches the expected result.
+	// It always queries the info namespace
+	infoQuery := func(q string, fn func([]any) error) {
+		err2 := interp.ExecuteWithoutEngineCtx(ctx, tx, "{info}"+q, nil, func(r *common.Row) error {
+			row := make([]any, len(r.Values))
+			for i, v := range r.Values {
+				row[i] = v.RawValue()
+			}
+			return fn(row)
+		})
+		require.NoError(t, err2)
+	}
+
+	// assertQuery is a helper function that runs a query and asserts that the result matches the expected result
+	assertQuery := func(q string, want [][]any) {
+		t.Logf("running query: %s", q)
+
+		got := [][]any{}
+		infoQuery(q, func(row []any) error {
+			got = append(got, row)
+			return nil
+		})
+		require.NoError(t, err)
+
+		require.Equal(t, len(want), len(got))
+
+		for i, w := range want {
+			assert.Equal(t, len(w), len(got[i]))
+			for j, v := range w {
+				assert.EqualValuesf(t, v, got[i][j], "mismatch at row %d, col %d. want: %v, got: %v", i, j, v, got[i][j])
+			}
+		}
+	}
+
+	checkedNamespace := "main"
+
+	// TODO: in a subsequent PR, I will register extension methods as actions. We should test that here.
+	// 2. Query the metadata from the info schema
+	// 2.1 Tables
+	// 2.1.1 "tables" table
+	// We won't use the built-in function since they skip some columns, and their implementation's
+	// might change since they are for internal use, rather than user-facing
+	assertQuery(`SELECT * FROM tables WHERE namespace = 'main'`, [][]any{
+		{"order_details", "main"},
+		{"orders", "main"},
+		{"products", "main"},
+		{"shipment", "main"},
+		{"users", "main"},
+	})
+	// 2.1.2 "columns" table
+	// has columns namespace, table_name, name, data_type, is_nullable, default_value, is_primary_key, ordinal_position
+	assertQuery(`SELECT * FROM columns WHERE namespace = 'main' order by table_name, ordinal_position`, [][]any{
+		{"main", "order_details", "order_id", "uuid", false, nil, true, 1},
+		{"main", "order_details", "line_item", "int8", false, nil, true, 2},
+		{"main", "order_details", "product_id", "uuid", false, nil, false, 3},
+
+		{"main", "orders", "order_id", "uuid", false, nil, true, 1},
+		{"main", "orders", "user_id", "uuid", false, nil, false, 2},
+		{"main", "orders", "total_amt", "numeric(10,2)", false, "0", false, 3},
+
+		{"main", "products", "product_id", "uuid", false, nil, true, 1},
+		{"main", "products", "name", "text", false, nil, false, 2},
+		{"main", "products", "description", "text", true, nil, false, 3},
+		{"main", "products", "price", "numeric(10,2)", false, nil, false, 4},
+		{"main", "products", "product_image", "bytea", true, nil, false, 5},
+		{"main", "products", "is_active", "boolean", false, "true", false, 6},
+
+		{"main", "shipment", "shipment_id", "uuid", false, nil, true, 1},
+		{"main", "shipment", "order_id", "uuid", false, nil, false, 2},
+		{"main", "shipment", "line_item", "int8", false, nil, false, 3},
+
+		{"main", "users", "user_id", "uuid", false, nil, true, 1},
+		{"main", "users", "first_name", "text", false, nil, false, 2},
+		{"main", "users", "last_name", "text", false, nil, false, 3},
+		{"main", "users", "email", "text", false, nil, false, 4},
+		{"main", "users", "is_active", "boolean", false, "true", false, 5},
+		{"main", "users", "balance", "numeric(10,2)", false, "0", false, 6},
+		{"main", "users", "avatar", "bytea", true, nil, false, 7},
+	})
+	// 2.1.3 "indexes" table
+	// has columns namespace, table_name, name, is_pk, is_unique, columns
+	assertQuery(`SELECT * FROM indexes WHERE namespace = 'main'`, [][]any{
+		{"main", "order_details", "pk_order_details", true, true, stringArr("order_id", "line_item")},
+
+		{"main", "orders", "orders_pkey", true, true, stringArr("order_id")},
+
+		{"main", "products", "products_name_key", false, true, stringArr("name")},
+		{"main", "products", "products_name_price_idx", false, false, stringArr("name", "price")},
+		{"main", "products", "products_pkey", true, true, stringArr("product_id")},
+		{"main", "shipment", "shipment_pkey", true, true, stringArr("shipment_id")},
+
+		{"main", "users", "idx_users_email", false, false, stringArr("email")},
+		{"main", "users", "users_pkey", true, true, stringArr("user_id")},
+	})
+	// 2.1.4 "constraints" table
+	// has columns namespace, table_name, name, constraint_type, columns, expression
+	assertQuery(`SELECT * FROM constraints WHERE namespace = 'main'`, [][]any{
+		{"main", "order_details", "check_balance", "CHECK", stringArr("line_item"), "CHECK ((line_item >= 0))"},
+		{"main", "products", "products_name_key", "UNIQUE", stringArr("name"), "UNIQUE (name)"},
+		{"main", "users", "check_balance", "CHECK", stringArr("balance"), "CHECK ((balance >= (0)::numeric))"},
+	})
+	// 2.1.5 "foreign_keys" table
+	// has columns namespace, table_name, name, columns, ref_table, ref_columns, on_update, on_delete
+	assertQuery(`SELECT * FROM foreign_keys WHERE namespace = 'main'`, [][]any{
+		{"main", "order_details", "fk_order_details_orders", stringArr("order_id"), "orders", stringArr("order_id"), "NO ACTION", "CASCADE"},
+		{"main", "order_details", "fk_order_details_products", stringArr("product_id"), "products", stringArr("product_id"), "NO ACTION", "RESTRICT"},
+		{"main", "orders", "fk_orders_users", stringArr("user_id"), "users", stringArr("user_id"), "NO ACTION", "CASCADE"},
+		{"main", "shipment", "fk_shipment_order_details", stringArr("order_id", "line_item"), "order_details", stringArr("order_id", "line_item"), "NO ACTION", "CASCADE"},
+	})
+
+	// 2.2 Actions
+	// the actions table has columns namespace, name, raw_statement, access_modifiers, parameter_names, parameter_types, return_names, return_types, returns_table
+	assertQuery(`SELECT * FROM actions WHERE namespace = 'main'`, [][]any{
+		{"main", "many_params_no_returns", "{main}CREATE ACTION many_params_no_returns($a int, $b text, $c bool, $d numeric(10,5)) public view {};", stringArr("PUBLIC", "VIEW"), stringArr("$a", "$b", "$c", "$d"), stringArr("int8", "text", "bool", "numeric(10,5)"), stringArr(), stringArr(), false},
+		{"main", "no_params_no_returns", "{main}CREATE ACTION no_params_no_returns() private owner {};", stringArr("PRIVATE", "OWNER"), stringArr(), stringArr(), stringArr(), stringArr(), false},
+		{"main", "no_params_returns_single", "{main}CREATE ACTION no_params_returns_single() public view returns (id int, name text) { return 1, 'hello'; };", stringArr("PUBLIC", "VIEW"), stringArr(), stringArr(), stringArr("id", "name"), stringArr("int8", "text"), false},
+		{"main", "one_param_returns_table", "{main}CREATE ACTION one_param_returns_table($a int) system view returns table (id int, name text) { return select 1 as id, 'hello' as name; };", stringArr("SYSTEM", "VIEW"), stringArr("$a"), stringArr("int8"), stringArr("id", "name"), stringArr("int8", "text"), true},
+	})
+
+	// 2.3 Roles
+	// 2.3.1 "roles" table
+	// the roles table has columns "name" and "built_in"
+	assertQuery(`SELECT * FROM roles`, [][]any{
+		{"default", true},
+		{"no_perms", false},
+		{"owner", true},
+		{"some_perms", false},
+	})
+	// 2.3.2 "user_roles" table
+	// the user_roles table has columns "role_name" and "user_identifier"
+	assertQuery(`SELECT * FROM user_roles`, [][]any{
+		{"no_perms", "0xUser"},
+		{"owner", "0xUser"},
+		{"some_perms", "0xUser"},
+	})
+	// 2.3.3 "role_privileges" table
+	// the role_privileges table has columns "role_name", "privilege", "namespace"
+	assertQuery(`SELECT * FROM role_privileges`, [][]any{
+		// default has select and call
+		{"default", "CALL", nil},
+		{"default", "SELECT", nil},
+
+		// owner has all privileges on all/nil namespaces
+		{"owner", "ALTER", nil},
+		{"owner", "CALL", nil},
+		{"owner", "CREATE", nil},
+		{"owner", "DELETE", nil},
+		{"owner", "DROP", nil},
+		{"owner", "INSERT", nil},
+		{"owner", "ROLES", nil},
+		{"owner", "SELECT", nil},
+		{"owner", "UPDATE", nil},
+		{"owner", "USE", nil},
+
+		{"some_perms", "INSERT", nil},
+		{"some_perms", "SELECT", "info"},
+	})
+
+	// 2.4 Extensions
+	// there is only one extensions table
+	// it has columns namespace, extension, parameters, values
+	assertQuery(`SELECT * FROM extensions`, [][]any{
+		{"ext1", "store_test", stringArr("init", "init2"), stringArr("init", "2")},
+		{"ext2", "store_test", stringArr("init", "init2"), stringArr("init2", "3")},
+	})
+
+	// 3. Ensure that the interpreter's in-memory metadata matches the database's metadata
+	ns, ok := interp.i.namespaces[checkedNamespace]
+	require.True(t, ok)
+
+	// 3.1 Tables
+	hasTable := func(ns *namespace, want *engine.Table) {
+		tbl, ok := ns.tables[want.Name]
+		require.True(t, ok)
+
+		require.Equal(t, want.Name, tbl.Name)
+		require.Equal(t, len(want.Columns), len(tbl.Columns))
+		require.Equal(t, len(want.Indexes), len(tbl.Indexes))
+		require.Equal(t, len(want.Constraints), len(tbl.Constraints))
+
+		for i, wc := range want.Columns {
+			sc := tbl.Columns[i]
+			require.Equal(t, wc.Name, sc.Name)
+			require.Equal(t, wc.DataType.String(), sc.DataType.String())
+			require.Equal(t, wc.IsPrimaryKey, sc.IsPrimaryKey)
+			require.Equal(t, wc.Nullable, sc.Nullable)
+		}
+
+		for i, wi := range want.Indexes {
+			si := tbl.Indexes[i]
+			require.Equal(t, wi.Columns, si.Columns)
+			require.Equal(t, wi.Type, si.Type)
+			require.Equal(t, wi.Name, si.Name)
+		}
+
+		for i, wc := range want.Constraints {
+			sc := tbl.Constraints[i]
+			require.Equal(t, wc.Type, sc.Type)
+			require.Equal(t, wc.Columns, sc.Columns)
+		}
+	}
+
+	hasTable(ns, &engine.Table{
+		Name: "order_details",
+		Columns: []*engine.Column{
+			{
+				Name:         "order_id",
+				DataType:     types.UUIDType,
+				IsPrimaryKey: true,
+			},
+			{
+				Name:         "line_item",
+				DataType:     types.IntType,
+				IsPrimaryKey: true,
+			},
+			{
+				Name:     "product_id",
+				DataType: types.UUIDType,
+			},
+		},
+		Indexes: []*engine.Index{
+			{
+				Name:    "pk_order_details",
+				Type:    engine.PRIMARY,
+				Columns: []string{"order_id", "line_item"},
+			},
+		},
+		Constraints: map[string]*engine.Constraint{
+			"check_balance": {
+				Type:    engine.ConstraintCheck,
+				Columns: []string{"line_item"},
+			},
+			"fk_order_details_orders": {
+				Type:    engine.ConstraintFK,
+				Columns: []string{"order_id"},
+			},
+			"fk_order_details_products": {
+				Type:    engine.ConstraintFK,
+				Columns: []string{"product_id"},
+			},
+		},
+	})
+
+	hasTable(ns, &engine.Table{
+		Name: "orders",
+		Columns: []*engine.Column{
+			{
+				Name:         "order_id",
+				DataType:     types.UUIDType,
+				IsPrimaryKey: true,
+				Nullable:     false,
+			},
+			{
+				Name:     "user_id",
+				DataType: types.UUIDType,
+				Nullable: false,
+			},
+			{
+				Name:     "total_amt",
+				DataType: mustDecType(10, 2),
+				Nullable: false,
+			},
+		},
+		Indexes: []*engine.Index{
+			{
+				Name:    "orders_pkey",
+				Type:    engine.PRIMARY,
+				Columns: []string{"order_id"},
+			},
+		},
+		Constraints: map[string]*engine.Constraint{
+			"fk_orders_users": {
+				Type:    engine.ConstraintFK,
+				Columns: []string{"user_id"},
+			},
+		},
+	})
+
+	hasTable(ns, &engine.Table{
+		Name: "products",
+		Columns: []*engine.Column{
+			{
+				Name:         "product_id",
+				DataType:     types.UUIDType,
+				IsPrimaryKey: true,
+			},
+			{
+				Name:     "name",
+				DataType: types.TextType,
+				Nullable: false,
+			},
+			{
+				Name:     "description",
+				DataType: types.TextType,
+				Nullable: true,
+			},
+			{
+				Name:     "price",
+				DataType: mustDecType(10, 2),
+				Nullable: false,
+			},
+			{
+				Name:     "product_image",
+				DataType: types.BlobType,
+				Nullable: true,
+			},
+			{
+				Name:     "is_active",
+				DataType: types.BoolType,
+				Nullable: false,
+			},
+		},
+		Indexes: []*engine.Index{
+			{
+				Name:    "products_name_key",
+				Type:    engine.UNIQUE_BTREE,
+				Columns: []string{"name"},
+			},
+			{
+				Name:    "products_name_price_idx",
+				Type:    engine.BTREE,
+				Columns: []string{"name", "price"},
+			},
+			{
+				Name:    "products_pkey",
+				Type:    engine.PRIMARY,
+				Columns: []string{"product_id"},
+			},
+		},
+		Constraints: map[string]*engine.Constraint{
+			"products_name_key": {
+				Type:    engine.ConstraintUnique,
+				Columns: []string{"name"},
+			},
+		},
+	})
+
+	hasTable(ns, &engine.Table{
+		Name: "shipment",
+		Columns: []*engine.Column{
+			{
+				Name:         "shipment_id",
+				DataType:     types.UUIDType,
+				IsPrimaryKey: true,
+			},
+			{
+				Name:     "order_id",
+				DataType: types.UUIDType,
+				Nullable: false,
+			},
+			{
+				Name:     "line_item",
+				DataType: types.IntType,
+				Nullable: false,
+			},
+		},
+		Indexes: []*engine.Index{
+			{
+				Name:    "shipment_pkey",
+				Type:    engine.PRIMARY,
+				Columns: []string{"shipment_id"},
+			},
+		},
+		Constraints: map[string]*engine.Constraint{
+			"fk_shipment_order_details": {
+				Type:    engine.ConstraintFK,
+				Columns: []string{"order_id", "line_item"},
+			},
+		},
+	})
+
+	hasTable(ns, &engine.Table{
+		Name: "users",
+		Columns: []*engine.Column{
+			{
+				Name:         "user_id",
+				DataType:     types.UUIDType,
+				IsPrimaryKey: true,
+				Nullable:     false,
+			},
+			{
+				Name:     "first_name",
+				DataType: types.TextType,
+				Nullable: false,
+			},
+			{
+				Name:     "last_name",
+				DataType: types.TextType,
+				Nullable: false,
+			},
+			{
+				Name:     "email",
+				DataType: types.TextType,
+				Nullable: false,
+			},
+			{
+				Name:     "is_active",
+				DataType: types.BoolType,
+				Nullable: false,
+			},
+			{
+				Name:     "balance",
+				DataType: mustDecType(10, 2),
+				Nullable: false,
+			},
+			{
+				Name:     "avatar",
+				DataType: types.BlobType,
+				Nullable: true,
+			},
+		},
+		Indexes: []*engine.Index{
+			{
+				Name:    "idx_users_email",
+				Type:    engine.BTREE,
+				Columns: []string{"email"},
+			},
+			{
+				Name:    "users_pkey",
+				Type:    engine.PRIMARY,
+				Columns: []string{"user_id"},
+			},
+		},
+		Constraints: map[string]*engine.Constraint{
+			"check_balance": {
+				Type:    engine.ConstraintCheck,
+				Columns: []string{"balance"},
+			},
+		},
+	})
+
+	// 3.2 Actions
+	hasAction := func(ns *namespace, want string) {
+		e, ok := ns.availableFunctions[want]
+		require.True(t, ok)
+		require.Equal(t, executableTypeAction, e.Type)
+		// there are no further checks we can perform, since actions get
+		// transformed into executable functions
+	}
+
+	hasAction(ns, "many_params_no_returns")
+	hasAction(ns, "no_params_no_returns")
+	hasAction(ns, "no_params_returns_single")
+	hasAction(ns, "one_param_returns_table")
+	// TODO: once we have a way to get extension methods, we should test that here
+
+	// 3.3 Roles
+	// hasRole func does not take the namespace because roles are global
+	hasRole := func(want string, perms *perms) {
+		ps, ok := interp.i.accessController.roles[want]
+		require.True(t, ok)
+
+		assert.EqualValues(t, perms.globalPrivileges, ps.globalPrivileges)
+		assert.EqualValues(t, perms.namespacePrivileges, ps.namespacePrivileges)
+	}
+
+	// all roles will have a namespacePrivileges map that has all the namespaces (but empty privileges)
+	defaultNamespacePrivileges := map[string]map[privilege]struct{}{
+		"info":  {},
+		"main":  {},
+		"other": {},
+		"ext1":  {},
+		"ext2":  {},
+	}
+
+	hasRole("default", &perms{
+		namespacePrivileges: defaultNamespacePrivileges,
+		globalPrivileges: map[privilege]struct{}{
+			CallPrivilege:   {},
+			SelectPrivilege: {},
+		},
+	})
+	hasRole("no_perms", &perms{
+		namespacePrivileges: defaultNamespacePrivileges,
+		globalPrivileges:    map[privilege]struct{}{},
+	})
+	hasRole("owner", &perms{
+		namespacePrivileges: defaultNamespacePrivileges,
+		globalPrivileges: map[privilege]struct{}{
+			AlterPrivilege:  {},
+			CallPrivilege:   {},
+			CreatePrivilege: {},
+			DeletePrivilege: {},
+			DropPrivilege:   {},
+			InsertPrivilege: {},
+			RolesPrivilege:  {},
+			SelectPrivilege: {},
+			UpdatePrivilege: {},
+			UsePrivilege:    {},
+		},
+	})
+
+	somePermsNamespacePrivileges := maps.Clone(defaultNamespacePrivileges)
+	somePermsNamespacePrivileges["info"] = map[privilege]struct{}{
+		SelectPrivilege: {},
+	}
+	hasRole("some_perms", &perms{
+		namespacePrivileges: somePermsNamespacePrivileges,
+		globalPrivileges: map[privilege]struct{}{
+			InsertPrivilege: {},
+		},
+	})
+
+	// 3.4 Extensions
+	// hasExtension does not take the namespace because extensions are global.
+	// params cannot be checked because they are only used at initialization time.
+	// They are not stored in memory
+	hasExtension := func(want string) {
+		e, ok := interp.i.namespaces[want]
+		require.True(t, ok)
+		assert.Equal(t, e.namespaceType, namespaceTypeExtension)
+
+		_, ok = e.availableFunctions["returns_one_unnamed"]
+		require.True(t, ok)
+		_, ok = e.availableFunctions["returns_one_named"]
+		require.True(t, ok)
+		_, ok = e.availableFunctions["returns_table"]
+		require.True(t, ok)
+		_, ok = e.availableFunctions["no_params_no_returns"]
+		require.True(t, ok)
+	}
+
+	hasExtension("ext1")
+	hasExtension("ext2")
 }
 
-// var testSchemaExt = precompiles.PrecompileExtension[struct{}]{
-// 	Methods: []precompiles.Method[struct{}]{
-// 		{
-// 			Name:            "test_schema",
-// 			AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
-// 		},
-// 	},
-// }
+func mustDecType(prec, scale uint16) *types.DataType {
+	dt, err := types.NewDecimalType(prec, scale)
+	if err != nil {
+		panic(err)
+	}
+	return dt
+}
+
+// stringArr makes a string array that matches the engine's return format
+func stringArr(vals ...string) []*string {
+	if len(vals) == 0 {
+		return make([]*string, 0)
+	}
+	arr := make([]*string, len(vals))
+	for i, v := range vals {
+		arr[i] = &v
+	}
+	return arr
+}
+
+var testSchemaExt = precompiles.PrecompileExtension[struct{}]{
+	Initialize: func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]precompiles.Value) (*struct{}, error) {
+		val, ok := metadata["init"]
+		if !ok {
+			return nil, fmt.Errorf("missing 'init' metadata")
+		}
+
+		if val.RawValue().(string) != "init" && val.RawValue().(string) != "init2" {
+			return nil, fmt.Errorf("invalid 'init' metadata")
+		}
+
+		return &struct{}{}, nil
+	},
+	Methods: []precompiles.Method[struct{}]{
+		{
+			Name:            "returns_one_unnamed",
+			AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
+			Returns: &precompiles.MethodReturn{
+				ColumnTypes: []*types.DataType{types.IntType},
+			},
+			Handler: func(ctx *common.EngineContext, app *common.App, inputs []precompiles.Value, resultFn func([]precompiles.Value) error, t *struct{}) error {
+				return resultFn([]precompiles.Value{precompiles.MakeInt8(1)})
+			},
+		},
+		{
+			Name:            "returns_one_named",
+			AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+			Parameters:      []*types.DataType{types.IntType},
+			Returns: &precompiles.MethodReturn{
+				ColumnTypes: []*types.DataType{types.IntType},
+				ColumnNames: []string{"id"},
+			},
+			Handler: func(ctx *common.EngineContext, app *common.App, inputs []precompiles.Value, resultFn func([]precompiles.Value) error, t *struct{}) error {
+				return resultFn([]precompiles.Value{precompiles.MakeInt8(2)})
+			},
+		},
+		{
+			Name:            "returns_table",
+			AccessModifiers: []precompiles.Modifier{precompiles.SYSTEM, precompiles.VIEW},
+			Returns: &precompiles.MethodReturn{
+				IsTable:     true,
+				ColumnNames: []string{"id", "name"},
+				ColumnTypes: []*types.DataType{types.IntType, types.TextType},
+			},
+			Handler: func(ctx *common.EngineContext, app *common.App, inputs []precompiles.Value, resultFn func([]precompiles.Value) error, t *struct{}) error {
+				return resultFn([]precompiles.Value{precompiles.MakeInt8(3), precompiles.MakeText("three")})
+			},
+		},
+		{
+			Name:            "no_params_no_returns",
+			AccessModifiers: []precompiles.Modifier{precompiles.PRIVATE, precompiles.OWNER},
+			Handler: func(ctx *common.EngineContext, app *common.App, inputs []precompiles.Value, resultFn func([]precompiles.Value) error, t *struct{}) error {
+				return nil
+			},
+		},
+	},
+}

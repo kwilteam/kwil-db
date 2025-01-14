@@ -124,9 +124,10 @@ func Test_Arithmetic(t *testing.T) {
 				eq(t, want, raw)
 
 				// operations on null values should always return null
-				null := MakeNull(a.Type()).(ScalarValue)
+				null, err := MakeNull(a.Type())
+				require.NoError(t, err)
 
-				res, err = a.Arithmetic(null, op)
+				res, err = a.Arithmetic(null.(ScalarValue), op)
 				require.NoError(t, err)
 
 				require.True(t, res.Null())
@@ -763,7 +764,7 @@ func Test_Array(t *testing.T) {
 			}
 
 			for i := range res.Len() {
-				s, err := res.Index(i + 1) // 1-indexed
+				s, err := res.Get(i + 1) // 1-indexed
 				require.NoError(t, err)
 
 				eq(t, tt.vals[i], s.RawValue())
@@ -772,12 +773,15 @@ func Test_Array(t *testing.T) {
 			// we will now set them all to nulls and test that the array is created successfully
 			dt := vals[0].Type()
 			for i := range vals {
-				err = res.Set(int32(i+1), MakeNull(dt).(ScalarValue))
+				nullVal, err := MakeNull(dt)
+				require.NoError(t, err)
+
+				err = res.Set(int32(i+1), nullVal.(ScalarValue))
 				require.NoError(t, err)
 			}
 
 			for i := range res.Len() {
-				s, err := res.Index(i + 1) // 1-indexed
+				s, err := res.Get(i + 1) // 1-indexed
 				require.NoError(t, err)
 
 				isNull := s.Null()

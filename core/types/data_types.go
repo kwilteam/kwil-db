@@ -96,7 +96,7 @@ func (c *DataType) String() string {
 		return str.String() + "[]"
 	}
 
-	if c.Name == DecimalStr {
+	if c.Name == NumericStr {
 		str.WriteString("(")
 		str.WriteString(strconv.FormatUint(uint64(c.Metadata[0]), 10))
 		str.WriteString(",")
@@ -108,10 +108,8 @@ func (c *DataType) String() string {
 }
 
 func (c *DataType) HasMetadata() bool {
-	return c.Metadata != ZeroMetadata
+	return c.Metadata != [2]uint16{}
 }
-
-var ZeroMetadata = [2]uint16{}
 
 // PGString returns the string representation of the type in Postgres.
 func (c *DataType) PGString() (string, error) {
@@ -138,15 +136,15 @@ func (c *DataType) PGScalar() (string, error) {
 		scalar = "TEXT"
 	case boolStr:
 		scalar = "BOOL"
-	case blobStr:
+	case byteaStr:
 		scalar = "BYTEA"
 	case uuidStr:
 		scalar = "UUID"
 	case uint256Str:
 		scalar = "UINT256"
-	case DecimalStr:
-		if c.Metadata == ZeroMetadata {
-			scalar = "NUMERIC"
+	case NumericStr:
+		if !c.HasMetadata() {
+			return "", errors.New("decimal type requires metadata")
 		} else {
 			scalar = fmt.Sprintf("NUMERIC(%d,%d)", c.Metadata[0], c.Metadata[1])
 		}
@@ -170,23 +168,25 @@ func (c *DataType) Clean() error {
 	}
 
 	switch referencedType {
-	case intStr, textStr, boolStr, blobStr, uuidStr, uint256Str: // ok
-		if c.Metadata != ZeroMetadata {
+	case intStr, textStr, boolStr, byteaStr, uuidStr, uint256Str: // ok
+		if c.HasMetadata() {
 			return fmt.Errorf("type %s cannot have metadata", c.Name)
 		}
-	case DecimalStr:
-		if c.Metadata != ZeroMetadata {
-			err := decimal.CheckPrecisionAndScale(c.Metadata[0], c.Metadata[1])
-			if err != nil {
-				return err
-			}
+	case NumericStr:
+		if !c.HasMetadata() {
+			return fmt.Errorf("type %s requires metadata", c.Name)
 		}
+		err := decimal.CheckPrecisionAndScale(c.Metadata[0], c.Metadata[1])
+		if err != nil {
+			return err
+		}
+
 	case nullStr, unknownStr:
 		if c.IsArray {
 			return fmt.Errorf("type %s cannot be an array", c.Name)
 		}
 
-		if c.Metadata != ZeroMetadata {
+		if c.HasMetadata() {
 			return fmt.Errorf("type %s cannot have metadata", c.Name)
 		}
 	default:
@@ -222,13 +222,8 @@ func (c *DataType) EqualsStrict(other *DataType) bool {
 		return false
 	}
 
-	if (c.Metadata == ZeroMetadata) != (other.Metadata == ZeroMetadata) {
+	if c.Metadata[0] != other.Metadata[0] || c.Metadata[1] != other.Metadata[1] {
 		return false
-	}
-	if c.Metadata != ZeroMetadata {
-		if c.Metadata[0] != other.Metadata[0] || c.Metadata[1] != other.Metadata[1] {
-			return false
-		}
 	}
 
 	return strings.EqualFold(c.Name, other.Name)
@@ -249,7 +244,7 @@ func (c *DataType) IsNumeric() bool {
 		return false
 	}
 
-	return c.Name == intStr || c.Name == DecimalStr || c.Name == uint256Str || c.Name == unknownStr
+	return c.Name == intStr || c.Name == NumericStr || c.Name == uint256Str || c.Name == unknownStr
 }
 
 // declared DataType constants.
@@ -268,7 +263,7 @@ var (
 	}
 	BoolArrayType = ArrayType(BoolType)
 	BlobType      = &DataType{
-		Name: blobStr,
+		Name: byteaStr,
 	}
 	BlobArrayType = ArrayType(BlobType)
 	UUIDType      = &DataType{
@@ -279,22 +274,22 @@ var (
 	// For type detection, users should prefer compare a datatype
 	// name with the DecimalStr constant.
 	DecimalType = &DataType{
-		Name:     DecimalStr,
-		Metadata: [2]uint16{1, 0}, // the minimum precision and scale
+		Name:     NumericStr,
+		Metadata: [2]uint16{0, 0}, // unspecified precision and scale
 	}
 	DecimalArrayType = ArrayType(DecimalType)
 	Uint256Type      = &DataType{
-		Name: uint256Str,
+		Name: uint256Str, // TODO: delete
 	}
 	Uint256ArrayType = ArrayType(Uint256Type)
 	// NullType is a special type used internally
 	NullType = &DataType{
-		Name: nullStr,
+		Name: nullStr, // TODO: delete
 	}
 	// Unknown is a special type used internally
 	// when a type is unknown until runtime.
 	UnknownType = &DataType{
-		Name: unknownStr,
+		Name: unknownStr, // TODO: delete
 	}
 )
 
@@ -315,11 +310,11 @@ const (
 	textStr    = "text"
 	intStr     = "int8"
 	boolStr    = "bool"
-	blobStr    = "blob"
+	byteaStr   = "bytea"
 	uuidStr    = "uuid"
 	uint256Str = "uint256"
-	// DecimalStr is a fixed point number.
-	DecimalStr = "decimal"
+	// NumericStr is a fixed point number.
+	NumericStr = "numeric"
 	nullStr    = "null"
 	unknownStr = "unknown"
 )
@@ -332,7 +327,7 @@ func NewDecimalType(precision, scale uint16) (*DataType, error) {
 	}
 
 	return &DataType{
-		Name:     DecimalStr,
+		Name:     NumericStr,
 		Metadata: [2]uint16{precision, scale},
 	}, nil
 }
@@ -369,7 +364,7 @@ func ParseDataType(s string) (*DataType, error) {
 	if rawMetadata != "" {
 		metadata = [2]uint16{}
 		// only decimal types can have metadata
-		if baseName != DecimalStr {
+		if baseName != NumericStr {
 			return nil, fmt.Errorf("metadata is only allowed for decimal type")
 		}
 
@@ -406,9 +401,9 @@ var typeAlias = map[string]string{
 	"int8":    intStr,
 	"bool":    boolStr,
 	"boolean": boolStr,
-	"blob":    blobStr,
-	"bytea":   blobStr,
+	"blob":    byteaStr,
+	"bytea":   byteaStr,
 	"uuid":    uuidStr,
-	"decimal": DecimalStr,
-	"numeric": DecimalStr,
+	"decimal": NumericStr,
+	"numeric": NumericStr,
 }

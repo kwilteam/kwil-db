@@ -326,7 +326,7 @@ func (e *EncodedValue) Decode() (any, error) {
 			return nil, nil
 		case Uint256Type.Name:
 			return Uint256FromBytes(data)
-		case DecimalStr:
+		case NumericStr:
 			return decimal.NewFromString(string(data))
 		default:
 			return nil, fmt.Errorf("cannot decode type %s", typeName)
@@ -406,7 +406,7 @@ func (e *EncodedValue) Decode() (any, error) {
 				arr = append(arr, dec.(*Uint256))
 			}
 			arrAny = arr
-		case DecimalStr:
+		case NumericStr:
 			arr := make(decimal.DecimalArray, 0, len(e.Data))
 			for _, elem := range e.Data {
 				dec, err := decodeScalar(elem, e.Type.Name, true)

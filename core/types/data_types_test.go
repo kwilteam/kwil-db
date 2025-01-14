@@ -119,34 +119,34 @@ func Test_ParseDataTypes(t *testing.T) {
 		{
 			in: "int8",
 			out: DataType{
-				Name: "int8",
+				Name: intStr,
 			},
 		},
 		{
 			in: "int8[]",
 			out: DataType{
-				Name:    "int8",
+				Name:    intStr,
 				IsArray: true,
 			},
 		},
 		{
 			in: "text[]",
 			out: DataType{
-				Name:    "text",
+				Name:    textStr,
 				IsArray: true,
 			},
 		},
 		{
 			in: "decimal(10, 2)",
 			out: DataType{
-				Name:     "decimal",
+				Name:     NumericStr,
 				Metadata: [2]uint16{10, 2},
 			},
 		},
 		{
 			in: "decimal(10, 2)[]",
 			out: DataType{
-				Name:     "decimal",
+				Name:     NumericStr,
 				Metadata: [2]uint16{10, 2},
 				IsArray:  true,
 			},

@@ -176,7 +176,12 @@ type stmtFunc func(exec *executionContext, fn resultFunc) error
 
 func (i *interpreterPlanner) VisitActionStmtDeclaration(p0 *parse.ActionStmtDeclaration) any {
 	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
-		return exec.allocateVariable(p0.Variable.Name, precompiles.MakeNull(p0.Type))
+		nv, err := precompiles.MakeNull(p0.Type)
+		if err != nil {
+			return err
+		}
+
+		return exec.allocateVariable(p0.Variable.Name, nv)
 	})
 }
 
@@ -499,7 +504,7 @@ func (i *interpreterPlanner) VisitLoopTermExpression(p0 *parse.LoopTermExpressio
 		}
 
 		for i := range arr.Len() {
-			scalar, err := arr.Index(i + 1) // all arrays are 1-indexed
+			scalar, err := arr.Get(i + 1) // all arrays are 1-indexed
 			if err != nil {
 				return err
 			}
@@ -843,7 +848,7 @@ func (i *interpreterPlanner) VisitExpressionArrayAccess(p0 *parse.ExpressionArra
 				return nil, err
 			}
 
-			return arr.Index(int32(index.RawValue().(int64)))
+			return arr.Get(int32(index.RawValue().(int64)))
 		}
 
 		// 1-indexed
@@ -900,7 +905,7 @@ func (i *interpreterPlanner) VisitExpressionArrayAccess(p0 *parse.ExpressionArra
 
 		j := int32(1)
 		for i := start; i <= end; i++ {
-			idx, err := arr.Index(i)
+			idx, err := arr.Get(i)
 			if err != nil {
 				return nil, err
 			}
@@ -1046,11 +1051,11 @@ func makeLogicalFunc(left, right exprFunc, and bool) exprFunc {
 		}
 
 		if leftVal.Null() {
-			return precompiles.MakeNull(types.BoolType), nil
+			return precompiles.MakeNull(types.BoolType)
 		}
 
 		if rightVal.Null() {
-			return precompiles.MakeNull(types.BoolType), nil
+			return precompiles.MakeNull(types.BoolType)
 		}
 
 		if leftVal.Type() != types.BoolType || rightVal.Type() != types.BoolType {
