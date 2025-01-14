@@ -8,6 +8,7 @@ import (
 	"slices"
 	"time"
 
+	"github.com/kwilteam/kwil-db/config"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
 )
@@ -324,7 +325,7 @@ func (ce *ConsensusEngine) validatorSetHash() types.Hash {
 
 	keys := make([]string, 0, len(ce.validatorSet))
 	for _, v := range ce.validatorSet {
-		keys = append(keys, v.PubKey.String())
+		keys = append(keys, config.EncodePubKeyAndType(v.PubKey, v.PubKeyType))
 	}
 
 	// sort the keys
@@ -333,6 +334,7 @@ func (ce *ConsensusEngine) validatorSetHash() types.Hash {
 	for _, k := range keys {
 		val := ce.validatorSet[k]
 		hasher.Write(val.PubKey)
+		binary.Write(hasher, binary.BigEndian, val.PubKeyType)
 		binary.Write(hasher, binary.BigEndian, val.Power)
 	}
 

@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/tls"
 	"crypto/x509"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -19,7 +18,6 @@ import (
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
-	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/node"
 	"github.com/kwilteam/kwil-db/node/accounts"
@@ -50,15 +48,6 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 		logger:  d.logger,
 	}
 	d.closers = closers
-
-	valSet := make(map[string]ktypes.Validator)
-	for _, v := range d.genesisCfg.Validators {
-		valSet[hex.EncodeToString(v.PubKey)] = ktypes.Validator{
-			PubKey:     v.PubKey,
-			PubKeyType: v.PubKeyType,
-			Power:      v.Power,
-		}
-	}
 
 	// Initialize DB
 	db := buildDB(ctx, d, closers)
@@ -95,7 +84,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	bp := buildBlockProcessor(ctx, d, db, txApp, accounts, vs, ss, es, migrator, bs)
 
 	// Consensus
-	ce := buildConsensusEngine(ctx, d, db, mp, bs, bp, valSet)
+	ce := buildConsensusEngine(ctx, d, db, mp, bs, bp)
 
 	// Node
 	node := buildNode(d, mp, bs, ce, ss, db, bp)
@@ -405,7 +394,7 @@ func buildMigrator(d *coreDependencies, db *pg.DB, accounts *accounts.Accounts, 
 }
 
 func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB,
-	mempool *mempool.Mempool, bs *store.BlockStore, bp *blockprocessor.BlockProcessor, valSet map[string]ktypes.Validator) *consensus.ConsensusEngine {
+	mempool *mempool.Mempool, bs *store.BlockStore, bp *blockprocessor.BlockProcessor) *consensus.ConsensusEngine {
 	ceCfg := &consensus.Config{
 		PrivateKey:            d.privKey,
 		Leader:                d.genesisCfg.Leader.PublicKey,
@@ -413,7 +402,6 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB,
 		BlockStore:            bs,
 		BlockProcessor:        bp,
 		Mempool:               mempool,
-		ValidatorSet:          valSet,
 		Logger:                d.logger.New("CONS"),
 		ProposeTimeout:        time.Duration(d.cfg.Consensus.ProposeTimeout),
 		BlockProposalInterval: time.Duration(d.cfg.Consensus.BlockProposalInterval),

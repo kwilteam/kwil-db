@@ -6,11 +6,13 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"fmt"
 	"math/big"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -55,7 +57,7 @@ var (
 // leaderDB is set assigns DB to the leader, else DB is assigned to the follower
 // Most of these tests expect only one working node instance either a leader or the
 // first validator and all other nodes interactions are mocked out.
-func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) []*Config {
+func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) ([]*Config, map[string]ktypes.Validator) {
 	ceConfigs := make([]*Config, nodes)
 	tempDir := t.TempDir()
 
@@ -147,12 +149,12 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) []*Config {
 		assert.NoError(t, err)
 
 		ceConfigs[i] = &Config{
-			PrivateKey:            privKeys[i],
-			Leader:                pubKeys[0],
-			Mempool:               mempool.New(),
-			BlockStore:            bs,
-			BlockProcessor:        bp,
-			ValidatorSet:          validatorSet,
+			PrivateKey:     privKeys[i],
+			Leader:         pubKeys[0],
+			Mempool:        mempool.New(),
+			BlockStore:     bs,
+			BlockProcessor: bp,
+			// ValidatorSet:          validatorSet,
 			Logger:                logger,
 			ProposeTimeout:        1 * time.Second,
 			BlockProposalInterval: 1 * time.Second,
@@ -177,7 +179,7 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) []*Config {
 		}
 	})
 
-	return ceConfigs
+	return ceConfigs, validatorSet
 }
 
 var blockAppHash = nextHash()
@@ -254,12 +256,12 @@ func TestValidatorStateMachine(t *testing.T) {
 
 	testcases := []struct {
 		name    string
-		setup   func(*testing.T) []*Config
+		setup   func(*testing.T) ([]*Config, map[string]ktypes.Validator)
 		actions []action
 	}{
 		{
 			name: "BlkPropAndCommit",
-			setup: func(t *testing.T) []*Config {
+			setup: func(t *testing.T) ([]*Config, map[string]ktypes.Validator) {
 				return generateTestCEConfig(t, 2, false)
 			},
 			actions: []action{
@@ -286,7 +288,7 @@ func TestValidatorStateMachine(t *testing.T) {
 		},
 		{
 			name: "InvalidAppHash",
-			setup: func(t *testing.T) []*Config {
+			setup: func(t *testing.T) ([]*Config, map[string]ktypes.Validator) {
 				return generateTestCEConfig(t, 2, false)
 			},
 			actions: []action{
@@ -315,7 +317,7 @@ func TestValidatorStateMachine(t *testing.T) {
 		},
 		{
 			name: "MultipleBlockProposals",
-			setup: func(t *testing.T) []*Config {
+			setup: func(t *testing.T) ([]*Config, map[string]ktypes.Validator) {
 				return generateTestCEConfig(t, 2, false)
 			},
 			actions: []action{
@@ -351,7 +353,7 @@ func TestValidatorStateMachine(t *testing.T) {
 		},
 		{
 			name: "StaleBlockProposals",
-			setup: func(t *testing.T) []*Config {
+			setup: func(t *testing.T) ([]*Config, map[string]ktypes.Validator) {
 				return generateTestCEConfig(t, 2, false)
 			},
 			actions: []action{
@@ -387,7 +389,7 @@ func TestValidatorStateMachine(t *testing.T) {
 		},
 		{
 			name: "BlkAnnounceBeforeBlockProp",
-			setup: func(t *testing.T) []*Config {
+			setup: func(t *testing.T) ([]*Config, map[string]ktypes.Validator) {
 				return generateTestCEConfig(t, 2, false)
 			},
 			actions: []action{
@@ -423,7 +425,7 @@ func TestValidatorStateMachine(t *testing.T) {
 		},
 		{
 			name: "ValidResetFlow",
-			setup: func(t *testing.T) []*Config {
+			setup: func(t *testing.T) ([]*Config, map[string]ktypes.Validator) {
 				return generateTestCEConfig(t, 2, false)
 			},
 			actions: []action{
@@ -468,7 +470,7 @@ func TestValidatorStateMachine(t *testing.T) {
 		},
 		{
 			name: "ResetAfterCommit(Ignored)",
-			setup: func(t *testing.T) []*Config {
+			setup: func(t *testing.T) ([]*Config, map[string]ktypes.Validator) {
 				return generateTestCEConfig(t, 2, false)
 			},
 			actions: []action{
@@ -504,7 +506,7 @@ func TestValidatorStateMachine(t *testing.T) {
 		},
 		{
 			name: "DuplicateReset",
-			setup: func(t *testing.T) []*Config {
+			setup: func(t *testing.T) ([]*Config, map[string]ktypes.Validator) {
 				return generateTestCEConfig(t, 2, false)
 			},
 			actions: []action{
@@ -549,7 +551,7 @@ func TestValidatorStateMachine(t *testing.T) {
 		},
 		{
 			name: "InvalidFutureResetHeight",
-			setup: func(t *testing.T) []*Config {
+			setup: func(t *testing.T) ([]*Config, map[string]ktypes.Validator) {
 				return generateTestCEConfig(t, 2, false)
 			},
 			actions: []action{
@@ -597,17 +599,15 @@ func TestValidatorStateMachine(t *testing.T) {
 	for _, tc := range testcases {
 		t.Log(tc.name)
 		t.Run(tc.name, func(t *testing.T) {
-			ceConfigs := tc.setup(t)
+			ceConfigs, valset := tc.setup(t)
 
 			leader := New(ceConfigs[0])
 			val := New(ceConfigs[1])
 
 			ctxM := context.Background()
-			blkProp1, err = leader.createBlockProposal(ctxM)
-			assert.NoError(t, err)
-			time.Sleep(300 * time.Millisecond) // just to ensure that the block hashes are different due to start time
-			blkProp2, err = leader.createBlockProposal(ctxM)
-			assert.NoError(t, err)
+			proposals := createBlockProposals(t, leader, valset)
+			blkProp1, blkProp2 = proposals[0], proposals[1]
+
 			t.Logf("blkProp1: %s, blkProp2: %s", blkProp1.blkHash.String(), blkProp2.blkHash.String())
 
 			ctx, cancel := context.WithCancel(ctxM)
@@ -627,7 +627,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				t.Log("action", act.name)
 				act.trigger(t, leader, val)
 				require.Eventually(t, func() bool {
-					err := act.verify(t, leader, val)
+					err = act.verify(t, leader, val)
 					if err != nil {
 						t.Log(err)
 						return false
@@ -639,9 +639,48 @@ func TestValidatorStateMachine(t *testing.T) {
 	}
 }
 
+func createBlockProposals(t *testing.T, ce *ConsensusEngine, valSet map[string]ktypes.Validator) []*blockProposal {
+	var txs []*ktypes.Transaction
+	hasher := ktypes.NewHasher()
+	keys := make([]string, 0, len(valSet))
+	for _, v := range valSet {
+		keys = append(keys, config.EncodePubKeyAndType(v.PubKey, v.PubKeyType))
+	}
+	slices.Sort(keys)
+
+	for _, key := range keys {
+		val := valSet[key]
+		hasher.Write(val.PubKey)
+		binary.Write(hasher, binary.BigEndian, val.PubKeyType)
+		binary.Write(hasher, binary.BigEndian, val.Power)
+	}
+	hash := hasher.Sum(nil)
+
+	blk1 := ktypes.NewBlock(1, zeroHash, zeroHash, hash, time.Now(), txs)
+	err := blk1.Sign(ce.privKey)
+	require.NoError(t, err)
+
+	blk2 := ktypes.NewBlock(1, zeroHash, zeroHash, hash, time.Now().Add(500*time.Millisecond), txs)
+	err = blk2.Sign(ce.privKey)
+	require.NoError(t, err)
+
+	return []*blockProposal{
+		{
+			blk:     blk1,
+			height:  1,
+			blkHash: blk1.Hash(),
+		},
+		{
+			blk:     blk2,
+			height:  1,
+			blkHash: blk2.Hash(),
+		},
+	}
+}
+
 func TestCELeaderSingleNode(t *testing.T) {
 	// t.Parallel()
-	ceConfigs := generateTestCEConfig(t, 1, true)
+	ceConfigs, _ := generateTestCEConfig(t, 1, true)
 
 	// bring up the node
 	leader := New(ceConfigs[0])
@@ -666,7 +705,7 @@ func TestCELeaderSingleNode(t *testing.T) {
 
 func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
 	// Majority > n/2 -> 2
-	ceConfigs := generateTestCEConfig(t, 2, true)
+	ceConfigs, _ := generateTestCEConfig(t, 2, true)
 
 	// bring up the nodes
 	n1 := New(ceConfigs[0])
@@ -725,7 +764,7 @@ func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
 
 func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 	// Majority > n/2 -> 2
-	ceConfigs := generateTestCEConfig(t, 3, true)
+	ceConfigs, _ := generateTestCEConfig(t, 3, true)
 
 	// bring up the nodes
 	n1 := New(ceConfigs[0])
