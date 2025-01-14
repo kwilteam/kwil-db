@@ -248,6 +248,8 @@ func (i *interpreterPlanner) VisitActionStmtAssignment(p0 *parse.ActionStmtAssig
 				return err
 			}
 
+			// TODO: we need better null handling here.
+
 			err = arr.Set(int32(index.RawValue().(int64)), scalarVal)
 			if err != nil {
 				return err
@@ -844,6 +846,15 @@ func (i *interpreterPlanner) VisitExpressionArrayAccess(p0 *parse.ExpressionArra
 				return nil, err
 			}
 
+			// if null, it should return a null value
+			// of the scalar type of the array.
+			// e.g. pg_typeof(text_array_val[nil]) = text
+			if index.Null() {
+				arrType := arr.Type().Copy()
+				arrType.IsArray = false
+				return precompiles.MakeNull(arrType)
+			}
+
 			if err := checkArrIdx(index); err != nil {
 				return nil, err
 			}
@@ -860,6 +871,12 @@ func (i *interpreterPlanner) VisitExpressionArrayAccess(p0 *parse.ExpressionArra
 				return nil, err
 			}
 
+			// if a null slice, it should return a null array.
+			// e.g. pg_typeof(text_array_val[nil:nil]) = text[]
+			if fromVal.Null() {
+				return precompiles.MakeNull(arr.Type())
+			}
+
 			if err := checkArrIdx(fromVal); err != nil {
 				return nil, err
 			}
@@ -870,6 +887,12 @@ func (i *interpreterPlanner) VisitExpressionArrayAccess(p0 *parse.ExpressionArra
 			toVal, err := toFn(exec)
 			if err != nil {
 				return nil, err
+			}
+
+			// if a null slice, it should return a null array.
+			// e.g. pg_typeof(text_array_val[nil:nil]) = text[]
+			if toVal.Null() {
+				return precompiles.MakeNull(arr.Type())
 			}
 
 			if err := checkArrIdx(toVal); err != nil {
@@ -928,26 +951,8 @@ func (i *interpreterPlanner) VisitExpressionMakeArray(p0 *parse.ExpressionMakeAr
 	}
 
 	return cast(p0, func(exec *executionContext) (precompiles.Value, error) {
-		if len(valFns) == 0 {
-			return nil, fmt.Errorf("array must have at least one element")
-		}
-
-		val0, err := valFns[0](exec)
-		if err != nil {
-			return nil, err
-		}
-
-		scal, ok := val0.(precompiles.ScalarValue)
-		if !ok {
-			return nil, fmt.Errorf("%w: expected scalar value, got %T", engine.ErrType, val0)
-		}
-
-		var vals []precompiles.ScalarValue
+		vals := make([]precompiles.ScalarValue, len(valFns))
 		for j, valFn := range valFns {
-			if j == 0 {
-				continue
-			}
-
 			val, err := valFn(exec)
 			if err != nil {
 				return nil, err
@@ -958,10 +963,10 @@ func (i *interpreterPlanner) VisitExpressionMakeArray(p0 *parse.ExpressionMakeAr
 				return nil, fmt.Errorf("%w: expected scalar value, got %T", engine.ErrType, val)
 			}
 
-			vals = append(vals, scal)
+			vals[j] = scal
 		}
 
-		return scal.Array(vals...)
+		return precompiles.MakeArray(vals, p0.TypeCast)
 	})
 }
 

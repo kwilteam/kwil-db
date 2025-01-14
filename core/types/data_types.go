@@ -212,11 +212,11 @@ func (c *DataType) Copy() *DataType {
 // EqualsStrict returns true if the type is equal to the other type.
 // The types must be exactly the same, including metadata.
 func (c *DataType) EqualsStrict(other *DataType) bool {
-	// if unknown, return true. unknown is a special case used
-	// internally when type checking is disabled.
-	if c.Name == unknownStr || other.Name == unknownStr {
-		return true
-	}
+	// // if unknown, return true. unknown is a special case used
+	// // internally when type checking is disabled.
+	// if c.Name == unknownStr || other.Name == unknownStr {
+	// 	return true
+	// }
 
 	if c.IsArray != other.IsArray {
 		return false

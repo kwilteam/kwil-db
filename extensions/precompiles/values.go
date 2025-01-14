@@ -291,8 +291,6 @@ type ScalarValue interface {
 	Arithmetic(v ScalarValue, op engine.ArithmeticOp) (ScalarValue, error)
 	// Unary applies a unary operation to the variable.
 	Unary(op engine.UnaryOp) (ScalarValue, error)
-	// Array creates an array from this scalar value and any other scalar values.
-	Array(v ...ScalarValue) (ArrayValue, error)
 }
 
 // ArrayValue is an array value that can be compared and have unary operations applied to it.
@@ -506,11 +504,6 @@ func makeTypeErr(left, right Value) error {
 	return fmt.Errorf("%w: left: %s right: %s", engine.ErrType, left.Type(), right.Type())
 }
 
-// makeArrTypeErr returns an error for when an array operation is performed on a non-array type.
-func makeArrTypeErr(arrVal Value, newVal Value) error {
-	return fmt.Errorf("%w: cannot create an array of different types %s and %s", engine.ErrType, arrVal.Type(), newVal.Type())
-}
-
 func MakeInt8(i int64) *Int8Value {
 	return &Int8Value{
 		Int8: pgtype.Int8{
@@ -688,22 +681,6 @@ func (i *Int8Value) RawValue() any {
 	return i.Int64
 }
 
-func (i *Int8Value) Array(v ...ScalarValue) (ArrayValue, error) {
-	pgtArr := make([]pgtype.Int8, len(v)+1)
-	pgtArr[0] = i.Int8
-	for j, val := range v {
-		if intVal, ok := val.(*Int8Value); !ok {
-			return nil, makeArrTypeErr(i, val)
-		} else {
-			pgtArr[j+1] = intVal.Int8
-		}
-	}
-
-	return &IntArrayValue{
-		OneDArray: newValidArr(pgtArr),
-	}, nil
-}
-
 func (i *Int8Value) Cast(t *types.DataType) (Value, error) {
 	if i.Null() {
 		return MakeNull(t)
@@ -837,24 +814,6 @@ func (s *TextValue) RawValue() any {
 	return s.String
 }
 
-func (s *TextValue) Array(v ...ScalarValue) (ArrayValue, error) {
-	pgtArr := make([]pgtype.Text, len(v)+1)
-	pgtArr[0] = s.Text
-	for j, val := range v {
-		if textVal, ok := val.(*TextValue); !ok {
-			return nil, makeArrTypeErr(s, val)
-		} else {
-			pgtArr[j+1] = textVal.Text
-		}
-	}
-
-	arr := newValidArr(pgtArr)
-
-	return &TextArrayValue{
-		OneDArray: arr,
-	}, nil
-}
-
 func (s *TextValue) Cast(t *types.DataType) (Value, error) {
 	if s.Null() {
 		return MakeNull(t)
@@ -981,24 +940,6 @@ func (b *BoolValue) RawValue() any {
 	return b.Bool.Bool
 }
 
-func (b *BoolValue) Array(v ...ScalarValue) (ArrayValue, error) {
-	pgtArr := make([]pgtype.Bool, len(v)+1)
-	pgtArr[0] = b.Bool
-	for j, val := range v {
-		if boolVal, ok := val.(*BoolValue); !ok {
-			return nil, makeArrTypeErr(b, val)
-		} else {
-			pgtArr[j+1] = boolVal.Bool
-		}
-	}
-
-	arr := newValidArr(pgtArr)
-
-	return &BoolArrayValue{
-		OneDArray: arr,
-	}, nil
-}
-
 func (b *BoolValue) Cast(t *types.DataType) (Value, error) {
 	if b.Null() {
 		return MakeNull(t)
@@ -1086,25 +1027,11 @@ func (b *BlobValue) RawValue() any {
 	return b.bts
 }
 
-func (b *BlobValue) Array(v ...ScalarValue) (ArrayValue, error) {
-	pgtArr := make([]*BlobValue, len(v)+1)
-	pgtArr[0] = b
-	for j, val := range v {
-		if blobVal, ok := val.(*BlobValue); !ok {
-			return nil, makeArrTypeErr(b, val)
-		} else {
-			pgtArr[j+1] = blobVal
-		}
+func (b *BlobValue) Cast(t *types.DataType) (Value, error) {
+	if b.Null() {
+		return MakeNull(t)
 	}
 
-	arr := newValidArr(pgtArr)
-
-	return &BlobArrayValue{
-		OneDArray: arr,
-	}, nil
-}
-
-func (b *BlobValue) Cast(t *types.DataType) (Value, error) {
 	switch *t {
 	case *types.IntType:
 		i, err := strconv.ParseInt(string(b.bts), 10, 64)
@@ -1223,24 +1150,6 @@ func (u *UUIDValue) RawValue() any {
 	// kwil always handled uuids as pointers
 	u2 := types.UUID(u.Bytes)
 	return &u2
-}
-
-func (u *UUIDValue) Array(v ...ScalarValue) (ArrayValue, error) {
-	pgtArr := make([]pgtype.UUID, len(v)+1)
-	pgtArr[0] = u.UUID
-	for j, val := range v {
-		if uuidVal, ok := val.(*UUIDValue); !ok {
-			return nil, makeArrTypeErr(u, val)
-		} else {
-			pgtArr[j+1] = uuidVal.UUID
-		}
-	}
-
-	arr := newValidArr(pgtArr)
-
-	return &UuidArrayValue{
-		OneDArray: arr,
-	}, nil
 }
 
 func (u *UUIDValue) Cast(t *types.DataType) (Value, error) {
@@ -1483,26 +1392,10 @@ func (d *DecimalValue) RawValue() any {
 	return dec
 }
 
-func (d *DecimalValue) Array(v ...ScalarValue) (ArrayValue, error) {
-	pgtArr := make([]pgtype.Numeric, len(v)+1)
-	pgtArr[0] = d.Numeric
-	for j, val := range v {
-		if decVal, ok := val.(*DecimalValue); !ok {
-			return nil, makeArrTypeErr(d, val)
-		} else {
-			pgtArr[j+1] = decVal.Numeric
-		}
-	}
-
-	metaCopy := *d.metadata
-
-	return &DecimalArrayValue{
-		OneDArray: newValidArr(pgtArr),
-		metadata:  &metaCopy,
-	}, nil
-}
-
 func (d *DecimalValue) Cast(t *types.DataType) (Value, error) {
+	if d.Null() {
+		return MakeNull(t)
+	}
 	if t.Name == types.NumericStr {
 		if t.IsArray {
 			return nil, castErr(errors.New("cannot cast decimal to decimal array"))
@@ -1779,6 +1672,9 @@ func (a *TextArrayValue) RawValue() any {
 }
 
 func (a *TextArrayValue) Cast(t *types.DataType) (Value, error) {
+	if a.Null() {
+		return MakeNull(t)
+	}
 	if t.Name == types.NumericStr {
 		if !t.IsArray {
 			return nil, castErr(errors.New("cannot cast text array to decimal"))
@@ -1930,6 +1826,10 @@ func (a *BoolArrayValue) RawValue() any {
 }
 
 func (a *BoolArrayValue) Cast(t *types.DataType) (Value, error) {
+	if a.Null() {
+		return MakeNull(t)
+	}
+
 	switch *t {
 	case *types.TextArrayType:
 		return castArr(a, func(b bool) (string, error) { return strconv.FormatBool(b), nil }, newTextArrayValue)
@@ -2135,6 +2035,10 @@ func (a *DecimalArrayValue) RawValue() any {
 }
 
 func (a *DecimalArrayValue) Cast(t *types.DataType) (Value, error) {
+	if a.Null() {
+		return MakeNull(t)
+	}
+
 	if t.Name == types.NumericStr {
 		if !t.IsArray {
 			return nil, castErr(errors.New("cannot cast decimal array to decimal"))
@@ -2274,6 +2178,10 @@ func (a *BlobArrayValue) RawValue() any {
 }
 
 func (a *BlobArrayValue) Cast(t *types.DataType) (Value, error) {
+	if a.Null() {
+		return MakeNull(t)
+	}
+
 	switch *t {
 	case *types.TextArrayType:
 		return castArr(a, func(b []byte) (string, error) { return string(b), nil }, newTextArrayValue)
@@ -2359,6 +2267,10 @@ func (a *UuidArrayValue) RawValue() any {
 }
 
 func (a *UuidArrayValue) Cast(t *types.DataType) (Value, error) {
+	if a.Null() {
+		return MakeNull(t)
+	}
+
 	switch *t {
 	case *types.TextArrayType:
 		return castArr(a, func(u *types.UUID) (string, error) { return u.String(), nil }, newTextArrayValue)
@@ -2461,7 +2373,77 @@ func (o *RecordValue) RawValue() any {
 }
 
 func (o *RecordValue) Cast(t *types.DataType) (Value, error) {
+	if o.Null() {
+		return MakeNull(t)
+	}
+
 	return nil, castErr(fmt.Errorf("cannot cast record to %s", t))
+}
+
+// NullValue is a special type that represents a NULL value.
+// It is both a scalar and an array type.
+type NullValue struct{}
+
+var _ Value = (*NullValue)(nil)
+
+// var _ ArrayValue = (*NullValue)(nil)
+var _ ScalarValue = (*NullValue)(nil)
+
+func (n *NullValue) Null() bool {
+	return true
+}
+
+// since NullValue is a special value that can be used anywhere, it will always return null
+// unless the comparison operator is IS or IS DISTINCT FROM
+func (n *NullValue) Compare(v Value, op engine.ComparisonOp) (*BoolValue, error) {
+	switch op {
+	case engine.IS:
+		if v.Null() {
+			return MakeBool(true), nil
+		}
+		return MakeBool(false), nil
+	case engine.IS_DISTINCT_FROM:
+		if v.Null() {
+			return MakeBool(false), nil
+		}
+		return MakeBool(true), nil
+	default:
+		/// otherwise, it is just null
+		nv, err := MakeNull(types.BoolType)
+		if err != nil {
+			return nil, err
+		}
+
+		bv, ok := nv.(*BoolValue)
+		if !ok {
+			return nil, fmt.Errorf("unexpected type %T", nv)
+		}
+
+		return bv, nil
+	}
+}
+
+func (n *NullValue) Type() *types.DataType {
+	return types.NullType.Copy()
+}
+
+func (n *NullValue) RawValue() any {
+	return nil
+}
+
+func (n *NullValue) Cast(t *types.DataType) (Value, error) {
+	if n.Null() {
+		return MakeNull(t)
+	}
+	return MakeNull(t)
+}
+
+func (n *NullValue) Arithmetic(v ScalarValue, op engine.ArithmeticOp) (ScalarValue, error) {
+	return n, nil
+}
+
+func (n *NullValue) Unary(op engine.UnaryOp) (ScalarValue, error) {
+	return n, nil
 }
 
 func cmpIntegers(a, b int, op engine.ComparisonOp) (*BoolValue, error) {
@@ -2619,29 +2601,72 @@ func parseArray(s string, t *types.DataType) (ArrayValue, error) {
 		fields[i] = scalar
 	}
 
-	if len(fields) == 0 {
-		// if 0-length, then we return a new zero-length array
-		zv, err := NewZeroValue(t)
-		if err != nil {
-			return nil, err
-		}
-
-		zva, ok := zv.(ArrayValue)
-		if !ok {
-			return nil, fmt.Errorf("unexpected type %T", zv)
-		}
-
-		return zva, nil
-	}
-
-	arrType, err := fields[0].Array(fields[1:]...)
-	if err != nil {
-		return nil, err
-	}
-
-	return arrType, nil
+	return MakeArray(fields, t)
 }
 
 func castErr(e error) error {
 	return fmt.Errorf("%w: %w", engine.ErrCast, e)
+}
+
+// MakeArray creates an array value from a list of scalar values.
+// All of the scalar values must be of the same type.
+// If t is nil, it will infer the type from the first element.
+func MakeArray(vals []ScalarValue, t *types.DataType) (ArrayValue, error) {
+	expectedType := t
+	if len(vals) == 0 && expectedType == nil {
+		return nil, fmt.Errorf("%w: cannot create an empty array of unknown type. Try typecasting it", engine.ErrArrayDimensionality)
+	}
+
+	// if no type has been provided, we should search for the first non-null value
+	for _, v := range vals {
+		if !v.Type().EqualsStrict(types.UnknownType) {
+			if expectedType == nil {
+				expectedType = v.Type().Copy()
+				expectedType.IsArray = true
+			}
+		}
+	}
+
+	// if it is still null, it is a text array. This seems somewhat arbitrary,
+	// but it is consistent with Postgres.
+	if expectedType == nil {
+		expectedType = types.TextType.Copy()
+	}
+
+	if !expectedType.IsArray {
+		return nil, fmt.Errorf("%w: cannot cast array to a scalar type", engine.ErrCast)
+	}
+
+	// we now need to make a zero value of the new array type
+	zeroVal, err := NewZeroValue(expectedType)
+	if err != nil {
+		return nil, err
+	}
+	zeroArr, ok := zeroVal.(ArrayValue)
+	if !ok {
+		return nil, fmt.Errorf("unexpected zero array value of type %T", zeroVal)
+	}
+
+	// we need the expected scalar type
+	expectScalar := expectedType.Copy()
+	expectScalar.IsArray = false
+
+	// now, we must cast all of the values to the expected type
+	for i, v := range vals {
+		casted, err := v.Cast(expectScalar)
+		if err != nil {
+			return nil, err
+		}
+		castedScalar, ok := casted.(ScalarValue)
+		if !ok {
+			return nil, fmt.Errorf("unexpected casted value of type %T", casted)
+		}
+
+		err = zeroArr.Set(int32(i+1), castedScalar) // 1-based index
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return zeroArr, nil
 }
