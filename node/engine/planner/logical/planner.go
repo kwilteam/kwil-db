@@ -1573,6 +1573,10 @@ func (s *scopeContext) exprWithAggRewrite(node parse.Expression, currentRel *Rel
 			// might be in the outer relation, correlated
 			field, err = s.OuterRelation.Search(node.Table, node.Column)
 			if errors.Is(err, ErrColumnNotFound) {
+				if s.preGroupRelation == nil {
+					return nil, nil, false, fmt.Errorf(`%w: unknown column reference "%s"`, ErrColumnNotFound, node.String())
+				}
+
 				// if not found, see if it is in the relation but not grouped
 				field, err2 := s.preGroupRelation.Search(node.Table, node.Column)
 				// if the column exist in the outer relation, then it might be part of an expression
@@ -1942,7 +1946,7 @@ func (s *scopeContext) exprWithAggRewrite(node parse.Expression, currentRel *Rel
 			}
 		}
 
-		return subqExpr, rel.Fields[0], shouldRewrite, nil
+		return cast(subqExpr, rel.Fields[0])
 	}
 }
 

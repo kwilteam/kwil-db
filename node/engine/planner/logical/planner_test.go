@@ -616,6 +616,27 @@ func Test_Planner(t *testing.T) {
 				"    └─Filter: r.n < 10\n" +
 				"      └─Scan Table: r [cte]\n",
 		},
+		{
+			// this caused a nil pointer dereference.
+			// It is an illegal query, but it should not crash the planner.
+			name: "inserting a cte",
+			sql: `with a as (select 1)
+			INSERT INTO users VALUES ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', a)`,
+			err: logical.ErrColumnNotFound,
+		},
+		{
+			// this is a regression test for a previous uncaught type case
+			name: "subquery type cast",
+			sql:  `select * from users where age = (select sum(age) from users)::int8`,
+			wt: "Return: id [uuid], name [text], age [int8]\n" +
+				"└─Project: users.id; users.name; users.age\n" +
+				"  └─Filter: users.age = [subquery (scalar) (subplan_id=0) (uncorrelated)]::int8\n" +
+				"    └─Scan Table: users [physical]\n" +
+				"Subplan [subquery] [id=0]\n" +
+				"└─Project: {#ref(A)}\n" +
+				"  └─Aggregate: {#ref(A) = sum(users.age)}\n" +
+				"    └─Scan Table: users [physical]\n",
+		},
 	}
 
 	for _, test := range tests {
