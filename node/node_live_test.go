@@ -5,7 +5,6 @@ package node
 import (
 	"context"
 	"encoding/hex"
-	"math/big"
 	"os"
 	"path/filepath"
 	"sync"
@@ -93,21 +92,33 @@ func TestSingleNodeMocknet(t *testing.T) {
 	signer1 := &auth.EthPersonalSigner{Key: *k}
 
 	es := &mockEventStore{}
-	accounts := &mockAccounts{}
+	// accounts := &mockAccounts{}
 	mparams := config.MigrationParams{
 		StartHeight: 0, EndHeight: 0,
 	}
 
+	accounts, err := accounts.InitializeAccountStore(ctx, db1, log.DiscardLogger)
+	require.NoError(t, err)
+
 	migrator, err := migrations.SetupMigrator(ctx, db1, newSnapshotStore(), accounts, filepath.Join(root1, "migrations"), mparams, vsReal, log.New(log.WithName("MIGRATOR")))
 	require.NoError(t, err)
 
+	signer := auth.GetNodeSigner(privKeys[0])
+	txapp, err := txapp.NewTxApp(ctx, db1, &mockEngine{}, signer, nil, &common.Service{
+		Logger:        log.New(log.WithName("TXAPP"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
+		GenesisConfig: genCfg,
+		LocalConfig:   config.DefaultConfig(),
+		Identity:      signer.CompactID(),
+	}, accounts, vsReal)
+	require.NoError(t, err)
+
 	bpl := log.New(log.WithName("BP1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
-	bp, err := blockprocessor.NewBlockProcessor(ctx, db1, newDummyTxApp(), &mockAccounts{}, vsReal, ss, es, migrator, bs1, genCfg, signer1, bpl)
+	bp, err := blockprocessor.NewBlockProcessor(ctx, db1, txapp, accounts, vsReal, ss, es, migrator, bs1, genCfg, signer1, bpl)
 	require.NoError(t, err)
 
 	ceCfg1 := &consensus.Config{
-		PrivateKey:            privKeys[0],
-		ValidatorSet:          valSet,
+		PrivateKey: privKeys[0],
+		// ValidatorSet:          valSet,
 		Leader:                privKeys[0].Public(),
 		Mempool:               mp1,
 		BlockStore:            bs1,
@@ -215,31 +226,36 @@ func TestDualNodeMocknet(t *testing.T) {
 	genCfg.Leader = ktypes.PublicKey{PublicKey: privKeys[0].Public()}
 	genCfg.Validators = valSetList
 
-	// _, vsReal, err := voting.NewResolutionStore(ctx, db1)
-
-	k, err := crypto.UnmarshalSecp256k1PrivateKey(pk1)
-	require.NoError(t, err)
-
-	signer1 := &auth.EthPersonalSigner{Key: *k}
 	es1 := &mockEventStore{}
-	accounts1 := &mockAccounts{}
 	mparams := config.MigrationParams{
 		StartHeight: 0, EndHeight: 0,
 	}
 
+	accounts1, err := accounts.InitializeAccountStore(ctx, db1, log.DiscardLogger)
+	require.NoError(t, err)
+
 	_, vstore1, err := voting.NewResolutionStore(ctx, db1)
+	require.NoError(t, err)
+
+	signer1 := auth.GetNodeSigner(privKeys[0])
+	txapp1, err := txapp.NewTxApp(ctx, db1, &mockEngine{}, signer1, nil, &common.Service{
+		Logger:        log.New(log.WithName("TXAPP"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
+		GenesisConfig: genCfg,
+		LocalConfig:   config.DefaultConfig(),
+		Identity:      signer1.CompactID(),
+	}, accounts1, vstore1)
 	require.NoError(t, err)
 
 	migrator, err := migrations.SetupMigrator(ctx, db1, newSnapshotStore(), accounts1, filepath.Join(root1, "migrations"), mparams, vstore1, log.New(log.WithName("MIGRATOR")))
 	require.NoError(t, err)
 
 	bpl1 := log.New(log.WithName("BP1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
-	bp1, err := blockprocessor.NewBlockProcessor(ctx, db1, newDummyTxApp(), accounts1, vstore1, ss, es1, migrator, bs1, genCfg, signer1, bpl1)
+	bp1, err := blockprocessor.NewBlockProcessor(ctx, db1, txapp1, accounts1, vstore1, ss, es1, migrator, bs1, genCfg, signer1, bpl1)
 	require.NoError(t, err)
 
 	ceCfg1 := &consensus.Config{
-		PrivateKey:            privKeys[0],
-		ValidatorSet:          valSet,
+		PrivateKey: privKeys[0],
+		// ValidatorSet:          valSet,
 		Leader:                privKeys[0].Public(),
 		Mempool:               mp1,
 		BlockStore:            bs1,
@@ -280,25 +296,34 @@ func TestDualNodeMocknet(t *testing.T) {
 
 	time.Sleep(20 * time.Millisecond)
 
-	k2, err := crypto.UnmarshalSecp256k1PrivateKey(pk2)
+	// Node 2
+	es2 := &mockEventStore{}
+
+	accounts2, err := accounts.InitializeAccountStore(ctx, db2, log.DiscardLogger)
 	require.NoError(t, err)
 
-	signer2 := &auth.EthPersonalSigner{Key: *k2}
-	es2 := &mockEventStore{}
-	accounts2 := &mockAccounts{}
 	_, vstore2, err := voting.NewResolutionStore(ctx, db2)
 	require.NoError(t, err)
 
 	migrator2, err := migrations.SetupMigrator(ctx, db2, newSnapshotStore(), accounts2, filepath.Join(root2, "migrations"), mparams, vstore2, log.New(log.WithName("MIGRATOR")))
 	require.NoError(t, err)
 
+	signer2 := auth.GetNodeSigner(privKeys[1])
+	txapp2, err := txapp.NewTxApp(ctx, db2, &mockEngine{}, signer2, nil, &common.Service{
+		Logger:        log.New(log.WithName("TXAPP"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
+		GenesisConfig: genCfg,
+		LocalConfig:   config.DefaultConfig(),
+		Identity:      signer2.CompactID(),
+	}, accounts2, vstore2)
+	require.NoError(t, err)
+
 	bpl2 := log.New(log.WithName("BP2"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
-	bp2, err := blockprocessor.NewBlockProcessor(ctx, db2, newDummyTxApp(), accounts2, vstore2, ss, es2, migrator2, bs2, genCfg, signer2, bpl2)
+	bp2, err := blockprocessor.NewBlockProcessor(ctx, db2, txapp2, accounts2, vstore2, ss, es2, migrator2, bs2, genCfg, signer2, bpl2)
 	require.NoError(t, err)
 
 	ceCfg2 := &consensus.Config{
-		PrivateKey:            privKeys[1],
-		ValidatorSet:          valSet,
+		PrivateKey: privKeys[1],
+		// ValidatorSet:          valSet,
 		Leader:                privKeys[0].Public(),
 		Mempool:               mp2,
 		BlockStore:            bs2,
@@ -388,59 +413,78 @@ func cleanupDB(db *pg.DB) {
 	db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_events CASCADE;`)
 	db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_migrations CASCADE;`)
 	db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_internal CASCADE;`)
+	db.Execute(ctx, `DROP SCHEMA IF EXISTS kwild_accounts CASCADE;`)
 	db.AutoCommit(false)
 }
 
-type dummyTxApp struct {
-	// vals []*ktypes.Validator
+// type dummyTxApp struct {
+// 	vals []*ktypes.Validator
+// }
+
+// func newDummyTxApp(valset []*ktypes.Validator) *dummyTxApp {
+// 	return &dummyTxApp{
+// 		vals: valset,
+// 	}
+// }
+// func (d *dummyTxApp) Begin(ctx context.Context, height int64) error {
+// 	return nil
+// }
+
+// func (d *dummyTxApp) Execute(ctx *common.TxContext, db sql.DB, tx *ktypes.Transaction) *txapp.TxResponse {
+// 	return &txapp.TxResponse{}
+// }
+
+// func (d *dummyTxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) ([]*ktypes.Validator, error) {
+// 	return d.vals, nil
+// }
+
+// func (d *dummyTxApp) Price(ctx context.Context, dbTx sql.DB, tx *ktypes.Transaction, chainContext *common.ChainContext) (*big.Int, error) {
+// 	return big.NewInt(0), nil
+// }
+
+// func (d *dummyTxApp) Commit() error {
+// 	return nil
+// }
+
+// func (d *dummyTxApp) Rollback() {}
+
+// func (d *dummyTxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*ktypes.Validator, genesisAccounts []*ktypes.Account, initialHeight int64, dbOwner string, chain *common.ChainContext) error {
+// 	return nil
+// }
+
+// func (d *dummyTxApp) AccountInfo(ctx context.Context, dbTx sql.DB, identifier string, pending bool) (*big.Int, int64, error) {
+// 	return big.NewInt(0), 0, nil
+// }
+
+// func (d *dummyTxApp) ApplyMempool(ctx *common.TxContext, db sql.DB, tx *ktypes.Transaction) error {
+// 	return nil
+// }
+
+// type mockAccounts struct{}
+
+// func (m *mockAccounts) Updates() []*ktypes.Account {
+// 	return nil
+// }
+
+// func (m *mockAccounts) GetBlockSpends() []*accounts.Spend {
+// 	return nil
+// }
+
+// func (m *mockAccounts) ApplySpend(ctx context.Context, tx sql.Executor, id string, bal *big.Int, nonce int64) error {
+// 	return nil
+// }
+
+type mockEngine struct{}
+
+func (me *mockEngine) Call(ctx *common.EngineContext, db sql.DB, namespace, action string, args []common.EngineValue, resultFn func(*common.Row) error) (*common.CallResult, error) {
+	return nil, nil
 }
 
-func newDummyTxApp() *dummyTxApp {
-	return &dummyTxApp{
-		//vals: valset,
-	}
-}
-func (d *dummyTxApp) Begin(ctx context.Context, height int64) error {
+func (me *mockEngine) Execute(ctx *common.EngineContext, db sql.DB, statement string, params map[string]common.EngineValue, fn func(*common.Row) error) error {
 	return nil
 }
 
-func (d *dummyTxApp) Execute(ctx *common.TxContext, db sql.DB, tx *ktypes.Transaction) *txapp.TxResponse {
-	return &txapp.TxResponse{}
-}
-
-func (d *dummyTxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) error {
-	return nil
-}
-
-func (d *dummyTxApp) Price(ctx context.Context, dbTx sql.DB, tx *ktypes.Transaction, chainContext *common.ChainContext) (*big.Int, error) {
-	return big.NewInt(0), nil
-}
-
-func (d *dummyTxApp) Commit() error {
-	return nil
-}
-
-func (d *dummyTxApp) Rollback() {}
-
-func (d *dummyTxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*ktypes.Validator, genesisAccounts []*ktypes.Account, initialHeight int64, dbOwner string, chain *common.ChainContext) error {
-	return nil
-}
-
-func (d *dummyTxApp) AccountInfo(ctx context.Context, dbTx sql.DB, identifier string, pending bool) (*big.Int, int64, error) {
-	return big.NewInt(0), 0, nil
-}
-
-func (d *dummyTxApp) ApplyMempool(ctx *common.TxContext, db sql.DB, tx *ktypes.Transaction) error {
-	return nil
-}
-
-type mockAccounts struct{}
-
-func (m *mockAccounts) Updates() []*ktypes.Account {
-	return nil
-}
-
-func (m *mockAccounts) GetBlockSpends() []*accounts.Spend {
+func (me *mockEngine) ExecuteWithoutEngineCtx(ctx context.Context, db sql.DB, statement string, params map[string]common.EngineValue, fn func(*common.Row) error) error {
 	return nil
 }
 

@@ -6,7 +6,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"maps"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -120,8 +119,6 @@ type Config struct {
 	Leader crypto.PublicKey
 	// GenesisHeight is the initial height of the network.
 	GenesisHeight int64
-	// ValidatorSet is the set of validators in the network.
-	ValidatorSet map[string]ktypes.Validator
 	// ProposeTimeout is the timeout for proposing a block.
 	ProposeTimeout time.Duration
 	// BlkPropReannounceInterval is the frequency at which block proposal messages are reannounced by the Leader.
@@ -238,23 +235,8 @@ func New(cfg *Config) *ConsensusEngine {
 			log.WithWriter(os.Stdout), log.WithFormat(log.FormatUnstructured))
 	}
 
-	// Determine *genesis* role based on leader pubkey and validator set.
-	var role types.Role
+	// defer role assignment till the beginning of the catchup phase.
 	pubKey := cfg.PrivateKey.Public()
-
-	if pubKey.Equals(cfg.Leader) {
-		role = types.RoleLeader
-		logger.Info("You are the leader")
-	} else {
-		pubKeyBts := pubKey.Bytes()
-		if _, in := cfg.ValidatorSet[hex.EncodeToString(pubKeyBts)]; in {
-			role = types.RoleValidator
-			logger.Info("You are a validator")
-		} else {
-			role = types.RoleSentry
-			logger.Info("You are a sentry")
-		}
-	}
 
 	// rethink how this state is initialized
 	ce := &ConsensusEngine{
@@ -281,7 +263,6 @@ func New(cfg *Config) *ConsensusEngine {
 			status:  Committed,
 			blkProp: nil,
 		},
-		validatorSet:  maps.Clone(cfg.ValidatorSet),
 		genesisHeight: cfg.GenesisHeight,
 		msgChan:       make(chan consensusMessage, 1), // buffer size??
 		haltChan:      make(chan string, 1),
@@ -295,8 +276,6 @@ func New(cfg *Config) *ConsensusEngine {
 		log:            logger,
 		txSubscribers:  make(map[ktypes.Hash]chan ktypes.TxResult),
 	}
-
-	ce.role.Store(role)
 
 	return ce
 }
@@ -514,6 +493,9 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 
 		ce.setLastCommitInfo(appHeight, blkHash[:], appHash)
 	}
+
+	// Set the role and validator set based on the initial state of the voters before starting the replay
+	ce.updateValidatorSetAndRole()
 
 	// Replay the blocks from the blockstore if the app hasn't played all the blocks yet.
 	if appHeight < storeHeight {
