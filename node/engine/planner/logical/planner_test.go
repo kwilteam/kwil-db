@@ -158,7 +158,7 @@ func Test_Planner(t *testing.T) {
 		{
 			name: "aggregate without group by",
 			sql:  "select sum(age) from users",
-			wt: "Return: sum [decimal(1000,0)]\n" +
+			wt: "Return: sum [numeric(1000,0)]\n" +
 				"└─Project: {#ref(A)}\n" +
 				"  └─Aggregate: {#ref(A) = sum(users.age)}\n" +
 				"    └─Scan Table: users [physical]\n",
@@ -166,7 +166,7 @@ func Test_Planner(t *testing.T) {
 		{
 			name: "aggregate with group by",
 			sql:  "select name, sum(age) from users where name = 'a' group by name having sum(age)::int8 > 100",
-			wt: "Return: name [text], sum [decimal(1000,0)]\n" +
+			wt: "Return: name [text], sum [numeric(1000,0)]\n" +
 				"└─Project: {#ref(A)}; {#ref(B)}\n" +
 				"  └─Filter: {#ref(B)}::int8 > 100\n" +
 				"    └─Aggregate [{#ref(A) = users.name}]: {#ref(B) = sum(users.age)}\n" +
@@ -223,7 +223,7 @@ func Test_Planner(t *testing.T) {
 		{
 			name: "complex having",
 			sql:  "select name, sum(age/2)+sum(age*10) from users group by name having sum(age)::int8 > 100 or sum(age/2)::int8 > 10",
-			wt: "Return: name [text], ?column? [decimal(1000,0)]\n" +
+			wt: "Return: name [text], ?column? [numeric(1000,0)]\n" +
 				"└─Project: {#ref(A)}; {#ref(C)} + {#ref(D)}\n" +
 				"  └─Filter: {#ref(B)}::int8 > 100 OR {#ref(C)}::int8 > 10\n" +
 				"    └─Aggregate [{#ref(A) = users.name}]: {#ref(B) = sum(users.age)}; {#ref(C) = sum(users.age / 2)}; {#ref(D) = sum(users.age * 10)}\n" +
@@ -271,7 +271,7 @@ func Test_Planner(t *testing.T) {
 		{
 			name: "basic inline window",
 			sql:  "select name, sum(age) over (partition by name) from users",
-			wt: "Return: name [text], sum [decimal(1000,0)]\n" +
+			wt: "Return: name [text], sum [numeric(1000,0)]\n" +
 				"└─Project: users.name; {#ref(A)}\n" +
 				"  └─Window [partition_by=users.name]: {#ref(A) = sum(users.age)}\n" +
 				"    └─Scan Table: users [physical]\n",
@@ -279,7 +279,7 @@ func Test_Planner(t *testing.T) {
 		{
 			name: "named window used several times",
 			sql:  "select name, sum(age) over w1, array_agg(name) over w1 from users window w1 as (partition by name order by age)",
-			wt: "Return: name [text], sum [decimal(1000,0)], array_agg [text[]]\n" +
+			wt: "Return: name [text], sum [numeric(1000,0)], array_agg [text[]]\n" +
 				"└─Project: users.name; {#ref(A)}; {#ref(B)}\n" +
 				"  └─Window [partition_by=users.name] [order_by=users.age asc nulls last]: {#ref(A) = sum(users.age)}; {#ref(B) = array_agg(users.name)}\n" +
 				"    └─Scan Table: users [physical]\n",
@@ -365,7 +365,7 @@ func Test_Planner(t *testing.T) {
 		{
 			name: "sort with group by",
 			sql:  "select name, sum(age) from users group by name order by name, sum(age)",
-			wt: "Return: name [text], sum [decimal(1000,0)]\n" +
+			wt: "Return: name [text], sum [numeric(1000,0)]\n" +
 				"└─Project: {#ref(A)}; {#ref(B)}\n" +
 				"  └─Sort: {#ref(A)} asc nulls last; {#ref(B)} asc nulls last\n" +
 				"    └─Aggregate [{#ref(A) = users.name}]: {#ref(B) = sum(users.age)}\n" +
@@ -405,7 +405,7 @@ func Test_Planner(t *testing.T) {
 		{
 			name: "distinct aggregate",
 			sql:  "select count(distinct name), sum(age) from users",
-			wt: "Return: count [int8], sum [decimal(1000,0)]\n" +
+			wt: "Return: count [int8], sum [numeric(1000,0)]\n" +
 				"└─Project: {#ref(A)}; {#ref(B)}\n" +
 				"  └─Aggregate: {#ref(A) = count(distinct users.name)}; {#ref(B) = sum(users.age)}\n" +
 				"    └─Scan Table: users [physical]\n",
