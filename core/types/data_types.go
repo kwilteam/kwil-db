@@ -107,7 +107,9 @@ func (c *DataType) String() string {
 	return str.String()
 }
 
-var ZeroMetadata = [2]uint16{}
+func (c *DataType) HasMetadata() bool {
+	return c.Metadata != [2]uint16{}
+}
 
 // PGString returns the string representation of the type in Postgres.
 func (c *DataType) PGString() (string, error) {
@@ -141,7 +143,7 @@ func (c *DataType) PGScalar() (string, error) {
 	case uint256Str:
 		scalar = "UINT256"
 	case NumericStr:
-		if c.Metadata == ZeroMetadata {
+		if !c.HasMetadata() {
 			return "", errors.New("decimal type requires metadata")
 		} else {
 			scalar = fmt.Sprintf("NUMERIC(%d,%d)", c.Metadata[0], c.Metadata[1])
@@ -167,11 +169,11 @@ func (c *DataType) Clean() error {
 
 	switch referencedType {
 	case intStr, textStr, boolStr, byteaStr, uuidStr, uint256Str: // ok
-		if c.Metadata != ZeroMetadata {
+		if c.HasMetadata() {
 			return fmt.Errorf("type %s cannot have metadata", c.Name)
 		}
 	case NumericStr:
-		if c.Metadata == ZeroMetadata {
+		if !c.HasMetadata() {
 			return fmt.Errorf("type %s requires metadata", c.Name)
 		}
 		err := decimal.CheckPrecisionAndScale(c.Metadata[0], c.Metadata[1])
@@ -184,7 +186,7 @@ func (c *DataType) Clean() error {
 			return fmt.Errorf("type %s cannot be an array", c.Name)
 		}
 
-		if c.Metadata != ZeroMetadata {
+		if c.HasMetadata() {
 			return fmt.Errorf("type %s cannot have metadata", c.Name)
 		}
 	default:

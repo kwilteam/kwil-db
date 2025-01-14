@@ -461,7 +461,7 @@ func getExtensionInitializationMetadata(ctx context.Context, db sql.DB) ([]*stor
 // getTypeMetadata gets the serialized type metadata.
 // If there is none, it returns nil.
 func getTypeMetadata(t *types.DataType) []byte {
-	if t.Metadata == types.ZeroMetadata {
+	if !t.HasMetadata() {
 		return nil
 	}
 

@@ -132,7 +132,7 @@ func init() {
 		valueMapping{
 			KwilType: types.DecimalType,
 			ZeroValue: func(t *types.DataType) (Value, error) {
-				if t.Metadata == types.ZeroMetadata {
+				if !t.HasMetadata() {
 					return nil, fmt.Errorf("cannot create zero value of decimal type with zero precision and scale")
 				}
 
@@ -149,7 +149,7 @@ func init() {
 				return dec2, nil
 			},
 			NullValue: func(t *types.DataType) (Value, error) {
-				if t.Metadata == types.ZeroMetadata {
+				if !t.HasMetadata() {
 					return nil, fmt.Errorf("cannot create null value of decimal type with zero precision and scale")
 				}
 				prec := t.Metadata[0]
@@ -214,7 +214,7 @@ func init() {
 		valueMapping{
 			KwilType: types.DecimalArrayType,
 			ZeroValue: func(t *types.DataType) (Value, error) {
-				if t.Metadata == types.ZeroMetadata {
+				if !t.HasMetadata() {
 					return nil, fmt.Errorf("cannot create zero value of decimal type with zero precision and scale")
 				}
 
@@ -228,7 +228,7 @@ func init() {
 				return arr, nil
 			},
 			NullValue: func(t *types.DataType) (Value, error) {
-				if t.Metadata == types.ZeroMetadata {
+				if !t.HasMetadata() {
 					return nil, fmt.Errorf("cannot create null value of decimal array type with zero precision and scale")
 				}
 
