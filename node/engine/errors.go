@@ -16,6 +16,8 @@ var (
 	ErrUnary               = errors.New("unary operation error")
 	ErrIndexOutOfBounds    = errors.New("index out of bounds")
 	ErrArrayDimensionality = errors.New("array dimensionality error")
+	ErrInvalidNull         = errors.New("invalid null value")
+	ErrArrayTooSmall       = errors.New("array too small")
 
 	// Errors that signal the existence or non-existence of an object.
 	ErrUnknownAction     = errors.New("unknown action")

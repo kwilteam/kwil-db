@@ -2211,6 +2211,16 @@ func (s *schemaVisitor) VisitStmt_variable_assignment(ctx *gen.Stmt_variable_ass
 	stmt.Value = ctx.Action_expr(1).Accept(s).(Expression)
 
 	if ctx.Type_() != nil {
+		// if a type is specified, the assign variable must be a variable
+		switch stmt.Variable.(type) {
+		case *ExpressionVariable:
+			// do nothing, this is the expected type
+		case *ExpressionArrayAccess:
+			s.errs.RuleErr(ctx.Action_expr(0), ErrSyntax, "cannot assign new type to slice element(s)")
+		default:
+			panic("unknown assignable type")
+		}
+
 		stmt.Type = ctx.Type_().Accept(s).(*types.DataType)
 	}
 
