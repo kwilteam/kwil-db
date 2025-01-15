@@ -14,11 +14,11 @@ func addSerializedTypePrefix(encoding EncodingType, encodedValue []byte) []byte 
 // removeSerializedTypePrefix removes the prefix from the encoded value.
 func removeSerializedTypePrefix(data []byte) (EncodingType, []byte, error) {
 	if len(data) < 3 {
-		return encodingTypeInvalid, nil, errors.New("cannot deserialize encoded value: data is too short")
+		return EncodingTypeInvalid, nil, errors.New("cannot deserialize encoded value: data is too short")
 	}
 	typ, err := bytesToUint16(data[:2])
 	if err != nil {
-		return encodingTypeInvalid, nil, err
+		return EncodingTypeInvalid, nil, err
 	}
 
 	return typ, data[2:], nil

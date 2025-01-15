@@ -26,6 +26,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
+	"github.com/kwilteam/kwil-db/node/rlp"
 	"github.com/kwilteam/kwil-db/node/voting"
 )
 
@@ -58,12 +59,12 @@ type MigrationDeclaration struct {
 
 // MarshalBinary marshals the MigrationDeclaration into a binary format.
 func (md MigrationDeclaration) MarshalBinary() ([]byte, error) {
-	return serialize.Encode(md)
+	return serialize.EncodeWithEncodingType(md, rlp.EncodingTypeRLP)
 }
 
 // UnmarshalBinary unmarshals the MigrationDeclaration from a binary format.
 func (md *MigrationDeclaration) UnmarshalBinary(data []byte) error {
-	return serialize.Decode(data, md)
+	return serialize.DecodeWithEncodingType(data, md, rlp.EncodingTypeRLP)
 }
 
 // MigrationResolution is the definition for the network migration vote type in Kwil's

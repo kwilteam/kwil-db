@@ -584,6 +584,8 @@ func EmptyIfNil(b []byte) []byte {
 	return b
 }
 
+// WriteBytes writes a byte slice to a writer. This uses a 32-bit length prefix
+// to indicate how much data to read when deserializing.
 func WriteBytes(w io.Writer, data []byte) error {
 	if data == nil {
 		return binary.Write(w, SerializationByteOrder, uint32(math.MaxUint32))
@@ -595,10 +597,13 @@ func WriteBytes(w io.Writer, data []byte) error {
 	return err
 }
 
+// WriteString writes a string to a writer. This uses a 32-bit length prefix.
 func WriteString(w io.Writer, s string) error {
 	return WriteBytes(w, []byte(s))
 }
 
+// ReadBytes reads a byte slice from a reader. This expects a 32-bit length
+// prefix as written by WriteBytes.
 func ReadBytes(r io.Reader) ([]byte, error) {
 	var length uint32
 	if err := binary.Read(r, SerializationByteOrder, &length); err != nil {
@@ -634,6 +639,8 @@ func ReadBytes(r io.Reader) ([]byte, error) {
 	return data, nil
 }
 
+// ReadString reads a string from a reader. This expects a 32-bit length prefix
+// as written by WriteString.
 func ReadString(r io.Reader) (string, error) {
 	bts, err := ReadBytes(r)
 	return string(bts), err
