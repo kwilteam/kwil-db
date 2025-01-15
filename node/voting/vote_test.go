@@ -119,7 +119,7 @@ func Test_Voting(t *testing.T) {
 
 				// Ensure that the voter type is set to 1 / ed25519
 				for _, voter := range voters {
-					require.Equal(t, crypto.KeyTypeEd25519, voter.PubKeyType)
+					require.Equal(t, crypto.KeyTypeEd25519, voter.Type)
 				}
 
 				voterAPower, err := v.GetValidatorPower(ctx, []byte("a"), crypto.KeyTypeEd25519)
@@ -255,7 +255,7 @@ func Test_Voting(t *testing.T) {
 
 				require.EqualValues(t, resolutionInfo, expired[0])
 				require.Equal(t, resolutionInfo.Proposer.Power, int64(100))
-				require.Equal(t, resolutionInfo.Proposer.PubKeyType, crypto.KeyTypeEd25519)
+				require.Equal(t, resolutionInfo.Proposer.Type, crypto.KeyTypeEd25519)
 				require.Equal(t, []byte(resolutionInfo.Proposer.PubKey[:]), []byte("a"))
 			},
 		},

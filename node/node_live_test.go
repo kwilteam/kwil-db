@@ -20,6 +20,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/core/types"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/accounts"
 	blockprocessor "github.com/kwilteam/kwil-db/node/block_processor"
@@ -67,9 +68,11 @@ func TestSingleNodeMocknet(t *testing.T) {
 	valSet := make(map[string]ktypes.Validator)
 	for _, priv := range privKeys {
 		valSet[hex.EncodeToString(priv.Public().Bytes())] = ktypes.Validator{
-			PubKey:     priv.Public().Bytes(),
-			PubKeyType: priv.Type(),
-			Power:      1,
+			NodeKey: types.NodeKey{
+				PubKey: priv.Public().Bytes(),
+				Type:   priv.Type(),
+			},
+			Power: 1,
 		}
 	}
 	valSetList := make([]*ktypes.Validator, 0, len(valSet))
@@ -211,9 +214,11 @@ func TestDualNodeMocknet(t *testing.T) {
 	valSet := make(map[string]ktypes.Validator)
 	for _, priv := range privKeys {
 		valSet[hex.EncodeToString(priv.Public().Bytes())] = ktypes.Validator{
-			PubKey:     priv.Public().Bytes(),
-			PubKeyType: priv.Type(),
-			Power:      1,
+			NodeKey: types.NodeKey{
+				PubKey: priv.Public().Bytes(),
+				Type:   priv.Type(),
+			},
+			Power: 1,
 		}
 	}
 	valSetList := make([]*ktypes.Validator, 0, len(valSet))

@@ -292,27 +292,27 @@ func Test_Routes(t *testing.T) {
 type mockAccount struct {
 }
 
-func (a *mockAccount) GetAccount(_ context.Context, _ sql.Executor, acctID string) (*types.Account, error) {
+func (a *mockAccount) GetAccount(_ context.Context, _ sql.Executor, acctID *types.AccountID) (*types.Account, error) {
 	return &types.Account{
-		Identifier: acctID,
-		Balance:    big.NewInt(0),
-		Nonce:      0,
+		ID:      acctID,
+		Balance: big.NewInt(0),
+		Nonce:   0,
 	}, nil
 }
 
-func (a *mockAccount) Spend(_ context.Context, _ sql.Executor, acctID string, amount *big.Int, nonce int64) error {
+func (a *mockAccount) Spend(_ context.Context, _ sql.Executor, acctID *types.AccountID, amount *big.Int, nonce int64) error {
 	return nil
 }
 
-func (a *mockAccount) Credit(_ context.Context, _ sql.Executor, acctID string, amount *big.Int) error {
+func (a *mockAccount) Credit(_ context.Context, _ sql.Executor, acctID *types.AccountID, amount *big.Int) error {
 	return nil
 }
 
-func (a *mockAccount) Transfer(_ context.Context, _ sql.TxMaker, from, to string, amount *big.Int) error {
+func (a *mockAccount) Transfer(_ context.Context, _ sql.TxMaker, from, to *types.AccountID, amount *big.Int) error {
 	return nil
 }
 
-func (a *mockAccount) ApplySpend(_ context.Context, _ sql.Executor, acctID string, amount *big.Int, nonce int64) error {
+func (a *mockAccount) ApplySpend(_ context.Context, _ sql.Executor, acctID *types.AccountID, amount *big.Int, nonce int64) error {
 	return nil
 }
 func (a *mockAccount) Commit() error {

@@ -65,7 +65,7 @@ func (r *respValSets) MarshalJSON() ([]byte, error) {
 		valInfos[i] = valInfo{
 			PubKey:     fmt.Sprintf("%x", v.PubKey),
 			Power:      v.Power,
-			PubKeyType: v.PubKeyType.String(),
+			PubKeyType: v.Type.String(),
 		}
 	}
 

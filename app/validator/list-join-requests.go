@@ -3,7 +3,6 @@ package validator
 import (
 	"bytes"
 	"context"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"math"
@@ -86,7 +85,7 @@ func (r *respJoinList) MarshalText() ([]byte, error) {
 			}
 		}
 
-		msg.WriteString(fmt.Sprintf("\n %s | % 5d | % 9d | %d", hex.EncodeToString(j.Candidate), j.Power, approvals, j.ExpiresAt))
+		msg.WriteString(fmt.Sprintf("\n %s | % 5d | % 9d | %d", j.Candidate.String(), j.Power, approvals, j.ExpiresAt))
 
 	}
 

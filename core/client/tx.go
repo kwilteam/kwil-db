@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	clientType "github.com/kwilteam/kwil-db/core/client/types"
-	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
@@ -33,9 +32,9 @@ func (c *Client) newTx(ctx context.Context, data types.Payload, txOpts *clientTy
 	if txOpts.Nonce > 0 {
 		nonce = uint64(txOpts.Nonce)
 	} else {
-		ident, err := auth.GetIdentifierFromSigner(c.Signer())
+		ident, err := types.GetSignerAccount(c.Signer())
 		if err != nil {
-			return nil, fmt.Errorf("failed to get identifier: %w", err)
+			return nil, fmt.Errorf("failed to get signer account: %w", err)
 		}
 
 		// Get the latest nonce for the account, if it exists.
@@ -46,7 +45,7 @@ func (c *Client) newTx(ctx context.Context, data types.Payload, txOpts *clientTy
 
 		// NOTE: an error type would be more robust signalling of a non-existent
 		// account, but presently a nil ID is set by internal/accounts.
-		if len(acc.Identifier) > 0 {
+		if acc.ID != nil && len(acc.ID.Identifier) > 0 {
 			nonce = uint64(acc.Nonce + 1)
 		} else {
 			nonce = 1

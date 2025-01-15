@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
@@ -45,15 +46,22 @@ func (m *mockDB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Re
 	// mock some expected queries from internal functions
 	switch stmt {
 	case sqlCreateAccount: // via createAccount and createAccountWithNonce
-		id := args[0].(string)
+		acctID := args[0].([]byte)
 		bal, ok := big.NewInt(0).SetString(args[1].(string), 10)
 		if !ok {
 			return nil, errors.New("not a string balance")
 		}
-		m.accts[id] = &types.Account{
-			Identifier: id,
-			Nonce:      args[2].(int64),
-			Balance:    bal,
+
+		acct := &types.AccountID{}
+		err := acct.Decode(acctID)
+		if err != nil {
+			return nil, err
+		}
+
+		m.accts[string(acctID)] = &types.Account{
+			ID:      acct,
+			Nonce:   args[2].(int64),
+			Balance: bal,
 		}
 		return &sql.ResultSet{
 			Status: sql.CommandTag{
@@ -66,9 +74,9 @@ func (m *mockDB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Re
 		if !ok {
 			return nil, errors.New("not a string balance")
 		}
-		id, nonce := args[2].(string), args[1].(int64)
+		acctID, nonce := args[2].([]byte), args[1].(int64)
 
-		acct, ok := m.accts[id]
+		acct, ok := m.accts[string(acctID)]
 		if !ok {
 			return &sql.ResultSet{
 				Status: sql.CommandTag{
@@ -89,8 +97,8 @@ func (m *mockDB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Re
 		}, nil
 	case sqlGetAccount: // via getAccount
 		m.accessCnt++
-		id := args[0].(string)
-		acct, ok := m.accts[id]
+		acctID := args[0].([]byte)
+		acct, ok := m.accts[string(acctID)]
 		if !ok {
 			return &sql.ResultSet{}, nil // not ErrNoRows since we don't use Scan in pg
 		}
@@ -114,8 +122,14 @@ type counter interface {
 }
 
 var (
-	account1 = "account1"
-	account2 = "account2"
+	account1 = &types.AccountID{
+		Identifier: []byte("account1"),
+		KeyType:    crypto.KeyTypeSecp256k1,
+	}
+	account2 = &types.AccountID{
+		Identifier: []byte("account2"),
+		KeyType:    crypto.KeyTypeSecp256k1,
+	}
 )
 
 type acctsTestCase struct {
@@ -148,10 +162,13 @@ var acctsTestCases = []acctsTestCase{
 			// first credit, access db
 			verifyDBAccessCount(t, c, 1, skip)
 
-			_, ok := a.records[account1]
+			acctID1, err := account1.Encode()
+			require.NoError(t, err)
+
+			_, ok := a.records[string(acctID1)]
 			require.False(t, ok)
 
-			acct, ok := a.updates[account1]
+			acct, ok := a.updates[string(acctID1)]
 			require.True(t, ok)
 			assert.Equal(t, int64(100), acct.Balance.Int64())
 

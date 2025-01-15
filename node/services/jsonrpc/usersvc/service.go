@@ -43,7 +43,7 @@ type BlockchainTransactor interface {
 }
 
 type NodeApp interface {
-	AccountInfo(ctx context.Context, db sql.DB, identifier string, pending bool) (balance *big.Int, nonce int64, err error)
+	AccountInfo(ctx context.Context, db sql.DB, account *types.AccountID, pending bool) (balance *big.Int, nonce int64, err error)
 	Price(ctx context.Context, dbTx sql.DB, tx *types.Transaction) (*big.Int, error)
 	GetMigrationMetadata(ctx context.Context) (*types.MigrationMetadata, error)
 }
@@ -550,27 +550,28 @@ func (svc *Service) Account(ctx context.Context, req *userjson.AccountRequest) (
 	// be others such as finalized and safe.
 	uncommitted := req.Status != nil && *req.Status > 0
 
-	if len(req.Identifier) == 0 {
+	if req.ID == nil || len(req.ID.Identifier) == 0 {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "missing account identifier", nil)
 	}
 
 	readTx := svc.db.BeginDelayedReadTx()
 	defer readTx.Rollback(ctx)
 
-	balance, nonce, err := svc.nodeApp.AccountInfo(ctx, readTx, req.Identifier, uncommitted)
+	balance, nonce, err := svc.nodeApp.AccountInfo(ctx, readTx, req.ID, uncommitted)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorAccountInternal, "account info error", nil)
 	}
 
-	ident := ""
-	if nonce > 0 { // return nil pubkey for non-existent account
-		ident = req.Identifier
+	var ident *types.AccountID
+	var zeroBal big.Int
+	if nonce > 0 || balance.Cmp(&zeroBal) > 0 { // return nil pubkey for non-existent account
+		ident = req.ID
 	}
 
 	return &userjson.AccountResponse{
-		Identifier: ident, // nil for non-existent account
-		Nonce:      nonce,
-		Balance:    balance.String(),
+		ID:      ident, // nil for non-existent account
+		Nonce:   nonce,
+		Balance: balance.String(),
 	}, nil
 }
 
@@ -668,7 +669,7 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 	defer cancel()
 
 	txContext, jsonRPCErr := svc.txCtx(ctxExec, msg)
-	if err != nil {
+	if jsonRPCErr != nil {
 		return nil, jsonRPCErr
 	}
 

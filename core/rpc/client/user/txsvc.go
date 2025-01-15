@@ -17,7 +17,7 @@ type TxSvcClient interface {
 	Call(ctx context.Context, msg *types.CallMessage, opts ...client.ActionCallOption) (*types.CallResult, error)
 	ChainInfo(ctx context.Context) (*types.ChainInfo, error)
 	EstimateCost(ctx context.Context, tx *types.Transaction) (*big.Int, error)
-	GetAccount(ctx context.Context, identifier string, status types.AccountStatus) (*types.Account, error)
+	GetAccount(ctx context.Context, identifier *types.AccountID, status types.AccountStatus) (*types.Account, error)
 	Ping(ctx context.Context) (string, error)
 	Query(ctx context.Context, query string, params map[string]*types.EncodedValue) (*types.QueryResult, error)
 	TxQuery(ctx context.Context, txHash types.Hash) (*types.TxQueryResponse, error)

@@ -79,9 +79,11 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) ([]*Config, ma
 	var valSet []*ktypes.Validator
 	for _, pubKey := range pubKeys {
 		val := &ktypes.Validator{
-			PubKey:     types.HexBytes(pubKey.Bytes()),
-			PubKeyType: pubKey.Type(),
-			Power:      1,
+			NodeKey: ktypes.NodeKey{
+				PubKey: types.HexBytes(pubKey.Bytes()),
+				Type:   pubKey.Type(),
+			},
+			Power: 1,
 		}
 		validatorSet[hex.EncodeToString(pubKey.Bytes())] = *val
 		valSet = append(valSet, val)
@@ -644,14 +646,14 @@ func createBlockProposals(t *testing.T, ce *ConsensusEngine, valSet map[string]k
 	hasher := ktypes.NewHasher()
 	keys := make([]string, 0, len(valSet))
 	for _, v := range valSet {
-		keys = append(keys, config.EncodePubKeyAndType(v.PubKey, v.PubKeyType))
+		keys = append(keys, config.EncodePubKeyAndType(v.PubKey, v.Type))
 	}
 	slices.Sort(keys)
 
 	for _, key := range keys {
 		val := valSet[key]
 		hasher.Write(val.PubKey)
-		binary.Write(hasher, binary.BigEndian, val.PubKeyType)
+		binary.Write(hasher, binary.BigEndian, val.Type)
 		binary.Write(hasher, binary.BigEndian, val.Power)
 	}
 	hash := hasher.Sum(nil)
@@ -890,7 +892,7 @@ func (d *dummyTxApp) Rollback() {}
 func (d *dummyTxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*ktypes.Validator, genesisAccounts []*ktypes.Account, initialHeight int64, dbOwner string, chain *common.ChainContext) error {
 	return nil
 }
-func (d *dummyTxApp) AccountInfo(ctx context.Context, dbTx sql.DB, identifier string, pending bool) (balance *big.Int, nonce int64, err error) {
+func (d *dummyTxApp) AccountInfo(ctx context.Context, dbTx sql.DB, identifier *ktypes.AccountID, pending bool) (balance *big.Int, nonce int64, err error) {
 	return big.NewInt(0), 0, nil
 }
 

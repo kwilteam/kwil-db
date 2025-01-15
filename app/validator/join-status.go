@@ -65,21 +65,24 @@ type respValJoinStatus struct {
 
 // respValJoinRequest is customized json format for respValJoinStatus
 type respValJoinRequest struct {
-	Candidate string   `json:"candidate"`
-	Power     int64    `json:"power"`
-	Board     []string `json:"board"`
-	Approved  []bool   `json:"approved"`
+	Candidate types.NodeKey   `json:"candidate"`
+	Power     int64           `json:"power"`
+	Board     []types.NodeKey `json:"board"`
+	Approved  []bool          `json:"approved"`
 }
 
 func (r *respValJoinStatus) MarshalJSON() ([]byte, error) {
 	joinReq := &respValJoinRequest{
-		Candidate: fmt.Sprintf("%x", r.Data.Candidate),
+		Candidate: r.Data.Candidate,
 		Power:     r.Data.Power,
-		Board:     make([]string, len(r.Data.Board)),
+		Board:     make([]types.NodeKey, len(r.Data.Board)),
 		Approved:  r.Data.Approved,
 	}
 	for i := range r.Data.Board {
-		joinReq.Board[i] = fmt.Sprintf("%x", r.Data.Board[i])
+		joinReq.Board[i] = types.NodeKey{
+			PubKey: r.Data.Board[i].PubKey,
+			Type:   r.Data.Board[i].Type,
+		}
 	}
 
 	return json.Marshal(joinReq)
@@ -96,7 +99,7 @@ func (r *respValJoinStatus) MarshalText() ([]byte, error) {
 	needed := int(math.Ceil(float64(len(r.Data.Board)) * 2 / 3))
 
 	var msg bytes.Buffer
-	msg.WriteString(fmt.Sprintf("Candidate: %x\n", r.Data.Candidate))
+	msg.WriteString(fmt.Sprintf("Candidate: %s\n", r.Data.Candidate.String()))
 	msg.WriteString(fmt.Sprintf("Requested Power: %d\n", r.Data.Power))
 	msg.WriteString(fmt.Sprintf("Expiration Height: %d\n", r.Data.ExpiresAt))
 
@@ -109,7 +112,7 @@ func (r *respValJoinStatus) MarshalText() ([]byte, error) {
 		}
 
 		msg.WriteString(fmt.Sprintf("Validator %x, %s\n",
-			r.Data.Board[i], approvedTerm))
+			r.Data.Board[i].String(), approvedTerm))
 	}
 
 	return msg.Bytes(), nil

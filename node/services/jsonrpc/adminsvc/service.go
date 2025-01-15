@@ -48,7 +48,7 @@ type App interface {
 	// AccountInfo returns the unconfirmed account info for the given identifier.
 	// If unconfirmed is true, the account found in the mempool is returned.
 	// Otherwise, the account found in the blockchain is returned.
-	AccountInfo(ctx context.Context, db sql.DB, identifier string, unconfirmed bool) (balance *big.Int, nonce int64, err error)
+	AccountInfo(ctx context.Context, db sql.DB, identifier *ktypes.AccountID, unconfirmed bool) (balance *big.Int, nonce int64, err error)
 	Price(ctx context.Context, db sql.DB, tx *ktypes.Transaction) (*big.Int, error)
 	BlockExecutionStatus() *ktypes.BlockExecutionStatus
 }
@@ -265,14 +265,17 @@ func (svc *Service) Status(ctx context.Context, req *adminjson.StatusRequest) (*
 	}
 
 	var power int64
-	power, _ = svc.voting.GetValidatorPower(ctx, status.Validator.PubKey, status.Validator.PubKeyType)
+	power, _ = svc.voting.GetValidatorPower(ctx, status.Validator.PubKey, status.Validator.Type)
 
 	return &adminjson.StatusResponse{
 		Node: status.Node,
 		Sync: convertSyncInfo(status.Sync),
 		Validator: &adminjson.Validator{ // TODO: weed out the type dups
-			PubKey: status.Validator.PubKey,
-			Power:  power,
+			NodeKey: ktypes.NodeKey{
+				PubKey: status.Validator.PubKey,
+				Type:   status.Validator.Type,
+			},
+			Power: power,
 		},
 	}, nil
 }
@@ -300,13 +303,13 @@ func (svc *Service) sendTx(ctx context.Context, payload ktypes.Payload) (*userjs
 	readTx := svc.db.BeginDelayedReadTx()
 	defer readTx.Rollback(ctx)
 
-	ident, err := auth.GetIdentifierFromSigner(svc.signer)
+	acct, err := ktypes.GetSignerAccount(svc.signer)
 	if err != nil {
-		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to get identifier: "+err.Error(), nil)
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "unable to get signer account: "+err.Error(), nil)
 	}
 
 	// Get the latest nonce for the account, if it exists.
-	_, nonce, err := svc.app.AccountInfo(ctx, readTx, ident, true)
+	_, nonce, err := svc.app.AccountInfo(ctx, readTx, acct, true)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorAccountInternal, "account info error: "+err.Error(), nil)
 	}
@@ -415,8 +418,11 @@ func (svc *Service) ListValidators(ctx context.Context, req *adminjson.ListValid
 	pbValidators := make([]*adminjson.Validator, len(vals))
 	for i, vi := range vals {
 		pbValidators[i] = &adminjson.Validator{
-			PubKey: vi.PubKey,
-			Power:  vi.Power,
+			NodeKey: ktypes.NodeKey{
+				PubKey: vi.PubKey,
+				Type:   vi.Type,
+			},
+			Power: vi.Power,
 		}
 	}
 
@@ -461,8 +467,10 @@ func (svc *Service) toPendingInfo(resolution *resolutions.Resolution, allVoters 
 	board, approvals := svc.approvalsInfo(resolution, allVoters)
 
 	return &adminjson.PendingJoin{
-		Candidate: resolutionBody.PubKey,
-		KeyType:   resolutionBody.PubKeyType,
+		Candidate: ktypes.NodeKey{
+			PubKey: resolutionBody.PubKey,
+			Type:   resolutionBody.PubKeyType,
+		},
 		Power:     resolutionBody.Power,
 		ExpiresAt: resolution.ExpirationHeight,
 		Board:     board,
@@ -470,30 +478,37 @@ func (svc *Service) toPendingInfo(resolution *resolutions.Resolution, allVoters 
 	}, nil
 }
 
-func (svc *Service) approvalsInfo(resolution *resolutions.Resolution, allVoters []*ktypes.Validator) ([]ktypes.HexBytes, []bool) {
+func (svc *Service) approvalsInfo(resolution *resolutions.Resolution, allVoters []*ktypes.Validator) ([]ktypes.NodeKey, []bool) {
 	// to create the board, we will take a list of all approvers and append the voters.
 	// we will then remove any duplicates the second time we see them.
 	// this will result with all approvers at the start of the list, and all voters at the end.
 	// finally, the approvals will be true for the length of the approvers, and false for found.length - voters.length
-	board := make([]ktypes.HexBytes, 0, len(allVoters))
+	board := make([]ktypes.NodeKey, 0, len(allVoters))
 	approvals := make([]bool, len(allVoters))
 	for i, v := range resolution.Voters {
-		board = append(board, v.PubKey)
+		board = append(board, ktypes.NodeKey{
+			PubKey: v.PubKey,
+			Type:   v.Type,
+		})
 		approvals[i] = true
 	}
 	for _, v := range allVoters {
-		board = append(board, v.PubKey)
+		board = append(board, ktypes.NodeKey{
+			PubKey: v.PubKey,
+			Type:   v.Type,
+		})
 	}
 
 	// we will now remove duplicates from the board.
 	found := make(map[string]struct{})
 	for i := 0; i < len(board); i++ {
-		if _, ok := found[string(board[i])]; ok {
+		nodeKey := fmt.Sprintf("%s:%s", string(board[i].PubKey), board[i].Type)
+		if _, ok := found[nodeKey]; ok {
 			board = append(board[:i], board[i+1:]...)
 			i--
 			continue
 		}
-		found[string(board[i])] = struct{}{}
+		found[nodeKey] = struct{}{}
 	}
 
 	return board, approvals

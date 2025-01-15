@@ -41,7 +41,11 @@ func (d *Duration) UnmarshalText(text []byte) error {
 	return nil
 }
 
-type GenesisAlloc map[string]*big.Int
+type GenesisAlloc struct {
+	ID      string   `json:"id"`
+	KeyType string   `json:"key_type"`
+	Amount  *big.Int `json:"amount"`
+}
 
 type GenesisConfig struct {
 	ChainID       string `json:"chain_id"`
@@ -55,7 +59,7 @@ type GenesisConfig struct {
 	// StateHash *types.Hash `json:"state_hash,omitempty"`
 
 	// Alloc is the initial allocation of balances.
-	Allocs GenesisAlloc `json:"alloc,omitempty"`
+	Allocs []GenesisAlloc `json:"alloc,omitempty"`
 
 	// Migration specifies the migration configuration required for zero downtime migration.
 	Migration MigrationParams `json:"migration"`
@@ -130,6 +134,13 @@ func EncodePubKeyAndType(pubKey []byte, pubKeyType crypto.KeyType) string {
 	return fmt.Sprintf("%s#%d", hex.EncodeToString(pubKey), pubKeyType)
 }
 
+func FormatAccountID(acctID *types.AccountID) string {
+	if acctID == nil {
+		return ""
+	}
+	return fmt.Sprintf("%s#%d", acctID.Identifier.String(), acctID.KeyType)
+}
+
 // MigrationParams is the migration configuration required for zero downtime
 // migration. The height values refer to the height of the old/from chain.
 type MigrationParams struct {
@@ -171,7 +182,6 @@ func DefaultGenesisConfig() *GenesisConfig {
 		ChainID:       "kwil-test-chain",
 		InitialHeight: 0,
 		Validators:    []*types.Validator{},
-		Allocs:        make(map[string]*big.Int),
 		StateHash:     nil,
 		Migration:     MigrationParams{},
 		NetworkParameters: types.NetworkParameters{

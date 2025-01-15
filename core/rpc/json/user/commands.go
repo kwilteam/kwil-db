@@ -26,8 +26,8 @@ type SchemaRequest struct {
 
 // AccountRequest contains the request parameters for MethodAccount.
 type AccountRequest struct {
-	Identifier string         `json:"identifier" desc:"account identifier"`
-	Status     *AccountStatus `json:"status,omitempty" desc:"blockchain status (confirmed or unconfirmed)"` // Mapped to URL query parameter `status`.
+	ID     *types.AccountID `json:"id" desc:"account identifier"`
+	Status *AccountStatus   `json:"status,omitempty" desc:"blockchain status (confirmed or unconfirmed)"` // Mapped to URL query parameter `status`.
 }
 
 // AccountStatus is the type used to enumerate the different account status

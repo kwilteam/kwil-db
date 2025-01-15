@@ -119,10 +119,10 @@ func (cl *Client) EstimateCost(ctx context.Context, tx *types.Transaction) (*big
 	return price, nil
 }
 
-func (cl *Client) GetAccount(ctx context.Context, identifier string, status types.AccountStatus) (*types.Account, error) {
+func (cl *Client) GetAccount(ctx context.Context, account *types.AccountID, status types.AccountStatus) (*types.Account, error) {
 	cmd := &userjson.AccountRequest{
-		Identifier: identifier,
-		Status:     &status,
+		ID:     account,
+		Status: &status,
 	}
 	res := &userjson.AccountResponse{}
 	err := cl.CallMethod(ctx, string(userjson.MethodAccount), cmd, res)
@@ -143,9 +143,9 @@ func (cl *Client) GetAccount(ctx context.Context, identifier string, status type
 	// }
 
 	return &types.Account{
-		Identifier: identifier,
-		Balance:    balance,
-		Nonce:      res.Nonce,
+		ID:      res.ID,
+		Balance: balance,
+		Nonce:   res.Nonce,
 	}, nil
 }
 

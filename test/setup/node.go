@@ -216,12 +216,15 @@ func SetupTests(t *testing.T, testConfig *TestConfig) *Testnet {
 				t.Fatal("first node must be a validator")
 			}
 
-			genesisConfig.Leader = types.PublicKey{nodeCfg.PrivateKey.Public()}
+			genesisConfig.Leader = nodeCfg.PrivateKey.Public().(types.PublicKey)
 		}
 		if nodeCfg.Validator {
 			genesisConfig.Validators = append(genesisConfig.Validators, &types.Validator{
-				PubKey: nodeCfg.PrivateKey.Public().Bytes(),
-				Power:  1,
+				NodeKey: types.NodeKey{
+					PubKey: nodeCfg.PrivateKey.Public().Bytes(),
+					Type:   nodeCfg.PrivateKey.Type(),
+				},
+				Power: 1,
 			})
 		}
 

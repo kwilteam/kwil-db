@@ -13,6 +13,7 @@ import (
 	"github.com/kwilteam/kwil-db/node/types/sql"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_MempoolWithoutGas(t *testing.T) {
@@ -44,33 +45,40 @@ func Test_MempoolWithoutGas(t *testing.T) {
 	}
 
 	// Successful transaction A: 1
-	err := m.applyTransaction(txCtx, newTx(t, 1, "A"), db, rebroadcast)
+	tx := newTx(t, 1, "A")
+	senderAcct, err := tx.SenderInfo()
+	require.NoError(t, err)
+	id, err := senderAcct.Encode()
+	require.NoError(t, err)
+
+	err = m.applyTransaction(txCtx, tx, db, rebroadcast)
 	assert.NoError(t, err)
-	assert.EqualValues(t, m.accounts["A"].Nonce, 1)
+	require.NotNil(t, m.accounts[string(id)])
+	assert.EqualValues(t, m.accounts[string(id)].Nonce, 1)
 
 	// Successful transaction A: 2
 	err = m.applyTransaction(txCtx, newTx(t, 2, "A"), db, rebroadcast)
 	assert.NoError(t, err)
-	assert.EqualValues(t, m.accounts["A"].Nonce, 2)
+	assert.EqualValues(t, m.accounts[string(id)].Nonce, 2)
 
 	// Duplicate nonce failure
 	err = m.applyTransaction(txCtx, newTx(t, 2, "A"), db, rebroadcast)
 	assert.Error(t, err)
-	assert.EqualValues(t, m.accounts["A"].Nonce, 2)
+	assert.EqualValues(t, m.accounts[string(id)].Nonce, 2)
 
 	// Invalid order
 	err = m.applyTransaction(txCtx, newTx(t, 4, "A"), db, rebroadcast)
 	assert.Error(t, err)
-	assert.EqualValues(t, m.accounts["A"].Nonce, 2)
+	assert.EqualValues(t, m.accounts[string(id)].Nonce, 2)
 
 	err = m.applyTransaction(txCtx, newTx(t, 3, "A"), db, rebroadcast)
 	assert.NoError(t, err)
-	assert.EqualValues(t, m.accounts["A"].Nonce, 3)
+	assert.EqualValues(t, m.accounts[string(id)].Nonce, 3)
 
 	// Recheck nonce 4 transaction
 	err = m.applyTransaction(txCtx, newTx(t, 4, "A"), db, rebroadcast)
 	assert.NoError(t, err)
-	assert.EqualValues(t, m.accounts["A"].Nonce, 4)
+	assert.EqualValues(t, m.accounts[string(id)].Nonce, 4)
 }
 
 func Test_MempoolWithGas(t *testing.T) {
@@ -97,7 +105,12 @@ func Test_MempoolWithGas(t *testing.T) {
 
 	// Transaction from Unknown sender should fail
 	tx := newTx(t, 1, "A")
-	err := m.applyTransaction(txCtx, tx, db, rebroadcast)
+	senderAcct, err := tx.SenderInfo()
+	require.NoError(t, err)
+	id, err := senderAcct.Encode()
+	require.NoError(t, err)
+
+	err = m.applyTransaction(txCtx, tx, db, rebroadcast)
 	assert.Error(t, err)
 
 	// Resubmitting the same transaction should fail
@@ -105,10 +118,13 @@ func Test_MempoolWithGas(t *testing.T) {
 	assert.Error(t, err)
 
 	// Credit account A
-	m.accounts["A"] = &types.Account{
-		Identifier: "A",
-		Balance:    big.NewInt(100),
-		Nonce:      0,
+	m.accounts[string(id)] = &types.Account{
+		ID: &types.AccountID{
+			Identifier: []byte("A"),
+			KeyType:    crypto.KeyTypeSecp256k1,
+		},
+		Balance: big.NewInt(100),
+		Nonce:   0,
 	}
 
 	// Successful transaction A: 1
@@ -118,7 +134,10 @@ func Test_MempoolWithGas(t *testing.T) {
 
 func newTx(_ *testing.T, nonce uint64, sender string) *types.Transaction {
 	return &types.Transaction{
-		Signature: &auth.Signature{},
+		Signature: &auth.Signature{
+			Data: []byte("signature"),
+			Type: auth.EthPersonalSignAuth,
+		},
 		Body: &types.TransactionBody{
 			Description: "test",
 			Payload:     []byte(`random payload`),
