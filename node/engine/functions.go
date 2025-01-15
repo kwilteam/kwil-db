@@ -15,7 +15,7 @@ var (
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
 
-				if !args[0].EqualsStrict(types.IntType) && args[0].Name != types.NumericStr {
+				if !args[0].Equals(types.IntType) && args[0].Name != types.NumericStr {
 					return nil, fmt.Errorf("%w: expected argument to be int or decimal, got %s", ErrType, args[0].String())
 				}
 
@@ -29,7 +29,7 @@ var (
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
 
-				if !args[0].EqualsStrict(types.TextType) {
+				if !args[0].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
@@ -46,11 +46,11 @@ var (
 					return nil, wrapErrArgumentNumber(2, len(args))
 				}
 
-				if !args[0].EqualsStrict(types.TextType) {
+				if !args[0].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
-				if !args[1].EqualsStrict(types.TextType) {
+				if !args[1].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[1])
 				}
 
@@ -65,11 +65,11 @@ var (
 					return nil, wrapErrArgumentNumber(2, len(args))
 				}
 
-				if !args[0].EqualsStrict(decimal16_6) {
+				if !args[0].Equals(decimal16_6) {
 					return nil, wrapErrArgumentType(decimal16_6, args[0])
 				}
 
-				if !args[1].EqualsStrict(types.TextType) {
+				if !args[1].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[1])
 				}
 
@@ -83,7 +83,7 @@ var (
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
 
-				if !args[0].EqualsStrict(types.TextType) {
+				if !args[0].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
@@ -102,11 +102,11 @@ var (
 					return nil, wrapErrArgumentNumber(2, len(args))
 				}
 
-				if !args[0].EqualsStrict(types.UUIDType) {
+				if !args[0].Equals(types.UUIDType) {
 					return nil, wrapErrArgumentType(types.UUIDType, args[0])
 				}
 
-				if !args[1].EqualsStrict(types.TextType) {
+				if !args[1].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[1])
 				}
 
@@ -121,11 +121,11 @@ var (
 					return nil, wrapErrArgumentNumber(2, len(args))
 				}
 
-				if !args[0].EqualsStrict(types.BlobType) {
+				if !args[0].Equals(types.BlobType) {
 					return nil, wrapErrArgumentType(types.BlobType, args[0])
 				}
 
-				if !args[1].EqualsStrict(types.TextType) {
+				if !args[1].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[1])
 				}
 
@@ -140,11 +140,11 @@ var (
 					return nil, wrapErrArgumentNumber(2, len(args))
 				}
 
-				if !args[0].EqualsStrict(types.TextType) {
+				if !args[0].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
-				if !args[1].EqualsStrict(types.TextType) {
+				if !args[1].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[1])
 				}
 
@@ -159,11 +159,11 @@ var (
 					return nil, wrapErrArgumentNumber(2, len(args))
 				}
 
-				if !args[0].EqualsStrict(types.TextType) && !args[0].EqualsStrict(types.BlobType) {
+				if !args[0].Equals(types.TextType) && !args[0].Equals(types.BlobType) {
 					return nil, fmt.Errorf("%w: expected first argument to be text or blob, got %s", ErrType, args[0].String())
 				}
 
-				if !args[1].EqualsStrict(types.TextType) {
+				if !args[1].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[1])
 				}
 
@@ -178,11 +178,11 @@ var (
 					return nil, wrapErrArgumentNumber(2, len(args))
 				}
 
-				if !args[0].EqualsStrict(types.TextType) {
+				if !args[0].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
-				if !args[1].EqualsStrict(types.BlobType) {
+				if !args[1].Equals(types.BlobType) {
 					return nil, wrapErrArgumentType(types.BlobType, args[1])
 				}
 
@@ -305,7 +305,7 @@ var (
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
 
-				if !args[0].EqualsStrict(types.TextType) {
+				if !args[0].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
@@ -319,7 +319,7 @@ var (
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
 
-				if !args[0].EqualsStrict(types.TextType) {
+				if !args[0].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
@@ -333,7 +333,7 @@ var (
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
 
-				if !args[0].EqualsStrict(types.TextType) {
+				if !args[0].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
@@ -347,7 +347,7 @@ var (
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
 
-				if !args[0].EqualsStrict(types.TextType) {
+				if !args[0].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
@@ -361,7 +361,7 @@ var (
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
 
-				if !args[0].EqualsStrict(types.TextType) {
+				if !args[0].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
@@ -376,15 +376,15 @@ var (
 					return nil, fmt.Errorf("invalid number of arguments: expected 2 or 3, got %d", len(args))
 				}
 
-				if !args[0].EqualsStrict(types.TextType) {
+				if !args[0].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
-				if !args[1].EqualsStrict(types.IntType) {
+				if !args[1].Equals(types.IntType) {
 					return nil, wrapErrArgumentType(types.IntType, args[1])
 				}
 
-				if len(args) == 3 && !args[2].EqualsStrict(types.TextType) {
+				if len(args) == 3 && !args[2].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[2])
 				}
 
@@ -414,7 +414,7 @@ var (
 				}
 
 				for _, arg := range args {
-					if !arg.EqualsStrict(types.TextType) {
+					if !arg.Equals(types.TextType) {
 						return nil, wrapErrArgumentType(types.TextType, arg)
 					}
 				}
@@ -429,7 +429,7 @@ var (
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
 
-				if !args[0].EqualsStrict(types.TextType) {
+				if !args[0].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
@@ -444,19 +444,19 @@ var (
 					return nil, fmt.Errorf("invalid number of arguments: expected 3 or 4, got %d", len(args))
 				}
 
-				if !args[0].EqualsStrict(types.TextType) {
+				if !args[0].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
-				if !args[1].EqualsStrict(types.TextType) {
+				if !args[1].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[1])
 				}
 
-				if !args[2].EqualsStrict(types.IntType) {
+				if !args[2].Equals(types.IntType) {
 					return nil, wrapErrArgumentType(types.IntType, args[2])
 				}
 
-				if len(args) == 4 && !args[3].EqualsStrict(types.IntType) {
+				if len(args) == 4 && !args[3].Equals(types.IntType) {
 					return nil, wrapErrArgumentType(types.IntType, args[3])
 				}
 
@@ -489,7 +489,7 @@ var (
 				}
 
 				for _, arg := range args {
-					if !arg.EqualsStrict(types.TextType) {
+					if !arg.Equals(types.TextType) {
 						return nil, wrapErrArgumentType(types.TextType, arg)
 					}
 				}
@@ -507,15 +507,15 @@ var (
 					return nil, fmt.Errorf("invalid number of arguments: expected 2 or 3, got %d", len(args))
 				}
 
-				if !args[0].EqualsStrict(types.TextType) {
+				if !args[0].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
-				if !args[1].EqualsStrict(types.IntType) {
+				if !args[1].Equals(types.IntType) {
 					return nil, wrapErrArgumentType(types.IntType, args[1])
 				}
 
-				if len(args) == 3 && !args[2].EqualsStrict(types.TextType) {
+				if len(args) == 3 && !args[2].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[2])
 				}
 
@@ -545,7 +545,7 @@ var (
 				}
 
 				for _, arg := range args {
-					if !arg.EqualsStrict(types.TextType) {
+					if !arg.Equals(types.TextType) {
 						return nil, wrapErrArgumentType(types.TextType, arg)
 					}
 				}
@@ -565,15 +565,15 @@ var (
 					return nil, fmt.Errorf("invalid number of arguments: expected 2 or 3, got %d", len(args))
 				}
 
-				if !args[0].EqualsStrict(types.TextType) {
+				if !args[0].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
-				if !args[1].EqualsStrict(types.IntType) {
+				if !args[1].Equals(types.IntType) {
 					return nil, wrapErrArgumentType(types.IntType, args[1])
 				}
 
-				if len(args) == 3 && !args[2].EqualsStrict(types.IntType) {
+				if len(args) == 3 && !args[2].Equals(types.IntType) {
 					return nil, wrapErrArgumentType(types.IntType, args[2])
 				}
 
@@ -604,7 +604,7 @@ var (
 				}
 
 				for _, arg := range args {
-					if !arg.EqualsStrict(types.TextType) {
+					if !arg.Equals(types.TextType) {
 						return nil, wrapErrArgumentType(types.TextType, arg)
 					}
 				}
@@ -619,7 +619,7 @@ var (
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
 
-				if !args[0].EqualsStrict(types.TextType) {
+				if !args[0].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
@@ -633,7 +633,7 @@ var (
 					return nil, fmt.Errorf("invalid number of arguments: expected at least 1, got %d", len(args))
 				}
 
-				if !args[0].EqualsStrict(types.TextType) {
+				if !args[0].Equals(types.TextType) {
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
@@ -650,7 +650,7 @@ var (
 				firstType := args[0]
 				// all arguments must be the same type
 				for i, arg := range args {
-					if !firstType.EqualsStrict(arg) {
+					if !firstType.Equals(arg) {
 						return nil, fmt.Errorf("%w: all arguments must be the same type, but argument %d is %s and argument 1 is %s", ErrType, i+1, arg.String(), firstType.String())
 					}
 				}
@@ -696,12 +696,12 @@ var (
 
 				var retType *types.DataType
 				switch {
-				case args[0].EqualsStrict(types.IntType):
+				case args[0].Equals(types.IntType):
 					retType = decimal1000.Copy()
 				case args[0].Name == types.NumericStr:
 					retType = args[0].Copy()
 					retType.Metadata[0] = 1000 // max precision
-				case args[0].EqualsStrict(types.Uint256Type):
+				case args[0].Equals(types.Uint256Type):
 					retType = decimal1000.Copy()
 				default:
 					panic(fmt.Sprintf("unexpected numeric type: %s", retType.String()))
@@ -724,7 +724,7 @@ var (
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
 
-				if !args[0].IsNumeric() && !args[0].EqualsStrict(types.TextType) {
+				if !args[0].IsNumeric() && !args[0].Equals(types.TextType) {
 					return nil, fmt.Errorf("%w: expected argument to be numeric or text, got %s", ErrType, args[0].String())
 				}
 
@@ -745,7 +745,7 @@ var (
 					return nil, wrapErrArgumentNumber(1, len(args))
 				}
 
-				if !args[0].IsNumeric() && !args[0].EqualsStrict(types.TextType) {
+				if !args[0].IsNumeric() && !args[0].Equals(types.TextType) {
 					return nil, fmt.Errorf("%w: expected argument to be numeric or text, got %s", ErrType, args[0].String())
 				}
 
@@ -812,13 +812,13 @@ var (
 				}
 
 				if len(args) >= 2 {
-					if !args[1].EqualsStrict(types.IntType) {
+					if !args[1].Equals(types.IntType) {
 						return nil, wrapErrArgumentType(types.IntType, args[1])
 					}
 				}
 
 				if len(args) == 3 {
-					if !args[2].EqualsStrict(args[0]) {
+					if !args[2].Equals(args[0]) {
 						return nil, fmt.Errorf("%w: expected default value to be the same type as the value expression: %s != %s", ErrType, args[0].String(), args[2].String())
 					}
 				}
@@ -835,13 +835,13 @@ var (
 				}
 
 				if len(args) >= 2 {
-					if !args[1].EqualsStrict(types.IntType) {
+					if !args[1].Equals(types.IntType) {
 						return nil, wrapErrArgumentType(types.IntType, args[1])
 					}
 				}
 
 				if len(args) == 3 {
-					if !args[2].EqualsStrict(args[0]) {
+					if !args[2].Equals(args[0]) {
 						return nil, fmt.Errorf("%w: expected default value to be the same type as the value expression: %s != %s", ErrType, args[0].String(), args[2].String())
 					}
 				}
@@ -879,7 +879,7 @@ var (
 					return nil, wrapErrArgumentNumber(2, len(args))
 				}
 
-				if !args[1].EqualsStrict(types.IntType) {
+				if !args[1].Equals(types.IntType) {
 					return nil, wrapErrArgumentType(types.IntType, args[1])
 				}
 

@@ -29,7 +29,7 @@ func makeActionToExecutable(namespace string, act *Action) *executable {
 		}
 
 		for i, arg := range v {
-			if !act.Parameters[i].Type.EqualsStrict(arg.Type()) {
+			if !act.Parameters[i].Type.Equals(arg.Type()) {
 				return fmt.Errorf("%w: expected argument %d to be %s, got %s", engine.ErrType, i+1, act.Parameters[i].Type, arg.Type())
 			}
 		}

@@ -209,13 +209,9 @@ func (c *DataType) Copy() *DataType {
 
 // EqualsStrict returns true if the type is equal to the other type.
 // The types must be exactly the same, including metadata.
+// Unlike Equals, it will return false if one of the types is null
+// and the other is not.
 func (c *DataType) EqualsStrict(other *DataType) bool {
-	// if null, return true. null is used if we have a null
-	// value and do not know the type.
-	if c.Name == nullStr || other.Name == nullStr {
-		return true
-	}
-
 	if c.IsArray != other.IsArray {
 		return false
 	}
@@ -228,7 +224,6 @@ func (c *DataType) EqualsStrict(other *DataType) bool {
 }
 
 // Equals returns true if the type is equal to the other type, or if either type is null.
-// TODO: delete this, in favor of EqualsStrict
 func (c *DataType) Equals(other *DataType) bool {
 	if c.Name == nullStr || other.Name == nullStr {
 		return true
