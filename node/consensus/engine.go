@@ -524,9 +524,11 @@ func (ce *ConsensusEngine) updateValidatorSetAndRole() {
 	ce.validatorSet = make(map[string]ktypes.Validator)
 	for _, v := range valset {
 		ce.validatorSet[hex.EncodeToString(v.PubKey)] = ktypes.Validator{
-			PubKey:     v.PubKey,
-			PubKeyType: v.PubKeyType,
-			Power:      v.Power,
+			NodeKey: ktypes.NodeKey{
+				PubKey: v.PubKey,
+				Type:   v.Type,
+			},
+			Power: v.Power,
 		}
 	}
 
@@ -696,9 +698,7 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 		return err
 	}
 
-	ce.log.Info("Network Sync: ", "from", startHeight, "to (excluding)", ce.state.lc.height+1, "time", time.Since(t0), "appHash", ce.state.lc.appHash)
-
-	ce.updateValidatorSetAndRole()
+	ce.log.Debug("Network Sync: ", "from", startHeight, "to (excluding)", ce.state.lc.height+1, "time", time.Since(t0), "appHash", ce.state.lc.appHash)
 
 	return nil
 }

@@ -151,8 +151,11 @@ func (cl *Client) Status(ctx context.Context) (*adminTypes.Status, error) {
 			Syncing:         res.Sync.Syncing,
 		},
 		Validator: &adminTypes.ValidatorInfo{
-			PubKey: res.Validator.PubKey,
-			Power:  res.Validator.Power,
+			NodeKey: types.NodeKey{
+				PubKey: res.Validator.PubKey,
+				Type:   res.Validator.Type,
+			},
+			Power: res.Validator.Power,
 		},
 	}, nil
 }

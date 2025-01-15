@@ -152,9 +152,11 @@ func mergeGenesisFlags(conf *config.GenesisConfig, cmd *cobra.Command, flagCfg *
 			}
 
 			conf.Validators = append(conf.Validators, &types.Validator{
-				PubKey:     hexPub,
-				PubKeyType: crypto.KeyType(keyType),
-				Power:      power,
+				NodeKey: types.NodeKey{
+					PubKey: hexPub,
+					Type:   crypto.KeyType(keyType),
+				},
+				Power: power,
 			})
 		}
 	}
@@ -167,12 +169,31 @@ func mergeGenesisFlags(conf *config.GenesisConfig, cmd *cobra.Command, flagCfg *
 				return nil, makeErr(fmt.Errorf("invalid format for alloc, expected address:balance, received: %s", a))
 			}
 
+			keyParts := strings.Split(parts[0], "#")
+			if len(keyParts) != 2 {
+				return nil, makeErr(fmt.Errorf("invalid address for alloc: %s", parts[0]))
+			}
+
+			keyTypeInt, err := strconv.ParseInt(keyParts[1], 10, 64)
+			if err != nil {
+				return nil, makeErr(fmt.Errorf("invalid key type for genesis allocs: %s", keyParts[1]))
+			}
+			keyType := crypto.KeyType(keyTypeInt)
+
+			if !keyType.Valid() {
+				return nil, makeErr(fmt.Errorf("invalid key type for genesis allocs: %s", keyParts[1]))
+			}
+
 			balance, ok := new(big.Int).SetString(parts[1], 10)
 			if !ok {
 				return nil, makeErr(fmt.Errorf("invalid balance for alloc: %s", parts[1]))
 			}
 
-			conf.Allocs[parts[0]] = balance
+			conf.Allocs = append(conf.Allocs, config.GenesisAlloc{
+				ID:      keyParts[0],
+				KeyType: keyType.String(),
+				Amount:  balance,
+			})
 		}
 	}
 

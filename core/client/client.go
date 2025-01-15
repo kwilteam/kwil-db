@@ -195,16 +195,16 @@ func syncBcastFlag(syncBcast bool) rpcclient.BroadcastWait {
 }
 
 // Transfer transfers balance to a given address.
-func (c *Client) Transfer(ctx context.Context, to string, amount *big.Int, opts ...clientType.TxOpt) (types.Hash, error) {
+func (c *Client) Transfer(ctx context.Context, to *types.AccountID, amount *big.Int, opts ...clientType.TxOpt) (types.Hash, error) {
 	// Get account balance to ensure we can afford the transfer, and use the
 	// nonce to avoid a second GetAccount in newTx.
 
-	ident, err := auth.GetIdentifierFromSigner(c.signer)
+	signerAcctID, err := types.GetSignerAccount(c.signer)
 	if err != nil {
-		return types.Hash{}, fmt.Errorf("failed to get identifier: %w", err)
+		return types.Hash{}, fmt.Errorf("failed to get signer account: %w", err)
 	}
 
-	acct, err := c.txClient.GetAccount(ctx, ident, types.AccountStatusPending)
+	acct, err := c.txClient.GetAccount(ctx, signerAcctID, types.AccountStatusPending)
 	if err != nil {
 		return types.Hash{}, err
 	}
@@ -377,7 +377,7 @@ func (c *Client) Ping(ctx context.Context) (string, error) {
 
 // GetAccount gets account info by account ID.
 // If status is AccountStatusPending, it will include the pending info.
-func (c *Client) GetAccount(ctx context.Context, acctID string, status types.AccountStatus) (*types.Account, error) {
+func (c *Client) GetAccount(ctx context.Context, acctID *types.AccountID, status types.AccountStatus) (*types.Account, error) {
 	return c.txClient.GetAccount(ctx, acctID, status)
 }
 

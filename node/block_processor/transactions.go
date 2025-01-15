@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )
@@ -126,9 +125,10 @@ func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs []*t
 
 		// Drop transactions from unfunded accounts in gasEnabled mode
 		if !bp.chainCtx.NetworkParameters.DisabledGasCosts {
-			ident, err := auth.GetIdentifier(tx.Signature.Type, tx.Sender)
+			ident, err := tx.SenderInfo()
 			if err != nil {
-				return nil, nil, fmt.Errorf("failed to get identifier: %w", err)
+				bp.log.Error("failed to get sender info", "error", err)
+				continue
 			}
 
 			balance, nonce, err := bp.AccountInfo(ctx, readTx, ident, false)
@@ -218,12 +218,12 @@ func (bp *BlockProcessor) prepareValidatorVoteBodyTx(ctx context.Context, nonce 
 	}
 	defer readTx.Rollback(ctx)
 
-	ident, err := auth.GetIdentifierFromSigner(bp.signer)
+	acctID, err := types.GetSignerAccount(bp.signer)
 	if err != nil {
 		return nil, err
 	}
 
-	bal, n, err := bp.AccountInfo(ctx, readTx, ident, false)
+	bal, n, err := bp.AccountInfo(ctx, readTx, acctID, false)
 	if err != nil {
 		return nil, err
 	}
@@ -385,7 +385,7 @@ func (bp *BlockProcessor) PrepareValidatorVoteIDTx(ctx context.Context, db sql.D
 	found := false
 	for _, val := range vals {
 		if bytes.Equal(val.PubKey, myPubKey.Bytes()) &&
-			val.PubKeyType == myPubKey.Type() {
+			val.Type == myPubKey.Type() {
 			found = true
 		}
 	}
@@ -412,12 +412,12 @@ func (bp *BlockProcessor) PrepareValidatorVoteIDTx(ctx context.Context, db sql.D
 		ids = ids[:bp.chainCtx.NetworkParameters.MaxVotesPerTx]
 	}
 
-	ident, err := auth.GetIdentifierFromSigner(bp.signer)
+	acctID, err := types.GetSignerAccount(bp.signer)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to get signer account: %w", err)
 	}
 
-	bal, nonce, err := bp.AccountInfo(ctx, readTx, ident, true)
+	bal, nonce, err := bp.AccountInfo(ctx, readTx, acctID, true)
 	if err != nil {
 		return nil, nil, err
 	}

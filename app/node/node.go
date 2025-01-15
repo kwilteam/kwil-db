@@ -305,9 +305,11 @@ func loadGenesisAndPrivateKey(rootDir string, autogen bool) (privKey crypto.Priv
 	genCfg = config.DefaultGenesisConfig()
 	genCfg.Leader = types.PublicKey{PublicKey: privKey.Public()}
 	genCfg.Validators = append(genCfg.Validators, &types.Validator{
-		PubKey:     privKey.Public().Bytes(),
-		PubKeyType: privKey.Type(),
-		Power:      1,
+		NodeKey: types.NodeKey{
+			PubKey: privKey.Public().Bytes(),
+			Type:   privKey.Type(),
+		},
+		Power: 1,
 	})
 	if err := genCfg.SaveAs(genFile); err != nil {
 		return nil, nil, fmt.Errorf("failed to write genesis file in autogen mode %s: %w", genFile, err)

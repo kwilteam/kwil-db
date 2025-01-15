@@ -144,21 +144,21 @@ type Accounts interface {
 	// treated as a debit. Accounts cannot have negative balances, and
 	// will return an error if the amount would cause the balance to go
 	// negative.
-	Credit(ctx context.Context, tx sql.Executor, address string, balance *big.Int) error
+	Credit(ctx context.Context, tx sql.Executor, account *types.AccountID, balance *big.Int) error
 	// Transfer transfers an amount from one account to another. If the
 	// from account does not have enough funds to transfer the amount,
 	// it will fail. If the to account does not exist, it will be
 	// created. The amount must be greater than 0.
-	Transfer(ctx context.Context, tx sql.TxMaker, from, to string, amt *big.Int) error
+	Transfer(ctx context.Context, tx sql.TxMaker, from, to *types.AccountID, amt *big.Int) error
 	// GetAccount retrieves the account with the given identifier. If the
 	// account does not exist, it will return an account with a balance
 	// of 0 and a nonce of 0.
-	GetAccount(ctx context.Context, tx sql.Executor, account string) (*types.Account, error)
+	GetAccount(ctx context.Context, tx sql.Executor, account *types.AccountID) (*types.Account, error)
 	// ApplySpend applies a spend to the account. If the account does not
 	// exist, it will be created. If the account does not have enough
 	// funds to spend the amount, the entire balance will be spent and
 	// the spend will fail.
-	ApplySpend(ctx context.Context, tx sql.Executor, account string, amount *big.Int, nonce int64) error
+	ApplySpend(ctx context.Context, tx sql.Executor, account *types.AccountID, amount *big.Int, nonce int64) error
 }
 
 // Validators is an interface for managing validators on the Kwil network.

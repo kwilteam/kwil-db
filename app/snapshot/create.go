@@ -6,6 +6,7 @@ import (
 	"compress/gzip"
 	"context"
 	"crypto/sha256"
+	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -20,6 +21,7 @@ import (
 	"github.com/kwilteam/kwil-db/app/shared/bind"
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/config"
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node"
 	"github.com/kwilteam/kwil-db/node/meta"
@@ -231,6 +233,12 @@ func PGDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 				return -1, nil, nil, fmt.Errorf("failed to decode voter ID: %w", err)
 			}
 
+			// voterID is the encoded public key
+			pubkey, keyType, err := decodePubKey(voterID)
+			if err != nil {
+				return -1, nil, nil, fmt.Errorf("failed to decode public key: %w", err)
+			}
+
 			power, err := strconv.ParseInt(strs[2], 10, 64)
 			if err != nil {
 				return -1, nil, nil, fmt.Errorf("failed to parse power: %w", err)
@@ -238,8 +246,11 @@ func PGDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 
 			// TODO: update this once the keytype is added to the voters table
 			genCfg.Validators = append(genCfg.Validators, &types.Validator{
-				PubKey: voterID,
-				Power:  power,
+				NodeKey: types.NodeKey{
+					PubKey: pubkey,
+					Type:   keyType,
+				},
+				Power: power,
 			})
 			validatorCount++
 		} else {
@@ -325,4 +336,13 @@ func chainHeight(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort str
 	}
 
 	return height, nil
+}
+
+func decodePubKey(b []byte) ([]byte, crypto.KeyType, error) {
+	if len(b) <= 4 {
+		return nil, 0, errors.New("insufficient data for public key")
+	}
+
+	keyType := crypto.KeyType(binary.LittleEndian.Uint32(b))
+	return b[4:], keyType, nil
 }

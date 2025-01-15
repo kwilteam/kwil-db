@@ -16,6 +16,7 @@ import (
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	root "github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/database"
+	"github.com/kwilteam/kwil-db/config"
 	clientImpl "github.com/kwilteam/kwil-db/core/client"
 	client "github.com/kwilteam/kwil-db/core/client/types"
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -193,7 +194,7 @@ func stringifyCLIArg(a any) string {
 	if typeof.Kind() == reflect.Slice && typeof.Elem().Kind() != reflect.Uint8 {
 		slice := reflect.ValueOf(a)
 		args := make([]string, slice.Len())
-		for i := 0; i < slice.Len(); i++ {
+		for i := range slice.Len() {
 			args[i] = stringifyCLIArg(slice.Index(i).Interface())
 		}
 		return strings.Join(args, ",")
@@ -252,10 +253,11 @@ func (j *jsonRPCCLIDriver) exec(ctx context.Context, args []string, opts ...clie
 
 // printWithSync will
 
-func (j *jsonRPCCLIDriver) GetAccount(ctx context.Context, identifier string, status types.AccountStatus) (*types.Account, error) {
+func (j *jsonRPCCLIDriver) GetAccount(ctx context.Context, identifier *types.AccountID, status types.AccountStatus) (*types.Account, error) {
 	r := &types.Account{}
+	acctID := config.FormatAccountID(identifier)
 
-	args := []string{"account", "get", identifier}
+	args := []string{"account", "balance", acctID}
 	if status == types.AccountStatusPending {
 		args = append(args, "--pending")
 	}
@@ -303,6 +305,7 @@ func (j *jsonRPCCLIDriver) WaitTx(ctx context.Context, txHash types.Hash, interv
 	return clientImpl.WaitForTx(ctx, j.TxQuery, txHash, interval)
 }
 
-func (j *jsonRPCCLIDriver) Transfer(ctx context.Context, to string, amount *big.Int, opts ...client.TxOpt) (types.Hash, error) {
-	return j.exec(ctx, []string{"account", "transfer", to, amount.String()}, opts...)
+func (j *jsonRPCCLIDriver) Transfer(ctx context.Context, to *types.AccountID, amount *big.Int, opts ...client.TxOpt) (types.Hash, error) {
+	toAcct := config.FormatAccountID(to)
+	return j.exec(ctx, []string{"account", "transfer", toAcct, amount.String()}, opts...)
 }

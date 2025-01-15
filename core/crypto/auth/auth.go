@@ -59,6 +59,15 @@ func GetAuthenticator(authType string) Authenticator {
 	}
 }
 
+func IsAuthTypeValid(authType string) bool {
+	switch authType {
+	case Secp256k1Auth, EthPersonalSignAuth, Ed25519Auth:
+		return true
+	default:
+		return false
+	}
+}
+
 func GetIdentifierFromSigner(signer Signer) (string, error) {
 	return GetIdentifier(signer.AuthType(), signer.CompactID())
 }

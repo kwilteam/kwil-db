@@ -551,8 +551,8 @@ func EncodeValue(v any) (*EncodedValue, error) {
 
 // Transfer transfers an amount of tokens from the sender to the receiver.
 type Transfer struct {
-	To     string `json:"to"`     // to be string as user identifier
-	Amount string `json:"amount"` // big.Int
+	To     *AccountID `json:"to"`     // to be string as user identifier
+	Amount string     `json:"amount"` // big.Int
 }
 
 func (v *Transfer) Type() PayloadType {
@@ -562,12 +562,47 @@ func (v *Transfer) Type() PayloadType {
 var _ encoding.BinaryUnmarshaler = (*Transfer)(nil)
 var _ encoding.BinaryMarshaler = (*Transfer)(nil)
 
-func (v *Transfer) UnmarshalBinary(b []byte) error {
-	return serialize.Decode(b, v)
+func (v Transfer) MarshalBinary() ([]byte, error) {
+	if v.To == nil {
+		return nil, errors.New("missing To field in transfer")
+	}
+
+	buf := new(bytes.Buffer)
+	toBts, err := v.To.Encode()
+	if err != nil {
+		return nil, err
+	}
+
+	if err := WriteBytes(buf, toBts); err != nil {
+		return nil, err
+	}
+
+	if err := WriteString(buf, v.Amount); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
-func (v *Transfer) MarshalBinary() ([]byte, error) {
-	return serialize.Encode(v)
+func (v *Transfer) UnmarshalBinary(b []byte) error {
+	rd := bytes.NewReader(b)
+	toBts, err := ReadBytes(rd)
+	if err != nil {
+		return err
+	}
+
+	v.To = &AccountID{}
+	err = v.To.Decode(toBts)
+	if err != nil {
+		return err
+	}
+
+	amount, err := ReadString(rd)
+	if err != nil {
+		return err
+	}
+
+	v.Amount = amount
+	return nil
 }
 
 // ValidatorJoin requests to join the network with

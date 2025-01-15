@@ -241,18 +241,18 @@ func (m *mockAccounts) GetBlockSpends() []*accounts.Spend {
 	return nil
 }
 
-func (m *mockAccounts) Credit(ctx context.Context, tx sql.Executor, address string, balance *big.Int) error {
+func (m *mockAccounts) Credit(ctx context.Context, tx sql.Executor, address *types.AccountID, balance *big.Int) error {
 	return nil
 }
 
-func (m *mockAccounts) Transfer(ctx context.Context, tx sql.TxMaker, from, to string, amt *big.Int) error {
+func (m *mockAccounts) Transfer(ctx context.Context, tx sql.TxMaker, from, to *types.AccountID, amt *big.Int) error {
 	return nil
 }
 
-func (m *mockAccounts) GetAccount(ctx context.Context, tx sql.Executor, account string) (*types.Account, error) {
+func (m *mockAccounts) GetAccount(ctx context.Context, tx sql.Executor, account *types.AccountID) (*types.Account, error) {
 	return nil, nil
 }
 
-func (m *mockAccounts) ApplySpend(ctx context.Context, tx sql.Executor, account string, amount *big.Int, nonce int64) error {
+func (m *mockAccounts) ApplySpend(ctx context.Context, tx sql.Executor, account *types.AccountID, amount *big.Int, nonce int64) error {
 	return nil
 }

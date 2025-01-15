@@ -652,8 +652,11 @@ func (n *Node) Status(ctx context.Context) (*adminTypes.Status, error) {
 			Syncing: n.ce.InCatchup(),
 		},
 		Validator: &adminTypes.ValidatorInfo{
-			PubKey: pkBytes,
-			// Power: 1,
+			NodeKey: ktypes.NodeKey{
+				PubKey: pkBytes,
+				Type:   n.pubkey.Type(),
+			},
+			Power: 1, // Let's default to 1 for now
 		},
 	}, nil
 }

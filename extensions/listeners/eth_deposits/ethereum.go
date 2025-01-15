@@ -14,6 +14,7 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/jpillora/backoff"
+	kcrypto "github.com/kwilteam/kwil-db/core/crypto"
 
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/extensions/resolutions/credit"
@@ -128,7 +129,8 @@ func decodeCreditEvent(l *types.Log) (*credit.AccountCreditResolution, error) {
 	}
 
 	return &credit.AccountCreditResolution{
-		Account: address.Hex(),
+		Account: address.Bytes(),
+		KeyType: kcrypto.KeyTypeSecp256k1,
 		Amount:  amount,
 		TxHash:  l.TxHash.Bytes(),
 	}, nil

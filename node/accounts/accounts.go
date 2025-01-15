@@ -39,7 +39,7 @@ type Accounts struct {
 }
 
 type Spend struct {
-	Account string
+	Account *types.AccountID
 	Amount  *big.Int
 	Nonce   uint64
 }
@@ -63,14 +63,14 @@ func InitializeAccountStore(ctx context.Context, db sql.DB, logger log.Logger) (
 
 // GetAccount retrieves the account with the given identifier. If the account does not exist,
 // it will return an account with a balance of 0 and a nonce of 0.
-func (a *Accounts) GetAccount(ctx context.Context, tx sql.Executor, account string) (*types.Account, error) {
+func (a *Accounts) GetAccount(ctx context.Context, tx sql.Executor, account *types.AccountID) (*types.Account, error) {
 	acct, err := a.getAccount(ctx, tx, account, false)
 	if err != nil {
 		if err == ErrAccountNotFound {
 			return &types.Account{
-				Identifier: account,
-				Balance:    big.NewInt(0),
-				Nonce:      0,
+				ID:      account,
+				Balance: big.NewInt(0),
+				Nonce:   0,
 			}, nil
 		}
 		return nil, err
@@ -81,29 +81,35 @@ func (a *Accounts) GetAccount(ctx context.Context, tx sql.Executor, account stri
 // getAccount retrieves the account with the given identifier.
 // If the account does not exist, it will return an error.
 // If uncommitted is true, it will check the in-memory cache for the account.
-func (a *Accounts) getAccount(ctx context.Context, tx sql.Executor, account string, uncommitted bool) (acct *types.Account, err error) {
+func (a *Accounts) getAccount(ctx context.Context, tx sql.Executor, account *types.AccountID, uncommitted bool) (acct *types.Account, err error) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
+	acctID, err := account.Encode()
+	if err != nil {
+		return nil, err
+	}
+
 	var ok bool
 	if uncommitted {
-		acct, ok = a.updates[account]
+		// Check in the updates first to see if the account has been updated in the current block
+		acct, ok = a.updates[string(acctID)]
 		if ok {
-			a.log.Info("GetAccount: Found account in updates", "account", "id", account, "balance", acct.Balance, "nonce", acct.Nonce)
 			return &types.Account{
-				Identifier: acct.Identifier,
-				Balance:    acct.Balance,
-				Nonce:      acct.Nonce,
+				ID:      account,
+				Balance: big.NewInt(0).Set(acct.Balance),
+				Nonce:   acct.Nonce,
 			}, nil
 		}
 	}
 
-	acct, ok = a.records[account]
+	// Check in the records to see if the account has been read before
+	acct, ok = a.records[string(acctID)]
 	if ok {
 		return &types.Account{
-			Identifier: acct.Identifier,
-			Balance:    acct.Balance,
-			Nonce:      acct.Nonce,
+			ID:      account,
+			Balance: big.NewInt(0).Set(acct.Balance),
+			Nonce:   acct.Nonce,
 		}, nil
 	}
 
@@ -113,11 +119,12 @@ func (a *Accounts) getAccount(ctx context.Context, tx sql.Executor, account stri
 	}
 
 	// Add the account to the in-memory cache
-	a.records[account] = &types.Account{
-		Identifier: acct.Identifier,
-		Balance:    acct.Balance,
-		Nonce:      acct.Nonce,
+	a.records[string(acctID)] = &types.Account{
+		ID:      account,
+		Balance: big.NewInt(0).Set(acct.Balance),
+		Nonce:   acct.Nonce,
 	}
+
 	return acct, nil
 }
 
@@ -125,7 +132,7 @@ func (a *Accounts) getAccount(ctx context.Context, tx sql.Executor, account stri
 // A negative amount will be treated as a debit. Accounts cannot have negative balances, and will
 // return an error if the amount would cause the balance to go negative.
 // It also adds a record to the in-memory cache.
-func (a *Accounts) Credit(ctx context.Context, tx sql.Executor, account string, amt *big.Int) error {
+func (a *Accounts) Credit(ctx context.Context, tx sql.Executor, account *types.AccountID, amt *big.Int) error {
 	acct, err := a.getAccount(ctx, tx, account, true)
 	if err != nil {
 		if errors.Is(err, ErrAccountNotFound) {
@@ -151,7 +158,7 @@ func (a *Accounts) Credit(ctx context.Context, tx sql.Executor, account string, 
 // Spend spends an amount from an account and records nonces. It blocks until the spend is written to the database.
 // The nonce passed must be exactly one greater than the account's nonce. If the nonce is not valid, the spend will fail.
 // If the account does not have enough funds to spend the amount, an ErrInsufficientFunds error will be returned.
-func (a *Accounts) Spend(ctx context.Context, tx sql.Executor, account string, amount *big.Int, nonce int64) error {
+func (a *Accounts) Spend(ctx context.Context, tx sql.Executor, account *types.AccountID, amount *big.Int, nonce int64) error {
 	acct, err := a.getAccount(ctx, tx, account, true)
 	if err != nil {
 		// If amount is 0 and account does not exist, create the account
@@ -181,7 +188,7 @@ func (a *Accounts) Spend(ctx context.Context, tx sql.Executor, account string, a
 	return a.updateAccount(ctx, tx, account, newBal, nonce)
 }
 
-func (a *Accounts) recordSpend(account string, amount *big.Int, nonce int64) {
+func (a *Accounts) recordSpend(account *types.AccountID, amount *big.Int, nonce int64) {
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
@@ -215,7 +222,7 @@ func (a *Accounts) GetBlockSpends() []*Spend {
 // This is used by the new nodes during migration to replicate spends from the old network to the new network.
 // If the account does not have enough funds to spend the amount, spend the entire balance.
 // Nonces on the new network take precedence over the old network, so the nonces are not checked.
-func (a *Accounts) ApplySpend(ctx context.Context, tx sql.Executor, account string, amount *big.Int, nonce int64) error {
+func (a *Accounts) ApplySpend(ctx context.Context, tx sql.Executor, account *types.AccountID, amount *big.Int, nonce int64) error {
 	acct, err := a.getAccount(ctx, tx, account, true)
 	if err != nil {
 		// Spends should not occur on accounts that do not exist during migration as credits are disabled.
@@ -233,7 +240,7 @@ func (a *Accounts) ApplySpend(ctx context.Context, tx sql.Executor, account stri
 
 // Transfer transfers an amount from one account to another. If the from account does not have enough funds to transfer the amount,
 // it will fail. If the to account does not exist, it will be created. The amount must be greater than 0.
-func (a *Accounts) Transfer(ctx context.Context, db sql.TxMaker, from, to string, amt *big.Int) error {
+func (a *Accounts) Transfer(ctx context.Context, db sql.TxMaker, from, to *types.AccountID, amt *big.Int) error {
 	if amt.Sign() < 0 {
 		return ErrNegativeTransfer
 	}
@@ -291,9 +298,9 @@ func (a *Accounts) Commit() error {
 
 	for k, v := range a.updates {
 		a.records[k] = &types.Account{
-			Identifier: v.Identifier,
-			Balance:    v.Balance,
-			Nonce:      v.Nonce,
+			ID:      v.ID,
+			Balance: v.Balance,
+			Nonce:   v.Nonce,
 		}
 	}
 
@@ -322,8 +329,13 @@ func (a *Accounts) Rollback() {
 	a.spends = nil
 }
 
-func (a *Accounts) createAccount(ctx context.Context, tx sql.Executor, account string, amt *big.Int, nonce int64) error {
-	if err := createAccount(ctx, tx, account, amt, nonce); err != nil {
+func (a *Accounts) createAccount(ctx context.Context, tx sql.Executor, account *types.AccountID, amt *big.Int, nonce int64) error {
+	accountID, err := account.Encode()
+	if err != nil {
+		return err
+	}
+
+	if err := createAccount(ctx, tx, accountID, amt, nonce); err != nil {
 		return err
 	}
 
@@ -331,16 +343,22 @@ func (a *Accounts) createAccount(ctx context.Context, tx sql.Executor, account s
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
-	a.updates[account] = &types.Account{
-		Identifier: account,
-		Balance:    amt,
-		Nonce:      nonce,
+	a.updates[string(accountID)] = &types.Account{
+		ID:      account,
+		Balance: big.NewInt(0).Set(amt),
+		Nonce:   nonce,
 	}
+
 	return nil
 }
 
-func (a *Accounts) updateAccount(ctx context.Context, tx sql.Executor, account string, amount *big.Int, nonce int64) error {
-	if err := updateAccount(ctx, tx, account, amount, nonce); err != nil {
+func (a *Accounts) updateAccount(ctx context.Context, tx sql.Executor, account *types.AccountID, amount *big.Int, nonce int64) error {
+	accountID, err := account.Encode()
+	if err != nil {
+		return err
+	}
+
+	if err := updateAccount(ctx, tx, accountID, amount, nonce); err != nil {
 		return err
 	}
 
@@ -348,10 +366,10 @@ func (a *Accounts) updateAccount(ctx context.Context, tx sql.Executor, account s
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
-	a.updates[account] = &types.Account{
-		Identifier: account,
-		Balance:    amount,
-		Nonce:      nonce,
+	a.updates[string(accountID)] = &types.Account{
+		ID:      account,
+		Balance: big.NewInt(0).Set(amount),
+		Nonce:   nonce,
 	}
 	return nil
 }

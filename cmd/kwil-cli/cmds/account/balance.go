@@ -2,6 +2,7 @@ package account
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 
@@ -9,7 +10,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/client"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	clientType "github.com/kwilteam/kwil-db/core/client/types"
-	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/spf13/cobra"
 )
@@ -17,16 +18,38 @@ import (
 func balanceCmd() *cobra.Command {
 	var pending bool
 	cmd := &cobra.Command{
-		Use:   "balance",
+		Use:   "balance accountID keyType",
 		Short: "Gets an account's balance and nonce",
 		Long:  `Gets an account's balance and nonce.`,
-		Args:  cobra.MaximumNArgs(1), // no args means own account
-		RunE: func(cmd *cobra.Command, args []string) error {
-			var acctID string
+		Args:  cobra.MaximumNArgs(2), // no args means own account
+		RunE: func(cmd *cobra.Command, args []string) (err error) {
+			var acctID *types.AccountID
+			var typeStr string
 			var clientFlags uint8
+
 			if len(args) > 0 {
 				clientFlags = client.WithoutPrivateKey
-				acctID = args[0]
+
+				id, err := hex.DecodeString(args[0])
+				if err != nil {
+					return display.PrintErr(cmd, fmt.Errorf("failed to decode account ID: %w", err))
+				}
+
+				if len(args) == 1 {
+					typeStr = crypto.KeyTypeSecp256k1.String()
+				} else {
+					typeStr = args[1]
+				}
+
+				keyType, err := crypto.ParseKeyType(typeStr)
+				if err != nil {
+					return display.PrintErr(cmd, fmt.Errorf("failed to parse key type %s: %w", typeStr, err))
+				}
+
+				acctID = &types.AccountID{
+					Identifier: id,
+					KeyType:    keyType,
+				}
 			} // else use our account from the signer
 
 			return client.DialClient(cmd.Context(), cmd, clientFlags, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
@@ -35,14 +58,11 @@ func balanceCmd() *cobra.Command {
 						return display.PrintErr(cmd, errors.New("no account ID provided and no signer set"))
 					}
 
-					ident, err := auth.Secp25k1Authenticator{}.Identifier(cl.Signer().CompactID())
+					acctID, err = types.GetSignerAccount(cl.Signer())
 					if err != nil {
-						return display.PrintErr(cmd, fmt.Errorf("failed to get identifier: %w", err))
+						return display.PrintErr(cmd, fmt.Errorf("failed to get signer account: %w", err))
 					}
-					acctID = ident
-					if len(acctID) == 0 {
-						return display.PrintErr(cmd, errors.New("empty account ID"))
-					}
+
 				}
 				status := types.AccountStatusLatest
 				if pending {

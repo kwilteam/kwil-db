@@ -80,7 +80,7 @@ func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.
 
 	// Add Genesis Validators
 	for _, validator := range validators {
-		err := r.Validators.SetValidatorPower(ctx, db, validator.PubKey, validator.PubKeyType, validator.Power)
+		err := r.Validators.SetValidatorPower(ctx, db, validator.PubKey, validator.Type, validator.Power)
 		if err != nil {
 			return err
 		}
@@ -88,7 +88,7 @@ func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.
 
 	// Fund Genesis Accounts
 	for _, account := range genesisAccounts {
-		err := r.Accounts.Credit(ctx, db, account.Identifier, account.Balance)
+		err := r.Accounts.Credit(ctx, db, account.ID, account.Balance)
 		if err != nil {
 			return err
 		}
@@ -341,12 +341,12 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 	// Since it is a map, we need to order it for deterministic results.
 	if !block.ChainContext.NetworkParameters.DisabledGasCosts {
 		for _, kv := range order.OrderMap(credits) {
-			key, _, err := config.DecodePubKeyAndType(kv.Key)
-			if err != nil {
-				return err
+			acct := &types.AccountID{}
+			if err = acct.Decode([]byte(kv.Key)); err != nil {
+				return fmt.Errorf("error decoding account id from CreditMap key %s : %w", kv.Key, err)
 			}
 
-			err = r.Accounts.Credit(ctx, db, string(key), kv.Value) // TODO: verify if correct key is used here
+			err = r.Accounts.Credit(ctx, db, acct, kv.Value)
 			if err != nil {
 				return err
 			}
@@ -366,7 +366,7 @@ type creditMap map[string]*big.Int
 
 // applyResolution will calculate the rewards for the proposer and voters of a resolution.
 // it will add the rewards to the credit map.
-func (c creditMap) applyResolution(res *resolutions.Resolution) {
+func (c creditMap) applyResolution(res *resolutions.Resolution) error {
 	// reward voters.
 	// this will include the proposer, even if they did not submit a vote id
 	for _, voter := range res.Voters {
@@ -376,18 +376,26 @@ func (c creditMap) applyResolution(res *resolutions.Resolution) {
 			continue
 		}
 
-		key := config.EncodePubKeyAndType(voter.PubKey, voter.PubKeyType)
+		voterID := &types.AccountID{
+			Identifier: voter.PubKey,
+			KeyType:    voter.Type,
+		}
 
-		currentBalance, ok := c[key]
+		id, err := voterID.Encode()
+		if err != nil {
+			return err
+		}
+
+		currentBalance, ok := c[string(id)]
 		if !ok {
 			currentBalance = big.NewInt(0)
 		}
 
-		c[key] = big.NewInt(0).Add(currentBalance, ValidatorVoteIDPrice)
+		c[string(id)] = big.NewInt(0).Add(currentBalance, ValidatorVoteIDPrice)
 	}
 
 	bodyCost := big.NewInt(ValidatorVoteBodyBytePrice * int64(len(res.Body)))
-	proposerKey := config.EncodePubKeyAndType(res.Proposer.PubKey, res.Proposer.PubKeyType)
+	proposerKey := config.EncodePubKeyAndType(res.Proposer.PubKey, res.Proposer.Type)
 	currentBalance, ok := c[proposerKey]
 	if !ok {
 		currentBalance = big.NewInt(0)
@@ -395,6 +403,8 @@ func (c creditMap) applyResolution(res *resolutions.Resolution) {
 
 	// reward proposer
 	c[proposerKey] = big.NewInt(0).Add(currentBalance, bodyCost)
+
+	return nil
 }
 
 // TxResponse is the response from a transaction.
@@ -463,25 +473,30 @@ func (r *TxApp) checkAndSpend(ctx *common.TxContext, tx *types.Transaction, pric
 		}
 	}
 
+	sender, err := tx.SenderInfo()
+	if err != nil {
+		return nil, types.CodeInvalidSender, err
+	}
+
 	// Get account info
-	account, err := r.Accounts.GetAccount(ctx.Ctx, dbTx, ctx.Caller)
+	account, err := r.Accounts.GetAccount(ctx.Ctx, dbTx, sender)
 	if err == nil {
-		r.service.Logger.Info("account info", "account", tx.Sender, "balance", account.Balance, "nonce", account.Nonce)
+		r.service.Logger.Debug("account info", "account", tx.Sender, "balance", account.Balance, "nonce", account.Nonce)
 	}
 
 	// check if the transaction consented to spending enough tokens
 	if tx.Body.Fee.Cmp(amt) < 0 {
 		// If the transaction does not consent to spending required tokens for the transaction execution,
 		// spend the approved tx fee and terminate the transaction
-		err = r.Accounts.Spend(ctx.Ctx, dbTx, ctx.Caller, tx.Body.Fee, int64(tx.Body.Nonce))
+		err = r.Accounts.Spend(ctx.Ctx, dbTx, sender, tx.Body.Fee, int64(tx.Body.Nonce))
 		if errors.Is(err, accounts.ErrInsufficientFunds) {
 			// spend as much as possible
-			account, err := r.Accounts.GetAccount(ctx.Ctx, dbTx, ctx.Caller)
+			account, err := r.Accounts.GetAccount(ctx.Ctx, dbTx, sender)
 			if err != nil { // account will just be empty if not found
 				return nil, types.CodeUnknownError, err
 			}
 
-			err2 := r.Accounts.Spend(ctx.Ctx, dbTx, ctx.Caller, account.Balance, int64(tx.Body.Nonce))
+			err2 := r.Accounts.Spend(ctx.Ctx, dbTx, sender, account.Balance, int64(tx.Body.Nonce))
 			if err2 != nil {
 				if errors.Is(err2, accounts.ErrAccountNotFound) {
 					return nil, types.CodeInsufficientBalance, errors.New("account has zero balance")
@@ -503,15 +518,15 @@ func (r *TxApp) checkAndSpend(ctx *common.TxContext, tx *types.Transaction, pric
 	}
 
 	// spend the tokens
-	err = r.Accounts.Spend(ctx.Ctx, dbTx, ctx.Caller, amt, int64(tx.Body.Nonce))
+	err = r.Accounts.Spend(ctx.Ctx, dbTx, sender, amt, int64(tx.Body.Nonce))
 	if errors.Is(err, accounts.ErrInsufficientFunds) {
 		// spend as much as possible
-		account, err := r.Accounts.GetAccount(ctx.Ctx, dbTx, ctx.Caller)
+		account, err := r.Accounts.GetAccount(ctx.Ctx, dbTx, sender)
 		if err != nil {
 			return nil, types.CodeUnknownError, err
 		}
 
-		err2 := r.Accounts.Spend(ctx.Ctx, dbTx, ctx.Caller, account.Balance, int64(tx.Body.Nonce))
+		err2 := r.Accounts.Spend(ctx.Ctx, dbTx, sender, account.Balance, int64(tx.Body.Nonce))
 		if err2 != nil {
 			return nil, types.CodeUnknownError, err2
 		}
@@ -541,7 +556,7 @@ func (r *TxApp) ApplyMempool(ctx *common.TxContext, db sql.DB, tx *types.Transac
 
 // AccountInfo gets account info from either the mempool or the account store.
 // It takes a flag to indicate whether it should check the mempool first.
-func (r *TxApp) AccountInfo(ctx context.Context, db sql.DB, acctID string, getUnconfirmed bool) (balance *big.Int, nonce int64, err error) {
+func (r *TxApp) AccountInfo(ctx context.Context, db sql.DB, acctID *types.AccountID, getUnconfirmed bool) (balance *big.Int, nonce int64, err error) {
 	var a *types.Account
 	if getUnconfirmed {
 		a, err = r.mempool.accountInfoSafe(ctx, db, acctID)

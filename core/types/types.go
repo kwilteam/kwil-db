@@ -3,18 +3,90 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 )
 
 // TODO: doc it all
 
+// AccountID uniquely identifies kwil accounts.
+// It is a combination of the Identifier and the key type.
+// Identifier can be a public key or an address.
+type AccountID struct {
+	Identifier HexBytes       `json:"identifier"`
+	KeyType    crypto.KeyType `json:"key_type"`
+}
+
+func (a *AccountID) String() string {
+	if a == nil {
+		return "AccountID{nil}"
+	}
+
+	return fmt.Sprintf("AccountID{identifier = %x, keyType = %s}", a.Identifier, a.KeyType.String())
+}
+
+func (id *AccountID) Encode() ([]byte, error) {
+	if id == nil {
+		return nil, errors.New("nil account ID")
+	}
+
+	buf := new(bytes.Buffer)
+	if err := WriteBytes(buf, id.Identifier); err != nil {
+		return nil, fmt.Errorf("failed to write account identifier: %w", err)
+	}
+
+	if err := binary.Write(buf, binary.LittleEndian, id.KeyType); err != nil {
+		return nil, fmt.Errorf("failed to write key type: %w", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
+func (id *AccountID) Decode(b []byte) error {
+	buf := bytes.NewBuffer(b)
+
+	ident, err := ReadBytes(buf)
+	if err != nil {
+		return fmt.Errorf("failed to read account identifier: %w", err)
+	}
+	id.Identifier = ident
+
+	if err := binary.Read(buf, binary.LittleEndian, &id.KeyType); err != nil {
+		return fmt.Errorf("failed to read key type: %w", err)
+	}
+
+	if !id.KeyType.Valid() {
+		return fmt.Errorf("invalid key type: %s", id.KeyType)
+	}
+
+	return nil
+}
+
+// GetSignerAccount returns the account ID of the signer.
+func GetSignerAccount(signer auth.Signer) (*AccountID, error) {
+	ident := signer.CompactID()
+
+	keyType, err := auth.GetAuthenticatorKeyType(signer.AuthType())
+	if err != nil {
+		return nil, err
+	}
+
+	return &AccountID{
+		Identifier: ident,
+		KeyType:    keyType,
+	}, nil
+}
+
 type Account struct {
-	Identifier string   `json:"identifier"`
-	Balance    *big.Int `json:"balance"`
-	Nonce      int64    `json:"nonce"`
+	ID      *AccountID `json:"id"`
+	Balance *big.Int   `json:"balance"`
+	Nonce   int64      `json:"nonce"`
 }
 
 type AccountStatus uint32
@@ -36,29 +108,85 @@ type ChainInfo struct {
 // the account/owner fields in the user service.
 
 type JoinRequest struct {
-	Candidate HexBytes       `json:"candidate"`  // pubkey of the candidate validator
-	KeyType   crypto.KeyType `json:"key_type"`   // the type of the pubkey of the joiner (ed25519 or secp256k1)
-	Power     int64          `json:"power"`      // the requested power
-	ExpiresAt int64          `json:"expires_at"` // the block height at which the join request expires
-	Board     []HexBytes     `json:"board"`      // slice of pubkeys of all the eligible voting validators
-	Approved  []bool         `json:"approved"`   // slice of bools indicating if the corresponding validator approved
+	Candidate NodeKey   `json:"candidate"`  // pubkey of the candidate validator
+	Power     int64     `json:"power"`      // the requested power
+	ExpiresAt int64     `json:"expires_at"` // the block height at which the join request expires
+	Board     []NodeKey `json:"board"`      // slice of pubkeys of all the eligible voting validators
+	Approved  []bool    `json:"approved"`   // slice of bools indicating if the corresponding validator approved
 }
+
+// NodeKey is a public key of a validator node.
+type NodeKey struct {
+	PubKey HexBytes       `json:"pubkey"`
+	Type   crypto.KeyType `json:"type"`
+}
+
+func (n *NodeKey) String() string {
+	if n == nil {
+		return "NodeKey{nil}"
+	}
+	return fmt.Sprintf("NodeKey{pubkey = %s, keyType = %s}", hex.EncodeToString(n.PubKey), n.Type.String())
+}
+
+// func (n *NodeKey) AuthType() (string, error) {
+// 	switch n.Type {
+// 	case crypto.KeyTypeSecp256k1:
+// 		return auth.Secp256k1Auth, nil
+// 	case crypto.KeyTypeEd25519:
+// 		return auth.Ed25519Auth, nil
+// 	default:
+// 		return "", fmt.Errorf("unknown key type: %s", n.Type)
+// 	}
+// }
 
 type Validator struct {
-	PubKey     HexBytes       `json:"pubkey"`
-	PubKeyType crypto.KeyType `json:"pubkey_type"`
-	Power      int64          `json:"power"`
-}
-
-// ValidatorRemoveProposal is a proposal from an existing validator (remover) to
-// remove a validator (the target) from the validator set.
-type ValidatorRemoveProposal struct {
-	Target  HexBytes `json:"target"`  // pubkey of the validator to remove
-	Remover HexBytes `json:"remover"` // pubkey of the validator proposing the removal
+	NodeKey
+	Power int64 `json:"power"`
 }
 
 func (v *Validator) String() string {
-	return fmt.Sprintf("Validator{pubkey = %x, keyType = %s, power = %d}", v.PubKey, v.PubKeyType.String(), v.Power)
+	return fmt.Sprintf("Validator{pubkey = %x, keyType = %s, power = %d}", v.PubKey, v.Type.String(), v.Power)
+}
+
+type validatorJSON struct {
+	PubKey string `json:"pubkey"`
+	Type   string `json:"type"`
+	Power  int64  `json:"power"`
+}
+
+func (v *Validator) MarshalJSON() ([]byte, error) {
+	if v == nil {
+		return nil, errors.New("nil Validator")
+	}
+
+	return json.Marshal(validatorJSON{
+		PubKey: hex.EncodeToString(v.PubKey),
+		Type:   v.Type.String(),
+		Power:  v.Power,
+	})
+
+}
+
+func (v *Validator) UnmarshalJSON(b []byte) error {
+	var vj validatorJSON
+	if err := json.Unmarshal(b, &vj); err != nil {
+		return err
+	}
+
+	pk, err := hex.DecodeString(vj.PubKey)
+	if err != nil {
+		return err
+	}
+	v.PubKey = pk
+
+	kt, err := crypto.ParseKeyType(vj.Type)
+	if err != nil {
+		return err
+	}
+	v.Type = kt
+
+	v.Power = vj.Power
+	return nil
 }
 
 // DatasetIdentifier contains the information required to identify a dataset.
@@ -123,11 +251,11 @@ func (e *VotableEvent) UnmarshalBinary(b []byte) error {
 }
 
 type PendingResolution struct {
-	Type         string     `json:"type"`
-	ResolutionID *UUID      `json:"resolution_id"` // Resolution ID
-	ExpiresAt    int64      `json:"expires_at"`    // ExpiresAt is the block height at which the resolution expires
-	Board        []HexBytes `json:"board"`         // Board is the list of validators who are eligible to vote on the resolution
-	Approved     []bool     `json:"approved"`      // Approved is the list of bools indicating if the corresponding validator approved the resolution
+	Type         string    `json:"type"`
+	ResolutionID *UUID     `json:"resolution_id"` // Resolution ID
+	ExpiresAt    int64     `json:"expires_at"`    // ExpiresAt is the block height at which the resolution expires
+	Board        []NodeKey `json:"board"`         // Board is the list of validators who are eligible to vote on the resolution
+	Approved     []bool    `json:"approved"`      // Approved is the list of bools indicating if the corresponding validator approved the resolution
 }
 
 // Migration is a migration resolution that is proposed by a validator

@@ -16,7 +16,7 @@ const (
 	accountStoreVersion = 0
 
 	sqlInitTables = `CREATE TABLE IF NOT EXISTS ` + schemaName + `.accounts (
-		identifier TEXT PRIMARY KEY,
+		identifier BYTEA PRIMARY KEY,
 		balance TEXT NOT NULL, -- consider: NUMERIC(32) for uint256 and pgx.Numeric will handle it and provide a *big.Int field
 		nonce BIGINT NOT NULL -- a.k.a. INT8
 	);`
@@ -41,22 +41,27 @@ func initTables(ctx context.Context, tx sql.DB) error {
 }
 
 // updateAccount updates the balance and nonce of an account.
-func updateAccount(ctx context.Context, db sql.Executor, ident string, amount *big.Int, nonce int64) error {
-	_, err := db.Execute(ctx, sqlUpdateAccount, amount.String(), nonce, ident)
+func updateAccount(ctx context.Context, db sql.Executor, acctID []byte, amount *big.Int, nonce int64) error {
+	_, err := db.Execute(ctx, sqlUpdateAccount, amount.String(), nonce, acctID)
 	return err
 }
 
 // createAccount creates an account with the given identifier and
 // initial balance. The nonce will be set to 0.
-func createAccount(ctx context.Context, db sql.Executor, ident string, amt *big.Int, nonce int64) error {
-	_, err := db.Execute(ctx, sqlCreateAccount, ident, amt.String(), nonce)
+func createAccount(ctx context.Context, db sql.Executor, acctID []byte, amt *big.Int, nonce int64) error {
+	_, err := db.Execute(ctx, sqlCreateAccount, acctID, amt.String(), nonce)
 	return err
 }
 
 // getAccount retrieves an account from the database.
 // if the account is not found, it returns nil, ErrAccountNotFound.
-func getAccount(ctx context.Context, db sql.Executor, ident string) (*types.Account, error) {
-	results, err := db.Execute(ctx, sqlGetAccount, ident)
+func getAccount(ctx context.Context, db sql.Executor, account *types.AccountID) (*types.Account, error) {
+	accountID, err := account.Encode()
+	if err != nil {
+		return nil, err
+	}
+
+	results, err := db.Execute(ctx, sqlGetAccount, accountID)
 	if err != nil {
 		return nil, err
 	}
@@ -84,8 +89,11 @@ func getAccount(ctx context.Context, db sql.Executor, ident string) (*types.Acco
 	}
 
 	return &types.Account{
-		Identifier: ident,
-		Balance:    balance,
-		Nonce:      nonce,
+		ID: &types.AccountID{
+			Identifier: account.Identifier,
+			KeyType:    account.KeyType,
+		},
+		Balance: big.NewInt(0).Set(balance),
+		Nonce:   nonce,
 	}, nil
 }

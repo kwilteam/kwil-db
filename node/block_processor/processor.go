@@ -16,6 +16,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/config"
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
@@ -348,10 +349,23 @@ func (bp *BlockProcessor) InitChain(ctx context.Context) (int64, []byte, error) 
 	genCfg := bp.genesisParams
 
 	genesisAllocs := make([]*ktypes.Account, 0, len(genCfg.Allocs))
-	for acct, bal := range genCfg.Allocs {
+	for _, acct := range genCfg.Allocs {
+		acctID, err := hex.DecodeString(acct.ID)
+		if err != nil {
+			return -1, nil, fmt.Errorf("failed to decode genesis account %s: %w", acct.ID, err)
+		}
+
+		keyType, err := crypto.ParseKeyType(acct.KeyType)
+		if err != nil {
+			return -1, nil, fmt.Errorf("failed to parse key type %s: %w", acct.KeyType, err)
+		}
+
 		genesisAllocs = append(genesisAllocs, &ktypes.Account{
-			Identifier: acct, // no need to be removing the prefix 0x anymore
-			Balance:    bal,
+			ID: &ktypes.AccountID{
+				Identifier: acctID,
+				KeyType:    keyType,
+			},
+			Balance: acct.Amount,
 		})
 	}
 
@@ -733,12 +747,16 @@ func txResultsHash(results []ktypes.TxResult) types.Hash {
 
 func (bp *BlockProcessor) accountsHash() types.Hash {
 	accounts := bp.accounts.Updates()
+
 	slices.SortFunc(accounts, func(a, b *ktypes.Account) int {
-		return strings.Compare(a.Identifier, b.Identifier)
+		id1 := fmt.Sprintf("%s:%s", hex.EncodeToString(a.ID.Identifier), a.ID.KeyType.String())
+		id2 := fmt.Sprintf("%s:%s", hex.EncodeToString(b.ID.Identifier), b.ID.KeyType.String())
+		return strings.Compare(id1, id2)
 	})
 	hasher := ktypes.NewHasher()
 	for _, acc := range accounts {
-		hasher.Write([]byte(acc.Identifier))
+		hasher.Write([]byte(acc.ID.Identifier))
+		binary.Write(hasher, binary.BigEndian, acc.ID.KeyType)
 		binary.Write(hasher, binary.BigEndian, acc.Balance.Bytes())
 		binary.Write(hasher, binary.BigEndian, acc.Nonce)
 	}
@@ -824,7 +842,7 @@ func (bp *BlockProcessor) Price(ctx context.Context, dbTx sql.DB, tx *ktypes.Tra
 	return bp.txapp.Price(ctx, dbTx, tx, bp.chainCtx)
 }
 
-func (bp *BlockProcessor) AccountInfo(ctx context.Context, db sql.DB, identifier string, pending bool) (balance *big.Int, nonce int64, err error) {
+func (bp *BlockProcessor) AccountInfo(ctx context.Context, db sql.DB, identifier *ktypes.AccountID, pending bool) (balance *big.Int, nonce int64, err error) {
 	return bp.txapp.AccountInfo(ctx, db, identifier, pending)
 }
 

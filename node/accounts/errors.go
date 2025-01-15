@@ -4,6 +4,8 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+
+	"github.com/kwilteam/kwil-db/core/types"
 )
 
 var (
@@ -16,7 +18,7 @@ var (
 )
 
 // errInsufficientFunds formats an error message for insufficient funds
-func errInsufficientFunds(account string, amount *big.Int, balance *big.Int) error {
+func errInsufficientFunds(account *types.AccountID, amount *big.Int, balance *big.Int) error {
 	return fmt.Errorf("%w: account %s tried to use %s, but only has balance %s",
 		ErrInsufficientFunds, account, amount.String(), balance.String())
 }

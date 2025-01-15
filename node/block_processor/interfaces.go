@@ -44,7 +44,7 @@ type TxApp interface {
 	ApplyMempool(ctx *common.TxContext, db sql.DB, tx *types.Transaction) error
 
 	Price(ctx context.Context, dbTx sql.DB, tx *ktypes.Transaction, chainContext *common.ChainContext) (*big.Int, error)
-	AccountInfo(ctx context.Context, dbTx sql.DB, identifier string, pending bool) (balance *big.Int, nonce int64, err error)
+	AccountInfo(ctx context.Context, dbTx sql.DB, identifier *types.AccountID, pending bool) (balance *big.Int, nonce int64, err error)
 }
 
 // Question:
