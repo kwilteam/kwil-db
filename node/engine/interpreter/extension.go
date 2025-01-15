@@ -49,7 +49,7 @@ func initializeExtension(ctx context.Context, svc *common.Service, db sql.DB, i 
 						}
 
 						for i, result := range a {
-							if !result.Type().EqualsStrict(method.Returns.ColumnTypes[i]) {
+							if !result.Type().Equals(method.Returns.ColumnTypes[i]) {
 								return fmt.Errorf("method %s returned a value of type %s, but expected %s", method.Name, result.Type(), method.Returns.ColumnTypes[i])
 							}
 						}
