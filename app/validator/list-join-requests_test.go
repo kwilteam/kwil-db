@@ -108,7 +108,7 @@ func Test_respJoinList_MarshalText(t *testing.T) {
 					},
 				},
 			},
-			want: "Pending join requests (1 approval needed):\n Candidate                                                        | Power | Approvals | Expiration\n------------------------------------------------------------------+-------+-----------+------------\n 1234 |   100 |         1 | 1000",
+			want: "Pending join requests (1 approval needed):\n Candidate                                                        | Power | Approvals | Expiration\n------------------------------------------------------------------+-------+-----------+------------\n NodeKey{pubkey = 1234, keyType = ed25519} |   100 |         1 | 1000",
 		},
 		{
 			name: "multiple approvals needed",
@@ -143,7 +143,7 @@ func Test_respJoinList_MarshalText(t *testing.T) {
 					},
 				},
 			},
-			want: "Pending join requests (2 approvals needed):\n Candidate                                                        | Power | Approvals | Expiration\n------------------------------------------------------------------+-------+-----------+------------\n 1234 |   100 |         2 | 1000\n 5678 |   200 |         0 | 2000",
+			want: "Pending join requests (2 approvals needed):\n Candidate                                                        | Power | Approvals | Expiration\n------------------------------------------------------------------+-------+-----------+------------\n NodeKey{pubkey = 1234, keyType = ed25519} |   100 |         2 | 1000\n NodeKey{pubkey = 5678, keyType = secp256k1} |   200 |         0 | 2000",
 		},
 	}
 

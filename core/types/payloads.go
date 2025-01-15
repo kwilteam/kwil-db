@@ -549,6 +549,9 @@ func EncodeValue(v any) (*EncodedValue, error) {
 	}, nil
 }
 
+// transfer payload version
+const tVersion = 0
+
 // Transfer transfers an amount of tokens from the sender to the receiver.
 type Transfer struct {
 	To     *AccountID `json:"to"`     // to be string as user identifier
@@ -568,6 +571,13 @@ func (v Transfer) MarshalBinary() ([]byte, error) {
 	}
 
 	buf := new(bytes.Buffer)
+
+	// version uint16
+	if err := binary.Write(buf, SerializationByteOrder, uint16(tVersion)); err != nil {
+		return nil, err
+	}
+
+	// transfer to
 	toBts, err := v.To.Encode()
 	if err != nil {
 		return nil, err
@@ -577,6 +587,7 @@ func (v Transfer) MarshalBinary() ([]byte, error) {
 		return nil, err
 	}
 
+	// transfer amount
 	if err := WriteString(buf, v.Amount); err != nil {
 		return nil, err
 	}
@@ -585,6 +596,16 @@ func (v Transfer) MarshalBinary() ([]byte, error) {
 
 func (v *Transfer) UnmarshalBinary(b []byte) error {
 	rd := bytes.NewReader(b)
+
+	var version uint16
+	if err := binary.Read(rd, SerializationByteOrder, &version); err != nil {
+		return err
+	}
+	if version != tVersion {
+		return fmt.Errorf("unsupported transfer payload version %d", version)
+	}
+
+	// transfer to
 	toBts, err := ReadBytes(rd)
 	if err != nil {
 		return err
@@ -596,6 +617,7 @@ func (v *Transfer) UnmarshalBinary(b []byte) error {
 		return err
 	}
 
+	// transfer amount
 	amount, err := ReadString(rd)
 	if err != nil {
 		return err
