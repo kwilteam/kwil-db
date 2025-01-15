@@ -648,6 +648,7 @@ func Test_Unary(t *testing.T) {
 		},
 		{
 			name: "text",
+			val:  "hello",
 			// text values should not be able to be used with unary operators
 		},
 		{
@@ -794,6 +795,27 @@ func Test_Array(t *testing.T) {
 			// test rountripping strings
 			testRoundTripParse(t, res)
 		})
+	}
+}
+
+// this test tests setting null values to an array of different types
+func Test_ArrayNull(t *testing.T) {
+	decType, err := types.NewDecimalType(10, 5)
+	require.NoError(t, err)
+	decType.IsArray = true
+	for _, dt := range []*types.DataType{
+		types.IntArrayType,
+		types.TextArrayType,
+		types.BoolArrayType,
+		decType,
+		types.UUIDArrayType,
+		types.BlobArrayType,
+	} {
+		n, err := MakeNull(dt)
+		require.NoError(t, err)
+
+		err = n.(ArrayValue).Set(1, &NullValue{})
+		require.NoError(t, err)
 	}
 }
 

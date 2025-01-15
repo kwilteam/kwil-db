@@ -189,10 +189,24 @@ func (i *interpreterPlanner) VisitActionStmtAssignment(p0 *parse.ActionStmtAssig
 	valFn := p0.Value.Accept(i).(exprFunc)
 
 	var arrFn exprFunc
+	// index in case of array access
 	var indexFn exprFunc
+	// to and from in case of slice
+	var toFn exprFunc
+	var fromFn exprFunc
 	if a, ok := p0.Variable.(*parse.ExpressionArrayAccess); ok {
 		arrFn = a.Array.Accept(i).(exprFunc)
-		indexFn = a.Index.Accept(i).(exprFunc)
+		if a.Index != nil {
+			indexFn = a.Index.Accept(i).(exprFunc)
+		}
+		if a.FromTo != nil {
+			if a.FromTo[0] != nil {
+				fromFn = a.FromTo[0].Accept(i).(exprFunc)
+			}
+			if a.FromTo[1] != nil {
+				toFn = a.FromTo[1].Accept(i).(exprFunc)
+			}
+		}
 	}
 	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
 		val, err := valFn(exec)
@@ -200,59 +214,157 @@ func (i *interpreterPlanner) VisitActionStmtAssignment(p0 *parse.ActionStmtAssig
 			return err
 		}
 
-		// if the user specifies an expected type
-		// (e.g. $a text := 'a'), we should check that the type matches.
-		checkType := func(v precompiles.Value) error {
-			if p0.Type != nil {
-				if !v.Type().EqualsStrict(p0.Type) {
-					return fmt.Errorf("%w: expected %s, got %s", engine.ErrType, p0.Type, v.Type())
-				}
-			}
-
-			return nil
-		}
-
 		switch a := p0.Variable.(type) {
 		case *parse.ExpressionVariable:
-			if err := checkType(val); err != nil {
-				return err
+			// if p0 has a type, then a variable must either already exist of that type, OR it must be new
+			if p0.Type != nil {
+				v, err := exec.getVariable(a.Name) // this will error if it does not exist
+				// if unknown variable, assign it.
+				// if other error, return.
+				// if nil error, a var exists, so ensure it is of this type
+				switch {
+				case errors.Is(err, engine.ErrUnknownVariable):
+					err2 := exec.allocateNullVariable(a.Name, p0.Type)
+					if err2 != nil {
+						return err2
+					}
+				case err != nil:
+					return err
+				default:
+					if !v.Type().EqualsStrict(p0.Type) {
+						return fmt.Errorf(`%w: cannot assign new type "%s" to variable "%s" of type "%s"`, engine.ErrType, p0.Type.String(), a.Name, v.Type().String())
+					}
+					// then we do nothing, since it is already allocated.
+				}
 			}
 
 			return exec.setVariable(a.Name, val)
 		case *parse.ExpressionArrayAccess:
-			scalarVal, ok := val.(precompiles.ScalarValue)
-			if !ok {
-				return fmt.Errorf("%w: expected scalar value, got %T", engine.ErrType, val)
+			if p0.Type != nil {
+				return fmt.Errorf(`%w: cannot assign to array element with type assignment "%s"`, engine.ErrType, p0.Type.String())
 			}
 
 			arrVal, err := arrFn(exec)
 			if err != nil {
 				return err
 			}
-
 			arr, ok := arrVal.(precompiles.ArrayValue)
 			if !ok {
 				return fmt.Errorf("%w: expected array, got %T", engine.ErrType, arrVal)
 			}
 
-			index, err := indexFn(exec)
+			// if array access, then there are two cases.
+			// one is that we are assigning a scalar value to an array element:
+			// arr[1] = 5
+			// the other is that we are assigning an array to a slice of an array:
+			// arr[2:3] = [1, 2]
+			// arr[2:] = [1, 2]
+			// arr[:3] = [1, 2]
+
+			if indexFn != nil {
+				// we are assigning a scalar value to an array element
+				scalarVal, ok := val.(precompiles.ScalarValue)
+				if !ok {
+					return fmt.Errorf("%w: expected scalar value, got %T", engine.ErrType, val)
+				}
+
+				index, err := indexFn(exec)
+				if err != nil {
+					return err
+				}
+
+				if index.Null() {
+					return fmt.Errorf("%w: array index cannot be null when assigning to array", engine.ErrInvalidNull)
+				}
+
+				if !index.Type().EqualsStrict(types.IntType) {
+					return fmt.Errorf("array index must be integer, got %s", index.Type())
+				}
+
+				err = arr.Set(int32(index.RawValue().(int64)), scalarVal)
+				if err != nil {
+					return err
+				}
+
+				return nil
+			}
+
+			evaluateSliceIdx := func(fn exprFunc, defaultVal int32) (int32, error) {
+				if fn == nil {
+					return defaultVal, nil
+				}
+
+				val, err := fn(exec)
+				if err != nil {
+					return 0, err
+				}
+
+				if val.Null() {
+					return 0, fmt.Errorf("%w: slice index cannot be null when assigning to array", engine.ErrInvalidNull)
+				}
+
+				if !val.Type().EqualsStrict(types.IntType) {
+					return 0, fmt.Errorf("array index must be integer, got %s", val.Type())
+				}
+
+				return int32(val.RawValue().(int64)), nil
+			}
+
+			// we are assigning an array to a slice of an array
+			// We will start by evaluating the from and to indices.
+			// From there, we will ensure that our new value is of the right length.
+			// Finally, we will assign the values.
+			from, err := evaluateSliceIdx(fromFn, 1) // default 1 in case of arr[1:]
+			if err != nil {
+				return err
+			}
+			to, err := evaluateSliceIdx(toFn, arr.Len()) // default arr.Len() in case of arr[:2]
 			if err != nil {
 				return err
 			}
 
-			if !index.Type().EqualsStrict(types.IntType) {
-				return fmt.Errorf("array index must be integer, got %s", index.Type())
+			if from < 1 {
+				return fmt.Errorf("%w: slice from index must be greater than 0, got %d", engine.ErrIndexOutOfBounds, from)
 			}
 
-			if err := checkType(scalarVal); err != nil {
-				return err
+			if to < from {
+				return fmt.Errorf("%w: slice to index must be greater than or equal to from index, got %d", engine.ErrIndexOutOfBounds, to)
 			}
 
-			// TODO: we need better null handling here.
-
-			err = arr.Set(int32(index.RawValue().(int64)), scalarVal)
+			// now, we can get the new array and check its length
+			newArrVal, err := valFn(exec)
 			if err != nil {
 				return err
+			}
+
+			newArr, ok := newArrVal.(precompiles.ArrayValue)
+			if !ok {
+				return fmt.Errorf("%w: expected array, got %T", engine.ErrType, newArrVal)
+			}
+
+			// to match postgres:
+			// if the receiving array is too small, we truncate the new array so that it fits.
+			// if the receiving array is too large, we return an error.
+			receiveLen := to - from + 1
+			newArrLen := newArr.Len()
+			if receiveLen > newArrLen {
+				return fmt.Errorf("%w: expected slice to have length %d, got %d", engine.ErrArrayTooSmall, receiveLen, newArrLen)
+			}
+
+			j := int32(1)
+			// finally, we can assign the values
+			for i := from; i <= to; i++ {
+				newVal, err := newArr.Get(j)
+				if err != nil {
+					return err
+				}
+
+				err = arr.Set(i, newVal)
+				if err != nil {
+					return err
+				}
+
+				j++
 			}
 
 			return nil
@@ -421,6 +533,10 @@ func (i *interpreterPlanner) VisitLoopTermRange(p0 *parse.LoopTermRange) any {
 			return err
 		}
 
+		if start.Null() || end.Null() {
+			return nil
+		}
+
 		if !start.Type().EqualsStrict(types.IntType) {
 			return fmt.Errorf("%w: expected integer, got %s", engine.ErrType, start.Type())
 		}
@@ -492,12 +608,16 @@ func (i *interpreterPlanner) VisitLoopTermExpression(p0 *parse.LoopTermExpressio
 		// expect the expression to return a single array
 		// If the user did not specify this, we should return an error.
 		if !p0.Array {
-			return fmt.Errorf("%w: must use IN ARRAY when looping over anything that is not a function", engine.ErrLoop)
+			return fmt.Errorf("%w: must use IN ARRAY when looping over anything that is not a function, integer range, or SQL statement", engine.ErrLoop)
 		}
 
 		val, err := expr(exec)
 		if err != nil {
 			return err
+		}
+
+		if val.Null() {
+			return nil
 		}
 
 		arr, ok := val.(precompiles.ArrayValue)
@@ -581,6 +701,9 @@ func (i *interpreterPlanner) VisitActionStmtIf(p0 *parse.ActionStmtIf) any {
 				return err
 			}
 
+			if cond.Null() {
+				continue
+			}
 			if boolVal, ok := cond.(*precompiles.BoolValue); ok {
 				if boolVal.Null() {
 					continue
@@ -825,6 +948,15 @@ func (i *interpreterPlanner) VisitExpressionArrayAccess(p0 *parse.ExpressionArra
 		arrVal, err := arrFn(exec)
 		if err != nil {
 			return nil, err
+		}
+
+		if arrVal.Null() {
+			if arrVal.Type().EqualsStrict(types.UnknownType) {
+				return nil, fmt.Errorf("%w: cannot access array element of unknown type", engine.ErrInvalidNull)
+			}
+			arrType := arrVal.Type().Copy()
+			arrType.IsArray = false
+			return precompiles.MakeNull(arrType)
 		}
 
 		arr, ok := arrVal.(precompiles.ArrayValue)

@@ -67,20 +67,20 @@ func init() {
 				}, nil
 			},
 		},
-		valueMapping{
-			// TODO: we can get rid of this
-			KwilType: types.NullType,
-			ZeroValue: func(t *types.DataType) (Value, error) {
-				return nil, fmt.Errorf("cannot create zero value of null type")
-			},
-			NullValue: func(t *types.DataType) (Value, error) {
-				return &TextValue{
-					Text: pgtype.Text{
-						Valid: false,
-					},
-				}, nil
-			},
-		},
+		// valueMapping{
+		// 	// TODO: we can get rid of this
+		// 	KwilType: types.NullType,
+		// 	ZeroValue: func(t *types.DataType) (Value, error) {
+		// 		return nil, fmt.Errorf("cannot create zero value of null type")
+		// 	},
+		// 	NullValue: func(t *types.DataType) (Value, error) {
+		// 		return &TextValue{
+		// 			Text: pgtype.Text{
+		// 				Valid: false,
+		// 			},
+		// 		}, nil
+		// 	},
+		// },
 		valueMapping{
 			KwilType: types.TextType,
 			ZeroValue: func(t *types.DataType) (Value, error) {
@@ -162,12 +162,12 @@ func init() {
 		valueMapping{
 			KwilType: types.IntArrayType,
 			ZeroValue: func(t *types.DataType) (Value, error) {
-				return &IntArrayValue{
+				return &Int8ArrayValue{
 					OneDArray: newValidArr([]pgtype.Int8{}),
 				}, nil
 			},
 			NullValue: func(t *types.DataType) (Value, error) {
-				return &IntArrayValue{
+				return &Int8ArrayValue{
 					OneDArray: newNullArray[pgtype.Int8](),
 				}, nil
 			},
@@ -319,6 +319,20 @@ func newValidArr[T any](a []T) OneDArray[T] {
 	}
 }
 
+func newNullArray[T any]() OneDArray[T] {
+	return OneDArray[T]{
+		Array: pgtype.Array[T]{
+			Valid: false,
+			Dims: []pgtype.ArrayDimension{
+				{
+					Length:     0,
+					LowerBound: 1,
+				},
+			},
+		},
+	}
+}
+
 // NewValue creates a new Value from the given any val.
 func NewValue(v any) (Value, error) {
 	switch v := v.(type) {
@@ -349,7 +363,7 @@ func NewValue(v any) (Value, error) {
 			pgInts[i].Valid = true
 		}
 
-		return &IntArrayValue{
+		return &Int8ArrayValue{
 			OneDArray: newValidArr(pgInts),
 		}, nil
 	case []*int64:
@@ -362,7 +376,7 @@ func NewValue(v any) (Value, error) {
 				pgInts[i].Valid = true
 			}
 		}
-		return &IntArrayValue{
+		return &Int8ArrayValue{
 			OneDArray: newValidArr(pgInts),
 		}, nil
 	case []int:
@@ -372,7 +386,7 @@ func NewValue(v any) (Value, error) {
 			pgInts[i].Valid = true
 		}
 
-		return &IntArrayValue{
+		return &Int8ArrayValue{
 			OneDArray: newValidArr(pgInts),
 		}, nil
 	case []*int:
@@ -385,7 +399,7 @@ func NewValue(v any) (Value, error) {
 				pgInts[i].Valid = true
 			}
 		}
-		return &IntArrayValue{
+		return &Int8ArrayValue{
 			OneDArray: newValidArr(pgInts),
 		}, nil
 	case []string:
@@ -490,11 +504,7 @@ func NewValue(v any) (Value, error) {
 			OneDArray: newValidArr(pgUUIDs),
 		}, nil
 	case nil:
-		return &TextValue{
-			Text: pgtype.Text{
-				Valid: false,
-			},
-		}, nil
+		return &NullValue{}, nil
 	default:
 		return nil, fmt.Errorf("unexpected type %T", v)
 	}
@@ -727,14 +737,6 @@ func MakeNull(t *types.DataType) (Value, error) {
 	}
 
 	return m.NullValue(t)
-}
-
-func newNullArray[T any]() OneDArray[T] {
-	return OneDArray[T]{
-		Array: pgtype.Array[T]{
-			Valid: false,
-		},
-	}
 }
 
 func MakeText(s string) *TextValue {
@@ -1441,7 +1443,7 @@ func (d *DecimalValue) Cast(t *types.DataType) (Value, error) {
 	}
 }
 
-func newIntArr(v []*int64) *IntArrayValue {
+func newIntArr(v []*int64) *Int8ArrayValue {
 	pgInts := make([]pgtype.Int8, len(v))
 	for i, val := range v {
 		if val == nil {
@@ -1452,7 +1454,7 @@ func newIntArr(v []*int64) *IntArrayValue {
 		}
 	}
 
-	return &IntArrayValue{
+	return &Int8ArrayValue{
 		OneDArray: newValidArr(pgInts),
 	}
 }
@@ -1461,6 +1463,100 @@ func newIntArr(v []*int64) *IntArrayValue {
 // 1D arrays. This is because we do not support multi-dimensional arrays.
 type OneDArray[T any] struct {
 	pgtype.Array[T]
+}
+
+//lint:ignore U1000 This is an internal helper function satisfying the internalArray interface
+func (o *OneDArray[T]) pgtypeArr() *pgtype.Array[T] {
+	return &o.Array
+}
+
+// internalArray is an internal helper interface to allow us to access the underlying pgtype.Array
+// when using an array type
+type internalArray[T any] interface {
+	pgtypeArr() *pgtype.Array[T]
+	Type() *types.DataType
+}
+
+// setArr sets the value at index i in the array.
+// It treats the array as 1-based.
+func setArr[T, B any](arr internalArray[T], i int32, v ScalarValue, fn func(B) T) error {
+	if i < 1 { // 1-based indexing
+		return engine.ErrIndexOutOfBounds
+	}
+
+	dtScalar := arr.Type().Copy()
+	dtScalar.IsArray = false
+
+	// makeNull creates a new null value that can be set in the array.
+	makeNull := func() (T, error) {
+		nullVal, err := MakeNull(dtScalar)
+		if err != nil {
+			return *new(T), err
+		}
+
+		nvt, ok := nullVal.(B)
+		if !ok {
+			return *new(T), fmt.Errorf("cannot set null value in array: internal type bug")
+		}
+
+		return fn(nvt), nil
+	}
+
+	pgArr := arr.pgtypeArr()
+
+	// in postgres, if we have array [1,2], and we set to index 4, it will allocate
+	// positions 3 and 4. We do the same here.
+	// if the index is greater than the length of the array, we need to allocate
+	// enough space to set the value.
+	if i > int32(len(pgArr.Elements)) {
+		// Allocate enough space to set the value.
+		// This matches the behavior of Postgres.
+		newVal := make([]T, i)
+
+		// copy the existing values into the new array
+		copy(newVal, pgArr.Elements)
+
+		// set the new values to a valid null value
+		for j := len(pgArr.Elements); j < int(i); j++ {
+			nn, err := makeNull()
+			if err != nil {
+				return err
+			}
+			newVal[j] = nn
+		}
+
+		pgArr.Elements = newVal
+		pgArr.Dims[0] = pgtype.ArrayDimension{
+			Length:     i,
+			LowerBound: 1,
+		}
+	}
+
+	// if the new value is null, we will create a new null of this type and
+	// set it in the array.
+	if v.Null() {
+		nn, err := makeNull()
+		if err != nil {
+			return err
+		}
+
+		pgArr.Elements[i-1] = nn
+		return nil
+	}
+
+	// if the value is not null, we will cast it to the scalar type of the array
+	scalar, err := v.Cast(dtScalar)
+	if err != nil {
+		return err
+	}
+
+	val, ok := scalar.(B)
+	if !ok {
+		return fmt.Errorf(`cannot set value of type "%s" in array of type "%s"`, v.Type(), arr.Type())
+	}
+
+	pgArr.Elements[i-1] = fn(val)
+	return nil
 }
 
 var _ pgtype.ArraySetter = (*OneDArray[any])(nil)
@@ -1484,23 +1580,23 @@ func (a *OneDArray[T]) Value() (driver.Value, error) {
 	return a.Array, nil
 }
 
-type IntArrayValue struct {
+type Int8ArrayValue struct {
 	OneDArray[pgtype.Int8]
 }
 
-func (a *IntArrayValue) Null() bool {
+func (a *Int8ArrayValue) Null() bool {
 	return !a.Valid
 }
 
-func (a *IntArrayValue) Compare(v Value, op engine.ComparisonOp) (*BoolValue, error) {
+func (a *Int8ArrayValue) Compare(v Value, op engine.ComparisonOp) (*BoolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
-func (a *IntArrayValue) Len() int32 {
+func (a *Int8ArrayValue) Len() int32 {
 	return int32(len(a.Elements))
 }
 
-func (a *IntArrayValue) Get(i int32) (ScalarValue, error) {
+func (a *Int8ArrayValue) Get(i int32) (ScalarValue, error) {
 	if i < 1 || i > a.Len() {
 		return nil, engine.ErrIndexOutOfBounds
 	}
@@ -1508,53 +1604,17 @@ func (a *IntArrayValue) Get(i int32) (ScalarValue, error) {
 	return &Int8Value{a.Elements[i-1]}, nil // indexing is 1-based
 }
 
-// allocArr checks that the array has index i, and if NOT, it allocates enough space to set the value.
-func allocArr[T any](p *pgtype.Array[T], i int32) error {
-	if i < 1 {
-		return engine.ErrIndexOutOfBounds
-	}
-
-	if i > int32(len(p.Elements)) {
-		// Allocate enough space to set the value.
-		// This matches the behavior of Postgres.
-		newVal := make([]T, i)
-		copy(newVal, p.Elements)
-		p.Elements = newVal
-		p.Dims[0] = pgtype.ArrayDimension{
-			Length:     i,
-			LowerBound: 1,
-		}
-	}
-
-	return nil
+func (a *Int8ArrayValue) Set(i int32, v ScalarValue) error {
+	return setArr(a, i, v, func(v2 *Int8Value) pgtype.Int8 {
+		return v2.Int8
+	})
 }
 
-func (a *IntArrayValue) Set(i int32, v ScalarValue) error {
-	// we do NOT need to worry about nulls here. Postgres will automatically make an array
-	// NOT null if we set a value in it.
-	// to test it:
-	// CREATE TABLE test (arr int[]);
-	// INSERT INTO test VALUES (NULL);
-	// UPDATE test SET arr[1] = 1;
-	err := allocArr(&a.Array, i)
-	if err != nil {
-		return err
-	}
-
-	val, ok := v.(*Int8Value)
-	if !ok {
-		return fmt.Errorf("cannot set non-int value in int array")
-	}
-
-	a.Elements[i-1] = val.Int8
-	return nil
-}
-
-func (a *IntArrayValue) Type() *types.DataType {
+func (a *Int8ArrayValue) Type() *types.DataType {
 	return types.IntArrayType
 }
 
-func (a *IntArrayValue) RawValue() any {
+func (a *Int8ArrayValue) RawValue() any {
 	if !a.Valid {
 		return nil
 	}
@@ -1571,7 +1631,7 @@ func (a *IntArrayValue) RawValue() any {
 	return res
 }
 
-func (a *IntArrayValue) Cast(t *types.DataType) (Value, error) {
+func (a *Int8ArrayValue) Cast(t *types.DataType) (Value, error) {
 	if a.Null() {
 		return MakeNull(t)
 	}
@@ -1638,18 +1698,9 @@ func (a *TextArrayValue) Get(i int32) (ScalarValue, error) {
 }
 
 func (a *TextArrayValue) Set(i int32, v ScalarValue) error {
-	err := allocArr(&a.Array, i)
-	if err != nil {
-		return err
-	}
-
-	val, ok := v.(*TextValue)
-	if !ok {
-		return fmt.Errorf("cannot set non-text value in text array")
-	}
-
-	a.Elements[i-1] = val.Text
-	return nil
+	return setArr(a, i, v, func(v2 *TextValue) pgtype.Text {
+		return v2.Text
+	})
 }
 
 func (a *TextArrayValue) Type() *types.DataType {
@@ -1792,18 +1843,9 @@ func (a *BoolArrayValue) Get(i int32) (ScalarValue, error) {
 }
 
 func (a *BoolArrayValue) Set(i int32, v ScalarValue) error {
-	err := allocArr(&a.Array, i)
-	if err != nil {
-		return err
-	}
-
-	val, ok := v.(*BoolValue)
-	if !ok {
-		return fmt.Errorf("cannot set non-bool value in bool array")
-	}
-
-	a.Elements[i-1] = val.Bool
-	return nil
+	return setArr(a, i, v, func(v2 *BoolValue) pgtype.Bool {
+		return v2.Bool
+	})
 }
 
 func (a *BoolArrayValue) Type() *types.DataType {
@@ -1857,9 +1899,10 @@ func newNullDecArr(t *types.DataType) *DecimalArrayValue {
 	}
 	precCopy := t.Metadata[0]
 	scaleCopy := t.Metadata[1]
+
 	return &DecimalArrayValue{
 		OneDArray: OneDArray[pgtype.Numeric]{
-			Array: pgtype.Array[pgtype.Numeric]{Valid: false},
+			Array: newNullArray[pgtype.Numeric]().Array,
 		},
 		metadata: &precAndScale{precCopy, scaleCopy},
 	}
@@ -1984,24 +2027,23 @@ func (a *DecimalArrayValue) Get(i int32) (ScalarValue, error) {
 }
 
 func (a *DecimalArrayValue) Set(i int32, v ScalarValue) error {
-	err := allocArr(&a.Array, i)
-	if err != nil {
-		return err
+	// if incoming value is of type decimal, it must have the same precision and scale as the array
+	if v.Type().Name == types.NumericStr {
+		val, ok := v.(*DecimalValue)
+		if !ok {
+			return fmt.Errorf("internal bug: variable of declared type decimal was not a decimal")
+		}
+
+		if val.metadata != nil && a.metadata != nil && *val.metadata != *a.metadata {
+			valMeta := *val.metadata
+			aMeta := *a.metadata
+			return fmt.Errorf("cannot set decimal with precision %d and scale %d in array with precision %d and scale %d", valMeta[0], valMeta[1], aMeta[0], aMeta[1])
+		}
 	}
 
-	val, ok := v.(*DecimalValue)
-	if !ok {
-		return fmt.Errorf("cannot set non-decimal value in decimal array")
-	}
-
-	if val.metadata != nil && a.metadata != nil && *val.metadata != *a.metadata {
-		valMeta := *val.metadata
-		aMeta := *a.metadata
-		return fmt.Errorf("cannot set decimal with precision %d and scale %d in array with precision %d and scale %d", valMeta[0], valMeta[1], aMeta[0], aMeta[1])
-	}
-
-	a.Elements[i-1] = val.Numeric
-	return nil
+	return setArr(a, i, v, func(v2 *DecimalValue) pgtype.Numeric {
+		return v2.Numeric
+	})
 }
 
 func (a *DecimalArrayValue) Type() *types.DataType {
@@ -2143,18 +2185,9 @@ func (a *BlobArrayValue) Get(i int32) (ScalarValue, error) {
 }
 
 func (a *BlobArrayValue) Set(i int32, v ScalarValue) error {
-	err := allocArr(&a.Array, i)
-	if err != nil {
-		return err
-	}
-
-	val, ok := v.(*BlobValue)
-	if !ok {
-		return fmt.Errorf("cannot set non-blob value in blob array")
-	}
-
-	a.Elements[i-1] = val
-	return nil
+	return setArr(a, i, v, func(v2 *BlobValue) *BlobValue {
+		return v2
+	})
 }
 
 func (a *BlobArrayValue) Type() *types.DataType {
@@ -2232,18 +2265,9 @@ func (a *UuidArrayValue) Get(i int32) (ScalarValue, error) {
 }
 
 func (a *UuidArrayValue) Set(i int32, v ScalarValue) error {
-	err := allocArr(&a.Array, i)
-	if err != nil {
-		return err
-	}
-
-	val, ok := v.(*UUIDValue)
-	if !ok {
-		return fmt.Errorf("cannot set non-uuid value in uuid array")
-	}
-
-	a.Elements[i-1] = val.UUID
-	return nil
+	return setArr(a, i, v, func(v2 *UUIDValue) pgtype.UUID {
+		return v2.UUID
+	})
 }
 
 func (a *UuidArrayValue) Type() *types.DataType {
@@ -2386,7 +2410,7 @@ type NullValue struct{}
 
 var _ Value = (*NullValue)(nil)
 
-// var _ ArrayValue = (*NullValue)(nil)
+var _ ArrayValue = (*NullValue)(nil)
 var _ ScalarValue = (*NullValue)(nil)
 
 func (n *NullValue) Null() bool {
@@ -2424,7 +2448,7 @@ func (n *NullValue) Compare(v Value, op engine.ComparisonOp) (*BoolValue, error)
 }
 
 func (n *NullValue) Type() *types.DataType {
-	return types.NullType.Copy()
+	return types.UnknownType.Copy()
 }
 
 func (n *NullValue) RawValue() any {
@@ -2443,7 +2467,19 @@ func (n *NullValue) Arithmetic(v ScalarValue, op engine.ArithmeticOp) (ScalarVal
 }
 
 func (n *NullValue) Unary(op engine.UnaryOp) (ScalarValue, error) {
-	return n, nil
+	return nil, fmt.Errorf("%w: cannot perform unary operation %s on null", engine.ErrArithmetic, op)
+}
+
+func (n *NullValue) Len() int32 {
+	return 0
+}
+
+func (n *NullValue) Get(i int32) (ScalarValue, error) {
+	return nil, fmt.Errorf("%w: cannot get element from null", engine.ErrArrayDimensionality)
+}
+
+func (n *NullValue) Set(i int32, v ScalarValue) error {
+	return fmt.Errorf("%w: cannot set element in null", engine.ErrArrayDimensionality)
 }
 
 func cmpIntegers(a, b int, op engine.ComparisonOp) (*BoolValue, error) {

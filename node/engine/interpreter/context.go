@@ -2,6 +2,7 @@ package interpreter
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -272,9 +273,24 @@ type execFunc func(exec *executionContext, args []precompiles.Value, returnFn re
 // if we are setting a variable that was defined in an outer scope,
 // it will overwrite the variable in the outer scope.
 func (e *executionContext) setVariable(name string, value precompiles.Value) error {
+	if strings.HasPrefix(name, "@") {
+		return fmt.Errorf("%w: cannot set system variable %s", engine.ErrInvalidVariable, name)
+	}
+
 	oldVal, foundScope, found := getVarFromScope(name, e.scope)
 	if !found {
 		return e.allocateVariable(name, value)
+	}
+
+	// if the new variable is null, we should set the old variable to null
+	if value.Type().EqualsStrict(types.UnknownType) && value.Null() {
+		// set it to null
+		newVal, err := precompiles.MakeNull(oldVal.Type())
+		if err != nil {
+			return err
+		}
+		foundScope.variables[name] = newVal
+		return nil
 	}
 
 	if !oldVal.Type().EqualsStrict(value.Type()) {
@@ -287,6 +303,10 @@ func (e *executionContext) setVariable(name string, value precompiles.Value) err
 
 // allocateVariable allocates a variable in the current scope.
 func (e *executionContext) allocateVariable(name string, value precompiles.Value) error {
+	if value.Type().EqualsStrict(types.UnknownType) && value.Null() {
+		return fmt.Errorf("%w: cannot allocate untyped null value", engine.ErrInvalidNull)
+	}
+
 	_, ok := e.scope.variables[name]
 	if ok {
 		return fmt.Errorf(`variable "%s" already exists`, name)
@@ -294,6 +314,17 @@ func (e *executionContext) allocateVariable(name string, value precompiles.Value
 
 	e.scope.variables[name] = value
 	return nil
+}
+
+// allocateNullVariable allocates a null variable in the current scope.
+// It requires a valid type to allocate the variable.
+func (e *executionContext) allocateNullVariable(name string, dataType *types.DataType) error {
+	nv, err := precompiles.MakeNull(dataType)
+	if err != nil {
+		return err
+	}
+
+	return e.allocateVariable(name, nv)
 }
 
 // getVariable gets a variable from the current scope.
