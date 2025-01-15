@@ -13,6 +13,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
+	"github.com/kwilteam/kwil-db/node/rlp" // TODO: remove
 )
 
 const CreditAccountEventType = "credit_account"
@@ -54,13 +55,13 @@ type AccountCreditResolution struct {
 // to be deterministic. Kwil contains a serialization library that uses Ethereum's
 // RLP encoding, which is deterministic and used for all serialization in Kwil.
 func (a *AccountCreditResolution) MarshalBinary() ([]byte, error) {
-	return serialize.Encode(a)
+	return serialize.EncodeWithEncodingType(a, rlp.EncodingTypeRLP)
 }
 
 // UnmarshalBinary unmarshals the AccountCreditResolution from binary.
 // It is the inverse of MarshalBinary, and uses the same serialization library.
 func (a *AccountCreditResolution) UnmarshalBinary(data []byte) error {
-	return serialize.Decode(data, a)
+	return serialize.DecodeWithEncodingType(data, a, rlp.EncodingTypeRLP)
 }
 
 // resolutionConfig defines the rules for the credit_account resolution.

@@ -284,10 +284,7 @@ func (c *Client) ExecuteSQL(ctx context.Context, stmt string, params map[string]
 			return types.Hash{}, err
 		}
 
-		execTx.Parameters = append(execTx.Parameters, &struct {
-			Name  string
-			Value *types.EncodedValue
-		}{
+		execTx.Parameters = append(execTx.Parameters, &types.NamedValue{
 			Name:  k,
 			Value: encoded,
 		})

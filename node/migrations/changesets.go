@@ -11,6 +11,7 @@ import (
 	"github.com/kwilteam/kwil-db/extensions/hooks"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/node/pg"
+	"github.com/kwilteam/kwil-db/node/rlp" // TODO: remove
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
 )
@@ -65,12 +66,12 @@ type changesetMigration struct {
 
 // MarshalBinary marshals the ChangesetMigration into a binary format.
 func (cs *changesetMigration) MarshalBinary() ([]byte, error) {
-	return serialize.Encode(cs)
+	return serialize.EncodeWithEncodingType(cs, rlp.EncodingTypeRLP)
 }
 
 // UnmarshalBinary unmarshals the ChangesetMigration from a binary format.
 func (cs *changesetMigration) UnmarshalBinary(data []byte) error {
-	return serialize.Decode(data, cs)
+	return serialize.DecodeWithEncodingType(data, cs, rlp.EncodingTypeRLP)
 }
 
 // ChangesetMigrationResolution is the definition for changeset migration vote type in Kwil's voting system.
