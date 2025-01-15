@@ -283,7 +283,7 @@ func (e *executionContext) setVariable(name string, value precompiles.Value) err
 	}
 
 	// if the new variable is null, we should set the old variable to null
-	if value.Type().EqualsStrict(types.UnknownType) && value.Null() {
+	if value.Null() {
 		// set it to null
 		newVal, err := precompiles.MakeNull(oldVal.Type())
 		if err != nil {
@@ -303,7 +303,7 @@ func (e *executionContext) setVariable(name string, value precompiles.Value) err
 
 // allocateVariable allocates a variable in the current scope.
 func (e *executionContext) allocateVariable(name string, value precompiles.Value) error {
-	if value.Type().EqualsStrict(types.UnknownType) && value.Null() {
+	if value.Type().EqualsStrict(types.NullType) && value.Null() {
 		return fmt.Errorf("%w: cannot allocate untyped null value", engine.ErrInvalidNull)
 	}
 
