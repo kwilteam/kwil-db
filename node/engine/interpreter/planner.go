@@ -951,7 +951,7 @@ func (i *interpreterPlanner) VisitExpressionArrayAccess(p0 *parse.ExpressionArra
 		}
 
 		if arrVal.Null() {
-			if arrVal.Type().EqualsStrict(types.UnknownType) {
+			if arrVal.Type().EqualsStrict(types.NullType) {
 				return nil, fmt.Errorf("%w: cannot access array element of unknown type", engine.ErrInvalidNull)
 			}
 			arrType := arrVal.Type().Copy()

@@ -207,7 +207,7 @@ func (s *schemaVisitor) VisitDrop_namespace_statement(ctx *gen.Drop_namespace_st
 // returns an expression.
 func unknownExpression(ctx antlr.ParserRuleContext) *ExpressionLiteral {
 	e := &ExpressionLiteral{
-		Type:  types.UnknownType,
+		Type:  types.NullType,
 		Value: nil,
 	}
 
@@ -392,12 +392,12 @@ func (s *schemaVisitor) VisitType(ctx *gen.TypeContext) any {
 		prec, err := strconv.ParseInt(ctx.GetPrecision().GetText(), 10, 64)
 		if err != nil {
 			s.errs.RuleErr(ctx, ErrSyntax, "invalid precision: %s", ctx.DIGITS_(0).GetText())
-			return types.UnknownType
+			return types.NullType
 		}
 
 		if prec > maxPrecisionOrScale {
 			s.errs.RuleErr(ctx, ErrSyntax, "precision too large: %d", prec)
-			return types.UnknownType
+			return types.NullType
 		}
 
 		var scale uint16
@@ -407,11 +407,11 @@ func (s *schemaVisitor) VisitType(ctx *gen.TypeContext) any {
 			scaleint64, err := strconv.ParseInt(ctx.GetScale().GetText(), 10, 64)
 			if err != nil {
 				s.errs.RuleErr(ctx, ErrSyntax, "invalid scale: %s", ctx.DIGITS_(1).GetText())
-				return types.UnknownType
+				return types.NullType
 			}
 			if scaleint64 > maxPrecisionOrScale {
 				s.errs.RuleErr(ctx, ErrSyntax, "scale too large: %d", scaleint64)
-				return types.UnknownType
+				return types.NullType
 			}
 
 			scale = uint16(scaleint64)
@@ -428,7 +428,7 @@ func (s *schemaVisitor) VisitType(ctx *gen.TypeContext) any {
 	err := dt.Clean()
 	if err != nil {
 		s.errs.RuleErr(ctx, err, "invalid type: %s", dt.String())
-		return types.UnknownType
+		return types.NullType
 	}
 
 	return dt

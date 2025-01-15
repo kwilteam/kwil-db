@@ -694,12 +694,6 @@ var (
 					return nil, fmt.Errorf("%w: expected argument to be numeric, got %s", ErrType, args[0].String())
 				}
 
-				// we check if it is an unknown type before the switch,
-				// as unknown will be true for all EqualsStrict checks
-				if args[0] == types.UnknownType {
-					return types.UnknownType, nil
-				}
-
 				var retType *types.DataType
 				switch {
 				case args[0].EqualsStrict(types.IntType):

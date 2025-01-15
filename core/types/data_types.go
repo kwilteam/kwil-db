@@ -150,8 +150,6 @@ func (c *DataType) PGScalar() (string, error) {
 		}
 	case nullStr:
 		return "", errors.New("cannot have null column type")
-	case unknownStr:
-		return "", errors.New("cannot have unknown column type")
 	default:
 		return "", fmt.Errorf("unknown column type: %s", c.Name)
 	}
@@ -181,7 +179,7 @@ func (c *DataType) Clean() error {
 			return err
 		}
 
-	case nullStr, unknownStr:
+	case nullStr:
 		if c.IsArray {
 			return fmt.Errorf("type %s cannot be an array", c.Name)
 		}
@@ -212,11 +210,11 @@ func (c *DataType) Copy() *DataType {
 // EqualsStrict returns true if the type is equal to the other type.
 // The types must be exactly the same, including metadata.
 func (c *DataType) EqualsStrict(other *DataType) bool {
-	// // if unknown, return true. unknown is a special case used
-	// // internally when type checking is disabled.
-	// if c.Name == unknownStr || other.Name == unknownStr {
-	// 	return true
-	// }
+	// if null, return true. null is used if we have a null
+	// value and do not know the type.
+	if c.Name == nullStr || other.Name == nullStr {
+		return true
+	}
 
 	if c.IsArray != other.IsArray {
 		return false
@@ -244,7 +242,7 @@ func (c *DataType) IsNumeric() bool {
 		return false
 	}
 
-	return c.Name == intStr || c.Name == NumericStr || c.Name == uint256Str || c.Name == unknownStr
+	return c.Name == intStr || c.Name == NumericStr || c.Name == uint256Str || c.Name == nullStr
 }
 
 // declared DataType constants.
@@ -282,14 +280,10 @@ var (
 		Name: uint256Str, // TODO: delete
 	}
 	Uint256ArrayType = ArrayType(Uint256Type)
-	// NullType is a special type used internally
+	// NullType is a special type used to denote a null value where
+	// we do not yet know the type.
 	NullType = &DataType{
-		Name: nullStr, // TODO: delete
-	}
-	// Unknown is a special type used internally
-	// when a type is unknown until runtime.
-	UnknownType = &DataType{
-		Name: unknownStr, // TODO: delete
+		Name: nullStr,
 	}
 )
 
@@ -316,7 +310,6 @@ const (
 	// NumericStr is a fixed point number.
 	NumericStr = "numeric"
 	nullStr    = "null"
-	unknownStr = "unknown"
 )
 
 // NewDecimalType creates a new fixed point decimal type.

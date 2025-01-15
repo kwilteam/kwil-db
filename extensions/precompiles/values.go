@@ -2448,7 +2448,7 @@ func (n *NullValue) Compare(v Value, op engine.ComparisonOp) (*BoolValue, error)
 }
 
 func (n *NullValue) Type() *types.DataType {
-	return types.UnknownType.Copy()
+	return types.NullType.Copy()
 }
 
 func (n *NullValue) RawValue() any {
@@ -2655,7 +2655,7 @@ func MakeArray(vals []ScalarValue, t *types.DataType) (ArrayValue, error) {
 
 	// if no type has been provided, we should search for the first non-null value
 	for _, v := range vals {
-		if !v.Type().EqualsStrict(types.UnknownType) {
+		if !v.Type().EqualsStrict(types.NullType) {
 			if expectedType == nil {
 				expectedType = v.Type().Copy()
 				expectedType.IsArray = true
