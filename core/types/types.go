@@ -125,7 +125,7 @@ func (n *NodeKey) String() string {
 	if n == nil {
 		return "NodeKey{nil}"
 	}
-	return fmt.Sprintf("NodeKey{pubkey = %s, keyType = %s}", hex.EncodeToString(n.PubKey), n.Type.String())
+	return fmt.Sprintf("NodeKey{pubkey = %x, keyType = %s}", n.PubKey, n.Type.String())
 }
 
 // func (n *NodeKey) AuthType() (string, error) {
