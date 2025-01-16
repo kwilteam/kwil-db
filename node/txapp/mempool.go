@@ -35,7 +35,7 @@ func (m *mempool) accountInfo(ctx context.Context, tx sql.Executor, acctID *type
 	// 	return nil, err
 	// }
 	// id := string(idBts)
-	id, err := acctID.Encode()
+	id, err := acctID.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
@@ -217,11 +217,7 @@ func (m *mempool) applyTransaction(ctx *common.TxContext, tx *types.Transaction,
 			return err
 		}
 
-		amt, ok := big.NewInt(0).SetString(transfer.Amount, 10)
-		if !ok {
-			return types.ErrInvalidAmount
-		}
-
+		amt := transfer.Amount
 		if amt.Cmp(&big.Int{}) < 0 {
 			return errors.Join(types.ErrInvalidAmount, errors.New("negative transfer not permitted"))
 		}

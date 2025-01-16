@@ -214,7 +214,7 @@ func (c *Client) Transfer(ctx context.Context, to *types.AccountID, amount *big.
 
 	trans := &types.Transfer{
 		To:     to,
-		Amount: amount.String(),
+		Amount: amount,
 	}
 	tx, err := c.newTx(ctx, trans, txOpts)
 	if err != nil {

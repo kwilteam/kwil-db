@@ -355,10 +355,7 @@ func (d *transferRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *ty
 		return types.CodeEncodingError, err
 	}
 
-	bigAmt, ok := new(big.Int).SetString(transferBody.Amount, 10)
-	if !ok {
-		return types.CodeInvalidAmount, fmt.Errorf("failed to parse amount: %s", transferBody.Amount)
-	}
+	bigAmt := transferBody.Amount
 
 	// Negative send amounts should be blocked at various levels, so we should
 	// never get this, but be extra defensive since we cannot allow thievery.

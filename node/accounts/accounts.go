@@ -85,7 +85,7 @@ func (a *Accounts) getAccount(ctx context.Context, tx sql.Executor, account *typ
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
-	acctID, err := account.Encode()
+	acctID, err := account.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
@@ -330,7 +330,7 @@ func (a *Accounts) Rollback() {
 }
 
 func (a *Accounts) createAccount(ctx context.Context, tx sql.Executor, account *types.AccountID, amt *big.Int, nonce int64) error {
-	accountID, err := account.Encode()
+	accountID, err := account.MarshalBinary()
 	if err != nil {
 		return err
 	}
@@ -353,7 +353,7 @@ func (a *Accounts) createAccount(ctx context.Context, tx sql.Executor, account *
 }
 
 func (a *Accounts) updateAccount(ctx context.Context, tx sql.Executor, account *types.AccountID, amount *big.Int, nonce int64) error {
-	accountID, err := account.Encode()
+	accountID, err := account.MarshalBinary()
 	if err != nil {
 		return err
 	}
