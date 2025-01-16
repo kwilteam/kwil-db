@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/hex"
 	"errors"
+	"fmt"
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/common"
@@ -35,8 +36,8 @@ type AccountCreditResolution struct {
 	// This can be an Ethereum address (decoded from hex), a validator ed25519 public key,
 	// or any other custom account identifier implemented in an auth extension.
 	Account []byte
-	// KeyType represents the cryptographic key type of the account.
-	KeyType crypto.KeyType
+	// KeyType represents the cryptographic key type of the account. "secp256k1" or "ed25519" are currently supported.
+	KeyType string
 	// Amount is the amount to be credited to the account.
 	// It uses a big.Int to allow for arbitrary precision, and to allow for uint256 values,
 	// which are commonly used in token contracts on Ethereum.
@@ -95,13 +96,18 @@ var resolutionConfig = resolutions.ResolutionConfig{
 			return errors.New("credit amount cannot be negative")
 		}
 
+		keyType, err := crypto.ParseKeyType(credit.KeyType)
+		if err != nil {
+			return fmt.Errorf("invalid key type: %w", err)
+		}
+
 		app.Service.Logger.Infof("crediting account", "account", credit.Account, "amount", credit.Amount,
 			"eth_tx", hex.EncodeToString(credit.TxHash))
 
 		// Credit the account with the given amount
 		return app.Accounts.Credit(ctx, app.DB, &types.AccountID{
 			Identifier: credit.Account,
-			KeyType:    credit.KeyType,
+			KeyType:    keyType,
 		}, credit.Amount)
 	},
 }
