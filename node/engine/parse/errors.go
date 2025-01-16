@@ -53,9 +53,18 @@ func (p ParseError) Unwrap() error {
 func (p *ParseError) Error() string {
 	// Add 1 to the column numbers to make them 1-indexed, since antlr-go is 0-indexed
 	// for columns.
-	return fmt.Sprintf("(%s) %s: %s\n start %d:%d end %d:%d", p.ParserName, p.Err.Error(), p.Message,
-		p.Position.StartLine, p.Position.StartCol+1,
-		p.Position.EndLine, p.Position.EndCol+1)
+
+	if p.Position.nilEnd() {
+		if p.Position.nilStart() {
+			return fmt.Sprintf("(%s) %s: %s", p.ParserName, p.Err.Error(), p.Message)
+		}
+		return fmt.Sprintf("(%s) %s: %s\n  location %d:%d", p.ParserName, p.Err.Error(), p.Message,
+			*p.Position.StartLine, *p.Position.StartCol+1)
+	}
+
+	return fmt.Sprintf("(%s) %s: %s\n  start %d:%d end %d:%d", p.ParserName, p.Err.Error(), p.Message,
+		*p.Position.StartLine, *p.Position.StartCol+1,
+		*p.Position.EndLine, *p.Position.EndCol+1)
 }
 
 // ParseErrs is a collection of parse errors.
@@ -97,14 +106,18 @@ func (e *errorListener) Err() error {
 		var errChain error
 		for i, err := range e.errs {
 			if i == 0 {
-				errChain = err
+				errChain = numberErr(err, i)
 				continue
 			}
-			errChain = fmt.Errorf("%w\n %w", errChain, err)
+			errChain = fmt.Errorf("%w\n %w", errChain, numberErr(err, i))
 		}
 
 		return fmt.Errorf("detected multiple parse errors:\n %w", errChain)
 	}
+}
+
+func numberErr(err error, i int) error {
+	return fmt.Errorf("error %d: %w", i+1, err)
 }
 
 // Add adds errors to the collection.
@@ -186,8 +199,10 @@ func (e *errorListener) SyntaxError(recognizer antlr.Recognizer, offendingSymbol
 			}()
 			prev := e.toks.LB(1)
 			if prev != nil {
-				pos.StartCol = prev.GetColumn()
-				pos.StartLine = prev.GetLine()
+				col := prev.GetColumn()
+				lin := prev.GetLine()
+				pos.StartCol = &col
+				pos.StartLine = &lin
 			}
 		}()
 	}

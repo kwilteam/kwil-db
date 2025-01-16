@@ -44,18 +44,13 @@ func generateKeyCmd() *cobra.Command {
 			}
 
 			if out != "" {
-				out, err = helpers.ExpandPath(out)
-				if err != nil {
-					return display.PrintErr(cmd, err)
-				}
-
-				err = os.WriteFile(out, []byte(hex.EncodeToString(pk.Bytes())+"\n"), 0644)
+				full, err := writeToFile(out, []byte(hex.EncodeToString(pk.Bytes())+"\n"))
 				if err != nil {
 					return display.PrintErr(cmd, err)
 				}
 
 				res := privateKeyFileRes{
-					PrivateKeyPath: out,
+					PrivateKeyPath: full,
 					PublicKey:      pubKeyHex,
 					Address:        address,
 				}
@@ -118,4 +113,14 @@ func (p *privateKeyRes) MarshalText() (text []byte, err error) {
 	bts = append(bts, []byte("\nAddress: ")...)
 	bts = append(bts, p.Address...)
 	return bts, nil
+}
+
+// writeToFile exands the path and writes the private key to the file.
+func writeToFile(path string, data []byte) (string, error) {
+	path, err := helpers.ExpandPath(path)
+	if err != nil {
+		return "", err
+	}
+
+	return path, os.WriteFile(path, data, 0644)
 }

@@ -1656,6 +1656,32 @@ func Test_Actions(t *testing.T) {
 			$a := $arr[1];
 			$a := 1; -- should be an int, so this should be fine
 		`),
+		rawTest(`uuid kwil`, `
+		$id := uuid_generate_kwil('a');
+		if $id != '819ab751-e64c-5259-bbae-4d36f25bdd84'::uuid {
+			error($id::TEXT);
+		}
+		`),
+		{
+			name: "action param changes do not reflect in the caller",
+			stmt: []string{
+				`CREATE ACTION change_param($a int) public view returns (b int) {
+					$a := 2;
+					RETURN $a;
+				}`,
+				`CREATE ACTION call_change_param() public view {
+					$a := 1;
+					$b := change_param($a);
+					if $a != 1 {
+						error('a is not 1');
+					}
+					if $b != 2 {
+						error('b is not 2');
+					}
+				}`,
+			},
+			action: "call_change_param",
+		},
 	}
 
 	db, err := newTestDB()

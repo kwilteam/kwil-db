@@ -5,6 +5,7 @@ package precompiles
 import (
 	"context"
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/common"
@@ -83,6 +84,34 @@ type Method struct {
 	Returns *MethodReturn
 	// Handler is the function that is called when the method is invoked.
 	Handler func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error
+}
+
+// Copy deep-copies a method.
+func (m *Method) Copy() *Method {
+	m2 := &Method{
+		Name:            m.Name,
+		AccessModifiers: slices.Clone(m.AccessModifiers),
+		Parameters:      copyParams(m.Parameters),
+		Handler:         m.Handler,
+	}
+
+	if m.Returns != nil {
+		m2.Returns = &MethodReturn{
+			IsTable:    m.Returns.IsTable,
+			Fields:     copyParams(m.Returns.Fields),
+			FieldNames: slices.Clone(m.Returns.FieldNames),
+		}
+	}
+
+	return m2
+}
+
+func copyParams(params []PrecompileValue) []PrecompileValue {
+	params2 := make([]PrecompileValue, len(params))
+	for i, param := range params {
+		params2[i] = param.Copy()
+	}
+	return params2
 }
 
 func (m *Method) verify() error {
@@ -169,6 +198,13 @@ type PrecompileValue struct {
 	Type *types.DataType
 	// Nullable is true if the value can be null.
 	Nullable bool
+}
+
+func (p *PrecompileValue) Copy() PrecompileValue {
+	return PrecompileValue{
+		Type:     p.Type.Copy(),
+		Nullable: p.Nullable,
+	}
 }
 
 // NewPrecompileValue creates a new precompile value.

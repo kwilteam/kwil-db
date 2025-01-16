@@ -114,6 +114,24 @@ var (
 			},
 			PGFormatFunc: defaultFormat("uuid_generate_v5"),
 		},
+		// a special function that generates a UUID using a fixed namespace
+		"uuid_generate_kwil": &ScalarFunctionDefinition{
+			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
+				// 1 argument, must be text
+				if len(args) != 1 {
+					return nil, wrapErrArgumentNumber(1, len(args))
+				}
+
+				if !args[0].Equals(types.TextType) {
+					return nil, wrapErrArgumentType(types.TextType, args[0])
+				}
+
+				return types.UUIDType, nil
+			},
+			PGFormatFunc: func(inputs []string) (string, error) {
+				return "uuid_generate_v5('a247cac1-d817-4949-bac7-dc4b1dc41d09'::uuid," + inputs[0] + ")", nil
+			},
+		},
 		"encode": &ScalarFunctionDefinition{
 			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
 				// first must be blob, second must be text

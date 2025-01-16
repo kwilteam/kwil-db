@@ -19,6 +19,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+var (
+	OwnerAddress = "0xc89D42189f0450C2b2c3c61f58Ec5d628176A1E7"
+	UserPrivkey1 = func() crypto.PrivateKey {
+		privk, _, err := crypto.GenerateSecp256k1Key(nil)
+		if err != nil {
+			panic(err)
+		}
+		return privk
+	}()
+)
+
 // TestKwildDatabaseIntegration is to ensure that nodes are able to
 // produce blocks and accept db related transactions and agree on the
 // state of the database
@@ -37,7 +48,7 @@ func TestKwildDatabaseIntegration(t *testing.T) {
 
 	ctx := context.Background()
 
-	clt := p.Nodes[0].JSONRPCClient(t, ctx, false, "")
+	clt := p.Nodes[0].JSONRPCClient(t, ctx, nil)
 
 	ping, err := clt.Ping(ctx)
 	require.NoError(t, err)
@@ -226,7 +237,7 @@ func TestKwildBlockSync(t *testing.T) {
 	time.Sleep(4 * time.Second)
 
 	// ensure that all nodes are in sync
-	info, err := p.Nodes[3].JSONRPCClient(t, ctx, false, "").ChainInfo(ctx)
+	info, err := p.Nodes[3].JSONRPCClient(t, ctx, nil).ChainInfo(ctx)
 	require.NoError(t, err)
 	require.Greater(t, info.BlockHeight, uint64(0))
 
@@ -286,7 +297,7 @@ func TestStatesync(t *testing.T) {
 	time.Sleep(4 * time.Second)
 
 	// ensure that all nodes are in sync
-	info, err := p.Nodes[3].JSONRPCClient(t, ctx, false, "").ChainInfo(ctx)
+	info, err := p.Nodes[3].JSONRPCClient(t, ctx, nil).ChainInfo(ctx)
 	require.NoError(t, err)
 	require.Greater(t, info.BlockHeight, uint64(50))
 
@@ -412,7 +423,7 @@ func TestLongRunningNetworkMigrations(t *testing.T) {
 	time.Sleep(4 * time.Second)
 
 	// ensure that all nodes are in sync
-	info, err := net2.Nodes[3].JSONRPCClient(t, ctx, false, "").ChainInfo(ctx)
+	info, err := net2.Nodes[3].JSONRPCClient(t, ctx, nil).ChainInfo(ctx)
 	require.NoError(t, err)
 	require.Greater(t, info.BlockHeight, uint64(50)) // TODO: height > 50 + migration height
 }
@@ -488,8 +499,9 @@ func TestSingleNodeKwildEthDepositsOracleIntegration(t *testing.T) {
 	// Deposit the amount to the escrow
 	specifications.ApproveSpecification(ctx, t, deployer)
 	amount := big.NewInt(10)
-
-	rpcClient := p.Nodes[0].JSONRPCClient(t, ctx, false, setup.UserPubKey1)
+	rpcClient := p.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
+		PrivateKey: UserPrivkey1,
+	})
 
 	// execute sql statement without enough balance
 	specifications.DeployDbInsufficientFundsSpecification(ctx, t, deployer, rpcClient)
@@ -569,7 +581,9 @@ func TestKwildEthDepositFundTransfer(t *testing.T) {
 
 	fmt.Println(ethNode.Deployers[0].EscrowAddress(), ethNode.Deployers[1].EscrowAddress())
 
-	clt := p.Nodes[0].JSONRPCClient(t, ctx, false, setup.UserPubKey1)
+	clt := p.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
+		PrivateKey: UserPrivkey1,
+	})
 
 	specifications.FundValidatorSpecification(ctx, t, deployer, clt, privKey)
 }
@@ -656,7 +670,9 @@ func TestKwildEthDepositOracleValidatorUpdates(t *testing.T) {
 	rpcClients := make([]setup.JSONRPCClient, 3)
 	adminClients := make([]*setup.AdminClient, 3)
 	for i := 0; i < 3; i++ {
-		rpcClients[i] = p.Nodes[i].JSONRPCClient(t, ctx, false, setup.UserPubKey1)
+		rpcClients[i] = p.Nodes[i].JSONRPCClient(t, ctx, &setup.ClientOptions{
+			PrivateKey: UserPrivkey1,
+		})
 		adminClients[i] = p.Nodes[i].AdminClient(t, ctx)
 	}
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"maps"
 	"regexp"
 	"strings"
 	"sync"
@@ -139,6 +140,28 @@ type namespace struct {
 	namespaceType namespaceType
 	// methods is a map of methods that are available if the namespace is an extension.
 	methods map[string]precompileExecutable
+}
+
+// copy creates a deep copy of the namespace.
+func (n *namespace) copy() *namespace {
+	n2 := &namespace{
+		availableFunctions: maps.Clone(n.availableFunctions),
+		tables:             make(map[string]*engine.Table), // we need to copy the tables as well, so shallow copy is not enough
+		onDeploy:           n.onDeploy,
+		onUndeploy:         n.onUndeploy,
+		namespaceType:      n.namespaceType,
+		methods:            make(map[string]precompileExecutable), // we need to copy the methods as well, so shallow copy is not enough
+	}
+
+	for tblName, tbl := range n.tables {
+		n2.tables[tblName] = tbl.Copy()
+	}
+
+	for k, v := range n.methods {
+		n2.methods[k] = *v.copy()
+	}
+
+	return n2
 }
 
 type namespaceType string
@@ -386,6 +409,25 @@ type baseInterpreter struct {
 	accounts common.Accounts
 }
 
+// copy deep copies the state of the interpreter.
+// It is used to ensure transactionality by providing
+// a state that can be rolled back to.
+func (i *baseInterpreter) copy() *baseInterpreter {
+	namespaces := make(map[string]*namespace)
+	for k, v := range i.namespaces {
+		namespaces[k] = v.copy()
+	}
+
+	return &baseInterpreter{
+		namespaces:       namespaces,
+		accessController: i.accessController.copy(),
+		// service, validators, and accounts should have no need to be copied
+		service:    i.service,
+		validators: i.validators,
+		accounts:   i.accounts,
+	}
+}
+
 // Execute executes a statement against the database.
 func (i *baseInterpreter) execute(ctx *common.EngineContext, db sql.DB, statement string, params map[string]any, fn func(*common.Row) error, toplevel bool) error {
 	err := ctx.Valid()
@@ -406,6 +448,15 @@ func (i *baseInterpreter) execute(ctx *common.EngineContext, db sql.DB, statemen
 	if len(ast) == 0 {
 		return fmt.Errorf("no valid statements provided: %s", statement)
 	}
+
+	copied := i.copy()
+	defer func() {
+		if err != nil {
+			// rollback the interpreter
+			i.namespaces = copied.namespaces
+			i.accessController = copied.accessController
+		}
+	}()
 
 	execCtx, err := i.newExecCtx(ctx, db, DefaultNamespace, toplevel)
 	if err != nil {

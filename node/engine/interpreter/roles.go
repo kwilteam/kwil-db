@@ -3,6 +3,8 @@ package interpreter
 import (
 	"context"
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/node/engine"
@@ -124,6 +126,24 @@ type accessController struct {
 	roles           map[string]*perms
 	userRoles       map[string][]string // a map of user public keys to the roles they have. It does _not_ include the default role.
 	knownNamespaces map[string]struct{} // a set of all known namespaces
+}
+
+func (a *accessController) copy() *accessController {
+	a2 := &accessController{
+		roles:           make(map[string]*perms, len(a.roles)),
+		userRoles:       make(map[string][]string, len(a.userRoles)),
+		knownNamespaces: maps.Clone(a.knownNamespaces),
+	}
+
+	for k, v := range a.roles {
+		a2.roles[k] = v.copy()
+	}
+
+	for k, v := range a.userRoles {
+		a2.userRoles[k] = slices.Clone(v)
+	}
+
+	return a2
 }
 
 // CreateRole adds a new role to the access controller.
@@ -530,6 +550,19 @@ type perms struct {
 	// globalPrivileges is a set of privileges that are allowed globally.
 	// it does NOT include inherited privileges.
 	globalPrivileges map[privilege]struct{}
+}
+
+func (p *perms) copy() *perms {
+	p2 := &perms{
+		namespacePrivileges: make(map[string]map[privilege]struct{}),
+		globalPrivileges:    maps.Clone(p.globalPrivileges),
+	}
+
+	for k, v := range p.namespacePrivileges {
+		p2.namespacePrivileges[k] = maps.Clone(v)
+	}
+
+	return p2
 }
 
 // canDo returns true if the role can perform the specified action.

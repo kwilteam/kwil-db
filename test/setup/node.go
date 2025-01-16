@@ -70,7 +70,7 @@ type NetworkConfig struct {
 	// REQUIRED: Nodes is the list of nodes in the network
 	Nodes []*NodeConfig
 
-	// REQUIRED: DBOwner is the initial wallet address that owns the database.
+	// OPTIONAL: DBOwner is the initial wallet address that owns the database.
 	DBOwner string
 
 	// OPTIONAL: ConfigureGenesis is a function that alters the genesis configuration
@@ -88,7 +88,7 @@ func (n *NetworkConfig) ensureDefaults(t *testing.T) {
 	}
 
 	if n.DBOwner == "" {
-		t.Fatal("DBOwner is required")
+		n.DBOwner = "0xabc"
 	}
 
 	if n.Nodes == nil {
@@ -340,7 +340,9 @@ func SetupTests(t *testing.T, testConfig *TestConfig) *Testnet {
 				t.Fatal("first node must be a validator")
 			}
 
-			genesisConfig.Leader = types.PublicKey{nodeCfg.PrivateKey.Public()}
+			genesisConfig.Leader = types.PublicKey{
+				PublicKey: nodeCfg.PrivateKey.Public(),
+			}
 		}
 
 		if nodeCfg.Validator {
@@ -615,7 +617,7 @@ func (k *kwilNode) Config() *config.Config {
 	return k.config
 }
 
-func (k *kwilNode) JSONRPCClient(t *testing.T, ctx context.Context, usingGateway bool, privKey string) JSONRPCClient {
+func (k *kwilNode) JSONRPCClient(t *testing.T, ctx context.Context, opts *ClientOptions) JSONRPCClient {
 	if k.client != nil {
 		return k.client
 	}
@@ -628,7 +630,7 @@ func (k *kwilNode) JSONRPCClient(t *testing.T, ctx context.Context, usingGateway
 	endpoint, _, err := kwildJSONRPCEndpoints(container, ctx)
 	require.NoError(t, err)
 
-	client, err := getNewClientFn(k.testCtx.config.ClientDriver)(ctx, endpoint, usingGateway, t.Logf, privKey)
+	client, err := getNewClientFn(k.testCtx.config.ClientDriver)(ctx, endpoint, t.Logf, opts)
 	require.NoError(t, err)
 
 	k.client = client
@@ -660,7 +662,7 @@ type KwilNode interface {
 	PublicKey() *crypto.Secp256k1PublicKey
 	IsValidator() bool
 	Config() *config.Config
-	JSONRPCEndpoint(t *testing.T, ctx context.Context) (string, string, error)
-	JSONRPCClient(t *testing.T, ctx context.Context, usingKGW bool, privKey string) JSONRPCClient
+	JSONRPCEndpoint(t *testing.T, ctx context.Context) (exposed string, unexposed string, err error)
+	JSONRPCClient(t *testing.T, ctx context.Context, opts *ClientOptions) JSONRPCClient
 	AdminClient(t *testing.T, ctx context.Context) *AdminClient
 }
