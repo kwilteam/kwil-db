@@ -476,15 +476,15 @@ func cleanupDB(db *pg.DB) {
 
 type mockEngine struct{}
 
-func (me *mockEngine) Call(ctx *common.EngineContext, db sql.DB, namespace, action string, args []common.EngineValue, resultFn func(*common.Row) error) (*common.CallResult, error) {
+func (me *mockEngine) Call(ctx *common.EngineContext, db sql.DB, namespace, action string, args []any, resultFn func(*common.Row) error) (*common.CallResult, error) {
 	return nil, nil
 }
 
-func (me *mockEngine) Execute(ctx *common.EngineContext, db sql.DB, statement string, params map[string]common.EngineValue, fn func(*common.Row) error) error {
+func (me *mockEngine) Execute(ctx *common.EngineContext, db sql.DB, statement string, params map[string]any, fn func(*common.Row) error) error {
 	return nil
 }
 
-func (me *mockEngine) ExecuteWithoutEngineCtx(ctx context.Context, db sql.DB, statement string, params map[string]common.EngineValue, fn func(*common.Row) error) error {
+func (me *mockEngine) ExecuteWithoutEngineCtx(ctx context.Context, db sql.DB, statement string, params map[string]any, fn func(*common.Row) error) error {
 	return nil
 }
 

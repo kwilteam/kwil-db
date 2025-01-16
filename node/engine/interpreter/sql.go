@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types"
@@ -63,7 +64,7 @@ func dropNamespace(ctx context.Context, db sql.DB, name string) error {
 
 // storeAction stores an action in the database.
 // It should always be called within a transaction.
-func storeAction(ctx context.Context, db sql.DB, namespace string, action *Action) error {
+func storeAction(ctx context.Context, db sql.DB, namespace string, action *Action, builtin bool) error {
 	returnsTable := false
 	if action.Returns != nil {
 		returnsTable = action.Returns.IsTable
@@ -74,9 +75,9 @@ func storeAction(ctx context.Context, db sql.DB, namespace string, action *Actio
 		modStrs[i] = string(mod)
 	}
 
-	actionID, err := queryOneInt64(ctx, db, `INSERT INTO kwild_engine.actions (name, namespace, raw_statement, modifiers, returns_table)
-		VALUES ($1, $2, $3, $4, $5) RETURNING id`,
-		action.Name, namespace, action.RawStatement, modStrs, returnsTable)
+	actionID, err := queryOneInt64(ctx, db, `INSERT INTO kwild_engine.actions (name, namespace, raw_statement, modifiers, returns_table, built_in)
+		VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+		action.Name, namespace, action.RawStatement, modStrs, returnsTable, builtin)
 	if err != nil {
 		return err
 	}
@@ -107,6 +108,27 @@ func storeAction(ctx context.Context, db sql.DB, namespace string, action *Actio
 // deleteAction deletes an action from the database.
 func deleteAction(ctx context.Context, db sql.DB, namespace, actionName string) error {
 	return execute(ctx, db, `DELETE FROM kwild_engine.actions WHERE namespace = $1 AND name = $2`, namespace, actionName)
+}
+
+// deleteActionIfBuiltin deletes an action from the database if it is a built-in action.
+// It returns true if an action was found but not deleted
+func deleteActionIfBuiltin(ctx context.Context, db sql.DB, namespace, actionName string) (bool, error) {
+	var builtin bool
+	found := false
+	err := queryRowFunc(ctx, db, `SELECT built_in FROM kwild_engine.actions WHERE namespace = $1 AND name = $2`, []any{&builtin},
+		func() error {
+			found = true
+			return nil
+		}, namespace, actionName)
+	if err != nil {
+		return false, err
+	}
+
+	if builtin {
+		return false, deleteAction(ctx, db, namespace, actionName)
+	}
+
+	return found, nil
 }
 
 // listNamespaces lists all namespaces that are created.
@@ -302,15 +324,22 @@ func listTablesInNamespace(ctx context.Context, db sql.DB, namespace string) ([]
 	return tables, nil
 }
 
-// listActionsInNamespace lists all actions in a namespace.
-func listActionsInNamespace(ctx context.Context, db sql.DB, namespace string) ([]*Action, error) {
+// listActionsInBuiltInNamespace lists all actions in a namespace.
+// If the namespace is an extension, it wont return any actions.
+func listActionsInBuiltInNamespace(ctx context.Context, db sql.DB, namespace string) ([]*Action, error) {
 	var actions []*Action
 	var rawStmt string
 	scans := []any{
 		&rawStmt,
 	}
 
-	err := queryRowFunc(ctx, db, `SELECT raw_statement FROM info.actions WHERE namespace = $1`, scans,
+	stmt := `
+	SELECT a.raw_statement
+	FROM kwild_engine.actions a
+	WHERE a.namespace = $1 AND a.built_in = false
+	`
+
+	err := queryRowFunc(ctx, db, stmt, scans,
 		func() error {
 			res, err := parse.Parse(rawStmt)
 			if err != nil {
@@ -344,7 +373,7 @@ func listActionsInNamespace(ctx context.Context, db sql.DB, namespace string) ([
 }
 
 // registerExtensionInitialization registers that an extension was initialized with some values.
-func registerExtensionInitialization(ctx context.Context, db sql.DB, name, baseExtName string, metadata map[string]precompiles.Value) error {
+func registerExtensionInitialization(ctx context.Context, db sql.DB, name, baseExtName string, metadata map[string]value) error {
 	id, err := createNamespace(ctx, db, name, namespaceTypeExtension)
 	if err != nil {
 		return err
@@ -371,7 +400,7 @@ func registerExtensionInitialization(ctx context.Context, db sql.DB, name, baseE
 			insertMetaStmt += `,`
 		}
 
-		strVal, err := precompiles.StringifyValue(v)
+		strVal, err := stringifyValue(v)
 		if err != nil {
 			return err
 		}
@@ -397,7 +426,7 @@ type storedExtension struct {
 	// Alias is the alias of the extension.
 	Alias string
 	// Metadata is the metadata of the extension.
-	Metadata map[string]precompiles.Value
+	Metadata map[string]value
 }
 
 // getExtensionInitializationMetadata gets all initialized extensions and their metadata.
@@ -418,7 +447,7 @@ func getExtensionInitializationMetadata(ctx context.Context, db sql.DB) ([]*stor
 				ext = &storedExtension{
 					Alias:    alias,
 					ExtName:  extName,
-					Metadata: make(map[string]precompiles.Value),
+					Metadata: make(map[string]value),
 				}
 				extMap[alias] = ext
 			}
@@ -437,7 +466,7 @@ func getExtensionInitializationMetadata(ctx context.Context, db sql.DB) ([]*stor
 				return err
 			}
 
-			v, err := precompiles.ParseValue(*val, datatype)
+			v, err := parseValue(*val, datatype)
 			if err != nil {
 				return err
 			}
@@ -458,6 +487,69 @@ func getExtensionInitializationMetadata(ctx context.Context, db sql.DB) ([]*stor
 	return fin, nil
 }
 
+// ensureExtensionRegistered ensures that extension methods are registered as actions within the database.
+// It is idempotent.
+func ensureMethodsRegistered(ctx context.Context, db sql.DB, alias string, methods []precompiles.Method) error {
+	for _, method := range methods {
+		// if an action exists, we always want to delete and overwrite it.
+		// This is only true if the action was built-in; if it was user-defined,
+		// we should not delete it.
+		foundButNotDeleted, err := deleteActionIfBuiltin(ctx, db, alias, method.Name)
+		if err != nil {
+			return err
+		}
+		if foundButNotDeleted {
+			// if it was found but not deleted, then it is a user-defined action, and we
+			// should not overwrite it.
+			return nil
+		}
+
+		params := make([]*NamedType, len(method.Parameters))
+		for i, p := range method.Parameters {
+			params[i] = &NamedType{
+				Name: "$param_" + strconv.Itoa(i+1),
+				Type: p.Type,
+			}
+		}
+
+		var returns *ActionReturn
+		if method.Returns != nil {
+			returns = &ActionReturn{
+				IsTable: method.Returns.IsTable,
+			}
+
+			fields := make([]*NamedType, len(method.Returns.Fields))
+			for i, f := range method.Returns.Fields {
+				var fieldName string
+				if len(method.Returns.FieldNames) == 0 {
+					fieldName = "column_" + strconv.Itoa(i+1)
+				} else {
+					fieldName = method.Returns.FieldNames[i]
+				}
+
+				fields[i] = &NamedType{
+					Name: fieldName,
+					Type: f.Type,
+				}
+			}
+
+			returns.Fields = fields
+		}
+
+		if err := storeAction(ctx, db, alias, &Action{
+			Name:       method.Name,
+			Parameters: params,
+			Modifiers:  method.AccessModifiers,
+			Returns:    returns,
+			// body and raw statement are not used
+		}, true); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 // getTypeMetadata gets the serialized type metadata.
 // If there is none, it returns nil.
 func getTypeMetadata(t *types.DataType) []byte {
@@ -475,7 +567,7 @@ func getTypeMetadata(t *types.DataType) []byte {
 // query executes a SQL query with the given values.
 // It is a utility function to help reduce boilerplate when executing
 // SQL with Value types.
-func query(ctx context.Context, db sql.DB, query string, scanVals []precompiles.Value, fn func() error, args []precompiles.Value) error {
+func query(ctx context.Context, db sql.DB, query string, scanVals []value, fn func() error, args []value) error {
 	argVals := make([]any, len(args))
 	var err error
 	for i, v := range args {

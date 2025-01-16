@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS kwild_engine.actions (
     raw_statement TEXT NOT NULL,
     returns_table BOOLEAN NOT NULL DEFAULT FALSE,
     modifiers kwild_engine.modifiers[],
+    built_in BOOLEAN DEFAULT FALSE,
     UNIQUE (namespace, name)
 );
 

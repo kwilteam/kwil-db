@@ -680,12 +680,8 @@ func Test_SQL(t *testing.T) {
 			interp := newTestInterp(t, tx, test.sql, !skipInitTables)
 
 			var values [][]any
-			err = interp.Execute(newEngineCtx(test.caller), tx, test.execSQL, convMap(test.execVars), func(v *common.Row) error {
-				var row []any
-				for _, val := range v.Values {
-					row = append(row, val.RawValue())
-				}
-				values = append(values, row)
+			err = interp.Execute(newEngineCtx(test.caller), tx, test.execSQL, test.execVars, func(v *common.Row) error {
+				values = append(values, v.Values)
 				return nil
 			})
 			if test.err != nil {
@@ -716,6 +712,14 @@ func Test_SQL(t *testing.T) {
 			}
 		})
 	}
+}
+
+func ptrArr[T any](a ...T) []*T {
+	var res []*T
+	for _, v := range a {
+		res = append(res, &v)
+	}
+	return res
 }
 
 // Test_Roundtrip tries roundtripping each data type
@@ -761,17 +765,17 @@ func Test_Roundtrip(t *testing.T) {
 		{
 			name:     "int_array",
 			datatype: "INT[]",
-			value:    []int64{1, 2},
+			value:    ptrArr[int64](1, 2),
 		},
 		{
 			name:     "text_array",
 			datatype: "TEXT[]",
-			value:    []string{"hello", "world"},
+			value:    ptrArr("hello", "world"),
 		},
 		{
 			name:     "bool_array",
 			datatype: "BOOL[]",
-			value:    []bool{true, false},
+			value:    ptrArr(true, false),
 		},
 		{
 			name:     "decimal_array",
@@ -809,41 +813,29 @@ func Test_Roundtrip(t *testing.T) {
 			require.NoError(t, err)
 
 			// insert the value
-			err = interp.ExecuteWithoutEngineCtx(ctx, tx, fmt.Sprintf("INSERT INTO tbl_%s (id, val) VALUES (1, $val);", test.name), map[string]common.EngineValue{"$val": mustVal(test.value)}, nil)
+			err = interp.ExecuteWithoutEngineCtx(ctx, tx, fmt.Sprintf("INSERT INTO tbl_%s (id, val) VALUES (1, $val);", test.name), map[string]any{"$val": test.value}, nil)
 			require.NoError(t, err)
 
 			// select the value
-			var value precompiles.Value
+			var value any
 			err = interp.ExecuteWithoutEngineCtx(ctx, tx, fmt.Sprintf("SELECT val FROM tbl_%s;", test.name), nil, func(r *common.Row) error {
-				value = r.Values[0].(precompiles.Value)
+				value = r.Values[0]
 				return nil
 			})
 			require.NoError(t, err)
 
-			boolVal, err := value.Compare(mustVal(test.value), engine.EQUAL)
-			require.NoError(t, err)
-
-			require.True(t, boolVal.Bool.Bool)
-
+			require.EqualValues(t, test.value, value)
 			// roundtrip nulls as well
 			err = interp.ExecuteWithoutEngineCtx(ctx, tx, fmt.Sprintf("INSERT INTO tbl_%s (id, val) VALUES (2, NULL);", test.name), nil, nil)
 			require.NoError(t, err)
 
 			err = interp.ExecuteWithoutEngineCtx(ctx, tx, fmt.Sprintf("SELECT val FROM tbl_%s WHERE id = 2;", test.name), nil, func(r *common.Row) error {
-				assert.True(t, r.Values[0].Null())
+				assert.True(t, r.Values[0] == nil)
 				return nil
 			})
 			require.NoError(t, err)
 		})
 	}
-}
-
-func mustVal(v any) precompiles.Value {
-	val, err := precompiles.NewValue(v)
-	if err != nil {
-		panic(err)
-	}
-	return val
 }
 
 // Test_CreateAndDelete tests creating and dropping different objects,
@@ -1680,13 +1672,8 @@ func Test_Actions(t *testing.T) {
 			interp := newTestInterp(t, tx, test.stmt, true)
 
 			var results [][]any
-			_, err = interp.Call(newEngineCtx(test.caller), tx, test.namespace, test.action, convArr(test.values), func(v *common.Row) error {
-				var row []any
-				for _, val := range v.Values {
-					row = append(row, val.RawValue())
-				}
-
-				results = append(results, row)
+			_, err = interp.Call(newEngineCtx(test.caller), tx, test.namespace, test.action, test.values, func(v *common.Row) error {
+				results = append(results, v.Values)
 				return nil
 			})
 			if test.err != nil {
@@ -1707,20 +1694,63 @@ func Test_Actions(t *testing.T) {
 	}
 }
 
-func convMap(m map[string]any) map[string]common.EngineValue {
-	res := make(map[string]common.EngineValue)
-	for k, v := range m {
-		res[k] = mustVal(v)
-	}
-	return res
+type testPrecompile struct {
+	alias  string
+	i      int
+	meta   map[string]any
+	notify func(string)
 }
 
-func convArr(a []any) []common.EngineValue {
-	res := make([]common.EngineValue, len(a))
-	for i, v := range a {
-		res[i] = mustVal(v)
+func (t *testPrecompile) OnStart(ctx context.Context, app *common.App) error {
+	t.notify("start")
+	return nil
+}
+
+func (t *testPrecompile) OnUse(ctx *common.EngineContext, app *common.App) error {
+	t.notify("use")
+	return nil
+}
+
+func (t *testPrecompile) makeGetMethod(datatype *types.DataType) precompiles.Method {
+	name := datatype.Name
+	if datatype.IsArray {
+		name += "_array"
 	}
-	return res
+	return precompiles.Method{
+		Name:       "get_" + name,
+		Parameters: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.TextType, false)},
+		Returns: &precompiles.MethodReturn{
+			Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(datatype, false)},
+		},
+		Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+			v, ok := t.meta[inputs[0].(string)]
+			if !ok {
+				return errors.New("expected key in metadata")
+			}
+
+			return resultFn([]any{v})
+		},
+		AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+	}
+}
+
+func mustDecType(precision, scale uint16) *types.DataType {
+	t, err := types.NewDecimalType(precision, scale)
+	if err != nil {
+		panic(err)
+	}
+	return t
+}
+
+func mustDecArrType(precision, scale uint16) *types.DataType {
+	t := mustDecType(precision, scale)
+	t.IsArray = true
+	return t
+}
+
+func (t *testPrecompile) OnUnuse(ctx *common.EngineContext, app *common.App) error {
+	t.notify("unuse")
+	return nil
 }
 
 // This function tests precompiles
@@ -1728,125 +1758,99 @@ func Test_Extensions(t *testing.T) {
 	type testExtension struct {
 		alias string
 		i     int
-		meta  map[string]precompiles.Value
+		meta  map[string]any
 	}
 
 	// notifications track in which order the extension is initialized, used, and unused
 	var notifications []string
 
 	// below we create a test precompile extension
-	err := precompiles.RegisterPrecompile("test", precompiles.PrecompileExtension[testExtension]{
-		Initialize: func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]precompiles.Value) (*testExtension, error) {
-			te := &testExtension{
-				alias: alias,
-			}
-			te.meta = metadata
-			notifications = append(notifications, "initialize")
-
-			return te, nil
-		},
-		OnUse: func(ctx *common.EngineContext, app *common.App, t *testExtension) error {
-			notifications = append(notifications, "use")
-			return nil
-		},
-		OnUnuse: func(ctx *common.EngineContext, app *common.App, t *testExtension) error {
-			notifications = append(notifications, "unuse")
-			return nil
-		},
-		Methods: []precompiles.Method[testExtension]{
-			{
-				Name: "concat",
-				Handler: func(ctx *common.EngineContext, app *common.App, inputs []precompiles.Value, resultFn func([]precompiles.Value) error, te *testExtension) error {
-					te.i++
-					if len(inputs) != 2 {
-						return fmt.Errorf("expected 2 inputs, got %d", len(inputs))
-					}
-
-					if !inputs[0].Type().EqualsStrict(types.TextType) {
-						return errors.New("first input is not a string")
-					}
-
-					if !inputs[1].Type().EqualsStrict(types.TextType) {
-						return errors.New("second input is not a string")
-					}
-
-					if inputs[0].Null() || inputs[1].Null() {
-						nv, err := precompiles.NewValue(types.TextType)
+	err := precompiles.RegisterInitializer("test", func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]any) (precompiles.Precompile, error) {
+		tc := &testPrecompile{
+			alias: alias,
+			meta:  metadata,
+			notify: func(s string) {
+				notifications = append(notifications, s)
+			},
+		}
+		tc.notify("initialize")
+		return precompiles.Precompile{
+			OnStart: tc.OnStart,
+			OnUse:   tc.OnUse,
+			OnUnuse: tc.OnUnuse,
+			Methods: []precompiles.Method{
+				{
+					Name:            "concat",
+					AccessModifiers: []precompiles.Modifier{precompiles.SYSTEM},
+					Parameters: []precompiles.PrecompileValue{
+						precompiles.NewPrecompileValue(types.TextType, false),
+						precompiles.NewPrecompileValue(types.TextType, false),
+					},
+					Returns: &precompiles.MethodReturn{
+						Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.TextType, false)},
+					},
+					Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+						tc.i++
+						return resultFn([]any{inputs[0].(string) + inputs[1].(string)})
+					},
+				},
+				{
+					Name: "owner_only",
+					Returns: &precompiles.MethodReturn{
+						Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.TextType, false)},
+					},
+					Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+						count := 0
+						ctx.OverrideAuthz = true
+						_, err := app.Engine.Call(ctx, app.DB, tc.alias, "internal", nil, func(v *common.Row) error {
+							count++
+							if v.Values[0].(string) != "internal" {
+								return errors.New("expected 'internal' message")
+							}
+							return nil
+						})
 						if err != nil {
 							return err
 						}
-
-						return resultFn([]precompiles.Value{nv})
-					}
-
-					return resultFn([]precompiles.Value{precompiles.MakeText(inputs[0].RawValue().(string) + inputs[1].RawValue().(string))})
-				},
-				AccessModifiers: []precompiles.Modifier{precompiles.SYSTEM},
-			},
-			{
-				Name: "get",
-				Handler: func(ctx *common.EngineContext, app *common.App, inputs []precompiles.Value, resultFn func([]precompiles.Value) error, te *testExtension) error {
-					count := 0
-					ctx.OverrideAuthz = true
-					_, err := app.Engine.Call(ctx, app.DB, te.alias, "internal", nil, func(v *common.Row) error {
-						count++
-						if v.Values[0].RawValue().(string) != "internal" {
-							return errors.New("expected 'internal' message")
+						if count != 1 {
+							return errors.New("expected 1 internal call")
 						}
-						return nil
-					})
-					if err != nil {
-						return err
-					}
-					if count != 1 {
-						return errors.New("expected 1 internal call")
-					}
-					ctx.OverrideAuthz = false
+						ctx.OverrideAuthz = false
 
-					if len(inputs) != 1 {
-						return errors.New("expected 1 input")
-					}
-
-					raw := inputs[0].RawValue()
-					if raw == nil {
-						return errors.New("expected non-nil input")
-					}
-
-					str, ok := raw.(string)
-					if !ok {
-						return errors.New("expected text input")
-					}
-
-					meta, ok := te.meta[str]
-					if !ok {
-						return errors.New("expected key in metadata")
-					}
-
-					te.i++
-					return resultFn([]precompiles.Value{meta})
+						tc.i++
+						return resultFn([]any{"owner_only"})
+					},
+					AccessModifiers: []precompiles.Modifier{precompiles.OWNER, precompiles.PUBLIC},
 				},
-				AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
-			},
-			{
-				Name: "owner_only",
-				Handler: func(ctx *common.EngineContext, app *common.App, inputs []precompiles.Value, resultFn func([]precompiles.Value) error, te *testExtension) error {
-					return resultFn([]precompiles.Value{precompiles.MakeText("owner_only")})
-				},
-				AccessModifiers: []precompiles.Modifier{precompiles.OWNER, precompiles.PUBLIC},
-			},
-			{
-				Name: "internal",
-				Handler: func(ctx *common.EngineContext, app *common.App, inputs []precompiles.Value, resultFn func([]precompiles.Value) error, te *testExtension) error {
-					if len(inputs) != 0 {
-						return errors.New("expected 0 inputs")
-					}
-					te.i++
+				{
+					Name: "internal",
+					Returns: &precompiles.MethodReturn{
+						Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.TextType, false)},
+					},
+					Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+						if len(inputs) != 0 {
+							return errors.New("expected 0 inputs")
+						}
+						tc.i++
 
-					return resultFn([]precompiles.Value{precompiles.MakeText("internal")})
+						return resultFn([]any{"internal"})
+					},
+					AccessModifiers: []precompiles.Modifier{precompiles.PRIVATE},
 				},
-				AccessModifiers: []precompiles.Modifier{precompiles.PRIVATE},
+				tc.makeGetMethod(types.TextType),
+				tc.makeGetMethod(types.IntType),
+				tc.makeGetMethod(types.BoolType),
+				tc.makeGetMethod(mustDecType(10, 2)),
+				tc.makeGetMethod(types.BlobType),
+				tc.makeGetMethod(types.UUIDType),
+				tc.makeGetMethod(types.ArrayType(types.TextType)),
+				tc.makeGetMethod(types.ArrayType(types.IntType)),
+				tc.makeGetMethod(types.ArrayType(types.BoolType)),
+				tc.makeGetMethod(types.ArrayType(types.BlobType)),
+				tc.makeGetMethod(types.ArrayType(types.UUIDType)),
+				tc.makeGetMethod(mustDecArrType(10, 2)),
 			},
-		},
+		}, nil
 	})
 	require.NoError(t, err)
 
@@ -1881,11 +1885,11 @@ func Test_Extensions(t *testing.T) {
 	do := func(interp *interpreter.ThreadSafeInterpreter) {
 
 		callFromUser := func(caller string, namespace, action string, values []any, fn func(*common.Row) error) error {
-			_, err := interp.Call(newEngineCtx(caller), tx, namespace, action, convArr(values), fn)
+			_, err := interp.Call(newEngineCtx(caller), tx, namespace, action, values, fn)
 			return err
 		}
 		adminCall := func(namespace, action string, values []any, fn func(*common.Row) error) error {
-			_, err := interp.Call(adminCtx(), tx, namespace, action, convArr(values), fn)
+			_, err := interp.Call(adminCtx(), tx, namespace, action, values, fn)
 			return err
 		}
 		execFromUser := func(caller string, sql string, fn func(*common.Row) error) error {
@@ -1899,11 +1903,17 @@ func Test_Extensions(t *testing.T) {
 		err = interp.Execute(newEngineCtx(defaultCaller), tx, `
 		USE IF NOT EXISTS test {
 			text: 'text',
-			int: 1+2,
+			int8: 1+2,
 			bool: true,
-			blob: 0x010203, -- hex encoded []byte{1,2,3}
+			bytea: 0x010203, -- hex encoded []byte{1,2,3}
 			uuid: 'f47ac10b-58cc-4372-a567-0e02b2c3d479'::uuid,
-			decimal: 1.23
+			numeric: 1.23::numeric(10,2),
+			text_array: array['text'],
+			int8_array: array[1],
+			bool_array: array[true],
+			bytea_array: array[0x010203],
+			uuid_array: array['f47ac10b-58cc-4372-a567-0e02b2c3d479'::uuid],
+			numeric_array: array[1.23::numeric(10,2)]
 		} AS test_ext;
 	`, nil, func(r *common.Row) error {
 			return nil
@@ -1932,10 +1942,10 @@ func Test_Extensions(t *testing.T) {
 		assert.ErrorIs(t, err, engine.ErrCannotMutateState)
 
 		// 2: get can be called publicly or by other actions, and can be called in a view action
-		err = callFromUser(defaultCaller, "test_ext", "get", []any{"text"}, exact("text"))
+		err = callFromUser(defaultCaller, "test_ext", "get_text", []any{"text"}, exact("text"))
 		require.NoError(t, err)
 
-		err = adminExec("CREATE ACTION IF NOT EXISTS call_get() public view returns (text) { return test_ext.get('text'); }", nil)
+		err = adminExec("CREATE ACTION IF NOT EXISTS call_get() public view returns (text) { return test_ext.get_text('text'); }", nil)
 		require.NoError(t, err)
 
 		err = callFromUser(defaultCaller, "", "call_get", nil, exact("text"))
@@ -1979,14 +1989,20 @@ func Test_Extensions(t *testing.T) {
 			value any
 		}{
 			{"text", "text"},
-			{"int", int64(3)},
+			{"int8", int64(3)},
 			{"bool", true},
-			{"blob", []byte{1, 2, 3}},
+			{"bytea", []byte{1, 2, 3}},
 			{"uuid", mustUUID("f47ac10b-58cc-4372-a567-0e02b2c3d479")},
-			{"decimal", mustDecimal("1.23")},
+			{"numeric", mustExplicitDecimal("1.23", 10, 2)},
+			{"text_array", []string{"text"}},
+			{"int8_array", []int64{1}},
+			{"bool_array", []bool{true}},
+			{"bytea_array", [][]byte{{1, 2, 3}}},
+			{"uuid_array", []*types.UUID{mustUUID("f47ac10b-58cc-4372-a567-0e02b2c3d479")}},
+			{"numeric_array", []*decimal.Decimal{mustExplicitDecimal("1.23", 10, 2)}},
 		} {
-			err = adminCall("test_ext", "get", []any{get.key}, exact(get.value))
-			require.NoError(t, err)
+			err = adminCall("test_ext", "get_"+get.key, []any{get.key}, exact(get.value))
+			require.NoErrorf(t, err, "key: %s", get.key)
 		}
 
 		// 6. The imported extension creates a namespace that cannot be dropped by the admin
@@ -2066,10 +2082,20 @@ func Test_Extensions(t *testing.T) {
 	interp := newTestInterp(t, tx, nil, true)
 	do(interp)
 
+	// check notifications
+	require.Equal(t, []string{"initialize", "start", "use"}, notifications)
+
 	// second run: restart interpreter
 	// It will read in all previous data from the database.
 	interp = newTestInterp(t, tx, nil, true)
 	do(interp)
+
+	// unuse
+	err = interp.Execute(newEngineCtx(defaultCaller), tx, `UNUSE test_ext;`, nil, nil)
+	require.NoError(t, err)
+
+	// check notifications
+	require.Equal(t, []string{"initialize", "start", "use", "initialize", "start", "unuse"}, notifications)
 }
 
 // This test tests that functions can be overwritten by extension methods, and extension
@@ -2087,18 +2113,24 @@ func Test_NamingOverwrites(t *testing.T) {
 
 	// we use an extension with one method "abs" to overwrite the built-in abs function
 	absCalled := false
-	err = precompiles.RegisterPrecompile("test2", precompiles.PrecompileExtension[struct{}]{
-		Methods: []precompiles.Method[struct{}]{
+	err = precompiles.RegisterPrecompile("test2", precompiles.Precompile{
+		Methods: []precompiles.Method{
 			{
 				Name: "abs",
-				Handler: func(ctx *common.EngineContext, app *common.App, inputs []precompiles.Value, resultFn func([]precompiles.Value) error, _ *struct{}) error {
+				Parameters: []precompiles.PrecompileValue{
+					precompiles.NewPrecompileValue(types.IntType, false),
+				},
+				Returns: &precompiles.MethodReturn{
+					Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.IntType, false)},
+				},
+				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 					absCalled = true
-					raw, ok := inputs[0].RawValue().(int64)
+					raw, ok := inputs[0].(int64)
 					if !ok {
 						return errors.New("expected int64 input")
 					}
 
-					return resultFn([]precompiles.Value{precompiles.MakeInt8(int64(math.Abs(float64(raw))))})
+					return resultFn([]any{int64(math.Abs(float64(raw)))})
 				},
 				AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
 			},
@@ -2115,6 +2147,7 @@ func Test_NamingOverwrites(t *testing.T) {
 	err = interp.Execute(adminCtx(), tx, `{test_ext}CREATE OR REPLACE ACTION use_abs() public view returns (int) { return abs(-1); }`, nil, nil)
 	require.NoError(t, err)
 
+	// we will call it to ensure that it uses the extension method
 	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "test_ext", "use_abs", nil, exact(int64(1)))
 	require.NoError(t, err)
 
@@ -2132,10 +2165,11 @@ func Test_NamingOverwrites(t *testing.T) {
 	// we will make a new interpreter to ensure that they are loaded correctly
 	interp = newTestInterp(t, tx, nil, true)
 
+	// ensure that the action is still called
 	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "test_ext", "use_abs", nil, exact(int64(2)))
 	require.NoError(t, err)
 
-	// dropping the action should restore the correct behavior
+	// dropping the action should make it call the extension method again
 	err = interp.Execute(adminCtx(), tx, `{test_ext}DROP ACTION abs;`, nil, nil)
 	require.NoError(t, err)
 
@@ -2173,21 +2207,19 @@ func Test_Notice(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback(ctx) // always rollback
 
-	err = precompiles.RegisterPrecompile("log", precompiles.PrecompileExtension[string]{
-		Initialize: func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]precompiles.Value) (*string, error) {
-			return &alias, nil
-		},
-		OnUse: func(ctx *common.EngineContext, app *common.App, t *string) error {
+	alias := "log_ext"
+	err = precompiles.RegisterPrecompile("log", precompiles.Precompile{
+		OnUse: func(ctx *common.EngineContext, app *common.App) error {
 			// we create an action that logs a notice
 			ctx.OverrideAuthz = true
 			defer func() { ctx.OverrideAuthz = false }()
-			return app.Engine.Execute(ctx, app.DB, "{"+*t+"}"+`CREATE ACTION log_notice() public view { notice('internal notice'); }`, nil, nil)
+			return app.Engine.Execute(ctx, app.DB, "{"+alias+"}"+`CREATE ACTION log_notice() public view { notice('internal notice'); }`, nil, nil)
 		},
-		Methods: []precompiles.Method[string]{
+		Methods: []precompiles.Method{
 			{
 				Name: "method_log_notice",
-				Handler: func(ctx *common.EngineContext, app *common.App, inputs []precompiles.Value, resultFn func([]precompiles.Value) error, t *string) error {
-					res, err := app.Engine.Call(ctx, app.DB, *t, "log_notice", nil, nil)
+				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+					res, err := app.Engine.Call(ctx, app.DB, alias, "log_notice", nil, nil)
 					if err != nil {
 						return err
 					}
@@ -2236,6 +2268,138 @@ func Test_Notice(t *testing.T) {
 	require.ErrorIs(t, err, engine.ErrIllegalFunctionUsage)
 }
 
+// this tests that extension type checks work properly
+func Test_ExtensionTypeChecks(t *testing.T) {
+	db, err := newTestDB()
+	require.NoError(t, err)
+	defer db.Close()
+
+	ctx := context.Background()
+	tx, err := db.BeginTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx) // always rollback
+
+	// we will add four methods:
+	// 1. takes 1 param (cannot be null), returns nothing
+	// 2. takes 1 param (can be null), returns nothing
+	// 3. takes 1 param, returns the same type (return cannot be null)
+	// 4. takes 1 param, returns the same type (return can be null)
+
+	err = precompiles.RegisterPrecompile("types", precompiles.Precompile{
+		Methods: []precompiles.Method{
+			{
+				Name:       "accept_null",
+				Parameters: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.TextType, true)},
+				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+					return nil
+				},
+				AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
+			},
+			{
+				Name:       "accept_not_null",
+				Parameters: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.TextType, false)},
+				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+					return nil
+				},
+				AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
+			},
+			{
+				Name:       "return_not_null",
+				Parameters: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.TextType, true)},
+				Returns: &precompiles.MethodReturn{
+					Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.TextType, false)},
+				},
+				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+					return resultFn(inputs)
+				},
+				AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
+			},
+			{
+				Name:       "return_null",
+				Parameters: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.TextType, true)},
+				Returns: &precompiles.MethodReturn{
+					Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.TextType, true)},
+				},
+				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+					return resultFn(inputs)
+				},
+				AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
+			},
+			{
+				Name: "returns_wrong_type",
+				Returns: &precompiles.MethodReturn{
+					Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.TextType, false)},
+				},
+				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+					return resultFn([]any{1})
+				},
+				AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
+			},
+			{
+				Name: "returns_wrong_count",
+				Returns: &precompiles.MethodReturn{
+					Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.TextType, false), precompiles.NewPrecompileValue(types.TextType, false)},
+				},
+				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+					return resultFn([]any{"hello"})
+				},
+				AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
+			},
+		},
+	})
+	require.NoError(t, err)
+
+	interp := newTestInterp(t, tx, nil, true)
+
+	err = interp.Execute(newEngineCtx(defaultCaller), tx, `USE types AS types_ext;`, nil, nil)
+	require.NoError(t, err)
+
+	// 1. takes 1 param (cannot be null), returns nothing
+	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "types_ext", "accept_not_null", []any{"hello"}, nil)
+	require.NoError(t, err)
+
+	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "types_ext", "accept_not_null", []any{nil}, nil)
+	require.ErrorIs(t, err, engine.ErrExtensionInvocation)
+
+	// call with an int
+	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "types_ext", "accept_not_null", []any{1}, nil)
+	require.ErrorIs(t, err, engine.ErrExtensionInvocation)
+
+	// 2. takes 1 param (can be null), returns nothing
+	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "types_ext", "accept_null", []any{"hello"}, nil)
+	require.NoError(t, err)
+
+	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "types_ext", "accept_null", []any{nil}, nil)
+	require.NoError(t, err)
+
+	// 3. takes 1 param, returns the same type (return cannot be null)
+	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "types_ext", "return_not_null", []any{"hello"}, exact("hello"))
+	require.NoError(t, err)
+
+	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "types_ext", "return_not_null", []any{nil}, nil)
+	require.ErrorIs(t, err, engine.ErrExtensionInvocation)
+
+	// 4. takes 1 param, returns the same type (return can be null)
+	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "types_ext", "return_null", []any{"hello"}, exact("hello"))
+	require.NoError(t, err)
+
+	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "types_ext", "return_null", []any{nil}, exact(nil))
+	require.NoError(t, err)
+
+	// Other tests:
+	// returns wrong type
+	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "types_ext", "returns_wrong_type", nil, nil)
+	require.ErrorIs(t, err, engine.ErrExtensionInvocation)
+
+	// returns wrong count
+	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "types_ext", "returns_wrong_count", nil, nil)
+	require.ErrorIs(t, err, engine.ErrExtensionInvocation)
+
+	// wrong count for parameters
+	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "types_ext", "accept_not_null", []any{"hello", "world"}, nil)
+	require.ErrorIs(t, err, engine.ErrExtensionInvocation)
+}
+
 // exact is a helper function that verifies that a result is called exactly once, and that the result is equal to the expected value.
 func exact(val any) func(*common.Row) error {
 	called := false
@@ -2249,35 +2413,51 @@ func exact(val any) func(*common.Row) error {
 			return fmt.Errorf("expected 1 value, got %d", len(row.Values))
 		}
 
-		switch t := val.(type) {
-		case []byte:
-			t2, ok := row.Values[0].RawValue().([]byte)
-			if !ok {
-				return fmt.Errorf("expected []byte, got %T", row.Values[0])
-			}
+		return eq(val, row.Values[0])
+	}
+}
 
-			if !bytes.Equal(t, t2) {
-				return fmt.Errorf("expected %v, got %v", t, t2)
-			}
-
-		default:
-			// if it is a pointer, we need to dereference it
-			if reflect.TypeOf(val).Kind() == reflect.Ptr {
-				val = reflect.ValueOf(val).Elem().Interface()
-			}
-
-			// if row.Values[0] is a pointer, we need to dereference it
-			rowVal := row.Values[0].RawValue()
-			if reflect.TypeOf(rowVal).Kind() == reflect.Ptr {
-				rowVal = reflect.ValueOf(rowVal).Elem().Interface()
-			}
-			if rowVal != val {
-				return fmt.Errorf("expected %v, got %v", val, rowVal)
-			}
+// eq checks that two values are equal
+func eq(a, b any) error {
+	switch a.(type) {
+	case []byte:
+		if !bytes.Equal(a.([]byte), b.([]byte)) {
+			return fmt.Errorf("expected %v, got %v", a, b)
+		}
+	case nil:
+		if b != nil {
+			return fmt.Errorf("expected %v, got %v", a, b)
+		}
+	default:
+		// if it is a pointer, we need to dereference it
+		if reflect.TypeOf(a).Kind() == reflect.Ptr {
+			a = reflect.ValueOf(a).Elem().Interface()
 		}
 
-		return nil
+		// if b is a pointer, we need to dereference it
+		if reflect.TypeOf(b).Kind() == reflect.Ptr {
+			b = reflect.ValueOf(b).Elem().Interface()
+		}
+
+		// if b is an array or slice, we need to iterate through it
+		if reflect.TypeOf(a).Kind() == reflect.Slice {
+			// iterate using reflect in case it is not of []any
+			for i := 0; i < reflect.ValueOf(a).Len(); i++ {
+				// recursively call eq
+				if err := eq(reflect.ValueOf(a).Index(i).Interface(), reflect.ValueOf(b).Index(i).Interface()); err != nil {
+					return err
+				}
+			}
+
+			return nil
+		}
+
+		if a != b {
+			return fmt.Errorf("expected %v, got %v", a, b)
+		}
 	}
+
+	return nil
 }
 
 func mustDecimal(s string) *decimal.Decimal {
@@ -2325,15 +2505,16 @@ func newTestDB() (*pg.DB, error) {
 
 // newTestInterp creates a new interpreter for testing purposes.
 // It is seeded with the default tables.
+
 func newTestInterp(t *testing.T, tx sql.DB, seeds []string, includeTestTables bool) *interpreter.ThreadSafeInterpreter {
 	interp, err := interpreter.NewInterpreter(context.Background(), tx, &common.Service{}, nil, nil)
 	require.NoError(t, err)
 
 	engCtx := newEngineCtx(defaultCaller)
 	engCtx.OverrideAuthz = true
-	err = interp.Execute(engCtx, tx, "GRANT IF NOT GRANTED owner TO $user", convMap(map[string]any{
+	err = interp.Execute(engCtx, tx, "GRANT IF NOT GRANTED owner TO $user", map[string]any{
 		"user": defaultCaller,
-	}), nil)
+	}, nil)
 	require.NoError(t, err)
 
 	seedStmts := []string{}

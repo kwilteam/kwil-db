@@ -29,11 +29,11 @@ func Test_built_in_sql(t *testing.T) {
 			name: "test store and load actions",
 			fn: func(ctx context.Context, db sql.DB) {
 				for _, act := range all_test_actions {
-					err := storeAction(ctx, db, "main", act)
+					err := storeAction(ctx, db, "main", act, false)
 					require.NoError(t, err)
 				}
 
-				actions, err := listActionsInNamespace(ctx, db, "main")
+				actions, err := listActionsInBuiltInNamespace(ctx, db, "main")
 				require.NoError(t, err)
 
 				actMap := map[string]*Action{}
@@ -257,8 +257,8 @@ func Test_built_in_sql(t *testing.T) {
 		{
 			name: "test store and load extensions",
 			fn: func(ctx context.Context, db sql.DB) {
-				vals := func() map[string]precompiles.Value {
-					return map[string]precompiles.Value{
+				vals := func() map[string]value {
+					return map[string]value{
 						"str":     mustNewVal("val1"),
 						"int":     mustNewVal(123),
 						"bool":    mustNewVal(true),
@@ -338,28 +338,12 @@ func namedTypesEq(t *testing.T, a, b []*NamedType) {
 	}
 }
 
-func mustNewVal(v any) precompiles.Value {
-	val, err := precompiles.NewValue(v)
+func mustNewVal(v any) value {
+	val, err := newValue(v)
 	if err != nil {
 		panic(err)
 	}
 	return val
-}
-
-func mustDec(s string) *decimal.Decimal {
-	d, err := decimal.NewFromString(s)
-	if err != nil {
-		panic(err)
-	}
-	return d
-}
-
-func mustUUID(s string) *types.UUID {
-	u, err := types.ParseUUID(s)
-	if err != nil {
-		panic(err)
-	}
-	return u
 }
 
 // This tests how the engine stores and queries all sorts of different DDL.
@@ -560,11 +544,7 @@ func Test_Metadata(t *testing.T) {
 	// It always queries the info namespace
 	infoQuery := func(q string, fn func([]any) error) {
 		err2 := interp.ExecuteWithoutEngineCtx(ctx, tx, "{info}"+q, nil, func(r *common.Row) error {
-			row := make([]any, len(r.Values))
-			for i, v := range r.Values {
-				row[i] = v.RawValue()
-			}
-			return fn(row)
+			return fn(r.Values)
 		})
 		require.NoError(t, err2)
 	}
@@ -592,7 +572,6 @@ func Test_Metadata(t *testing.T) {
 
 	checkedNamespace := "main"
 
-	// TODO: in a subsequent PR, I will register extension methods as actions. We should test that here.
 	// 2. Query the metadata from the info schema
 	// 2.1 Tables
 	// 2.1.1 "tables" table
@@ -673,6 +652,14 @@ func Test_Metadata(t *testing.T) {
 		{"main", "no_params_no_returns", "{main}CREATE ACTION no_params_no_returns() private owner {};", stringArr("PRIVATE", "OWNER"), stringArr(), stringArr(), stringArr(), stringArr(), false},
 		{"main", "no_params_returns_single", "{main}CREATE ACTION no_params_returns_single() public view returns (id int, name text) { return 1, 'hello'; };", stringArr("PUBLIC", "VIEW"), stringArr(), stringArr(), stringArr("id", "name"), stringArr("int8", "text"), false},
 		{"main", "one_param_returns_table", "{main}CREATE ACTION one_param_returns_table($a int) system view returns table (id int, name text) { return select 1 as id, 'hello' as name; };", stringArr("SYSTEM", "VIEW"), stringArr("$a"), stringArr("int8"), stringArr("id", "name"), stringArr("int8", "text"), true},
+	})
+
+	// we also need to test the extension actions
+	assertQuery(`SELECT * FROM actions WHERE namespace = 'ext1'`, [][]any{
+		{"ext1", "no_params_no_returns", "", stringArr("PRIVATE", "OWNER"), stringArr(), stringArr(), stringArr(), stringArr(), false},
+		{"ext1", "returns_one_named", "", stringArr("PUBLIC", "VIEW"), stringArr("$param_1"), stringArr("int8"), stringArr("id"), stringArr("int8"), false},
+		{"ext1", "returns_one_unnamed", "", stringArr("PUBLIC"), stringArr(), stringArr(), stringArr("column_1"), stringArr("int8"), false},
+		{"ext1", "returns_table", "", stringArr("SYSTEM", "VIEW"), stringArr(), stringArr(), stringArr("id", "name"), stringArr("int8", "text"), true},
 	})
 
 	// 2.3 Roles
@@ -1000,7 +987,6 @@ func Test_Metadata(t *testing.T) {
 	hasAction(ns, "no_params_no_returns")
 	hasAction(ns, "no_params_returns_single")
 	hasAction(ns, "one_param_returns_table")
-	// TODO: once we have a way to get extension methods, we should test that here
 
 	// 3.3 Roles
 	// hasRole func does not take the namespace because roles are global
@@ -1102,58 +1088,55 @@ func stringArr(vals ...string) []*string {
 	return arr
 }
 
-var testSchemaExt = precompiles.PrecompileExtension[struct{}]{
-	Initialize: func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]precompiles.Value) (*struct{}, error) {
-		val, ok := metadata["init"]
-		if !ok {
-			return nil, fmt.Errorf("missing 'init' metadata")
-		}
-
-		if val.RawValue().(string) != "init" && val.RawValue().(string) != "init2" {
-			return nil, fmt.Errorf("invalid 'init' metadata")
-		}
-
-		return &struct{}{}, nil
-	},
-	Methods: []precompiles.Method[struct{}]{
+var testSchemaExt = precompiles.Precompile{
+	Methods: []precompiles.Method{
 		{
 			Name:            "returns_one_unnamed",
 			AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
 			Returns: &precompiles.MethodReturn{
-				ColumnTypes: []*types.DataType{types.IntType},
+				Fields: []precompiles.PrecompileValue{
+					{Type: types.IntType},
+				},
 			},
-			Handler: func(ctx *common.EngineContext, app *common.App, inputs []precompiles.Value, resultFn func([]precompiles.Value) error, t *struct{}) error {
-				return resultFn([]precompiles.Value{precompiles.MakeInt8(1)})
+			Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+				return resultFn([]any{1})
 			},
 		},
 		{
 			Name:            "returns_one_named",
 			AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
-			Parameters:      []*types.DataType{types.IntType},
-			Returns: &precompiles.MethodReturn{
-				ColumnTypes: []*types.DataType{types.IntType},
-				ColumnNames: []string{"id"},
+			Parameters: []precompiles.PrecompileValue{
+				{Type: types.IntType},
 			},
-			Handler: func(ctx *common.EngineContext, app *common.App, inputs []precompiles.Value, resultFn func([]precompiles.Value) error, t *struct{}) error {
-				return resultFn([]precompiles.Value{precompiles.MakeInt8(2)})
+			Returns: &precompiles.MethodReturn{
+				Fields: []precompiles.PrecompileValue{
+					{Type: types.IntType},
+				},
+				FieldNames: []string{"id"},
+			},
+			Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+				return resultFn([]any{2})
 			},
 		},
 		{
 			Name:            "returns_table",
 			AccessModifiers: []precompiles.Modifier{precompiles.SYSTEM, precompiles.VIEW},
 			Returns: &precompiles.MethodReturn{
-				IsTable:     true,
-				ColumnNames: []string{"id", "name"},
-				ColumnTypes: []*types.DataType{types.IntType, types.TextType},
+				IsTable:    true,
+				FieldNames: []string{"id", "name"},
+				Fields: []precompiles.PrecompileValue{
+					{Type: types.IntType},
+					{Type: types.TextType},
+				},
 			},
-			Handler: func(ctx *common.EngineContext, app *common.App, inputs []precompiles.Value, resultFn func([]precompiles.Value) error, t *struct{}) error {
-				return resultFn([]precompiles.Value{precompiles.MakeInt8(3), precompiles.MakeText("three")})
+			Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+				return resultFn([]any{3, "three"})
 			},
 		},
 		{
 			Name:            "no_params_no_returns",
 			AccessModifiers: []precompiles.Modifier{precompiles.PRIVATE, precompiles.OWNER},
-			Handler: func(ctx *common.EngineContext, app *common.App, inputs []precompiles.Value, resultFn func([]precompiles.Value) error, t *struct{}) error {
+			Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 				return nil
 			},
 		},

@@ -13,7 +13,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/consensus"
-	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/node/accounts"
 	"github.com/kwilteam/kwil-db/node/engine"
@@ -217,7 +216,7 @@ func codeForEngineError(err error) types.TxCode {
 
 type rawStatementRoute struct {
 	statement string
-	params    map[string]common.EngineValue
+	params    map[string]any
 }
 
 var _ consensus.Route = (*rawStatementRoute)(nil)
@@ -238,14 +237,9 @@ func (d *rawStatementRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx
 	}
 
 	d.statement = raw.Statement
-	d.params = make(map[string]common.EngineValue, len(raw.Parameters))
+	d.params = make(map[string]any, len(raw.Parameters))
 	for _, p := range raw.Parameters {
-		decoded, err := p.Value.Decode()
-		if err != nil {
-			return types.CodeEncodingError, err
-		}
-
-		d.params[p.Name], err = precompiles.NewValue(decoded)
+		d.params[p.Name], err = p.Value.Decode()
 		if err != nil {
 			return types.CodeEncodingError, err
 		}
@@ -275,7 +269,7 @@ func makeEngineCtx(ctx *common.TxContext) *common.EngineContext {
 type executeActionRoute struct {
 	namespace string
 	action    string
-	args      [][]common.EngineValue
+	args      [][]any
 }
 
 var _ consensus.Route = (*executeActionRoute)(nil)
@@ -299,15 +293,11 @@ func (d *executeActionRoute) PreTx(ctx *common.TxContext, svc *common.Service, t
 	d.namespace = action.DBID
 
 	// here, we decode the [][]types.EncodedTypes into [][]any
-	args := make([][]common.EngineValue, len(action.Arguments))
+	d.args = make([][]any, len(action.Arguments))
 	for i, arg := range action.Arguments {
-		args[i] = make([]common.EngineValue, len(arg))
+		d.args[i] = make([]any, len(arg))
 		for j, val := range arg {
-			decoded, err := val.Decode()
-			if err != nil {
-				return types.CodeEncodingError, err
-			}
-			args[i][j], err = precompiles.NewValue(decoded)
+			d.args[i][j], err = val.Decode()
 			if err != nil {
 				return types.CodeEncodingError, err
 			}
@@ -316,11 +306,9 @@ func (d *executeActionRoute) PreTx(ctx *common.TxContext, svc *common.Service, t
 
 	// we want to execute the tx for as many arg arrays exist
 	// if there are no arg arrays, we want to execute it once
-	if len(args) == 0 {
-		args = make([][]common.EngineValue, 1)
+	if len(d.args) == 0 {
+		d.args = make([][]any, 1)
 	}
-
-	d.args = args
 
 	return 0, nil
 }

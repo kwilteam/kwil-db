@@ -164,7 +164,7 @@ func (e *executionContext) query(sql string, fn func(*row) error) error {
 			}
 
 			// if it is a record, then return nil
-			if _, ok := val.(*precompiles.RecordValue); ok {
+			if _, ok := val.(*recordValue); ok {
 				return nil, engine.ErrUnknownVariable
 			}
 
@@ -176,7 +176,7 @@ func (e *executionContext) query(sql string, fn func(*row) error) error {
 				return nil, err
 			}
 
-			if rec, ok := val.(*precompiles.RecordValue); ok {
+			if rec, ok := val.(*recordValue); ok {
 				dt := make(map[string]*types.DataType)
 				for _, field := range rec.Order {
 					dt[field] = rec.Fields[field].Type()
@@ -200,7 +200,7 @@ func (e *executionContext) query(sql string, fn func(*row) error) error {
 	}
 
 	// get the params we will pass
-	var args []precompiles.Value
+	var args []value
 	for _, param := range params {
 		val, err := e.getVariable(param)
 		if err != nil {
@@ -211,14 +211,14 @@ func (e *executionContext) query(sql string, fn func(*row) error) error {
 	}
 
 	// get the scan values as well:
-	var scanValues []precompiles.Value
+	var scanValues []value
 	for _, field := range analyzed.Plan.Relation().Fields {
 		scalar, err := field.Scalar()
 		if err != nil {
 			return err
 		}
 
-		zVal, err := precompiles.NewZeroValue(scalar)
+		zVal, err := newZeroValue(scalar)
 		if err != nil {
 			return err
 		}
@@ -266,13 +266,13 @@ const (
 	executableTypePrecompile executableType = "precompile"
 )
 
-type execFunc func(exec *executionContext, args []precompiles.Value, returnFn resultFunc) error
+type execFunc func(exec *executionContext, args []value, returnFn resultFunc) error
 
 // setVariable sets a variable in the current scope.
 // It will allocate the variable if it does not exist.
 // if we are setting a variable that was defined in an outer scope,
 // it will overwrite the variable in the outer scope.
-func (e *executionContext) setVariable(name string, value precompiles.Value) error {
+func (e *executionContext) setVariable(name string, value value) error {
 	if strings.HasPrefix(name, "@") {
 		return fmt.Errorf("%w: cannot set system variable %s", engine.ErrInvalidVariable, name)
 	}
@@ -285,7 +285,7 @@ func (e *executionContext) setVariable(name string, value precompiles.Value) err
 	// if the new variable is null, we should set the old variable to null
 	if value.Null() {
 		// set it to null
-		newVal, err := precompiles.MakeNull(oldVal.Type())
+		newVal, err := makeNull(oldVal.Type())
 		if err != nil {
 			return err
 		}
@@ -302,7 +302,7 @@ func (e *executionContext) setVariable(name string, value precompiles.Value) err
 }
 
 // allocateVariable allocates a variable in the current scope.
-func (e *executionContext) allocateVariable(name string, value precompiles.Value) error {
+func (e *executionContext) allocateVariable(name string, value value) error {
 	if value.Type().EqualsStrict(types.NullType) && value.Null() {
 		return fmt.Errorf("%w: cannot allocate untyped null value", engine.ErrInvalidNull)
 	}
@@ -319,7 +319,7 @@ func (e *executionContext) allocateVariable(name string, value precompiles.Value
 // allocateNullVariable allocates a null variable in the current scope.
 // It requires a valid type to allocate the variable.
 func (e *executionContext) allocateNullVariable(name string, dataType *types.DataType) error {
-	nv, err := precompiles.MakeNull(dataType)
+	nv, err := makeNull(dataType)
 	if err != nil {
 		return err
 	}
@@ -330,7 +330,7 @@ func (e *executionContext) allocateNullVariable(name string, dataType *types.Dat
 // getVariable gets a variable from the current scope.
 // It searches the parent scopes if the variable is not found.
 // It returns the value and a boolean indicating if the variable was found.
-func (e *executionContext) getVariable(name string) (precompiles.Value, error) {
+func (e *executionContext) getVariable(name string) (value, error) {
 	if len(name) == 0 {
 		return nil, fmt.Errorf("%w: variable name is empty", engine.ErrInvalidVariable)
 	}
@@ -348,38 +348,38 @@ func (e *executionContext) getVariable(name string) (precompiles.Value, error) {
 			if e.engineCtx.InvalidTxCtx {
 				return nil, engine.ErrInvalidTxCtx
 			}
-			return precompiles.MakeText(e.engineCtx.TxContext.Caller), nil
+			return makeText(e.engineCtx.TxContext.Caller), nil
 		case "txid":
 			if e.engineCtx.InvalidTxCtx {
 				return nil, engine.ErrInvalidTxCtx
 			}
-			return precompiles.MakeText(e.engineCtx.TxContext.TxID), nil
+			return makeText(e.engineCtx.TxContext.TxID), nil
 		case "signer":
 			if e.engineCtx.InvalidTxCtx {
 				return nil, engine.ErrInvalidTxCtx
 			}
-			return precompiles.MakeBlob(e.engineCtx.TxContext.Signer), nil
+			return makeBlob(e.engineCtx.TxContext.Signer), nil
 		case "height":
 			if e.engineCtx.InvalidTxCtx {
 				return nil, engine.ErrInvalidTxCtx
 			}
-			return precompiles.MakeInt8(e.engineCtx.TxContext.BlockContext.Height), nil
+			return makeInt8(e.engineCtx.TxContext.BlockContext.Height), nil
 		case "foreign_caller":
 			if e.scope.parent != nil {
-				return precompiles.MakeText(e.scope.parent.namespace), nil
+				return makeText(e.scope.parent.namespace), nil
 			} else {
-				return precompiles.MakeText(""), nil
+				return makeText(""), nil
 			}
 		case "block_timestamp":
 			if e.engineCtx.InvalidTxCtx {
 				return nil, engine.ErrInvalidTxCtx
 			}
-			return precompiles.MakeInt8(e.engineCtx.TxContext.BlockContext.Timestamp), nil
+			return makeInt8(e.engineCtx.TxContext.BlockContext.Timestamp), nil
 		case "authenticator":
 			if e.engineCtx.InvalidTxCtx {
 				return nil, engine.ErrInvalidTxCtx
 			}
-			return precompiles.MakeText(e.engineCtx.TxContext.Authenticator), nil
+			return makeText(e.engineCtx.TxContext.Authenticator), nil
 		default:
 			return nil, fmt.Errorf("%w: %s", engine.ErrInvalidVariable, name)
 		}
@@ -461,7 +461,7 @@ func (e *executionContext) app() *common.App {
 
 // getVarFromScope recursively searches the scopes for a variable.
 // It returns the value, as well as the scope it was found in.
-func getVarFromScope(variable string, scope *scopeContext) (precompiles.Value, *scopeContext, bool) {
+func getVarFromScope(variable string, scope *scopeContext) (value, *scopeContext, bool) {
 	if v, ok := scope.variables[variable]; ok {
 		return v, scope, true
 	}
@@ -477,7 +477,7 @@ type scopeContext struct {
 	// if the parent is nil, this is the root
 	parent *scopeContext
 	// variables are the variables stored in memory.
-	variables map[string]precompiles.Value
+	variables map[string]value
 	// namespace is the current namespace.
 	namespace string
 	// isTopLevel is true if this is the top level scope.
@@ -488,7 +488,7 @@ type scopeContext struct {
 // newScope creates a new scope.
 func newScope(namespace string) *scopeContext {
 	return &scopeContext{
-		variables: make(map[string]precompiles.Value),
+		variables: make(map[string]value),
 		namespace: namespace,
 	}
 }
@@ -503,7 +503,7 @@ func (s *scopeContext) child() {
 		variables: s.variables,
 		namespace: s.namespace,
 	}
-	s.variables = make(map[string]precompiles.Value)
+	s.variables = make(map[string]value)
 	s.namespace = s.parent.namespace
 }
 

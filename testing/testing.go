@@ -17,17 +17,15 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/assert"
-
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/node/accounts"
 	"github.com/kwilteam/kwil-db/node/engine/interpreter"
 	"github.com/kwilteam/kwil-db/node/pg"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
+	"github.com/stretchr/testify/assert"
 )
 
 // RunSchemaTest runs a SchemaTest.
@@ -200,8 +198,8 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 						},
 					},
 					OverrideAuthz: true,
-				}, outerTx, "GRANT owner TO $user", map[string]common.EngineValue{
-					"user": precompiles.MakeText(tc.Owner),
+				}, outerTx, "GRANT owner TO $user", map[string]any{
+					"user": tc.Owner,
 				}, func(r *common.Row) error {
 					// do nothing
 					return nil
@@ -313,15 +311,6 @@ func (e *TestCase) runExecution(ctx context.Context, platform *Platform) error {
 	// log to help users debug failed tests
 	platform.Logger.Logf(`executing action/procedure "%s" against namespace "%s"`, e.Action, e.Namespace)
 
-	convArgs := make([]common.EngineValue, len(e.Args))
-	for i, arg := range e.Args {
-		var err error
-		convArgs[i], err = precompiles.NewValue(arg)
-		if err != nil {
-			return fmt.Errorf("error converting argument %d: %w", i, err)
-		}
-	}
-
 	var results [][]any
 	_, err := platform.Engine.Call(&common.EngineContext{
 		TxContext: &common.TxContext{
@@ -338,12 +327,8 @@ func (e *TestCase) runExecution(ctx context.Context, platform *Platform) error {
 			},
 		},
 		OverrideAuthz: true,
-	}, platform.DB, e.Namespace, e.Action, convArgs, func(r *common.Row) error {
-		var row []any
-		for _, col := range r.Values {
-			row = append(row, col.RawValue())
-		}
-		results = append(results, row)
+	}, platform.DB, e.Namespace, e.Action, e.Args, func(r *common.Row) error {
+		results = append(results, r.Values)
 		return nil
 	})
 	if err != nil {

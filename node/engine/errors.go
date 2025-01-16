@@ -18,6 +18,7 @@ var (
 	ErrArrayDimensionality = errors.New("array dimensionality error")
 	ErrInvalidNull         = errors.New("invalid null value")
 	ErrArrayTooSmall       = errors.New("array too small")
+	ErrExtensionInvocation = errors.New("extension invocation error")
 
 	// Errors that signal the existence or non-existence of an object.
 	ErrUnknownAction     = errors.New("unknown action")
