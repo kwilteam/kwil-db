@@ -69,7 +69,7 @@ func (v *respVersionInfo) MarshalText() ([]byte, error) {
 func NewVersionCmd() *cobra.Command {
 	var cmd = &cobra.Command{
 		Use:   "version",
-		Short: "Displays the cli version information.",
+		Short: "Display the application version",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			resp := &respVersionInfo{

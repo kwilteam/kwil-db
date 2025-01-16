@@ -45,12 +45,14 @@ type contextRPCKey string
 
 const (
 	RequestIPCtx contextRPCKey = "clientIP"
+	ServerCtx    contextRPCKey = "server"
 )
 
 // Server is a JSON-RPC server.
 type Server struct {
 	srv            *http.Server
-	unix           bool // the listener's network should be "unix" instead of "tcp"
+	addr           string // the listener's actual address, not the config
+	unix           bool   // the listener's network should be "unix" instead of "tcp"
 	log            log.Logger
 	methodHandlers map[jsonrpc.Method]MethodHandler
 	methodDefs     map[string]*openrpc.MethodDefinition
@@ -512,6 +514,11 @@ func realIP(r *http.Request, xffTrustProxyCount int) string {
 
 }
 
+// Addr returns the listener's address. This is only set after Server is called.
+func (s *Server) Addr() string {
+	return s.addr
+}
+
 func (s *Server) Serve(ctx context.Context) error {
 	network := "tcp"
 	if s.unix {
@@ -530,7 +537,8 @@ func (s *Server) Serve(ctx context.Context) error {
 			return err
 		}
 	}
-	s.log.Info("JSON-RPC server listening", "address", ln.Addr().String())
+	s.addr = ln.Addr().String()
+	s.log.Info("JSON-RPC server listening", "address", s.addr)
 	return s.ServeOn(ctx, ln)
 }
 

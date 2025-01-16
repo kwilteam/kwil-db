@@ -28,6 +28,7 @@ func ioTypes[I, O any](Handler[I, O]) (reflect.Type, reflect.Type) {
 func MakeMethodHandler[I, O any](fn Handler[I, O]) MethodHandler {
 	return func(ctx context.Context, s *Server) (any, func() (any, *jsonrpc.Error)) {
 		req := new(I)
+		ctx = context.WithValue(ctx, ServerCtx, s)
 		return req, func() (any, *jsonrpc.Error) { return fn(ctx, req) }
 	}
 }

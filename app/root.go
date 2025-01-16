@@ -16,6 +16,7 @@ import (
 	"github.com/kwilteam/kwil-db/app/setup"
 	"github.com/kwilteam/kwil-db/app/shared/bind"
 	"github.com/kwilteam/kwil-db/app/shared/display"
+	verCmd "github.com/kwilteam/kwil-db/app/shared/version"
 	"github.com/kwilteam/kwil-db/app/snapshot"
 	"github.com/kwilteam/kwil-db/app/utils"
 	"github.com/kwilteam/kwil-db/app/validator"
@@ -67,6 +68,7 @@ func RootCmd() *cobra.Command {
 	// There is a virtual "node" command grouping, but no actual "node" command yet.
 	cmd.AddCommand(node.StartCmd())
 	cmd.AddCommand(node.PrintConfigCmd())
+
 	cmd.AddCommand(rpc.NewAdminCmd())
 	cmd.AddCommand(validator.NewValidatorsCmd())
 	cmd.AddCommand(params.NewConsensusCmd())
@@ -78,6 +80,7 @@ func RootCmd() *cobra.Command {
 	cmd.AddCommand(block.NewBlockExecCmd())
 	cmd.AddCommand(seed.SeedCmd())
 	cmd.AddCommand(utils.NewCmdUtils())
+	cmd.AddCommand(verCmd.NewVersionCmd())
 
 	return cmd
 }

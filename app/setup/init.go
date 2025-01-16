@@ -30,7 +30,7 @@ var (
 )
 
 var (
-	initLong = `The ` + "`" + `init` + "`" + ` command facilitates quick setup of an isolated Kwil node either on a fresh network in which that node is the single validator or to join an existing network.
+	initLong = `The init command facilitates quick setup of an isolated Kwil node either on a fresh network in which that node is the single validator or to join an existing network.
 This permits rapid prototyping and evaluation of Kwil functionality. An output directory can be specified using the ` + "`" + `--output-dir` + "`" + `" flag.
 If no output directory is specified, the node will be initialized ` + "`" + `./testnet` + "`" + `.`
 
@@ -52,6 +52,7 @@ func InitCmd() *cobra.Command {
 		CompletionOptions: cobra.CompletionOptions{
 			DisableDefaultCmd: true,
 		},
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			genSnapshotFlag := cmd.Flag("genesis-snapshot").Changed
 			genStateFlag := cmd.Flag("genesis-state").Changed

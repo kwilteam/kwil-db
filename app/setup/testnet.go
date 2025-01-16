@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"strconv"
 
+	"github.com/spf13/cobra"
+
 	"github.com/kwilteam/kwil-db/app/custom"
 	"github.com/kwilteam/kwil-db/app/key"
 	"github.com/kwilteam/kwil-db/app/shared/bind"
@@ -19,8 +21,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node"
-
-	"github.com/spf13/cobra"
 )
 
 // accept: #vals, #n-vals and set the first validator as the leader.
@@ -33,7 +33,7 @@ func TestnetCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "testnet",
-		Short: "Generate configuration for multiple nodes",
+		Short: "Generate configuration for a new test network with multiple nodes",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return GenerateTestnetConfigs(&TestnetConfig{
 				RootDir:      outDir,

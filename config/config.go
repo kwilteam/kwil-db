@@ -18,6 +18,14 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
+const (
+	ConfigFileName  = "config.toml"
+	GenesisFileName = "genesis.json"
+
+	DefaultAdminRPCAddr = "/tmp/kwild.socket"
+	AdminCertName       = "admin.cert"
+)
+
 // Duration is a wrapper around time.Duration that implements text
 // (un)marshalling for the go-toml package to work with Go duration strings
 // instead of integers.
@@ -227,10 +235,10 @@ func DefaultConfig() *Config {
 		},
 		Admin: AdminConfig{
 			Enable:        true,
-			ListenAddress: "/tmp/kwild.socket",
+			ListenAddress: DefaultAdminRPCAddr,
 			Pass:          "",
 			NoTLS:         false,
-			TLSCertFile:   "admin.cert",
+			TLSCertFile:   AdminCertName,
 			TLSKeyFile:    "admin.key",
 		},
 		Snapshots: SnapshotConfig{

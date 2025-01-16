@@ -51,6 +51,14 @@ type CommitInfo struct {
 	ParamUpdates ParamUpdates
 }
 
+type NodeStatus struct {
+	Role            string             `json:"role"`
+	CatchingUp      bool               `json:"catching_up"`
+	CommittedHeader *BlockHeader       `json:"committed_header"`
+	CommitInfo      *CommitInfo        `json:"commit_info"`
+	Params          *NetworkParameters `json:"params"`
+}
+
 type AckStatus int
 
 const (
@@ -105,7 +113,7 @@ func NewBlock(height int64, prevHash, appHash, valSetHash Hash, stamp time.Time,
 		PrevHash:    prevHash,
 		PrevAppHash: appHash,
 		NumTxns:     uint32(numTxns),
-		Timestamp:   stamp.UTC(),
+		Timestamp:   stamp.Truncate(time.Millisecond).UTC(),
 		MerkleRoot:  merkelRoot,
 
 		ValidatorSetHash: valSetHash,

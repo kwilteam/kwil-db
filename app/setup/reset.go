@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	resetLong = `To delete all of a Kwil node's data files, use the ` + "`" + `reset` + "`" + ` command. If the root directory is not specified, the node's default root directory will be used.
+	resetLong = `To delete all of a Kwil node's data files, use the reset command. If the root directory is not specified, the node's default root directory will be used.
 
 WARNING: This command should not be used on production systems. This should only be used to reset disposable test nodes.`
 
@@ -27,7 +27,7 @@ func ResetCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:     "reset",
-		Short:   "Reset the blockchain and the application state",
+		Short:   "Reset blockchain data and the application state.",
 		Long:    resetLong,
 		Example: resetExample,
 		Args:    cobra.NoArgs,

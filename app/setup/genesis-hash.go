@@ -45,7 +45,7 @@ func GenesisHashCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:     "genesis-hash",
-		Short:   "Compute genesis hash from existing PostgreSQL datasets, and optionally update `genesis.json`.",
+		Short:   "Compute genesis hash from existing PostgreSQL data, and optionally update genesis.json.",
 		Long:    genesisHashLong,
 		Example: genesisHashExample,
 		Args:    cobra.NoArgs,

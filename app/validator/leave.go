@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	leaveLong = "A current validator may leave the validator set using the `leave` command."
+	leaveLong = "The leave command submits a transaction to leave the validator set. This node will be removed from the validator set if the transaction is included in a block."
 
 	leaveExample = `# Leave the validator set
 kwil-admin validators leave`
@@ -19,7 +19,7 @@ kwil-admin validators leave`
 func leaveCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "leave",
-		Short:   "A current validator may leave the validator set using the `leave` command.",
+		Short:   "Leave the validator set (your node must be a validator).",
 		Long:    leaveLong,
 		Example: leaveExample,
 		Args:    cobra.NoArgs,

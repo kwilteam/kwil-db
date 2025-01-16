@@ -15,13 +15,13 @@ import (
 )
 
 var (
-	listJoinRequestsLong = `Command ` + "`" + `list-join-requests` + "`" + ` lists all pending join requests.
+	listJoinRequestsLong = `The list-join-requests command lists all pending join requests.
 	
 Join requests are created when a validator wants to join the validator set. The validator must be approved by 2/3 of the current validator set to be added to the validator set.
 Each join request has an expiration block height, after which it is no longer valid.`
 
 	listJoinRequestsExample = `# List all pending join requests
-kwil-admin validators list-join-requests`
+kwild validators list-join-requests`
 )
 
 func listJoinRequestsCmd() *cobra.Command {
@@ -30,6 +30,7 @@ func listJoinRequestsCmd() *cobra.Command {
 		Short:   "List all pending join requests.",
 		Long:    listJoinRequestsLong,
 		Example: listJoinRequestsExample,
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()
 

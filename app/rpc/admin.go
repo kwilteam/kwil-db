@@ -7,13 +7,16 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/kwilteam/kwil-db/app/shared/bind"
-	adminclient "github.com/kwilteam/kwil-db/node/admin"
 	"github.com/spf13/cobra"
+
+	"github.com/kwilteam/kwil-db/app/node/conf"
+	"github.com/kwilteam/kwil-db/app/shared/bind"
+	"github.com/kwilteam/kwil-db/config"
+	adminclient "github.com/kwilteam/kwil-db/node/admin"
 )
 
 const (
-	adminCertName = "admin.cert" // fallback in case we're on a remote machine not kwild's
+	rpcserverFlagName = "rpcserver"
 )
 
 // BindRPCFlags binds the RPC flags to the given command.
@@ -21,17 +24,17 @@ const (
 // These flags can be used to create an admin service client.
 // The flags will be bound to all subcommands of the given command.
 func BindRPCFlags(cmd *cobra.Command) {
-	cmd.PersistentFlags().StringP("rpcserver", "s", "/tmp/kwild.socket", "admin RPC server address (either unix or tcp)")
+	cmd.PersistentFlags().StringP(rpcserverFlagName, "s", config.DefaultAdminRPCAddr, "admin RPC server address (either UNIX socket path or TCP address)")
 
 	cmd.PersistentFlags().String("authrpc-cert", "", "kwild's TLS certificate, required for HTTPS server")
-	cmd.PersistentFlags().String("pass", "", "admin server password (alternative to mTLS with tlskey/tlscert). May be set in ~/.kwil-admin/rpc-admin-pass instead.")
+	cmd.PersistentFlags().String("pass", "", "admin server password (alternative to mTLS with tlskey/tlscert)")
 	cmd.PersistentFlags().String("tlskey", "auth.key", "kwil-admin's TLS key file to establish a mTLS (authenticated) connection")
 	cmd.PersistentFlags().String("tlscert", "auth.cert", "kwil-admin's TLS certificate file for server to authenticate us")
 }
 
 // GetRPCServerFlag returns the RPC flag from the given command.
 func GetRPCServerFlag(cmd *cobra.Command) (string, error) {
-	return cmd.Flags().GetString("rpcserver")
+	return cmd.Flags().GetString(rpcserverFlagName)
 }
 
 // AdminSvcClient will return an admin service client based on the flags.
@@ -39,9 +42,15 @@ func GetRPCServerFlag(cmd *cobra.Command) (string, error) {
 func AdminSvcClient(ctx context.Context, cmd *cobra.Command) (*adminclient.AdminClient, error) {
 	adminOpts := []adminclient.Opt{}
 
-	rpcServer, err := GetRPCServerFlag(cmd)
-	if err != nil {
-		return nil, err
+	// Get the RPC server address from the rpcserver flag. If it is not set and
+	// the active config (from node config) is modified, then use the active config.
+	var rpcServer string
+	addrFlag := cmd.Flags().Lookup(rpcserverFlagName)
+	cfgAddr := conf.ActiveConfig().Admin.ListenAddress
+	if cfgAddr != config.DefaultAdminRPCAddr && !addrFlag.Changed {
+		rpcServer = cfgAddr
+	} else {
+		rpcServer = addrFlag.Value.String()
 	}
 
 	// get the tls files
@@ -104,22 +113,21 @@ type nodeCert struct {
 	ClientTLSCertFile string // default: auth.cert
 }
 
-// tlsFiles loads the remote nodes TLS certificate, which the client uses to
+// tlsFiles loads the remote node's TLS certificate, which the client uses to
 // authenticate the server during the connection handshake, and our TLS key
 // pair, which allows the server to authenticate the client. The server's TLS
 // certificate would be obtained from the node machine and specified with the
-// --authrpc-cert flag, this will search for it in known paths. The client key
+// --authrpc-cert flag, or this will search for it in known paths. The client key
 // pair (ours) should first be generated with the `node gen-auth-key` command.
 func (nc *nodeCert) tlsFiles(rootDir string) (nodeCert, ourKey, ourCert string, err error) {
 	// Look for kwild's TLS certificate in:
 	//  1. any path provided via --authrpc-cert
-	//  2. ~/.kwil-admin/kwild.cert
-	//  3. ~/.kwild/rpc.cert
-	nodeCert = nc.KwildTLSCertFile
-	if nodeCert != "" { // --authrpc-cert
+	//  2. ~/.kwild/admin.cert
+	nodeCert = nc.KwildTLSCertFile // --authrpc-cert
+	if nodeCert != "" {
 		nodeCert = fullPath(nodeCert, rootDir)
-	} else { // search the two fallback paths
-		nodeCert = fullPath(adminCertName, rootDir)
+	} else {
+		nodeCert = fullPath(config.AdminCertName, rootDir) // ~/.kwild/admin.cert
 	}
 	if nodeCert == "" || !fileExists(nodeCert) {
 		err = fmt.Errorf("kwild cert file not found, checked %v", nodeCert)

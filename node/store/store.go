@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
@@ -23,13 +24,16 @@ import (
 type blockHashes struct {
 	hash    types.Hash
 	appHash types.Hash
+	stamp   time.Time
 }
 
 type BlockStore struct {
-	mtx      sync.RWMutex
-	idx      map[types.Hash]int64
-	hashes   map[int64]blockHashes
-	fetching map[types.Hash]bool // TODO: remove, app concern
+	mtx        sync.RWMutex
+	bestHeight int64
+	bestHash   types.Hash
+	idx        map[types.Hash]int64
+	hashes     map[int64]blockHashes
+	fetching   map[types.Hash]bool // TODO: remove, app concern
 
 	// TODO: LRU cache for recent txns
 
@@ -98,6 +102,7 @@ func NewBlockStore(dir string, opts ...Option) (*BlockStore, error) {
 		for it.Rewind(); it.Valid(); it.Next() {
 			item := it.Item()
 			var height int64
+			var stamp time.Time
 			err := item.Value(func(val []byte) error {
 				r := bytes.NewReader(val)
 				blockHeader, err := ktypes.DecodeBlockHeader(r)
@@ -105,6 +110,7 @@ func NewBlockStore(dir string, opts ...Option) (*BlockStore, error) {
 					return err
 				}
 				height = blockHeader.Height
+				stamp = blockHeader.Timestamp
 				// sig, err = io.ReadAll(r)
 				return nil
 			})
@@ -137,6 +143,11 @@ func NewBlockStore(dir string, opts ...Option) (*BlockStore, error) {
 			bs.hashes[height] = blockHashes{
 				hash:    hash,
 				appHash: ci.AppHash,
+				stamp:   stamp,
+			}
+			if bs.bestHeight < height {
+				bs.bestHeight = height
+				bs.bestHash = hash
 			}
 			count++
 		}
@@ -348,6 +359,11 @@ func (bki *BlockStore) Store(blk *ktypes.Block, commitInfo *ktypes.CommitInfo) e
 	bki.hashes[height] = blockHashes{
 		hash:    blkHash,
 		appHash: commitInfo.AppHash,
+		stamp:   blk.Header.Timestamp,
+	}
+	if bki.bestHeight < height {
+		bki.bestHeight = height
+		bki.bestHash = blkHash
 	}
 
 	return nil
@@ -372,22 +388,16 @@ func (bki *BlockStore) PreFetch(blkid types.Hash) (bool, func()) { // TODO: remo
 	} // go get it
 }
 
-// Best returns the best block's height, hash, and appHash. The appHash is a
-// result of executing the block, not the appHash stored in the header, which is
-// from the execution of the previous block.
-func (bki *BlockStore) Best() (int64, types.Hash, types.Hash) {
+// Best returns the best block's height, hash, appHash, and time stamp. The
+// appHash is a result of executing the block, not the appHash stored in the
+// header, which is from the execution of the previous block. The time stamp is
+// what is in the header.
+func (bki *BlockStore) Best() (height int64, blkHash, appHash types.Hash, stamp time.Time) {
 	bki.mtx.RLock()
 	defer bki.mtx.RUnlock()
-	var bestHeight int64
-	var bestHash, bestAppHash types.Hash
-	for height, hashes := range bki.hashes {
-		if height >= bestHeight {
-			bestHeight = height
-			bestHash = hashes.hash
-			bestAppHash = hashes.appHash
-		}
-	}
-	return bestHeight, bestHash, bestAppHash
+	height, blkHash = bki.bestHeight, bki.bestHash
+	appHash, stamp = bki.hashes[height].appHash, bki.hashes[height].stamp
+	return
 }
 
 func (bki *BlockStore) Get(blkHash types.Hash) (*ktypes.Block, *ktypes.CommitInfo, error) {

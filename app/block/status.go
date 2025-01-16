@@ -14,7 +14,7 @@ import (
 func statusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "status",
-		Short:   "Get the status of the ongoing block execution.",
+		Short:   "Get the status of any ongoing block execution.",
 		Example: "kwild block status",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {

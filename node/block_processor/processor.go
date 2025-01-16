@@ -13,6 +13,7 @@ import (
 	"slices"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/config"
@@ -270,7 +271,7 @@ func (bp *BlockProcessor) Rollback(ctx context.Context, height int64, appHash kt
 	return nil
 }
 
-func (bp *BlockProcessor) CheckTx(ctx context.Context, tx *ktypes.Transaction, recheck bool) error {
+func (bp *BlockProcessor) CheckTx(ctx context.Context, tx *ktypes.Transaction, height int64, blockTime time.Time, recheck bool) error {
 	txHash := tx.Hash()
 
 	// If the network is halted for migration, we reject all transactions.
@@ -315,7 +316,8 @@ func (bp *BlockProcessor) CheckTx(ctx context.Context, tx *ktypes.Transaction, r
 		Ctx: ctx,
 		BlockContext: &common.BlockContext{
 			ChainContext: bp.chainCtx,
-			Height:       bp.height.Load() + 1,
+			Height:       height + 1,
+			Timestamp:    blockTime.Unix() + 1, // eh, one second later... ?
 			Proposer:     bp.chainCtx.NetworkParameters.Leader,
 		},
 		TxID:          hex.EncodeToString(txHash[:]),

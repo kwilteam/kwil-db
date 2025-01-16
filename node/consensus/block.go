@@ -49,10 +49,22 @@ func (ce *ConsensusEngine) validateBlock(blk *ktypes.Block) error {
 }
 
 func (ce *ConsensusEngine) CheckTx(ctx context.Context, tx *ktypes.Transaction) error {
+	ce.stateInfo.mtx.RLock()
+	height, timestamp := ce.stateInfo.height, ce.stateInfo.lastCommit.blk.Header.Timestamp
+	ce.stateInfo.mtx.RUnlock()
+
 	ce.mempoolMtx.Lock()
 	defer ce.mempoolMtx.Unlock()
 
-	return ce.blockProcessor.CheckTx(ctx, tx, false)
+	return ce.blockProcessor.CheckTx(ctx, tx, height, timestamp, false)
+}
+
+func (ce *ConsensusEngine) recheckTx(ctx context.Context, tx *ktypes.Transaction) error {
+	ce.stateInfo.mtx.RLock()
+	height, timestamp := ce.stateInfo.height, ce.stateInfo.lastCommit.blk.Header.Timestamp
+	ce.stateInfo.mtx.RUnlock()
+
+	return ce.blockProcessor.CheckTx(ctx, tx, height, timestamp, true)
 }
 
 // BroadcastTx checks the Tx with the mempool and if the verification is successful, broadcasts the Tx to the network.
@@ -180,7 +192,7 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 	}
 
 	// recheck the transactions in the mempool
-	ce.mempool.RecheckTxs(ctx, ce.blockProcessor.CheckTx)
+	ce.mempool.RecheckTxs(ctx, ce.recheckTx)
 
 	// update the role of the node based on the final validator set at the end of the commit.
 	ce.updateValidatorSetAndRole()
@@ -223,6 +235,7 @@ func (ce *ConsensusEngine) resetState() {
 	ce.stateInfo.status = Committed
 	ce.stateInfo.blkProp = nil
 	ce.stateInfo.height = ce.state.lc.height
+	ce.stateInfo.lastCommit = *ce.state.lc
 	ce.stateInfo.mtx.Unlock()
 
 	ce.cancelFnMtx.Lock()

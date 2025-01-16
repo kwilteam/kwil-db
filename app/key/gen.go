@@ -25,8 +25,8 @@ func GenCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:     "gen [<keytype>]",
-		Short:   "Generate private keys for usage in validators.",
-		Long:    "Generate private keys for usage in validators.",
+		Short:   "Generate a private key for validator use.",
+		Long:    "The gen command generates a private key for use by validators.",
 		Example: genExample,
 		Args:    cobra.RangeArgs(0, 1),
 		RunE: func(cmd *cobra.Command, args []string) error {

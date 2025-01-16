@@ -5,14 +5,16 @@ package memstore
 import (
 	"fmt"
 	"sync"
+	"time"
 
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
 )
 
-type blockHashes struct {
+type blockHashes struct { // meta
 	hash    types.Hash
 	appHash types.Hash
+	stamp   time.Time
 }
 
 type MemBS struct {
@@ -133,19 +135,18 @@ func (bs *MemBS) Result(hash types.Hash, idx uint32) (*ktypes.TxResult, error) {
 	return &r, nil
 }
 
-func (bs *MemBS) Best() (int64, types.Hash, types.Hash) {
+func (bs *MemBS) Best() (height int64, blkHash, appHash types.Hash, stamp time.Time) {
 	bs.mtx.RLock()
 	defer bs.mtx.RUnlock()
-	var bestHeight int64
-	var bestHash, bestAppHash types.Hash
-	for height, hashes := range bs.hashes {
-		if height >= bestHeight {
-			bestHeight = height
-			bestHash = hashes.hash
-			bestAppHash = hashes.appHash
+	for heighti, hashes := range bs.hashes {
+		if heighti >= height {
+			height = heighti
+			blkHash = hashes.hash
+			appHash = hashes.appHash
+			stamp = hashes.stamp
 		}
 	}
-	return bestHeight, bestHash, bestAppHash
+	return height, blkHash, appHash, stamp
 }
 
 func (bs *MemBS) PreFetch(blkid types.Hash) (bool, func()) {

@@ -16,6 +16,11 @@ type StatusResponse struct {
 
 type NodeInfo = adminTypes.NodeInfo
 
+// type NodeInfo struct {
+// 	adminTypes.NodeInfo
+// 	RPCAddr string `json:"rpc_addr"`
+// }
+
 // type SyncInfo = adminTypes.SyncInfo
 // type Validator = adminTypes.ValidatorInfo
 type Validator = types.Validator

@@ -11,15 +11,15 @@ import (
 )
 
 var (
-	dumpCfgLong    = `Gets the current config from the node.`
+	dumpCfgLong    = `The dump-config command retrieves and displays the active config from the running node.`
 	dumpCfgExample = `# Get the current config from the node.
-kwil-admin node dump-config --rpcserver /tmp/kwild.socket`
+kwild admin dump-config --rpcserver /tmp/kwild.socket`
 )
 
 func dumpCfgCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "dump-config",
-		Short:   "Gets the current config from the node.",
+		Short:   "Get and display the current config from the node.",
 		Long:    dumpCfgLong,
 		Example: dumpCfgExample,
 		Args:    cobra.NoArgs,

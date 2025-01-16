@@ -428,7 +428,7 @@ func (n *Node) startDiscoveryRequestGossip(ctx context.Context, ps *pubsub.PubSu
 			n.log.Infof("received Discovery request from %s", peers.PeerIDStringer(discMsg.ReceivedFrom))
 
 			// Check the block store for the best height and respond
-			bestHeight, _, _ := n.bki.Best()
+			bestHeight, _, _, _ := n.bki.Best()
 			n.sendDiscoveryResponse(bestHeight)
 
 			n.log.Info("responded to Discovery request", "height", bestHeight)

@@ -16,13 +16,14 @@ func StartCmd() *cobra.Command {
 	var dbOwner string
 	cmd := &cobra.Command{
 		Use:               "start",
-		Short:             "start the node (default command)",
-		Long:              "Start the node running",
+		Short:             "Start the node (default command if none given)",
+		Long:              "The start command starts the Kwil DB blockchain node.",
 		DisableAutoGenTag: true,
 		SilenceUsage:      true,
 		CompletionOptions: cobra.CompletionOptions{
 			DisableDefaultCmd: true,
 		},
+		Args:    cobra.NoArgs,
 		Version: version.KwilVersion,
 		Example: custom.BinaryConfig.NodeCmd + " start -r .testnet",
 		RunE: func(cmd *cobra.Command, args []string) error {

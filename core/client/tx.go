@@ -8,17 +8,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
-// NewSignedTx creates a signed transaction with a prepared payload. This will
-// set the nonce to signer's latest, build the Transaction, set the Fee, and
-// sign the transaction. It may then be broadcast on a kwil network. The
-// TxOptions may be set to override the nonce and fee.
-//
-// WARNING: This is an advanced method, and most applications should use the
-// other Client methods to interact with a Kwil network.
-func (c *Client) NewSignedTx(ctx context.Context, data types.Payload, txOpts *clientType.TxOptions) (*types.Transaction, error) {
-	return c.newTx(ctx, data, txOpts)
-}
-
 // newTx creates a new Transaction signed by the Client's Signer
 func (c *Client) newTx(ctx context.Context, data types.Payload, txOpts *clientType.TxOptions) (*types.Transaction, error) {
 	if c.Signer() == nil {

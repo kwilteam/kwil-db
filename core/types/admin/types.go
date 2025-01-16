@@ -8,17 +8,14 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
-// NodeInfo describes a peer node. This may be a peer or a node being
-// administered.
+// NodeInfo describes the administered node.
 type NodeInfo struct {
-	ChainID         string `json:"chain_id"`
-	Name            string `json:"name"`
-	NodeID          string `json:"node_id"`
-	ProtocolVersion uint64 `json:"proto_ver"`
-	AppVersion      uint64 `json:"app_ver"`
-	BlockVersion    uint64 `json:"block_ver"`
-	ListenAddr      string `json:"listen_addr"`
-	RPCAddr         string `json:"rpc_addr"`
+	ChainID    string `json:"chain_id"`
+	NodeID     string `json:"node_id"`
+	AppVersion uint64 `json:"app_ver"`
+	ListenAddr string `json:"listen_addr"`
+	Role       string `json:"role"`
+	RPCAddr    string `json:"rpc_addr"`
 }
 
 // SyncInfo describes the sync state of a node.
@@ -46,9 +43,9 @@ type Status struct {
 
 // PeerInfo describes a connected peer node.
 type PeerInfo struct {
-	NodeInfo   *NodeInfo `json:"node"`
-	Inbound    bool      `json:"inbound"`
-	RemoteAddr string    `json:"remote_addr"`
+	RemoteAddr string `json:"remote_addr"`
+	LocalAddr  string `json:"local_addr"`
+	Inbound    bool   `json:"inbound"`
 }
 
 type MigrationInfo struct {

@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"context"
+	"time"
 
 	blockprocessor "github.com/kwilteam/kwil-db/node/block_processor"
 	"github.com/kwilteam/kwil-db/node/mempool"
@@ -30,15 +31,11 @@ type Mempool interface {
 
 // BlockStore includes both txns and blocks
 type BlockStore interface {
-	// GetBlockByHeight(height int64) (types.Block, error)
-	Best() (int64, types.Hash, types.Hash)
+	Best() (height int64, blkHash, appHash types.Hash, stamp time.Time)
 	Store(block *ktypes.Block, commitInfo *ktypes.CommitInfo) error
-	// Have(blkid types.Hash) bool
 	Get(blkid types.Hash) (*ktypes.Block, *ktypes.CommitInfo, error)
-	// TODO: should return commitInfo instead of appHash
 	GetByHeight(height int64) (types.Hash, *ktypes.Block, *ktypes.CommitInfo, error)
 	StoreResults(hash types.Hash, results []ktypes.TxResult) error
-	// Results(hash types.Hash) ([]types.TxResult, error)
 }
 
 type BlockProcessor interface {
@@ -51,7 +48,7 @@ type BlockProcessor interface {
 	Rollback(ctx context.Context, height int64, appHash ktypes.Hash) error
 	Close() error
 
-	CheckTx(ctx context.Context, tx *ktypes.Transaction, recheck bool) error
+	CheckTx(ctx context.Context, tx *ktypes.Transaction, height int64, blockTime time.Time, recheck bool) error
 
 	GetValidators() []*ktypes.Validator
 	ConsensusParams() *ktypes.NetworkParameters

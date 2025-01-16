@@ -4,16 +4,17 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/spf13/cobra"
+
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	types "github.com/kwilteam/kwil-db/core/types/admin"
-	"github.com/spf13/cobra"
 )
 
 var (
-	statusLong = `Print the node's status information.`
+	statusLong = `The status command retrieves and prints the node's status.`
 
-	statusExample = `# Print a remote node's status (TLS with self-signed certificate)
-kwil-admin node status --rpcserver /tmp/kwild.socket`
+	statusExample = `# Print a running node's status
+kwild admin status --rpcserver /tmp/kwild.socket`
 )
 
 func statusCmd() *cobra.Command {
