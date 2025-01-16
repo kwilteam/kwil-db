@@ -384,10 +384,10 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 	} // else would use persistent peer store (address book)
 
 	for _, val := range n.bp.GetValidators() {
-		n.log.Infof("Adding validator %v to peer whitelist", val.PubKey)
-		peerID, err := peerIDForValidator(val.PubKey)
+		n.log.Infof("Adding validator %v to peer whitelist", val.Identifier)
+		peerID, err := peerIDForValidator(val.Identifier)
 		if err != nil {
-			n.log.Errorf("cannot get peerID for validator (%v): %v", val.PubKey, err)
+			n.log.Errorf("cannot get peerID for validator (%v): %v", val.Identifier, err)
 			continue
 		}
 		n.pm.Allow(peerID)
@@ -405,9 +405,9 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 				}
 				// update peer filter
 				for _, up := range valUpdates {
-					peerID, err := peerIDForValidator(up.PubKey)
+					peerID, err := peerIDForValidator(up.Identifier)
 					if err != nil {
-						n.log.Errorf("cannot get peerID for validator (%v): %v", up.PubKey, err)
+						n.log.Errorf("cannot get peerID for validator (%v): %v", up.Identifier, err)
 						continue
 					}
 					if up.Power > 0 {
@@ -652,9 +652,9 @@ func (n *Node) Status(ctx context.Context) (*adminTypes.Status, error) {
 			Syncing: n.ce.InCatchup(),
 		},
 		Validator: &adminTypes.ValidatorInfo{
-			NodeKey: ktypes.NodeKey{
-				PubKey: pkBytes,
-				Type:   n.pubkey.Type(),
+			AccountID: ktypes.AccountID{
+				Identifier: pkBytes,
+				KeyType:    n.pubkey.Type(),
 			},
 			Power: 1, // Let's default to 1 for now
 		},

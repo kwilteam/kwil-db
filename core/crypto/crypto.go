@@ -16,6 +16,11 @@ import (
 	"runtime/debug"
 )
 
+const (
+	// ReservedKeyTypes is the range of key types that are reserved for internal purposes.
+	ReservedKeyTypes = KeyType(1 << 16) // 65536
+)
+
 var (
 	ErrInvalidSignature = errors.New("invalid signature")
 	// ErrInvalidSignatureLength = errors.New("invalid signature length")
@@ -45,36 +50,59 @@ const (
 	// KeyTypeRSA       KeyType = 2
 )
 
-func (kt KeyType) Valid() bool {
-	switch kt {
-	case KeyTypeSecp256k1, KeyTypeEd25519:
-		return true
-	default:
-		return false
+var (
+	// keyTypes maps key types to their string representations
+	// of all the supported key types.
+	keyTypes map[KeyType]string = map[KeyType]string{
+		KeyTypeSecp256k1: "secp256k1",
+		KeyTypeEd25519:   "ed25519",
 	}
+
+	// maps of keyTypeStrings to KeyType
+	keyTypeStrings map[string]KeyType = map[string]KeyType{
+		"secp256k1": KeyTypeSecp256k1,
+		"ed25519":   KeyTypeEd25519,
+	}
+)
+
+// RegisterKeyType registers a new keyType. The KeyType and its string should be
+// unique and the KeyType value must be greater than ReservedKeyTypes.
+func RegisterKeyType(kt KeyType, name string) error {
+	if kt <= ReservedKeyTypes {
+		return fmt.Errorf("key type %d is reserved", kt)
+	}
+
+	if _, ok := keyTypes[kt]; ok {
+		return fmt.Errorf("key type %d already registered with %s", kt, keyTypes[kt])
+	}
+
+	if _, ok := keyTypeStrings[name]; ok {
+		return fmt.Errorf("key type string %s already registered with keyType: %d", name, keyTypeStrings[name])
+	}
+
+	keyTypes[kt] = name
+	keyTypeStrings[name] = kt
+	return nil
+}
+
+func (kt KeyType) Valid() bool {
+	_, ok := keyTypes[kt]
+	return ok
 }
 
 func (kt KeyType) String() string {
-	switch kt {
-	case KeyTypeSecp256k1:
-		return "secp256k1"
-	case KeyTypeEd25519:
-		return "ed25519"
-	default:
-		return fmt.Sprintf("unknown key type %d", kt)
+	if s, ok := keyTypes[kt]; ok {
+		return s
 	}
+	return fmt.Sprintf("unknown key type %d", kt)
 }
 
 // ParseKeyType parses a string into a KeyType.
 func ParseKeyType(s string) (KeyType, error) {
-	switch s {
-	case "secp256k1":
-		return KeyTypeSecp256k1, nil
-	case "ed25519":
-		return KeyTypeEd25519, nil
-	default:
-		return 0, fmt.Errorf("unknown key type: %s", s)
+	if kt, ok := keyTypeStrings[s]; ok {
+		return kt, nil
 	}
+	return 0, fmt.Errorf("unknown key type: %s", s)
 }
 
 // PrivateKey represents a private key that can be used to sign data.

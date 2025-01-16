@@ -79,9 +79,9 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) ([]*Config, ma
 	var valSet []*ktypes.Validator
 	for _, pubKey := range pubKeys {
 		val := &ktypes.Validator{
-			NodeKey: ktypes.NodeKey{
-				PubKey: types.HexBytes(pubKey.Bytes()),
-				Type:   pubKey.Type(),
+			AccountID: ktypes.AccountID{
+				Identifier: types.HexBytes(pubKey.Bytes()),
+				KeyType:    pubKey.Type(),
 			},
 			Power: 1,
 		}
@@ -646,14 +646,14 @@ func createBlockProposals(t *testing.T, ce *ConsensusEngine, valSet map[string]k
 	hasher := ktypes.NewHasher()
 	keys := make([]string, 0, len(valSet))
 	for _, v := range valSet {
-		keys = append(keys, config.EncodePubKeyAndType(v.PubKey, v.Type))
+		keys = append(keys, config.EncodePubKeyAndType(v.Identifier, v.KeyType))
 	}
 	slices.Sort(keys)
 
 	for _, key := range keys {
 		val := valSet[key]
-		hasher.Write(val.PubKey)
-		binary.Write(hasher, binary.BigEndian, val.Type)
+		hasher.Write(val.Identifier)
+		binary.Write(hasher, binary.BigEndian, val.KeyType)
 		binary.Write(hasher, binary.BigEndian, val.Power)
 	}
 	hash := hasher.Sum(nil)

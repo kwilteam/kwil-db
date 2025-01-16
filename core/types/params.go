@@ -102,9 +102,6 @@ type NetworkParameters struct {
 	// JoinExpiry is the number of blocks after which the validators
 	// join request expires if not approved.
 	JoinExpiry int64 `json:"join_expiry"`
-	// VoteExpiry is the default number of blocks after which the validators
-	// vote expires if not approved.
-	VoteExpiry int64 `json:"vote_expiry"`
 	// DisabledGasCosts dictates whether gas costs are disabled.
 	DisabledGasCosts bool `json:"disabled_gas_costs"`
 	// MaxVotesPerTx is the maximum number of votes that can be included in a
@@ -135,13 +132,12 @@ var (
 	ParamNameDBOwner          ParamName
 	ParamNameMaxBlockSize     ParamName
 	ParamNameJoinExpiry       ParamName
-	ParamNameVoteExpiry       ParamName
 	ParamNameDisabledGasCosts ParamName
 	ParamNameMaxVotesPerTx    ParamName
 	ParamNameMigrationStatus  ParamName
 )
 
-const numParams = 8
+const numParams = 7
 
 // setParamNames sets the ParamName constants based on the json tags of a struct
 // (intended for NetworkParameters, but any for unit testing). This looks crazy,
@@ -168,8 +164,6 @@ func setParamNames(np any) {
 			ParamNameMaxBlockSize = fieldTag
 		case "JoinExpiry":
 			ParamNameJoinExpiry = fieldTag
-		case "VoteExpiry":
-			ParamNameVoteExpiry = fieldTag
 		case "DisabledGasCosts":
 			ParamNameDisabledGasCosts = fieldTag
 		case "MaxVotesPerTx":
@@ -213,8 +207,6 @@ func MergeUpdates(np *NetworkParameters, updates ParamUpdates) (err error) {
 			np.MaxBlockSize = update.(int64)
 		case ParamNameJoinExpiry:
 			np.JoinExpiry = update.(int64)
-		case ParamNameVoteExpiry:
-			np.VoteExpiry = update.(int64)
 		case ParamNameDisabledGasCosts:
 			np.DisabledGasCosts = update.(bool)
 		case ParamNameMaxVotesPerTx:
@@ -335,14 +327,6 @@ func (pu ParamUpdates) MarshalBinary() ([]byte, error) {
 			} else {
 				return nil, fmt.Errorf("invalid type for %s", key)
 			}
-		case ParamNameMaxBlockSize, ParamNameJoinExpiry, ParamNameVoteExpiry, ParamNameMaxVotesPerTx:
-			if val, ok := value.(int64); ok {
-				if err := binary.Write(buf, binary.LittleEndian, val); err != nil {
-					return nil, err
-				}
-			} else {
-				return nil, fmt.Errorf("invalid type for %s", key)
-			}
 		case ParamNameDisabledGasCosts:
 			if val, ok := value.(bool); ok {
 				var boolInt uint8
@@ -350,6 +334,14 @@ func (pu ParamUpdates) MarshalBinary() ([]byte, error) {
 					boolInt = 1
 				}
 				if err := binary.Write(buf, binary.LittleEndian, boolInt); err != nil {
+					return nil, err
+				}
+			} else {
+				return nil, fmt.Errorf("invalid type for %s", key)
+			}
+		case ParamNameMaxBlockSize, ParamNameJoinExpiry, ParamNameMaxVotesPerTx:
+			if val, ok := value.(int64); ok {
+				if err := binary.Write(buf, binary.LittleEndian, val); err != nil {
 					return nil, err
 				}
 			} else {
@@ -435,7 +427,7 @@ func (pu *ParamUpdates) UnmarshalBinary(data []byte) error {
 				return err
 			}
 			updates[paramName] = string(val)
-		case ParamNameMaxBlockSize, ParamNameJoinExpiry, ParamNameVoteExpiry, ParamNameMaxVotesPerTx:
+		case ParamNameMaxBlockSize, ParamNameJoinExpiry, ParamNameMaxVotesPerTx:
 			var val int64
 			if err := binary.Read(buf, binary.LittleEndian, &val); err != nil {
 				return err
@@ -474,7 +466,6 @@ func (np NetworkParameters) ToMap() map[ParamName]any {
 		ParamNameDBOwner:          np.DBOwner,
 		ParamNameMaxBlockSize:     np.MaxBlockSize,
 		ParamNameJoinExpiry:       np.JoinExpiry,
-		ParamNameVoteExpiry:       np.VoteExpiry,
 		ParamNameDisabledGasCosts: np.DisabledGasCosts,
 		ParamNameMaxVotesPerTx:    np.MaxVotesPerTx,
 		ParamNameMigrationStatus:  np.MigrationStatus,
@@ -511,7 +502,6 @@ func (np *NetworkParameters) Equals(other *NetworkParameters) bool {
 		np.DBOwner == other.DBOwner &&
 		np.MaxBlockSize == other.MaxBlockSize &&
 		np.JoinExpiry == other.JoinExpiry &&
-		np.VoteExpiry == other.VoteExpiry &&
 		np.DisabledGasCosts == other.DisabledGasCosts &&
 		np.MaxVotesPerTx == other.MaxVotesPerTx &&
 		np.MigrationStatus == other.MigrationStatus
@@ -525,11 +515,6 @@ func (np *NetworkParameters) SanityChecks() error {
 	// DBOwner shouldn't be empty
 	if len(np.DBOwner) == 0 {
 		return errors.New("db owner should not be empty")
-	}
-
-	// Vote expiry shouldn't be 0
-	if np.VoteExpiry == 0 {
-		return errors.New("vote expiry should be greater than 0")
 	}
 
 	// MaxVotesPerTx shouldn't be 0
@@ -560,10 +545,9 @@ func (np NetworkParameters) String() string {
 	DB Owner: %s
 	Max Block Size: %d
 	Join Expiry: %d
-	Vote Expiry: %d
 	Disabled Gas Costs: %t
 	Max Votes Per Tx: %d
 	Migration Status: %s`,
 		np.Leader, np.DBOwner, np.MaxBlockSize, np.JoinExpiry,
-		np.VoteExpiry, np.DisabledGasCosts, np.MaxVotesPerTx, np.MigrationStatus)
+		np.DisabledGasCosts, np.MaxVotesPerTx, np.MigrationStatus)
 }

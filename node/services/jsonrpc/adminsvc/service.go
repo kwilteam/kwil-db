@@ -144,7 +144,7 @@ func (svc *Service) HealthMethod(ctx context.Context, _ *userjson.HealthRequest)
 	return &adminjson.HealthResponse{
 		Healthy:       happy,
 		Version:       apiSemver,
-		PubKey:        status.Validator.PubKey,
+		PubKey:        status.Validator.Identifier,
 		NumValidators: len(vals.Validators),
 	}, nil
 	// slices.ContainsFunc(vals.Validators, func(v *ktypes.Validator) bool { return bytes.Equal(v.PubKey, status.Validator.PubKey) })
@@ -265,15 +265,15 @@ func (svc *Service) Status(ctx context.Context, req *adminjson.StatusRequest) (*
 	}
 
 	var power int64
-	power, _ = svc.voting.GetValidatorPower(ctx, status.Validator.PubKey, status.Validator.Type)
+	power, _ = svc.voting.GetValidatorPower(ctx, status.Validator.Identifier, status.Validator.KeyType)
 
 	return &adminjson.StatusResponse{
 		Node: status.Node,
 		Sync: convertSyncInfo(status.Sync),
 		Validator: &adminjson.Validator{ // TODO: weed out the type dups
-			NodeKey: ktypes.NodeKey{
-				PubKey: status.Validator.PubKey,
-				Type:   status.Validator.Type,
+			AccountID: ktypes.AccountID{
+				Identifier: status.Validator.Identifier,
+				KeyType:    status.Validator.KeyType,
 			},
 			Power: power,
 		},
@@ -418,9 +418,9 @@ func (svc *Service) ListValidators(ctx context.Context, req *adminjson.ListValid
 	pbValidators := make([]*adminjson.Validator, len(vals))
 	for i, vi := range vals {
 		pbValidators[i] = &adminjson.Validator{
-			NodeKey: ktypes.NodeKey{
-				PubKey: vi.PubKey,
-				Type:   vi.Type,
+			AccountID: ktypes.AccountID{
+				Identifier: vi.Identifier,
+				KeyType:    vi.KeyType,
 			},
 			Power: vi.Power,
 		}
@@ -467,9 +467,9 @@ func (svc *Service) toPendingInfo(resolution *resolutions.Resolution, allVoters 
 	board, approvals := svc.approvalsInfo(resolution, allVoters)
 
 	return &adminjson.PendingJoin{
-		Candidate: ktypes.NodeKey{
-			PubKey: resolutionBody.PubKey,
-			Type:   resolutionBody.PubKeyType,
+		Candidate: &ktypes.AccountID{
+			Identifier: resolutionBody.PubKey,
+			KeyType:    resolutionBody.PubKeyType,
 		},
 		Power:     resolutionBody.Power,
 		ExpiresAt: resolution.ExpirationHeight,
@@ -478,31 +478,31 @@ func (svc *Service) toPendingInfo(resolution *resolutions.Resolution, allVoters 
 	}, nil
 }
 
-func (svc *Service) approvalsInfo(resolution *resolutions.Resolution, allVoters []*ktypes.Validator) ([]ktypes.NodeKey, []bool) {
+func (svc *Service) approvalsInfo(resolution *resolutions.Resolution, allVoters []*ktypes.Validator) ([]*ktypes.AccountID, []bool) {
 	// to create the board, we will take a list of all approvers and append the voters.
 	// we will then remove any duplicates the second time we see them.
 	// this will result with all approvers at the start of the list, and all voters at the end.
 	// finally, the approvals will be true for the length of the approvers, and false for found.length - voters.length
-	board := make([]ktypes.NodeKey, 0, len(allVoters))
+	board := make([]*ktypes.AccountID, 0, len(allVoters))
 	approvals := make([]bool, len(allVoters))
 	for i, v := range resolution.Voters {
-		board = append(board, ktypes.NodeKey{
-			PubKey: v.PubKey,
-			Type:   v.Type,
+		board = append(board, &ktypes.AccountID{
+			Identifier: v.Identifier,
+			KeyType:    v.KeyType,
 		})
 		approvals[i] = true
 	}
 	for _, v := range allVoters {
-		board = append(board, ktypes.NodeKey{
-			PubKey: v.PubKey,
-			Type:   v.Type,
+		board = append(board, &ktypes.AccountID{
+			Identifier: v.Identifier,
+			KeyType:    v.KeyType,
 		})
 	}
 
 	// we will now remove duplicates from the board.
 	found := make(map[string]struct{})
 	for i := 0; i < len(board); i++ {
-		nodeKey := fmt.Sprintf("%s:%s", string(board[i].PubKey), board[i].Type)
+		nodeKey := fmt.Sprintf("%s:%s", string(board[i].Identifier), board[i].KeyType)
 		if _, ok := found[nodeKey]; ok {
 			board = append(board[:i], board[i+1:]...)
 			i--

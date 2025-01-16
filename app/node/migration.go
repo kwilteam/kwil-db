@@ -198,9 +198,9 @@ func (m *migrationClient) downloadGenesisState(ctx context.Context) error {
 	if len(m.genesisCfg.Validators) == 0 {
 		for _, v := range metadata.GenesisInfo.Validators {
 			m.genesisCfg.Validators = append(m.genesisCfg.Validators, &types.Validator{
-				NodeKey: types.NodeKey{
-					PubKey: v.PubKey,
-					Type:   v.Type,
+				AccountID: types.AccountID{
+					Identifier: v.Identifier,
+					KeyType:    v.KeyType,
 				},
 				Power: v.Power,
 			})

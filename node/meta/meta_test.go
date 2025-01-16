@@ -54,7 +54,6 @@ func Test_NetworkParams(t *testing.T) {
 		Leader:           types.PublicKey{PublicKey: pubkey},
 		MaxBlockSize:     1000,
 		JoinExpiry:       100,
-		VoteExpiry:       100,
 		DisabledGasCosts: true,
 		MaxVotesPerTx:    100,
 	}

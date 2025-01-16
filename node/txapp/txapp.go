@@ -80,7 +80,7 @@ func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.
 
 	// Add Genesis Validators
 	for _, validator := range validators {
-		err := r.Validators.SetValidatorPower(ctx, db, validator.PubKey, validator.Type, validator.Power)
+		err := r.Validators.SetValidatorPower(ctx, db, validator.Identifier, validator.KeyType, validator.Power)
 		if err != nil {
 			return err
 		}
@@ -372,13 +372,13 @@ func (c creditMap) applyResolution(res *resolutions.Resolution) error {
 	for _, voter := range res.Voters {
 		// if the voter is the proposer, then we will reward them below,
 		// since extra logic is required if they did not submit a vote id
-		if bytes.Equal(voter.PubKey, res.Proposer.PubKey) {
+		if bytes.Equal(voter.Identifier, res.Proposer.Identifier) {
 			continue
 		}
 
 		voterID := &types.AccountID{
-			Identifier: voter.PubKey,
-			KeyType:    voter.Type,
+			Identifier: voter.Identifier,
+			KeyType:    voter.KeyType,
 		}
 
 		id, err := voterID.Encode()
@@ -395,7 +395,7 @@ func (c creditMap) applyResolution(res *resolutions.Resolution) error {
 	}
 
 	bodyCost := big.NewInt(ValidatorVoteBodyBytePrice * int64(len(res.Body)))
-	proposerKey := config.EncodePubKeyAndType(res.Proposer.PubKey, res.Proposer.Type)
+	proposerKey := config.EncodePubKeyAndType(res.Proposer.Identifier, res.Proposer.KeyType)
 	currentBalance, ok := c[proposerKey]
 	if !ok {
 		currentBalance = big.NewInt(0)

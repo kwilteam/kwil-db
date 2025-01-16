@@ -104,7 +104,7 @@ func (omgr *ListenerManager) Start() (err error) {
 
 	containsMe := func(validators []*types.Validator) bool {
 		return slices.ContainsFunc(validators, func(v *types.Validator) bool {
-			return bytes.Equal(v.PubKey, omgr.service.Identity)
+			return bytes.Equal(v.Identifier, omgr.service.Identity)
 		})
 	}
 

@@ -53,9 +53,9 @@ func proposalStatusCmd() *cobra.Command {
 
 type MigrationStatus struct {
 	ProposalID *types.UUID
-	ExpiresAt  int64           `json:"expires_at"` // ExpiresAt is the block height at which the migration proposal expires
-	Board      []types.NodeKey `json:"board"`      // Board is the list of validators who are eligible to vote on the migration proposal
-	Approved   []bool          `json:"approved"`   // Approved is the list of bools indicating if the corresponding validator approved the migration proposal
+	ExpiresAt  int64              `json:"expires_at"` // ExpiresAt is the block height at which the migration proposal expires
+	Board      []*types.AccountID `json:"board"`      // Board is the list of validators who are eligible to vote on the migration proposal
+	Approved   []bool             `json:"approved"`   // Approved is the list of bools indicating if the corresponding validator approved the migration proposal
 }
 
 func (m *MigrationStatus) MarshalJSON() ([]byte, error) {

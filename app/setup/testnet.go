@@ -153,9 +153,9 @@ func GenerateTestnetConfigs(cfg *TestnetConfig, opts *ConfigOpts) error {
 
 	for i := range cfg.NumVals {
 		genConfig.Validators[i] = &ktypes.Validator{
-			NodeKey: types.NodeKey{
-				PubKey: keys[i].Public().Bytes(),
-				Type:   keys[i].Type(),
+			AccountID: types.AccountID{
+				Identifier: keys[i].Public().Bytes(),
+				KeyType:    keys[i].Type(),
 			},
 			Power: 1,
 		}

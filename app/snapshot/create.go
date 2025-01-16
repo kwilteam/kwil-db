@@ -246,9 +246,9 @@ func PGDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 
 			// TODO: update this once the keytype is added to the voters table
 			genCfg.Validators = append(genCfg.Validators, &types.Validator{
-				NodeKey: types.NodeKey{
-					PubKey: pubkey,
-					Type:   keyType,
+				AccountID: types.AccountID{
+					Identifier: pubkey,
+					KeyType:    keyType,
 				},
 				Power: power,
 			})
