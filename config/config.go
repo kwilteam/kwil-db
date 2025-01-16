@@ -189,7 +189,6 @@ func DefaultGenesisConfig() *GenesisConfig {
 			DBOwner:          "",
 			MaxBlockSize:     6 * 1024 * 1024,
 			JoinExpiry:       14400,
-			VoteExpiry:       108000,
 			DisabledGasCosts: true,
 			MaxVotesPerTx:    200,
 			MigrationStatus:  types.NoActiveMigration,

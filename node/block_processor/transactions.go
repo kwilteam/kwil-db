@@ -384,8 +384,8 @@ func (bp *BlockProcessor) PrepareValidatorVoteIDTx(ctx context.Context, db sql.D
 	vals := bp.GetValidators()
 	found := false
 	for _, val := range vals {
-		if bytes.Equal(val.PubKey, myPubKey.Bytes()) &&
-			val.Type == myPubKey.Type() {
+		if bytes.Equal(val.Identifier, myPubKey.Bytes()) &&
+			val.KeyType == myPubKey.Type() {
 			found = true
 		}
 	}

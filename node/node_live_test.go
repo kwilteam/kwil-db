@@ -68,9 +68,9 @@ func TestSingleNodeMocknet(t *testing.T) {
 	valSet := make(map[string]ktypes.Validator)
 	for _, priv := range privKeys {
 		valSet[hex.EncodeToString(priv.Public().Bytes())] = ktypes.Validator{
-			NodeKey: types.NodeKey{
-				PubKey: priv.Public().Bytes(),
-				Type:   priv.Type(),
+			AccountID: types.AccountID{
+				Identifier: priv.Public().Bytes(),
+				KeyType:    priv.Type(),
 			},
 			Power: 1,
 		}
@@ -214,9 +214,9 @@ func TestDualNodeMocknet(t *testing.T) {
 	valSet := make(map[string]ktypes.Validator)
 	for _, priv := range privKeys {
 		valSet[hex.EncodeToString(priv.Public().Bytes())] = ktypes.Validator{
-			NodeKey: types.NodeKey{
-				PubKey: priv.Public().Bytes(),
-				Type:   priv.Type(),
+			AccountID: types.AccountID{
+				Identifier: priv.Public().Bytes(),
+				KeyType:    priv.Type(),
 			},
 			Power: 1,
 		}

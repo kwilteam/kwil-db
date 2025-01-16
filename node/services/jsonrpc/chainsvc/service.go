@@ -250,7 +250,6 @@ func (svc *Service) Genesis(ctx context.Context, _ *chainjson.GenesisRequest) (*
 		Validators:       svc.genesisCfg.Validators,
 		MaxBlockSize:     svc.genesisCfg.MaxBlockSize,
 		JoinExpiry:       svc.genesisCfg.JoinExpiry,
-		VoteExpiry:       svc.genesisCfg.VoteExpiry,
 		DisabledGasCosts: svc.genesisCfg.DisabledGasCosts,
 		MaxVotesPerTx:    svc.genesisCfg.MaxVotesPerTx,
 	}, nil

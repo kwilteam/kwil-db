@@ -42,7 +42,6 @@ type genesisFlagConfig struct {
 	dbOwner       string
 	maxBlockSize  int64
 	joinExpiry    int64
-	voteExpiry    int64
 	maxVotesPerTx int64
 	genesisState  string
 }
@@ -112,7 +111,6 @@ func bindGenesisFlags(cmd *cobra.Command, cfg *genesisFlagConfig) {
 	cmd.Flags().StringVar(&cfg.dbOwner, "db-owner", "", "owner of the database")
 	cmd.Flags().Int64Var(&cfg.maxBlockSize, "max-block-size", 0, "maximum block size")
 	cmd.Flags().Int64Var(&cfg.joinExpiry, "join-expiry", 0, "Number of blocks before a join proposal expires")
-	cmd.Flags().Int64Var(&cfg.voteExpiry, "vote-expiry", 0, "Number of blocks before a vote proposal expires")
 	cmd.Flags().Int64Var(&cfg.maxVotesPerTx, "max-votes-per-tx", 0, "Maximum votes per transaction")
 	cmd.Flags().StringVar(&cfg.genesisState, "genesis-snapshot", "", "path to genesis state snapshot file")
 }
@@ -152,9 +150,9 @@ func mergeGenesisFlags(conf *config.GenesisConfig, cmd *cobra.Command, flagCfg *
 			}
 
 			conf.Validators = append(conf.Validators, &types.Validator{
-				NodeKey: types.NodeKey{
-					PubKey: hexPub,
-					Type:   crypto.KeyType(keyType),
+				AccountID: types.AccountID{
+					Identifier: hexPub,
+					KeyType:    crypto.KeyType(keyType),
 				},
 				Power: power,
 			})
@@ -223,10 +221,6 @@ func mergeGenesisFlags(conf *config.GenesisConfig, cmd *cobra.Command, flagCfg *
 
 	if cmd.Flags().Changed("join-expiry") {
 		conf.JoinExpiry = flagCfg.joinExpiry
-	}
-
-	if cmd.Flags().Changed("vote-expiry") {
-		conf.VoteExpiry = flagCfg.voteExpiry
 	}
 
 	if cmd.Flags().Changed("max-votes-per-tx") {

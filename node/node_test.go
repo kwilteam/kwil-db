@@ -219,9 +219,9 @@ func newGenesis(t *testing.T, nodekeys [][]byte) ([]crypto.PrivateKey, *config.G
 	}
 	for _, priv := range privKeys {
 		genCfg.Validators = append(genCfg.Validators, &ktypes.Validator{
-			NodeKey: ktypes.NodeKey{
-				PubKey: priv.Public().Bytes(),
-				Type:   priv.Type(),
+			AccountID: ktypes.AccountID{
+				Identifier: priv.Public().Bytes(),
+				KeyType:    priv.Type(),
 			},
 			Power: 1,
 		})

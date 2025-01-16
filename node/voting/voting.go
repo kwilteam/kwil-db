@@ -303,9 +303,9 @@ func fromRow(ctx context.Context, db sql.Executor, row []any) (*resolutions.Reso
 		}
 
 		v.Proposer = &types.Validator{
-			NodeKey: types.NodeKey{
-				PubKey: slices.Clone(pubKey),
-				Type:   keyType,
+			AccountID: types.AccountID{
+				Identifier: slices.Clone(pubKey),
+				KeyType:    keyType,
 			},
 		}
 
@@ -350,8 +350,8 @@ func fromRow(ctx context.Context, db sql.Executor, row []any) (*resolutions.Reso
 		}
 
 		v.Voters = append(v.Voters, &types.Validator{
-			Power:   int64(power),
-			NodeKey: types.NodeKey{PubKey: slices.Clone(pubKey), Type: keyType},
+			Power:     int64(power),
+			AccountID: types.AccountID{Identifier: slices.Clone(pubKey), KeyType: keyType},
 		})
 	}
 
@@ -602,9 +602,9 @@ func (v *VoteStore) SetValidatorPower(ctx context.Context, db sql.Executor, pubK
 	defer v.mtx.Unlock()
 
 	v.valUpdates[string(pubkeyBts)] = &types.Validator{
-		NodeKey: types.NodeKey{
-			PubKey: pubKey,
-			Type:   pubKeyType,
+		AccountID: types.AccountID{
+			Identifier: pubKey,
+			KeyType:    pubKeyType,
 		},
 		Power: power,
 	}
@@ -635,9 +635,9 @@ func (v *VoteStore) GetValidators() []*types.Validator {
 	vals := make([]*types.Validator, 0, len(v.validatorSet))
 	for _, val := range v.validatorSet {
 		vals = append(vals, &types.Validator{
-			NodeKey: types.NodeKey{
-				PubKey: slices.Clone(val.PubKey),
-				Type:   val.Type,
+			AccountID: types.AccountID{
+				Identifier: slices.Clone(val.Identifier),
+				KeyType:    val.KeyType,
 			},
 			Power: val.Power,
 		})
@@ -660,9 +660,9 @@ func (v *VoteStore) LoadValidatorSet(ctx context.Context, db sql.Executor) error
 	v.validatorSet = make([]*types.Validator, 0, len(vals))
 	for _, val := range vals {
 		v.validatorSet = append(v.validatorSet, &types.Validator{
-			NodeKey: types.NodeKey{
-				PubKey: slices.Clone(val.PubKey),
-				Type:   val.Type,
+			AccountID: types.AccountID{
+				Identifier: slices.Clone(val.Identifier),
+				KeyType:    val.KeyType,
 			},
 			Power: val.Power,
 		})
@@ -709,9 +709,9 @@ func getValidators(ctx context.Context, db sql.Executor) ([]*types.Validator, er
 			return nil, errors.New("invalid type for power")
 		}
 		voters[i] = &types.Validator{
-			NodeKey: types.NodeKey{
-				PubKey: pubkey,
-				Type:   keyType,
+			AccountID: types.AccountID{
+				Identifier: pubkey,
+				KeyType:    keyType,
 			},
 			Power: power,
 		}
@@ -760,9 +760,9 @@ func getValidator(ctx context.Context, db sql.Executor, pubKey []byte, keyType c
 	}
 
 	return &types.Validator{
-		NodeKey: types.NodeKey{
-			PubKey: slices.Clone(pubkey),
-			Type:   keyType,
+		AccountID: types.AccountID{
+			Identifier: slices.Clone(pubkey),
+			KeyType:    keyType,
 		},
 		Power: power,
 	}, nil
@@ -821,7 +821,7 @@ func decodePubKey(b []byte) ([]byte, crypto.KeyType, error) {
 func (v *VoteStore) addOrUpdateValidator(val *types.Validator) {
 	// Check if the validator already exists
 	idx := slices.IndexFunc(v.validatorSet, func(v *types.Validator) bool {
-		return bytes.Equal(v.PubKey, val.PubKey) && v.Type == val.Type
+		return bytes.Equal(v.Identifier, val.Identifier) && v.KeyType == val.KeyType
 	})
 
 	if idx == -1 {
@@ -835,14 +835,14 @@ func (v *VoteStore) addOrUpdateValidator(val *types.Validator) {
 func (v *VoteStore) removeValidator(val *types.Validator) {
 	// Check if the validator exists
 	v.validatorSet = slices.DeleteFunc(v.validatorSet, func(v *types.Validator) bool {
-		return bytes.Equal(v.PubKey, val.PubKey) && v.Type == val.Type
+		return bytes.Equal(v.Identifier, val.Identifier) && v.KeyType == val.KeyType
 	})
 }
 
 func (v *VoteStore) getValidator(pubKey []byte, keyType crypto.KeyType) *types.Validator {
 	// Check if the validator exists
 	idx := slices.IndexFunc(v.validatorSet, func(v *types.Validator) bool {
-		return bytes.Equal(v.PubKey, pubKey) && v.Type == keyType
+		return bytes.Equal(v.Identifier, pubKey) && v.KeyType == keyType
 	})
 	if idx == -1 {
 		return nil

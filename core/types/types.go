@@ -108,11 +108,11 @@ type ChainInfo struct {
 // the account/owner fields in the user service.
 
 type JoinRequest struct {
-	Candidate NodeKey   `json:"candidate"`  // pubkey of the candidate validator
-	Power     int64     `json:"power"`      // the requested power
-	ExpiresAt int64     `json:"expires_at"` // the block height at which the join request expires
-	Board     []NodeKey `json:"board"`      // slice of pubkeys of all the eligible voting validators
-	Approved  []bool    `json:"approved"`   // slice of bools indicating if the corresponding validator approved
+	Candidate *AccountID   `json:"candidate"`  // pubkey of the candidate validator
+	Power     int64        `json:"power"`      // the requested power
+	ExpiresAt int64        `json:"expires_at"` // the block height at which the join request expires
+	Board     []*AccountID `json:"board"`      // slice of pubkeys of all the eligible voting validators
+	Approved  []bool       `json:"approved"`   // slice of bools indicating if the corresponding validator approved
 }
 
 // NodeKey is a public key of a validator node.
@@ -140,12 +140,12 @@ func (n *NodeKey) String() string {
 // }
 
 type Validator struct {
-	NodeKey
+	AccountID
 	Power int64 `json:"power"`
 }
 
 func (v *Validator) String() string {
-	return fmt.Sprintf("Validator{pubkey = %x, keyType = %s, power = %d}", v.PubKey, v.Type.String(), v.Power)
+	return fmt.Sprintf("Validator{pubkey = %x, keyType = %s, power = %d}", v.Identifier, v.KeyType.String(), v.Power)
 }
 
 type validatorJSON struct {
@@ -160,8 +160,8 @@ func (v *Validator) MarshalJSON() ([]byte, error) {
 	}
 
 	return json.Marshal(validatorJSON{
-		PubKey: hex.EncodeToString(v.PubKey),
-		Type:   v.Type.String(),
+		PubKey: hex.EncodeToString(v.Identifier),
+		Type:   v.KeyType.String(),
 		Power:  v.Power,
 	})
 
@@ -177,13 +177,13 @@ func (v *Validator) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
-	v.PubKey = pk
+	v.Identifier = pk
 
 	kt, err := crypto.ParseKeyType(vj.Type)
 	if err != nil {
 		return err
 	}
-	v.Type = kt
+	v.KeyType = kt
 
 	v.Power = vj.Power
 	return nil
@@ -251,11 +251,11 @@ func (e *VotableEvent) UnmarshalBinary(b []byte) error {
 }
 
 type PendingResolution struct {
-	Type         string    `json:"type"`
-	ResolutionID *UUID     `json:"resolution_id"` // Resolution ID
-	ExpiresAt    int64     `json:"expires_at"`    // ExpiresAt is the block height at which the resolution expires
-	Board        []NodeKey `json:"board"`         // Board is the list of validators who are eligible to vote on the resolution
-	Approved     []bool    `json:"approved"`      // Approved is the list of bools indicating if the corresponding validator approved the resolution
+	Type         string       `json:"type"`
+	ResolutionID *UUID        `json:"resolution_id"` // Resolution ID
+	ExpiresAt    int64        `json:"expires_at"`    // ExpiresAt is the block height at which the resolution expires
+	Board        []*AccountID `json:"board"`         // Board is the list of validators who are eligible to vote on the resolution
+	Approved     []bool       `json:"approved"`      // Approved is the list of bools indicating if the corresponding validator approved the resolution
 }
 
 // Migration is a migration resolution that is proposed by a validator

@@ -127,9 +127,9 @@ func InitCmd() *cobra.Command {
 
 				genCfg.Leader = types.PublicKey{PublicKey: privKey.Public()}
 				genCfg.Validators = append(genCfg.Validators, &types.Validator{
-					NodeKey: types.NodeKey{
-						PubKey: privKey.Public().Bytes(),
-						Type:   privKey.Type(),
+					AccountID: types.AccountID{
+						Identifier: privKey.Public().Bytes(),
+						KeyType:    privKey.Type(),
 					},
 					Power: 1,
 				})
@@ -138,10 +138,10 @@ func InitCmd() *cobra.Command {
 				// if no funds are allocated to that validators.
 				if !genCfg.DisabledGasCosts {
 					for _, v := range genCfg.Validators {
-						hexPubKey := v.PubKey.String()
+						hexPubKey := v.Identifier.String()
 						genCfg.Allocs = append(genCfg.Allocs, config.GenesisAlloc{
 							ID:      hexPubKey,
-							KeyType: v.Type.String(),
+							KeyType: v.Identifier.String(),
 							Amount:  genesisValidatorGas,
 						})
 

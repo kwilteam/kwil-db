@@ -37,9 +37,8 @@ func TestSetParamNames(t *testing.T) {
 		{
 			name: "unset params (partial fields)",
 			input: struct {
-				Leader     string `json:"leader"`
-				DBOwner    string `json:"db_owner"`
-				VoteExpiry int    `json:"vote_expiry"`
+				Leader  string `json:"leader"`
+				DBOwner string `json:"db_owner"`
 			}{},
 			wantPanic: true,
 		},
@@ -75,9 +74,6 @@ func TestSetParamNames(t *testing.T) {
 				if ParamNameJoinExpiry != "join_expiry" {
 					t.Errorf("ParamNameJoinExpiry = %v, want %v", ParamNameJoinExpiry, "join_expiry")
 				}
-				if ParamNameVoteExpiry != "vote_expiry" {
-					t.Errorf("ParamNameVoteExpiry = %v, want %v", ParamNameVoteExpiry, "vote_expiry")
-				}
 				if ParamNameDisabledGasCosts != "disabled_gas_costs" {
 					t.Errorf("ParamNameDisabledGasCosts = %v, want %v", ParamNameDisabledGasCosts, "disabled_gas_costs")
 				}
@@ -110,7 +106,6 @@ func TestParamUpdatesMarshalBinary(t *testing.T) {
 				ParamNameDBOwner:          "test_owner",
 				ParamNameMaxBlockSize:     int64(1000),
 				ParamNameJoinExpiry:       int64(3600),
-				ParamNameVoteExpiry:       int64(7200),
 				ParamNameDisabledGasCosts: true,
 				ParamNameMaxVotesPerTx:    int64(10),
 				ParamNameMigrationStatus:  MigrationStatus("pending"),
@@ -274,21 +269,16 @@ func TestMergeUpdates(t *testing.T) {
 			name: "update multiple fields",
 			np: &NetworkParameters{
 				MaxBlockSize:     1000,
-				VoteExpiry:       3600,
 				DisabledGasCosts: false,
 			},
 			updates: ParamUpdates{
 				ParamNameMaxBlockSize:     int64(2000),
-				ParamNameVoteExpiry:       int64(7200),
 				ParamNameDisabledGasCosts: true,
 			},
 			wantErr: false,
 			verify: func(t *testing.T, np *NetworkParameters) {
 				if np.MaxBlockSize != 2000 {
 					t.Errorf("MaxBlockSize not updated correctly, got %v want %v", np.MaxBlockSize, 2000)
-				}
-				if np.VoteExpiry != 7200 {
-					t.Errorf("VoteExpiry not updated correctly, got %v want %v", np.VoteExpiry, 7200)
 				}
 				if !np.DisabledGasCosts {
 					t.Errorf("DisabledGasCosts not updated correctly, got %v want true", np.DisabledGasCosts)
@@ -430,8 +420,7 @@ func TestParamUpdatesMerge(t *testing.T) {
 		{
 			name: "invalid updates",
 			base: ParamUpdates{
-				ParamNameDBOwner:    "owner1",
-				ParamNameVoteExpiry: int64(1000),
+				ParamNameDBOwner: "owner1",
 			},
 			other: ParamUpdates{
 				ParamNameMaxVotesPerTx:    "bad",

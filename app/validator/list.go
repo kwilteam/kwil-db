@@ -63,9 +63,9 @@ func (r *respValSets) MarshalJSON() ([]byte, error) {
 	valInfos := make([]valInfo, len(r.Data))
 	for i, v := range r.Data {
 		valInfos[i] = valInfo{
-			PubKey:     fmt.Sprintf("%x", v.PubKey),
+			PubKey:     v.Identifier.String(),
 			Power:      v.Power,
-			PubKeyType: v.Type.String(),
+			PubKeyType: v.KeyType.String(),
 		}
 	}
 

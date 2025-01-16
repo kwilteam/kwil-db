@@ -523,10 +523,10 @@ func (ce *ConsensusEngine) updateValidatorSetAndRole() {
 
 	ce.validatorSet = make(map[string]ktypes.Validator)
 	for _, v := range valset {
-		ce.validatorSet[hex.EncodeToString(v.PubKey)] = ktypes.Validator{
-			NodeKey: ktypes.NodeKey{
-				PubKey: v.PubKey,
-				Type:   v.Type,
+		ce.validatorSet[hex.EncodeToString(v.Identifier)] = ktypes.Validator{
+			AccountID: ktypes.AccountID{
+				Identifier: v.Identifier,
+				KeyType:    v.KeyType,
 			},
 			Power: v.Power,
 		}

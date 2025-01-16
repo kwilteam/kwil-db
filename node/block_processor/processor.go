@@ -783,14 +783,14 @@ func validatorUpdatesHash(updates map[string]*ktypes.Validator) (types.Hash, []*
 		updatesList = append(updatesList, v)
 	}
 	slices.SortFunc(updatesList, func(a, b *ktypes.Validator) int {
-		return bytes.Compare(a.PubKey, b.PubKey)
+		return bytes.Compare(a.Identifier, b.Identifier)
 	})
 
 	// hash the validator address and the validator struct
 	hash := ktypes.NewHasher()
 	for _, up := range updatesList {
 		// hash the validator address
-		hash.Write(up.PubKey)
+		hash.Write(up.Identifier)
 		// hash the validator power
 		binary.Write(hash, binary.BigEndian, up.Power)
 	}

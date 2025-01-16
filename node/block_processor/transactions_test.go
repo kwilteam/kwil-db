@@ -285,16 +285,16 @@ func TestPrepareVoteIDTx(t *testing.T) {
 	_, sentrySigner := genNodeKeyAndSigner(t)
 	valSet := []*types.Validator{
 		{
-			NodeKey: types.NodeKey{
-				PubKey: valPriv.Public().Bytes(),
-				Type:   crypto.KeyTypeSecp256k1,
+			AccountID: types.AccountID{
+				Identifier: valPriv.Public().Bytes(),
+				KeyType:    crypto.KeyTypeSecp256k1,
 			},
 			Power: 1,
 		},
 		{
-			NodeKey: types.NodeKey{
-				PubKey: leaderPrivKey.Public().Bytes(),
-				Type:   crypto.KeyTypeSecp256k1,
+			AccountID: types.AccountID{
+				Identifier: leaderPrivKey.Public().Bytes(),
+				KeyType:    crypto.KeyTypeSecp256k1,
 			},
 			Power: 1,
 		},

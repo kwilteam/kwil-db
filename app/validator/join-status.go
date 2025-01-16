@@ -65,23 +65,23 @@ type respValJoinStatus struct {
 
 // respValJoinRequest is customized json format for respValJoinStatus
 type respValJoinRequest struct {
-	Candidate types.NodeKey   `json:"candidate"`
-	Power     int64           `json:"power"`
-	Board     []types.NodeKey `json:"board"`
-	Approved  []bool          `json:"approved"`
+	Candidate *types.AccountID   `json:"candidate"`
+	Power     int64              `json:"power"`
+	Board     []*types.AccountID `json:"board"`
+	Approved  []bool             `json:"approved"`
 }
 
 func (r *respValJoinStatus) MarshalJSON() ([]byte, error) {
 	joinReq := &respValJoinRequest{
 		Candidate: r.Data.Candidate,
 		Power:     r.Data.Power,
-		Board:     make([]types.NodeKey, len(r.Data.Board)),
+		Board:     make([]*types.AccountID, len(r.Data.Board)),
 		Approved:  r.Data.Approved,
 	}
 	for i := range r.Data.Board {
-		joinReq.Board[i] = types.NodeKey{
-			PubKey: r.Data.Board[i].PubKey,
-			Type:   r.Data.Board[i].Type,
+		joinReq.Board[i] = &types.AccountID{
+			Identifier: r.Data.Board[i].Identifier,
+			KeyType:    r.Data.Board[i].KeyType,
 		}
 	}
 
