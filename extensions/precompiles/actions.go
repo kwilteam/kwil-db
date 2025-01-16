@@ -19,114 +19,53 @@ import (
 // It should be used for reading values into memory, creating
 // connections, and other setup that should only be done once per
 // extension instance.
-type Initializer func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]Value) (Instance, error)
+type Initializer func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]any) (Precompile, error)
 
-// Instance is a named initialized instance of a precompile. It is
-// returned from the precompile initialization, as specified by the
-// Initializer. It will exist for the lifetime of the deployed
-// dataset, and a single dataset can have multiple instances of the
-// same precompile.
-type Instance interface {
-	// OnStart is called when the node starts, or when the extension is
-	// first used. It is called right after Initialize, and before any
-	// other methods are called.
-	OnStart(ctx context.Context, app *common.App) error
-	// OnUse is called when a `USE ... AS ...` statement is executed.
-	// It is only called once per "USE" function, and is called after the
-	// initializer.
-	// It should be used for setting up state such as tables, indexes,
-	// and other data structures that are part of the application state.
-	OnUse(ctx *common.EngineContext, app *common.App) error
-	// Methods returns the methods that are available on the instance.
-	Methods() []*ExportedMethod
-	// OnUnuse is called when a `UNUSE ...` statement is executed.
-	OnUnuse(ctx *common.EngineContext, app *common.App) error
-}
-
-// ConcreteInstance is a concrete implementation of an extension instance.
-type PrecompileExtension[T any] struct {
-	// Initialize is the function that creates a new instance of the extension.
-	Initialize func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]Value) (*T, error)
+// Precompile holds the methods and lifecycle hooks for a precompile extension.
+type Precompile struct {
 	// OnStart is called when the node starts, or when the extension is first used
-	OnStart func(ctx context.Context, app *common.App, t *T) error
+	OnStart func(ctx context.Context, app *common.App) error
 	// OnUse is called when a `USE ... AS ...` statement is executed
-	OnUse func(ctx *common.EngineContext, app *common.App, t *T) error
+	OnUse func(ctx *common.EngineContext, app *common.App) error
 	// Methods is a map of method names to method implementations.
-	Methods []Method[T]
+	Methods []Method
 	// OnUnuse is called when a `UNUSE ...` statement is executed
-	OnUnuse func(ctx *common.EngineContext, app *common.App, t *T) error
+	OnUnuse func(ctx *common.EngineContext, app *common.App) error
 }
 
-// Export exports the extension to a form that does not rely on generics, allowing the extension to be consumed by callers without forcing
-// the callers to know the generic type.
-func (p *PrecompileExtension[T]) export() Initializer {
-	return func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]Value) (Instance, error) {
-		var t *T
-		if p.Initialize == nil {
-			t = new(T)
-		} else {
-			t2, err := p.Initialize(ctx, service, db, alias, metadata)
-			if err != nil {
-				return nil, err
-			}
-
-			t = t2
+// CleanExtension verifies that the extension is correctly set up.
+// It does not need to be called by extension authors, as it is called
+// automatically by kwild.
+func CleanPrecompile(e *Precompile) error {
+	methodNames := make(map[string]struct{})
+	for _, method := range e.Methods {
+		err := method.verify()
+		if err != nil {
+			return fmt.Errorf("method %s: %w", method.Name, err)
 		}
 
-		methods := make([]*ExportedMethod, len(p.Methods))
-		for i, method := range p.Methods {
-			methods[i] = method.export(t)
+		if _, ok := methodNames[method.Name]; ok {
+			return fmt.Errorf("duplicate method %s", method.Name)
 		}
 
-		return &ExportedExtension{
-			onStart: func(ctx context.Context, app *common.App) error {
-				if p.OnStart == nil {
-					return nil
-				}
-
-				return p.OnStart(ctx, app, t)
-			},
-			onUse: func(ctx *common.EngineContext, app *common.App) error {
-				if p.OnUse == nil {
-					return nil
-				}
-				return p.OnUse(ctx, app, t)
-			},
-			methods: methods,
-			onUnuse: func(ctx *common.EngineContext, app *common.App) error {
-				if p.OnUnuse == nil {
-					return nil
-				}
-				return p.OnUnuse(ctx, app, t)
-			},
-		}, nil
+		methodNames[method.Name] = struct{}{}
 	}
+
+	if e.OnStart == nil {
+		e.OnStart = func(ctx context.Context, app *common.App) error { return nil }
+	}
+	if e.OnUse == nil {
+		e.OnUse = func(ctx *common.EngineContext, app *common.App) error { return nil }
+	}
+	if e.OnUnuse == nil {
+		e.OnUnuse = func(ctx *common.EngineContext, app *common.App) error { return nil }
+	}
+
+	return nil
 }
 
-type ExportedExtension struct {
-	methods []*ExportedMethod
-	onStart func(ctx context.Context, app *common.App) error
-	onUse   func(ctx *common.EngineContext, app *common.App) error
-	onUnuse func(ctx *common.EngineContext, app *common.App) error
-}
-
-func (e *ExportedExtension) OnStart(ctx context.Context, app *common.App) error {
-	return e.onStart(ctx, app)
-}
-
-func (e *ExportedExtension) OnUse(ctx *common.EngineContext, app *common.App) error {
-	return e.onUse(ctx, app)
-}
-
-func (e *ExportedExtension) Methods() []*ExportedMethod {
-	return e.methods
-}
-
-func (e *ExportedExtension) OnUnuse(ctx *common.EngineContext, app *common.App) error {
-	return e.onUnuse(ctx, app)
-}
-
-type Method[T any] struct {
+// Method is a method that can be called on a precompile extension.
+type Method struct {
 	// Name is the name of the method.
 	// It is case-insensitive, and should be unique within the extension.
 	Name string
@@ -138,15 +77,15 @@ type Method[T any] struct {
 	// The engine will enforce that anything calling the method
 	// provides the correct number of parameters, and in the correct
 	// types.
-	Parameters []*types.DataType
+	Parameters []PrecompileValue
 	// Returns specifies the return structure of the method.
 	// If nil, the method does not return anything.
 	Returns *MethodReturn
 	// Handler is the function that is called when the method is invoked.
-	Handler func(ctx *common.EngineContext, app *common.App, inputs []Value, resultFn func([]Value) error, t *T) error
+	Handler func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error
 }
 
-func (m *Method[T]) verify() error {
+func (m *Method) verify() error {
 	if strings.ToLower(m.Name) != m.Name {
 		return fmt.Errorf("method name %s must be lowercase", m.Name)
 	}
@@ -167,12 +106,12 @@ func (m *Method[T]) verify() error {
 	}
 
 	if m.Returns != nil {
-		if len(m.Returns.ColumnTypes) == 0 {
+		if len(m.Returns.Fields) == 0 {
 			return fmt.Errorf("method %s has no return types", m.Name)
 		}
 
-		if len(m.Returns.ColumnNames) != 0 && len(m.Returns.ColumnNames) != len(m.Returns.ColumnTypes) {
-			return fmt.Errorf("method %s has %d return names, but %d return types", m.Name, len(m.Returns.ColumnNames), len(m.Returns.ColumnTypes))
+		if len(m.Returns.FieldNames) != 0 && len(m.Returns.FieldNames) != len(m.Returns.Fields) {
+			return fmt.Errorf("method %s has %d return names, but %d return types", m.Name, len(m.Returns.FieldNames), len(m.Returns.Fields))
 		}
 	}
 
@@ -184,15 +123,15 @@ type MethodReturn struct {
 	// If true, then the method returns any number of rows.
 	// If false, then the method returns exactly one row.
 	IsTable bool
-	// ColumnTypes is a list of column types.
+	// Fields is a list of column types.
 	// It is required. If the extension returns types that are
 	// not matching the column types, the engine will return an error.
-	ColumnTypes []*types.DataType
-	// ColumnNames is a list of column names.
+	Fields []PrecompileValue
+	// FieldNames is a list of column names.
 	// It is optional. If it is set, its length must be equal to the length
 	// of the column types. If it is not set, the column names will be generated
 	// based on their position in the column types.
-	ColumnNames []string
+	FieldNames []string
 }
 
 // Modifier modifies the access to a procedure.
@@ -223,26 +162,21 @@ func (m Modifiers) Has(mod Modifier) bool {
 	return false
 }
 
-// export exports the method to a form that does not rely on generics, allowing the method to be consumed by callers without forcing
-// the callers to know the generic type.
-func (m *Method[T]) export(t *T) *ExportedMethod {
-	return &ExportedMethod{
-		Name:            m.Name,
-		AccessModifiers: m.AccessModifiers,
-		Parameters:      m.Parameters,
-		Returns:         m.Returns,
-		Call: func(ctx *common.EngineContext, app *common.App, inputs []Value, resultFn func([]Value) error) error {
-			return m.Handler(ctx, app, inputs, resultFn, t)
-		},
-	}
+// PrecompileValue specifies the type and nullability of a value passed to or returned from
+// a precompile method.
+type PrecompileValue struct {
+	// Type is the type of the value.
+	Type *types.DataType
+	// Nullable is true if the value can be null.
+	Nullable bool
 }
 
-type ExportedMethod struct {
-	Name            string
-	AccessModifiers []Modifier
-	Parameters      []*types.DataType
-	Returns         *MethodReturn
-	Call            func(ctx *common.EngineContext, app *common.App, inputs []Value, resultFn func([]Value) error) error
+// NewPrecompileValue creates a new precompile value.
+func NewPrecompileValue(t *types.DataType, nullable bool) PrecompileValue {
+	return PrecompileValue{
+		Type:     t,
+		Nullable: nullable,
+	}
 }
 
 var registeredPrecompiles = make(map[string]Initializer)
@@ -251,28 +185,35 @@ func RegisteredPrecompiles() map[string]Initializer {
 	return registeredPrecompiles
 }
 
-// RegisterPrecompile registers a precompile extension with the
-// engine.
-func RegisterPrecompile[T any](name string, ext PrecompileExtension[T]) error {
+// RegisterPrecompile registers a precompile extension with the engine.
+// It is a more user-friendly way to register precompiles than RegisterInitializer.
+func RegisterPrecompile(name string, ext Precompile) error {
 	name = strings.ToLower(name)
 	if _, ok := registeredPrecompiles[name]; ok {
 		return fmt.Errorf("precompile of same name already registered:%s ", name)
 	}
 
-	methodNames := make(map[string]struct{})
-	for _, method := range ext.Methods {
-		err := method.verify()
-		if err != nil {
-			return fmt.Errorf("method %s: %w", method.Name, err)
-		}
-
-		if _, ok := methodNames[method.Name]; ok {
-			return fmt.Errorf("duplicate method %s", method.Name)
-		}
-
-		methodNames[method.Name] = struct{}{}
+	err := CleanPrecompile(&ext)
+	if err != nil {
+		return err
 	}
 
-	registeredPrecompiles[name] = ext.export()
+	return RegisterInitializer(name, func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]any) (Precompile, error) {
+		return ext, nil
+	})
+}
+
+// RegisterInitializer registers an initializer for a precompile extension.
+// It is more flexible than RegisterPrecompile, as it allows extension interfaces to
+// change dynamically based on initialization. Unless you need this flexibility,
+// use RegisterPrecompile instead.
+
+func RegisterInitializer(name string, init Initializer) error {
+	name = strings.ToLower(name)
+	if _, ok := registeredPrecompiles[name]; ok {
+		return fmt.Errorf("precompile of same name already registered:%s ", name)
+	}
+
+	registeredPrecompiles[name] = init
 	return nil
 }

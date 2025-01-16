@@ -1,6 +1,8 @@
 package usersvc
 
 import (
+	// errors from engine
+
 	"context"
 	"crypto/rand"
 	"encoding/json"
@@ -17,24 +19,20 @@ import (
 	userjson "github.com/kwilteam/kwil-db/core/rpc/json/user"
 	"github.com/kwilteam/kwil-db/core/types"
 	adminTypes "github.com/kwilteam/kwil-db/core/types/admin"
-	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	nodeConsensus "github.com/kwilteam/kwil-db/node/consensus"
 	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/ident"
 	"github.com/kwilteam/kwil-db/node/migrations"
-	"github.com/kwilteam/kwil-db/node/types/sql"
-	"github.com/kwilteam/kwil-db/node/voting"
-
-	// errors from engine
-
 	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/node/services/jsonrpc/ratelimit"
+	"github.com/kwilteam/kwil-db/node/types/sql"
+	"github.com/kwilteam/kwil-db/node/voting"
 	"github.com/kwilteam/kwil-db/version"
 )
 
 type EngineReader interface {
-	Call(ctx *common.EngineContext, tx sql.DB, namespace, action string, args []common.EngineValue, resultFn func(*common.Row) error) (*common.CallResult, error)
-	Execute(ctx *common.EngineContext, tx sql.DB, query string, params map[string]common.EngineValue, resultFn func(*common.Row) error) error
+	Call(ctx *common.EngineContext, tx sql.DB, namespace, action string, args []any, resultFn func(*common.Row) error) (*common.CallResult, error)
+	Execute(ctx *common.EngineContext, tx sql.DB, query string, params map[string]any, resultFn func(*common.Row) error) error
 }
 
 type BlockchainTransactor interface {
@@ -518,10 +516,10 @@ func (svc *Service) Query(ctx context.Context, req *userjson.QueryRequest) (*use
 	readTx := svc.db.BeginDelayedReadTx()
 	defer readTx.Rollback(ctx)
 
-	params := make(map[string]common.EngineValue)
+	params := make(map[string]any)
 	for k, v := range req.Params {
 		var err error
-		params[k], err = decode(v)
+		params[k], err = v.Decode()
 		if err != nil {
 			return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "failed to decode parameter: "+err.Error(), nil)
 		}
@@ -545,17 +543,6 @@ func (svc *Service) Query(ctx context.Context, req *userjson.QueryRequest) (*use
 		ColumnTypes: r.qr.ColumnTypes,
 		Values:      r.qr.Values,
 	}, nil
-}
-
-func decode(e *types.EncodedValue) (common.EngineValue, error) {
-	var val any
-	var err error
-	val, err = e.Decode()
-	if err != nil {
-		return nil, err
-	}
-
-	return precompiles.NewValue(val)
 }
 
 func (svc *Service) Account(ctx context.Context, req *userjson.AccountRequest) (*userjson.AccountResponse, *jsonrpc.Error) {
@@ -668,9 +655,9 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 		return nil, jsonRPCErr
 	}
 
-	args := make([]common.EngineValue, len(body.Arguments))
+	args := make([]any, len(body.Arguments))
 	for i, arg := range body.Arguments {
-		argVal, err := decode(arg)
+		argVal, err := arg.Decode()
 		if err != nil {
 			return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "failed to decode argument: "+err.Error(), nil)
 		}
@@ -715,11 +702,7 @@ func (r *rowReader) read(row *common.Row) error {
 		r.qr.ColumnNames = row.ColumnNames
 		r.qr.ColumnTypes = row.ColumnTypes
 	}
-	var row2 []any
-	for _, val := range row.Values {
-		row2 = append(row2, val.RawValue())
-	}
-	r.qr.Values = append(r.qr.Values, row2)
+	r.qr.Values = append(r.qr.Values, row.Values)
 	return nil
 }
 

@@ -1,4 +1,4 @@
-package precompiles
+package interpreter
 
 import (
 	"testing"
@@ -101,16 +101,16 @@ func Test_Arithmetic(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			makeVal := func(v any) ScalarValue {
-				val, err := NewValue(v)
+			makeVal := func(v any) scalarValue {
+				val, err := newValue(v)
 				require.NoError(t, err)
-				return val.(ScalarValue)
+				return val.(scalarValue)
 			}
 
 			a := makeVal(tt.a)
 			b := makeVal(tt.b)
 
-			isErrOrResult := func(a, b ScalarValue, op engine.ArithmeticOp, want any) {
+			isErrOrResult := func(a, b scalarValue, op engine.ArithmeticOp, want any) {
 				res, err := a.Arithmetic(b, op)
 				if wantErr, ok := want.(error); ok {
 					require.Error(t, err)
@@ -124,10 +124,10 @@ func Test_Arithmetic(t *testing.T) {
 				eq(t, want, raw)
 
 				// operations on null values should always return null
-				null, err := MakeNull(a.Type())
+				null, err := makeNull(a.Type())
 				require.NoError(t, err)
 
-				res, err = a.Arithmetic(null.(ScalarValue), op)
+				res, err = a.Arithmetic(null.(scalarValue), op)
 				require.NoError(t, err)
 
 				require.True(t, res.Null())
@@ -359,8 +359,8 @@ func Test_Comparison(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			makeVal := func(v any) Value {
-				val, err := NewValue(v)
+			makeVal := func(v any) value {
+				val, err := newValue(v)
 				require.NoError(t, err)
 				return val
 			}
@@ -368,7 +368,7 @@ func Test_Comparison(t *testing.T) {
 			a := makeVal(tt.a)
 			b := makeVal(tt.b)
 
-			isErrOrResult := func(a, b Value, op engine.ComparisonOp, want any) {
+			isErrOrResult := func(a, b value, op engine.ComparisonOp, want any) {
 				t.Log(op.String())
 				res, err := a.Compare(b, op)
 				if wantErr, ok := want.(error); ok {
@@ -567,7 +567,7 @@ func Test_Cast(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			val, err := NewValue(tt.val)
+			val, err := newValue(tt.val)
 			require.NoError(t, err)
 
 			check := func(dataType *types.DataType, want any) {
@@ -670,9 +670,9 @@ func Test_Unary(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			val, err := NewValue(tt.val)
+			val, err := newValue(tt.val)
 			require.NoError(t, err)
-			scal, ok := val.(ScalarValue)
+			scal, ok := val.(scalarValue)
 			require.True(t, ok)
 
 			check := func(op engine.UnaryOp, want any) {
@@ -750,14 +750,14 @@ func Test_Array(t *testing.T) {
 				t.Fatal("no values provided")
 			}
 
-			var vals []ScalarValue
+			var vals []scalarValue
 			for _, v := range tt.vals {
-				val, err := NewValue(v)
+				val, err := newValue(v)
 				require.NoError(t, err)
-				vals = append(vals, val.(ScalarValue))
+				vals = append(vals, val.(scalarValue))
 			}
 
-			res, err := MakeArray(vals, nil)
+			res, err := makeArray(vals, nil)
 			if tt.wantErr != nil {
 				require.Error(t, err)
 				require.ErrorIs(t, err, tt.wantErr)
@@ -775,10 +775,10 @@ func Test_Array(t *testing.T) {
 			// we will now set them all to nulls and test that the array is created successfully
 			dt := vals[0].Type()
 			for i := range vals {
-				nullVal, err := MakeNull(dt)
+				nullVal, err := makeNull(dt)
 				require.NoError(t, err)
 
-				err = res.Set(int32(i+1), nullVal.(ScalarValue))
+				err = res.Set(int32(i+1), nullVal.(scalarValue))
 				require.NoError(t, err)
 			}
 
@@ -811,10 +811,10 @@ func Test_ArrayNull(t *testing.T) {
 		types.UUIDArrayType,
 		types.BlobArrayType,
 	} {
-		n, err := MakeNull(dt)
+		n, err := makeNull(dt)
 		require.NoError(t, err)
 
-		err = n.(ArrayValue).Set(1, &NullValue{})
+		err = n.(arrayValue).Set(1, &nullValue{})
 		require.NoError(t, err)
 	}
 }
@@ -856,14 +856,14 @@ func mustUUID(s string) *types.UUID {
 
 // testRoundTripParse is a helper function that formats a value to a string, then parses it back to a value.
 // It is meant to be used within these other tests.
-func testRoundTripParse(t *testing.T, v Value) {
+func testRoundTripParse(t *testing.T, v value) {
 	if v.Null() {
 		return
 	}
-	str, err := StringifyValue(v)
+	str, err := stringifyValue(v)
 	require.NoError(t, err)
 
-	val2, err := ParseValue(str, v.Type())
+	val2, err := parseValue(str, v.Type())
 	require.NoError(t, err)
 
 	equal, err := v.Compare(val2, engine.EQUAL)

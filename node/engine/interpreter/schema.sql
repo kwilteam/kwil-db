@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS kwild_engine.actions (
     raw_statement TEXT NOT NULL,
     returns_table BOOLEAN NOT NULL DEFAULT FALSE,
     modifiers kwild_engine.modifiers[],
+    built_in BOOLEAN DEFAULT FALSE,
     UNIQUE (namespace, name)
 );
 
@@ -455,7 +456,8 @@ SELECT
     COALESCE(p.parameter_types, ARRAY[]::TEXT[]) AS parameter_types,
     COALESCE(r.return_names, ARRAY[]::TEXT[]) AS return_names,
     COALESCE(r.return_types, ARRAY[]::TEXT[]) AS return_types,
-    a.returns_table AS returns_table
+    a.returns_table AS returns_table,
+    a.built_in AS built_in
 FROM kwild_engine.actions a
 LEFT JOIN parameters p
     ON a.id = p.action_id

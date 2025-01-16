@@ -87,6 +87,10 @@ type EngineContext struct {
 	// is valid / can be used. There are times when the engine is called
 	// while not within a transaction (e.g. by extensions to read in metadata)
 	// on startup. In these cases, the transaction context is not valid.
+	// This will disable all system variables (e.g. @caller). If users are
+	// not in a transaction but still want to use system variables (e.g. in an
+	// RPC making read-only calls to the engine), they should set this to false,
+	// and make sure to create a fake transaction context.
 	// If InvalidTxCtx is set to true, OverrideAuthz should also be set to true.
 	InvalidTxCtx bool
 }
@@ -102,16 +106,16 @@ type Engine interface {
 	// Call calls an action in the database. The resultFn callback is
 	// called for each row in the result set. If the resultFn returns
 	// an error, the call will be aborted and the error will be returned.
-	Call(ctx *EngineContext, db sql.DB, namespace, action string, args []EngineValue, resultFn func(*Row) error) (*CallResult, error)
+	Call(ctx *EngineContext, db sql.DB, namespace, action string, args []any, resultFn func(*Row) error) (*CallResult, error)
 	// Execute executes a statement in the database. The fn callback is
 	// called for each row in the result set. If the fn returns an error,
 	// the call will be aborted and the error will be returned.
-	Execute(ctx *EngineContext, db sql.DB, statement string, params map[string]EngineValue, fn func(*Row) error) error
+	Execute(ctx *EngineContext, db sql.DB, statement string, params map[string]any, fn func(*Row) error) error
 	// ExecuteWithoutEngineCtx executes a statement in the database without
 	// needing an engine context. This is useful for extensions that need to
 	// interact with the engine outside of a transaction. If possible, use
 	// Execute instead.
-	ExecuteWithoutEngineCtx(ctx context.Context, db sql.DB, statement string, params map[string]EngineValue, fn func(*Row) error) error
+	ExecuteWithoutEngineCtx(ctx context.Context, db sql.DB, statement string, params map[string]any, fn func(*Row) error) error
 }
 
 // CallResult is the result of a call to an action.
@@ -129,7 +133,7 @@ type Row struct {
 	// ColumnTypes are the types of the columns in the row.
 	ColumnTypes []*types.DataType
 	// Values are the values of the columns in the row.
-	Values []EngineValue
+	Values []any
 }
 
 // Accounts is an interface for managing accounts on the Kwil network. It
@@ -170,18 +174,6 @@ type Validators interface {
 	// longer be considered a validator. It will return an error if a
 	// negative power is given.
 	SetValidatorPower(ctx context.Context, tx sql.Executor, pubKey []byte, pubKeyType crypto.KeyType, power int64) error
-}
-
-// EngineValue is a value pass or returned from the engine.
-type EngineValue interface {
-	// Type returns the type of the variable.
-	Type() *types.DataType
-	// RawValue returns the value of the variable.
-	// This engine.IS one of: nil, int64, string, bool, []byte, *types.UUID, *decimal.Decimal,
-	// []*int64, []*string, []*bool, [][]byte, []*decimal.Decimal, []*types.UUID
-	RawValue() any
-	// Null returns true if the variable is null.
-	Null() bool
 }
 
 type NetworkParameters = types.NetworkParameters
