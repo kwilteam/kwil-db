@@ -646,20 +646,20 @@ func Test_Metadata(t *testing.T) {
 	})
 
 	// 2.2 Actions
-	// the actions table has columns namespace, name, raw_statement, access_modifiers, parameter_names, parameter_types, return_names, return_types, returns_table
+	// the actions table has columns namespace, name, raw_statement, access_modifiers, parameter_names, parameter_types, return_names, return_types, returns_table, built_in
 	assertQuery(`SELECT * FROM actions WHERE namespace = 'main'`, [][]any{
-		{"main", "many_params_no_returns", "{main}CREATE ACTION many_params_no_returns($a int, $b text, $c bool, $d numeric(10,5)) public view {};", stringArr("PUBLIC", "VIEW"), stringArr("$a", "$b", "$c", "$d"), stringArr("int8", "text", "bool", "numeric(10,5)"), stringArr(), stringArr(), false},
-		{"main", "no_params_no_returns", "{main}CREATE ACTION no_params_no_returns() private owner {};", stringArr("PRIVATE", "OWNER"), stringArr(), stringArr(), stringArr(), stringArr(), false},
-		{"main", "no_params_returns_single", "{main}CREATE ACTION no_params_returns_single() public view returns (id int, name text) { return 1, 'hello'; };", stringArr("PUBLIC", "VIEW"), stringArr(), stringArr(), stringArr("id", "name"), stringArr("int8", "text"), false},
-		{"main", "one_param_returns_table", "{main}CREATE ACTION one_param_returns_table($a int) system view returns table (id int, name text) { return select 1 as id, 'hello' as name; };", stringArr("SYSTEM", "VIEW"), stringArr("$a"), stringArr("int8"), stringArr("id", "name"), stringArr("int8", "text"), true},
+		{"main", "many_params_no_returns", "{main}CREATE ACTION many_params_no_returns($a int, $b text, $c bool, $d numeric(10,5)) public view {};", stringArr("PUBLIC", "VIEW"), stringArr("$a", "$b", "$c", "$d"), stringArr("int8", "text", "bool", "numeric(10,5)"), stringArr(), stringArr(), false, false},
+		{"main", "no_params_no_returns", "{main}CREATE ACTION no_params_no_returns() private owner {};", stringArr("PRIVATE", "OWNER"), stringArr(), stringArr(), stringArr(), stringArr(), false, false},
+		{"main", "no_params_returns_single", "{main}CREATE ACTION no_params_returns_single() public view returns (id int, name text) { return 1, 'hello'; };", stringArr("PUBLIC", "VIEW"), stringArr(), stringArr(), stringArr("id", "name"), stringArr("int8", "text"), false, false},
+		{"main", "one_param_returns_table", "{main}CREATE ACTION one_param_returns_table($a int) system view returns table (id int, name text) { return select 1 as id, 'hello' as name; };", stringArr("SYSTEM", "VIEW"), stringArr("$a"), stringArr("int8"), stringArr("id", "name"), stringArr("int8", "text"), true, false},
 	})
 
 	// we also need to test the extension actions
 	assertQuery(`SELECT * FROM actions WHERE namespace = 'ext1'`, [][]any{
-		{"ext1", "no_params_no_returns", "", stringArr("PRIVATE", "OWNER"), stringArr(), stringArr(), stringArr(), stringArr(), false},
-		{"ext1", "returns_one_named", "", stringArr("PUBLIC", "VIEW"), stringArr("$param_1"), stringArr("int8"), stringArr("id"), stringArr("int8"), false},
-		{"ext1", "returns_one_unnamed", "", stringArr("PUBLIC"), stringArr(), stringArr(), stringArr("column_1"), stringArr("int8"), false},
-		{"ext1", "returns_table", "", stringArr("SYSTEM", "VIEW"), stringArr(), stringArr(), stringArr("id", "name"), stringArr("int8", "text"), true},
+		{"ext1", "no_params_no_returns", "", stringArr("PRIVATE", "OWNER"), stringArr(), stringArr(), stringArr(), stringArr(), false, true},
+		{"ext1", "returns_one_named", "", stringArr("PUBLIC", "VIEW"), stringArr("$param_1"), stringArr("int8"), stringArr("id"), stringArr("int8"), false, true},
+		{"ext1", "returns_one_unnamed", "", stringArr("PUBLIC"), stringArr(), stringArr(), stringArr("column_1"), stringArr("int8"), false, true},
+		{"ext1", "returns_table", "", stringArr("SYSTEM", "VIEW"), stringArr(), stringArr(), stringArr("id", "name"), stringArr("int8", "text"), true, true},
 	})
 
 	// 2.3 Roles

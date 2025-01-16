@@ -87,6 +87,10 @@ type EngineContext struct {
 	// is valid / can be used. There are times when the engine is called
 	// while not within a transaction (e.g. by extensions to read in metadata)
 	// on startup. In these cases, the transaction context is not valid.
+	// This will disable all system variables (e.g. @caller). If users are
+	// not in a transaction but still want to use system variables (e.g. in an
+	// RPC making read-only calls to the engine), they should set this to false,
+	// and make sure to create a fake transaction context.
 	// If InvalidTxCtx is set to true, OverrideAuthz should also be set to true.
 	InvalidTxCtx bool
 }
