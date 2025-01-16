@@ -53,7 +53,7 @@ func (m *mockDB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Re
 		}
 
 		acct := &types.AccountID{}
-		err := acct.Decode(acctID)
+		err := acct.UnmarshalBinary(acctID)
 		if err != nil {
 			return nil, err
 		}
@@ -162,7 +162,7 @@ var acctsTestCases = []acctsTestCase{
 			// first credit, access db
 			verifyDBAccessCount(t, c, 1, skip)
 
-			acctID1, err := account1.Encode()
+			acctID1, err := account1.MarshalBinary()
 			require.NoError(t, err)
 
 			_, ok := a.records[string(acctID1)]

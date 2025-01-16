@@ -342,7 +342,7 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 	if !block.ChainContext.NetworkParameters.DisabledGasCosts {
 		for _, kv := range order.OrderMap(credits) {
 			acct := &types.AccountID{}
-			if err = acct.Decode([]byte(kv.Key)); err != nil {
+			if err = acct.UnmarshalBinary([]byte(kv.Key)); err != nil {
 				return fmt.Errorf("error decoding account id from CreditMap key %s : %w", kv.Key, err)
 			}
 
@@ -381,7 +381,7 @@ func (c creditMap) applyResolution(res *resolutions.Resolution) error {
 			KeyType:    voter.KeyType,
 		}
 
-		id, err := voterID.Encode()
+		id, err := voterID.MarshalBinary()
 		if err != nil {
 			return err
 		}

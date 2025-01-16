@@ -31,7 +31,7 @@ func (a *AccountID) String() string {
 	return fmt.Sprintf("AccountID{identifier = %x, keyType = %s}", a.Identifier, a.KeyType.String())
 }
 
-func (id *AccountID) Encode() ([]byte, error) {
+func (id *AccountID) MarshalBinary() ([]byte, error) {
 	if id == nil {
 		return nil, errors.New("nil account ID")
 	}
@@ -48,7 +48,7 @@ func (id *AccountID) Encode() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (id *AccountID) Decode(b []byte) error {
+func (id *AccountID) UnmarshalBinary(b []byte) error {
 	buf := bytes.NewBuffer(b)
 
 	ident, err := ReadBytes(buf)

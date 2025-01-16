@@ -56,7 +56,7 @@ func createAccount(ctx context.Context, db sql.Executor, acctID []byte, amt *big
 // getAccount retrieves an account from the database.
 // if the account is not found, it returns nil, ErrAccountNotFound.
 func getAccount(ctx context.Context, db sql.Executor, account *types.AccountID) (*types.Account, error) {
-	accountID, err := account.Encode()
+	accountID, err := account.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}

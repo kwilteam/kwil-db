@@ -48,7 +48,7 @@ func Test_MempoolWithoutGas(t *testing.T) {
 	tx := newTx(t, 1, "A")
 	senderAcct, err := tx.SenderInfo()
 	require.NoError(t, err)
-	id, err := senderAcct.Encode()
+	id, err := senderAcct.MarshalBinary()
 	require.NoError(t, err)
 
 	err = m.applyTransaction(txCtx, tx, db, rebroadcast)
@@ -107,7 +107,7 @@ func Test_MempoolWithGas(t *testing.T) {
 	tx := newTx(t, 1, "A")
 	senderAcct, err := tx.SenderInfo()
 	require.NoError(t, err)
-	id, err := senderAcct.Encode()
+	id, err := senderAcct.MarshalBinary()
 	require.NoError(t, err)
 
 	err = m.applyTransaction(txCtx, tx, db, rebroadcast)

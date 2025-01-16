@@ -2,6 +2,7 @@ package blockprocessor
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/binary"
 	"encoding/hex"
@@ -10,7 +11,6 @@ import (
 	"maps"
 	"math/big"
 	"slices"
-	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -749,10 +749,12 @@ func (bp *BlockProcessor) accountsHash() types.Hash {
 	accounts := bp.accounts.Updates()
 
 	slices.SortFunc(accounts, func(a, b *ktypes.Account) int {
-		id1 := fmt.Sprintf("%s:%s", hex.EncodeToString(a.ID.Identifier), a.ID.KeyType.String())
-		id2 := fmt.Sprintf("%s:%s", hex.EncodeToString(b.ID.Identifier), b.ID.KeyType.String())
-		return strings.Compare(id1, id2)
+		if idCmp := bytes.Compare(a.ID.Identifier, b.ID.Identifier); idCmp != 0 {
+			return idCmp
+		}
+		return cmp.Compare(a.ID.KeyType, b.ID.KeyType)
 	})
+
 	hasher := ktypes.NewHasher()
 	for _, acc := range accounts {
 		hasher.Write([]byte(acc.ID.Identifier))
@@ -783,7 +785,10 @@ func validatorUpdatesHash(updates map[string]*ktypes.Validator) (types.Hash, []*
 		updatesList = append(updatesList, v)
 	}
 	slices.SortFunc(updatesList, func(a, b *ktypes.Validator) int {
-		return bytes.Compare(a.Identifier, b.Identifier)
+		if idCmp := bytes.Compare(a.Identifier, b.Identifier); idCmp != 0 {
+			return idCmp
+		}
+		return cmp.Compare(a.KeyType, b.KeyType)
 	})
 
 	// hash the validator address and the validator struct

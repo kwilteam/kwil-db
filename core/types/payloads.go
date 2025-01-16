@@ -6,6 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"math/big"
 	"reflect"
 	"strconv"
 
@@ -555,7 +556,7 @@ const tVersion = 0
 // Transfer transfers an amount of tokens from the sender to the receiver.
 type Transfer struct {
 	To     *AccountID `json:"to"`     // to be string as user identifier
-	Amount string     `json:"amount"` // big.Int
+	Amount *big.Int   `json:"amount"` // big.Int
 }
 
 func (v *Transfer) Type() PayloadType {
@@ -578,7 +579,7 @@ func (v Transfer) MarshalBinary() ([]byte, error) {
 	}
 
 	// transfer to
-	toBts, err := v.To.Encode()
+	toBts, err := v.To.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
@@ -588,7 +589,7 @@ func (v Transfer) MarshalBinary() ([]byte, error) {
 	}
 
 	// transfer amount
-	if err := WriteString(buf, v.Amount); err != nil {
+	if err := WriteBigInt(buf, v.Amount); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
@@ -612,18 +613,16 @@ func (v *Transfer) UnmarshalBinary(b []byte) error {
 	}
 
 	v.To = &AccountID{}
-	err = v.To.Decode(toBts)
+	err = v.To.UnmarshalBinary(toBts)
 	if err != nil {
 		return err
 	}
 
 	// transfer amount
-	amount, err := ReadString(rd)
+	v.Amount, err = ReadBigInt(rd)
 	if err != nil {
 		return err
 	}
-
-	v.Amount = amount
 	return nil
 }
 
