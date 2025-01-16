@@ -130,7 +130,7 @@ func decodeCreditEvent(l *types.Log) (*credit.AccountCreditResolution, error) {
 
 	return &credit.AccountCreditResolution{
 		Account: address.Bytes(),
-		KeyType: kcrypto.KeyTypeSecp256k1,
+		KeyType: kcrypto.KeyTypeSecp256k1.String(),
 		Amount:  amount,
 		TxHash:  l.TxHash.Bytes(),
 	}, nil
