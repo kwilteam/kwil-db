@@ -18,11 +18,6 @@ import (
 	"github.com/pelletier/go-toml/v2"
 )
 
-const (
-	ConfigFileName  = "kwil.toml"
-	GenesisFileName = "genesis.json"
-)
-
 // Duration is a wrapper around time.Duration that implements text
 // (un)marshalling for the go-toml package to work with Go duration strings
 // instead of integers.

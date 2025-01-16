@@ -14,6 +14,7 @@ import (
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/utils"
 	"github.com/kwilteam/kwil-db/node"
@@ -133,6 +134,16 @@ func InitCmd() *cobra.Command {
 					},
 					Power: 1,
 				})
+
+				// If DB owner is not set, set it to the node's public key
+				if genCfg.DBOwner == "" {
+					signer := auth.GetUserSigner(privKey)
+					ident, err := auth.GetIdentifierFromSigner(signer)
+					if err != nil {
+						return display.PrintErr(cmd, fmt.Errorf("failed to get identifier for dbOwner: %w", err))
+					}
+					genCfg.DBOwner = ident
+				}
 
 				// allocate some initial balance to validators if gas is enabled and
 				// if no funds are allocated to that validators.

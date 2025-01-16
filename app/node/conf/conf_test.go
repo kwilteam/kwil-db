@@ -2,7 +2,6 @@ package conf
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/knadh/koanf/v2"
@@ -27,7 +26,7 @@ number = 42
 [nested]
 string_value = "nested-string"
 `
-	configPath := filepath.Join(tmpDir, config.ConfigFileName)
+	configPath := config.ConfigFilePath(tmpDir)
 	err := os.WriteFile(configPath, []byte(configContent), 0644)
 	assert.NoError(t, err)
 

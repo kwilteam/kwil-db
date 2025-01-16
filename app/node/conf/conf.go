@@ -172,7 +172,7 @@ func PreRunBindConfigFile(cmd *cobra.Command, args []string) error {
 	// The above can be modified to standardize to "-".
 
 	// Load config from file
-	confPath, _ := filepath.Abs(filepath.Join(rootDir, config.ConfigFileName))
+	confPath, _ := filepath.Abs(config.ConfigFilePath(rootDir))
 	if err := k.Load(file.Provider(confPath), toml.Parser() /*, mergeFn*/); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("error loading config: %v", err)

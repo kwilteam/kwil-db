@@ -15,6 +15,7 @@ import (
 	"github.com/kwilteam/kwil-db/app/shared/bind"
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node"
@@ -28,7 +29,7 @@ func TestnetCmd() *cobra.Command {
 	var numVals, numNVals int
 	var noPex, uniquePorts bool
 	var startingPort uint64
-	var outDir string
+	var outDir, dbOwner string
 
 	cmd := &cobra.Command{
 		Use:   "testnet",
@@ -40,6 +41,7 @@ func TestnetCmd() *cobra.Command {
 				NumNVals:     numNVals,
 				NoPex:        noPex,
 				StartingPort: startingPort,
+				Owner:        dbOwner,
 			}, &ConfigOpts{
 				UniquePorts: uniquePorts,
 				DnsHost:     false,
@@ -61,6 +63,7 @@ func TestnetCmd() *cobra.Command {
 	cmd.Flags().Uint64VarP(&startingPort, "port", "p", 6600, "starting P2P port for the nodes")
 	cmd.Flags().StringVarP(&outDir, "out-dir", "o", ".testnet", "output directory for generated node root directories")
 	cmd.Flags().BoolVarP(&uniquePorts, "unique-ports", "u", false, "use unique ports for each node")
+	cmd.Flags().StringVar(&dbOwner, "db-owner", "", "owner of the database")
 	return cmd
 }
 
@@ -150,6 +153,14 @@ func GenerateTestnetConfigs(cfg *TestnetConfig, opts *ConfigOpts) error {
 	genConfig.Leader = types.PublicKey{PublicKey: leaderPub}
 	genConfig.Validators = make([]*ktypes.Validator, cfg.NumVals)
 	genConfig.DBOwner = cfg.Owner
+	if genConfig.DBOwner == "" {
+		signer := auth.GetUserSigner(keys[0])
+		ident, err := auth.GetIdentifierFromSigner(signer)
+		if err != nil {
+			return fmt.Errorf("failed to get identifier from user signer for dbOwner: %w", err)
+		}
+		genConfig.DBOwner = ident
+	}
 
 	for i := range cfg.NumVals {
 		genConfig.Validators[i] = &ktypes.Validator{
@@ -290,13 +301,13 @@ func GenerateNodeDir(rootDir string, genesis *config.GenesisConfig, node *config
 		return err
 	}
 
-	if err := node.SaveAs(filepath.Join(rootDir, config.ConfigFileName)); err != nil {
+	if err := node.SaveAs(config.ConfigFilePath(rootDir)); err != nil {
 		return err
 	}
 
-	if err := genesis.SaveAs(filepath.Join(rootDir, config.GenesisFileName)); err != nil {
+	if err := genesis.SaveAs(config.GenesisFilePath(rootDir)); err != nil {
 		return err
 	}
 
-	return key.SaveNodeKey(filepath.Join(rootDir, config.NodeKeyFileName), privateKey)
+	return key.SaveNodeKey(config.NodeKeyFilePath(rootDir), privateKey)
 }
