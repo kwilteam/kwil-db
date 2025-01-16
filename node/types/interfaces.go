@@ -1,6 +1,8 @@
 package types
 
 import (
+	"time"
+
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
@@ -17,8 +19,7 @@ type BlockStore interface {
 	TxGetter
 	BlockResultsStorer
 
-	// TODO: Should this return commitInfo or AppHash?
-	Best() (int64, Hash, Hash)
+	Best() (height int64, blkHash, appHash Hash, stamp time.Time)
 
 	PreFetch(Hash) (bool, func()) // should be app level instead (TODO: remove)
 

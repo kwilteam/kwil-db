@@ -11,7 +11,9 @@ import (
 )
 
 type ConsensusEngine interface {
-	Role() types.Role // maybe: Role() (rol types.Role, power int64)
+	Status() *ktypes.NodeStatus // includes: role, inCatchup, consensus params, last commit info and block header
+
+	Role() types.Role
 	InCatchup() bool
 
 	AcceptProposal(height int64, blkID, prevBlkID types.Hash, leaderSig []byte, timestamp int64) bool

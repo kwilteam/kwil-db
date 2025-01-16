@@ -8,8 +8,8 @@ import (
 
 var consensusCmd = &cobra.Command{
 	Use:   "consensus",
-	Short: "Functions for dealing with consensus update proposals.",
-	Long:  "The `consensus` command provides functions for dealing with consensus update proposals.",
+	Short: "Functions for dealing with consensus update proposals",
+	Long:  "The consensus command provides functions for dealing with consensus update proposals.",
 }
 
 func NewConsensusCmd() *cobra.Command {

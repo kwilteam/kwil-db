@@ -22,8 +22,8 @@ kwil-admin validators list`
 
 func listCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:     "list-validators", // validators list-validators
-		Aliases: []string{"list"},  // validators list
+		Use:     "list",                      // validators list
+		Aliases: []string{"list-validators"}, // validators list-validators
 		Short:   "List the current validator set of the network.",
 		Long:    listLong,
 		Example: listExample,

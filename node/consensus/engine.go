@@ -191,6 +191,8 @@ type StateInfo struct {
 
 	// proposed block for the current height
 	blkProp *blockProposal
+
+	lastCommit lastCommit
 }
 
 // Consensus state that is applicable for processing the block at a specific height.
@@ -222,7 +224,7 @@ type lastCommit struct {
 
 	appHash types.Hash
 
-	blk        *ktypes.Block // why is this needed? can be fetched from the blockstore too.
+	blk        *ktypes.Block // for reannounce and other status getters
 	commitInfo *ktypes.CommitInfo
 }
 
@@ -347,6 +349,24 @@ func (ce *ConsensusEngine) close() {
 	}
 }
 
+func (ce *ConsensusEngine) Status() *ktypes.NodeStatus {
+	params := ce.blockProcessor.ConsensusParams()
+	ce.stateInfo.mtx.RLock()
+	defer ce.stateInfo.mtx.RUnlock()
+	lc := ce.stateInfo.lastCommit
+	var hdr *ktypes.BlockHeader
+	if lc.blk != nil {
+		hdr = lc.blk.Header
+	}
+	return &ktypes.NodeStatus{
+		Role:            ce.role.Load().(types.Role).String(),
+		CatchingUp:      ce.inSync.Load(),
+		CommittedHeader: hdr,
+		CommitInfo:      lc.commitInfo,
+		Params:          params,
+	}
+}
+
 // runEventLoop starts the event loop for the consensus engine.
 // Below are the external event triggers that nodes can receive depending on their role:
 // Leader:
@@ -464,7 +484,7 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 	defer readTx.Rollback(ctx)
 
 	// retrieve the last committed block info from the blockstore
-	storeHeight, blkHash, storeAppHash := ce.blockStore.Best()
+	storeHeight, blkHash, storeAppHash, _ /* timestamp */ := ce.blockStore.Best()
 
 	// retrieve the app state from the meta table
 	appHeight, appHash, dirty, err := meta.GetChainState(ctx, readTx)
@@ -709,7 +729,7 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 		return err
 	}
 
-	ce.log.Debug("Network Sync: ", "from", startHeight, "to (excluding)", ce.state.lc.height+1, "time", time.Since(t0), "appHash", ce.state.lc.appHash)
+	ce.log.Info("Network Sync: ", "from", startHeight, "to", ce.state.lc.height, "time", time.Since(t0), "appHash", ce.state.lc.appHash)
 
 	return nil
 }
@@ -770,7 +790,7 @@ func (ce *ConsensusEngine) resetBlockProp(ctx context.Context, height int64, txI
 	// recheck txs in the mempool, if we have deleted any txs from the mempool
 	if len(txIDs) > 0 {
 		ce.mempoolMtx.Lock()
-		ce.mempool.RecheckTxs(ctx, ce.blockProcessor.CheckTx)
+		ce.mempool.RecheckTxs(ctx, ce.recheckTx)
 		ce.mempoolMtx.Unlock()
 	}
 }

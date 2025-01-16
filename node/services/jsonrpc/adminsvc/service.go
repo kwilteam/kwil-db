@@ -253,7 +253,7 @@ func convertSyncInfo(si *types.SyncInfo) *adminjson.SyncInfo {
 		AppHash:         si.AppHash,
 		BestBlockHash:   si.BestBlockHash,
 		BestBlockHeight: si.BestBlockHeight,
-		BestBlockTime:   si.BestBlockTime.UnixMilli(), // this is why we dup this
+		BestBlockTime:   si.BestBlockTime.UnixMilli(),
 		Syncing:         si.Syncing,
 	}
 }
@@ -267,10 +267,20 @@ func (svc *Service) Status(ctx context.Context, req *adminjson.StatusRequest) (*
 	var power int64
 	power, _ = svc.voting.GetValidatorPower(ctx, status.Validator.Identifier, status.Validator.KeyType)
 
+	var rpcAddr string
+	if srv, ok := ctx.Value(rpcserver.ServerCtx).(*rpcserver.Server); ok {
+		rpcAddr = srv.Addr()
+	}
+
+	// A different type from blockchain.Status that has no RPCAddr would be less
+	// error prone but more types...
+	nodeInfo := *status.Node
+	nodeInfo.RPCAddr = rpcAddr
+
 	return &adminjson.StatusResponse{
-		Node: status.Node,
+		Node: &nodeInfo,
 		Sync: convertSyncInfo(status.Sync),
-		Validator: &adminjson.Validator{ // TODO: weed out the type dups
+		Validator: &adminjson.Validator{
 			AccountID: ktypes.AccountID{
 				Identifier: status.Validator.Identifier,
 				KeyType:    status.Validator.KeyType,
@@ -285,14 +295,6 @@ func (svc *Service) Peers(ctx context.Context, _ *adminjson.PeersRequest) (*admi
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "node peers unavailable", nil)
 	}
-	// pbPeers := make([]*types.PeerInfo, len(peers))
-	// for i, p := range peers {
-	// 	pbPeers[i] = &types.PeerInfo{
-	// 		NodeInfo:   p.NodeInfo,
-	// 		Inbound:    p.Inbound,
-	// 		RemoteAddr: p.RemoteAddr,
-	// 	}
-	// }
 	return &adminjson.PeersResponse{
 		Peers: peers,
 	}, nil

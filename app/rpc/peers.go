@@ -10,10 +10,10 @@ import (
 )
 
 var (
-	peersLong = `Print a list of the node's peers, with their public information.`
+	peersLong = `The peers command retrieves and print a list of the node's peers, with their public information.`
 
 	peersExample = `# Print a list of the node's peers
-kwil-admin node peers --rpcserver /tmp/kwild.socket`
+kwild admin peers --rpcserver /tmp/kwild.socket`
 )
 
 func peersCmd() *cobra.Command {

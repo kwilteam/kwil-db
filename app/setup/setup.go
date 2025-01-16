@@ -8,7 +8,7 @@ func SetupCmd() *cobra.Command {
 	- resetting node state and all data files (reset)`
 	setupCmd := &cobra.Command{
 		Use:   "setup",
-		Short: "The setup command provides functions for creating and managing node configuration and data.",
+		Short: "Tools for creating and managing node configuration and data",
 		Long:  setupLong,
 	}
 	setupCmd.AddCommand(ResetCmd(), TestnetCmd(), InitCmd(), GenesisCmd())

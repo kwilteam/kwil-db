@@ -58,7 +58,7 @@ func createCmd() *cobra.Command {
 	var snapshotDir string
 	cmd := &cobra.Command{
 		Use:     "create",
-		Short:   "Creates a snapshot of the database.",
+		Short:   "Creates a snapshot of the database for use with a new network.",
 		Long:    createLongExplain,
 		Example: createExample,
 		Args:    cobra.NoArgs,

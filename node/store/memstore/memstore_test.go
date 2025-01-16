@@ -122,7 +122,7 @@ func TestMemBS_Best(t *testing.T) {
 		}
 	}
 
-	height, hash, appHash := bs.Best()
+	height, hash, appHash, _ := bs.Best()
 	if height != 3 {
 		t.Errorf("got height %d, want 3", height)
 	}

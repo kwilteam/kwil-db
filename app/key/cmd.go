@@ -11,15 +11,13 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 )
 
-const keyExplain = "The `key` command provides subcommands for private key generation and inspection."
-
-var keyCmd = &cobra.Command{
-	Use:   "key",
-	Short: keyExplain,
-	Long:  "The `key` command provides subcommands for private key generation and inspection. These are the private keys that identify the node on the network and provide validator transaction signing capability.",
-}
-
 func KeyCmd() *cobra.Command {
+	keyCmd := &cobra.Command{
+		Use:   "key",
+		Short: "Tools for private key generation and inspection",
+		Long:  "The key command provides subcommands for private key generation and inspection. These are the private keys that identify the node on the network and provide validator transaction signing capability.",
+	}
+
 	keyCmd.AddCommand(
 		GenCmd(),
 		InfoCmd(),

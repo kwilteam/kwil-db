@@ -8,7 +8,7 @@ const (
 
 var snapshotCmd = &cobra.Command{
 	Use:   "snapshot",
-	Short: "snapshot related actions",
+	Short: "Snapshot related actions",
 	Long:  snapshotExplain,
 }
 

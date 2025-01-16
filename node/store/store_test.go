@@ -313,7 +313,7 @@ func TestBlockStore_StoreDuplicateBlock(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	height, hash, gotAppHash := bs.Best()
+	height, hash, gotAppHash, _ := bs.Best()
 	if height != block.Header.Height {
 		t.Errorf("Expected height %d, got %d", block.Header.Height, height)
 	}

@@ -12,13 +12,12 @@ import (
 )
 
 var (
-	genAuthKeyLong = `Generate a new key pair for use with an authenticated admin RPC service.
+	genAuthKeyLong = `The gen-auth-key command generates a new key pair for use with an authenticated admin RPC service.
 	
 The key pair is generated and stored in the node's configuration directory, in the files auth.key and auth.cert. The key pair is used to authenticate the admin tool to the node.`
 	genAuthKeyExample = `# Generate a new TLS key pair to talk to the node
-kwil-admin node gen-auth-key
-cat ~/.kwil-admin/auth.cert >> ~/.kwild/clients.pem # or copy to remote kwild machine
-# kwil-admin uses auth.{key,cert}, while kwild uses clients.pem`
+kwild admin gen-auth-key
+# kwild admin commands uses auth.{key,cert}, while kwild uses clients.pem`
 )
 
 func genAuthKeyCmd() *cobra.Command {
@@ -50,11 +49,18 @@ func genAuthKeyCmd() *cobra.Command {
 				return display.PrintErr(cmd, fmt.Errorf("cert file exists: %v", certFile))
 			}
 			if err := os.MkdirAll(filepath.Dir(certFile), 0755); err != nil {
-
 				return display.PrintErr(cmd, fmt.Errorf("failed to create key file dir: %v", err))
 			}
 
-			return transport.GenTLSKeyPair(certFile, keyFile, "local kwild CA", nil)
+			err := transport.GenTLSKeyPair(certFile, keyFile, "local kwild CA", nil)
+			if err != nil {
+				return display.PrintErr(cmd, fmt.Errorf("failed to generate TLS key pair: %v", err))
+			}
+			certText, err := os.ReadFile(certFile)
+			if err != nil {
+				return display.PrintErr(cmd, fmt.Errorf("failed to read cert file: %v", err))
+			}
+			return appendToFile(filepath.Join(rootDir, "clients.pem"), certText)
 		},
 	}
 
@@ -62,4 +68,14 @@ func genAuthKeyCmd() *cobra.Command {
 	cmd.Flags().StringVar(&certFile, "tlscert", "auth.cert", "output path for the new client certificate")
 
 	return cmd
+}
+
+func appendToFile(path string, data []byte) error {
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = f.Write(data)
+	return err
 }

@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	removeLong = "Command `remove` votes to remove a validator from the validator set. If enough validators vote to remove the validator, the validator will be removed from the validator set."
+	removeLong = "The remove command votes to remove a validator from the validator set. If enough validators vote to remove the validator, the validator will be removed from the validator set."
 
 	removeExample = `# Remove a validator from the validator set by providing the validator info in format <hexPubkey#pubkeytype>
 kwil-admin validators remove e16141e4def3a7f2dfc5bbf40d50619b4d7bc9c9f670fcad98327b0d3d7b97b6#0`
@@ -20,7 +20,7 @@ kwil-admin validators remove e16141e4def3a7f2dfc5bbf40d50619b4d7bc9c9f670fcad983
 func removeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "remove <validator>",
-		Short:   "Command `remove` votes to remove a validator from the validator set.",
+		Short:   "Votes to remove a validator from the validator set (this node must be a validator).",
 		Long:    removeLong,
 		Example: removeExample,
 		Args:    cobra.ExactArgs(1),

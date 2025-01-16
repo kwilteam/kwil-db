@@ -148,7 +148,7 @@ func (r *respCall) MarshalText() (text []byte, err error) {
 }
 
 // buildProcedureInputs will build the inputs for either
-// an action or procedure executon/call.
+// an action or procedure execution/call.
 func buildExecutionInputs(ctx context.Context, client clientType.Client, namespace string, action string, inputs []map[string]string) ([][]any, error) {
 	params, err := GetParamList(ctx, client.Query, namespace, action)
 	if err != nil {
@@ -195,10 +195,10 @@ func GetParamList(ctx context.Context,
 	}
 
 	if len(res.Values) == 0 {
-		return nil, errors.New(`action "%s" not found in namespace "%s"`)
+		return nil, fmt.Errorf(`action "%s" not found in namespace "%s"`, action, namespace)
 	}
 	if len(res.Values) > 1 {
-		return nil, errors.New(`action "%s" is ambiguous in namespace "%s"`)
+		return nil, fmt.Errorf(`action "%s" is ambiguous in namespace "%s"`, action, namespace)
 	}
 
 	var paramNames []string

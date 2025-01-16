@@ -291,6 +291,10 @@ func (ce *dummyCE) NotifyBlockCommit(blk *ktypes.Block, ci *ktypes.CommitInfo) {
 	}
 }
 
+func (ce *dummyCE) Status() *ktypes.NodeStatus {
+	return &ktypes.NodeStatus{}
+}
+
 func (ce *dummyCE) NotifyACK(validatorPK []byte, ack types.AckRes) {
 	if ce.ackHandler != nil {
 		ce.ackHandler(validatorPK, ack)

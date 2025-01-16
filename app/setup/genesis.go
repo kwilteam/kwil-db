@@ -17,20 +17,18 @@ import (
 )
 
 var (
-	genesisLong = `` + "`" + `genesis` + "`" + ` creates a new genesis.json file.
+	genesisLong = `The genesis command creates a new genesis.json file with optionally specified modifications.
 
-This command creates a new genesis file with optionally specified modifications.
-
-Validators, balance allocations should have the format "pubkey:power", "address:balance" respectively.`
+Validators and balance allocations should have the format "pubkey:power", "address:balance" respectively.`
 
 	genesisExample = `# Create a new genesis.json file in the current directory
-kwil-admin setup genesis
+kwild setup genesis
 
 # Create a new genesis.json file in a specific directory with a specific chain ID and a validator with 1 power
-kwil-admin setup genesis --out /path/to/directory --chain-id mychainid --validator 890fe7ae9cb1fa6177555d5651e1b8451b4a9c64021c876236c700bc2690ff1d:1
+kwild setup genesis --out /path/to/directory --chain-id mychainid --validator 890fe7ae9cb1fa6177555d5651e1b8451b4a9c64021c876236c700bc2690ff1d:1
 
 # Create a new genesis.json with the specified allocation
-kwil-admin setup genesis --alloc 0x7f5f4552091a69125d5dfcb7b8c2659029395bdf:100`
+kwild setup genesis --alloc 0x7f5f4552091a69125d5dfcb7b8c2659029395bdf:100`
 )
 
 type genesisFlagConfig struct {
@@ -52,7 +50,7 @@ func GenesisCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:               "genesis",
-		Short:             "`genesis` creates a new genesis.json file",
+		Short:             "Create a new genesis.json file",
 		Long:              genesisLong,
 		Example:           genesisExample,
 		DisableAutoGenTag: true,
@@ -60,6 +58,7 @@ func GenesisCmd() *cobra.Command {
 		CompletionOptions: cobra.CompletionOptions{
 			DisableDefaultCmd: true,
 		},
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			outDir, err := node.ExpandPath(output)
 			if err != nil {

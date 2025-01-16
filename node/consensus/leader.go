@@ -106,7 +106,7 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 
 			// Recheck the transactions in the mempool
 			ce.mempoolMtx.Lock()
-			ce.mempool.RecheckTxs(ctx, ce.blockProcessor.CheckTx)
+			ce.mempool.RecheckTxs(ctx, ce.recheckTx)
 			ce.mempoolMtx.Unlock()
 
 			// signal ce to start a new round
@@ -161,7 +161,8 @@ func (ce *ConsensusEngine) createBlockProposal(ctx context.Context) (*blockPropo
 	}
 
 	valSetHash := ce.validatorSetHash()
-	blk := ktypes.NewBlock(ce.state.lc.height+1, ce.state.lc.blkHash, ce.state.lc.appHash, valSetHash, time.Now(), finalTxs)
+	stamp := time.Now().Truncate(time.Millisecond).UTC()
+	blk := ktypes.NewBlock(ce.state.lc.height+1, ce.state.lc.blkHash, ce.state.lc.appHash, valSetHash, stamp, finalTxs)
 
 	// Sign the block
 	if err := blk.Sign(ce.privKey); err != nil {

@@ -18,7 +18,7 @@ import (
 )
 
 var (
-	joinStatusLong    = `Query the status of a pending validator join request.`
+	joinStatusLong    = `The query command gets the status of a pending validator join request.`
 	joinStatusExample = `# Query the status of a pending validator join request, by providing the validator info in format <hexPubkey#pubkeytype>
 kwil-admin validators join-status 6ecaca8e9394c939a858c2c7b47acb1db26a96d7ab38bd702fa3820c5034e9d0#0`
 )
@@ -26,7 +26,7 @@ kwil-admin validators join-status 6ecaca8e9394c939a858c2c7b47acb1db26a96d7ab38bd
 func joinStatusCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "join-status <joiner>",
-		Short:   "Query the status of a pending validator join request.",
+		Short:   "Get the status of a pending validator join request.",
 		Long:    joinStatusLong,
 		Example: joinStatusExample,
 		Args:    cobra.ExactArgs(1),

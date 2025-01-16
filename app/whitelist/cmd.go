@@ -7,7 +7,7 @@ import (
 
 var peersCmd = &cobra.Command{
 	Use:   "whitelist",
-	Short: "The whitelist command is used to manage a node's peer whitelist.",
+	Short: "Manage a node's peer whitelist",
 }
 
 func WhitelistCmd() *cobra.Command {

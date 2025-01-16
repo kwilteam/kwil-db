@@ -15,7 +15,8 @@ func listCmd() *cobra.Command {
 	var cmd = &cobra.Command{
 		Use:     "list",
 		Short:   "List the peers in the node's whitelist.",
-		Example: "kwil-admin whitelist list",
+		Long:    "The list command lists the peers in the node's whitelist.",
+		Example: "kwild whitelist list",
 		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()

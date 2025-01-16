@@ -16,8 +16,10 @@ linters-settings:
   sloglint:
     forbidden-keys: ["time","level","msg","source"]
   govet:
-    enable:
-      - stdversion
+    enable-all: true
+    disable:
+      - fieldalignment
+      - shadow
 
 linters:
   disable-all: true

@@ -12,7 +12,7 @@ const validatorsLong = "The validators command provides functions for creating a
 func NewValidatorsCmd() *cobra.Command {
 	validatorsCmd := &cobra.Command{
 		Use:   "validators",
-		Short: "validator related actions",
+		Short: "Validator related actions",
 		Long:  validatorsLong,
 	}
 

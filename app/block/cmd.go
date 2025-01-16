@@ -8,8 +8,8 @@ import (
 
 var blockCmd = &cobra.Command{
 	Use:   "block",
-	Short: "",
-	Long:  "",
+	Short: "Leader block execution commands",
+	Long:  "The block command group has subcommands for managing leader block execution, including status and aborting.",
 }
 
 func NewBlockExecCmd() *cobra.Command {

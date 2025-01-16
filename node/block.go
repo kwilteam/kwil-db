@@ -348,7 +348,7 @@ func (n *Node) getBlkHeight(ctx context.Context, height int64) (types.Hash, []by
 // will be returned.
 func (n *Node) BlockByHeight(height int64) (types.Hash, *ktypes.Block, *ktypes.CommitInfo, error) {
 	if height <= 0 { // I think this is correct since block height starts from 1
-		height, _, _ = n.bki.Best()
+		height, _, _, _ = n.bki.Best()
 	}
 	return n.bki.GetByHeight(height)
 }

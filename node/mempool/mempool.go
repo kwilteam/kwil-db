@@ -116,14 +116,14 @@ func (mp *Mempool) PeekN(n int) []types.NamedTx {
 	return txns
 }
 
-type CheckFn func(ctx context.Context, tx *ktypes.Transaction, recheck bool) error
+type CheckFn func(ctx context.Context, tx *ktypes.Transaction) error
 
 func (mp *Mempool) RecheckTxs(ctx context.Context, fn CheckFn) {
 	mp.mtx.RLock()
 	defer mp.mtx.RUnlock()
 
 	for _, tx := range mp.txQ {
-		if err := fn(ctx, tx.Tx, true); err != nil {
+		if err := fn(ctx, tx.Tx); err != nil {
 			mp.remove(tx.Hash)
 		}
 	}

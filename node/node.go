@@ -42,6 +42,11 @@ import (
 	"github.com/multiformats/go-multiaddr"
 )
 
+// AppVersion encompasses all aspects of the Kwil DB application. A new version
+// indicates incompatible changes to the application, and nodes with different
+// versions should not communicate (TODO).
+const AppVersion = 1
+
 const (
 	blockTxCount    = 50 // for "mining"
 	txReAnnInterval = 30 * time.Second
@@ -570,7 +575,7 @@ func (n *Node) doStatesync(ctx context.Context) error {
 	}
 
 	// Check if the Block store and DB are initialized
-	h, _, _ := n.bki.Best()
+	h, _, _, _ := n.bki.Best()
 	if h != 0 {
 		return nil
 	}
@@ -605,32 +610,46 @@ func (n *Node) doStatesync(ctx context.Context) error {
 	return nil
 }
 
+func multiAddrToHostPort(addr multiaddr.Multiaddr) string {
+	host, port, _ := maHostPort(addr)
+	return net.JoinHostPort(host, port)
+}
+
 func (n *Node) Peers(context.Context) ([]*adminTypes.PeerInfo, error) {
 	peers := n.pm.ConnectedPeers()
-	var peersInfo []*adminTypes.PeerInfo
+	peersInfo := []*adminTypes.PeerInfo{}
 	for _, peer := range peers {
 		conns := n.host.Network().ConnsToPeer(peer.ID)
 		if len(conns) == 0 { // should be at least one
 			continue
 		}
-
-		var addr string
-		if len(peer.Addrs) > 0 {
-			host, port, _ := maHostPort(peer.Addrs[0])
-			addr = net.JoinHostPort(host, port)
-		}
+		conn := conns[0]
 
 		peersInfo = append(peersInfo, &adminTypes.PeerInfo{
-			NodeInfo:   &adminTypes.NodeInfo{},
-			Inbound:    conns[0].Stat().Direction == network.DirInbound,
-			RemoteAddr: addr,
+			Inbound:    conn.Stat().Direction == network.DirInbound,
+			RemoteAddr: multiAddrToHostPort(conn.RemoteMultiaddr()),
+			LocalAddr:  multiAddrToHostPort(conn.LocalMultiaddr()),
 		})
 	}
 	return peersInfo, nil
 }
 
+// Status returns the current status of the node.
 func (n *Node) Status(ctx context.Context) (*adminTypes.Status, error) {
-	height, blkHash, appHash := n.bki.Best()
+	ceStatus := n.ce.Status()
+	var height int64
+	var blkHash, appHash ktypes.Hash
+	var stamp time.Time
+	if ceStatus.CommittedHeader != nil {
+		height = ceStatus.CommittedHeader.Height
+		blkHash = ceStatus.CommittedHeader.Hash()
+		stamp = ceStatus.CommittedHeader.Timestamp
+	}
+	if ceStatus.CommitInfo != nil {
+		appHash = ceStatus.CommitInfo.AppHash
+	}
+
+	// height, blkHash, appHash, stamp := n.bki.Best()
 	var addr string
 	if addrs := n.Addrs(); len(addrs) > 0 {
 		addr = addrs[0]
@@ -639,15 +658,17 @@ func (n *Node) Status(ctx context.Context) (*adminTypes.Status, error) {
 	return &adminTypes.Status{
 		Node: &adminTypes.NodeInfo{
 			ChainID:    n.chainID,
-			NodeID:     hex.EncodeToString(pkBytes),
+			NodeID:     peers.NodeIDFromPubKey(n.pubkey),
 			ListenAddr: addr,
+			AppVersion: AppVersion,
+			Role:       ceStatus.Role,
 		},
 		Sync: &adminTypes.SyncInfo{
 			AppHash:         appHash,
 			BestBlockHash:   blkHash,
 			BestBlockHeight: height,
-			// BestBlockTime: ,
-			Syncing: n.ce.InCatchup(),
+			BestBlockTime:   stamp,
+			Syncing:         ceStatus.CatchingUp, // n.ce.InCatchup(), //
 		},
 		Validator: &adminTypes.ValidatorInfo{
 			AccountID: ktypes.AccountID{
@@ -717,7 +738,7 @@ func (n *Node) ChainUnconfirmedTx(limit int) (int, []types.NamedTx) {
 }
 
 func (n *Node) BlockHeight() int64 {
-	height, _, _ := n.bki.Best()
+	height, _, _, _ := n.bki.Best()
 	return height
 }
 

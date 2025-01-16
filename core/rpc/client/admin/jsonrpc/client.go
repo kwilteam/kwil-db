@@ -140,7 +140,7 @@ func (cl *Client) Status(ctx context.Context) (*adminTypes.Status, error) {
 	if err != nil {
 		return nil, err
 	}
-	// TODO: convert!
+
 	return &adminTypes.Status{
 		Node: res.Node,
 		Sync: &adminTypes.SyncInfo{
