@@ -702,11 +702,7 @@ func (r *rowReader) read(row *common.Row) error {
 		r.qr.ColumnNames = row.ColumnNames
 		r.qr.ColumnTypes = row.ColumnTypes
 	}
-	var row2 []any
-	for _, val := range row.Values {
-		row2 = append(row2, val)
-	}
-	r.qr.Values = append(r.qr.Values, row2)
+	r.qr.Values = append(r.qr.Values, row.Values)
 	return nil
 }
 

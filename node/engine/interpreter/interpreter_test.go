@@ -1755,12 +1755,6 @@ func (t *testPrecompile) OnUnuse(ctx *common.EngineContext, app *common.App) err
 
 // This function tests precompiles
 func Test_Extensions(t *testing.T) {
-	type testExtension struct {
-		alias string
-		i     int
-		meta  map[string]any
-	}
-
 	// notifications track in which order the extension is initialized, used, and unused
 	var notifications []string
 
@@ -2442,7 +2436,7 @@ func eq(a, b any) error {
 		// if b is an array or slice, we need to iterate through it
 		if reflect.TypeOf(a).Kind() == reflect.Slice {
 			// iterate using reflect in case it is not of []any
-			for i := 0; i < reflect.ValueOf(a).Len(); i++ {
+			for i := range reflect.ValueOf(a).Len() {
 				// recursively call eq
 				if err := eq(reflect.ValueOf(a).Index(i).Interface(), reflect.ValueOf(b).Index(i).Interface()); err != nil {
 					return err
@@ -2458,14 +2452,6 @@ func eq(a, b any) error {
 	}
 
 	return nil
-}
-
-func mustDecimal(s string) *decimal.Decimal {
-	d, err := decimal.NewFromString(s)
-	if err != nil {
-		panic(err)
-	}
-	return d
 }
 
 func mustExplicitDecimal(s string, prec, scale uint16) *decimal.Decimal {
