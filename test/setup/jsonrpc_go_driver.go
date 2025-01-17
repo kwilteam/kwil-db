@@ -23,33 +23,33 @@ type jsonrpcGoDriver struct {
 
 var _ JSONRPCClient = (*jsonrpcGoDriver)(nil)
 
-func newClient(ctx context.Context, endpoint string, usingGateway bool, l logFunc, privKey string) (JSONRPCClient, error) {
-	var secp256k1Priv *crypto.Secp256k1PrivateKey
-	var err error
+func newClient(ctx context.Context, endpoint string, l logFunc, opts *ClientOptions) (JSONRPCClient, error) {
+	if opts == nil {
+		opts = &ClientOptions{}
+	}
+	opts.ensureDefaults()
 
-	secp256k1Priv, err = generatePrivKey(privKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate private key: %w", err)
+	clOpts := &cTypes.Options{
+		Signer: &auth.EthPersonalSigner{
+			Key: *opts.PrivateKey.(*crypto.Secp256k1PrivateKey),
+		},
 	}
 
-	opts := &cTypes.Options{
-		Signer: &auth.Secp256k1Signer{
-			Secp256k1PrivateKey: *secp256k1Priv},
-	}
 	var cl cTypes.Client
-	if usingGateway {
+	var err error
+	if opts.UsingKGW {
 		cl, err = gatewayclient.NewClient(ctx, endpoint, &gatewayclient.GatewayOptions{
-			Options: *opts,
+			Options: *clOpts,
 		})
 	} else {
-		cl, err = client.NewClient(ctx, endpoint, opts)
+		cl, err = client.NewClient(ctx, endpoint, clOpts)
 	}
 	if err != nil {
 		return nil, err
 	}
 
 	return &jsonrpcGoDriver{
-		privateKey: secp256k1Priv,
+		privateKey: opts.PrivateKey,
 		Client:     cl,
 		log:        l,
 	}, nil
@@ -101,4 +101,13 @@ func (c *jsonrpcGoDriver) TxSuccess(ctx context.Context, txHash types.Hash) erro
 	}
 
 	return nil
+}
+
+func (j *jsonrpcGoDriver) Identifier() string {
+	ident, err := auth.Secp25k1Authenticator{}.Identifier(j.privateKey.Public().Bytes())
+	if err != nil {
+		panic(err)
+	}
+
+	return ident
 }

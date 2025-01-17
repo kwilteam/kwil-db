@@ -16,7 +16,7 @@ import (
 
 // Client defines methods are used to talk to a Kwil provider.
 type Client interface {
-	Call(ctx context.Context, dbid string, action string, inputs []any) (*types.CallResult, error)
+	Call(ctx context.Context, namespace string, action string, inputs []any) (*types.CallResult, error)
 	ChainID() string
 	ChainInfo(ctx context.Context) (*types.ChainInfo, error)
 	Execute(ctx context.Context, namespace string, action string, tuples [][]any, opts ...TxOpt) (types.Hash, error)

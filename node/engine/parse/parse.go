@@ -20,7 +20,7 @@ import (
 // - etc.
 type ParseResult struct {
 	// Statements are the individual statements, in the order they were encountered.
-	Statements []TopLevelStatement
+	Statements []TopLevelStatement `json:"statements,omitempty"`
 	// ParseErrs is the error listener that contains all the errors that occurred during parsing.
 	ParseErrs ParseErrs `json:"parse_errs,omitempty"`
 }

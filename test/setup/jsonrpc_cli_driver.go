@@ -32,18 +32,16 @@ type jsonRPCCLIDriver struct {
 	cobraCmd     *cobra.Command
 }
 
-func newKwilCI(ctx context.Context, endpoint string, usingGateway bool, l logFunc, privKey string) (JSONRPCClient, error) {
-	var secp256k1Priv *crypto.Secp256k1PrivateKey
-
-	secp256k1Priv, err := generatePrivKey(privKey)
-	if err != nil {
-		return nil, fmt.Errorf("failed to generate private key: %w", err)
+func newKwilCI(ctx context.Context, endpoint string, l logFunc, opts *ClientOptions) (JSONRPCClient, error) {
+	if opts == nil {
+		opts = &ClientOptions{}
 	}
+	opts.ensureDefaults()
 
 	return &jsonRPCCLIDriver{
 		provider:     endpoint,
-		privateKey:   secp256k1Priv,
-		usingGateway: usingGateway,
+		privateKey:   opts.PrivateKey.(*crypto.Secp256k1PrivateKey),
+		usingGateway: opts.UsingKGW,
 		logFunc:      l,
 		cobraCmd:     root.NewRootCmd(),
 	}, nil
@@ -95,6 +93,15 @@ func (j *jsonRPCCLIDriver) PublicKey() crypto.PublicKey {
 
 func (j *jsonRPCCLIDriver) Signer() auth.Signer {
 	return &auth.Secp256k1Signer{Secp256k1PrivateKey: *j.privateKey.(*crypto.Secp256k1PrivateKey)}
+}
+
+func (j *jsonRPCCLIDriver) Identifier() string {
+	ident, err := auth.Secp25k1Authenticator{}.Identifier(j.privateKey.Public().Bytes())
+	if err != nil {
+		panic(err)
+	}
+
+	return ident
 }
 
 func (j *jsonRPCCLIDriver) Call(ctx context.Context, namespace string, action string, inputs []any) (*types.CallResult, error) {

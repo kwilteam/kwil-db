@@ -56,6 +56,8 @@ func (d *respDBList) MarshalText() ([]byte, error) {
 type respRelations struct {
 	// to avoid recursive call of MarshalJSON
 	Data *types.QueryResult
+	// conf for table formatting
+	conf *tableConfig
 }
 
 func (r *respRelations) MarshalJSON() ([]byte, error) {
@@ -63,12 +65,34 @@ func (r *respRelations) MarshalJSON() ([]byte, error) {
 }
 
 func (r *respRelations) MarshalText() ([]byte, error) {
-	return recordsToTable(r.Data.ExportToStringMap()), nil
+	return recordsToTable(r.Data.ExportToStringMap(), r.conf), nil
+}
+
+type tableConfig struct {
+	// width is the width of the column.
+	// text will be wrapped if it exceeds the width
+	width int
+	// topAndBottomBorder is the flag to show top and bottom border
+	topAndBottomBorder bool
+	// maxRowWidth is the maximum width of the row
+	maxRowWidth int
+}
+
+func (t *tableConfig) apply(table *tablewriter.Table) {
+	if t.width > 0 {
+		table.SetColWidth(t.width)
+	}
+	if t.topAndBottomBorder {
+		table.SetRowLine(true)
+	}
 }
 
 // recordsToTable converts records to a formatted table structure
 // that can be printed
-func recordsToTable(data []map[string]string) []byte {
+func recordsToTable(data []map[string]string, c *tableConfig) []byte {
+	if c == nil {
+		c = &tableConfig{}
+	}
 	if len(data) == 0 {
 		return []byte("No data to display.")
 	}
@@ -88,11 +112,16 @@ func recordsToTable(data []map[string]string) []byte {
 	table.SetAutoFormatHeaders(false)
 	table.SetBorders(
 		tablewriter.Border{Left: true, Top: false, Right: true, Bottom: false})
+	c.apply(table)
 
 	for _, row := range data {
 		rs := make([]string, 0, len(headers))
 		for _, h := range headers {
-			rs = append(rs, row[h])
+			v := row[h]
+			if c.maxRowWidth > 0 && len(v) > c.maxRowWidth {
+				v = v[:c.maxRowWidth] + "..."
+			}
+			rs = append(rs, v)
 		}
 		table.Append(rs)
 	}

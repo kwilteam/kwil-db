@@ -14,6 +14,7 @@ func NewCmdUtils() *cobra.Command {
 
 	cmd.AddCommand(
 		pingCmd(),
+		parseCmd(),
 		printConfigCmd(),
 		txQueryCmd(),
 		decodeTxCmd(),

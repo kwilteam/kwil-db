@@ -29,6 +29,7 @@ kwil-cli database query "SELECT * FROM users WHERE age > 25" --name mydb --owner
 )
 
 func queryCmd() *cobra.Command {
+	fmtConf := tableConfig{}
 	cmd := &cobra.Command{
 		Use:     `query <select_statement>`,
 		Short:   "Query a database using an ad-hoc SQL SELECT statement.",
@@ -58,9 +59,19 @@ func queryCmd() *cobra.Command {
 						return display.PrintErr(cmd, fmt.Errorf("error querying database: %w", err))
 					}
 
-					return display.PrintCmd(cmd, &respRelations{Data: data})
+					resp := &respRelations{
+						Data: data,
+						conf: &fmtConf,
+					}
+
+					return display.PrintCmd(cmd, resp)
 				})
 		},
 	}
+
+	cmd.Flags().IntVarP(&fmtConf.width, "width", "w", 0, "Set the width of the table columns. Text beyond this width will be wrapped.")
+	cmd.Flags().BoolVar(&fmtConf.topAndBottomBorder, "row-border", false, "Show border lines between rows.")
+	cmd.Flags().IntVar(&fmtConf.maxRowWidth, "max-row-width", 0, "Set the maximum width of the row. Text beyond this width will be truncated.")
+
 	return cmd
 }

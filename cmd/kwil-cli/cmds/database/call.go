@@ -132,10 +132,10 @@ func (r *respCall) MarshalJSON() ([]byte, error) {
 
 func (r *respCall) MarshalText() (text []byte, err error) {
 	if !r.PrintLogs {
-		return recordsToTable(r.Data.QueryResult.ExportToStringMap()), nil
+		return recordsToTable(r.Data.QueryResult.ExportToStringMap(), nil), nil
 	}
 
-	bts := recordsToTable(r.Data.QueryResult.ExportToStringMap())
+	bts := recordsToTable(r.Data.QueryResult.ExportToStringMap(), nil)
 
 	if len(r.Data.Logs) > 0 {
 		bts = append(bts, []byte("\n\nLogs:")...)
@@ -186,7 +186,7 @@ func GetParamList(ctx context.Context,
 		namespace = interpreter.DefaultNamespace
 	}
 
-	res, err := query(ctx, "{info}SELECT parameters FROM actions WHERE namespace = $namespace AND name = $action", map[string]any{
+	res, err := query(ctx, "{info}SELECT parameter_names, parameter_types FROM actions WHERE namespace = $namespace AND name = $action", map[string]any{
 		"namespace": namespace,
 		"action":    action,
 	})
@@ -201,40 +201,46 @@ func GetParamList(ctx context.Context,
 		return nil, errors.New(`action "%s" is ambiguous in namespace "%s"`)
 	}
 
-	var strVal []string
+	var paramNames []string
+	var paramTypes []*types.DataType
 	switch res.Values[0][0].(type) {
 	case nil:
 		return nil, nil // no inputs
 	case []string:
-		strVal = res.Values[0][0].([]string)
+		paramNames = res.Values[0][0].([]string)
+		typs := res.Values[0][1].([]string)
+		for _, t := range typs {
+			dt, err := types.ParseDataType(t)
+			if err != nil {
+				return nil, err
+			}
+			paramTypes = append(paramTypes, dt)
+		}
 	case []any:
 		for _, v := range res.Values[0][0].([]any) {
-			strVal = append(strVal, v.(string))
+			paramNames = append(paramNames, v.(string))
+		}
+
+		for _, v := range res.Values[0][1].([]any) {
+			dt, err := types.ParseDataType(v.(string))
+			if err != nil {
+				return nil, err
+			}
+			paramTypes = append(paramTypes, dt)
 		}
 	default:
 		return nil, fmt.Errorf("unexpected type %T when querying action parameters. this is a bug", res.Values[0][0])
 	}
 
-	type param struct {
-		Name     string `json:"name"`
-		DataType string `json:"data_type"`
+	if len(paramNames) != len(paramTypes) {
+		return nil, errors.New("mismatched parameter names and types")
 	}
 
-	params := make([]NamedParameter, len(strVal))
-	for i, s := range strVal {
-		var p param
-		if err := json.Unmarshal([]byte(s), &p); err != nil {
-			return nil, err
-		}
-
-		dt, err := types.ParseDataType(p.DataType)
-		if err != nil {
-			return nil, err
-		}
-
+	params := make([]NamedParameter, len(paramNames))
+	for i, name := range paramNames {
 		params[i] = NamedParameter{
-			Name: p.Name,
-			Type: dt,
+			Name: name,
+			Type: paramTypes[i],
 		}
 	}
 

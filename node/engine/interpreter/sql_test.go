@@ -381,7 +381,6 @@ func Test_Metadata(t *testing.T) {
 
 	// set owner
 	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `GRANT OWNER TO '0xUser';`, nil, nil)
-
 	require.NoError(t, err)
 
 	// 1. Create a bunch of different types of metadata
@@ -1141,4 +1140,60 @@ var testSchemaExt = precompiles.Precompile{
 			},
 		},
 	},
+}
+
+// This test tests that batch statements executed against the interpreter are transactional
+func Test_Transactionality(t *testing.T) {
+	ctx := context.Background()
+
+	db, err := pg.NewDB(ctx, &pg.DBConfig{
+		PoolConfig: pg.PoolConfig{
+			ConnConfig: pg.ConnConfig{
+				Host:   "127.0.0.1",
+				Port:   "5432",
+				User:   "kwild",
+				Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
+				DBName: "kwil_test_db",
+			},
+			MaxConns: 11,
+		},
+	})
+	require.NoError(t, err)
+	defer db.Close()
+
+	tx, err := db.BeginTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx) // always rollback to avoid cleanup
+
+	interp, err := NewInterpreter(ctx, tx, &common.Service{}, nil, nil)
+	require.NoError(t, err)
+	_ = interp
+
+	tx2, err := tx.BeginTx(ctx)
+	require.NoError(t, err)
+	defer tx2.Rollback(ctx)
+
+	// we will test that if I create two tables in the same statement and the second fails, that
+	// the first table is not created.
+	// The below tables are syntactically valid, but the second table has a foreign key constraint
+	// that references a non-existent table.
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx2, `
+		CREATE TABLE table1 (id INT PRIMARY KEY);
+		CREATE TABLE table2 (id INT PRIMARY KEY, name TEXT REFERENCES not_exists(id));
+		`, nil, nil)
+	require.Error(t, err)
+
+	err = tx2.Rollback(ctx)
+	require.NoError(t, err)
+
+	// we will check that the first table was not created
+	_, ok := interp.i.namespaces[DefaultNamespace].tables["table1"]
+	require.False(t, ok)
+
+	// fix the bug and continue
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `
+	CREATE TABLE table1 (id INT PRIMARY KEY);
+	CREATE TABLE table2 (id INT PRIMARY KEY, name TEXT);
+	`, nil, nil)
+	require.NoError(t, err)
 }

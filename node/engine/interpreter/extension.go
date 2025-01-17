@@ -129,3 +129,12 @@ type precompileExecutable struct {
 	method *precompiles.Method
 	exec   *executable
 }
+
+// copy deep copies the precompileExecutable.
+func (p *precompileExecutable) copy() *precompileExecutable {
+	e := *p.exec
+	return &precompileExecutable{
+		method: p.method.Copy(),
+		exec:   &e,
+	}
+}
