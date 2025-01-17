@@ -92,7 +92,7 @@ func init() {
 			},
 		},
 		valueMapping{
-			KwilType: types.BlobType,
+			KwilType: types.ByteaType,
 			ZeroValue: func(t *types.DataType) (value, error) {
 				return makeBlob([]byte{}), nil
 			},
@@ -183,7 +183,7 @@ func init() {
 			},
 		},
 		valueMapping{
-			KwilType: types.BlobArrayType,
+			KwilType: types.ByteaArrayType,
 			ZeroValue: func(t *types.DataType) (value, error) {
 				return &blobArrayValue{
 					singleDimArray: newValidArr([]*blobValue{}),
@@ -849,7 +849,7 @@ func (s *textValue) Cast(t *types.DataType) (value, error) {
 		}
 
 		return makeUUID(u), nil
-	case *types.BlobType:
+	case *types.ByteaType:
 		return makeBlob([]byte(s.String)), nil
 	default:
 		return nil, castErr(fmt.Errorf("cannot cast text to %s", t))
@@ -1013,7 +1013,7 @@ func (b *blobValue) Unary(op engine.UnaryOp) (scalarValue, error) {
 }
 
 func (b *blobValue) Type() *types.DataType {
-	return types.BlobType
+	return types.ByteaType
 }
 
 func (b *blobValue) RawValue() any {
@@ -1040,7 +1040,7 @@ func (b *blobValue) Cast(t *types.DataType) (value, error) {
 		return makeInt8(i), nil
 	case *types.TextType:
 		return makeText(string(b.bts)), nil
-	case *types.BlobType:
+	case *types.ByteaType:
 		return b, nil
 	default:
 		return nil, castErr(fmt.Errorf("cannot cast blob to %s", t))
@@ -1158,7 +1158,7 @@ func (u *uuidValue) Cast(t *types.DataType) (value, error) {
 	switch *t {
 	case *types.TextType:
 		return makeText(types.UUID(u.Bytes).String()), nil
-	case *types.BlobType:
+	case *types.ByteaType:
 		return makeBlob(u.Bytes[:]), nil
 	case *types.UUIDType:
 		return u, nil
@@ -1650,7 +1650,7 @@ func (a *int8ArrayValue) Cast(t *types.DataType) (value, error) {
 		}
 
 		return castArrWithPtr(a, func(i int64) (*types.Decimal, error) {
-			return types.NewDecimalExplicit(strconv.FormatInt(i, 10), t.Metadata[0], t.Metadata[1])
+			return types.ParseDecimalExplicit(strconv.FormatInt(i, 10), t.Metadata[0], t.Metadata[1])
 		}, newDecArrFn(t))
 	}
 
@@ -1740,7 +1740,7 @@ func (a *textArrayValue) Cast(t *types.DataType) (value, error) {
 		}
 
 		return castArrWithPtr(a, func(s string) (*types.Decimal, error) {
-			return types.NewDecimalExplicit(s, t.Metadata[0], t.Metadata[1])
+			return types.ParseDecimalExplicit(s, t.Metadata[0], t.Metadata[1])
 		}, newDecArrFn(t))
 	}
 
@@ -1753,7 +1753,7 @@ func (a *textArrayValue) Cast(t *types.DataType) (value, error) {
 		return castArrWithPtr(a, types.ParseUUID, newUUIDArrayValue)
 	case *types.TextArrayType:
 		return a, nil
-	case *types.BlobArrayType:
+	case *types.ByteaArrayType:
 		return castArr(a, func(s string) ([]byte, error) { return []byte(s), nil }, newBlobArrayValue)
 	default:
 		return nil, castErr(fmt.Errorf("cannot cast text array to %s", t))
@@ -2109,7 +2109,7 @@ func (a *decimalArrayValue) Cast(t *types.DataType) (value, error) {
 
 			// we need to make a copy of the decimal because SetPrecisionAndScale
 			// will modify the decimal in place.
-			dec2, err := types.NewDecimalExplicit(dec.String(), dec.Precision(), dec.Scale())
+			dec2, err := types.ParseDecimalExplicit(dec.String(), dec.Precision(), dec.Scale())
 			if err != nil {
 				return nil, err
 			}
@@ -2199,7 +2199,7 @@ func (a *blobArrayValue) Set(i int32, v scalarValue) error {
 }
 
 func (a *blobArrayValue) Type() *types.DataType {
-	return types.BlobArrayType
+	return types.ByteaArrayType
 }
 
 func (a *blobArrayValue) RawValue() any {
@@ -2226,7 +2226,7 @@ func (a *blobArrayValue) Cast(t *types.DataType) (value, error) {
 	switch *t {
 	case *types.TextArrayType:
 		return castArr(a, func(b []byte) (string, error) { return string(b), nil }, newTextArrayValue)
-	case *types.BlobArrayType:
+	case *types.ByteaArrayType:
 		return a, nil
 	default:
 		return nil, castErr(fmt.Errorf("cannot cast blob array to %s", t))
@@ -2308,7 +2308,7 @@ func (a *uuidArrayValue) Cast(t *types.DataType) (value, error) {
 		return castArr(a, func(u *types.UUID) (string, error) { return u.String(), nil }, newTextArrayValue)
 	case *types.UUIDArrayType:
 		return a, nil
-	case *types.BlobArrayType:
+	case *types.ByteaArrayType:
 		return castArr(a, func(u *types.UUID) ([]byte, error) { return u.Bytes(), nil }, newBlobArrayValue)
 	default:
 		return nil, castErr(fmt.Errorf("cannot cast uuid array to %s", t))
@@ -2570,7 +2570,7 @@ func parseValue(s string, t *types.DataType) (value, error) {
 	}
 
 	if t.Name == types.NumericStr {
-		dec, err := types.NewDecimalExplicit(s, t.Metadata[0], t.Metadata[1])
+		dec, err := types.ParseDecimalExplicit(s, t.Metadata[0], t.Metadata[1])
 		if err != nil {
 			return nil, err
 		}
@@ -2602,7 +2602,7 @@ func parseValue(s string, t *types.DataType) (value, error) {
 		}
 
 		return makeUUID(u), nil
-	case *types.BlobType:
+	case *types.ByteaType:
 		return makeBlob([]byte(s)), nil
 	default:
 		return nil, fmt.Errorf("unexpected type %s", t)

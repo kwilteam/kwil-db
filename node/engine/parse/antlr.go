@@ -353,7 +353,7 @@ func (s *schemaVisitor) VisitBinary_literal(ctx *gen.Binary_literalContext) any 
 	}
 
 	e := &ExpressionLiteral{
-		Type:  types.BlobType,
+		Type:  types.ByteaType,
 		Value: decoded,
 	}
 	e.Set(ctx)

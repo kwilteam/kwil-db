@@ -597,7 +597,7 @@ func Test_Cast(t *testing.T) {
 			check(types.BoolType, tt.boolVal)
 			check(decimalType, tt.decimalVal)
 			check(types.UUIDType, tt.uuidVal)
-			check(types.BlobType, tt.blobVal)
+			check(types.ByteaType, tt.blobVal)
 
 			if intArr, ok := tt.intArr.([]int64); ok {
 				tt.intArr = ptrArr(intArr)
@@ -614,7 +614,7 @@ func Test_Cast(t *testing.T) {
 			check(types.BoolArrayType, tt.boolArr)
 			check(decArrType, tt.decimalArr)
 			check(types.UUIDArrayType, tt.uuidArr)
-			check(types.BlobArrayType, tt.blobArr)
+			check(types.ByteaArrayType, tt.blobArr)
 
 			// test rountripping strings
 			testRoundTripParse(t, val)
@@ -808,7 +808,7 @@ func Test_ArrayNull(t *testing.T) {
 		types.BoolArrayType,
 		decType,
 		types.UUIDArrayType,
-		types.BlobArrayType,
+		types.ByteaArrayType,
 	} {
 		n, err := makeNull(dt)
 		require.NoError(t, err)
@@ -837,7 +837,7 @@ func mustDec(dec string) *types.Decimal {
 }
 
 func mustExplicitDecimal(dec string, precision, scale uint16) *types.Decimal {
-	d, err := types.NewDecimalExplicit(dec, precision, scale)
+	d, err := types.ParseDecimalExplicit(dec, precision, scale)
 	if err != nil {
 		panic(err)
 	}

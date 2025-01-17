@@ -1860,12 +1860,12 @@ func Test_Extensions(t *testing.T) {
 				tc.makeGetMethod(types.IntType),
 				tc.makeGetMethod(types.BoolType),
 				tc.makeGetMethod(mustDecType(10, 2)),
-				tc.makeGetMethod(types.BlobType),
+				tc.makeGetMethod(types.ByteaType),
 				tc.makeGetMethod(types.UUIDType),
 				tc.makeGetMethod(types.ArrayType(types.TextType)),
 				tc.makeGetMethod(types.ArrayType(types.IntType)),
 				tc.makeGetMethod(types.ArrayType(types.BoolType)),
-				tc.makeGetMethod(types.ArrayType(types.BlobType)),
+				tc.makeGetMethod(types.ArrayType(types.ByteaType)),
 				tc.makeGetMethod(types.ArrayType(types.UUIDType)),
 				tc.makeGetMethod(mustDecArrType(10, 2)),
 			},
@@ -2480,7 +2480,7 @@ func eq(a, b any) error {
 }
 
 func mustExplicitDecimal(s string, prec, scale uint16) *types.Decimal {
-	d, err := types.NewDecimalExplicit(s, prec, scale)
+	d, err := types.ParseDecimalExplicit(s, prec, scale)
 	if err != nil {
 		panic(err)
 	}

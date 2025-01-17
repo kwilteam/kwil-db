@@ -311,7 +311,7 @@ func (e *EncodedValue) Decode() (any, error) {
 				return nil, fmt.Errorf("int must be 8 bytes")
 			}
 			return int64(binary.BigEndian.Uint64(data)), nil
-		case BlobType.Name:
+		case ByteaType.Name:
 			return data, nil
 		case UUIDType.Name:
 			if len(data) != 16 {
@@ -362,7 +362,7 @@ func (e *EncodedValue) Decode() (any, error) {
 				arr = append(arr, dec.(int64))
 			}
 			arrAny = arr
-		case BlobType.Name:
+		case ByteaType.Name:
 			arr := make([][]byte, 0, len(e.Data))
 			for _, elem := range e.Data {
 				dec, err := decodeScalar(elem, e.Type.Name, true)
@@ -461,7 +461,7 @@ func EncodeValue(v any) (*EncodedValue, error) {
 			binary.BigEndian.PutUint64(buf[:], uint64(i64))
 			return buf[:], IntType, nil
 		case []byte:
-			return t, BlobType, nil
+			return t, ByteaType, nil
 		case [16]byte:
 			return t[:], UUIDType, nil
 		case UUID:

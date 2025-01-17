@@ -292,7 +292,7 @@ var (
 	}
 
 	blobType = &datatype{
-		KwilType:       types.BlobType,
+		KwilType:       types.ByteaType,
 		Matches:        []reflect.Type{reflect.TypeOf([]byte{})},
 		OID:            func(*pgtype.Map) uint32 { return pgtype.ByteaOID },
 		EncodeInferred: defaultEncodeDecode,
@@ -316,7 +316,7 @@ var (
 	}
 
 	blobArrayType = &datatype{
-		KwilType:       types.BlobArrayType,
+		KwilType:       types.ByteaArrayType,
 		Matches:        []reflect.Type{reflect.TypeOf([][]byte{})},
 		OID:            func(*pgtype.Map) uint32 { return pgtype.ByteaArrayOID },
 		EncodeInferred: defaultEncodeDecode,

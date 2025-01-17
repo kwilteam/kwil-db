@@ -844,7 +844,7 @@ func Test_Metadata(t *testing.T) {
 			},
 			{
 				Name:     "product_image",
-				DataType: types.BlobType,
+				DataType: types.ByteaType,
 				Nullable: true,
 			},
 			{
@@ -948,7 +948,7 @@ func Test_Metadata(t *testing.T) {
 			},
 			{
 				Name:     "avatar",
-				DataType: types.BlobType,
+				DataType: types.ByteaType,
 				Nullable: true,
 			},
 		},

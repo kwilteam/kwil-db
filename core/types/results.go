@@ -214,14 +214,14 @@ func ScanTo(src []any, dst []any) error {
 			}
 			continue
 		} else if typeOf.Kind() == reflect.Slice && typeOf.Elem().Kind() == reflect.Uint8 {
-			if err := convertScalar(col, dst[j]); err != nil {
+			if _, err := convertScalar(col, dst[j]); err != nil {
 				return err
 			}
 			continue
 		} else if typeOf.Kind() == reflect.Map {
 			return fmt.Errorf("cannot scan value into map type: %T", dst[j])
 		} else {
-			if err := convertScalar(col, dst[j]); err != nil {
+			if _, err := convertScalar(col, dst[j]); err != nil {
 				return err
 			}
 		}
@@ -231,9 +231,21 @@ func ScanTo(src []any, dst []any) error {
 }
 
 func convertArray(src any, dst any) error {
-	arr, ok := src.([]any)
-	if !ok {
-		return fmt.Errorf("unexpected JSON array type: %T", src)
+	var arr []any
+	switch v := src.(type) {
+	// most results will be []any, but in case it isn't we can reflect
+	case []any:
+		arr = v
+	default:
+		// otherwise, reflect
+		val := reflect.ValueOf(src)
+		if val.Kind() != reflect.Slice && val.Kind() != reflect.Array {
+			return fmt.Errorf("unexpected type: %T", src)
+		}
+		arr = make([]any, val.Len())
+		for i := 0; i < val.Len(); i++ {
+			arr[i] = val.Index(i).Interface()
+		}
 	}
 
 	switch v := dst.(type) {
@@ -273,7 +285,7 @@ func convertArray(src any, dst any) error {
 func convArr[T any](src []any, dst *[]T) error {
 	dst2 := make([]T, len(src)) // we dont set the new slice to dst until we know we can convert all values
 	for i, val := range src {
-		if err := convertScalar(val, &dst2[i]); err != nil {
+		if _, err := convertScalar(val, &dst2[i]); err != nil {
 			return err
 		}
 	}
@@ -290,9 +302,13 @@ func convPtrArr[T any](src []any, dst *[]*T) error {
 
 		s := new(T)
 
-		err := convertScalar(val, s)
+		wrote, err := convertScalar(val, s)
 		if err != nil {
 			return err
+		}
+		if !wrote {
+			// if it didnt write a value, do not add the empty pointer to the slice
+			continue
 		}
 
 		dst2[i] = s
@@ -303,112 +319,118 @@ func convPtrArr[T any](src []any, dst *[]*T) error {
 
 // convertScalar converts a scalar value to the specified type.
 // It converts the source value to a string, then parses it into the specified type.
-func convertScalar(src any, dst any) error {
+func convertScalar(src any, dst any) (wroteValue bool, err error) {
 	var null bool
-	if src == nil {
-		null = true
-	}
-	str, err := stringify(src)
+	str, null, err := stringify(src)
 	if err != nil {
-		return err
+		return false, err
 	}
 	switch v := dst.(type) {
 	case *string:
 		if null {
-			return nil
+			return false, nil
 		}
 		*v = str
-		return nil
+		return true, nil
 	case *int64:
 		if null {
-			return nil
+			return false, nil
 		}
 		i, err := strconv.ParseInt(str, 10, 64)
 		if err != nil {
-			return err
+			return false, err
 		}
 		*v = i
-		return nil
+		return true, nil
 	case *int:
 		if null {
-			return nil
+			return false, nil
 		}
 		i, err := strconv.Atoi(str)
 		if err != nil {
-			return err
+			return false, err
 		}
 		*v = i
-		return nil
+		return true, nil
 	case *bool:
 		if null {
-			return nil
+			return false, nil
 		}
 		b, err := strconv.ParseBool(str)
 		if err != nil {
-			return err
+			return true, err
 		}
 		*v = b
-		return nil
+		return true, nil
 	case *[]byte:
 		if null {
-			return nil
+			return false, nil
 		}
 		*v = []byte(str)
-		return nil
+		return true, nil
 	case *UUID:
 		if null {
-			return nil
+			return false, nil
 		}
 
 		if len([]byte(str)) == 16 {
 			*v = UUID([]byte(str))
-			return nil
+			return true, nil
 		}
 
 		u, err := ParseUUID(str)
 		if err != nil {
-			return err
+			return false, err
 		}
 		*v = *u
-		return nil
+		return true, nil
 	case *Decimal:
 		if null {
-			return nil
+			return false, nil
 		}
 
 		dec, err := ParseDecimal(str)
 		if err != nil {
-			return err
+			return false, err
 		}
 		*v = *dec
-		return nil
+		return true, nil
 	default:
-		return fmt.Errorf("unexpected scan type: %T", dst)
+		return false, fmt.Errorf("unexpected scan type: %T", dst)
 	}
 }
 
 // stringify converts a value as a string.
-// It only expects values returned from JSON marshalling.
-// It does NOT expect slices/arrays (except for []byte) or maps
-func stringify(v any) (str string, err error) {
+// It does NOT expect slices/arrays (except for []byte) or maps.
+func stringify(v any) (str string, null bool, err error) {
 	switch val := v.(type) {
 	case string:
-		return val, nil
+		return val, false, nil
 	case []byte:
-		return string(val), nil
+		return string(val), false, nil
 	case int64:
-		return strconv.FormatInt(val, 10), nil
+		return strconv.FormatInt(val, 10), false, nil
 	case int:
-		return strconv.Itoa(val), nil
+		return strconv.Itoa(val), false, nil
 	case float64:
-		return strconv.FormatFloat(val, 'f', -1, 64), nil
+		return strconv.FormatFloat(val, 'f', -1, 64), false, nil
 	case bool:
-		return strconv.FormatBool(val), nil
+		return strconv.FormatBool(val), false, nil
 	case nil:
-		return "", nil
+		return "", true, nil
 	case float32:
-		return strconv.FormatFloat(float64(val), 'f', -1, 32), nil
+		return strconv.FormatFloat(float64(val), 'f', -1, 32), false, nil
 	default:
-		return "", fmt.Errorf("unexpected type: %T", v)
+		// if we hit here, we should see if it is a pointer, and if so, reflect and try again
+		vOf := reflect.ValueOf(v)
+		if vOf.Kind() == reflect.Ptr {
+			elem := vOf.Elem()
+			if elem.Kind() == reflect.Invalid {
+				return "", true, nil
+			}
+
+			return stringify(elem.Interface())
+		}
+		return "", false, fmt.Errorf("unexpected type: %T", v)
 	}
 }

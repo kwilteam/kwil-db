@@ -113,7 +113,7 @@ func Test_NewParsedDecimal(t *testing.T) {
 	// test cases for decimal creation
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d, err := types.NewDecimalExplicit(tt.decimal, tt.prec, tt.scale)
+			d, err := types.ParseDecimalExplicit(tt.decimal, tt.prec, tt.scale)
 			if tt.err {
 				require.Errorf(t, err, "result: %v", d)
 				return
@@ -628,7 +628,7 @@ func TestDecimalBinaryMarshaling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d, err := types.NewDecimalExplicit(tt.decimal, tt.prec, tt.scale)
+			d, err := types.ParseDecimalExplicit(tt.decimal, tt.prec, tt.scale)
 			require.NoError(t, err)
 
 			marshaled, err := d.MarshalBinary()

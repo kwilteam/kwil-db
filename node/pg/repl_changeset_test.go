@@ -95,7 +95,7 @@ func TestRelation_Serialize(t *testing.T) {
 			r: &Relation{
 				Table: "tablex",
 				Columns: []*Column{
-					{Name: "a", Type: types.BlobType},
+					{Name: "a", Type: types.ByteaType},
 				},
 			},
 		},

@@ -139,8 +139,8 @@ var (
 					return nil, wrapErrArgumentNumber(2, len(args))
 				}
 
-				if !args[0].Equals(types.BlobType) {
-					return nil, wrapErrArgumentType(types.BlobType, args[0])
+				if !args[0].Equals(types.ByteaType) {
+					return nil, wrapErrArgumentType(types.ByteaType, args[0])
 				}
 
 				if !args[1].Equals(types.TextType) {
@@ -166,7 +166,7 @@ var (
 					return nil, wrapErrArgumentType(types.TextType, args[1])
 				}
 
-				return types.BlobType, nil
+				return types.ByteaType, nil
 			},
 			PGFormatFunc: defaultFormat("decode"),
 		},
@@ -177,7 +177,7 @@ var (
 					return nil, wrapErrArgumentNumber(2, len(args))
 				}
 
-				if !args[0].Equals(types.TextType) && !args[0].Equals(types.BlobType) {
+				if !args[0].Equals(types.TextType) && !args[0].Equals(types.ByteaType) {
 					return nil, fmt.Errorf("%w: expected first argument to be text or blob, got %s", ErrType, args[0].String())
 				}
 
@@ -185,7 +185,7 @@ var (
 					return nil, wrapErrArgumentType(types.TextType, args[1])
 				}
 
-				return types.BlobType, nil
+				return types.ByteaType, nil
 			},
 			PGFormatFunc: defaultFormat("digest"),
 		},
@@ -200,8 +200,8 @@ var (
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
-				if !args[1].Equals(types.BlobType) {
-					return nil, wrapErrArgumentType(types.BlobType, args[1])
+				if !args[1].Equals(types.ByteaType) {
+					return nil, wrapErrArgumentType(types.ByteaType, args[1])
 				}
 
 				return types.TextType, nil
