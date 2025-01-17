@@ -49,12 +49,6 @@ func Test_eip55ChecksumAddr(t *testing.T) {
 }
 
 func TestEthSecp256k1AuthenticatorVerifyPositive(t *testing.T) {
-	// 	priv: a0505da852036821eb3df07e8f8ee1ebef5ce50034133ea038aee10c8b4c9111
-	// pub: 02f0a13ef50767acffd58328b4f69ef36866c4f350fe3fa6172598a883d03d501d
-	// priv, pub, _ := crypto.GenerateSecp256k1Key(nil)
-	// fmt.Printf("priv: %x\n", priv.Bytes())
-	// fmt.Printf("pub: %x\n", pub.Bytes())
-
 	privBts, _ := hex.DecodeString("a0505da852036821eb3df07e8f8ee1ebef5ce50034133ea038aee10c8b4c9111")
 	priv, _ := crypto.UnmarshalSecp256k1PrivateKey(privBts)
 
@@ -82,6 +76,26 @@ func TestEthSecp256k1AuthenticatorVerifyPositive(t *testing.T) {
 	sig.Data[crypto.RecoveryIDOffset] += 27
 
 	err = authnr.Verify(signer.CompactID(), msg, sig.Data)
+	require.NoError(t, err)
+
+}
+
+func TestEthSecp256k1AuthenticatorVerifyMetaMask(t *testing.T) {
+	authnr := &EthSecp256k1Authenticator{}
+
+	addrStr := "0x01ab2a7a29fdc3a3ad10e3ea07f2c7882b76b2e2"
+	addr, _ := hex.DecodeString(addrStr[2:])
+	msgBts, _ := hex.DecodeString("74657374206d657373616765") // "test message"
+	mmSig, _ := hex.DecodeString("b98c74a03e9de2b99dac504eb0e63cfe464fa8b9cafc63c913efa6122815ad5a3560e90ce1367185b40fc58924a69a6ff975d62a73f3866b5ea003844ed113291b")
+
+	err := authnr.Verify(addr, msgBts, mmSig)
+	require.NoError(t, err)
+
+	// https://etherscan.io/verifySig/265446
+	msgBts2 := []byte("kwil was here")
+	mmSig2, _ := hex.DecodeString("bc7acd4a00eec94ceed10bcf86d73f2c2b3b023f1d138b7c04248c724371fd39562c490be8431ed95ec1cebffc05bdb6e0d802c92fe8c8d6c6c7fb574fe321de1c")
+
+	err = authnr.Verify(addr, msgBts2, mmSig2)
 	require.NoError(t, err)
 }
 
