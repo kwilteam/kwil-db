@@ -1,9 +1,12 @@
 package auth
 
 import (
+	"bytes"
 	"encoding/hex"
 	"fmt"
 
+	ethAccounts "github.com/ethereum/go-ethereum/accounts"
+	ethCommon "github.com/ethereum/go-ethereum/common"
 	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"golang.org/x/crypto/sha3"
 )
@@ -60,14 +63,27 @@ func eip55ChecksumAddr(addr [20]byte) string {
 
 // Verify verifies applies the Ethereum TextHash digest and verifies the signature
 func (EthSecp256k1Authenticator) Verify(identity []byte, msg []byte, signature []byte) error {
-	hash := textHash(msg)
-
-	if len(signature) == 65 {
-		signature = signature[:64]
+	// signature is 65 bytes, [R || S || V] format
+	if len(signature) != 65 {
+		return fmt.Errorf("invalid signature length: expected %d, received %d",
+			65, len(signature))
 	}
 
-	if !ethCrypto.VerifySignature(identity, hash, signature) {
-		return fmt.Errorf("invalid signature")
+	if signature[ethCrypto.RecoveryIDOffset] == 27 ||
+		signature[ethCrypto.RecoveryIDOffset] == 28 {
+		// Transform yellow paper V from 27/28 to 0/1
+		signature[ethCrypto.RecoveryIDOffset] -= 27
+	}
+
+	hash := ethAccounts.TextHash(msg)
+	pubkeyBytes, err := ethCrypto.Ecrecover(hash, signature)
+	if err != nil {
+		return fmt.Errorf("invalid signature: recover public key failed: %w", err)
+	}
+
+	addr := ethCommon.BytesToAddress(ethCrypto.Keccak256(pubkeyBytes[1:])[12:])
+	if !bytes.Equal(addr.Bytes(), identity) {
+		return fmt.Errorf("invalid signature: expected address %x, received %x", identity, addr.Bytes())
 	}
 
 	return nil
