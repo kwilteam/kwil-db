@@ -40,7 +40,7 @@ type BlockStore interface {
 
 type BlockProcessor interface {
 	InitChain(ctx context.Context) (int64, []byte, error)
-	SetBroadcastTxFn(fn blockprocessor.BroadcastTxFn)
+	SetCallbackFns(applyBlockFn blockprocessor.BroadcastTxFn, addPeer, removePeer func(string) error)
 
 	PrepareProposal(ctx context.Context, txs []*ktypes.Transaction) (finalTxs []*ktypes.Transaction, invalidTxs []*ktypes.Transaction, err error)
 	ExecuteBlock(ctx context.Context, req *ktypes.BlockExecRequest) (*ktypes.BlockExecResult, error)

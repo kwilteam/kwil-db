@@ -489,7 +489,13 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 			TxBroadcaster:           n.BroadcastTx,
 		}
 
-		nodeErr = n.ce.Start(ctx, broadcastFns)
+		whitelistFns := consensus.WhitelistFns{
+			AddPeer:    n.Whitelister().AddPeer,
+			RemovePeer: n.Whitelister().RemovePeer,
+			// ListPeers:  n.Whitelister().List,
+		}
+
+		nodeErr = n.ce.Start(ctx, broadcastFns, whitelistFns)
 		if err != nil {
 			n.log.Errorf("Consensus engine failed: %v", nodeErr)
 			return // cancel context

@@ -64,7 +64,11 @@ type BlockProcessor struct {
 	migrator    MigratorModule
 	log         log.Logger
 
+	// broadcast function to send transactions to the network
 	broadcastTxFn BroadcastTxFn
+	// Whitelist functions for adding and removing peers
+	addPeer    func(string) error
+	removePeer func(string) error
 
 	// Subscribers for the validator updates
 	subChans []chan []*ktypes.Validator
@@ -207,8 +211,10 @@ func (bp *BlockProcessor) LoadFromDBState(ctx context.Context) error {
 	return nil
 }
 
-func (bp *BlockProcessor) SetBroadcastTxFn(fn BroadcastTxFn) {
-	bp.broadcastTxFn = fn
+func (bp *BlockProcessor) SetCallbackFns(broadcastFn BroadcastTxFn, addPeer, removePeer func(string) error) {
+	bp.broadcastTxFn = broadcastFn
+	bp.addPeer = addPeer
+	bp.removePeer = removePeer
 }
 
 func (bp *BlockProcessor) Close() error {
@@ -485,7 +491,7 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 	}
 
 	// Process resolutions and end-block hooks.
-	err = bp.txapp.Finalize(ctx, bp.consensusTx, blockCtx)
+	approvedJoins, expiredJoins, err := bp.txapp.Finalize(ctx, bp.consensusTx, blockCtx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to finalize the block execution: %w", err)
 	}
@@ -543,6 +549,9 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 		bp.log.Info("Validator updates", "updates", valUpdatesList)
 	}
 
+	// update the peers in the network
+	bp.updatePeers(valUpdatesList, approvedJoins, expiredJoins)
+
 	accountsHash := bp.accountsHash()
 	txResultsHash := txResultsHash(txResults)
 
@@ -583,6 +592,63 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 		ParamUpdates:     maps.Clone(bp.chainCtx.NetworkUpdates),
 	}, nil
 
+}
+
+func formatNodeID(identifier []byte, keyType crypto.KeyType) string {
+	return fmt.Sprintf("%s#%d", hex.EncodeToString(identifier), keyType)
+}
+
+func (bp *BlockProcessor) updatePeers(valUpdates []*ktypes.Validator, approvedJoins, expiredJoins []*ktypes.AccountID) {
+	// update the peers in the network
+	keyType, err := auth.GetAuthenticatorKeyType(bp.signer.AuthType())
+	if err != nil {
+		bp.log.Error("Failed to get the key type of the authenticator", "err", err)
+		return
+	}
+	localPeer := formatNodeID(bp.signer.CompactID(), keyType)
+
+	for _, val := range valUpdates {
+		nodeID := formatNodeID(val.Identifier, val.KeyType)
+		if nodeID == localPeer {
+			continue
+		}
+
+		if val.Power == 0 {
+			if err := bp.removePeer(nodeID); err != nil {
+				bp.log.Warn("Failed to remove peer", "nodeID", nodeID, "err", err)
+			}
+			bp.log.Info("Removed demoted peer from the whitelist", "nodeID", nodeID)
+		} else {
+			if err := bp.addPeer(nodeID); err != nil {
+				bp.log.Warn("Failed to add peer from validator updates", "nodeID", nodeID, "err", err)
+			}
+			bp.log.Info("Added promoted peer to the whitelist", "nodeID", nodeID)
+		}
+	}
+
+	for _, val := range approvedJoins {
+		nodeID := formatNodeID(val.Identifier, val.KeyType)
+		if nodeID == localPeer {
+			continue
+		}
+
+		if err := bp.addPeer(nodeID); err != nil {
+			bp.log.Warn("Failed to add peer to the whitelist", "nodeID", nodeID, "err", err)
+		}
+		bp.log.Info("Added peer to the whitelist", "nodeID", nodeID)
+	}
+
+	for _, val := range expiredJoins {
+		nodeID := formatNodeID(val.Identifier, val.KeyType)
+		if nodeID == localPeer {
+			continue
+		}
+
+		if err := bp.removePeer(nodeID); err != nil {
+			bp.log.Warn("Failed to remove peer", "nodeID", nodeID, "reason", "join request expired", "err", err)
+		}
+		bp.log.Info("Removed peer with expired join request", "nodeID", nodeID)
+	}
 }
 
 // Commit method commits the block to the blockstore and postgres database.

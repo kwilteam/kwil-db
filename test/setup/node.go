@@ -3,6 +3,7 @@ package setup
 import (
 	"context"
 	"crypto/rand"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"os"
@@ -163,7 +164,7 @@ func CreateDockerNetwork(ctx context.Context, t *testing.T) (*testcontainers.Doc
 	return dockerNetwork, nil
 }
 
-func DeployETHNode(t *testing.T, ctx context.Context, dockerName string) *EthNode {
+func DeployETHNode(t *testing.T, ctx context.Context, dockerName string, privKey *crypto.Secp256k1PrivateKey) *EthNode {
 	tmpDir, err := os.MkdirTemp("", "TestKwilInt")
 	if err != nil {
 		t.Fatal(err)
@@ -207,12 +208,9 @@ func DeployETHNode(t *testing.T, ctx context.Context, dockerName string) *EthNod
 
 	var deployers []*ethdeployer.Deployer
 
-	deployerPrivKey, _, err := crypto.GenerateSecp256k1Key(rand.Reader)
-	require.NoError(t, err, "failed to generate deployer private key")
-
 	// Deploy 2 escrow contracts
 	for i := range 2 {
-		ethDeployer, err := ethdeployer.NewDeployer(exposedChainRPC, deployerPrivKey.(*crypto.Secp256k1PrivateKey), 5)
+		ethDeployer, err := ethdeployer.NewDeployer(exposedChainRPC, privKey, 5)
 		require.NoError(t, err, "failed to get eth deployer")
 
 		// Deploy Token and Escrow contracts
@@ -654,6 +652,13 @@ func (k *kwilNode) JSONRPCEndpoint(t *testing.T, ctx context.Context) (string, s
 	return kwildJSONRPCEndpoints(container, ctx)
 }
 
+// PeerID returns the peer ID of the node.
+// This is of the format <hexPubKey#keyType>
+func (k *kwilNode) PeerID() string {
+	pubkey := k.PrivateKey().Public()
+	return fmt.Sprintf("%s#%d", hex.EncodeToString(pubkey.Bytes()), pubkey.Type())
+}
+
 type KwilNode interface {
 	PrivateKey() *crypto.Secp256k1PrivateKey
 	PublicKey() *crypto.Secp256k1PublicKey
@@ -662,4 +667,5 @@ type KwilNode interface {
 	JSONRPCEndpoint(t *testing.T, ctx context.Context) (exposed string, unexposed string, err error)
 	JSONRPCClient(t *testing.T, ctx context.Context, opts *ClientOptions) JSONRPCClient
 	AdminClient(t *testing.T, ctx context.Context) *AdminClient
+	PeerID() string
 }

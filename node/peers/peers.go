@@ -794,6 +794,9 @@ func (pm *PeerMan) Disallow(p peer.ID) {
 	delete(pm.persistentWhitelist, p)
 	pm.wlMtx.Unlock()
 	pm.cg.Disallow(p)
+
+	// Disconnect the peer if it is connected
+	pm.removePeer(p)
 }
 
 func (pm *PeerMan) IsAllowed(p peer.ID) bool {

@@ -28,7 +28,7 @@ type ConsensusEngine interface {
 
 	NotifyDiscoveryMessage(validatorPK []byte, height int64)
 
-	Start(ctx context.Context, fns consensus.BroadcastFns) error
+	Start(ctx context.Context, fns consensus.BroadcastFns, peerFns consensus.WhitelistFns) error
 
 	CheckTx(ctx context.Context, tx *ktypes.Transaction) error
 	BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (*ktypes.ResultBroadcastTx, error)

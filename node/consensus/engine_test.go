@@ -52,6 +52,11 @@ var (
 		DiscoveryReqBroadcaster: mockDiscoveryBroadcaster,
 		TxBroadcaster:           nil,
 	}
+
+	peerFns = WhitelistFns{
+		AddPeer:    mockAddPeer,
+		RemovePeer: mockRemovePeer,
+	}
 )
 
 // leaderDB is set assigns DB to the leader, else DB is assigned to the follower
@@ -617,7 +622,7 @@ func TestValidatorStateMachine(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				val.Start(ctx, broadcastFns)
+				val.Start(ctx, broadcastFns, peerFns)
 			}()
 
 			t.Cleanup(func() {
@@ -692,7 +697,7 @@ func TestCELeaderSingleNode(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		leader.Start(ctx, broadcastFns)
+		leader.Start(ctx, broadcastFns, peerFns)
 	}()
 
 	t.Cleanup(func() {
@@ -717,7 +722,7 @@ func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		n1.Start(ctx, broadcastFns)
+		n1.Start(ctx, broadcastFns, peerFns)
 	}()
 
 	t.Cleanup(func() {
@@ -782,7 +787,7 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 
 	go func() {
 		defer wg.Done()
-		n1.Start(ctx, broadcastFns)
+		n1.Start(ctx, broadcastFns, peerFns)
 	}()
 
 	n1.bestHeightCh <- &discoveryMsg{
@@ -875,8 +880,8 @@ func (d *dummyTxApp) Execute(ctx *common.TxContext, db sql.DB, tx *ktypes.Transa
 	return &txapp.TxResponse{}
 }
 
-func (d *dummyTxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) error {
-	return nil
+func (d *dummyTxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) (aj, ej []*ktypes.AccountID, err error) {
+	return nil, nil, nil
 }
 
 func (d *dummyTxApp) Price(ctx context.Context, dbTx sql.DB, tx *ktypes.Transaction, chainContext *common.ChainContext) (*big.Int, error) {
@@ -1006,3 +1011,6 @@ func (m *mockMigrator) PersistLastChangesetHeight(ctx context.Context, tx sql.Ex
 func (m *mockMigrator) GetMigrationMetadata(ctx context.Context, status ktypes.MigrationStatus) (*ktypes.MigrationMetadata, error) {
 	return nil, nil
 }
+
+func mockAddPeer(string) error    { return nil }
+func mockRemovePeer(string) error { return nil }

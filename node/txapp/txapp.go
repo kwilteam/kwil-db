@@ -4,10 +4,13 @@ package txapp
 import (
 	"bytes"
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
 	"slices"
+	"strconv"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/config"
@@ -42,6 +45,10 @@ type TxApp struct {
 
 	// list of resolution types
 	resTypes []string // How do these get updated runtime?
+
+	// approvedJoins track the join requests approved by this node,
+	// reset after every commit
+	approvedJoins []*types.AccountID
 }
 
 // NewTxApp creates a new router.
@@ -151,16 +158,42 @@ func (r *TxApp) Execute(ctx *common.TxContext, db sql.DB, tx *types.Transaction)
 	}
 
 	r.service.Logger.Debug("executing transaction", "tx", tx)
+
+	// no need to error out if we cannot track the validator join approval
+	r.trackValidatorJoinApprovals(tx)
+
 	return route.Execute(ctx, r, db, tx)
+}
+
+// trackValidatorJoinApprovals tracks validator join approvals from this node.
+// This is used to add these validators to the peer whitelist.
+func (r *TxApp) trackValidatorJoinApprovals(tx *types.Transaction) {
+	if tx.Body.PayloadType != types.PayloadTypeValidatorApprove {
+		return
+	}
+
+	// only track approvals from this node
+	if !bytes.Equal(tx.Sender, r.signer.CompactID()) {
+		return
+	}
+
+	approve := &types.ValidatorApprove{}
+	if err := approve.UnmarshalBinary(tx.Body.Payload); err != nil {
+		return
+	}
+
+	r.approvedJoins = append(r.approvedJoins, &types.AccountID{
+		Identifier: approve.Candidate,
+		KeyType:    approve.KeyType,
+	})
 }
 
 // Finalize signals that a block has been finalized. No more changes can be
 // applied to the database.
-// Use ValidatorUpdates to get the pending validator updates *before* Commit is called.
-// TODO: Also send updates, so that the CE doesn't have to regenerate the updates.
-func (r *TxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) error {
-	if err := r.processVotes(ctx, db, block); err != nil {
-		return err
+func (r *TxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) (approvedJoins, expiredJoins []*types.AccountID, err error) {
+	expiredJoins, err = r.processVotes(ctx, db, block)
+	if err != nil {
+		return nil, nil, err
 	}
 
 	// end block hooks
@@ -173,11 +206,11 @@ func (r *TxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockCont
 			Validators: r.Validators,
 		}, block)
 		if err != nil {
-			return fmt.Errorf("error running end block hook: %w", err)
+			return nil, nil, fmt.Errorf("error running end block hook: %w", err)
 		}
 	}
 
-	return nil
+	return r.approvedJoins, expiredJoins, nil
 }
 
 // Commit signals that a block's state changes should be committed.
@@ -186,7 +219,7 @@ func (r *TxApp) Commit() error {
 	r.Validators.Commit()
 
 	r.mempool.reset()
-
+	r.approvedJoins = nil
 	return nil
 }
 
@@ -195,11 +228,12 @@ func (r *TxApp) Rollback() {
 	r.Validators.Rollback()
 
 	r.mempool.reset() // will issue recheck before next block
+	r.approvedJoins = nil
 }
 
 // processVotes confirms resolutions that have been approved by the network,
 // expires resolutions that have expired, and properly credits proposers and voters.
-func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.BlockContext) error {
+func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.BlockContext) ([]*types.AccountID, error) {
 	credits := make(creditMap)
 
 	var finalizedIDs []*types.UUID
@@ -217,18 +251,18 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 
 	totalPower, err := r.validatorSetPower()
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	for _, resolutionType := range r.resTypes {
 		cfg, err := resolutions.GetResolution(resolutionType)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		finalized, err := getResolutionsByThresholdAndType(ctx, db, cfg.ConfirmationThreshold, resolutionType, totalPower)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		for _, resolution := range finalized {
@@ -256,7 +290,7 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 
 		tx, err := db.BeginTx(ctx)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		err = resolveFunc.ResolveFunc(ctx, &common.App{
@@ -269,7 +303,7 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 		if err != nil {
 			err2 := tx.Rollback(ctx)
 			if err2 != nil {
-				return fmt.Errorf("error rolling back transaction: %s, error: %s", err.Error(), err2.Error())
+				return nil, fmt.Errorf("error rolling back transaction: %s, error: %s", err.Error(), err2.Error())
 			}
 
 			// if the resolveFunc fails, we should still continue on, since it simply means
@@ -280,30 +314,43 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 
 		err = tx.Commit(ctx)
 		if err != nil {
-			return err
+			return nil, err
 		}
 	}
 
 	// now we will expire resolutions
 	expired, err := getExpired(ctx, db, block.Height)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	expiredIDs := make([]*types.UUID, 0, len(expired))
 	requiredPowerMap := make(map[string]int64) // map of resolution type to required power
 
+	expiredJoins := make([]*types.AccountID, 0)
 	for _, resolution := range expired {
 		expiredIDs = append(expiredIDs, resolution.ID)
 		if resolution.Type != voting.ValidatorJoinEventType && resolution.Type != voting.ValidatorRemoveEventType {
 			markProcessedIDs = append(markProcessedIDs, resolution.ID)
 		}
 
+		if resolution.Type == voting.ValidatorJoinEventType {
+			req := &voting.UpdatePowerRequest{}
+			if err := req.UnmarshalBinary(resolution.Body); err != nil {
+				return nil, fmt.Errorf("failed to unmarshal join request: %w", err)
+			}
+
+			expiredJoins = append(expiredJoins, &types.AccountID{
+				Identifier: req.PubKey,
+				KeyType:    req.PubKeyType,
+			})
+		}
+
 		threshold, ok := requiredPowerMap[resolution.Type]
 		if !ok {
 			cfg, err := resolutions.GetResolution(resolution.Type)
 			if err != nil {
-				return err
+				return nil, err
 			}
 
 			// we need to use each configured resolutions refund threshold
@@ -321,12 +368,12 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 	allIDs := append(finalizedIDs, expiredIDs...)
 	err = deleteResolutions(ctx, db, allIDs...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	err = markProcessed(ctx, db, markProcessedIDs...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// This is to ensure that the nodes that never get to vote on this event due to limitation
@@ -334,26 +381,45 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 	// So this is handled instead when the nodes are approved.
 	err = deleteEvents(ctx, db, markProcessedIDs...)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	// now we will apply credits if gas is enabled.
 	// Since it is a map, we need to order it for deterministic results.
 	if !block.ChainContext.NetworkParameters.DisabledGasCosts {
 		for _, kv := range order.OrderMap(credits) {
-			acct := &types.AccountID{}
-			if err = acct.UnmarshalBinary([]byte(kv.Key)); err != nil {
-				return fmt.Errorf("error decoding account id from CreditMap key %s : %w", kv.Key, err)
+			parts := strings.Split(kv.Key, "#")
+			if len(parts) != 2 {
+				return nil, fmt.Errorf("invalid key in credit map: %s", kv.Key)
+			}
+
+			pubKey, err := hex.DecodeString(parts[0])
+			if err != nil {
+				return nil, fmt.Errorf("failed to decode public key: %w", err)
+			}
+
+			keyTypeInt, err := strconv.ParseInt(parts[1], 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("failed to parse key type: %w", err)
+			}
+			keyType := crypto.KeyType(keyTypeInt)
+			if !keyType.Valid() {
+				return nil, fmt.Errorf("invalid key type: %d", keyType)
+			}
+
+			acct := &types.AccountID{
+				Identifier: pubKey,
+				KeyType:    keyType,
 			}
 
 			err = r.Accounts.Credit(ctx, db, acct, kv.Value)
 			if err != nil {
-				return err
+				return nil, err
 			}
 		}
 	}
 
-	return nil
+	return expiredJoins, nil
 }
 
 var (

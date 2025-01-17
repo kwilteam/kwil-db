@@ -149,6 +149,13 @@ type BroadcastFns struct {
 	TxBroadcaster           blockprocessor.BroadcastTxFn
 }
 
+type WhitelistFns struct {
+	AddPeer    func(string) error
+	RemovePeer func(string) error
+
+	// List func() []string
+}
+
 // ProposalBroadcaster broadcasts the new block proposal message to the network
 type ProposalBroadcaster func(ctx context.Context, blk *ktypes.Block)
 
@@ -287,7 +294,7 @@ func New(cfg *Config) *ConsensusEngine {
 	return ce
 }
 
-func (ce *ConsensusEngine) Start(ctx context.Context, fns BroadcastFns) error {
+func (ce *ConsensusEngine) Start(ctx context.Context, fns BroadcastFns, peerFns WhitelistFns) error {
 	ce.proposalBroadcaster = fns.ProposalBroadcaster
 	ce.blkAnnouncer = fns.BlkAnnouncer
 	ce.ackBroadcaster = fns.AckBroadcaster
@@ -296,7 +303,7 @@ func (ce *ConsensusEngine) Start(ctx context.Context, fns BroadcastFns) error {
 	ce.discoveryReqBroadcaster = fns.DiscoveryReqBroadcaster
 	ce.txAnnouncer = fns.TxAnnouncer
 
-	ce.blockProcessor.SetBroadcastTxFn(fns.TxBroadcaster)
+	ce.blockProcessor.SetCallbackFns(fns.TxBroadcaster, peerFns.AddPeer, peerFns.RemovePeer)
 
 	ce.log.Info("Starting the consensus engine")
 	ctx, cancel := context.WithCancel(ctx)
