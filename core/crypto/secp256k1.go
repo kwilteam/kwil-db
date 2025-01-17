@@ -175,6 +175,8 @@ func (k *Secp256k1PublicKey) VerifyRaw(data, rawSig []byte) (success bool, err e
 		}
 	}()
 
+	panic("WAHAHAH")
+
 	if len(rawSig) == 65 {
 		// we choose `VerifySignature` since it doesn't care recovery ID
 		// it expects signature in 64 byte [R || S] format
