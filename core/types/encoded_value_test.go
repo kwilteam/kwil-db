@@ -129,7 +129,7 @@ func TestDecodeArrayTypes(t *testing.T) {
 
 	t.Run("decode blob array", func(t *testing.T) {
 		e := &EncodedValue{
-			Type: DataType{Name: BlobType.Name, IsArray: true},
+			Type: DataType{Name: ByteaType.Name, IsArray: true},
 			Data: [][]byte{{1, 2, 3}, {4, 5, 6}},
 		}
 		decoded, err := e.Decode()

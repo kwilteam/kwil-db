@@ -560,6 +560,24 @@ func TestQueryResultScanArrays(t *testing.T) {
 			expUUIDArr:      errTestAny,
 			expUUIDArrPtr:   errTestAny,
 		},
+		{
+			name:            "string array",
+			rawval:          []string{"1", "2", "3"},
+			expStringArr:    []string{"1", "2", "3"},
+			expStringArrPtr: ptrArr[string]("1", "2", "3"),
+			expInt64Arr:     []int64{1, 2, 3},
+			expInt64ArrPtr:  ptrArr[int64](int64(1), int64(2), int64(3)),
+			expIntArr:       []int{1, 2, 3},
+			expIntArrPtr:    ptrArr[int](1, 2, 3),
+			expBoolArr:      errTestAny,
+			expBoolArrPtr:   errTestAny,
+			expBytesArr:     [][]byte{[]byte("1"), []byte("2"), []byte("3")},
+			expBytesArrPtr:  ptrArr[[]byte]([]byte("1"), []byte("2"), []byte("3")),
+			expDecArr:       []Decimal{*MustParseDecimal("1"), *MustParseDecimal("2"), *MustParseDecimal("3")},
+			expDecArrPtr:    ptrArr[Decimal](*MustParseDecimal("1"), *MustParseDecimal("2"), *MustParseDecimal("3")),
+			expUUIDArr:      errTestAny,
+			expUUIDArrPtr:   errTestAny,
+		},
 	}
 
 	for _, tt := range tests {

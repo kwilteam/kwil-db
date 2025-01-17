@@ -48,10 +48,11 @@ func callCmd() *cobra.Command {
 	var gwAuth, logs bool
 
 	cmd := &cobra.Command{
-		Use:     "call <procedure_or_action> <parameter_1:value_1> <parameter_2:value_2> ...",
-		Short:   "Call a 'view' action, returning the result.",
-		Long:    callLong,
-		Example: callExample,
+		Use:        "call <procedure_or_action> <parameter_1:value_1> <parameter_2:value_2> ...",
+		Short:      "Call a 'view' action, returning the result.",
+		Long:       callLong,
+		Example:    callExample,
+		Deprecated: `Use "kwil-cli call-action" instead.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// AuthenticatedCalls specifies that the call should be authenticated with the private key
 			// if the call is made to the Kwild node with private mode enabled. Else, no authentication is required.

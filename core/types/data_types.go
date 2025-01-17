@@ -251,11 +251,11 @@ var (
 		Name: boolStr,
 	}
 	BoolArrayType = ArrayType(BoolType)
-	BlobType      = &DataType{
+	ByteaType     = &DataType{
 		Name: byteaStr,
 	}
-	BlobArrayType = ArrayType(BlobType)
-	UUIDType      = &DataType{
+	ByteaArrayType = ArrayType(ByteaType)
+	UUIDType       = &DataType{
 		Name: uuidStr,
 	}
 	UUIDArrayType = ArrayType(UUIDType)
