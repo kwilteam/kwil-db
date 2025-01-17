@@ -1,7 +1,13 @@
 package auth
 
 import (
+	"encoding/hex"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/kwilteam/kwil-db/core/crypto"
 )
 
 func Test_eip55ChecksumAddr(t *testing.T) {
@@ -37,6 +43,109 @@ func Test_eip55ChecksumAddr(t *testing.T) {
 			result := eip55ChecksumAddr(tt.input)
 			if result != tt.expected {
 				t.Errorf("checksumHex() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestEthSecp256k1AuthenticatorVerifyPositive(t *testing.T) {
+	// 	priv: a0505da852036821eb3df07e8f8ee1ebef5ce50034133ea038aee10c8b4c9111
+	// pub: 02f0a13ef50767acffd58328b4f69ef36866c4f350fe3fa6172598a883d03d501d
+	// priv, pub, _ := crypto.GenerateSecp256k1Key(nil)
+	// fmt.Printf("priv: %x\n", priv.Bytes())
+	// fmt.Printf("pub: %x\n", pub.Bytes())
+
+	privBts, _ := hex.DecodeString("a0505da852036821eb3df07e8f8ee1ebef5ce50034133ea038aee10c8b4c9111")
+	priv, _ := crypto.UnmarshalSecp256k1PrivateKey(privBts)
+
+	msg := []byte("test message")
+
+	signer := GetUserSigner(priv)
+
+	authnr := GetAuthenticator(signer.AuthType()) // nolint:misspell
+	if _, is := authnr.(EthSecp256k1Authenticator); !is {
+		t.Errorf("expected EthSecp256k1Authenticator, got %T", authnr)
+	}
+
+	sig, err := signer.Sign(msg)
+	require.NoError(t, err)
+
+	authnr = GetAuthenticator(sig.Type)
+	if _, is := authnr.(EthSecp256k1Authenticator); !is {
+		t.Errorf("expected EthSecp256k1Authenticator, got %T", authnr)
+	}
+
+	err = authnr.Verify(signer.CompactID(), msg, sig.Data)
+	require.NoError(t, err)
+
+	// now pretend to be metamask
+	sig.Data[crypto.RecoveryIDOffset] += 27
+
+	err = authnr.Verify(signer.CompactID(), msg, sig.Data)
+	require.NoError(t, err)
+}
+
+func TestEthSecp256k1AuthenticatorVerifyNegative(t *testing.T) {
+	tests := []struct {
+		name      string
+		identity  []byte
+		msg       []byte
+		signature []byte
+		wantErr   bool
+		errMsg    string
+	}{
+		{
+			name:      "Invalid recovery ID",
+			identity:  []byte{0x1, 0x2, 0x3, 0x4},
+			msg:       []byte("test message"),
+			signature: []byte{0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 29}, // recovery ID 29 is invalid
+			wantErr:   true,
+			errMsg:    "recovery",
+		},
+		{
+			name:      "Empty message",
+			identity:  []byte{0x1, 0x2, 0x3, 0x4},
+			msg:       []byte{},
+			signature: make([]byte, 65),
+			wantErr:   true,
+			errMsg:    "invalid signature",
+		},
+		{
+			name:      "Short signature",
+			identity:  []byte{0x1, 0x2, 0x3, 0x4},
+			msg:       []byte("test message"),
+			signature: []byte{0x1, 0x2, 0x3},
+			wantErr:   true,
+			errMsg:    "invalid signature length",
+		},
+		{
+			name:      "Identity mismatch",
+			identity:  make([]byte, 20),
+			msg:       []byte("test message"),
+			signature: make([]byte, 65),
+			wantErr:   true,
+			errMsg:    "invalid signature",
+		},
+		{
+			name:      "Empty identity",
+			identity:  []byte{},
+			msg:       []byte("test message"),
+			signature: make([]byte, 65),
+			wantErr:   true,
+			errMsg:    "invalid signature",
+		},
+	}
+
+	auth := EthSecp256k1Authenticator{}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := auth.Verify(tt.identity, tt.msg, tt.signature)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				require.NoError(t, err)
 			}
 		})
 	}
