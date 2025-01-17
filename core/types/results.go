@@ -185,36 +185,45 @@ func (qr *QueryResult) ExportToStringMap() []map[string]string {
 func (q *QueryResult) Scan(vals []any, fn func() error) error {
 
 	for _, row := range q.Values {
-		if len(row) != len(vals) {
-			return fmt.Errorf("expected %d columns, got %d", len(vals), len(row))
-		}
-
-		for j, col := range row {
-			// if the column val is nil, we skip it.
-			// If it is an array, we need to
-			typeOf := reflect.TypeOf(col)
-			if col == nil {
-				continue
-			} else if typeOf.Kind() == reflect.Slice && typeOf.Elem().Kind() != reflect.Uint8 {
-				if err := convertArray(col, vals[j]); err != nil {
-					return err
-				}
-				continue
-			} else if typeOf.Kind() == reflect.Slice && typeOf.Elem().Kind() == reflect.Uint8 {
-				if err := convertScalar(col, vals[j]); err != nil {
-					return err
-				}
-				continue
-			} else if typeOf.Kind() == reflect.Map {
-				return fmt.Errorf("cannot scan value into map type: %T", vals[j])
-			} else {
-				if err := convertScalar(col, vals[j]); err != nil {
-					return err
-				}
-			}
+		if err := ScanTo(row, vals); err != nil {
+			return err
 		}
 		if err := fn(); err != nil {
 			return err
+		}
+	}
+
+	return nil
+}
+
+// ScanTo scans the src values into the dst values.
+func ScanTo(src []any, dst []any) error {
+	if len(src) != len(dst) {
+		return fmt.Errorf("expected %d columns, got %d", len(dst), len(src))
+	}
+
+	for j, col := range src {
+		// if the column val is nil, we skip it.
+		// If it is an array, we need to
+		typeOf := reflect.TypeOf(col)
+		if col == nil {
+			continue
+		} else if typeOf.Kind() == reflect.Slice && typeOf.Elem().Kind() != reflect.Uint8 {
+			if err := convertArray(col, dst[j]); err != nil {
+				return err
+			}
+			continue
+		} else if typeOf.Kind() == reflect.Slice && typeOf.Elem().Kind() == reflect.Uint8 {
+			if err := convertScalar(col, dst[j]); err != nil {
+				return err
+			}
+			continue
+		} else if typeOf.Kind() == reflect.Map {
+			return fmt.Errorf("cannot scan value into map type: %T", dst[j])
+		} else {
+			if err := convertScalar(col, dst[j]); err != nil {
+				return err
+			}
 		}
 	}
 
