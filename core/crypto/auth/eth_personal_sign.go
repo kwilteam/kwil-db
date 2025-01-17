@@ -1,11 +1,10 @@
 package auth
 
 import (
-	"bytes"
 	"encoding/hex"
 	"fmt"
 
-	"github.com/kwilteam/kwil-db/core/crypto"
+	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -62,16 +61,29 @@ func eip55ChecksumAddr(addr [20]byte) string {
 // Verify verifies applies the Ethereum TextHash digest and verifies the signature
 func (EthSecp256k1Authenticator) Verify(identity []byte, msg []byte, signature []byte) error {
 	hash := textHash(msg)
-	pubkey, err := crypto.RecoverSecp256k1KeyFromSigHash(hash, signature)
-	if err != nil {
-		return err
+
+	if len(signature) == 65 {
+		signature = signature[:64]
 	}
 
-	addr := crypto.EthereumAddressFromPubKey(pubkey)
-
-	if !bytes.Equal(addr, identity) {
-		return fmt.Errorf("invalid signature: expected address %x, received %x", identity, addr)
+	if !ethCrypto.VerifySignature(identity, hash, signature) {
+		return fmt.Errorf("invalid signature")
 	}
 
 	return nil
+
+	/*
+		pubkey, err := crypto.RecoverSecp256k1KeyFromSigHash(hash, signature)
+		if err != nil {
+			return err
+		}
+
+		addr := crypto.EthereumAddressFromPubKey(pubkey)
+
+		if !bytes.Equal(addr, identity) {
+			return fmt.Errorf("invalid signature: expected address %x, received %x", identity, addr)
+		}
+
+		return nil
+	*/
 }
