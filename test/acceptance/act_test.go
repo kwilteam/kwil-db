@@ -5,6 +5,8 @@ import (
 	_ "embed"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/test"
 	"github.com/kwilteam/kwil-db/test/setup"
 	"github.com/stretchr/testify/require"
@@ -16,23 +18,38 @@ import (
 // - type roundtripping
 // - private rpc
 
-const dbOwner = "db_owner"
+var (
+	//go:embed users.sql
+	usersSchema  string
+	UserPrivkey1 = func() *crypto.Secp256k1PrivateKey {
+		privk, err := crypto.Secp256k1PrivateKeyFromHex("f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e")
+		if err != nil {
+			panic(err)
+		}
+		return privk
+	}()
+)
 
 // setupSingleNodeClient creates a single node network for testing,
 // and returns the client
 func setupSingleNodeClient(t *testing.T, ctx context.Context, d setup.ClientDriver, usingKGW bool) setup.JSONRPCClient {
 	t.Helper()
 
+	ident, err := auth.EthSecp256k1Authenticator{}.Identifier(crypto.EthereumAddressFromPubKey(UserPrivkey1.Public().(*crypto.Secp256k1PublicKey)))
+	require.NoError(t, err)
+
 	testnet := setup.SetupTests(t, &setup.TestConfig{
 		ClientDriver: d,
 		Network: &setup.NetworkConfig{
+			DBOwner: ident,
 			Nodes: []*setup.NodeConfig{
 				setup.DefaultNodeConfig(),
 			},
 		},
 	})
 	return testnet.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
-		UsingKGW: usingKGW,
+		UsingKGW:   usingKGW,
+		PrivateKey: UserPrivkey1,
 	})
 }
 
@@ -88,9 +105,6 @@ func setupSingleNodeClient(t *testing.T, ctx context.Context, d setup.ClientDriv
 // 		})
 // 	}
 // }
-
-//go:embed users.sql
-var usersSchema string
 
 func Test_Engine(t *testing.T) {
 	for _, driver := range setup.AllDrivers {

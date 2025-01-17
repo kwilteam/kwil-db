@@ -23,12 +23,6 @@ import (
 	"github.com/testcontainers/testcontainers-go/wait"
 )
 
-var (
-	UserPubKey1  = "f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e"
-	UserPubKey2  = "43f149de89d64bf9a9099be19e1b1f7a4db784af8fa07caf6f08dc86ba65636b"
-	OwnerAddress = "0xc89D42189f0450C2b2c3c61f58Ec5d628176A1E7"
-)
-
 // TestConfig is the configuration for the test
 type TestConfig struct {
 	// REQUIRED: ClientDriver is the driver to use for the client
@@ -213,9 +207,12 @@ func DeployETHNode(t *testing.T, ctx context.Context, dockerName string) *EthNod
 
 	var deployers []*ethdeployer.Deployer
 
+	deployerPrivKey, _, err := crypto.GenerateSecp256k1Key(rand.Reader)
+	require.NoError(t, err, "failed to generate deployer private key")
+
 	// Deploy 2 escrow contracts
 	for i := range 2 {
-		ethDeployer, err := ethdeployer.NewDeployer(exposedChainRPC, UserPubKey1, 5)
+		ethDeployer, err := ethdeployer.NewDeployer(exposedChainRPC, deployerPrivKey.(*crypto.Secp256k1PrivateKey), 5)
 		require.NoError(t, err, "failed to get eth deployer")
 
 		// Deploy Token and Escrow contracts

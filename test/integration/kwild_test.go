@@ -22,7 +22,7 @@ import (
 var (
 	OwnerAddress = "0xc89D42189f0450C2b2c3c61f58Ec5d628176A1E7"
 	UserPrivkey1 = func() crypto.PrivateKey {
-		privk, _, err := crypto.GenerateSecp256k1Key(nil)
+		privk, err := crypto.Secp256k1PrivateKeyFromHex("f1aa5a7966c3863ccde3047f6a1e266cdc0c76b399e256b8fede92b1c69e4f4e")
 		if err != nil {
 			panic(err)
 		}
@@ -480,7 +480,7 @@ func TestSingleNodeKwildEthDepositsOracleIntegration(t *testing.T) {
 					nc.PrivateKey = privKey
 				}),
 			},
-			DBOwner: setup.OwnerAddress,
+			DBOwner: OwnerAddress,
 			ConfigureGenesis: func(genDoc *config.GenesisConfig) {
 				genDoc.DisabledGasCosts = false
 				alloc := config.GenesisAlloc{
@@ -565,7 +565,7 @@ func TestKwildEthDepositFundTransfer(t *testing.T) {
 					nc.PrivateKey = privKey
 				}),
 			},
-			DBOwner: setup.OwnerAddress,
+			DBOwner: OwnerAddress,
 			ConfigureGenesis: func(genDoc *config.GenesisConfig) {
 				genDoc.DisabledGasCosts = false
 				alloc := config.GenesisAlloc{
@@ -659,7 +659,7 @@ func TestKwildEthDepositOracleValidatorUpdates(t *testing.T) {
 					nc.PrivateKey = validators[2]
 				}),
 			},
-			DBOwner: setup.OwnerAddress,
+			DBOwner: OwnerAddress,
 			ConfigureGenesis: func(genDoc *config.GenesisConfig) {
 				genDoc.DisabledGasCosts = true
 			},
@@ -796,7 +796,7 @@ func TestKwildEthDepositOracleValidatorUpdates(t *testing.T) {
 // 					nc.PrivateKey = validators[3]
 // 				}),
 // 			},
-// 			DBOwner: setup.OwnerAddress,
+// 			DBOwner: OwnerAddress,
 // 			ConfigureGenesis: func(genDoc *config.GenesisConfig) {
 // 				genDoc.DisabledGasCosts = false
 // 				genDoc.VoteExpiry = 10
@@ -888,7 +888,7 @@ func TestKwildEthDepositOracleValidatorUpdates(t *testing.T) {
 // 					nc.PrivateKey = validators[3]
 // 				}),
 // 			},
-// 			DBOwner: setup.OwnerAddress,
+// 			DBOwner: OwnerAddress,
 // 			ConfigureGenesis: func(genDoc *config.GenesisConfig) {
 // 				genDoc.DisabledGasCosts = false
 // 				genDoc.VoteExpiry = 10

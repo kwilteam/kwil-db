@@ -3,6 +3,7 @@ package crypto
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -32,6 +33,16 @@ func GenerateSecp256k1Key(src io.Reader) (PrivateKey, PublicKey, error) {
 
 	k := (*Secp256k1PrivateKey)(privk)
 	return k, k.Public(), nil
+}
+
+// Secp256k1PrivateKeyFromHex returns a private key from a hex string.
+func Secp256k1PrivateKeyFromHex(hexStr string) (k *Secp256k1PrivateKey, err error) {
+	key, err := hex.DecodeString(hexStr)
+	if err != nil {
+		return nil, err
+	}
+
+	return UnmarshalSecp256k1PrivateKey(key)
 }
 
 // UnmarshalSecp256k1PrivateKey returns a private key from the key's raw bytes.

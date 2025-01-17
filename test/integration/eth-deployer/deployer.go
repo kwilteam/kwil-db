@@ -13,6 +13,7 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 	ec "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/test/integration/eth-deployer/contracts"
 	"github.com/stretchr/testify/require"
 )
@@ -33,14 +34,14 @@ type Deployer struct {
 }
 
 // NewDeployer("ws://localhost:8545","dd23ca549a97cb330b011aebb674730df8b14acaee42d211ab45692699ab8ba5")
-func NewDeployer(endpoint, secp256k1PrivKey string, chainID int64) (*Deployer, error) {
+func NewDeployer(endpoint string, secp256k1PrivKey *crypto.Secp256k1PrivateKey, chainID int64) (*Deployer, error) {
 	ctx := context.Background()
 	ethClient, err := ethclient.DialContext(ctx, endpoint)
 	if err != nil {
 		return nil, err
 	}
 
-	privKey, err := ec.HexToECDSA(secp256k1PrivKey)
+	privKey, err := ec.HexToECDSA(secp256k1PrivKey.Key.String())
 	if err != nil {
 		return nil, err
 	}
