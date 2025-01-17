@@ -10,7 +10,6 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/pg"
@@ -268,7 +267,7 @@ func Test_built_in_sql(t *testing.T) {
 						"strarr":  mustNewVal([]string{"a", "b", "c"}),
 						"intarr":  mustNewVal([]int{1, 2, 3}),
 						"boolarr": mustNewVal([]bool{true, false, true}),
-						"decarr":  mustNewVal([]*decimal.Decimal{mustDec("1.23"), mustDec("4.56")}),
+						"decarr":  mustNewVal([]*types.Decimal{mustDec("1.23"), mustDec("4.56")}),
 						"uuidarr": mustNewVal([]*types.UUID{mustUUID("c7b6a54c-392c-48f9-803d-31cb97e76052"), mustUUID("c7b6a54c-392c-48f9-803d-31cb97e76053")}),
 						"blobarr": mustNewVal([][]byte{{1, 2, 3}, {4, 5, 6}}),
 					}

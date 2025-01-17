@@ -17,12 +17,10 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgtype"
+	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/types/decimal"
-	"github.com/kwilteam/kwil-db/node/types/sql"
 )
 
 func TestMain(m *testing.M) {
@@ -142,7 +140,7 @@ func TestQueryRowFunc(t *testing.T) {
 		reflect.TypeFor[*pgtype.Int8](),
 		reflect.TypeFor[*pgtype.Text](),
 		reflect.TypeFor[*[]uint8](),
-		reflect.TypeFor[*decimal.Decimal](),
+		reflect.TypeFor[*types.Decimal](),
 		reflect.TypeFor[*pgtype.Array[pgtype.Int8]](),
 		reflect.TypeFor[*types.Uint256](),
 		reflect.TypeFor[*types.Uint256Array](),
@@ -162,7 +160,7 @@ func TestQueryRowFunc(t *testing.T) {
 
 	// Then use QueryRowFunc with the scan vals.
 
-	wantDec, err := decimal.NewFromString("12.500") // numeric(x,3)!
+	wantDec, err := types.ParseDecimal("12.500") // numeric(x,3)!
 	require.NoError(t, err)
 	if wantDec.Scale() != 3 {
 		t.Fatalf("scale of decimal does not match column def: %v", wantDec)
@@ -291,7 +289,7 @@ func TestScanVal(t *testing.T) {
 	var ba []byte
 	var i8 pgtype.Int8
 	var txt pgtype.Text
-	var num decimal.Decimal // pgtype.Numeric
+	var num types.Decimal // pgtype.Numeric
 	var u256 types.Uint256
 
 	// want pointers to these slices for array types
@@ -302,7 +300,7 @@ func TestScanVal(t *testing.T) {
 	var ia pgtype.Array[pgtype.Int8]
 	var ta pgtype.Array[pgtype.Text]
 	var baa pgtype.Array[[]byte]
-	var na decimal.DecimalArray // pgtype.Array[pgtype.Numeric]
+	var na types.DecimalArray // pgtype.Array[pgtype.Numeric]
 	var u256a types.Uint256Array
 
 	wantScans := []any{&i8, &i8, &txt, &ba, &num, &u256,
@@ -351,11 +349,11 @@ func TestQueryRowFuncAny(t *testing.T) {
 		reflect.TypeFor[int64](),
 		reflect.TypeFor[string](),
 		reflect.TypeFor[[]byte](),
-		reflect.TypeFor[*decimal.Decimal](),
+		reflect.TypeFor[*types.Decimal](),
 		reflect.TypeFor[[]int64](),
 	}
-	mustDec := func(s string) *decimal.Decimal {
-		d, err := decimal.NewFromString(s)
+	mustDec := func(s string) *types.Decimal {
+		d, err := types.ParseDecimal(s)
 		require.NoError(t, err)
 		return d
 	}
@@ -864,8 +862,8 @@ func TestTypeRoundtrip(t *testing.T) {
 		},
 		{
 			typ:  "decimal(6,4)[]",
-			val:  decimal.DecimalArray{mustDecimal("12.4223"), mustDecimal("22.4425"), mustDecimal("23.7423")},
-			want: decimal.DecimalArray{mustDecimal("12.4223"), mustDecimal("22.4425"), mustDecimal("23.7423")},
+			val:  types.DecimalArray{mustDecimal("12.4223"), mustDecimal("22.4425"), mustDecimal("23.7423")},
+			want: types.DecimalArray{mustDecimal("12.4223"), mustDecimal("22.4425"), mustDecimal("23.7423")},
 		},
 		{
 			typ:  "uint256[]",
@@ -967,8 +965,8 @@ func TestTypeRoundtrip(t *testing.T) {
 }
 
 // mustDecimal panics if the string cannot be converted to a decimal.
-func mustDecimal(s string) *decimal.Decimal {
-	d, err := decimal.NewFromString(s)
+func mustDecimal(s string) *types.Decimal {
+	d, err := types.ParseDecimal(s)
 	if err != nil {
 		panic(err)
 	}
@@ -1053,12 +1051,12 @@ func Test_Changesets(t *testing.T) {
 			val2:      []byte("world"),
 			arrayVal2: [][]byte{[]byte("d"), []byte("e"), []byte("f")},
 		},
-		&changesetTestcase[*decimal.Decimal, decimal.DecimalArray]{
+		&changesetTestcase[*types.Decimal, types.DecimalArray]{
 			datatype:  "decimal(6,3)",
 			val:       mustDecimal("123.456"),
-			arrayVal:  decimal.DecimalArray{mustDecimal("123.456"), mustDecimal("123.456"), mustDecimal("123.456")},
+			arrayVal:  types.DecimalArray{mustDecimal("123.456"), mustDecimal("123.456"), mustDecimal("123.456")},
 			val2:      mustDecimal("123.457"),
-			arrayVal2: decimal.DecimalArray{mustDecimal("123.457"), mustDecimal("123.457"), mustDecimal("123.457")},
+			arrayVal2: types.DecimalArray{mustDecimal("123.457"), mustDecimal("123.457"), mustDecimal("123.457")},
 		},
 		&changesetTestcase[*types.UUID, types.UUIDArray]{
 			datatype:  "uuid",
@@ -1631,7 +1629,7 @@ func Test_ParseUnixTimestamp(t *testing.T) {
 	require.Len(t, res.Rows, 1)
 	require.Len(t, res.Rows[0], 1)
 
-	expected, err := decimal.NewFromString("1718114052.123456")
+	expected, err := types.ParseDecimal("1718114052.123456")
 	require.NoError(t, err)
 
 	require.EqualValues(t, expected, res.Rows[0][0])

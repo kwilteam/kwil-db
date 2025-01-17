@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/engine/parse"
 )
@@ -1130,7 +1129,7 @@ func formatPGLiteral(value any) (string, error) {
 		str.WriteString(v.String())
 	case *types.Uint256:
 		str.WriteString(v.String())
-	case *decimal.Decimal:
+	case *types.Decimal:
 		str.WriteString(v.String())
 	case bool: // for bool type
 		if v {

@@ -10,7 +10,6 @@ import (
 
 	antlr "github.com/antlr4-go/antlr/v4"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/core/types/validation"
 	"github.com/kwilteam/kwil-db/node/engine/parse/gen"
 )
@@ -287,7 +286,7 @@ func (s *schemaVisitor) VisitDecimal_literal(ctx *gen.Decimal_literalContext) an
 	// our decimal library can parse the decimal, so we simply pass it there
 	txt := ctx.GetText()
 
-	dec, err := decimal.NewFromString(txt)
+	dec, err := types.ParseDecimal(txt)
 	if err != nil {
 		s.errs.RuleErr(ctx, err, "invalid decimal literal: %s", txt)
 		return unknownExpression(ctx)

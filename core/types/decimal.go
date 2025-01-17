@@ -2,7 +2,7 @@
 // It is mostly a wrapper around github.com/cockroachdb/apd/v3, with some
 // functionality that makes it easier to use in the context of Kwil. It enforces
 // certain semantics of Postgres's decimal, such as precision and scale.
-package decimal
+package types
 
 import (
 	"database/sql"
@@ -17,6 +17,8 @@ import (
 
 	"github.com/cockroachdb/apd/v3"
 )
+
+// TODO: we need to rename things to be decimal-specific now that this is in the types package
 
 var (
 	// context is the default context for the decimal.
@@ -46,7 +48,7 @@ type Decimal struct {
 
 // NewExplicit creates a new Decimal from a string, with an explicit precision and scale.
 // The precision must be between 1 and 1000, and the scale must be between 0 and precision.
-func NewExplicit(s string, precision, scale uint16) (*Decimal, error) {
+func NewExplicit(s string, precision, scale uint16) (*Decimal, error) { // TODO: rename to be decimal specific
 	dec := &Decimal{}
 
 	if err := dec.SetPrecisionAndScale(precision, scale); err != nil {
@@ -60,16 +62,25 @@ func NewExplicit(s string, precision, scale uint16) (*Decimal, error) {
 	return dec, nil
 }
 
-// NewFromString creates a new Decimal from a string. It automatically infers the precision and scale.
-func NewFromString(s string) (*Decimal, error) {
+// ParseDecimal creates a new Decimal from a string. It automatically infers the precision and scale.
+func ParseDecimal(s string) (*Decimal, error) {
 	inferredPrecision, inferredScale := inferPrecisionAndScale(s)
 
 	return NewExplicit(s, inferredPrecision, inferredScale)
 }
 
+// MustParseDecimal is like ParseDecimal but panics if the string cannot be parsed.
+func MustParseDecimal(s string) *Decimal {
+	dec, err := ParseDecimal(s)
+	if err != nil {
+		panic(err)
+	}
+	return dec
+}
+
 // NewFromBigInt creates a new Decimal from a big.Int and an exponent.
 // The negative of the exponent is the scale of the decimal.
-func NewFromBigInt(i *big.Int, exp int32) (*Decimal, error) {
+func NewFromBigInt(i *big.Int, exp int32) (*Decimal, error) { // TODO: rename to be decimal specific
 	if exp > 0 {
 		i2 := big.NewInt(10)
 		i2.Exp(i2, big.NewInt(int64(exp)), nil)
@@ -106,7 +117,7 @@ func NewFromBigInt(i *big.Int, exp int32) (*Decimal, error) {
 }
 
 // NewNaN creates a new NaN Decimal.
-func NewNaN() *Decimal {
+func NewNaN() *Decimal { // TODO: rename to be decimal specific
 	return &Decimal{
 		dec: apd.Decimal{
 			Form: apd.NaN,
@@ -340,7 +351,7 @@ func (d *Decimal) Scan(src interface{}) error {
 	}
 
 	// set scale and prec from the string
-	d2, err := NewFromString(s)
+	d2, err := ParseDecimal(s)
 	if err != nil {
 		return err
 	}

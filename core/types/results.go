@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"reflect"
+	"strconv"
 )
 
 type TxCode uint16
@@ -148,6 +150,12 @@ func (e *Event) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
+// CallResult is the result of a procedure call.
+type CallResult struct {
+	QueryResult *QueryResult `json:"query_result"`
+	Logs        []string     `json:"logs"`
+}
+
 // QueryResult is the result of a SQL query or action.
 type QueryResult struct {
 	ColumnNames []string    `json:"column_names"`
@@ -168,8 +176,229 @@ func (qr *QueryResult) ExportToStringMap() []map[string]string {
 	return res
 }
 
-// CallResult is the result of a procedure call.
-type CallResult struct {
-	QueryResult *QueryResult `json:"query_result"`
-	Logs        []string     `json:"logs"`
+// Scan scans a value from the query result.
+// It accepts a slice of pointers to values, and a function that will be called
+// for each row in the result set.
+// The passed values can be of type *string, *int64, *int, *bool, *[]byte, *UUID, *Decimal,
+// *[]string, *[]int64, *[]int, *[]bool, *[]*int64, *[]*int, *[]*bool, *[]*UUID, *[]*Decimal,
+// *[]UUID, *[]Decimal, *[][]byte, or *[]*[]byte.
+func (q *QueryResult) Scan(vals []any, fn func() error) error {
+
+	for _, row := range q.Values {
+		if len(row) != len(vals) {
+			return fmt.Errorf("expected %d columns, got %d", len(vals), len(row))
+		}
+
+		for j, col := range row {
+			// if the column val is nil, we skip it.
+			// If it is an array, we need to
+			typeOf := reflect.TypeOf(col)
+			if col == nil {
+				continue
+			} else if typeOf.Kind() == reflect.Slice && typeOf.Elem().Kind() != reflect.Uint8 {
+				if err := convertArray(col, vals[j]); err != nil {
+					return err
+				}
+				continue
+			} else if typeOf.Kind() == reflect.Slice && typeOf.Elem().Kind() == reflect.Uint8 {
+				if err := convertScalar(col, vals[j]); err != nil {
+					return err
+				}
+				continue
+			} else if typeOf.Kind() == reflect.Map {
+				return fmt.Errorf("cannot scan value into map type: %T", vals[j])
+			} else {
+				if err := convertScalar(col, vals[j]); err != nil {
+					return err
+				}
+			}
+		}
+		if err := fn(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func convertArray(src any, dst any) error {
+	arr, ok := src.([]any)
+	if !ok {
+		return fmt.Errorf("unexpected JSON array type: %T", src)
+	}
+
+	switch v := dst.(type) {
+	case *[]string:
+		return convArr(arr, v)
+	case *[]*string:
+		return convPtrArr(arr, v)
+	case *[]int64:
+		return convArr(arr, v)
+	case *[]int:
+		return convArr(arr, v)
+	case *[]bool:
+		return convArr(arr, v)
+	case *[]*int64:
+		return convPtrArr(arr, v)
+	case *[]*int:
+		return convPtrArr(arr, v)
+	case *[]*bool:
+		return convPtrArr(arr, v)
+	case *[]*UUID:
+		return convPtrArr(arr, v)
+	case *[]UUID:
+		return convArr(arr, v)
+	case *[]*Decimal:
+		return convPtrArr(arr, v)
+	case *[]Decimal:
+		return convArr(arr, v)
+	case *[][]byte:
+		return convArr(arr, v)
+	case *[]*[]byte:
+		return convPtrArr(arr, v)
+	default:
+		return fmt.Errorf("unexpected scan type: %T", dst)
+	}
+}
+
+func convArr[T any](src []any, dst *[]T) error {
+	dst2 := make([]T, len(src)) // we dont set the new slice to dst until we know we can convert all values
+	for i, val := range src {
+		if err := convertScalar(val, &dst2[i]); err != nil {
+			return err
+		}
+	}
+	*dst = dst2
+	return nil
+}
+
+func convPtrArr[T any](src []any, dst *[]*T) error {
+	dst2 := make([]*T, len(src)) // we dont set the new slice to dst until we know we can convert all values
+	for i, val := range src {
+		if val == nil {
+			continue
+		}
+
+		s := new(T)
+
+		err := convertScalar(val, s)
+		if err != nil {
+			return err
+		}
+
+		dst2[i] = s
+	}
+	*dst = dst2
+	return nil
+}
+
+// convertScalar converts a scalar value to the specified type.
+// It converts the source value to a string, then parses it into the specified type.
+func convertScalar(src any, dst any) error {
+	var null bool
+	if src == nil {
+		null = true
+	}
+	str, err := stringify(src)
+	if err != nil {
+		return err
+	}
+	switch v := dst.(type) {
+	case *string:
+		if null {
+			return nil
+		}
+		*v = str
+		return nil
+	case *int64:
+		if null {
+			return nil
+		}
+		i, err := strconv.ParseInt(str, 10, 64)
+		if err != nil {
+			return err
+		}
+		*v = i
+		return nil
+	case *int:
+		if null {
+			return nil
+		}
+		i, err := strconv.Atoi(str)
+		if err != nil {
+			return err
+		}
+		*v = i
+		return nil
+	case *bool:
+		if null {
+			return nil
+		}
+		b, err := strconv.ParseBool(str)
+		if err != nil {
+			return err
+		}
+		*v = b
+		return nil
+	case *[]byte:
+		if null {
+			return nil
+		}
+		*v = []byte(str)
+		return nil
+	case *UUID:
+		if null {
+			return nil
+		}
+
+		if len([]byte(str)) == 16 {
+			*v = UUID([]byte(str))
+			return nil
+		}
+
+		u, err := ParseUUID(str)
+		if err != nil {
+			return err
+		}
+		*v = *u
+		return nil
+	case *Decimal:
+		if null {
+			return nil
+		}
+
+		dec, err := ParseDecimal(str)
+		if err != nil {
+			return err
+		}
+		*v = *dec
+		return nil
+	default:
+		return fmt.Errorf("unexpected scan type: %T", dst)
+	}
+}
+
+// stringify converts a value as a string.
+// It only expects values returned from JSON marshalling.
+// It does NOT expect slices/arrays (except for []byte) or maps
+func stringify(v any) (str string, err error) {
+	switch val := v.(type) {
+	case string:
+		return val, nil
+	case []byte:
+		return string(val), nil
+	case int64:
+		return strconv.FormatInt(val, 10), nil
+	case int:
+		return strconv.Itoa(val), nil
+	case float64:
+		// TODO: we should probably protect against this within our client's JSON unmarshalling
+		return strconv.FormatFloat(val, 'f', -1, 64), nil
+	case bool:
+		return strconv.FormatBool(val), nil
+	case nil:
+		return "", nil
+	default:
+		return "", fmt.Errorf("unexpected type: %T", v)
+	}
 }

@@ -13,7 +13,6 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/engine/interpreter"
@@ -699,8 +698,8 @@ func Test_SQL(t *testing.T) {
 				for j, val := range row {
 					// if it is a numeric, we should do a special comparison
 					if test.results[i][j] != nil {
-						if decVal, ok := test.results[i][j].(*decimal.Decimal); ok {
-							cmp, err := decVal.Cmp(val.(*decimal.Decimal))
+						if decVal, ok := test.results[i][j].(*types.Decimal); ok {
+							cmp, err := decVal.Cmp(val.(*types.Decimal))
 							require.NoError(t, err)
 
 							require.Equal(t, 0, cmp)
@@ -780,7 +779,7 @@ func Test_Roundtrip(t *testing.T) {
 		{
 			name:     "decimal_array",
 			datatype: "DECIMAL(70,5)[]",
-			value:    []*decimal.Decimal{mustExplicitDecimal("100.101", 70, 5), mustExplicitDecimal("200.202", 70, 5)},
+			value:    []*types.Decimal{mustExplicitDecimal("100.101", 70, 5), mustExplicitDecimal("200.202", 70, 5)},
 		},
 		{
 			name:     "uuid_array",
@@ -2019,7 +2018,7 @@ func Test_Extensions(t *testing.T) {
 			{"bool_array", []bool{true}},
 			{"bytea_array", [][]byte{{1, 2, 3}}},
 			{"uuid_array", []*types.UUID{mustUUID("f47ac10b-58cc-4372-a567-0e02b2c3d479")}},
-			{"numeric_array", []*decimal.Decimal{mustExplicitDecimal("1.23", 10, 2)}},
+			{"numeric_array", []*types.Decimal{mustExplicitDecimal("1.23", 10, 2)}},
 		} {
 			err = adminCall("test_ext", "get_"+get.key, []any{get.key}, exact(get.value))
 			require.NoErrorf(t, err, "key: %s", get.key)
@@ -2480,8 +2479,8 @@ func eq(a, b any) error {
 	return nil
 }
 
-func mustExplicitDecimal(s string, prec, scale uint16) *decimal.Decimal {
-	d, err := decimal.NewExplicit(s, prec, scale)
+func mustExplicitDecimal(s string, prec, scale uint16) *types.Decimal {
+	d, err := types.NewExplicit(s, prec, scale)
 	if err != nil {
 		panic(err)
 	}

@@ -4,7 +4,6 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -153,8 +152,8 @@ func Test_Arithmetic(t *testing.T) {
 // It handles the semantics of comparing decimal values.
 func eq(t *testing.T, a, b any) {
 	// if the values are decimals, we need to compare them manually
-	if aDec, ok := a.(*decimal.Decimal); ok {
-		bDec, ok := b.(*decimal.Decimal)
+	if aDec, ok := a.(*types.Decimal); ok {
+		bDec, ok := b.(*types.Decimal)
 		require.True(t, ok)
 
 		rec, err := aDec.Cmp(bDec)
@@ -163,8 +162,8 @@ func eq(t *testing.T, a, b any) {
 		return
 	}
 
-	if aDec, ok := a.([]*decimal.Decimal); ok {
-		bDec, ok := b.([]*decimal.Decimal)
+	if aDec, ok := a.([]*types.Decimal); ok {
+		bDec, ok := b.([]*types.Decimal)
 		require.True(t, ok)
 
 		require.Len(t, aDec, len(bDec))
@@ -297,8 +296,8 @@ func Test_Comparison(t *testing.T) {
 		},
 		{
 			name:         "decimal-array",
-			a:            []*decimal.Decimal{mustDec("1.00"), mustDec("2.00"), mustDec("3.00")},
-			b:            []*decimal.Decimal{mustDec("1.00"), mustDec("2.00"), mustDec("3.00")},
+			a:            []*types.Decimal{mustDec("1.00"), mustDec("2.00"), mustDec("3.00")},
+			b:            []*types.Decimal{mustDec("1.00"), mustDec("2.00"), mustDec("3.00")},
 			eq:           true,
 			gt:           engine.ErrComparison,
 			lt:           engine.ErrComparison,
@@ -426,9 +425,9 @@ func Test_Cast(t *testing.T) {
 		blobArr    any
 	}
 
-	mDec := func(dec string) *decimal.Decimal {
+	mDec := func(dec string) *types.Decimal {
 		// all decimals will be precision 10, scale 5
-		d, err := decimal.NewFromString(dec)
+		d, err := types.ParseDecimal(dec)
 		require.NoError(t, err)
 
 		err = d.SetPrecisionAndScale(10, 5)
@@ -436,8 +435,8 @@ func Test_Cast(t *testing.T) {
 		return d
 	}
 
-	mDecArr := func(decimals ...string) []*decimal.Decimal {
-		var res []*decimal.Decimal
+	mDecArr := func(decimals ...string) []*types.Decimal {
+		var res []*types.Decimal
 		for _, dec := range decimals {
 			res = append(res, mDec(dec))
 		}
@@ -829,16 +828,16 @@ func ptrArr[T any](arr []T) []*T {
 	return res
 }
 
-func mustDec(dec string) *decimal.Decimal {
-	d, err := decimal.NewFromString(dec)
+func mustDec(dec string) *types.Decimal {
+	d, err := types.ParseDecimal(dec)
 	if err != nil {
 		panic(err)
 	}
 	return d
 }
 
-func mustExplicitDecimal(dec string, precision, scale uint16) *decimal.Decimal {
-	d, err := decimal.NewExplicit(dec, precision, scale)
+func mustExplicitDecimal(dec string, precision, scale uint16) *types.Decimal {
+	d, err := types.NewExplicit(dec, precision, scale)
 	if err != nil {
 		panic(err)
 	}

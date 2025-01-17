@@ -7,8 +7,6 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-
-	"github.com/kwilteam/kwil-db/core/types/decimal"
 )
 
 // DataType is a data type.
@@ -174,7 +172,7 @@ func (c *DataType) Clean() error {
 		if !c.HasMetadata() {
 			return fmt.Errorf("type %s requires metadata", c.Name)
 		}
-		err := decimal.CheckPrecisionAndScale(c.Metadata[0], c.Metadata[1])
+		err := CheckPrecisionAndScale(c.Metadata[0], c.Metadata[1])
 		if err != nil {
 			return err
 		}
@@ -309,7 +307,7 @@ const (
 
 // NewDecimalType creates a new fixed point decimal type.
 func NewDecimalType(precision, scale uint16) (*DataType, error) {
-	err := decimal.CheckPrecisionAndScale(precision, scale)
+	err := CheckPrecisionAndScale(precision, scale)
 	if err != nil {
 		return nil, err
 	}
