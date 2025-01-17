@@ -75,12 +75,20 @@ func (bp *BlockProcessor) updateBlockExecutionStatus(txID ktypes.Hash) {
 	bp.statusMu.Lock()
 	defer bp.statusMu.Unlock()
 
+	if bp.status == nil {
+		return
+	}
+
 	bp.status.txStatus[txID] = true
 }
 
 func (bp *BlockProcessor) recordBlockExecEndTime() {
 	bp.statusMu.Lock()
 	defer bp.statusMu.Unlock()
+
+	if bp.status == nil {
+		return
+	}
 
 	bp.status.endTime = time.Now()
 }

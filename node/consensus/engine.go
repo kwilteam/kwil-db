@@ -279,6 +279,11 @@ func New(cfg *Config) *ConsensusEngine {
 		txSubscribers:  make(map[ktypes.Hash]chan ktypes.TxResult),
 	}
 
+	// set it to sentry by default, will be updated in the catchup phase when the engine starts.
+	// Not initializing the role here will panic the node, as a lot of RPC calls such as HealthCheck,
+	// Status, etc. tries to access the role.
+	ce.role.Store(types.RoleSentry)
+
 	return ce
 }
 
@@ -292,9 +297,6 @@ func (ce *ConsensusEngine) Start(ctx context.Context, fns BroadcastFns) error {
 	ce.txAnnouncer = fns.TxAnnouncer
 
 	ce.blockProcessor.SetBroadcastTxFn(fns.TxBroadcaster)
-
-	// set it to sentry by default, will be updated in the catchup phase below
-	ce.role.Store(types.RoleSentry)
 
 	ce.log.Info("Starting the consensus engine")
 	ctx, cancel := context.WithCancel(ctx)

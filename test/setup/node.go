@@ -436,7 +436,7 @@ func runDockerCompose(ctx context.Context, t *testing.T, testCtx *testingContext
 		if t.Failed() {
 			t.Logf("Stopping but keeping containers for inspection after failed test: %v", dc.Services())
 			// cancel() // Stop, not Down, which would remove the containers too --- this doesn't work, dang
-			time.Sleep(10 * time.Minute)
+			time.Sleep(5 * time.Second)
 
 			// There is no dc.Stop, but there should be! Do this instead:
 			svcs := dc.Services()
