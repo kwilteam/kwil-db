@@ -392,12 +392,13 @@ func stringify(v any) (str string, err error) {
 	case int:
 		return strconv.Itoa(val), nil
 	case float64:
-		// TODO: we should probably protect against this within our client's JSON unmarshalling
 		return strconv.FormatFloat(val, 'f', -1, 64), nil
 	case bool:
 		return strconv.FormatBool(val), nil
 	case nil:
 		return "", nil
+	case float32:
+		return strconv.FormatFloat(float64(val), 'f', -1, 32), nil
 	default:
 		return "", fmt.Errorf("unexpected type: %T", v)
 	}

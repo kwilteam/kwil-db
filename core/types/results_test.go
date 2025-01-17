@@ -267,6 +267,28 @@ func TestQueryResultScanScalars(t *testing.T) {
 			expDec:    nil,
 			expUUID:   nil,
 		},
+		{
+			name:      "float",
+			rawval:    float64(123.456),
+			expString: "123.456",
+			expInt64:  strconv.ErrSyntax,
+			expInt:    strconv.ErrSyntax,
+			expBool:   strconv.ErrSyntax,
+			expBytes:  []byte("123.456"),
+			expDec:    *MustParseDecimal("123.456"),
+			expUUID:   errTestAny,
+		},
+		{
+			name:      "round float",
+			rawval:    float32(123),
+			expString: "123",
+			expInt64:  int64(123),
+			expInt:    int(123),
+			expBool:   strconv.ErrSyntax,
+			expBytes:  []byte("123"),
+			expDec:    *MustParseDecimal("123"),
+			expUUID:   errTestAny,
+		},
 	}
 
 	for _, tt := range tests {
@@ -519,6 +541,24 @@ func TestQueryResultScanArrays(t *testing.T) {
 			expDecArrPtr:    nil,
 			expUUIDArr:      nil,
 			expUUIDArrPtr:   nil,
+		},
+		{
+			name:            "float",
+			rawval:          []any{float64(123.456), float64(789), nil},
+			expStringArr:    []string{"123.456", "789", ""},
+			expStringArrPtr: ptrArr[string]("123.456", "789", nil),
+			expInt64Arr:     errTestAny,
+			expInt64ArrPtr:  errTestAny,
+			expIntArr:       errTestAny,
+			expIntArrPtr:    errTestAny,
+			expBoolArr:      errTestAny,
+			expBoolArrPtr:   errTestAny,
+			expBytesArr:     [][]byte{[]byte("123.456"), []byte("789"), nil},
+			expBytesArrPtr:  ptrArr[[]byte]([]byte("123.456"), []byte("789"), nil),
+			expDecArr:       []Decimal{*MustParseDecimal("123.456"), *MustParseDecimal("789"), {}},
+			expDecArrPtr:    ptrArr[Decimal](*MustParseDecimal("123.456"), *MustParseDecimal("789"), nil),
+			expUUIDArr:      errTestAny,
+			expUUIDArrPtr:   errTestAny,
 		},
 	}
 
