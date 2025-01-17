@@ -15,6 +15,7 @@ import (
 	"github.com/kwilteam/kwil-db/app/key"
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node"
@@ -45,7 +46,8 @@ type server struct {
 	jsonRPCAdminServer *rpcserver.Server
 }
 
-func runNode(ctx context.Context, rootDir string, cfg *config.Config, autogen bool) (err error) {
+func runNode(ctx context.Context, rootDir string, cfg *config.Config, autogen bool, dbOwner string) (err error) {
+	logOutputPaths := slices.Clone(cfg.LogOutput)
 	var logWriters []io.Writer
 	if idx := slices.Index(cfg.LogOutput, "stdout"); idx != -1 {
 		logWriters = append(logWriters, os.Stdout)
@@ -81,11 +83,11 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config, autogen bo
 
 	logger.Infof("Starting kwild version %v", version.KwilVersion)
 
-	genFile := rootedPath(config.GenesisFileName, rootDir)
+	genFile := config.GenesisFilePath(rootDir)
 
 	logger.Infof("Loading the genesis configuration from %s", genFile)
 
-	privKey, genConfig, err := loadGenesisAndPrivateKey(rootDir, autogen)
+	privKey, genConfig, err := loadGenesisAndPrivateKey(rootDir, autogen, dbOwner)
 	if err != nil {
 		return fmt.Errorf("failed to load genesis and private key: %w", err)
 	}
@@ -125,6 +127,7 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config, autogen bo
 	tomlFile := config.ConfigFilePath(rootDir)
 	if autogen && !fileExists(tomlFile) {
 		logger.Infof("Writing config file to %s", tomlFile)
+		cfg.LogOutput = logOutputPaths // restore log output paths before writing toml file
 		if err := cfg.SaveAs(tomlFile); err != nil {
 			return fmt.Errorf("failed to write config file: %w", err)
 		}
@@ -287,7 +290,7 @@ func readOrCreatePrivateKeyFile(rootDir string, autogen bool) (privKey crypto.Pr
 	return privKey, nil
 }
 
-func loadGenesisAndPrivateKey(rootDir string, autogen bool) (privKey crypto.PrivateKey, genCfg *config.GenesisConfig, err error) {
+func loadGenesisAndPrivateKey(rootDir string, autogen bool, dbOwner string) (privKey crypto.PrivateKey, genCfg *config.GenesisConfig, err error) {
 	privKey, err = readOrCreatePrivateKeyFile(rootDir, autogen)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to read or create private key: %w", err)
@@ -311,6 +314,18 @@ func loadGenesisAndPrivateKey(rootDir string, autogen bool) (privKey crypto.Priv
 		},
 		Power: 1,
 	})
+
+	if dbOwner != "" {
+		genCfg.DBOwner = dbOwner
+	} else {
+		signer := auth.GetUserSigner(privKey)
+		ident, err := auth.GetIdentifierFromSigner(signer)
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to get identifier from user signer: %w", err)
+		}
+		genCfg.DBOwner = ident
+	}
+
 	if err := genCfg.SaveAs(genFile); err != nil {
 		return nil, nil, fmt.Errorf("failed to write genesis file in autogen mode %s: %w", genFile, err)
 	}
