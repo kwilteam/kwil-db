@@ -8,7 +8,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/types/decimal"
 )
 
 func String(a any) (string, error) {
@@ -222,9 +221,9 @@ func Uint256(a any) (*types.Uint256, error) {
 		return types.Uint256FromBig(b)
 	case string:
 		return types.Uint256FromString(a)
-	case *decimal.Decimal:
+	case *types.Decimal:
 		return types.Uint256FromString(a.String())
-	case decimal.Decimal:
+	case types.Decimal:
 		return types.Uint256FromString(a.String())
 	case int, int8, int16, int32, int64:
 		return types.Uint256FromString(fmt.Sprint(a))
@@ -243,23 +242,23 @@ func Uint256(a any) (*types.Uint256, error) {
 }
 
 // Decimal converts a value to a Decimal.
-func Decimal(a any) (*decimal.Decimal, error) {
+func Decimal(a any) (*types.Decimal, error) {
 	switch a := a.(type) {
-	case *decimal.Decimal:
+	case *types.Decimal:
 		return a, nil
 	case string:
-		return decimal.NewFromString(a)
+		return types.ParseDecimal(a)
 	case *types.Uint256:
-		return decimal.NewFromString(a.String())
+		return types.ParseDecimal(a.String())
 	case types.Uint256:
-		return decimal.NewFromString(a.String())
+		return types.ParseDecimal(a.String())
 	case int, int8, int16, int32, int64:
-		return decimal.NewFromString(fmt.Sprint(a))
+		return types.ParseDecimal(fmt.Sprint(a))
 	case fmt.Stringer:
-		return decimal.NewFromString(a.String())
+		return types.ParseDecimal(a.String())
 	case nil:
 		// return decimal.NewFromBigInt(big.NewInt(0), 0)
-		return decimal.NewFromString("0")
+		return types.ParseDecimal("0")
 	}
 
 	str, err := String(a)
@@ -267,5 +266,5 @@ func Decimal(a any) (*decimal.Decimal, error) {
 		return nil, err
 	}
 
-	return decimal.NewFromString(str)
+	return types.ParseDecimal(str)
 }
