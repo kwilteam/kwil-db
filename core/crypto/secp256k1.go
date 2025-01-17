@@ -10,6 +10,7 @@ import (
 
 	"github.com/decred/dcrd/dcrec/secp256k1/v4"       // key/curve
 	"github.com/decred/dcrd/dcrec/secp256k1/v4/ecdsa" // signature algorithm
+	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"golang.org/x/crypto/sha3"
 )
 
@@ -174,21 +175,39 @@ func (k *Secp256k1PublicKey) VerifyRaw(data, rawSig []byte) (success bool, err e
 		}
 	}()
 
-	if len(rawSig) != 65 {
-		return false, errors.New("invalid signature length")
+	if len(rawSig) == 65 {
+		// we choose `VerifySignature` since it doesn't care recovery ID
+		// it expects signature in 64 byte [R || S] format
+		rawSig = rawSig[:len(rawSig)-1]
 	}
 
-	rawSig = rawSig[:RecoveryIDOffset]
+	if len(rawSig) != 64 {
+		return false, fmt.Errorf("secp256k1: invalid signature length: expected: 64 or 65, received: %d", len(rawSig))
+	}
 
-	var r, s secp256k1.ModNScalar
-	if r.SetByteSlice(rawSig[:32]) {
-		return false, errors.New("r value overflow")
+	if !ethCrypto.VerifySignature(k.Bytes(), data, rawSig) {
+		return false, nil
 	}
-	if s.SetByteSlice(rawSig[32:]) {
-		return false, errors.New("s value overflow")
-	}
-	sig := ecdsa.NewSignature(&r, &s)
-	return sig.Verify(data, (*secp256k1.PublicKey)(k)), nil
+
+	return true, nil
+	/*
+
+		if len(rawSig) != 65 {
+			return false, errors.New("invalid signature length")
+		}
+
+		rawSig = rawSig[:RecoveryIDOffset]
+
+		var r, s secp256k1.ModNScalar
+		if r.SetByteSlice(rawSig[:32]) {
+			return false, errors.New("r value overflow")
+		}
+		if s.SetByteSlice(rawSig[32:]) {
+			return false, errors.New("s value overflow")
+		}
+		sig := ecdsa.NewSignature(&r, &s)
+		return sig.Verify(data, (*secp256k1.PublicKey)(k)), nil
+	*/
 }
 
 // SignatureLength indicates the byte length required to carry a signature with recovery id.
