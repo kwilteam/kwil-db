@@ -396,6 +396,9 @@ func TestLongRunningNetworkMigrations(t *testing.T) {
 				}),
 			},
 			DBOwner: "0xabc",
+			ConfigureGenesis: func(genDoc *config.GenesisConfig) {
+				genDoc.ChainID = "kwil-test-chain2"
+			},
 		},
 		InitialServices:       []string{"new-node0", "new-node1", "new-node2", "new-pg0", "new-pg1", "new-pg2"}, // should bringup only node 0,1,2
 		ServicesPrefix:        "new-",
@@ -415,14 +418,16 @@ func TestLongRunningNetworkMigrations(t *testing.T) {
 	// time for node to do statesync and catchup
 	net2.RunServices(t, ctx, []*setup.ServiceDefinition{
 		setup.KwildServiceDefinition("new-node3"),
-		setup.KwildServiceDefinition("new-pg3"),
+		setup.PostgresServiceDefinition("new-pg3"),
 	})
 
 	// time for node to blocksync and catch up
 	time.Sleep(4 * time.Second)
 
 	// ensure that all nodes are in sync
-	info, err := net2.Nodes[3].JSONRPCClient(t, ctx, nil).ChainInfo(ctx)
+	info, err := net2.Nodes[3].JSONRPCClient(t, ctx, &setup.ClientOptions{
+		ChainID: "kwil-test-chain2",
+	}).ChainInfo(ctx)
 	require.NoError(t, err)
 	require.Greater(t, info.BlockHeight, uint64(50)) // TODO: height > 50 + migration height
 }
@@ -607,7 +612,7 @@ func TestKwildEthDepositOracleValidatorUpdates(t *testing.T) {
 	require.NoError(t, err)
 
 	var validators []*crypto.Secp256k1PrivateKey
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		privk, err := secp256k1.GeneratePrivateKeyFromRand(rand.Reader)
 		require.NoError(t, err)
 		privKey := (*crypto.Secp256k1PrivateKey)(privk)

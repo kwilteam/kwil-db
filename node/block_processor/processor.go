@@ -137,19 +137,7 @@ func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Account
 
 	networkParams, err := meta.LoadParams(ctx, tx)
 	if errors.Is(err, meta.ErrParamsNotFound) { // eh, genesis?
-		// infer migration status from the genesis config's migration parameters (why? could it be wrong?)
-		status := ktypes.NoActiveMigration
-		if migrationParams != nil {
-			status = ktypes.GenesisMigration
-		}
-
-		genesisNetParams := genesisCfg.NetworkParameters
-		networkParams = &genesisNetParams
-		networkParams.MigrationStatus = status
-
-		if err := meta.StoreParams(ctx, tx, networkParams); err != nil {
-			return nil, fmt.Errorf("failed to store the network parameters: %w", err)
-		}
+		bp.log.Debug("Network parameters not found in the database, expected if node is bootstrapping from genesis")
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to load the network parameters: %w", err)
 	}
@@ -382,6 +370,7 @@ func (bp *BlockProcessor) InitChain(ctx context.Context) (int64, []byte, error) 
 	if err := meta.StoreParams(ctx, genesisTx, &genCfg.NetworkParameters); err != nil {
 		return -1, nil, fmt.Errorf("error storing the genesis network parameters: %w", err)
 	}
+	bp.chainCtx.NetworkParameters = &genCfg.NetworkParameters
 
 	if err := bp.txapp.Commit(); err != nil {
 		return -1, nil, fmt.Errorf("txapp commit failed: %w", err)
@@ -861,13 +850,19 @@ func (bp *BlockProcessor) ConsensusParams() *ktypes.NetworkParameters {
 	bp.mtx.RLock()
 	defer bp.mtx.RUnlock()
 
+	if bp.chainCtx.NetworkParameters == nil {
+		return nil
+	}
+
 	return bp.chainCtx.NetworkParameters.Clone()
 }
 
 func (bp *BlockProcessor) GetMigrationMetadata(ctx context.Context) (*ktypes.MigrationMetadata, error) {
-	bp.mtx.RLock()
-	status := bp.chainCtx.NetworkParameters.MigrationStatus
-	bp.mtx.RUnlock()
+	networkParams := bp.ConsensusParams()
+	if networkParams == nil {
+		return nil, fmt.Errorf("network parameters not found, node is still booting up, try again later")
+	}
 
+	status := networkParams.MigrationStatus
 	return bp.migrator.GetMigrationMetadata(ctx, status)
 }

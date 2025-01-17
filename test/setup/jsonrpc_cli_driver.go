@@ -27,6 +27,7 @@ import (
 type jsonRPCCLIDriver struct {
 	provider     string
 	privateKey   crypto.PrivateKey
+	chainID      string
 	usingGateway bool
 	logFunc      logFunc
 	cobraCmd     *cobra.Command
@@ -41,6 +42,7 @@ func newKwilCI(ctx context.Context, endpoint string, l logFunc, opts *ClientOpti
 	return &jsonRPCCLIDriver{
 		provider:     endpoint,
 		privateKey:   opts.PrivateKey.(*crypto.Secp256k1PrivateKey),
+		chainID:      opts.ChainID,
 		usingGateway: opts.UsingKGW,
 		logFunc:      l,
 		cobraCmd:     root.NewRootCmd(),
@@ -50,7 +52,7 @@ func newKwilCI(ctx context.Context, endpoint string, l logFunc, opts *ClientOpti
 // cmd executes a kwil-cli command and unmarshals the result into res.
 // It logically should be a method on jsonRPCCLIDriver, but it can't because of the generic type T.
 func cmd[T any](j *jsonRPCCLIDriver, ctx context.Context, res T, args ...string) error {
-	flags := []string{"--provider", j.provider, "--private-key", hex.EncodeToString(j.privateKey.Bytes()), "--output", "json", "--assume-yes", "--silence", "--chain-id", "kwil-test-chain"}
+	flags := []string{"--provider", j.provider, "--private-key", hex.EncodeToString(j.privateKey.Bytes()), "--output", "json", "--assume-yes", "--silence", "--chain-id", j.chainID}
 
 	buf := new(bytes.Buffer)
 	j.cobraCmd.SetOut(buf)
