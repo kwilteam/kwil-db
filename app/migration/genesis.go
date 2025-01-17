@@ -20,13 +20,13 @@ var (
 	genesisFileName  = "genesis_info.json"
 	snapshotFileName = "snapshot.sql.gz"
 
-	genesisStateLong = "Download the genesis state for the new network from a trusted node on the source network. The genesis state includes the genesis info file (genesis_info.json) and genesis snapshot (snapshot.sql.gz). The genesis state is saved in the root directory specified by the `--out-dir` flag. If there is no approved migration or if the migration has not started yet, the command will return a message indicating that there is no genesis state to download. The genesis info file includes the app hash, validators and the migration settings required to manually start the new network."
+	genesisStateLong = "Download the genesis state for the new network from a trusted node on the source network. The genesis state includes the genesis info file (`genesis_info.json`) and genesis snapshot (`snapshot.sql.gz`). The genesis state is saved in the root directory specified by the `--out-dir` flag. If there is no approved migration or if the migration has not started yet, the command will return a message indicating that there is no genesis state to download. The genesis info file includes the app hash, validators and the migration settings required to manually start the new network."
 
 	genesisStateExample = `# Download the genesis state to the default output directory (~/.genesis-state)
-kwil-admin migrate genesis-state
+kwild migrate genesis-state
 
 # Download the genesis state to a custom root directory
-kwil-admin migrate genesis-state --out-dir /path/to/out/dir`
+kwild migrate genesis-state --out-dir /path/to/out/dir`
 )
 
 func genesisStateCmd() *cobra.Command {

@@ -26,7 +26,7 @@ import (
 //   - This phase includes committing the block to the block store, clearing the mempool,
 //     updating the chain state, creating snapshots, committing the pg db state, etc.
 //
-// The Leader can also issue ResetState messages using "kwil-admin reset <reset-block-height> <longrunning-tx-list>"
+// The Leader can also issue ResetState messages using "kwild block reset <reset-block-height> <longrunning-tx-list>"
 // When a leader receives a ResetState request, it will broadcast the ResetState message to the network to
 // halt the current block execution if the current block height equals reset-block-height + 1. The leader will stop processing
 // the current block, revert any state changes made, and remove the problematic transactions from the mempool before

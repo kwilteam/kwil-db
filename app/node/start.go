@@ -17,7 +17,7 @@ func StartCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               "start",
 		Short:             "Start the node (default command if none given)",
-		Long:              "The start command starts the Kwil DB blockchain node.",
+		Long:              "The `start` command starts the Kwil DB blockchain node.",
 		DisableAutoGenTag: true,
 		SilenceUsage:      true,
 		CompletionOptions: cobra.CompletionOptions{
@@ -62,5 +62,6 @@ func StartCmd() *cobra.Command {
 	cmd.Flags().BoolVarP(&autogen, "autogen", "a", false,
 		"auto generate private key, genesis file, and config file if not exist")
 	cmd.Flags().StringVarP(&dbOwner, "db-owner", "d", "", "owner of the database. This is either a hex pubkey or an address string")
+
 	return cmd
 }

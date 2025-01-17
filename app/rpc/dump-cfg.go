@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	dumpCfgLong    = `The dump-config command retrieves and displays the active config from the running node.`
+	dumpCfgLong    = "The `dump-config` command retrieves and displays the active config from the running node."
 	dumpCfgExample = `# Get the current config from the node.
 kwild admin dump-config --rpcserver /tmp/kwild.socket`
 )

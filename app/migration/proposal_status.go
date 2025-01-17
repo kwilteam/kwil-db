@@ -15,7 +15,7 @@ import (
 
 var (
 	statusExample = `# Get the status of the pending migration.
-kwil-admin migrate proposal-status <proposal_id>`
+kwild migrate proposal-status <proposal_id>`
 )
 
 func proposalStatusCmd() *cobra.Command {

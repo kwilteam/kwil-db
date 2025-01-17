@@ -17,7 +17,7 @@ func listCmd() *cobra.Command {
 		Short: "List all the pending migration proposals.",
 		Long:  "List all the pending migration proposals.",
 		Example: `# List all the pending migration proposals.
-kwil-admin migrate proposals`,
+kwild migrate proposals`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()

@@ -14,7 +14,7 @@ import (
 )
 
 var (
-	resetLong = `To delete all of a Kwil node's data files, use the reset command. If the root directory is not specified, the node's default root directory will be used.
+	resetLong = `To delete all of a Kwil node's data files, use the ` + "`reset`" + ` command. If the root directory is not specified, the node's default root directory will be used.
 
 WARNING: This command should not be used on production systems. This should only be used to reset disposable test nodes.`
 

@@ -21,9 +21,9 @@ for the other validators to vote on. If a super-majority of validators approve t
 commence after the specified activation-period blocks from approval and will continue for the duration defined by duration blocks.`
 
 	proposeExample = `# Submit a migration proposal to migrate to a new chain with activation period 1000 and migration duration of 14400 blocks.
-kwil-admin migrate propose --activation-period 1000 --duration 14400
+kwild migrate propose --activation-period 1000 --duration 14400
 (or)
-kwil-admin migrate propose -a 1000 -d 14400`
+kwild migrate propose -a 1000 -d 14400`
 )
 
 func proposeCmd() *cobra.Command {

@@ -17,8 +17,8 @@ func txQueryCmd() *cobra.Command {
 	var full bool
 	cmd := &cobra.Command{
 		Use:   "query-tx <tx_id>",
-		Short: "Queries a transaction from the blockchain. Requires 1 argument: the hex encoded transaction id.",
-		Long:  `Queries a transaction from the blockchain. Requires 1 argument: the hex encoded transaction id.`,
+		Short: "Queries a transaction from the blockchain. Requires 1 argument: the hex encoded transaction ID.",
+		Long:  `Queries a transaction from the blockchain. Requires 1 argument: the hex encoded transaction ID.`,
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := context.Background()

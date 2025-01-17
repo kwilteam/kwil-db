@@ -17,7 +17,7 @@ import (
 )
 
 var (
-	genesisLong = `The genesis command creates a new genesis.json file with optionally specified modifications.
+	genesisLong = `The ` + "`genesis`" + ` command creates a new ` + "`genesis.json`" + ` file with optionally specified modifications.
 
 Validators and balance allocations should have the format "pubkey:power", "address:balance" respectively.`
 

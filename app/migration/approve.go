@@ -12,7 +12,7 @@ func approveCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:     "approve <proposal_id>",
 		Short:   "Approve a migration proposal.",
-		Example: "kwil-admin migrate approve <proposal_id>",
+		Example: "kwild migrate approve <proposal_id>",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()

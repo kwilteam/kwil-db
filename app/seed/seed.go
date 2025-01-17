@@ -23,7 +23,7 @@ func SeedCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "seed",
 		Short: "Run a network seeder",
-		Long:  "The seed command starts a peer seeder process to crawl and bootstrap the network. This does not use the kwild node config. It will bind to TCP port 6609, and store config and data in the specified directory.",
+		Long:  "The `seed` command starts a peer seeder process to crawl and bootstrap the network. This does not use the kwild node config. It will bind to TCP port 6609, and store config and data in the specified directory.",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logger := log.New(log.WithWriter(os.Stdout), log.WithFormat(log.FormatUnstructured),

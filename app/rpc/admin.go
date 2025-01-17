@@ -26,10 +26,10 @@ const (
 func BindRPCFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().StringP(rpcserverFlagName, "s", config.DefaultAdminRPCAddr, "admin RPC server address (either UNIX socket path or TCP address)")
 
-	cmd.PersistentFlags().String("authrpc-cert", "", "kwild's TLS certificate, required for HTTPS server")
+	cmd.PersistentFlags().String("authrpc-cert", "", "kwild's TLS server certificate, required for HTTPS server")
 	cmd.PersistentFlags().String("pass", "", "admin server password (alternative to mTLS with tlskey/tlscert)")
-	cmd.PersistentFlags().String("tlskey", "auth.key", "kwil-admin's TLS key file to establish a mTLS (authenticated) connection")
-	cmd.PersistentFlags().String("tlscert", "auth.cert", "kwil-admin's TLS certificate file for server to authenticate us")
+	cmd.PersistentFlags().String("tlskey", "auth.key", "kwild's TLS client key file to establish a mTLS (authenticated) connection")
+	cmd.PersistentFlags().String("tlscert", "auth.cert", "kwild's TLS client certificate file for server to authenticate us")
 }
 
 // GetRPCServerFlag returns the RPC flag from the given command.

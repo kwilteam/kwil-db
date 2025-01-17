@@ -5,7 +5,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const adminExplain = "The admin command is used to get information about a running Kwil node using the admin RPC service."
+const adminExplain = "The `admin` command is used to get information about a running Kwil node using the administration RPC service."
 
 func NewAdminCmd() *cobra.Command {
 	adminCmd := &cobra.Command{

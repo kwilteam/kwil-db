@@ -8,10 +8,10 @@ import (
 )
 
 var (
-	versionLong = `The version command retrieves and prints the node's version information. The version is the Kwil's version string, set at compile time.`
+	versionLong = "The `version` command retrieves and prints the node's version information. The version is the Kwil's version string, set at compile time."
 
 	versionExample = `# Print the node's version information
-kwil-admin node version --rpcserver /tmp/kwild.socket`
+kwild node version --rpcserver /tmp/kwild.socket`
 )
 
 func versionCmd() *cobra.Command {
