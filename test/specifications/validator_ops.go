@@ -2,8 +2,6 @@ package specifications
 
 import (
 	"context"
-	"encoding/hex"
-	"fmt"
 	"testing"
 	"time"
 
@@ -28,8 +26,6 @@ func ValidatorNodeJoinSpecification(ctx context.Context, t *testing.T, netops Va
 	assert.Equal(t, valCount, len(vals))
 
 	// Validator issues a Join request
-	fmt.Println("Sending Join request to the validator:   ", hex.EncodeToString(joinerKey.Public().Bytes()))
-
 	rec, err := netops.ValidatorNodeJoin(ctx)
 	require.NoError(t, err)
 
@@ -38,9 +34,7 @@ func ValidatorNodeJoinSpecification(ctx context.Context, t *testing.T, netops Va
 
 	// Get Request status, #approvals = 0, #board = valCount
 	joiner := joinerKey.Public().Bytes()
-	fmt.Println("Requesting Join status:   ", hex.EncodeToString(joiner))
 	joinStatus, err := netops.ValidatorJoinStatus(ctx, joiner, joinerKey.Type())
-	fmt.Println("Join status:   ", joinStatus, err)
 	require.NoError(t, err)
 	assert.Equal(t, valCount, len(joinStatus.Board))
 	assert.Equal(t, 0, approvalCount(joinStatus))
@@ -213,7 +207,6 @@ func ValidatorNodeApproveSpecification(ctx context.Context, t *testing.T, netops
 	preApprovalCnt := approvalCount(joinStatus)
 
 	// Approval Request
-	fmt.Println("Approving valid join request by a valid validator:   ", hex.EncodeToString(joiner))
 	rec, err := netops.ValidatorNodeApprove(ctx, joiner, joinerKey.Type())
 	require.NoError(t, err)
 
@@ -226,7 +219,6 @@ func ValidatorNodeApproveSpecification(ctx context.Context, t *testing.T, netops
 		- If not approved, ensure that the vote is included, i.e #approvals = preApprovalCnt + 1
 	*/
 	joinStatus, err = netops.ValidatorJoinStatus(ctx, joiner, 0)
-	fmt.Println("Querying Join status:   ", joinStatus, err)
 	if approved {
 		assert.Error(t, err)
 		assert.Nil(t, joinStatus)
@@ -248,15 +240,12 @@ func NodeApprovalFailSpecification(ctx context.Context, t *testing.T, netops Val
 	// Get Join Request status, #board = preCnt
 	joiner := joinerKey.Public().Bytes()
 	keyType := joinerKey.Type()
-	fmt.Println("NodeApprovalFailSpecification:   ", hex.EncodeToString(joiner))
 	joinStatus, err := netops.ValidatorJoinStatus(ctx, joiner, keyType)
 
-	fmt.Println("Querying Join status:   ", joinStatus, err)
 	require.NoError(t, err)
 	preApprovalCnt := approvalCount(joinStatus)
 
 	// Approval Request
-	fmt.Println("Invalid approval request:   ", hex.EncodeToString(joiner))
 	rec, err := netops.ValidatorNodeApprove(ctx, joiner, keyType)
 	require.NoError(t, err)
 
@@ -265,7 +254,6 @@ func NodeApprovalFailSpecification(ctx context.Context, t *testing.T, netops Val
 
 	// Check Join Request Status: #approvals = preApprovalCnt
 	joinStatus, err = netops.ValidatorJoinStatus(ctx, joiner, keyType)
-	fmt.Println("Querying Join status:   ", joinStatus, err)
 	require.NoError(t, err)
 	postApprovalCnt := approvalCount(joinStatus)
 	assert.Equal(t, preApprovalCnt, postApprovalCnt)
