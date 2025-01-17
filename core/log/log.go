@@ -285,6 +285,7 @@ func (l *plainLogger) NewWithLevel(lvl Level, name string) Logger {
 
 func (l *plainLogger) New(name string) Logger {
 	logger := l.be.Logger(name)
+	logger.SetLevel(l.log.Level())
 	return &plainLogger{
 		be:  l.be,
 		log: logger,
