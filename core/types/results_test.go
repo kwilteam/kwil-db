@@ -503,7 +503,7 @@ func TestQueryResultScanArrays(t *testing.T) {
 			expBytesArrPtr:  ptrArr[[]byte]([]byte("12345678-1234-1234-1234-123456789abc"), []byte("12345678-1234-1234-1234-123456789def"), nil),
 			expDecArr:       errTestAny,
 			expDecArrPtr:    errTestAny,
-			expUUIDArr:      []UUID{*MustParseUUID("12345678-1234-1234-1234-123456789abc"), *MustParseUUID("12345678-1234-1234-1234-123456789def"), UUID{}},
+			expUUIDArr:      []UUID{*MustParseUUID("12345678-1234-1234-1234-123456789abc"), *MustParseUUID("12345678-1234-1234-1234-123456789def"), {}},
 			expUUIDArrPtr:   ptrArr[UUID](*MustParseUUID("12345678-1234-1234-1234-123456789abc"), *MustParseUUID("12345678-1234-1234-1234-123456789def"), nil),
 		},
 		{
@@ -521,7 +521,7 @@ func TestQueryResultScanArrays(t *testing.T) {
 			expBytesArrPtr:  ptrArr[[]byte](nil, nil, nil),
 			expDecArr:       []Decimal{{}, {}, {}},
 			expDecArrPtr:    ptrArr[Decimal](nil, nil, nil),
-			expUUIDArr:      []UUID{UUID{}, UUID{}, UUID{}},
+			expUUIDArr:      []UUID{{}, {}, {}},
 			expUUIDArrPtr:   ptrArr[UUID](nil, nil, nil),
 		},
 		{
