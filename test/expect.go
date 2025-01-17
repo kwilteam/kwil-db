@@ -14,6 +14,8 @@ import (
 var txTimeout = 5 * time.Second
 
 func ExpectTxSuccess(t *testing.T, spec setup.JSONRPCClient, ctx context.Context, txHash types.Hash) {
+	hash := txHash.String() // intentionally setting this as a variable so we can see it in a debugger
+	t.Logf("waiting for tx %s", hash)
 	res, err := spec.WaitTx(ctx, txHash, 300*time.Millisecond)
 	require.NoError(t, err)
 
@@ -21,6 +23,8 @@ func ExpectTxSuccess(t *testing.T, spec setup.JSONRPCClient, ctx context.Context
 }
 
 func ExpectTxError(t *testing.T, spec setup.JSONRPCClient, ctx context.Context, txHash types.Hash, msg string) {
+	hash := txHash.String() // intentionally setting this as a variable so we can see it in a debugger
+	t.Logf("waiting for tx %s", hash)
 	res, err := spec.WaitTx(ctx, txHash, 300*time.Millisecond)
 	require.NoError(t, err)
 

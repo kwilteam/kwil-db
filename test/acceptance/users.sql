@@ -27,6 +27,7 @@ CREATE TABLE wallets (
 CREATE TABLE posts (
     id UUID PRIMARY KEY,
     content TEXT NOT NULL CHECK (length(content) <= 500),
+    created_at INT NOT NULL,
     author_id UUID NOT NULL REFERENCES profiles(id) ON UPDATE CASCADE ON DELETE CASCADE,
     parent_id UUID REFERENCES posts(id) ON UPDATE CASCADE ON DELETE CASCADE
 );
@@ -115,9 +116,10 @@ CREATE ACTION create_post($username TEXT, $content TEXT, $parent_id UUID) public
         error('You do not own this profile');
     }
 
-    INSERT INTO posts (id, content, author_id, parent_id) VALUES (
+    INSERT INTO posts (id, content, created_at, author_id, parent_id) VALUES (
         uuid_generate_kwil(@txid||'post'),
         $content,
+        @height,
         (SELECT id FROM profiles WHERE username = $username),
         $parent_id
     );
@@ -166,20 +168,21 @@ CREATE ACTION get_friends($username TEXT) public view returns TABLE(username TEX
 };
 
 -- get_posts returns the list of posts for the specified profile
-CREATE ACTION get_posts($username TEXT) public view returns table(post_id UUID, content TEXT, likes INT) {
+CREATE ACTION get_posts($username TEXT) public view returns table(post_id UUID, content TEXT, created_at INT, likes INT) {
     return WITH likes AS (
         SELECT post_id, COUNT(*) as likes FROM likes GROUP BY post_id
     )
-    SELECT p.id, p.content, COALESCE(l.likes, 0) as likes FROM posts p
+    SELECT p.id, p.content, p,created_at, COALESCE(l.likes, 0) as likes FROM posts p
     LEFT JOIN likes l
     ON p.id = l.post_id
     JOIN profiles pr
     ON p.author_id = pr.id
-    WHERE pr.username = $username;
+    WHERE pr.username = $username
+    ORDER BY p.created_at DESC;
 };
 
 -- get_thread gets a post, its comments, and the comments' comments, recursively
-CREATE ACTION get_thread($post_id UUID, $max_depth int) public view returns table(post_id UUID, content TEXT, author TEXT, likes INT, children UUID[], depth INT) {
+CREATE ACTION get_thread($post_id UUID, $max_depth int) public view returns table(post_id UUID, content TEXT, created_at INT, author TEXT, likes INT, children UUID[], depth INT) {
     if $max_depth < 0 {
         error('max_depth must be greater than or equal to 0');
     }
@@ -191,10 +194,10 @@ CREATE ACTION get_thread($post_id UUID, $max_depth int) public view returns tabl
     }
     
     return WITH RECURSIVE children AS (
-        SELECT id, content, author_id, parent_id, 0 as depth
+        SELECT id, content, created_at, author_id, parent_id, 0 as depth
         FROM posts WHERE parent_id = $post_id
         UNION ALL
-        SELECT p.id, p.content, p.author_id, p.parent_id, c.depth + 1
+        SELECT p.id, p.content, created_at, p.author_id, p.parent_id, c.depth + 1
         FROM posts p 
         JOIN children c
         ON p.parent_id = c.id
@@ -202,7 +205,7 @@ CREATE ACTION get_thread($post_id UUID, $max_depth int) public view returns tabl
     ), like_counts AS (
         SELECT post_id, COUNT(*) as likes FROM likes GROUP BY post_id
     )
-    SELECT c.id as post_id, c.content, pr.username as author, COALESCE(l.likes, 0) as likes, ARRAY_AGG(c.id) as children, c.depth
+    SELECT c.id as post_id, c.content, created_at, pr.username as author, COALESCE(l.likes, 0) as likes, ARRAY_AGG(c.id) as children, c.depth
     FROM children c
     LEFT JOIN like_counts l
     ON c.id = l.post_id

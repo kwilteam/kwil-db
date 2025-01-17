@@ -435,8 +435,14 @@ CREATE VIEW info.actions AS
 WITH parameters AS (
     SELECT 
         action_id,
-        array_agg(p.name ORDER BY p.position, p.name, kwild_engine.format_type(p.scalar_type, p.is_array, p.metadata)) AS parameter_names,
-        array_agg(kwild_engine.format_type(p.scalar_type, p.is_array, p.metadata) ORDER BY p.position, p.name, kwild_engine.format_type(p.scalar_type, p.is_array, p.metadata)) AS parameter_types
+        array_agg(
+            p.name
+            ORDER BY p.position, p.name, kwild_engine.format_type(p.scalar_type, p.is_array, p.metadata)
+        ) AS parameter_names,
+        array_agg(
+            kwild_engine.format_type(p.scalar_type, p.is_array, p.metadata)
+            ORDER BY p.position, p.name, kwild_engine.format_type(p.scalar_type, p.is_array, p.metadata)
+        ) AS parameter_types
     FROM kwild_engine.parameters p
     GROUP BY action_id
 ), return_fields AS (

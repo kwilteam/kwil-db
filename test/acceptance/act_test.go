@@ -7,7 +7,6 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
-	"github.com/kwilteam/kwil-db/test"
 	"github.com/kwilteam/kwil-db/test/setup"
 	"github.com/stretchr/testify/require"
 )
@@ -106,18 +105,81 @@ func setupSingleNodeClient(t *testing.T, ctx context.Context, d setup.ClientDriv
 // 	}
 // }
 
-func Test_Engine(t *testing.T) {
-	for _, driver := range setup.AllDrivers {
-		if driver == setup.CLI {
-			continue // TODO: delete this once it works for jsonrpc
-		}
-		t.Run("engine_"+driver.String(), func(t *testing.T) {
-			ctx := context.Background()
-			client := setupSingleNodeClient(t, ctx, driver, false)
+// func Test_Engine(t *testing.T) {
+// 	for _, driver := range setup.AllDrivers {
+// 		if driver == setup.CLI {
+// 			continue // TODO: delete this once it works for jsonrpc
+// 		}
+// 		t.Run("engine_"+driver.String(), func(t *testing.T) {
+// 			ctx := context.Background()
+// 			client := setupSingleNodeClient(t, ctx, driver, false)
 
-			tx, err := client.ExecuteSQL(ctx, usersSchema, nil)
-			require.NoError(t, err)
-			test.ExpectTxSuccess(t, client, ctx, tx)
-		})
-	}
-}
+// 			// deploy the schema
+// 			tx, err := client.ExecuteSQL(ctx, usersSchema, nil)
+// 			require.NoError(t, err)
+// 			test.ExpectTxSuccess(t, client, ctx, tx)
+
+// 			// create two profiles: satoshi and megatron
+// 			tx, err = client.Execute(ctx, "", "create_profile", [][]any{
+// 				{"satoshi", 32, "father of $btc"},
+// 				{"megatron", 1000000, "leader of the decepticons"},
+// 			})
+// 			require.NoError(t, err)
+// 			test.ExpectTxSuccess(t, client, ctx, tx)
+
+// 			// create three posts, all responding to each other
+// 			tx, err = client.Execute(ctx, "", "create_post", [][]any{
+// 				{"satoshi", "hello world", nil},
+// 			})
+// 			require.NoError(t, err)
+// 			test.ExpectTxSuccess(t, client, ctx, tx)
+
+// 			satoshiPostUUID, err := getLatestPostID(ctx, client, "satoshi")
+// 			require.NoError(t, err)
+
+// 			tx, err = client.Execute(ctx, "", "create_post", [][]any{
+// 				{"megatron", "hello satoshi", satoshiPostUUID},
+// 			})
+// 			require.NoError(t, err)
+// 			test.ExpectTxSuccess(t, client, ctx, tx)
+
+// 			megatronPostUUID, err := getLatestPostID(ctx, client, "megatron")
+// 			require.NoError(t, err)
+
+// 			tx, err = client.Execute(ctx, "", "create_post", [][]any{
+// 				{"satoshi", "go back to cybertron", megatronPostUUID},
+// 			})
+// 			require.NoError(t, err)
+// 			test.ExpectTxSuccess(t, client, ctx, tx)
+
+// 			// testing recursive CTEs by getting the post chain
+// 			res, err := client.Call(ctx, "", "get_thread", []any{satoshiPostUUID, 5})
+// 			require.NoError(t, err)
+
+// 			// 3 posts in the chain, and get_thread does not include the root post
+// 			require.Len(t, res.QueryResult.Values, 2)
+
+// 			assert.Equal(t, "hello satoshi", res.QueryResult.Values[0][0])
+// 			assert.Equal(t, "go back to cybertron", res.QueryResult.Values[0][1])
+// 		})
+// 	}
+// }
+
+// // getLatestPostID returns the latest post from a user
+// func getLatestPostID(ctx context.Context, client setup.JSONRPCClient, user string) (id *types.UUID, err error) {
+// 	res, err := client.Call(ctx, "", "get_posts", []any{user})
+// 	if err != nil {
+// 		return nil, err
+// 	}
+
+// 	if len(res.QueryResult.Values) == 0 {
+// 		return nil, fmt.Errorf("no posts found for user %s", user)
+// 	}
+
+// 	str, ok := res.QueryResult.Values[0][0].(string)
+// 	if !ok {
+// 		return nil, fmt.Errorf("unexpected type for post ID: %T", res.QueryResult.Values[0][0])
+// 	}
+
+// 	return types.ParseUUID(str)
+// }

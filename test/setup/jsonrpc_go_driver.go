@@ -30,8 +30,8 @@ func newClient(ctx context.Context, endpoint string, l logFunc, opts *ClientOpti
 	opts.ensureDefaults()
 
 	clOpts := &cTypes.Options{
-		Signer: &auth.Secp256k1Signer{
-			Secp256k1PrivateKey: *opts.PrivateKey.(*crypto.Secp256k1PrivateKey),
+		Signer: &auth.EthPersonalSigner{
+			Key: *opts.PrivateKey.(*crypto.Secp256k1PrivateKey),
 		},
 	}
 

@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/client"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/helpers"
 	clientType "github.com/kwilteam/kwil-db/core/client/types"
 )
 
@@ -35,6 +37,7 @@ kwil-cli database execute --action create_user username:satoshi age:32 --namespa
 
 func executeCmd() *cobra.Command {
 	var sqlStmt string
+	var sqlFilepath string
 
 	cmd := &cobra.Command{
 		Use:     "execute --sql <sql_stmt> <parameter_1:value_1> <parameter_2:value_2> ...",
@@ -63,7 +66,7 @@ func executeCmd() *cobra.Command {
 				}
 
 				// if sql is not changed, then it is an action
-				if !cmd.Flags().Changed("sql") {
+				if !cmd.Flags().Changed("sql") && !cmd.Flags().Changed("sql-file") {
 					action, args, err := getSelectedAction(cmd, args)
 					if err != nil {
 						return display.PrintErr(cmd, fmt.Errorf("error getting selected action: %w", err))
@@ -99,10 +102,32 @@ func executeCmd() *cobra.Command {
 				}
 
 				if actionFlagSet(cmd) {
-					return display.PrintErr(cmd, fmt.Errorf("cannot specify both --sql and --action"))
+					return display.PrintErr(cmd, fmt.Errorf("cannot specify both (--sql or --sql-file) and --action"))
 				}
 
-				stmt := strings.TrimSpace(sqlStmt)
+				if sqlStmt == "" && sqlFilepath == "" {
+					return display.PrintErr(cmd, fmt.Errorf("either --sql or --sql-file must be set"))
+				}
+				if sqlStmt != "" && sqlFilepath != "" {
+					return display.PrintErr(cmd, fmt.Errorf("cannot specify both --sql and --sql-file"))
+				}
+				var stmt string
+				if sqlFilepath != "" {
+					expanded, err := helpers.ExpandPath(sqlFilepath)
+					if err != nil {
+						return display.PrintErr(cmd, fmt.Errorf("error expanding path: %w", err))
+					}
+
+					file, err := os.ReadFile(expanded)
+					if err != nil {
+						return display.PrintErr(cmd, fmt.Errorf("error reading file: %w", err))
+					}
+					stmt = string(file)
+				} else {
+					stmt = sqlStmt
+				}
+
+				stmt = strings.TrimSpace(stmt)
 
 				// if the namespace is set, we should prepend it to the statement
 				if wasSet {
@@ -143,6 +168,7 @@ func executeCmd() *cobra.Command {
 
 	bindFlagsTargetingAction(cmd)
 	cmd.Flags().StringVarP(&sqlStmt, "sql", "s", "", "the SQL statement to execute")
+	cmd.Flags().StringVarP(&sqlFilepath, "sql-file", "f", "", "the file containing the SQL statement to execute")
 	return cmd
 }
 
