@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"fmt"
 	"math/big"
 	"testing"
 	"time"
@@ -494,8 +493,6 @@ func TestSingleNodeKwildEthDepositsOracleIntegration(t *testing.T) {
 		DockerNetwork: dockerNetwork.Name,
 	})
 
-	fmt.Println(ethNode.Deployers[0].EscrowAddress(), ethNode.Deployers[1].EscrowAddress())
-
 	// Deposit the amount to the escrow
 	specifications.ApproveSpecification(ctx, t, deployer)
 	amount := big.NewInt(10)
@@ -578,8 +575,6 @@ func TestKwildEthDepositFundTransfer(t *testing.T) {
 		},
 		DockerNetwork: dockerNetwork.Name,
 	})
-
-	fmt.Println(ethNode.Deployers[0].EscrowAddress(), ethNode.Deployers[1].EscrowAddress())
 
 	clt := p.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
 		PrivateKey: UserPrivkey1,

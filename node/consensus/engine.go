@@ -529,9 +529,6 @@ func (ce *ConsensusEngine) updateValidatorSetAndRole() {
 	valset := ce.blockProcessor.GetValidators()
 	pubKey := ce.privKey.Public()
 
-	fmt.Println("Current Validator set: ", ce.validatorSet)
-	fmt.Println("New Validator set: ", valset)
-
 	ce.validatorSet = make(map[string]ktypes.Validator)
 	for _, v := range valset {
 		ce.validatorSet[hex.EncodeToString(v.Identifier)] = ktypes.Validator{

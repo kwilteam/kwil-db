@@ -2,7 +2,6 @@ package node
 
 import (
 	"context"
-	"fmt"
 
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/discovery"
@@ -35,7 +34,6 @@ func makeDHT(ctx context.Context, h host.Host, peers []peer.AddrInfo, mode dht.M
 	err = kadDHT.Bootstrap(ctx)
 	if err != nil {
 		kadDHT.Close()
-		fmt.Println("Bootstrap failed")
 		return nil, err
 	}
 
