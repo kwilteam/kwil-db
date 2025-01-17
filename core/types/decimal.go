@@ -18,8 +18,6 @@ import (
 	"github.com/cockroachdb/apd/v3"
 )
 
-// TODO: we need to rename things to be decimal-specific now that this is in the types package
-
 var (
 	// context is the default context for the decimal.
 	// We can change this to have different precision/speed properties,
@@ -46,9 +44,9 @@ type Decimal struct {
 	precision uint16
 }
 
-// NewExplicit creates a new Decimal from a string, with an explicit precision and scale.
+// NewDecimalExplicit creates a new Decimal from a string, with an explicit precision and scale.
 // The precision must be between 1 and 1000, and the scale must be between 0 and precision.
-func NewExplicit(s string, precision, scale uint16) (*Decimal, error) { // TODO: rename to be decimal specific
+func NewDecimalExplicit(s string, precision, scale uint16) (*Decimal, error) {
 	dec := &Decimal{}
 
 	if err := dec.SetPrecisionAndScale(precision, scale); err != nil {
@@ -66,7 +64,7 @@ func NewExplicit(s string, precision, scale uint16) (*Decimal, error) { // TODO:
 func ParseDecimal(s string) (*Decimal, error) {
 	inferredPrecision, inferredScale := inferPrecisionAndScale(s)
 
-	return NewExplicit(s, inferredPrecision, inferredScale)
+	return NewDecimalExplicit(s, inferredPrecision, inferredScale)
 }
 
 // MustParseDecimal is like ParseDecimal but panics if the string cannot be parsed.
@@ -78,9 +76,9 @@ func MustParseDecimal(s string) *Decimal {
 	return dec
 }
 
-// NewFromBigInt creates a new Decimal from a big.Int and an exponent.
+// NewDecimalFromBigInt creates a new Decimal from a big.Int and an exponent.
 // The negative of the exponent is the scale of the decimal.
-func NewFromBigInt(i *big.Int, exp int32) (*Decimal, error) { // TODO: rename to be decimal specific
+func NewDecimalFromBigInt(i *big.Int, exp int32) (*Decimal, error) {
 	if exp > 0 {
 		i2 := big.NewInt(10)
 		i2.Exp(i2, big.NewInt(int64(exp)), nil)
@@ -109,15 +107,15 @@ func NewFromBigInt(i *big.Int, exp int32) (*Decimal, error) { // TODO: rename to
 		dec.precision = dec.scale
 	}
 
-	if err := CheckPrecisionAndScale(dec.precision, dec.scale); err != nil {
+	if err := CheckDecimalPrecisionAndScale(dec.precision, dec.scale); err != nil {
 		return nil, err
 	}
 
 	return dec, nil
 }
 
-// NewNaN creates a new NaN Decimal.
-func NewNaN() *Decimal { // TODO: rename to be decimal specific
+// NewNaNDecimal creates a new NaN Decimal.
+func NewNaNDecimal() *Decimal {
 	return &Decimal{
 		dec: apd.Decimal{
 			Form: apd.NaN,
@@ -204,7 +202,7 @@ func (d *Decimal) setScale(scale uint16) error {
 // SetPrecisionAndScale sets the precision and scale of the decimal.
 // The precision must be between 1 and 1000, and the scale must be between 0 and precision.
 func (d *Decimal) SetPrecisionAndScale(precision, scale uint16) error {
-	if err := CheckPrecisionAndScale(precision, scale); err != nil {
+	if err := CheckDecimalPrecisionAndScale(precision, scale); err != nil {
 		return err
 	}
 
@@ -479,44 +477,44 @@ func (d *Decimal) enforceScale() error {
 	return err
 }
 
-// Add adds two decimals together.
+// DecimalAdd adds two decimals together.
 // It will return a decimal with maximum precision and scale.
-func Add(x, y *Decimal) (*Decimal, error) {
+func DecimalAdd(x, y *Decimal) (*Decimal, error) {
 	return mathOp(x, y, context.Add)
 }
 
-// Sub subtracts y from x.
+// DecimalSub subtracts y from x.
 // It will return a decimal with maximum precision and scale.
-func Sub(x, y *Decimal) (*Decimal, error) {
+func DecimalSub(x, y *Decimal) (*Decimal, error) {
 	return mathOp(x, y, context.Sub)
 }
 
-// Mul multiplies two decimals together.
+// DecimalMul multiplies two decimals together.
 // It will return a decimal with maximum precision and scale.
-func Mul(x, y *Decimal) (*Decimal, error) {
+func DecimalMul(x, y *Decimal) (*Decimal, error) {
 	return mathOp(x, y, context.Mul)
 }
 
-// Div divides x by y.
+// DecimalDiv divides x by y.
 // It will return a decimal with maximum precision and scale.
-func Div(x, y *Decimal) (*Decimal, error) {
+func DecimalDiv(x, y *Decimal) (*Decimal, error) {
 	return mathOp(x, y, context.Quo)
 }
 
-// Mod returns the remainder of x divided by y.
+// DecimalMod returns the remainder of x divided by y.
 // It will return a decimal with maximum precision and scale.
-func Mod(x, y *Decimal) (*Decimal, error) {
+func DecimalMod(x, y *Decimal) (*Decimal, error) {
 	return mathOp(x, y, context.Rem)
 }
 
-// Pow raises x to the power of y.
-func Pow(x, y *Decimal) (*Decimal, error) {
+// DecimalPow raises x to the power of y.
+func DecimalPow(x, y *Decimal) (*Decimal, error) {
 	return mathOp(x, y, context.Pow)
 }
 
-// Cmp compares two decimals.
+// DecimalCmp compares two decimals.
 // It returns -1 if x < y, 0 if x == y, and 1 if x > y.
-func Cmp(x, y *Decimal) (int64, error) {
+func DecimalCmp(x, y *Decimal) (int64, error) {
 	z := apd.New(0, 0)
 	_, err := context.Cmp(z, &x.dec, &y.dec)
 	if err != nil {
@@ -527,8 +525,8 @@ func Cmp(x, y *Decimal) (int64, error) {
 	// return x.dec.Cmp(&y.dec)
 }
 
-// CheckPrecisionAndScale checks if the precision and scale are valid.
-func CheckPrecisionAndScale(precision, scale uint16) error {
+// CheckDecimalPrecisionAndScale checks if the precision and scale are valid.
+func CheckDecimalPrecisionAndScale(precision, scale uint16) error {
 	if precision < 1 {
 		return fmt.Errorf("precision must be at least 1: %d", precision)
 	}

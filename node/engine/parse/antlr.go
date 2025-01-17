@@ -292,7 +292,7 @@ func (s *schemaVisitor) VisitDecimal_literal(ctx *gen.Decimal_literalContext) an
 		return unknownExpression(ctx)
 	}
 
-	typ, err := types.NewDecimalType(dec.Precision(), dec.Scale())
+	typ, err := types.NewNumericType(dec.Precision(), dec.Scale())
 	if err != nil {
 		s.errs.RuleErr(ctx, err, "invalid decimal literal: %s", txt)
 		return unknownExpression(ctx)

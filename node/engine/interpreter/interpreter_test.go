@@ -1760,7 +1760,7 @@ func (t *testPrecompile) makeGetMethod(datatype *types.DataType) precompiles.Met
 }
 
 func mustDecType(precision, scale uint16) *types.DataType {
-	t, err := types.NewDecimalType(precision, scale)
+	t, err := types.NewNumericType(precision, scale)
 	if err != nil {
 		panic(err)
 	}
@@ -2480,7 +2480,7 @@ func eq(a, b any) error {
 }
 
 func mustExplicitDecimal(s string, prec, scale uint16) *types.Decimal {
-	d, err := types.NewExplicit(s, prec, scale)
+	d, err := types.NewDecimalExplicit(s, prec, scale)
 	if err != nil {
 		panic(err)
 	}

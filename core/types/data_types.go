@@ -142,7 +142,7 @@ func (c *DataType) PGScalar() (string, error) {
 		scalar = "UINT256"
 	case NumericStr:
 		if !c.HasMetadata() {
-			return "", errors.New("decimal type requires metadata")
+			return "", errors.New("numeric type requires metadata")
 		} else {
 			scalar = fmt.Sprintf("NUMERIC(%d,%d)", c.Metadata[0], c.Metadata[1])
 		}
@@ -172,7 +172,7 @@ func (c *DataType) Clean() error {
 		if !c.HasMetadata() {
 			return fmt.Errorf("type %s requires metadata", c.Name)
 		}
-		err := CheckPrecisionAndScale(c.Metadata[0], c.Metadata[1])
+		err := CheckDecimalPrecisionAndScale(c.Metadata[0], c.Metadata[1])
 		if err != nil {
 			return err
 		}
@@ -261,14 +261,14 @@ var (
 		Name: uuidStr,
 	}
 	UUIDArrayType = ArrayType(UUIDType)
-	// DecimalType contains 1,0 metadata.
+	// NumericType contains 1,0 metadata.
 	// For type detection, users should prefer compare a datatype
-	// name with the DecimalStr constant.
-	DecimalType = &DataType{
+	// name with the NumericStr constant.
+	NumericType = &DataType{
 		Name:     NumericStr,
 		Metadata: [2]uint16{0, 0}, // unspecified precision and scale
 	}
-	DecimalArrayType = ArrayType(DecimalType)
+	NumericArrayType = ArrayType(NumericType)
 	Uint256Type      = &DataType{
 		Name: uint256Str, // TODO: delete
 	}
@@ -305,9 +305,9 @@ const (
 	nullStr    = "null"
 )
 
-// NewDecimalType creates a new fixed point decimal type.
-func NewDecimalType(precision, scale uint16) (*DataType, error) {
-	err := CheckPrecisionAndScale(precision, scale)
+// NewNumericType creates a new fixed point numeric type.
+func NewNumericType(precision, scale uint16) (*DataType, error) {
+	err := CheckDecimalPrecisionAndScale(precision, scale)
 	if err != nil {
 		return nil, err
 	}
@@ -349,20 +349,23 @@ func ParseDataType(s string) (*DataType, error) {
 	var metadata [2]uint16
 	if rawMetadata != "" {
 		metadata = [2]uint16{}
-		// only decimal types can have metadata
+		// only numeric types can have metadata
 		if baseName != NumericStr {
-			return nil, fmt.Errorf("metadata is only allowed for decimal type")
+			return nil, fmt.Errorf("metadata is only allowed for numeric type")
 		}
 
 		parts := strings.Split(rawMetadata, ",")
-		// can be either DECIMAL(10,5) or just DECIMAL
-		if len(parts) != 2 && len(parts) != 0 {
+		// must be either NUMERIC(10,5)
+		if len(parts) != 2 {
 			return nil, fmt.Errorf("invalid metadata format: %s", rawMetadata)
 		}
 		for i, part := range parts {
 			num, err := strconv.Atoi(strings.TrimSpace(part))
 			if err != nil {
 				return nil, fmt.Errorf("invalid metadata value: %s", part)
+			}
+			if num > int(maxPrecision) {
+				return nil, fmt.Errorf("precision must be less than %d", maxPrecision)
 			}
 			metadata[i] = uint16(num)
 		}

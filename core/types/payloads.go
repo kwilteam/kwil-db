@@ -477,14 +477,14 @@ func EncodeValue(v any) (*EncodedValue, error) {
 			// and we are in an array
 			return nil, nil, fmt.Errorf("cannot encode nil in type array")
 		case *Decimal:
-			decTyp, err := NewDecimalType(t.Precision(), t.Scale())
+			decTyp, err := NewNumericType(t.Precision(), t.Scale())
 			if err != nil {
 				return nil, nil, err
 			}
 
 			return []byte(t.String()), decTyp, nil
 		case Decimal:
-			decTyp, err := NewDecimalType(t.Precision(), t.Scale())
+			decTyp, err := NewNumericType(t.Precision(), t.Scale())
 			if err != nil {
 				return nil, nil, err
 			}

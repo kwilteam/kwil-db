@@ -114,7 +114,7 @@ func init() {
 			},
 		},
 		valueMapping{
-			KwilType: types.DecimalType,
+			KwilType: types.NumericType,
 			ZeroValue: func(t *types.DataType) (value, error) {
 				if !t.HasMetadata() {
 					return nil, fmt.Errorf("cannot create zero value of decimal type with zero precision and scale")
@@ -196,7 +196,7 @@ func init() {
 			},
 		},
 		valueMapping{
-			KwilType: types.DecimalArrayType,
+			KwilType: types.NumericArrayType,
 			ZeroValue: func(t *types.DataType) (value, error) {
 				if !t.HasMetadata() {
 					return nil, fmt.Errorf("cannot create zero value of decimal type with zero precision and scale")
@@ -219,7 +219,7 @@ func init() {
 				prec := t.Metadata[0]
 				scale := t.Metadata[1]
 
-				arr := newNullDecArr(types.DecimalArrayType)
+				arr := newNullDecArr(types.NumericArrayType)
 				arr.metadata = &precAndScale{prec, scale}
 				return arr, nil
 			},
@@ -1197,14 +1197,14 @@ func pgTypeFromDec(d *types.Decimal) pgtype.Numeric {
 
 func decFromPgType(n pgtype.Numeric, meta *precAndScale) (*types.Decimal, error) {
 	if n.NaN {
-		return types.NewNaN(), nil
+		return types.NewNaNDecimal(), nil
 	}
 	if !n.Valid {
 		// we should never get here, but just in case
 		return nil, fmt.Errorf("internal bug: null decimal")
 	}
 
-	dec, err := types.NewFromBigInt(n.Int, n.Exp)
+	dec, err := types.NewDecimalFromBigInt(n.Int, n.Exp)
 	if err != nil {
 		return nil, err
 	}
@@ -1256,7 +1256,7 @@ func (d *decimalValue) dec() (*types.Decimal, error) {
 		return nil, fmt.Errorf("internal bug: null decimal")
 	}
 
-	d2, err := types.NewFromBigInt(d.Int, d.Exp)
+	d2, err := types.NewDecimalFromBigInt(d.Int, d.Exp)
 	if err != nil {
 		return nil, err
 	}
@@ -1329,17 +1329,17 @@ func (d *decimalValue) Arithmetic(v scalarValue, op engine.ArithmeticOp) (scalar
 	var d2 *types.Decimal
 	switch op {
 	case engine.ADD:
-		d2, err = types.Add(dec1, dec2)
+		d2, err = types.DecimalAdd(dec1, dec2)
 	case engine.SUB:
-		d2, err = types.Sub(dec1, dec2)
+		d2, err = types.DecimalSub(dec1, dec2)
 	case engine.MUL:
-		d2, err = types.Mul(dec1, dec2)
+		d2, err = types.DecimalMul(dec1, dec2)
 	case engine.DIV:
-		d2, err = types.Div(dec1, dec2)
+		d2, err = types.DecimalDiv(dec1, dec2)
 	case engine.EXP:
-		d2, err = types.Pow(dec1, dec2)
+		d2, err = types.DecimalPow(dec1, dec2)
 	case engine.MOD:
-		d2, err = types.Mod(dec1, dec2)
+		d2, err = types.DecimalMod(dec1, dec2)
 	default:
 		return nil, fmt.Errorf("%w: unexpected operator id %d for decimal", engine.ErrArithmetic, op)
 	}
@@ -1382,10 +1382,10 @@ func (d *decimalValue) Unary(op engine.UnaryOp) (scalarValue, error) {
 
 func (d *decimalValue) Type() *types.DataType {
 	if d.metadata == nil {
-		return types.DecimalType
+		return types.NumericType
 	}
 
-	t := types.DecimalType.Copy()
+	t := types.NumericType.Copy()
 	t.Metadata = *d.metadata
 	return t
 }
@@ -1650,7 +1650,7 @@ func (a *int8ArrayValue) Cast(t *types.DataType) (value, error) {
 		}
 
 		return castArrWithPtr(a, func(i int64) (*types.Decimal, error) {
-			return types.NewExplicit(strconv.FormatInt(i, 10), t.Metadata[0], t.Metadata[1])
+			return types.NewDecimalExplicit(strconv.FormatInt(i, 10), t.Metadata[0], t.Metadata[1])
 		}, newDecArrFn(t))
 	}
 
@@ -1740,7 +1740,7 @@ func (a *textArrayValue) Cast(t *types.DataType) (value, error) {
 		}
 
 		return castArrWithPtr(a, func(s string) (*types.Decimal, error) {
-			return types.NewExplicit(s, t.Metadata[0], t.Metadata[1])
+			return types.NewDecimalExplicit(s, t.Metadata[0], t.Metadata[1])
 		}, newDecArrFn(t))
 	}
 
@@ -2056,10 +2056,10 @@ func (a *decimalArrayValue) Set(i int32, v scalarValue) error {
 
 func (a *decimalArrayValue) Type() *types.DataType {
 	if a.metadata == nil {
-		return types.DecimalArrayType
+		return types.NumericArrayType
 	}
 
-	t := types.DecimalArrayType.Copy()
+	t := types.NumericArrayType.Copy()
 	t.Metadata = *a.metadata
 	return t
 }
@@ -2109,7 +2109,7 @@ func (a *decimalArrayValue) Cast(t *types.DataType) (value, error) {
 
 			// we need to make a copy of the decimal because SetPrecisionAndScale
 			// will modify the decimal in place.
-			dec2, err := types.NewExplicit(dec.String(), dec.Precision(), dec.Scale())
+			dec2, err := types.NewDecimalExplicit(dec.String(), dec.Precision(), dec.Scale())
 			if err != nil {
 				return nil, err
 			}
@@ -2130,7 +2130,7 @@ func (a *decimalArrayValue) Cast(t *types.DataType) (value, error) {
 		return castArr(a, func(d *types.Decimal) (string, error) { return d.String(), nil }, newTextArrayValue)
 	case *types.IntArrayType:
 		return castArr(a, func(d *types.Decimal) (int64, error) { return d.Int64() }, newIntArr)
-	case *types.DecimalArrayType:
+	case *types.NumericArrayType:
 		return a, nil
 	default:
 		return nil, castErr(fmt.Errorf("cannot cast decimal array to %s", t))
@@ -2570,7 +2570,7 @@ func parseValue(s string, t *types.DataType) (value, error) {
 	}
 
 	if t.Name == types.NumericStr {
-		dec, err := types.NewExplicit(s, t.Metadata[0], t.Metadata[1])
+		dec, err := types.NewDecimalExplicit(s, t.Metadata[0], t.Metadata[1])
 		if err != nil {
 			return nil, err
 		}

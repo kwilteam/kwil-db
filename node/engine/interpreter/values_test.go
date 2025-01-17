@@ -586,7 +586,7 @@ func Test_Cast(t *testing.T) {
 				eq(t, want, res.RawValue())
 			}
 
-			decimalType, err := types.NewDecimalType(10, 5)
+			decimalType, err := types.NewNumericType(10, 5)
 			require.NoError(t, err)
 
 			decArrType := decimalType.Copy()
@@ -799,7 +799,7 @@ func Test_Array(t *testing.T) {
 
 // this test tests setting null values to an array of different types
 func Test_ArrayNull(t *testing.T) {
-	decType, err := types.NewDecimalType(10, 5)
+	decType, err := types.NewNumericType(10, 5)
 	require.NoError(t, err)
 	decType.IsArray = true
 	for _, dt := range []*types.DataType{
@@ -837,7 +837,7 @@ func mustDec(dec string) *types.Decimal {
 }
 
 func mustExplicitDecimal(dec string, precision, scale uint16) *types.Decimal {
-	d, err := types.NewExplicit(dec, precision, scale)
+	d, err := types.NewDecimalExplicit(dec, precision, scale)
 	if err != nil {
 		panic(err)
 	}

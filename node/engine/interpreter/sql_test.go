@@ -1067,7 +1067,7 @@ func Test_Metadata(t *testing.T) {
 }
 
 func mustDecType(prec, scale uint16) *types.DataType {
-	dt, err := types.NewDecimalType(prec, scale)
+	dt, err := types.NewNumericType(prec, scale)
 	if err != nil {
 		panic(err)
 	}

@@ -146,7 +146,7 @@ func pgNumericToDecimal(num pgtype.Numeric) (*types.Decimal, error) {
 
 	// Really this could be uint256, which is same underlying type (a domain) as
 	// Numeric. If the caller needs to know, that has to happen differently.
-	return types.NewFromBigInt(i, e)
+	return types.NewDecimalFromBigInt(i, e)
 }
 
 var (
@@ -455,7 +455,7 @@ var (
 	}
 
 	decimalType = &datatype{
-		KwilType: types.DecimalType,
+		KwilType: types.NumericType,
 		Matches:  []reflect.Type{reflect.TypeOf(types.Decimal{}), reflect.TypeOf(&types.Decimal{})},
 		OID:      func(*pgtype.Map) uint32 { return pgtype.NumericOID },
 		EncodeInferred: func(v any) (any, error) {
@@ -498,7 +498,7 @@ var (
 	}
 
 	decimalArrayType = &datatype{
-		KwilType: types.DecimalArrayType,
+		KwilType: types.NumericArrayType,
 		Matches:  []reflect.Type{reflect.TypeOf(types.DecimalArray{})},
 		OID:      func(*pgtype.Map) uint32 { return pgtype.NumericArrayOID },
 		EncodeInferred: func(v any) (any, error) {

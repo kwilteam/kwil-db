@@ -937,12 +937,12 @@ var (
 
 func init() {
 	var err error
-	decimal1000, err = types.NewDecimalType(1000, 0)
+	decimal1000, err = types.NewNumericType(1000, 0)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create decimal type: 1000, 0: %v", err))
 	}
 
-	decimal16_6, err = types.NewDecimalType(16, 6)
+	decimal16_6, err = types.NewNumericType(16, 6)
 	if err != nil {
 		panic(fmt.Sprintf("failed to create decimal type: 16, 6: %v", err))
 	}

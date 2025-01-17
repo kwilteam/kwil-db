@@ -44,7 +44,7 @@ func TestEncodedValue_EdgeCases(t *testing.T) {
 
 	// THIS IS INCORRECT WITH scientific notation e.g 1e-28
 	t.Run("encode decimal with max precision", func(t *testing.T) {
-		d, err := NewFromBigInt(new(big.Int).SetInt64(1), -6)
+		d, err := NewDecimalFromBigInt(new(big.Int).SetInt64(1), -6)
 		require.NoError(t, err)
 		ev, err := EncodeValue(d)
 		require.NoError(t, err)
