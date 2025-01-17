@@ -290,7 +290,6 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 		return err
 	}
 
-	fmt.Println("expired resolutions", expired)
 	expiredIDs := make([]*types.UUID, 0, len(expired))
 	requiredPowerMap := make(map[string]int64) // map of resolution type to required power
 
@@ -370,7 +369,6 @@ type creditMap map[string]*big.Int
 func (c creditMap) applyResolution(res *resolutions.Resolution) {
 	// reward voters.
 	// this will include the proposer, even if they did not submit a vote id
-	fmt.Println("crediting the resolution", res)
 
 	for _, voter := range res.Voters {
 		// if the voter is the proposer, then we will reward them below,

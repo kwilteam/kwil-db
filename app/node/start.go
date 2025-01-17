@@ -13,6 +13,7 @@ import (
 
 func StartCmd() *cobra.Command {
 	var autogen bool
+	var dbOwner string
 	cmd := &cobra.Command{
 		Use:               "start",
 		Short:             "start the node (default command)",
@@ -47,7 +48,7 @@ func StartCmd() *cobra.Command {
 			}
 			defer stopProfiler()
 
-			return runNode(cmd.Context(), rootDir, cfg, autogen)
+			return runNode(cmd.Context(), rootDir, cfg, autogen, dbOwner)
 		},
 	}
 
@@ -59,5 +60,6 @@ func StartCmd() *cobra.Command {
 	cmd.SetVersionTemplate(custom.BinaryConfig.NodeCmd + " {{printf \"version %s\" .Version}}\n")
 	cmd.Flags().BoolVarP(&autogen, "autogen", "a", false,
 		"auto generate private key, genesis file, and config file if not exist")
+	cmd.Flags().StringVarP(&dbOwner, "db-owner", "d", "", "owner of the database. This is either a hex pubkey or an address string")
 	return cmd
 }
