@@ -683,8 +683,8 @@ func (m *mockTxApp) Execute(ctx *common.TxContext, db sql.DB, tx *types.Transact
 	return nil
 }
 
-func (m *mockTxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) error {
-	return nil
+func (m *mockTxApp) Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) (aJ, eJ []*types.AccountID, err error) {
+	return nil, nil, nil
 }
 
 func (m *mockTxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.Validator, accounts []*types.Account,

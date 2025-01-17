@@ -33,6 +33,13 @@ var (
 // produce blocks and accept db related transactions and agree on the
 // state of the database
 func TestKwildDatabaseIntegration(t *testing.T) {
+	userPrivKey, _, err := crypto.GenerateSecp256k1Key(rand.Reader)
+	require.NoError(t, err, "failed to generate user private key")
+
+	signer := auth.GetUserSigner(userPrivKey)
+	ident, err := auth.GetIdentifierFromSigner(signer)
+	require.NoError(t, err)
+
 	p := setup.SetupTests(t, &setup.TestConfig{
 		ClientDriver: setup.CLI,
 		Network: &setup.NetworkConfig{
@@ -41,20 +48,27 @@ func TestKwildDatabaseIntegration(t *testing.T) {
 				setup.DefaultNodeConfig(),
 				setup.DefaultNodeConfig(),
 			},
-			DBOwner: "0xabc",
+			DBOwner: ident,
 		},
 	})
 
 	ctx := context.Background()
 
-	clt := p.Nodes[0].JSONRPCClient(t, ctx, nil)
+	clt := p.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
+		PrivateKey: userPrivKey,
+	})
 
 	ping, err := clt.Ping(ctx)
 	require.NoError(t, err)
 
 	require.Equal(t, "pong", ping)
 
-	// specifications.CreateNamespaceSpecification(ctx, t, clt)
+	specifications.CreateNamespaceSpecification(ctx, t, clt, false)
+	specifications.CreateSchemaSpecification(ctx, t, clt)
+
+	user := &specifications.User{Id: 1, Name: "Alice", Age: 25}
+	specifications.AddUserSpecification(ctx, t, clt, user)
+	specifications.ListUsersSpecification(ctx, t, clt, false, 1)
 }
 
 // TestKwildValidatorUpdates is to test the functionality of
@@ -168,7 +182,7 @@ func TestValidatorJoinExpirySpecification(t *testing.T) {
 	specifications.CurrentValidatorsSpecification(ctx, t, n0Admin, 1)
 
 	// Reject join requests from an existing validator
-	specifications.ValidatorJoinExpirySpecification(ctx, t, n1Admin, p.Nodes[1].PrivateKey(), 8*time.Second)
+	specifications.ValidatorJoinExpirySpecification(ctx, t, n1Admin, p.Nodes[1].PrivateKey(), 10*time.Second)
 }
 
 func TestKwildValidatorRemoveSpecification(t *testing.T) {
@@ -432,6 +446,159 @@ func TestLongRunningNetworkMigrations(t *testing.T) {
 	require.Greater(t, info.BlockHeight, uint64(50)) // TODO: height > 50 + migration height
 }
 
+func TestKwildPrivateNetworks(t *testing.T) {
+	userPrivKey, _, err := crypto.GenerateSecp256k1Key(rand.Reader)
+	require.NoError(t, err, "failed to generate user private key")
+
+	signer := auth.GetUserSigner(userPrivKey)
+	ident, err := auth.GetIdentifierFromSigner(signer)
+	require.NoError(t, err)
+
+	// 1 validators and 2 non-validator in a private network
+	p := setup.SetupTests(t, &setup.TestConfig{
+		ClientDriver: setup.CLI,
+		Network: &setup.NetworkConfig{
+			Nodes: []*setup.NodeConfig{
+				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+					nc.Configure = func(conf *config.Config) {
+						conf.P2P.PrivateMode = true
+					}
+				}),
+				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+					nc.Configure = func(conf *config.Config) {
+						conf.P2P.PrivateMode = true
+					}
+					nc.Validator = false
+				}),
+				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+					nc.Configure = func(conf *config.Config) {
+						conf.P2P.PrivateMode = true
+					}
+					nc.Validator = false
+				}),
+			},
+			DBOwner: ident,
+			ConfigureGenesis: func(genDoc *config.GenesisConfig) {
+				genDoc.JoinExpiry = 20 // 20 sec at 1block/sec
+			},
+		},
+		InitialServices: []string{"node0", "pg0"},
+	})
+
+	// bringup node1 and node2
+	msgStr := "Block sync completed"
+	p.RunServices(t, context.Background(), []*setup.ServiceDefinition{
+		{Name: "node1", WaitMsg: &msgStr},
+		{Name: "node2", WaitMsg: &msgStr},
+		setup.PostgresServiceDefinition("pg1"),
+		setup.PostgresServiceDefinition("pg2"),
+	})
+
+	ctx := context.Background()
+
+	// wait for all the nodes to discover each other
+	time.Sleep(2 * time.Second)
+
+	// adminClient for the nodes
+	n0Admin := p.Nodes[0].AdminClient(t, ctx)
+	n1Admin := p.Nodes[1].AdminClient(t, ctx)
+	n2Admin := p.Nodes[2].AdminClient(t, ctx)
+
+	nID0, nID1, nID2 := p.Nodes[0].PeerID(), p.Nodes[1].PeerID(), p.Nodes[2].PeerID()
+
+	// Ensure that the whitelisted peers information is correct and
+	// the nodes are not connected to any other nodes
+	specifications.ListPeersSpecification(ctx, t, n0Admin, []string{})
+	specifications.ListPeersSpecification(ctx, t, n1Admin, []string{})
+	specifications.ListPeersSpecification(ctx, t, n2Admin, []string{})
+
+	// Create a namespace and n0 verifies that the users created but not by n1 or n2
+	n0Clt := p.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{PrivateKey: userPrivKey})
+	n1Clt := p.Nodes[1].JSONRPCClient(t, ctx, &setup.ClientOptions{PrivateKey: userPrivKey})
+	n2Clt := p.Nodes[2].JSONRPCClient(t, ctx, &setup.ClientOptions{PrivateKey: userPrivKey})
+	specifications.CreateNamespaceSpecification(ctx, t, n0Clt, false)
+	specifications.CreateSchemaSpecification(ctx, t, n0Clt)
+
+	user := &specifications.User{Id: 1, Name: "Alice", Age: 25}
+	specifications.AddUserSpecification(ctx, t, n0Clt, user)
+	specifications.ListUsersSpecification(ctx, t, n0Clt, false, 1)
+	specifications.ListUsersSpecification(ctx, t, n1Clt, true, 0)
+
+	// connect n0 and n1
+	specifications.AddPeerSpecification(ctx, t, n0Admin, nID1)
+	specifications.AddPeerSpecification(ctx, t, n1Admin, nID0)
+
+	// verify peers
+	specifications.ListPeersSpecification(ctx, t, n0Admin, []string{nID1})
+	specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0})
+	specifications.ListPeersSpecification(ctx, t, n2Admin, []string{})
+
+	time.Sleep(5 * time.Second) // wait for the nodes to discover each other and blocksync
+	// TODO: does add peer actively connect to the peer?
+
+	// Now ensure that the n1 sees the data that was created by n0
+	specifications.ListUsersSpecification(ctx, t, n1Clt, false, 1)
+
+	// connect n0 and n2
+	specifications.AddPeerSpecification(ctx, t, n0Admin, nID2)
+	specifications.AddPeerSpecification(ctx, t, n2Admin, nID0)
+
+	// verify peers
+	specifications.ListPeersSpecification(ctx, t, n0Admin, []string{nID1, nID2})
+	specifications.ListPeersSpecification(ctx, t, n2Admin, []string{nID0})
+	specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0})
+
+	time.Sleep(5 * time.Second) // wait for the nodes to discover each other
+
+	// check peer connectivity
+	// specifications.PeerConnectivitySpecification(ctx, t, n2Admin, nID1, false)
+	// specifications.PeerConnectivitySpecification(ctx, t, n2Admin, nID0, true)
+	// specifications.PeerConnectivitySpecification(ctx, t, n0Admin, nID2, true)
+	// specifications.PeerConnectivitySpecification(ctx, t, n1Admin, nID2, false)
+
+	specifications.ListUsersSpecification(ctx, t, n2Clt, false, 1)
+
+	// allow n1 to accept connections from n2 and not the other way around
+	specifications.AddPeerSpecification(ctx, t, n1Admin, nID2)
+	specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0, nID2})
+	specifications.ListPeersSpecification(ctx, t, n2Admin, []string{nID0})
+
+	// check that the peers are not connected
+	// specifications.PeerConnectivitySpecification(ctx, t, n2Admin, nID1, false)
+	// specifications.PeerConnectivitySpecification(ctx, t, n1Admin, nID2, false)
+
+	// now make n1 a validator, this should make n2 trust n1
+	specifications.ValidatorNodeJoinSpecification(ctx, t, n1Admin, p.Nodes[1].PrivateKey(), 1)
+	specifications.ValidatorNodeApproveSpecification(ctx, t, n0Admin, p.Nodes[1].PrivateKey(), 1, 2, true)
+	time.Sleep(5 * time.Second)
+
+	specifications.CurrentValidatorsSpecification(ctx, t, n0Admin, 2)
+	specifications.CurrentValidatorsSpecification(ctx, t, n2Admin, 2)
+
+	// check that n1 is a trusted peer of n2
+	specifications.ListPeersSpecification(ctx, t, n2Admin, []string{nID0, nID1})
+	specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0, nID2})
+
+	// n1 removes n2 as a peer
+	specifications.RemovePeerSpecification(ctx, t, n1Admin, nID2)
+	specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0})
+	specifications.ListPeersSpecification(ctx, t, n2Admin, []string{nID0, nID1})
+
+	// n2 sends a join request and expires leaving n2 untrusted
+	specifications.ValidatorNodeJoinSpecification(ctx, t, n2Admin, p.Nodes[2].PrivateKey(), 2)
+	specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0}) // n2 is still not a trusted peer
+
+	// n2 approves the join request of n1 and adds it as a trusted peer
+	specifications.ValidatorNodeApproveSpecification(ctx, t, n1Admin, p.Nodes[2].PrivateKey(), 2, 2, false)
+	specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0, nID2})
+
+	time.Sleep(30 * time.Second) // let the join request expire
+	specifications.CurrentValidatorsSpecification(ctx, t, n0Admin, 2)
+
+	// n1 should remove n2 as a peer when the join request expires
+	specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0})
+}
+
 func TestSingleNodeKwildEthDepositsOracleIntegration(t *testing.T) {
 	ctx := context.Background()
 
@@ -442,7 +609,7 @@ func TestSingleNodeKwildEthDepositsOracleIntegration(t *testing.T) {
 	// I couldn't easily integrate it into Setup tests, as we need to first run the
 	// eth node and deploy contracts and use these contracts to configure and run the
 	// kwild nodes. So, I am keeping the deployment separate for now.
-	ethNode := setup.DeployETHNode(t, ctx, dockerNetwork.Name)
+	ethNode := setup.DeployETHNode(t, ctx, dockerNetwork.Name, UserPrivkey1.(*crypto.Secp256k1PrivateKey))
 	require.NotNil(t, ethNode)
 
 	// ensure that both the contracts are deployed
@@ -525,7 +692,7 @@ func TestKwildEthDepositFundTransfer(t *testing.T) {
 	// I couldn't easily integrate it into Setup tests, as we need to first run the
 	// eth node and deploy contracts and use these contracts to configure and run the
 	// kwild nodes. So, I am keeping the deployment separate for now.
-	ethNode := setup.DeployETHNode(t, ctx, dockerNetwork.Name)
+	ethNode := setup.DeployETHNode(t, ctx, dockerNetwork.Name, UserPrivkey1.(*crypto.Secp256k1PrivateKey))
 	require.NotNil(t, ethNode)
 
 	// ensure that both the contracts are deployed
@@ -598,7 +765,7 @@ func TestKwildEthDepositOracleValidatorUpdates(t *testing.T) {
 	// I couldn't easily integrate it into Setup tests, as we need to first run the
 	// eth node and deploy contracts and use these contracts to configure and run the
 	// kwild nodes. So, I am keeping the deployment separate for now.
-	ethNode := setup.DeployETHNode(t, ctx, dockerNetwork.Name)
+	ethNode := setup.DeployETHNode(t, ctx, dockerNetwork.Name, UserPrivkey1.(*crypto.Secp256k1PrivateKey))
 	require.NotNil(t, ethNode)
 
 	// ensure that both the contracts are deployed

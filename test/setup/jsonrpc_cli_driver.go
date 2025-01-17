@@ -55,9 +55,11 @@ func cmd[T any](j *jsonRPCCLIDriver, ctx context.Context, res T, args ...string)
 	flags := []string{"--provider", j.provider, "--private-key", hex.EncodeToString(j.privateKey.Bytes()), "--output", "json", "--assume-yes", "--silence", "--chain-id", j.chainID}
 
 	buf := new(bytes.Buffer)
-	j.cobraCmd.SetOut(buf)
-	j.cobraCmd.SetArgs(append(flags, args...))
-	err := j.cobraCmd.ExecuteContext(ctx)
+
+	cmd := root.NewRootCmd()
+	cmd.SetOut(buf)
+	cmd.SetArgs(append(flags, args...))
+	err := cmd.ExecuteContext(ctx)
 	if err != nil {
 		return err
 	}

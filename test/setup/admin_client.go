@@ -15,6 +15,7 @@ import (
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
+	adminTypes "github.com/kwilteam/kwil-db/core/types/admin"
 	"github.com/testcontainers/testcontainers-go"
 )
 
@@ -215,4 +216,57 @@ func (a *AdminClient) ListMigrations(ctx context.Context) ([]*types.Migration, e
 		return nil, err
 	}
 	return res, nil
+}
+
+func (a *AdminClient) AddPeer(ctx context.Context, peerID string) error {
+	var peer string
+	err := exec(a, ctx, &peer, "whitelist", "add", peerID)
+	if err != nil {
+		return err
+	}
+
+	if peer != peerID {
+		return fmt.Errorf("expected to add peer %s, got %s", peerID, peer)
+	}
+
+	return nil
+}
+
+func (a *AdminClient) RemovePeer(ctx context.Context, peerID string) error {
+	var peer string
+	err := exec(a, ctx, &peer, "whitelist", "remove", peerID)
+	if err != nil {
+		return err
+	}
+
+	if peer != peerID {
+		return fmt.Errorf("expected to remove peer %s, got %s", peerID, peer)
+	}
+
+	return nil
+}
+
+func (a *AdminClient) ListPeers(ctx context.Context) ([]string, error) {
+	var peers []string
+	err := exec(a, ctx, &peers, "whitelist", "list")
+	if err != nil {
+		return nil, err
+	}
+
+	return peers, nil
+}
+
+func (a *AdminClient) ConnectedPeers(ctx context.Context) ([]string, error) {
+	var res []*adminTypes.PeerInfo
+	err := exec(a, ctx, &res, "admin", "peers")
+	if err != nil {
+		return nil, err
+	}
+
+	peers := make([]string, len(res))
+	for i, p := range res {
+		peers[i] = p.RemoteAddr
+	}
+
+	return peers, nil
 }

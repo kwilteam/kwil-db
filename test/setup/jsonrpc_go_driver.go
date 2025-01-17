@@ -2,8 +2,6 @@ package setup
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/core/client"
@@ -53,27 +51,6 @@ func newClient(ctx context.Context, endpoint string, l logFunc, opts *ClientOpti
 		Client:     cl,
 		log:        l,
 	}, nil
-}
-
-func generatePrivKey(privKey string) (secp256k1Priv *crypto.Secp256k1PrivateKey, err error) {
-	if privKey == "" {
-		priv, _, err := crypto.GenerateSecp256k1Key(rand.Reader)
-		if err != nil {
-			return nil, err
-		}
-		secp256k1Priv = priv.(*crypto.Secp256k1PrivateKey)
-	} else {
-		bz, err := hex.DecodeString(privKey)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode private key: %w", err)
-		}
-		secp256k1Priv, err = crypto.UnmarshalSecp256k1PrivateKey(bz)
-		if err != nil {
-			return nil, fmt.Errorf("failed to unmarshal private key: %w", err)
-		}
-	}
-
-	return secp256k1Priv, nil
 }
 
 func (c *jsonrpcGoDriver) PrivateKey() crypto.PrivateKey {

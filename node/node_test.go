@@ -349,12 +349,13 @@ func (ce *dummyCE) CancelBlockExecution(height int64, txIDs []types.Hash) error 
 	return nil
 }
 
-func (ce *dummyCE) Start(ctx context.Context, fns consensus.BroadcastFns) error {
+func (ce *dummyCE) Start(ctx context.Context, fns consensus.BroadcastFns, peerFns consensus.WhitelistFns) error {
 	ce.proposerBroadcaster = fns.ProposalBroadcaster
 	ce.blkAnnouncer = fns.BlkAnnouncer
 	ce.ackBroadcaster = fns.AckBroadcaster
 	ce.blkRequester = fns.BlkRequester
 	ce.stateResetter = fns.RstStateBroadcaster
+
 	return nil
 }
 

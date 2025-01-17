@@ -231,26 +231,26 @@ tasks:
       - go test ./core/... -tags=ext_test -count=1 -race
       - CGO_ENABLED=1 go test ./... -tags=ext_test,pglive -count=1 -race
 
-  # test:it:
-  #   desc: Run integration tests ('short' mode)
-  #   deps:
-  #     - task: build:cli
-  #     - task: build:admin
-  #     - task: build:docker
-  #   cmds:
-  #     - task: test:it:nb
+  test:it:
+    desc: Run integration tests ('short' mode)
+    deps:
+      - task: build:cli
+      - task: build:admin
+      - task: build:docker
+    cmds:
+      - task: test:it:nb
 
-  # test:it:nb:
-  #   desc: Run integration tests ('short' mode)
-  #   dir: test # different module
-  #   cmds:
-  #     - go test -short -count=1 -timeout 0 ./integration -v {{.CLI_ARGS}}
+  test:it:nb:
+    desc: Run integration tests ('short' mode)
+    dir: test # different module
+    cmds:
+      - go test -short -count=1 -timeout 0 ./integration -v {{.CLI_ARGS}}
 
-  # test:it:nb:all:
-  #   desc: Run integration tests
-  #   dir: test # different module
-  #   cmds:
-  #     - go test -count=1 -timeout 0 ./integration -v {{.CLI_ARGS}}
+  test:it:nb:all:
+    desc: Run integration tests
+    dir: test # different module
+    cmds:
+      - go test -count=1 -timeout 0 ./integration -v {{.CLI_ARGS}}
 
   # test:it:spam:
   #   desc: Run integration test with oracle spammer nodes
