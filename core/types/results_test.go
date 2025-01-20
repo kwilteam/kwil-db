@@ -329,9 +329,9 @@ func checkType[T any](t *testing.T, q *QueryResult, want any) {
 	t.Logf("testing type %T, expecting %s", *new(T), name)
 
 	v := new(T)
-	err := q.Scan([]any{v}, func() error {
+	err := q.Scan(func() error {
 		return nil
-	})
+	}, v)
 
 	switch want := want.(type) {
 	case nil:
@@ -592,9 +592,9 @@ func TestScanArrayNullability(t *testing.T) {
 	qr := &QueryResult{
 		Values: [][]any{{[]any{}}},
 	}
-	err := qr.Scan([]any{v}, func() error {
+	err := qr.Scan(func() error {
 		return nil
-	})
+	}, v)
 	assert.NoError(t, err)
 
 	assert.True(t, *v != nil)
@@ -605,9 +605,9 @@ func TestScanArrayNullability(t *testing.T) {
 	qr = &QueryResult{
 		Values: [][]any{{[]any{"a"}, nil}},
 	}
-	err = qr.Scan([]any{v, v2}, func() error {
+	err = qr.Scan(func() error {
 		return nil
-	})
+	}, v, v2)
 	assert.NoError(t, err)
 
 	assert.True(t, *v != nil)
