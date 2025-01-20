@@ -16,7 +16,7 @@ func networkStatusCmd() *cobra.Command {
 		Use:   "status",
 		Short: "Get the migration status of the network.",
 		Example: `# Get the migration status of the network.
-		kwil-admin migrate status`,
+		kwild migrate status`,
 		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			ctx := cmd.Context()

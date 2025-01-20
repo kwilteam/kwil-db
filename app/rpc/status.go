@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	statusLong = `The status command retrieves and prints the node's status.`
+	statusLong = "The `status` command retrieves and prints the node's status."
 
 	statusExample = `# Print a running node's status
 kwild admin status --rpcserver /tmp/kwild.socket`

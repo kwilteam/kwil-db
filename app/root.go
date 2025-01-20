@@ -14,6 +14,7 @@ import (
 	"github.com/kwilteam/kwil-db/app/rpc"
 	"github.com/kwilteam/kwil-db/app/seed"
 	"github.com/kwilteam/kwil-db/app/setup"
+	"github.com/kwilteam/kwil-db/app/shared"
 	"github.com/kwilteam/kwil-db/app/shared/bind"
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	verCmd "github.com/kwilteam/kwil-db/app/shared/version"
@@ -52,13 +53,6 @@ func RootCmd() *cobra.Command {
 
 	bind.BindDebugFlag(cmd) // --debug enabled CLI debug mode (shared.Debugf output)
 
-	// conf.BindDefaults(struct {
-	// 	RootDir        string `koanf:"root" toml:"root"`
-	// 	*config.Config `koanf:",flatten"`
-	// }{
-	// 	RootDir: defaultRoot,
-	// 	Config:  custom.DefaultConfig(), // not config.DefaultConfig(), so custom command config is used
-	// })
 	conf.BindDefaultsWithRootDir(custom.DefaultConfig(), defaultRoot)
 
 	bind.BindRootDir(cmd, defaultRoot, "root directory") // --root/-r accessible with bind.RootDir from *any* subcommand
@@ -82,5 +76,23 @@ func RootCmd() *cobra.Command {
 	cmd.AddCommand(utils.NewCmdUtils())
 	cmd.AddCommand(verCmd.NewVersionCmd())
 
+	// Apply the custom help function to the current command
+	shared.SetSanitizedHelpFunc(cmd)
+
+	// Recursively apply to all subcommands
+	for _, subCmd := range cmd.Commands() {
+		applySanitizedHelpFuncRecursively(subCmd)
+	}
+
 	return cmd
+}
+
+func applySanitizedHelpFuncRecursively(cmd *cobra.Command) {
+	// Apply the custom help function to the current command
+	shared.SetSanitizedHelpFunc(cmd)
+
+	// Recursively apply to all subcommands
+	for _, subCmd := range cmd.Commands() {
+		applySanitizedHelpFuncRecursively(subCmd)
+	}
 }

@@ -11,7 +11,7 @@ import (
 )
 
 var (
-	approveLong = "The approve command creates and approves an active join request for a candidate validator using the node's validator keys to publish an approval transaction. If enough validators approve the join request, the candidate validator will be added to the validator set."
+	approveLong = "The `approve` command creates and approves an active join request for a candidate validator using the node's validator keys to publish an approval transaction. If enough validators approve the join request, the candidate validator will be added to the validator set."
 
 	approveExample = `# Approve a join request for a candidate validator by providing the validator info in format <hexPubkey#pubkeytype>
 kwild validators approve 6ecaca8e9394c939a858c2c7b47acb1db26a96d7ab38bd702fa3820c5034e9d0#1`

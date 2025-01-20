@@ -10,8 +10,8 @@ func NewCmdUtils() *cobra.Command {
 	var utilsCmd = &cobra.Command{
 		Use:     "utils",
 		Aliases: []string{"common"},
-		Short:   "Various admin utility commands.",
-		Long:    "Various admin utility commands.",
+		Short:   "Miscellaneous utility commands.",
+		Long:    "The `utils` commands provide various miscellaneous utility commands such as `query-tx` for querying a transaction status.",
 	}
 
 	utilsCmd.AddCommand(

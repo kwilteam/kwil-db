@@ -34,6 +34,8 @@ func TestnetCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "testnet",
 		Short: "Generate configuration for a new test network with multiple nodes",
+		Long: "The `testnet` command generates a configuration for a new test network with multiple nodes. " +
+			"For a configuration set that can be run on the same host, use the `--unique-ports` flag.",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return GenerateTestnetConfigs(&TestnetConfig{
 				RootDir:      outDir,

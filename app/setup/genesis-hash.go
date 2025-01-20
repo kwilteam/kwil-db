@@ -21,23 +21,23 @@ import (
 )
 
 var (
-	genesisHashLong = `Compute the genesis hash from existing PostgreSQL datasets, and optionally update a ` + "`" + `genesis.json` + "`" + ` file.
-It can be configured to connect to Postgres either using the root directory (from which the ` + "`" + `config.toml` + "`" + ` will be read),
+	genesisHashLong = `Compute the genesis hash from existing PostgreSQL datasets, and optionally update a ` + "`genesis.json`" + ` file.
+It can be configured to connect to Postgres either using the root directory (from which the ` + "`config.toml`" + ` will be read),
 or by specifying the connection details directly.
 
 Alternatively, a snapshot file can be provided to compute the genesis hash from a snapshot file instead of the database. The snapshot can either be
 a .sql or .sql.gz file.
 
-By default, it will print the genesis hash to stdout. To specify a genesis file to update as well, use the ` + "`" + `--genesis` + "`" + ` flag.`
+By default, it will print the genesis hash to stdout. To specify a genesis file to update as well, use the ` + "`--genesis`" + ` flag.`
 
 	genesisHashExample = `# Compute the genesis hash from an existing PostgreSQL database using a connection, and add it to a genesis file
-kwil-admin setup genesis-hash --dbname kwild --host "127.0.0.1" --port "5432" --user kwild --genesis "~/.kwild/abci/config/genesis.json"
+kwild setup genesis-hash --dbname kwild --host "127.0.0.1" --port "5432" --user kwild --genesis "~/.kwild/abci/config/genesis.json"
 
 # Compute the genesis hash from an existing PostgreSQL database using the root directory
-kwil-admin setup genesis-hash --genesis "~/.kwild/abci/config/genesis.json" --root-dir "~/.kwild"
+kwild setup genesis-hash --genesis "~/.kwild/abci/config/genesis.json" --root-dir "~/.kwild"
 
 # Compute the genesis hash from a snapshot file
-kwil-admin setup genesis-hash --snapshot "/path/to/snapshot.sql.gz" --genesis "~/.kwild/abci/config/genesis.json"`
+kwild setup genesis-hash --snapshot "/path/to/snapshot.sql.gz" --genesis "~/.kwild/abci/config/genesis.json"`
 )
 
 func GenesisHashCmd() *cobra.Command {
@@ -235,7 +235,7 @@ func tmpKwilAdminSnapshotDir() (string, error) {
 		return "", err
 	}
 
-	r, err := node.ExpandPath(filepath.Join(home, ".kwil-admin-snaps-temp"))
+	r, err := node.ExpandPath(filepath.Join(home, ".kwild-snaps-temp"))
 	if err != nil {
 		return "", err
 	}

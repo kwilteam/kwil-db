@@ -12,9 +12,9 @@ import (
 )
 
 var (
-	genAuthKeyLong = `The gen-auth-key command generates a new key pair for use with an authenticated admin RPC service.
+	genAuthKeyLong = `The ` + "`gen-auth-key`" + `command generates a new key pair for use with an authenticated admin RPC service.
 	
-The key pair is generated and stored in the node's configuration directory, in the files auth.key and auth.cert. The key pair is used to authenticate the admin tool to the node.`
+The key pair is generated and stored in the node's configuration directory, in the files ` + "`auth.key`" + ` and ` + "`auth.cert`" + `. The key pair is used to authenticate the admin tool to the node.`
 	genAuthKeyExample = `# Generate a new TLS key pair to talk to the node
 kwild admin gen-auth-key
 # kwild admin commands uses auth.{key,cert}, while kwild uses clients.pem`

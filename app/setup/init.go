@@ -30,9 +30,11 @@ var (
 )
 
 var (
-	initLong = `The init command facilitates quick setup of an isolated Kwil node either on a fresh network in which that node is the single validator or to join an existing network.
-This permits rapid prototyping and evaluation of Kwil functionality. An output directory can be specified using the ` + "`" + `--output-dir` + "`" + `" flag.
-If no output directory is specified, the node will be initialized ` + "`" + `./testnet` + "`" + `.`
+	initLong = `The ` + "`init`" + ` command facilitates quick setup of an isolated Kwil node either on a fresh network in which that node is the single validator or to join an existing network.
+
+This permits rapid prototyping and evaluation of Kwil functionality. An output directory can be specified using the ` + "`--output-dir`" + `" flag.
+
+If no output directory is specified, the node will be initialized ` + "`./testnet`" + `.`
 
 	initExample = `# Initialize a node, with a new network, in the directory ~/.kwil-new
 kwild setup init -r ~/.kwild-new`

@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	peersLong = `The peers command retrieves and print a list of the node's peers, with their public information.`
+	peersLong = "The `peers` command retrieves and print a list of the node's peers, with their public information."
 
 	peersExample = `# Print a list of the node's peers
 kwild admin peers --rpcserver /tmp/kwild.socket`

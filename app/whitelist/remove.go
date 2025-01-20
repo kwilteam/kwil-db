@@ -14,7 +14,7 @@ func removeCmd() *cobra.Command {
 	var cmd = &cobra.Command{
 		Use:     "remove <peerID>",
 		Short:   "Remove a peer from the node's whitelist and disconnect it.",
-		Long:    "The remove command removes a peer from the node's whitelist and disconnects it.",
+		Long:    "The `remove` command removes a peer from the node's whitelist and disconnects it.",
 		Example: "kwild whitelist remove <peerID>",
 		Args:    cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {

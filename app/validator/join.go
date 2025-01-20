@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	joinLong = "The join command submitting a request to join the validator set. This node will be the subject of the request. The node will be added to the validator set if the join request is approved by the current validator set. The status of a join request can be queried using the join-status command."
+	joinLong = "The `join` command submits a request to join the validator set. This node will be the subject of the request. The node will be added to the validator set if the join request is approved by the current validator set. The status of a join request can be queried using the `join-status` command."
 
 	joinExample = `# Request to join the validator set
 kwild validators join`

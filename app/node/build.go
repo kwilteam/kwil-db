@@ -647,7 +647,7 @@ func tlsConfig(d *coreDependencies, withClientAuth bool) *tls.Config {
 		d.logger.Info("generated admin service client CAs file", log.String("file", clientsFile))
 	} */
 	{
-		d.logger.Info("No admin client CAs file. Use kwil-admin's node gen-auth-key command to generate")
+		d.logger.Info("No admin client CAs file. Use kwild's admin gen-auth-key command to generate")
 	}
 
 	if len(clientsCerts) > 0 && !caCertPool.AppendCertsFromPEM(clientsCerts) {
