@@ -39,8 +39,8 @@ var (
 // Node specifies the methods required for chain service to interact with the blockchain.
 type Node interface {
 	// BlockByHeight returns block info at height. If height=0, the latest block will be returned.
-	BlockByHeight(height int64) (ktypes.Hash, *ktypes.Block, *ktypes.CommitInfo, error)
-	BlockByHash(hash ktypes.Hash) (*ktypes.Block, *ktypes.CommitInfo, error)
+	BlockByHeight(height int64) (ktypes.Hash, *ktypes.Block, *nodetypes.CommitInfo, error)
+	BlockByHash(hash ktypes.Hash) (*ktypes.Block, *nodetypes.CommitInfo, error)
 	BlockResultByHash(hash ktypes.Hash) ([]ktypes.TxResult, error)
 	ChainTx(hash ktypes.Hash) (*chaintypes.Tx, error)
 	BlockHeight() int64

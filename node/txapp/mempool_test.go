@@ -36,7 +36,7 @@ func Test_MempoolWithoutGas(t *testing.T) {
 		Caller: "A",
 		BlockContext: &common.BlockContext{
 			ChainContext: &common.ChainContext{
-				NetworkParameters: &common.NetworkParameters{
+				NetworkParameters: &types.NetworkParameters{
 					Leader:           types.PublicKey{PublicKey: pubkey},
 					DisabledGasCosts: true,
 				},
@@ -46,7 +46,7 @@ func Test_MempoolWithoutGas(t *testing.T) {
 
 	// Successful transaction A: 1
 	tx := newTx(t, 1, "A")
-	senderAcct, err := tx.SenderInfo()
+	senderAcct, err := TxSenderAcctID(tx)
 	require.NoError(t, err)
 	id, err := senderAcct.MarshalBinary()
 	require.NoError(t, err)
@@ -94,7 +94,7 @@ func Test_MempoolWithGas(t *testing.T) {
 		BlockContext: &common.BlockContext{
 			ChainContext: &common.ChainContext{
 				NetworkParameters: &common.NetworkParameters{
-					DisabledGasCosts: false,
+					// DisabledGasCosts: false,
 				},
 			},
 		},
@@ -105,7 +105,7 @@ func Test_MempoolWithGas(t *testing.T) {
 
 	// Transaction from Unknown sender should fail
 	tx := newTx(t, 1, "A")
-	senderAcct, err := tx.SenderInfo()
+	senderAcct, err := TxSenderAcctID(tx)
 	require.NoError(t, err)
 	id, err := senderAcct.MarshalBinary()
 	require.NoError(t, err)

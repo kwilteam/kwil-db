@@ -64,7 +64,7 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 // This also checks if the node should request the block from its peers. This can happen
 // 1. If the node is a sentry node and doesn't have the block.
 // 2. If the node is a validator and missed the block proposal message.
-func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, ci *ktypes.CommitInfo, leaderSig []byte) bool {
+func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, ci *types.CommitInfo, leaderSig []byte) bool {
 	if ce.role.Load() == types.RoleLeader {
 		return false
 	}
@@ -208,7 +208,7 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 	ce.log.Info("Sending ack to the leader", "height", blkPropMsg.height,
 		"hash", blkPropMsg.blkHash, "appHash", ce.state.blockRes.appHash)
 
-	signature, err := ktypes.SignVote(blkPropMsg.blkHash, true, &ce.state.blockRes.appHash, ce.privKey)
+	signature, err := types.SignVote(blkPropMsg.blkHash, true, &ce.state.blockRes.appHash, ce.privKey)
 	if err != nil {
 		ce.log.Error("Error signing the voteInfo", "error", err)
 	}
@@ -231,7 +231,7 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 // If the validator node processed a different block, it should rollback and reprocess the block.
 // Validator nodes can skip the block execution and directly commit the block if they have already processed the block.
 // The nodes should only commit the block if the appHash is valid, else halt the node.
-func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, ci *ktypes.CommitInfo) error {
+func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, ci *types.CommitInfo) error {
 	if ce.role.Load() == types.RoleLeader {
 		return nil
 	}
@@ -300,7 +300,7 @@ func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, c
 
 // processAndCommit: used by the sentry nodes and slow validators to process and commit the block.
 // This is used when the acks are not required to be sent back to the leader, essentially in catchup mode.
-func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Block, ci *ktypes.CommitInfo) error {
+func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Block, ci *types.CommitInfo) error {
 	blkID := blk.Header.Hash()
 	if ci == nil {
 		return fmt.Errorf("commitInfo is nil")
@@ -351,7 +351,7 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Blo
 	return nil
 }
 
-func (ce *ConsensusEngine) acceptCommitInfo(ci *ktypes.CommitInfo, blkID ktypes.Hash) error {
+func (ce *ConsensusEngine) acceptCommitInfo(ci *types.CommitInfo, blkID ktypes.Hash) error {
 	if ci == nil {
 		return fmt.Errorf("commitInfo is nil")
 	}
@@ -364,7 +364,7 @@ func (ce *ConsensusEngine) acceptCommitInfo(ci *ktypes.CommitInfo, blkID ktypes.
 			return fmt.Errorf("error verifying vote: %v", err)
 		}
 
-		if vote.AckStatus == ktypes.AckStatusAgree {
+		if vote.AckStatus == types.AckStatusAgree {
 			acks++
 		}
 	}

@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strings"
 	"time"
 
 	"github.com/kwilteam/kwil-db/app/shared/display"
@@ -19,7 +20,7 @@ import (
 
 func transferCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "transfer <receipientID> <recipientKeyType> <amount>",
+		Use:   "transfer <recipientID> <recipientKeyType> <amount>",
 		Short: "Transfer value to an account",
 		Long:  `Transfers value to an account.`,
 		Args:  cobra.ExactArgs(3), // recipient, keytype, amt
@@ -30,15 +31,18 @@ func transferCmd() *cobra.Command {
 				return display.PrintErr(cmd, errors.New("invalid decimal amount"))
 			}
 
-			keyType, err := crypto.ParseKeyType(typeStr)
-			if err != nil {
-				return display.PrintErr(cmd, fmt.Errorf("failed to parse key type %s: %w", typeStr, err))
-			}
-
+			// Recognize 0x prefix to permit ethereum address format rather
+			// than compact ID hex bytes.
+			recipient = strings.TrimPrefix(recipient, "0x")
 			id, err := hex.DecodeString(recipient)
 			if err != nil {
 				return display.PrintErr(cmd, fmt.Errorf("failed to decode account ID: %w", err))
 			}
+
+			keyType := crypto.KeyType(typeStr)
+			// NOTE: could validate on client side first if built with extensions:
+			//   keyType, err := crypto.ParseKeyType(typeStr)
+			// Otherwise we leave it to the nodes to decide if it is supported.
 
 			to := &types.AccountID{
 				Identifier: id,

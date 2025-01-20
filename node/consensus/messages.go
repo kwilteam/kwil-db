@@ -54,7 +54,7 @@ type vote struct {
 	appHash *types.Hash
 	height  int64
 
-	signature *ktypes.Signature
+	signature *types.Signature
 }
 
 func (vm *vote) Type() consensusMsgType {
@@ -74,7 +74,7 @@ func (vm *vote) String() string {
 // Ensure that the source of the block announce is the leader.
 type blockAnnounce struct {
 	blk *ktypes.Block
-	ci  *ktypes.CommitInfo
+	ci  *types.CommitInfo
 }
 
 func (bam *blockAnnounce) Type() consensusMsgType {
@@ -120,7 +120,7 @@ func (ce *ConsensusEngine) NotifyBlockProposal(blk *ktypes.Block) {
 
 // NotifyBlockCommit is used by the p2p stream handler to notify the consensus engine of a committed block.
 // Leader should ignore this message.
-func (ce *ConsensusEngine) NotifyBlockCommit(blk *ktypes.Block, ci *ktypes.CommitInfo) {
+func (ce *ConsensusEngine) NotifyBlockCommit(blk *ktypes.Block, ci *types.CommitInfo) {
 	if ce.role.Load() == types.RoleLeader {
 		return
 	}
@@ -148,7 +148,7 @@ func (ce *ConsensusEngine) NotifyACK(validatorPK []byte, ack types.AckRes) {
 		appHash: ack.AppHash,
 		blkHash: ack.BlkHash,
 		height:  ack.Height,
-		signature: &ktypes.Signature{
+		signature: &types.Signature{
 			PubKey:     ack.PubKey,
 			PubKeyType: ack.PubKeyType,
 			Data:       ack.Signature,

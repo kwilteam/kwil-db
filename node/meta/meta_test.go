@@ -9,7 +9,6 @@ import (
 
 	"github.com/stretchr/testify/require"
 
-	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/meta"
@@ -51,7 +50,7 @@ func Test_NetworkParams(t *testing.T) {
 
 	_, pubkey, _ := crypto.GenerateSecp256k1Key(nil)
 
-	param := &common.NetworkParameters{
+	param := &types.NetworkParameters{
 		Leader:           types.PublicKey{PublicKey: pubkey},
 		MaxBlockSize:     1000,
 		JoinExpiry:       types.Duration(100 * time.Second),

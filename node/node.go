@@ -289,7 +289,7 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 }
 
 func FormatPeerString(rawPubKey []byte, keyType crypto.KeyType, ip string, port int) string {
-	return fmt.Sprintf("%s#%d@%s", hex.EncodeToString(rawPubKey), keyType,
+	return fmt.Sprintf("%s#%s@%s", hex.EncodeToString(rawPubKey), keyType,
 		net.JoinHostPort(ip, strconv.Itoa(port)))
 }
 

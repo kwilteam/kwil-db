@@ -11,7 +11,7 @@ import (
 )
 
 type ConsensusEngine interface {
-	Status() *ktypes.NodeStatus // includes: role, inCatchup, consensus params, last commit info and block header
+	Status() *types.NodeStatus // includes: role, inCatchup, consensus params, last commit info and block header
 
 	Role() types.Role
 	InCatchup() bool
@@ -19,8 +19,8 @@ type ConsensusEngine interface {
 	AcceptProposal(height int64, blkID, prevBlkID types.Hash, leaderSig []byte, timestamp int64) bool
 	NotifyBlockProposal(blk *ktypes.Block)
 
-	AcceptCommit(height int64, blkID types.Hash, ci *ktypes.CommitInfo, leaderSig []byte) bool
-	NotifyBlockCommit(blk *ktypes.Block, ci *ktypes.CommitInfo)
+	AcceptCommit(height int64, blkID types.Hash, ci *types.CommitInfo, leaderSig []byte) bool
+	NotifyBlockCommit(blk *ktypes.Block, ci *types.CommitInfo)
 
 	NotifyACK(validatorPK []byte, ack types.AckRes)
 

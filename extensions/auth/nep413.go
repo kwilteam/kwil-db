@@ -164,3 +164,7 @@ func deserializeSignature(signatureBts []byte) (*Nep413Payload, []byte, error) {
 
 	return payload, signature, nil
 }
+
+func (n Nep413Authenticator) KeyType() crypto.KeyType {
+	return crypto.KeyTypeEd25519
+}

@@ -99,7 +99,7 @@ func TestEd25519KeyEquality(t *testing.T) {
 		t.Error("Derived public key should equal original public key")
 	}
 
-	mockPriv := &mockPrivateKey{keyType: 99}
+	mockPriv := &mockPrivateKey{keyType: "wrong"}
 	if priv1.Equals(mockPriv) {
 		t.Error("Different private key types should not be equal")
 	}
@@ -117,7 +117,7 @@ func TestEd25519KeyEquality(t *testing.T) {
 		t.Error("same Type and Bytes should be equal regardless of concrete impl")
 	}
 
-	mockPub := &mockPublicKey{keyType: 99}
+	mockPub := &mockPublicKey{keyType: "wrong"}
 	if pub1.Equals(mockPub) {
 		t.Error("Different private key types should not be equal")
 	}

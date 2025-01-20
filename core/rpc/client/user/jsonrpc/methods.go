@@ -143,7 +143,7 @@ func (cl *Client) GetAccount(ctx context.Context, account *types.AccountID, stat
 	// }
 
 	return &types.Account{
-		ID:      res.ID,
+		ID:      res.ID, // WARNING: may be nil if account is not found
 		Balance: balance,
 		Nonce:   res.Nonce,
 	}, nil

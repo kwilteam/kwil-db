@@ -34,7 +34,7 @@ const (
 )
 
 type blockStore interface {
-	GetByHeight(height int64) (types.Hash, *ktypes.Block, *ktypes.CommitInfo, error)
+	GetByHeight(height int64) (types.Hash, *ktypes.Block, *types.CommitInfo, error)
 }
 
 type statesyncConfig struct {

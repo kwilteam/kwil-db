@@ -122,7 +122,11 @@ func NodeIDFromPubKey(pubkey crypto.PublicKey) string {
 	if pubkey == nil {
 		return "<invalid>"
 	}
-	return fmt.Sprintf("%x#%d", pubkey.Bytes(), pubkey.Type())
+	// kd, ok := authExt.KeyDefinition(pubkey.Type())
+	// if !ok {
+	// 	return "<invalid key type>"
+	// }
+	return fmt.Sprintf("%x#%s", pubkey.Bytes(), pubkey.Type().String())
 }
 
 func NodeIDToPubKey(nodeID string) (crypto.PublicKey, error) {
@@ -131,22 +135,11 @@ func NodeIDToPubKey(nodeID string) (crypto.PublicKey, error) {
 		return nil, errors.New("invalid peer notation")
 	}
 	pubkeyStr, keyTypeStr := parts[0], parts[1]
-	keyType, err := strconv.ParseUint(keyTypeStr, 10, 16)
-	if err != nil {
-		return nil, errors.New("invalid key type in peer notation")
-	}
 	pubkeyBts, err := hex.DecodeString(pubkeyStr)
 	if err != nil {
 		return nil, fmt.Errorf("invalid node pubkey: %w", err)
 	}
-	switch crypto.KeyType(keyType) {
-	case crypto.KeyTypeSecp256k1:
-		return crypto.UnmarshalSecp256k1PublicKey(pubkeyBts)
-	case crypto.KeyTypeEd25519:
-		return crypto.UnmarshalEd25519PublicKey(pubkeyBts)
-	default:
-		return nil, errors.New("unsupported key type")
-	}
+	return crypto.UnmarshalPublicKey(pubkeyBts, crypto.KeyType(keyTypeStr))
 }
 
 func nodeIDToPeerID(nodeID string) (peer.ID, error) {

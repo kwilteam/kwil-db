@@ -36,7 +36,17 @@ func TestPeerIDPubKeyRoundTrip(t *testing.T) {
 				t.Fatalf("failed to decode pubkey hex: %v", err)
 			}
 
-			pubKey, err := crypto.UnmarshalPublicKey(pubKeyBytes, tt.pubKeyType)
+			var pubKey crypto.PublicKey
+
+			switch tt.pubKeyType {
+			case crypto.KeyTypeSecp256k1:
+				pubKey, err = crypto.UnmarshalSecp256k1PublicKey(pubKeyBytes)
+			case crypto.KeyTypeEd25519:
+				pubKey, err = crypto.UnmarshalEd25519PublicKey(pubKeyBytes)
+			default:
+				t.Fatalf("unsupported pubkey type: %v", tt.pubKeyType)
+			}
+
 			if err != nil {
 				t.Fatalf("failed to unmarshal pubkey: %v", err)
 			}

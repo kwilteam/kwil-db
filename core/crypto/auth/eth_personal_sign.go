@@ -17,6 +17,8 @@ const (
 	// is intended as the authenticator for the SDK-provided EthPersonalSigner,
 	// and must be registered with that name.
 	EthPersonalSignAuth = "secp256k1_ep"
+
+	EthAddressIdentLength = 20
 )
 
 // EthSecp256k1Authenticator is the authenticator for the Ethereum "personal
@@ -88,4 +90,8 @@ func (EthSecp256k1Authenticator) Verify(identity []byte, msg []byte, signature [
 	}
 
 	return nil
+}
+
+func (EthSecp256k1Authenticator) KeyType() crypto.KeyType {
+	return crypto.KeyTypeSecp256k1 // just like the Secp256k1Authenticator
 }

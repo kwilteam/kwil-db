@@ -102,8 +102,8 @@ var resolutionConfig = resolutions.ResolutionConfig{
 			return fmt.Errorf("invalid key type: %w", err)
 		}
 
-		app.Service.Logger.Infof("crediting account", "account", hex.EncodeToString(credit.Account), "amount", credit.Amount,
-			"eth_tx", hex.EncodeToString(credit.TxHash))
+		app.Service.Logger.Infof("crediting account", "account", hex.EncodeToString(credit.Account),
+			"amount", credit.Amount, "eth_tx", hex.EncodeToString(credit.TxHash))
 
 		// Credit the account with the given amount
 		return app.Accounts.Credit(ctx, app.DB, &types.AccountID{

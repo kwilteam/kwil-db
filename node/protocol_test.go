@@ -24,7 +24,7 @@ func TestBlockAnnMsg_MarshalUnmarshal(t *testing.T) {
 		{
 			name: "empty message with commitInfo",
 			msg: &blockAnnMsg{
-				CommitInfo: &ktypes.CommitInfo{},
+				CommitInfo: &types.CommitInfo{},
 			},
 			wantErr: false,
 		},
@@ -43,7 +43,7 @@ func TestBlockAnnMsg_MarshalUnmarshal(t *testing.T) {
 			msg: &blockAnnMsg{
 				Height: 100,
 				Hash:   [32]byte{1, 2, 3},
-				CommitInfo: &ktypes.CommitInfo{
+				CommitInfo: &types.CommitInfo{
 					AppHash: ktypes.Hash{1, 2, 3},
 				},
 				LeaderSig: []byte{7, 8, 9},
@@ -55,7 +55,7 @@ func TestBlockAnnMsg_MarshalUnmarshal(t *testing.T) {
 			msg: &blockAnnMsg{
 				Height: 100,
 				Hash:   [32]byte{1, 2, 3},
-				CommitInfo: &ktypes.CommitInfo{
+				CommitInfo: &types.CommitInfo{
 					AppHash: ktypes.Hash{1, 2, 3},
 				},
 			},

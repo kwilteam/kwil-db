@@ -34,8 +34,8 @@ type BlockStore interface {
 
 type BlockGetter interface {
 	Have(Hash) bool
-	Get(Hash) (*types.Block, *types.CommitInfo, error)
-	GetByHeight(int64) (Hash, *types.Block, *types.CommitInfo, error) // note: we can impl GetBlockHeader easily too
+	Get(Hash) (*types.Block, *CommitInfo, error)
+	GetByHeight(int64) (Hash, *types.Block, *CommitInfo, error) // note: we can impl GetBlockHeader easily too
 }
 
 type RawGetter interface {
@@ -44,7 +44,7 @@ type RawGetter interface {
 }
 
 type BlockStorer interface {
-	Store(*types.Block, *types.CommitInfo) error
+	Store(*types.Block, *CommitInfo) error
 }
 
 type BlockResultsStorer interface {

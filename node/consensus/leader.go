@@ -156,7 +156,7 @@ func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 	}
 
 	// Add its own vote to the votes map
-	sig, err := ktypes.SignVote(blkProp.blkHash, true, &ce.state.blockRes.appHash, ce.privKey)
+	sig, err := types.SignVote(blkProp.blkHash, true, &ce.state.blockRes.appHash, ce.privKey)
 	if err != nil {
 		ce.log.Errorf("Error signing the vote: %v", err)
 		return err
@@ -164,9 +164,9 @@ func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 
 	ce.log.Info("Waiting for votes from the validators", "height", blkProp.height, "hash", blkProp.blkHash)
 
-	ce.state.votes[string(ce.pubKey.Bytes())] = &ktypes.VoteInfo{
+	ce.state.votes[string(ce.pubKey.Bytes())] = &types.VoteInfo{
 		AppHash:   &ce.state.blockRes.appHash,
-		AckStatus: ktypes.AckStatusAgree,
+		AckStatus: types.AckStatusAgree,
 		Signature: *sig,
 	}
 
@@ -253,18 +253,18 @@ func (ce *ConsensusEngine) addVote(ctx context.Context, vote *vote, sender strin
 	ce.log.Info("Adding vote", "height", vote.height, "blkHash", vote.blkHash, "appHash", vote.appHash, "sender", sender)
 	if _, ok := ce.state.votes[sender]; !ok {
 		// verify the vote signature, before accepting the vote from the validator if ack is true
-		var ackStatus ktypes.AckStatus
+		var ackStatus types.AckStatus
 		var appHash *types.Hash
 
 		if vote.ack {
-			ackStatus = ktypes.AckStatusAgree
+			ackStatus = types.AckStatusAgree
 			if *vote.appHash != ce.state.blockRes.appHash {
-				ackStatus = ktypes.AckStatusDiverge
+				ackStatus = types.AckStatusDiverge
 				appHash = vote.appHash
 			}
 		}
 
-		voteInfo := &ktypes.VoteInfo{
+		voteInfo := &types.VoteInfo{
 			Signature: *vote.signature,
 			AckStatus: ackStatus,
 			AppHash:   appHash,
@@ -299,7 +299,7 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 	// Count the votes
 	var acks, nacks int
 	for _, vote := range ce.state.votes {
-		if vote.AckStatus == ktypes.AckStatusAgree {
+		if vote.AckStatus == types.AckStatusAgree {
 			acks++
 		} else {
 			nacks++
@@ -310,12 +310,12 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 		ce.log.Info("Majority of the validators have accepted the block, proceeding to commit the block",
 			"height", ce.state.blkProp.blk.Header.Height, "hash", ce.state.blkProp.blkHash, "acks", acks, "nacks", nacks)
 
-		votes := make([]*ktypes.VoteInfo, 0)
+		votes := make([]*types.VoteInfo, 0)
 		for _, v := range ce.state.votes {
 			votes = append(votes, v)
 		}
 
-		ci := &ktypes.CommitInfo{
+		ci := &types.CommitInfo{
 			AppHash:      ce.state.blockRes.appHash,
 			Votes:        votes,
 			ParamUpdates: ce.state.blockRes.paramUpdates,
@@ -362,8 +362,7 @@ func (ce *ConsensusEngine) validatorSetHash() types.Hash {
 
 	for _, k := range keys {
 		val := ce.validatorSet[k]
-		hasher.Write(val.Identifier)
-		binary.Write(hasher, binary.BigEndian, val.KeyType)
+		hasher.Write(val.AccountID.Bytes())
 		binary.Write(hasher, binary.BigEndian, val.Power)
 	}
 

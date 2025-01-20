@@ -9,6 +9,33 @@ import (
 	"io"
 )
 
+var edDefinition = Ed25519Definition{}
+
+type Ed25519Definition struct{}
+
+var _ KeyDefinition = Ed25519Definition{}
+
+func (Ed25519Definition) Type() KeyType {
+	return KeyTypeEd25519
+}
+
+func (Ed25519Definition) EncodeFlag() uint32 {
+	return keyIDEd25519
+}
+
+func (Ed25519Definition) UnmarshalPrivateKey(b []byte) (PrivateKey, error) {
+	return UnmarshalEd25519PrivateKey(b)
+}
+
+func (Ed25519Definition) UnmarshalPublicKey(b []byte) (PublicKey, error) {
+	return UnmarshalEd25519PublicKey(b)
+}
+
+func (Ed25519Definition) Generate() PrivateKey {
+	priv, _, _ := GenerateEd25519Key(nil)
+	return priv
+}
+
 // Ed25519PrivateKey is an ed25519 private key.
 type Ed25519PrivateKey struct {
 	k ed25519.PrivateKey
@@ -40,7 +67,7 @@ var _ PrivateKey = (*Ed25519PrivateKey)(nil)
 
 // Type of the private key (Ed25519).
 func (k *Ed25519PrivateKey) Type() KeyType {
-	return KeyTypeEd25519
+	return edDefinition.Type()
 }
 
 // Bytes private key bytes.
@@ -88,7 +115,7 @@ var _ PublicKey = (*Ed25519PublicKey)(nil)
 
 // Type of the public key (Ed25519).
 func (k *Ed25519PublicKey) Type() KeyType {
-	return KeyTypeEd25519
+	return edDefinition.Type()
 }
 
 // Bytes public key bytes.

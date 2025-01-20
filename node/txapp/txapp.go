@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"math/big"
 	"slices"
-	"strconv"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/common"
@@ -19,6 +18,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/utils/order"
+	authExt "github.com/kwilteam/kwil-db/extensions/auth"
 	"github.com/kwilteam/kwil-db/extensions/hooks"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/node/accounts"
@@ -250,10 +250,7 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 		ResolveFunc func(ctx context.Context, app *common.App, resolution *resolutions.Resolution, block *common.BlockContext) error
 	}
 
-	totalPower, err := r.validatorSetPower()
-	if err != nil {
-		return nil, err
-	}
+	totalPower := r.validatorSetPower()
 
 	for _, resolutionType := range r.resTypes {
 		cfg, err := resolutions.GetResolution(resolutionType)
@@ -399,13 +396,9 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 				return nil, fmt.Errorf("failed to decode public key: %w", err)
 			}
 
-			keyTypeInt, err := strconv.ParseInt(parts[1], 10, 64)
+			keyType, err := crypto.ParseKeyType(parts[1])
 			if err != nil {
 				return nil, fmt.Errorf("failed to parse key type: %w", err)
-			}
-			keyType := crypto.KeyType(keyTypeInt)
-			if !keyType.Valid() {
-				return nil, fmt.Errorf("invalid key type: %d", keyType)
 			}
 
 			acct := &types.AccountID{
@@ -443,7 +436,7 @@ func (c creditMap) applyResolution(res *resolutions.Resolution) {
 		if bytes.Equal(voter.Identifier, res.Proposer.Identifier) {
 			continue
 		}
-		id := fmt.Sprintf("%s#%d", voter.Identifier.String(), voter.KeyType)
+		id := fmt.Sprintf("%s#%s", voter.Identifier.String(), voter.KeyType)
 
 		currentBalance, ok := c[id]
 		if !ok {
@@ -530,7 +523,7 @@ func (r *TxApp) checkAndSpend(ctx *common.TxContext, tx *types.Transaction, pric
 		}
 	}
 
-	sender, err := tx.SenderInfo()
+	sender, err := TxSenderAcctID(tx)
 	if err != nil {
 		return nil, types.CodeInvalidSender, err
 	}
@@ -648,9 +641,9 @@ func validatorSetPower(validators []*types.Validator) int64 {
 
 // validatorsPower returns the total power of the current validator set
 // according to the DB.
-func (r *TxApp) validatorSetPower() (int64, error) {
+func (r *TxApp) validatorSetPower() int64 {
 	validators := r.Validators.GetValidators()
-	return validatorSetPower(validators), nil
+	return validatorSetPower(validators)
 }
 
 // logErr logs an error to TxApp if it is not nil.
@@ -659,4 +652,20 @@ func logErr(l log.Logger, err error) {
 	if err != nil {
 		l.Error("error committing/rolling back transaction", "error", err)
 	}
+}
+
+// TxSenderAcctID returns the transaction sender's account ID information.
+func TxSenderAcctID(t *types.Transaction) (*types.AccountID, error) {
+	if t.Sender == nil {
+		return nil, errors.New("transaction sender is nil")
+	}
+	keyType, err := authExt.GetAuthenticatorKeyType(t.Signature.Type)
+	if err != nil {
+		return nil, err
+	}
+
+	return &types.AccountID{
+		Identifier: t.Sender,
+		KeyType:    keyType,
+	}, nil
 }

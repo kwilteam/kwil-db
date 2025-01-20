@@ -24,25 +24,31 @@ type AccountID struct {
 	KeyType    crypto.KeyType `json:"key_type"`
 }
 
-func (a *AccountID) String() string {
-	if a == nil {
-		return "AccountID{nil}"
+func (a *AccountID) Equals(other *AccountID) bool {
+	if a == nil || other == nil {
+		return false
 	}
-
-	return fmt.Sprintf("AccountID{identifier = %x, keyType = %s}", a.Identifier, a.KeyType.String())
+	return a.Identifier.Equals(other.Identifier) && a.KeyType == other.KeyType
 }
 
-func (id *AccountID) MarshalBinary() ([]byte, error) {
-	if id == nil {
-		return nil, errors.New("nil account ID")
-	}
+func (a AccountID) String() string {
+	return fmt.Sprintf("AccountID{identifier = %x, keyType = %s}", a.Identifier, a.KeyType)
+}
 
+func (id AccountID) Bytes() []byte {
+	bts, _ := id.MarshalBinary() // does not error
+	return bts
+}
+
+// MarshalBinary serializes the Account ID. This does not error, as it uses a
+// bytes.Buffer writer internally.
+func (id AccountID) MarshalBinary() ([]byte, error) {
 	buf := new(bytes.Buffer)
 	if err := WriteBytes(buf, id.Identifier[:]); err != nil {
 		return nil, fmt.Errorf("failed to write account identifier: %w", err)
 	}
 
-	if err := binary.Write(buf, binary.LittleEndian, id.KeyType); err != nil {
+	if err := WriteString(buf, id.KeyType.String()); err != nil {
 		return nil, fmt.Errorf("failed to write key type: %w", err)
 	}
 
@@ -50,37 +56,28 @@ func (id *AccountID) MarshalBinary() ([]byte, error) {
 }
 
 func (id *AccountID) UnmarshalBinary(b []byte) error {
-	buf := bytes.NewBuffer(b)
+	rd := bytes.NewReader(b)
 
-	ident, err := ReadBytes(buf)
+	ident, err := ReadBytes(rd)
 	if err != nil {
 		return fmt.Errorf("failed to read account identifier: %w", err)
 	}
 	id.Identifier = ident
 
-	if err := binary.Read(buf, binary.LittleEndian, &id.KeyType); err != nil {
-		return fmt.Errorf("failed to read key type: %w", err)
+	kt, err := ReadString(rd)
+	if err != nil {
+		return err
 	}
-
-	if !id.KeyType.Valid() {
-		return fmt.Errorf("invalid key type: %s", id.KeyType)
-	}
+	id.KeyType = crypto.KeyType(kt)
 
 	return nil
 }
 
 // GetSignerAccount returns the account ID of the signer.
 func GetSignerAccount(signer auth.Signer) (*AccountID, error) {
-	ident := signer.CompactID()
-
-	keyType, err := auth.GetAuthenticatorKeyType(signer.AuthType())
-	if err != nil {
-		return nil, err
-	}
-
 	return &AccountID{
-		Identifier: ident,
-		KeyType:    keyType,
+		Identifier: signer.CompactID(),
+		KeyType:    signer.PubKey().Type(),
 	}, nil
 }
 
@@ -126,7 +123,7 @@ func (n *NodeKey) String() string {
 	if n == nil {
 		return "NodeKey{nil}"
 	}
-	return fmt.Sprintf("NodeKey{pubkey = %x, keyType = %s}", n.PubKey, n.Type.String())
+	return fmt.Sprintf("NodeKey{pubkey = %x, keyType = %s}", n.PubKey, n.Type)
 }
 
 // func (n *NodeKey) AuthType() (string, error) {
@@ -146,7 +143,7 @@ type Validator struct {
 }
 
 func (v *Validator) String() string {
-	return fmt.Sprintf("Validator{pubkey = %x, keyType = %s, power = %d}", v.Identifier, v.KeyType.String(), v.Power)
+	return fmt.Sprintf("Validator{pubkey = %x, keyType = %s, power = %d}", v.Identifier, v.KeyType, v.Power)
 }
 
 type validatorJSON struct {
@@ -165,7 +162,6 @@ func (v *Validator) MarshalJSON() ([]byte, error) {
 		Type:   v.KeyType.String(),
 		Power:  v.Power,
 	})
-
 }
 
 func (v *Validator) UnmarshalJSON(b []byte) error {
@@ -180,11 +176,11 @@ func (v *Validator) UnmarshalJSON(b []byte) error {
 	}
 	v.Identifier = pk
 
-	kt, err := crypto.ParseKeyType(vj.Type)
-	if err != nil {
-		return err
-	}
-	v.KeyType = kt
+	// kt, err := crypto.ParseKeyType(vj.Type)
+	// if err != nil {
+	// 	return err
+	// }
+	v.KeyType = crypto.KeyType(vj.Type) // kt
 
 	v.Power = vj.Power
 	return nil

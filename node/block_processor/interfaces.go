@@ -5,11 +5,11 @@ import (
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/core/types"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/migrations"
 	"github.com/kwilteam/kwil-db/node/snapshotter"
 	"github.com/kwilteam/kwil-db/node/txapp"
+	"github.com/kwilteam/kwil-db/node/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
 )
@@ -37,14 +37,14 @@ type ValidatorModule interface {
 type TxApp interface {
 	Begin(ctx context.Context, height int64) error
 	Execute(ctx *common.TxContext, db sql.DB, tx *ktypes.Transaction) *txapp.TxResponse
-	Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) (approvedJoins, expiredJoins []*types.AccountID, err error)
+	Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) (approvedJoins, expiredJoins []*ktypes.AccountID, err error)
 	Commit() error
 	Rollback()
 	GenesisInit(ctx context.Context, db sql.DB, validators []*ktypes.Validator, genesisAccounts []*ktypes.Account, initialHeight int64, initialDBOwner string, chain *common.ChainContext) error
-	ApplyMempool(ctx *common.TxContext, db sql.DB, tx *types.Transaction) error
+	ApplyMempool(ctx *common.TxContext, db sql.DB, tx *ktypes.Transaction) error
 
 	Price(ctx context.Context, dbTx sql.DB, tx *ktypes.Transaction, chainContext *common.ChainContext) (*big.Int, error)
-	AccountInfo(ctx context.Context, dbTx sql.DB, identifier *types.AccountID, pending bool) (balance *big.Int, nonce int64, err error)
+	AccountInfo(ctx context.Context, dbTx sql.DB, identifier *ktypes.AccountID, pending bool) (balance *big.Int, nonce int64, err error)
 }
 
 // Question:
@@ -73,10 +73,10 @@ type SnapshotModule interface {
 type EventStore interface {
 	// GetUnbroadcastedEvents filters out the events observed by the validator
 	// that are not previously broadcasted.
-	GetUnbroadcastedEvents(ctx context.Context) ([]*types.UUID, error)
+	GetUnbroadcastedEvents(ctx context.Context) ([]*ktypes.UUID, error)
 
 	// MarkBroadcasted marks list of events as broadcasted.
-	MarkBroadcasted(ctx context.Context, ids []*types.UUID) error
+	MarkBroadcasted(ctx context.Context, ids []*ktypes.UUID) error
 
 	// HasEvents return true if there are any events to be broadcasted
 	HasEvents() bool
@@ -95,9 +95,9 @@ type MigratorModule interface {
 	NotifyHeight(ctx context.Context, block *common.BlockContext, db migrations.Database, tx sql.Executor) error
 	StoreChangesets(height int64, changes <-chan any) error
 	PersistLastChangesetHeight(ctx context.Context, tx sql.Executor, height int64) error
-	GetMigrationMetadata(ctx context.Context, status types.MigrationStatus) (*types.MigrationMetadata, error)
+	GetMigrationMetadata(ctx context.Context, status ktypes.MigrationStatus) (*ktypes.MigrationMetadata, error)
 }
 
 type BlockStore interface {
-	GetByHeight(height int64) (types.Hash, *ktypes.Block, *ktypes.CommitInfo, error)
+	GetByHeight(height int64) (types.Hash, *ktypes.Block, *types.CommitInfo, error)
 }

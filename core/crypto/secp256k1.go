@@ -13,6 +13,37 @@ import (
 	"golang.org/x/crypto/sha3"
 )
 
+var secp256k1Def = Secp256k1Definition{}
+
+type Secp256k1Definition struct{}
+
+var _ KeyDefinition = Secp256k1Definition{}
+
+func (Secp256k1Definition) String() string {
+	return "secp256k1"
+}
+
+func (Secp256k1Definition) Type() KeyType {
+	return KeyTypeSecp256k1
+}
+
+func (Secp256k1Definition) EncodeFlag() uint32 {
+	return keyIDSecp256k1
+}
+
+func (Secp256k1Definition) UnmarshalPrivateKey(b []byte) (PrivateKey, error) {
+	return UnmarshalSecp256k1PrivateKey(b)
+}
+
+func (Secp256k1Definition) UnmarshalPublicKey(b []byte) (PublicKey, error) {
+	return UnmarshalSecp256k1PublicKey(b)
+}
+
+func (Secp256k1Definition) Generate() PrivateKey {
+	priv, _, _ := GenerateSecp256k1Key(nil)
+	return priv
+}
+
 // Secp256k1PrivateKey is a Secp256k1 private key.
 type Secp256k1PrivateKey secp256k1.PrivateKey
 
@@ -71,7 +102,7 @@ var _ PrivateKey = (*Secp256k1PrivateKey)(nil)
 
 // Type returns the private key type.
 func (k *Secp256k1PrivateKey) Type() KeyType {
-	return KeyTypeSecp256k1
+	return secp256k1Def.Type()
 }
 
 // Bytes returns the raw bytes of the key. To serialize for the wire or disk,
@@ -126,7 +157,7 @@ var _ PublicKey = (*Secp256k1PublicKey)(nil)
 
 // Type returns the public key type.
 func (k *Secp256k1PublicKey) Type() KeyType {
-	return KeyTypeSecp256k1
+	return secp256k1Def.Type()
 }
 
 // Bytes returns the bytes of the key.

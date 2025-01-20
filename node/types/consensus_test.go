@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"encoding/binary"
 	"testing"
+
+	"github.com/kwilteam/kwil-db/core/crypto"
 )
 
 func TestConsensusReset_MarshalUnmarshal(t *testing.T) {
@@ -145,7 +147,7 @@ func TestAckRes_MarshalUnmarshal(t *testing.T) {
 				BlkHash: Hash{1, 2, 3},
 				AppHash: &Hash{4, 5, 6},
 
-				PubKeyType: 0,
+				PubKeyType: crypto.KeyTypeSecp256k1,
 				PubKey:     []byte{1, 2, 3},
 				Signature:  []byte{4, 5, 6},
 			},

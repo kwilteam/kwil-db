@@ -56,18 +56,10 @@ func TestEthSecp256k1AuthenticatorVerifyPositive(t *testing.T) {
 
 	signer := GetUserSigner(priv)
 
-	authnr := GetAuthenticator(signer.AuthType()) // nolint:misspell
-	if _, is := authnr.(EthSecp256k1Authenticator); !is {
-		t.Errorf("expected EthSecp256k1Authenticator, got %T", authnr)
-	}
+	authnr := &EthSecp256k1Authenticator{}
 
 	sig, err := signer.Sign(msg)
 	require.NoError(t, err)
-
-	authnr = GetAuthenticator(sig.Type)
-	if _, is := authnr.(EthSecp256k1Authenticator); !is {
-		t.Errorf("expected EthSecp256k1Authenticator, got %T", authnr)
-	}
 
 	err = authnr.Verify(signer.CompactID(), msg, sig.Data)
 	require.NoError(t, err)

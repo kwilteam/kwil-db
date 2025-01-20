@@ -271,7 +271,7 @@ func Test_Routes(t *testing.T) {
 
 				tc.ctx.BlockContext = &common.BlockContext{
 					ChainContext: &common.ChainContext{
-						NetworkParameters: &common.NetworkParameters{
+						NetworkParameters: &types.NetworkParameters{
 							DisabledGasCosts: false,
 						},
 					},

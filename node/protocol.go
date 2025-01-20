@@ -163,8 +163,8 @@ func (n *Node) advertiseToPeer(ctx context.Context, peerID peer.ID, proto protoc
 type blockAnnMsg struct {
 	Hash       types.Hash
 	Height     int64
-	CommitInfo *ktypes.CommitInfo // commit sigs of validators attest to the block and app hash
-	LeaderSig  []byte             // to avoid having to get the block to realize if it is fake (spam)
+	CommitInfo *types.CommitInfo // commit sigs of validators attest to the block and app hash
+	LeaderSig  []byte            // to avoid having to get the block to realize if it is fake (spam)
 }
 
 var _ encoding.BinaryMarshaler = blockAnnMsg{}
@@ -240,7 +240,7 @@ func (m *blockAnnMsg) ReadFrom(r io.Reader) (int64, error) {
 		return cr.ReadCount(), err
 	}
 
-	var ci ktypes.CommitInfo
+	var ci types.CommitInfo
 	if err := ci.UnmarshalBinary(ciBts); err != nil {
 		return cr.ReadCount(), err
 	}

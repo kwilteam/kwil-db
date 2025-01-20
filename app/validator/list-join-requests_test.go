@@ -40,7 +40,7 @@ func Test_respJoinList_MarshalJSON(t *testing.T) {
 					},
 				},
 			},
-			want: `[{"candidate":{"identifier":"1234","key_type":1},"power":100,"expires_at": "0001-01-01T00:00:00Z","board":[{"identifier":"abcd","key_type":0}],"approved":[true]},{"candidate":{"identifier":"5678","key_type":0},"power":200,"expires_at":"0001-01-01T00:00:00Z","board":[{"identifier":"ef12","key_type":0}],"approved":[false]}]`,
+			want: `[{"candidate":{"identifier":"1234","key_type":"ed25519"},"power":100,"expires_at": "0001-01-01T00:00:00Z","board":[{"identifier":"abcd","key_type":"secp256k1"}],"approved":[true]},{"candidate":{"identifier":"5678","key_type":"secp256k1"},"power":200,"expires_at":"0001-01-01T00:00:00Z","board":[{"identifier":"ef12","key_type":"secp256k1"}],"approved":[false]}]`,
 		},
 		{
 			name: "empty joins",
@@ -64,7 +64,7 @@ func Test_respJoinList_MarshalJSON(t *testing.T) {
 					},
 				},
 			},
-			want: `[{"candidate":{"identifier":"1234","key_type":1},"power":150,"expires_at": "0001-01-01T00:00:00Z","board":[{"identifier":"abcd","key_type":0}],"approved":[true,false]}]`,
+			want: `[{"candidate":{"identifier":"1234","key_type":"ed25519"},"power":150,"expires_at": "0001-01-01T00:00:00Z","board":[{"identifier":"abcd","key_type":"secp256k1"}],"approved":[true,false]}]`,
 		},
 	}
 
@@ -131,6 +131,7 @@ func Test_respJoinList_MarshalText(t *testing.T) {
 					{
 						Candidate: &types.AccountID{
 							Identifier: []byte{0x56, 0x78},
+							KeyType:    crypto.KeyTypeSecp256k1,
 						},
 						Power:     200,
 						ExpiresAt: now,

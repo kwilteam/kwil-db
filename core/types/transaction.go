@@ -714,20 +714,3 @@ func ReadBigInt(r io.Reader) (*big.Int, error) {
 	// }
 	return b, nil
 }
-
-// SenderInfo returns the sender's account ID information.
-func (t *Transaction) SenderInfo() (*AccountID, error) {
-	if t.Sender == nil {
-		return nil, errors.New("transaction sender is nil")
-	}
-
-	keyType, err := auth.GetAuthenticatorKeyType(t.Signature.Type)
-	if err != nil {
-		return nil, err
-	}
-
-	return &AccountID{
-		Identifier: t.Sender,
-		KeyType:    keyType,
-	}, nil
-}

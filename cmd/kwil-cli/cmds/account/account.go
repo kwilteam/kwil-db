@@ -13,7 +13,7 @@ import (
 var idCmd = &cobra.Command{
 	Use:   "id",
 	Short: "Show the account ID.",
-	Long:  "Returns the Kwil account identifier (typically an Ethereum address), if a private key is configured.",
+	Long:  "Returns the Kwil account identifier (currently must be an Ethereum address), if a private key is configured.",
 	Args:  cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		conf, err := config.ActiveConfig()

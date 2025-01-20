@@ -12,6 +12,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
+	authExt "github.com/kwilteam/kwil-db/extensions/auth"
 	ethdeposits "github.com/kwilteam/kwil-db/extensions/listeners/eth_deposits"
 	"github.com/kwilteam/kwil-db/test/setup"
 	"github.com/kwilteam/kwil-db/test/specifications"
@@ -37,7 +38,7 @@ func TestKwildDatabaseIntegration(t *testing.T) {
 	require.NoError(t, err, "failed to generate user private key")
 
 	signer := auth.GetUserSigner(userPrivKey)
-	ident, err := auth.GetIdentifierFromSigner(signer)
+	ident, err := authExt.GetIdentifierFromSigner(signer)
 	require.NoError(t, err)
 
 	p := setup.SetupTests(t, &setup.TestConfig{
@@ -451,7 +452,7 @@ func TestKwildPrivateNetworks(t *testing.T) {
 	require.NoError(t, err, "failed to generate user private key")
 
 	signer := auth.GetUserSigner(userPrivKey)
-	ident, err := auth.GetIdentifierFromSigner(signer)
+	ident, err := authExt.GetIdentifierFromSigner(signer)
 	require.NoError(t, err)
 
 	// 1 validators and 2 non-validator in a private network

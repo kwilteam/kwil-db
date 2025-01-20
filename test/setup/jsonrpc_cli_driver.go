@@ -366,6 +366,10 @@ type respAccount struct {
 func (j *jsonRPCCLIDriver) GetAccount(ctx context.Context, acct *types.AccountID, status types.AccountStatus) (*types.Account, error) {
 	r := &respAccount{}
 
+	// keyType, err := crypto.ParseKeyType(acct.KeyType.String()) // validate?
+	// if err != nil {
+	// 	return nil, fmt.Errorf("bad key type %s (%w)", acct.KeyType, err)
+	// }
 	args := []string{"account", "balance", hex.EncodeToString(acct.Identifier), acct.KeyType.String()}
 	if status == types.AccountStatusPending {
 		args = append(args, "--pending")

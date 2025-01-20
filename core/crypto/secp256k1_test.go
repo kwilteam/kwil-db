@@ -169,7 +169,7 @@ func TestSecp256k1KeyEquality(t *testing.T) {
 		t.Error("Secp256k1 public key should not equal Ed25519 public key")
 	}
 
-	mockPriv := &mockPrivateKey{keyType: 99}
+	mockPriv := &mockPrivateKey{keyType: "wrong"}
 	if priv1.Equals(mockPriv) {
 		t.Error("Different private key types should not be equal")
 	}
@@ -187,7 +187,7 @@ func TestSecp256k1KeyEquality(t *testing.T) {
 		t.Error("same Type and Bytes should be equal regardless of concrete impl")
 	}
 
-	mockPub := &mockPublicKey{keyType: 99}
+	mockPub := &mockPublicKey{keyType: "wrong"}
 	if pub1.Equals(mockPub) {
 		t.Error("Different private key types should not be equal")
 	}

@@ -3,7 +3,6 @@ package key
 import (
 	"encoding/hex"
 	"fmt"
-	"strconv"
 
 	"github.com/spf13/cobra"
 
@@ -35,11 +34,7 @@ func GenCmd() *cobra.Command {
 				var err error
 				keyType, err = crypto.ParseKeyType(args[0])
 				if err != nil {
-					keyTypeInt, err := strconv.ParseUint(args[0], 10, 16)
-					if err != nil {
-						return display.PrintErr(cmd, fmt.Errorf("invalid key type (%s): %w", args[0], err))
-					}
-					keyType = crypto.KeyType(keyTypeInt)
+					return display.PrintErr(cmd, fmt.Errorf("invalid key type (%s): %w", args[0], err))
 				}
 			}
 
@@ -52,11 +47,7 @@ func GenCmd() *cobra.Command {
 				if raw {
 					return display.PrintCmd(cmd, display.RespString(hex.EncodeToString(privKey.Bytes())))
 				}
-				return display.PrintCmd(cmd, &PrivateKeyInfo{
-					KeyType:       keyType.String(),
-					PrivateKeyHex: hex.EncodeToString(privKey.Bytes()),
-					PublicKeyHex:  hex.EncodeToString(privKey.Public().Bytes()),
-				})
+				return display.PrintCmd(cmd, privKeyInfo(privKey))
 			}
 
 			if err := SaveNodeKey(out, privKey); err != nil {

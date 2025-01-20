@@ -794,23 +794,23 @@ func (v *VoteStore) Rollback() {
 	v.valUpdates = make(map[string]*types.Validator)
 }
 
-// EncodePubKey encodes public key and key type into a byte slice.
+// encodePubKey encodes public key and key type into a byte slice.
 // This should be used only within this package to store the pubkey
 // with its type in the voting store.
 func encodePubKey(pubKey []byte, keyType crypto.KeyType) []byte {
-	b := binary.LittleEndian.AppendUint32(nil, uint32(keyType))
+	b := crypto.WireEncodeKeyType(keyType)
 	b = append(b, pubKey...)
 	return b
 }
 
-// DecodePubKey decodes a byte slice into a public key and key type.
+// decodePubKey decodes a byte slice into a public key and key type.
 func decodePubKey(b []byte) ([]byte, crypto.KeyType, error) {
-	if len(b) <= 4 {
-		return nil, 0, errors.New("insufficient data for public key")
+	keyType, b, err := crypto.WireDecodeKeyType(b)
+	if err != nil {
+		return nil, "", err
 	}
 
-	keyType := crypto.KeyType(binary.LittleEndian.Uint32(b))
-	return b[4:], keyType, nil
+	return b, keyType, nil
 }
 
 func (v *VoteStore) addOrUpdateValidator(val *types.Validator) {

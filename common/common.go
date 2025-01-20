@@ -175,5 +175,3 @@ type Validators interface {
 	// negative power is given.
 	SetValidatorPower(ctx context.Context, tx sql.Executor, pubKey []byte, pubKeyType crypto.KeyType, power int64) error
 }
-
-type NetworkParameters = types.NetworkParameters

@@ -59,3 +59,7 @@ func (e Ed22519Sha256Authenticator) Verify(publicKey []byte, msg []byte, signatu
 
 	return nil
 }
+
+func (e Ed22519Sha256Authenticator) KeyType() crypto.KeyType {
+	return crypto.KeyTypeEd25519
+}
