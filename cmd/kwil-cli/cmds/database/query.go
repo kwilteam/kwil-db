@@ -31,10 +31,11 @@ kwil-cli database query "SELECT * FROM users WHERE age > 25" --name mydb --owner
 func queryCmd() *cobra.Command {
 	fmtConf := tableConfig{}
 	cmd := &cobra.Command{
-		Use:     `query <select_statement>`,
-		Short:   "Query a database using an ad-hoc SQL SELECT statement.",
-		Long:    queryLong,
-		Example: queryExample,
+		Use:        `query <select_statement>`,
+		Short:      "Query a database using an ad-hoc SQL SELECT statement.",
+		Long:       queryLong,
+		Example:    queryExample,
+		Deprecated: `Use "kwil-cli query" instead.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return client.DialClient(cmd.Context(), cmd, client.WithoutPrivateKey,
 				func(ctx context.Context, client clientType.Client, conf *config.KwilCliConfig) error {

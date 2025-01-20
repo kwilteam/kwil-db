@@ -47,6 +47,8 @@ func parseParams(args []string) (map[string]any, error) {
 }
 
 // stringAndTypeToVal converts a string and type to a value.
+// The string is the value, and the type is the data type.
+// e.g. 5 and int8, or "satoshi" and text.
 // we should probably refactor this since its sort've a mess, but its unexported
 // and the tests are pretty good so its ok for now.
 func stringAndTypeToVal(s string, dt *types.DataType) (any, error) {
@@ -235,6 +237,7 @@ const NullLiteral = "null"
 // inside single or double quotes (with backslash escapes). It distinguishes:
 //   - consecutive commas => nil
 //   - quoted empty => ""
+//   - unquoted null literal => nil
 //   - partial quoting => error
 //   - unclosed quotes => error
 func splitByCommas(input string) ([]*string, error) {

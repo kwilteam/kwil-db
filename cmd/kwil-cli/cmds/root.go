@@ -3,8 +3,6 @@ package cmds
 import (
 	"fmt"
 
-	"github.com/spf13/cobra"
-
 	"github.com/kwilteam/kwil-db/app/custom"
 	"github.com/kwilteam/kwil-db/app/shared/bind"
 	"github.com/kwilteam/kwil-db/app/shared/display"
@@ -15,6 +13,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/utils"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/helpers"
+	"github.com/spf13/cobra"
 )
 
 var longDesc = `Command line interface client for using %s.
@@ -67,6 +66,10 @@ func NewRootCmd() *cobra.Command {
 		database.NewCmdDatabase(),
 		utils.NewCmdUtils(),
 		version.NewVersionCmd(),
+		execSQLCmd(),
+		execActionCmd(),
+		callActionCmd(),
+		queryCmd(),
 	)
 
 	return rootCmd
