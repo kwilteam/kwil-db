@@ -1,7 +1,13 @@
 package auth
 
 import (
+	"encoding/hex"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+
+	"github.com/kwilteam/kwil-db/core/crypto"
 )
 
 func Test_eip55ChecksumAddr(t *testing.T) {
@@ -37,6 +43,123 @@ func Test_eip55ChecksumAddr(t *testing.T) {
 			result := eip55ChecksumAddr(tt.input)
 			if result != tt.expected {
 				t.Errorf("checksumHex() = %v, want %v", result, tt.expected)
+			}
+		})
+	}
+}
+
+func TestEthSecp256k1AuthenticatorVerifyPositive(t *testing.T) {
+	privBts, _ := hex.DecodeString("a0505da852036821eb3df07e8f8ee1ebef5ce50034133ea038aee10c8b4c9111")
+	priv, _ := crypto.UnmarshalSecp256k1PrivateKey(privBts)
+
+	msg := []byte("test message")
+
+	signer := GetUserSigner(priv)
+
+	authnr := GetAuthenticator(signer.AuthType()) // nolint:misspell
+	if _, is := authnr.(EthSecp256k1Authenticator); !is {
+		t.Errorf("expected EthSecp256k1Authenticator, got %T", authnr)
+	}
+
+	sig, err := signer.Sign(msg)
+	require.NoError(t, err)
+
+	authnr = GetAuthenticator(sig.Type)
+	if _, is := authnr.(EthSecp256k1Authenticator); !is {
+		t.Errorf("expected EthSecp256k1Authenticator, got %T", authnr)
+	}
+
+	err = authnr.Verify(signer.CompactID(), msg, sig.Data)
+	require.NoError(t, err)
+
+	// now pretend to be metamask
+	sig.Data[crypto.RecoveryIDOffset] += 27
+
+	err = authnr.Verify(signer.CompactID(), msg, sig.Data)
+	require.NoError(t, err)
+
+}
+
+func TestEthSecp256k1AuthenticatorVerifyMetaMask(t *testing.T) {
+	authnr := &EthSecp256k1Authenticator{}
+
+	addrStr := "0x01ab2a7a29fdc3a3ad10e3ea07f2c7882b76b2e2"
+	addr, _ := hex.DecodeString(addrStr[2:])
+	msgBts, _ := hex.DecodeString("74657374206d657373616765") // "test message"
+	mmSig, _ := hex.DecodeString("b98c74a03e9de2b99dac504eb0e63cfe464fa8b9cafc63c913efa6122815ad5a3560e90ce1367185b40fc58924a69a6ff975d62a73f3866b5ea003844ed113291b")
+
+	err := authnr.Verify(addr, msgBts, mmSig)
+	require.NoError(t, err)
+
+	// https://etherscan.io/verifySig/265446
+	msgBts2 := []byte("kwil was here")
+	mmSig2, _ := hex.DecodeString("bc7acd4a00eec94ceed10bcf86d73f2c2b3b023f1d138b7c04248c724371fd39562c490be8431ed95ec1cebffc05bdb6e0d802c92fe8c8d6c6c7fb574fe321de1c")
+
+	err = authnr.Verify(addr, msgBts2, mmSig2)
+	require.NoError(t, err)
+}
+
+func TestEthSecp256k1AuthenticatorVerifyNegative(t *testing.T) {
+	tests := []struct {
+		name      string
+		identity  []byte
+		msg       []byte
+		signature []byte
+		wantErr   bool
+		errMsg    string
+	}{
+		{
+			name:      "Invalid recovery ID",
+			identity:  []byte{0x1, 0x2, 0x3, 0x4},
+			msg:       []byte("test message"),
+			signature: []byte{0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 0x1, 0x2, 0x3, 0x4, 0x5, 0x6, 0x7, 0x8, 29}, // recovery ID 29 is invalid
+			wantErr:   true,
+			errMsg:    "recovery",
+		},
+		{
+			name:      "Empty message",
+			identity:  []byte{0x1, 0x2, 0x3, 0x4},
+			msg:       []byte{},
+			signature: make([]byte, 65),
+			wantErr:   true,
+			errMsg:    "invalid signature",
+		},
+		{
+			name:      "Short signature",
+			identity:  []byte{0x1, 0x2, 0x3, 0x4},
+			msg:       []byte("test message"),
+			signature: []byte{0x1, 0x2, 0x3},
+			wantErr:   true,
+			errMsg:    "invalid signature length",
+		},
+		{
+			name:      "Identity mismatch",
+			identity:  make([]byte, 20),
+			msg:       []byte("test message"),
+			signature: make([]byte, 65),
+			wantErr:   true,
+			errMsg:    "invalid signature",
+		},
+		{
+			name:      "Empty identity",
+			identity:  []byte{},
+			msg:       []byte("test message"),
+			signature: make([]byte, 65),
+			wantErr:   true,
+			errMsg:    "invalid signature",
+		},
+	}
+
+	auth := EthSecp256k1Authenticator{}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := auth.Verify(tt.identity, tt.msg, tt.signature)
+			if tt.wantErr {
+				require.Error(t, err)
+				assert.Contains(t, err.Error(), tt.errMsg)
+			} else {
+				require.NoError(t, err)
 			}
 		})
 	}

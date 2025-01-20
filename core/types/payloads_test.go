@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -664,5 +665,379 @@ func TestDeleteResolution_MarshalUnmarshal(t *testing.T) {
 		require.NoError(t, err)
 		require.Greater(t, len(data), 2)
 		require.Equal(t, uint16(drVersion), binary.LittleEndian.Uint16(data[:2]))
+	})
+}
+
+func TestRawStatement_MarshalUnmarshal(t *testing.T) {
+	t.Run("complex statement with multiple parameters", func(t *testing.T) {
+		original := RawStatement{
+			Statement: "SELECT * FROM table WHERE col1 = @param1 AND col2 = @param2 AND col3 = @param3",
+			Parameters: []*NamedValue{
+				{Name: "param1", Value: &EncodedValue{
+					Type: DataType{Name: TextType.Name},
+					Data: [][]byte{[]byte("hello")},
+				}},
+				{Name: "param2", Value: &EncodedValue{
+					Type: DataType{Name: IntType.Name},
+					Data: [][]byte{binary.BigEndian.AppendUint64(nil, 123)},
+				}},
+				{Name: "param3", Value: &EncodedValue{
+					Type: DataType{Name: BoolType.Name},
+					Data: [][]byte{{1}},
+				}},
+			},
+		}
+
+		data, err := original.MarshalBinary()
+		require.NoError(t, err)
+
+		var decoded RawStatement
+		err = decoded.UnmarshalBinary(data)
+		require.NoError(t, err)
+		require.Equal(t, original.Statement, decoded.Statement)
+		require.Len(t, decoded.Parameters, len(original.Parameters))
+		for i, p := range original.Parameters {
+			require.Equal(t, p.Name, decoded.Parameters[i].Name)
+			require.Equal(t, p.Value, decoded.Parameters[i].Value)
+		}
+	})
+
+	t.Run("empty statement with no parameters", func(t *testing.T) {
+		original := RawStatement{
+			Statement:  "",
+			Parameters: []*NamedValue{},
+		}
+
+		data, err := original.MarshalBinary()
+		require.NoError(t, err)
+
+		var decoded RawStatement
+		err = decoded.UnmarshalBinary(data)
+		require.NoError(t, err)
+		require.Equal(t, original.Statement, decoded.Statement)
+		require.Empty(t, decoded.Parameters)
+	})
+
+	t.Run("max parameters limit", func(t *testing.T) {
+		params := make([]*NamedValue, 65535)
+		for i := range params {
+			params[i] = &NamedValue{
+				Name: fmt.Sprintf("param%d", i),
+				Value: &EncodedValue{
+					Type: DataType{Name: TextType.Name},
+					Data: [][]byte{[]byte("value")},
+				},
+			}
+		}
+
+		original := RawStatement{
+			Statement:  "SELECT * FROM table",
+			Parameters: params,
+		}
+
+		data, err := original.MarshalBinary()
+		require.NoError(t, err)
+
+		var decoded RawStatement
+		err = decoded.UnmarshalBinary(data)
+		require.NoError(t, err)
+		require.Equal(t, original.Statement, decoded.Statement)
+		require.Len(t, decoded.Parameters, len(original.Parameters))
+	})
+
+	t.Run("invalid version", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		binary.Write(buf, SerializationByteOrder, uint16(999))
+		WriteString(buf, "SELECT 1")
+		binary.Write(buf, SerializationByteOrder, uint16(0))
+
+		var decoded RawStatement
+		err := decoded.UnmarshalBinary(buf.Bytes())
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "unsupported version")
+	})
+
+	t.Run("truncated data after version", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		binary.Write(buf, SerializationByteOrder, uint16(rsVersion))
+
+		var decoded RawStatement
+		err := decoded.UnmarshalBinary(buf.Bytes())
+		require.Error(t, err)
+	})
+
+	t.Run("truncated data after statement", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		binary.Write(buf, SerializationByteOrder, uint16(rsVersion))
+		WriteString(buf, "SELECT 1")
+
+		var decoded RawStatement
+		err := decoded.UnmarshalBinary(buf.Bytes())
+		require.Error(t, err)
+	})
+
+	t.Run("truncated data during parameter reading", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		binary.Write(buf, SerializationByteOrder, uint16(rsVersion))
+		WriteString(buf, "SELECT 1")
+		binary.Write(buf, SerializationByteOrder, uint16(1))
+		WriteString(buf, "param1")
+
+		var decoded RawStatement
+		err := decoded.UnmarshalBinary(buf.Bytes())
+		require.Error(t, err)
+	})
+}
+
+func TestActionExecution_MarshalUnmarshal(t *testing.T) {
+	t.Run("valid action execution with multiple calls", func(t *testing.T) {
+		original := ActionExecution{
+			DBID:   "testdb",
+			Action: "test_action",
+			Arguments: [][]*EncodedValue{
+				{
+					{Type: DataType{Name: TextType.Name}, Data: [][]byte{[]byte("arg1")}},
+					{Type: DataType{Name: IntType.Name}, Data: [][]byte{binary.BigEndian.AppendUint64(nil, 42)}},
+				},
+				{
+					{Type: DataType{Name: BoolType.Name}, Data: [][]byte{{1}}},
+					{Type: DataType{Name: TextType.Name}, Data: [][]byte{[]byte("arg2")}},
+				},
+			},
+		}
+
+		data, err := original.MarshalBinary()
+		require.NoError(t, err)
+
+		var decoded ActionExecution
+		err = decoded.UnmarshalBinary(data)
+		require.NoError(t, err)
+		require.Equal(t, original.DBID, decoded.DBID)
+		require.Equal(t, original.Action, decoded.Action)
+		require.Equal(t, len(original.Arguments), len(decoded.Arguments))
+		require.Equal(t, original.Arguments, decoded.Arguments)
+	})
+
+	t.Run("empty arguments array", func(t *testing.T) {
+		original := ActionExecution{
+			DBID:      "testdb",
+			Action:    "empty_action",
+			Arguments: [][]*EncodedValue{},
+		}
+
+		data, err := original.MarshalBinary()
+		require.NoError(t, err)
+
+		var decoded ActionExecution
+		err = decoded.UnmarshalBinary(data)
+		require.NoError(t, err)
+		require.Equal(t, original.DBID, decoded.DBID)
+		require.Equal(t, original.Action, decoded.Action)
+		require.Empty(t, decoded.Arguments)
+	})
+
+	t.Run("empty strings for DBID and Action", func(t *testing.T) {
+		original := ActionExecution{
+			DBID:   "",
+			Action: "",
+			Arguments: [][]*EncodedValue{
+				{
+					{Type: DataType{Name: TextType.Name}, Data: [][]byte{[]byte("test")}},
+				},
+			},
+		}
+
+		data, err := original.MarshalBinary()
+		require.NoError(t, err)
+
+		var decoded ActionExecution
+		err = decoded.UnmarshalBinary(data)
+		require.NoError(t, err)
+		require.Empty(t, decoded.DBID)
+		require.Empty(t, decoded.Action)
+		require.Len(t, decoded.Arguments, 1)
+	})
+
+	t.Run("invalid version", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		binary.Write(buf, SerializationByteOrder, uint16(999))
+		WriteString(buf, "testdb")
+		WriteString(buf, "action")
+		binary.Write(buf, SerializationByteOrder, uint16(0))
+
+		var decoded ActionExecution
+		err := decoded.UnmarshalBinary(buf.Bytes())
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "unsupported version")
+	})
+
+	t.Run("truncated data after version", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		binary.Write(buf, SerializationByteOrder, uint16(aeVersion))
+
+		var decoded ActionExecution
+		err := decoded.UnmarshalBinary(buf.Bytes())
+		require.Error(t, err)
+	})
+
+	t.Run("truncated data during arguments reading", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		binary.Write(buf, SerializationByteOrder, uint16(aeVersion))
+		WriteString(buf, "testdb")
+		WriteString(buf, "action")
+		binary.Write(buf, SerializationByteOrder, uint16(1))
+		binary.Write(buf, SerializationByteOrder, uint16(1))
+
+		var decoded ActionExecution
+		err := decoded.UnmarshalBinary(buf.Bytes())
+		require.Error(t, err)
+	})
+
+	t.Run("corrupted encoded value in arguments", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		binary.Write(buf, SerializationByteOrder, uint16(aeVersion))
+		WriteString(buf, "testdb")
+		WriteString(buf, "action")
+		binary.Write(buf, SerializationByteOrder, uint16(1))
+		binary.Write(buf, SerializationByteOrder, uint16(1))
+		WriteBytes(buf, []byte{0xFF, 0xFF})
+
+		var decoded ActionExecution
+		err := decoded.UnmarshalBinary(buf.Bytes())
+		require.Error(t, err)
+	})
+}
+
+func TestActionCall_MarshalUnmarshal(t *testing.T) {
+	t.Run("valid action call with multiple arguments", func(t *testing.T) {
+		original := ActionCall{
+			DBID:   "testdb",
+			Action: "test_action",
+			Arguments: []*EncodedValue{
+				{
+					Type: DataType{Name: TextType.Name},
+					Data: [][]byte{[]byte("arg1")},
+				},
+				{
+					Type: DataType{Name: IntType.Name},
+					Data: [][]byte{binary.BigEndian.AppendUint64(nil, 42)},
+				},
+			},
+		}
+
+		data, err := original.MarshalBinary()
+		require.NoError(t, err)
+
+		var decoded ActionCall
+		err = decoded.UnmarshalBinary(data)
+		require.NoError(t, err)
+		require.Equal(t, original.DBID, decoded.DBID)
+		require.Equal(t, original.Action, decoded.Action)
+		require.Len(t, decoded.Arguments, len(original.Arguments))
+		for i, arg := range original.Arguments {
+			require.Equal(t, arg.Type, decoded.Arguments[i].Type)
+			require.Equal(t, arg.Data, decoded.Arguments[i].Data)
+		}
+	})
+
+	t.Run("empty dbid and action with no arguments", func(t *testing.T) {
+		original := ActionCall{
+			DBID:      "",
+			Action:    "",
+			Arguments: []*EncodedValue{},
+		}
+
+		data, err := original.MarshalBinary()
+		require.NoError(t, err)
+
+		var decoded ActionCall
+		err = decoded.UnmarshalBinary(data)
+		require.NoError(t, err)
+		require.Equal(t, original.DBID, decoded.DBID)
+		require.Equal(t, original.Action, decoded.Action)
+		require.Empty(t, decoded.Arguments)
+	})
+
+	t.Run("max number of arguments", func(t *testing.T) {
+		args := make([]*EncodedValue, 65535)
+		for i := range args {
+			args[i] = &EncodedValue{
+				Type: DataType{Name: TextType.Name},
+				Data: [][]byte{[]byte(fmt.Sprintf("arg%d", i))},
+			}
+		}
+
+		original := ActionCall{
+			DBID:      "testdb",
+			Action:    "bulk_action",
+			Arguments: args,
+		}
+
+		data, err := original.MarshalBinary()
+		require.NoError(t, err)
+
+		var decoded ActionCall
+		err = decoded.UnmarshalBinary(data)
+		require.NoError(t, err)
+		require.Equal(t, original.DBID, decoded.DBID)
+		require.Equal(t, original.Action, decoded.Action)
+		require.Len(t, decoded.Arguments, len(original.Arguments))
+	})
+
+	t.Run("invalid version", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		binary.Write(buf, SerializationByteOrder, uint16(999))
+		WriteString(buf, "testdb")
+		WriteString(buf, "action")
+		binary.Write(buf, SerializationByteOrder, uint16(0))
+
+		var decoded ActionCall
+		err := decoded.UnmarshalBinary(buf.Bytes())
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "unsupported version")
+	})
+
+	t.Run("truncated data after version", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		binary.Write(buf, SerializationByteOrder, uint16(acVersion))
+
+		var decoded ActionCall
+		err := decoded.UnmarshalBinary(buf.Bytes())
+		require.Error(t, err)
+	})
+
+	t.Run("truncated data after dbid", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		binary.Write(buf, SerializationByteOrder, uint16(acVersion))
+		WriteString(buf, "testdb")
+
+		var decoded ActionCall
+		err := decoded.UnmarshalBinary(buf.Bytes())
+		require.Error(t, err)
+	})
+
+	t.Run("truncated data during argument reading", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		binary.Write(buf, SerializationByteOrder, uint16(acVersion))
+		WriteString(buf, "testdb")
+		WriteString(buf, "action")
+		binary.Write(buf, SerializationByteOrder, uint16(1))
+
+		var decoded ActionCall
+		err := decoded.UnmarshalBinary(buf.Bytes())
+		require.Error(t, err)
+	})
+
+	t.Run("invalid encoded value in arguments", func(t *testing.T) {
+		buf := &bytes.Buffer{}
+		binary.Write(buf, SerializationByteOrder, uint16(acVersion))
+		WriteString(buf, "testdb")
+		WriteString(buf, "action")
+		binary.Write(buf, SerializationByteOrder, uint16(1))
+		WriteBytes(buf, []byte{0xFF, 0xFF}) // Invalid encoded value
+
+		var decoded ActionCall
+		err := decoded.UnmarshalBinary(buf.Bytes())
+		require.Error(t, err)
 	})
 }

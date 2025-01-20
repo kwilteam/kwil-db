@@ -1,5 +1,14 @@
 package types
 
+// This file implements the Payload interface for the various payload types.
+// Each serialization should have a uint16 version encoded first. Unless
+// otherwise noted, the byte ordering used is SerializationByteOrder, which is
+// presently little endian.
+//
+// NOTE: most integers such as lengths are either uint16 or uint32, which is
+// somewhat inefficient in most cases. We may consider using varint instead.
+// See the encoding/binary package for more information.
+
 import (
 	"bytes"
 	"encoding"
@@ -12,7 +21,6 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
-	"github.com/kwilteam/kwil-db/core/types/serialize"
 )
 
 // PayloadType is the type of payload
@@ -146,23 +154,123 @@ func RegisterPayload(pType PayloadType) {
 // RawStatement is a raw SQL statement that is executed as a transaction
 type RawStatement struct {
 	Statement  string
-	Parameters []*struct {
-		Name  string
-		Value *EncodedValue
-	}
+	Parameters []*NamedValue
+}
+
+type NamedValue struct {
+	Name  string
+	Value *EncodedValue
 }
 
 var _ Payload = (*RawStatement)(nil)
 
-func (r *RawStatement) MarshalBinary() ([]byte, error) {
-	return serialize.Encode(r)
+// RawStatement serialization is as follows (using SerializationByteOrder in all
+// cases):
+//
+//   - Two bytes for version (uint16), which is presently 0 (rsVersion).
+//   - The statement string is written according to WriteString, which has a
+//	   4 byte (uint32) length prefix followed by the bytes of the utf8 string.
+//   - The number of parameters is written as a uint16.
+//   - For each parameter:
+//     - The parameter name is written according to WriteString.
+//     - The EncodedValue is serialized according to its MarshalBinary,
+//       written according to WriteBytes.
+
+const rsVersion = 0
+
+func (r RawStatement) MarshalBinary() ([]byte, error) {
+	buf := &bytes.Buffer{}
+	// version uint16
+	if err := binary.Write(buf, SerializationByteOrder, uint16(rsVersion)); err != nil {
+		return nil, err
+	}
+	// statement string
+	err := WriteString(buf, r.Statement)
+	if err != nil {
+		return nil, err
+	}
+
+	// parameters, max 65535 (uint16)
+	numParams := len(r.Parameters)
+	if err := binary.Write(buf, SerializationByteOrder, uint16(numParams)); err != nil {
+		return nil, err
+	}
+	for _, param := range r.Parameters {
+		// param name string
+		err := WriteString(buf, param.Name)
+		if err != nil {
+			return nil, err
+		}
+		// EncodedValue
+		encValBts, err := param.Value.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		err = WriteBytes(buf, encValBts)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return buf.Bytes(), nil
 }
 
 func (r *RawStatement) UnmarshalBinary(b []byte) error {
-	return serialize.Decode(b, r)
+	rd := bytes.NewReader(b)
+
+	var version uint16
+	if err := binary.Read(rd, SerializationByteOrder, &version); err != nil {
+		return err
+	}
+	if version != rsVersion {
+		return fmt.Errorf("unsupported version %d", version)
+	}
+
+	// statement string
+	statement, err := ReadString(rd)
+	if err != nil {
+		return err
+	}
+
+	// parameters
+	var numParams uint16
+	if err := binary.Read(rd, SerializationByteOrder, &numParams); err != nil {
+		return err
+	}
+
+	params := make([]*NamedValue, numParams)
+
+	for i := range params {
+		// param name string
+		name, err := ReadString(rd)
+		if err != nil {
+			return err
+		}
+
+		// EncodedValue
+		encValBts, err := ReadBytes(rd)
+		if err != nil {
+			return err
+		}
+		var encVal EncodedValue
+		if err := encVal.UnmarshalBinary(encValBts); err != nil {
+			return err
+		}
+
+		params[i] = &NamedValue{
+			Name:  name,
+			Value: &encVal,
+		}
+	}
+
+	// only modify the input if no errors
+	r.Statement = statement
+	r.Parameters = params
+
+	return nil
 }
 
-func (r *RawStatement) Type() PayloadType {
+func (r RawStatement) Type() PayloadType {
 	return PayloadTypeRawStatement
 }
 
@@ -175,16 +283,122 @@ type ActionExecution struct {
 
 var _ Payload = (*ActionExecution)(nil)
 
-func (a *ActionExecution) MarshalBinary() ([]byte, error) {
-	return serialize.Encode(a)
+func (a ActionExecution) Type() PayloadType {
+	return PayloadTypeExecute
+}
+
+const aeVersion = 0
+
+// ActionExecution serialization is as follows (using SerializationByteOrder in
+// all cases):
+//
+//   - Two bytes for version (uint16), which is presently 0 (aeVersion).
+//   - The DBID string is written according to WriteString, which has a
+//	   4 byte length prefix followed by the bytes of the utf8 string.
+//   - The Action string is written according to WriteString.
+//   - The number of batched calls is written as a uint16.
+//   - For each batched call:
+//     - The number of arguments is written as a uint16.
+//     - Each EncodedValue is serialize according to its MarshalBinary,
+//       written according to WriteBytes.
+
+func (a ActionExecution) MarshalBinary() ([]byte, error) {
+	buf := &bytes.Buffer{}
+	// version uint16
+	if err := binary.Write(buf, SerializationByteOrder, uint16(aeVersion)); err != nil {
+		return nil, err
+	}
+	// dbid
+	err := WriteString(buf, a.DBID)
+	if err != nil {
+		return nil, err
+	}
+	// action string
+	err = WriteString(buf, a.Action)
+	if err != nil {
+		return nil, err
+	}
+
+	// arguments
+	numCalls := len(a.Arguments)
+	if err := binary.Write(buf, SerializationByteOrder, uint16(numCalls)); err != nil {
+		return nil, err
+	}
+	for _, args := range a.Arguments {
+		numArgs := len(args)
+		if err := binary.Write(buf, SerializationByteOrder, uint16(numArgs)); err != nil {
+			return nil, err
+		}
+		for _, encVal := range args {
+			// EncodedValue
+			encValBts, err := encVal.MarshalBinary()
+			if err != nil {
+				return nil, err
+			}
+			err = WriteBytes(buf, encValBts)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	return buf.Bytes(), nil
 }
 
 func (a *ActionExecution) UnmarshalBinary(b []byte) error {
-	return serialize.Decode(b, a)
-}
+	rd := bytes.NewReader(b)
+	var version uint16
+	if err := binary.Read(rd, SerializationByteOrder, &version); err != nil {
+		return err
+	}
+	if version != aeVersion {
+		return fmt.Errorf("unsupported version %d", version)
+	}
+	// dbid
+	dbid, err := ReadString(rd)
+	if err != nil {
+		return err
+	}
+	// action string
+	action, err := ReadString(rd)
+	if err != nil {
+		return err
+	}
 
-func (a *ActionExecution) Type() PayloadType {
-	return PayloadTypeExecute
+	// arguments
+	var numCalls uint16
+	if err := binary.Read(rd, SerializationByteOrder, &numCalls); err != nil {
+		return err
+	}
+	args := make([][]*EncodedValue, numCalls)
+	for i := range args {
+		// arguments
+		var numArgs uint16
+		if err := binary.Read(rd, SerializationByteOrder, &numArgs); err != nil {
+			return err
+		}
+		args[i] = make([]*EncodedValue, numArgs)
+		for j := range args[i] {
+			// EncodedValue
+			encValBts, err := ReadBytes(rd)
+			if err != nil {
+				return err
+			}
+			var ev EncodedValue
+			if err := ev.UnmarshalBinary(encValBts); err != nil {
+				return err
+			}
+			args[i][j] = &ev
+		}
+	}
+
+	a.Action = action
+	a.DBID = dbid
+	a.Arguments = args
+
+	// ensure all args[i] have same length here or in caller?
+
+	return nil
 }
 
 // ActionCall models the arguments of an action call. It would be serialized
@@ -197,16 +411,103 @@ type ActionCall struct {
 	Arguments []*EncodedValue
 }
 
-func (a ActionCall) MarshalBinary() ([]byte, error) {
-	return serialize.Encode(a)
-}
-
-func (a *ActionCall) UnmarshalBinary(b []byte) error {
-	return serialize.Decode(b, a)
-}
-
 var _ encoding.BinaryUnmarshaler = (*ActionCall)(nil)
 var _ encoding.BinaryMarshaler = (*ActionCall)(nil)
+
+const acVersion = 0
+
+// ActionCall serialization is as follows (using SerializationByteOrder in
+// all cases):
+//
+//   - Two bytes for version (uint16), which is presently 0 (acVersion).
+//   - The DBID string is written according to WriteString, which has a
+//	   4 byte length prefix followed by the bytes of the utf8 string.
+//   - The Action string is written according to WriteString.
+//   - The number of arguments is written as a uint16.
+//   - Each EncodedValue is serialize according to its MarshalBinary, and
+//     written according to WriteBytes.
+
+func (ac ActionCall) MarshalBinary() ([]byte, error) {
+	buf := &bytes.Buffer{}
+	// version uint16
+	if err := binary.Write(buf, SerializationByteOrder, uint16(acVersion)); err != nil {
+		return nil, err
+	}
+	// dbid
+	err := WriteString(buf, ac.DBID)
+	if err != nil {
+		return nil, err
+	}
+	// action string
+	err = WriteString(buf, ac.Action)
+	if err != nil {
+		return nil, err
+	}
+	// arguments
+	numArgs := len(ac.Arguments)
+	if err := binary.Write(buf, SerializationByteOrder, uint16(numArgs)); err != nil {
+		return nil, err
+	}
+	for _, arg := range ac.Arguments {
+		// EncodedValue
+		encValBts, err := arg.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+		err = WriteBytes(buf, encValBts)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return buf.Bytes(), nil
+}
+
+func (ac *ActionCall) UnmarshalBinary(b []byte) error {
+	rd := bytes.NewReader(b)
+	var version uint16
+	if err := binary.Read(rd, SerializationByteOrder, &version); err != nil {
+		return err
+	}
+	if version != acVersion {
+		return fmt.Errorf("unsupported version %d", version)
+	}
+	// dbid
+	dbid, err := ReadString(rd)
+	if err != nil {
+		return err
+	}
+	// action string
+	action, err := ReadString(rd)
+	if err != nil {
+		return err
+	}
+
+	// arguments
+	var numArgs uint16
+	if err := binary.Read(rd, SerializationByteOrder, &numArgs); err != nil {
+		return err
+	}
+	args := make([]*EncodedValue, numArgs)
+	for i := range args {
+		// EncodedValue
+		encValBts, err := ReadBytes(rd)
+		if err != nil {
+			return err
+		}
+		var ev EncodedValue
+		if err := ev.UnmarshalBinary(encValBts); err != nil {
+			return err
+		}
+		args[i] = &ev
+	}
+
+	ac.Action = action
+	ac.DBID = dbid
+	ac.Arguments = args
+
+	return nil
+}
 
 // EncodedValue is used to encode a value with its type specified. This is used
 // as arguments for actions and procedures.
@@ -214,23 +515,25 @@ type EncodedValue struct {
 	Type DataType `json:"type"`
 	// The double slice handles arrays of encoded values.
 	// If there is only one element, the outer slice will have length 1.
-	Data [][]byte `rlp:"optional" json:"data"`
+	Data [][]byte `json:"data"`
 }
 
-func (e EncodedValue) MarshalBinary() ([]byte, error) {
-	return serialize.Encode(e)
-}
+const evVersion = 0
 
-func (e *EncodedValue) UnmarshalBinary(b []byte) error {
-	return serialize.Decode(b, e)
-}
-
-/*const evVersion = 0
+// EncodedValue serialization is as follows (using SerializationByteOrder in
+// all cases):
+//
+//   - Two bytes for version (uint16), which is presently 0 (evVersion).
+//   - The DataType is serialized according to its MarshalBinary, and the
+//     bytes are written according to WriteBytes, which has a 4 byte length
+//     prefix followed by the bytes of the data.
+//   - The number of elements in the data slice is written as a uint16.
+//   - Each element in the data slice is written according to WriteBytes.
 
 func (e EncodedValue) MarshalBinary() ([]byte, error) {
 	buf := &bytes.Buffer{}
 	// version uint16
-	if err := binary.Write(buf, binary.LittleEndian, uint16(evVersion)); err != nil {
+	if err := binary.Write(buf, SerializationByteOrder, uint16(evVersion)); err != nil {
 		return nil, err
 	}
 	bts, err := e.Type.MarshalBinary()
@@ -241,7 +544,7 @@ func (e EncodedValue) MarshalBinary() ([]byte, error) {
 		return nil, err
 	}
 	dataLen := len(e.Data)
-	if err := binary.Write(buf, binary.LittleEndian, uint16(dataLen)); err != nil {
+	if err := binary.Write(buf, SerializationByteOrder, uint16(dataLen)); err != nil {
 		return nil, err
 	}
 	for _, data := range e.Data {
@@ -257,7 +560,7 @@ func (e *EncodedValue) UnmarshalBinary(bts []byte) error {
 	buf := bytes.NewBuffer(bts)
 	// version uint16
 	var version uint16
-	if err := binary.Read(buf, binary.LittleEndian, &version); err != nil {
+	if err := binary.Read(buf, SerializationByteOrder, &version); err != nil {
 		return err
 	}
 	if version != evVersion {
@@ -274,7 +577,7 @@ func (e *EncodedValue) UnmarshalBinary(bts []byte) error {
 	}
 
 	var dataLen uint16
-	if err := binary.Read(buf, binary.LittleEndian, &dataLen); err != nil {
+	if err := binary.Read(buf, SerializationByteOrder, &dataLen); err != nil {
 		return err
 	}
 	e.Data = make([][]byte, dataLen)
@@ -286,7 +589,7 @@ func (e *EncodedValue) UnmarshalBinary(bts []byte) error {
 		e.Data[i] = data
 	}
 	return nil
-}*/
+}
 
 // Decode decodes the encoded value to its native Go type.
 func (e *EncodedValue) Decode() (any, error) {
@@ -550,21 +853,24 @@ func EncodeValue(v any) (*EncodedValue, error) {
 	}, nil
 }
 
-// transfer payload version
-const tVersion = 0
-
 // Transfer transfers an amount of tokens from the sender to the receiver.
 type Transfer struct {
 	To     *AccountID `json:"to"`     // to be string as user identifier
 	Amount *big.Int   `json:"amount"` // big.Int
 }
 
-func (v *Transfer) Type() PayloadType {
+var _ Payload = (*Transfer)(nil)
+
+func (v Transfer) Type() PayloadType {
 	return PayloadTypeTransfer
 }
 
 var _ encoding.BinaryUnmarshaler = (*Transfer)(nil)
 var _ encoding.BinaryMarshaler = (*Transfer)(nil)
+var _ encoding.BinaryMarshaler = Transfer{}
+
+// transfer payload version
+const tVersion = 0
 
 func (v Transfer) MarshalBinary() ([]byte, error) {
 	if v.To == nil {
@@ -788,14 +1094,14 @@ const vlVersion = 0
 
 func (v ValidatorLeave) MarshalBinary() ([]byte, error) {
 	// just a version uint16 and that's all
-	return binary.LittleEndian.AppendUint16(nil, vlVersion), nil
+	return SerializationByteOrder.AppendUint16(nil, vlVersion), nil
 }
 
 func (v *ValidatorLeave) UnmarshalBinary(b []byte) error {
 	if len(b) != 2 {
 		return fmt.Errorf("invalid validator leave payload")
 	}
-	if binary.LittleEndian.Uint16(b) != vlVersion {
+	if SerializationByteOrder.Uint16(b) != vlVersion {
 		return fmt.Errorf("invalid validator leave payload version")
 	}
 	return nil
@@ -818,12 +1124,12 @@ func (v *ValidatorVoteIDs) MarshalBinary() ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	// version uint16
-	if err := binary.Write(buf, binary.LittleEndian, uint16(vvidVersion)); err != nil {
+	if err := binary.Write(buf, SerializationByteOrder, uint16(vvidVersion)); err != nil {
 		return nil, err
 	}
 
 	// Length of resolution IDs (uint32)
-	if err := binary.Write(buf, binary.LittleEndian, uint32(len(v.ResolutionIDs))); err != nil {
+	if err := binary.Write(buf, SerializationByteOrder, uint32(len(v.ResolutionIDs))); err != nil {
 		return nil, err
 	}
 
@@ -842,14 +1148,14 @@ func (v *ValidatorVoteIDs) MarshalBinary() ([]byte, error) {
 func (v *ValidatorVoteIDs) UnmarshalBinary(bts []byte) error {
 	buf := bytes.NewBuffer(bts)
 	var version uint16
-	if err := binary.Read(buf, binary.LittleEndian, &version); err != nil {
+	if err := binary.Read(buf, SerializationByteOrder, &version); err != nil {
 		return err
 	}
 	if version != vvidVersion {
 		return fmt.Errorf("unknown version: %d", version)
 	}
 	var length uint32
-	if err := binary.Read(buf, binary.LittleEndian, &length); err != nil {
+	if err := binary.Read(buf, SerializationByteOrder, &length); err != nil {
 		return err
 	}
 	v.ResolutionIDs = make([]*UUID, 0, length) // to match MArshalBinary
@@ -888,12 +1194,12 @@ const vvbbVersion = 0
 func (v ValidatorVoteBodies) MarshalBinary() ([]byte, error) {
 	buf := new(bytes.Buffer)
 	// version uint16
-	if err := binary.Write(buf, binary.LittleEndian, uint16(vvbbVersion)); err != nil {
+	if err := binary.Write(buf, SerializationByteOrder, uint16(vvbbVersion)); err != nil {
 		return nil, err
 	}
 
 	// Length of events (uint32)
-	if err := binary.Write(buf, binary.LittleEndian, uint32(len(v.Events))); err != nil {
+	if err := binary.Write(buf, SerializationByteOrder, uint32(len(v.Events))); err != nil {
 		return nil, err
 	}
 	for _, event := range v.Events {
@@ -912,14 +1218,14 @@ func (v ValidatorVoteBodies) MarshalBinary() ([]byte, error) {
 func (v *ValidatorVoteBodies) UnmarshalBinary(bts []byte) error {
 	buf := bytes.NewBuffer(bts)
 	var version uint16
-	if err := binary.Read(buf, binary.LittleEndian, &version); err != nil {
+	if err := binary.Read(buf, SerializationByteOrder, &version); err != nil {
 		return err
 	}
 	if version != vvbbVersion {
 		return fmt.Errorf("unknown version: %d", version)
 	}
 	var numEvents uint32
-	if err := binary.Read(buf, binary.LittleEndian, &numEvents); err != nil {
+	if err := binary.Read(buf, SerializationByteOrder, &numEvents); err != nil {
 		return err
 	}
 	if int(numEvents) > min(500_000, buf.Len()) {
@@ -952,14 +1258,14 @@ const crVersion = 0
 func (v CreateResolution) MarshalBinary() ([]byte, error) {
 	// version uint16 and then the v.Resolution.MarshalBinary
 	buf := new(bytes.Buffer)
-	if err := binary.Write(buf, binary.LittleEndian, uint16(crVersion)); err != nil {
+	if err := binary.Write(buf, SerializationByteOrder, uint16(crVersion)); err != nil {
 		return nil, err
 	}
 	enc, err := v.Resolution.MarshalBinary()
 	if err != nil {
 		return nil, err
 	}
-	if err := binary.Write(buf, binary.LittleEndian, enc); err != nil {
+	if err := binary.Write(buf, SerializationByteOrder, enc); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
@@ -969,7 +1275,7 @@ func (v *CreateResolution) UnmarshalBinary(bts []byte) error {
 	if len(bts) <= 2 {
 		return fmt.Errorf("invalid payload")
 	}
-	version := binary.LittleEndian.Uint16(bts)
+	version := SerializationByteOrder.Uint16(bts)
 	if version != crVersion {
 		return fmt.Errorf("unknown version: %d", version)
 	}
@@ -998,7 +1304,7 @@ const arVersion = 0
 func (v ApproveResolution) MarshalBinary() ([]byte, error) {
 	// uint16 version and then the v.ResolutionID.MarshalBinary
 	buf := new(bytes.Buffer)
-	if err := binary.Write(buf, binary.LittleEndian, uint16(arVersion)); err != nil {
+	if err := binary.Write(buf, SerializationByteOrder, uint16(arVersion)); err != nil {
 		return nil, err
 	}
 	// var resID UUID
@@ -1012,7 +1318,7 @@ func (v ApproveResolution) MarshalBinary() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := binary.Write(buf, binary.LittleEndian, enc); err != nil {
+	if err := binary.Write(buf, SerializationByteOrder, enc); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
@@ -1022,7 +1328,7 @@ func (v *ApproveResolution) UnmarshalBinary(bts []byte) error {
 	if len(bts) <= 2 {
 		return fmt.Errorf("invalid payload")
 	}
-	version := binary.LittleEndian.Uint16(bts)
+	version := SerializationByteOrder.Uint16(bts)
 	if version != arVersion {
 		return fmt.Errorf("unknown version: %d", version)
 	}
@@ -1050,7 +1356,7 @@ const drVersion = 0
 
 func (d DeleteResolution) MarshalBinary() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	if err := binary.Write(buf, binary.LittleEndian, uint16(drVersion)); err != nil {
+	if err := binary.Write(buf, SerializationByteOrder, uint16(drVersion)); err != nil {
 		return nil, err
 	}
 	if d.ResolutionID == nil {
@@ -1060,7 +1366,7 @@ func (d DeleteResolution) MarshalBinary() ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	if err := binary.Write(buf, binary.LittleEndian, enc); err != nil {
+	if err := binary.Write(buf, SerializationByteOrder, enc); err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
@@ -1074,7 +1380,7 @@ func (d *DeleteResolution) UnmarshalBinary(bts []byte) error {
 	if len(bts) <= 2 {
 		return fmt.Errorf("invalid payload")
 	}
-	version := binary.LittleEndian.Uint16(bts)
+	version := SerializationByteOrder.Uint16(bts)
 	if version != drVersion {
 		return fmt.Errorf("unknown version: %d", version)
 	}

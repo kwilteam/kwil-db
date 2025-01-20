@@ -1,11 +1,10 @@
 package serialize
 
 import (
+	"encoding"
 	"errors"
 	"fmt"
 	"reflect"
-
-	"github.com/ethereum/go-ethereum/rlp"
 )
 
 // EncodingType is the type used to enumerate different codecs for binary data.
@@ -15,8 +14,8 @@ const EncodingTypeCustom = 1 << 12 // 4096 codecs reserved for kwild
 
 const (
 	// it is very important that the order of the encoding types is not changed
-	encodingTypeInvalid EncodingType = iota
-	encodingTypeRLP
+	EncodingTypeInvalid EncodingType = iota
+	EncodingTypeBinary               // type must implement BinaryMarshaler and BinaryUnmarshaler
 )
 
 // Codec contains the encoding and decoding functionality for a certain
@@ -30,20 +29,54 @@ type Codec struct {
 }
 
 var (
-	rlpCodec = Codec{
-		Type: encodingTypeRLP,
-		Name: "RLP",
+	// BinaryCodec is the default codec for encoding and decoding binary data.
+	// The type must implement BinaryMarshaler and BinaryUnmarshaler. The
+	// implementations of BinaryMarshaler and BinaryUnmarshaler must not be
+	// defined in terms of serialize.Encode and serialize.Decode to avoid
+	// infinite recursion.
+	BinaryCodec = Codec{
+		Type: EncodingTypeBinary,
+		Name: "Binary",
 		Encode: func(val any) ([]byte, error) {
-			return rlp.EncodeToBytes(val)
+			if val == nil {
+				return nil, nil
+			}
+			v := reflect.ValueOf(val)
+			if v.IsNil() {
+				return nil, nil
+			}
+			bm, ok := val.(encoding.BinaryMarshaler)
+			if !ok {
+				return nil, fmt.Errorf("not a binary marshaler: %T", val)
+			}
+			return bm.MarshalBinary()
 		},
-		Decode: func(bts []byte, v any) error {
-			return rlp.DecodeBytes(bts, v)
+		Decode: func(bts []byte, val any) error {
+			if val == nil {
+				return errors.New("must not be a nil interface")
+			}
+			err := requireNonNilPointer(val)
+			if err != nil {
+				return err
+			}
+			if bts == nil { // to match the exception in Encode
+				// set what v points to to the zero value
+				v := reflect.ValueOf(val)
+				// v.CanSet() // ?
+				v.Elem().Set(reflect.Zero(v.Elem().Type()))
+				return nil
+			}
+			bu, ok := val.(encoding.BinaryUnmarshaler)
+			if !ok {
+				return fmt.Errorf("not a binary unmarshaler: %T", val)
+			}
+			return bu.UnmarshalBinary(bts)
 		},
 	}
 )
 
 var encodings = map[EncodingType]Codec{
-	encodingTypeRLP: rlpCodec,
+	EncodingTypeBinary: BinaryCodec,
 }
 
 // RegisterCodec installs a new external codec. The codec extension
@@ -65,11 +98,10 @@ func RegisterCodec(c *Codec) {
 	encodings[encType] = *c
 }
 
-// Encode encodes the given value. If the value is an encoding.BinaryMarshaler,
-// its MarshalBinary method is used, otherwise it uses this package's current
-// serialized data format (RLP).
+// Encode encodes the given value. The value must be an
+// encoding.BinaryMarshaler.
 func Encode(val any) ([]byte, error) {
-	return EncodeWithCodec(val, rlpCodec)
+	return EncodeWithCodec(val, BinaryCodec)
 }
 
 // EncodeWithCodec encodes the given value into a serialized data format with
@@ -81,6 +113,14 @@ func EncodeWithCodec(val any, enc Codec) ([]byte, error) {
 	}
 
 	return addSerializedTypePrefix(enc.Type, btsVal), nil
+}
+
+func EncodeWithEncodingType(val any, encodingType EncodingType) ([]byte, error) {
+	codec, ok := encodings[encodingType]
+	if !ok {
+		return nil, fmt.Errorf("unregistered encoding type: %d", encodingType)
+	}
+	return EncodeWithCodec(val, codec)
 }
 
 func requireNonNilPointer(v any) error {
@@ -114,6 +154,14 @@ func Decode(bts []byte, v any) error {
 	}
 
 	return codec.Decode(val, v)
+}
+
+func DecodeWithEncodingType(bts []byte, v any, encodingType EncodingType) error {
+	codec, ok := encodings[encodingType]
+	if !ok {
+		return fmt.Errorf("unregistered encoding type: %d", encodingType)
+	}
+	return codec.Decode(bts, v)
 }
 
 // DecodeGeneric decodes the given serialized data into the given value. See

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	"slices"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"golang.org/x/crypto/sha3"
@@ -61,6 +62,19 @@ func eip55ChecksumAddr(addr [20]byte) string {
 
 // Verify verifies applies the Ethereum TextHash digest and verifies the signature
 func (EthSecp256k1Authenticator) Verify(identity []byte, msg []byte, signature []byte) error {
+	// signature is 65 bytes, [R || S || V] format
+	if len(signature) != crypto.Secp256k1SignatureLength {
+		return fmt.Errorf("invalid signature length: expected %d, received %d",
+			crypto.Secp256k1SignatureLength, len(signature))
+	}
+
+	if signature[crypto.RecoveryIDOffset] == 27 ||
+		signature[crypto.RecoveryIDOffset] == 28 {
+		// Transform yellow paper V from 27/28 to 0/1
+		signature = slices.Clone(signature)
+		signature[crypto.RecoveryIDOffset] -= 27
+	}
+
 	hash := textHash(msg)
 	pubkey, err := crypto.RecoverSecp256k1KeyFromSigHash(hash, signature)
 	if err != nil {

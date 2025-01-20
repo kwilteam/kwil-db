@@ -17,6 +17,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/node/accounts"
 	"github.com/kwilteam/kwil-db/node/pg"
+	"github.com/kwilteam/kwil-db/node/rlp"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/versioning"
 	"github.com/kwilteam/kwil-db/node/voting"
@@ -442,18 +443,18 @@ type BlockSpends struct {
 
 var _ pg.ChangeStreamer = (*BlockSpends)(nil)
 
-func (bs *BlockSpends) Prefix() byte {
+func (bs BlockSpends) Prefix() byte {
 	return pg.BlockSpendsType
 }
 
-func (bs *BlockSpends) MarshalBinary() ([]byte, error) {
-	return serialize.Encode(bs)
+func (bs BlockSpends) MarshalBinary() ([]byte, error) {
+	return serialize.EncodeWithEncodingType(bs, rlp.EncodingTypeRLP)
 }
 
 var _ encoding.BinaryUnmarshaler = (*BlockSpends)(nil)
 
 func (bs *BlockSpends) UnmarshalBinary(bts []byte) error {
-	return serialize.Decode(bts, bs)
+	return serialize.DecodeWithEncodingType(bts, bs, rlp.EncodingTypeRLP)
 }
 
 type chunkWriter struct {
