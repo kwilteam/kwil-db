@@ -260,6 +260,7 @@ func DefaultConfig() *Config {
 		},
 		Consensus: ConsensusConfig{
 			ProposeTimeout:        Duration(1000 * time.Millisecond),
+			EmptyBlockTimeout:     Duration(1 * time.Minute),
 			BlockProposalInterval: Duration(1 * time.Second),
 			BlockAnnInterval:      Duration(3 * time.Second),
 		},
@@ -356,7 +357,9 @@ type DBConfig struct {
 }
 
 type ConsensusConfig struct {
-	ProposeTimeout Duration `toml:"propose_timeout" comment:"timeout for proposing a block (applies to leader)"`
+	ProposeTimeout Duration `toml:"propose_timeout" comment:"minimum time to wait before proposing a block with transactions (applies to leader). If set to 0, the leader will propose a block as soon as it has transactions"`
+
+	EmptyBlockTimeout Duration `toml:"empty_block_timeout" comment:"timeout for proposing an empty block"`
 	// reannounce intervals
 
 	// BlockProposalInterval is the interval between block proposal reannouncements by the leader.

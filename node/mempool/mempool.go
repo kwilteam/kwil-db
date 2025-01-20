@@ -128,3 +128,9 @@ func (mp *Mempool) RecheckTxs(ctx context.Context, fn CheckFn) {
 		}
 	}
 }
+
+func (mp *Mempool) TxsAvailable() bool {
+	mp.mtx.RLock()
+	defer mp.mtx.RUnlock()
+	return len(mp.txQ) > 0
+}

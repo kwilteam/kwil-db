@@ -44,8 +44,11 @@ type ConsensusEngine struct {
 	log     log.Logger
 
 	// proposeTimeout specifies the time duration to wait before proposing a new block for the next height.
-	// Default is 1 second.
+	// This timeout is used by the leader to propose a block if transactions are available. Default is 1 second.
 	proposeTimeout time.Duration
+	// emptyBlockTimeout specifies the time duration to wait before proposing an empty block.
+	// This should always be greater than the proposeTimeout. Default is 1 minute.
+	emptyBlockTimeout time.Duration
 
 	// blkProposalInterval specifies the time duration to wait before reannouncing the block proposal message.
 	// This is only applicable for the leader. This timeout influences how quickly the out-of-sync nodes can
@@ -77,6 +80,10 @@ type ConsensusEngine struct {
 	numResets      int64
 
 	// Channels
+	newBlockProposal chan struct{} // triggers block production in the leader
+	// newRound triggers the start of a new round in the consensus engine.
+	// leader waits for the minBlockInterval before proposing a new block if txs are available.
+	// if no txs are available for the maxBlockInterval duration, the leader proposes an empty block.
 	newRound     chan struct{}
 	msgChan      chan consensusMessage
 	haltChan     chan string        // can take a msg or reason for halting the network
@@ -119,8 +126,13 @@ type Config struct {
 	Leader crypto.PublicKey
 	// GenesisHeight is the initial height of the network.
 	GenesisHeight int64
-	// ProposeTimeout is the timeout for proposing a block.
+
+	// ProposeTimeout is the minimum time duration to wait before proposing a new block.
+	// Leader can propose a block with transactions as soon as this timeout is reached. Default is 1 second.
 	ProposeTimeout time.Duration
+	// EmptyBlockTimeout is the maximum time duration to wait before proposing a new block without transactions.
+	// Default is 1 minute.
+	EmptyBlockTimeout time.Duration
 	// BlkPropReannounceInterval is the frequency at which block proposal messages are reannounced by the Leader.
 	BlockProposalInterval time.Duration
 	// BlkAnnReannounceInterval is the frequency at which block commit messages are reannounced by the Leader.
@@ -253,6 +265,7 @@ func New(cfg *Config) *ConsensusEngine {
 		privKey:             cfg.PrivateKey,
 		leader:              cfg.Leader,
 		proposeTimeout:      cfg.ProposeTimeout,
+		emptyBlockTimeout:   cfg.EmptyBlockTimeout,
 		blkProposalInterval: cfg.BlockProposalInterval,
 		blkAnnInterval:      cfg.BlockAnnInterval,
 		broadcastTxTimeout:  cfg.BroadcastTxTimeout,
@@ -272,12 +285,14 @@ func New(cfg *Config) *ConsensusEngine {
 			status:  Committed,
 			blkProp: nil,
 		},
-		genesisHeight: cfg.GenesisHeight,
-		msgChan:       make(chan consensusMessage, 1), // buffer size??
-		haltChan:      make(chan string, 1),
-		resetChan:     make(chan *resetMsg, 1),
-		bestHeightCh:  make(chan *discoveryMsg, 1),
-		newRound:      make(chan struct{}, 1),
+		genesisHeight:    cfg.GenesisHeight,
+		msgChan:          make(chan consensusMessage, 1), // buffer size??
+		haltChan:         make(chan string, 1),
+		resetChan:        make(chan *resetMsg, 1),
+		bestHeightCh:     make(chan *discoveryMsg, 1),
+		newRound:         make(chan struct{}, 1),
+		newBlockProposal: make(chan struct{}, 1),
+
 		// interfaces
 		mempool:        cfg.Mempool,
 		blockStore:     cfg.BlockStore,
@@ -318,7 +333,7 @@ func (ce *ConsensusEngine) Start(ctx context.Context, fns BroadcastFns, peerFns 
 	// nodes are activated when they receive a block proposal or block announce msg.
 	if ce.role.Load() == types.RoleLeader {
 		ce.log.Infof("Starting the leader node")
-		ce.newRound <- struct{}{} // recv by runConsensusEventLoop, buffered
+		ce.newBlockProposal <- struct{}{} // recv by runConsensusEventLoop, buffered
 	} else {
 		ce.log.Infof("Starting the validator/sentry node")
 	}
@@ -407,18 +422,19 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 			return nil
 
 		case <-ce.newRound:
+			go ce.newBlockRound(ctx)
+		case <-ce.newBlockProposal:
 			params := ce.blockProcessor.ConsensusParams()
 			if params.MigrationStatus == ktypes.MigrationCompleted {
 				ce.log.Info("Network halted due to migration, no more blocks will be produced")
 			}
 
-			if err := ce.startNewRound(ctx); err != nil {
+			if err := ce.proposeBlock(ctx); err != nil {
 				ce.log.Error("Error starting a new round", "error", err)
 				return err
 			}
-
 		case <-catchUpTicker.C:
-			err := ce.doCatchup(ctx) // better name??
+			err := ce.doCatchup(ctx)
 			if err != nil {
 				return err
 			}

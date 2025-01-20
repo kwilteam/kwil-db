@@ -32,8 +32,53 @@ import (
 // the current block, revert any state changes made, and remove the problematic transactions from the mempool before
 // reproposing the block.
 
-// startNewRound initiates a new round of the consensus process (Prepare Phase).
-func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
+func (ce *ConsensusEngine) newBlockRound(ctx context.Context) error {
+	// wait for the minBlockTime to start a new block round
+	select {
+	case <-time.After(ce.proposeTimeout):
+		// can propose a new block as soon as the txs are available
+	case <-ctx.Done():
+		ce.log.Warn("Context cancelled, stopping the new block round")
+		return nil
+	}
+
+	ticker := time.NewTicker(500 * time.Millisecond)
+	emptyBlockTicker := time.NewTicker(ce.emptyBlockTimeout - ce.proposeTimeout)
+
+	for {
+		select {
+		case <-ctx.Done():
+			ce.log.Warn("Context cancelled, stopping the new block round")
+			return nil
+		case <-emptyBlockTicker.C:
+			// can propose a new block even if the txs are not available
+			ce.newBlockProposal <- struct{}{}
+			return nil
+		case <-ticker.C:
+			// check for the availability of transactions in the mempool
+			if ce.mempool.TxsAvailable() {
+				ce.newBlockProposal <- struct{}{}
+				return nil
+			} else {
+				// check if the leader has any new events to broadcast a voteID transaction
+				hasEvents, err := ce.blockProcessor.HasEvents(ctx)
+				if err != nil {
+					ce.log.Errorf("Error checking for events: %v", err)
+					return err
+				}
+
+				if hasEvents {
+					ce.newBlockProposal <- struct{}{}
+					return nil
+				}
+			}
+			// no transactions available, wait till the next tick to recheck the mempool
+		}
+	}
+}
+
+// proposeBlock used by the leader to propose a new block to the network.
+func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 	// Check if the network is halted due to migration or other reasons
@@ -110,7 +155,9 @@ func (ce *ConsensusEngine) startNewRound(ctx context.Context) error {
 			ce.mempoolMtx.Unlock()
 
 			// signal ce to start a new round
-			ce.newRound <- struct{}{}
+			// ce.newRound <- struct{}{}
+			// repropse a new block
+			ce.newBlockProposal <- struct{}{}
 			return nil
 		}
 
@@ -298,17 +345,8 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 		// start the next round
 		ce.nextState()
 
-		go func() { // must not sleep with ce.state mutex locked
-			// Wait for the timeout to start the next round
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(ce.proposeTimeout):
-			}
-
-			// signal ce to start a new round
-			ce.newRound <- struct{}{}
-		}()
+		// signal ce to start a new round
+		ce.newRound <- struct{}{}
 
 	} else if ce.hasMajorityCeil(nacks) {
 		haltReason := fmt.Sprintf("Majority of the validators have rejected the block, halting the network: %d acks, %d nacks", acks, nacks)

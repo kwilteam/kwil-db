@@ -206,6 +206,21 @@ func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs []*t
 	return finalTxs, invalidTxs, nil
 }
 
+func (bp *BlockProcessor) HasEvents(ctx context.Context) (bool, error) {
+	readTx, err := bp.db.BeginReadTx(ctx)
+	if err != nil {
+		return false, err
+	}
+	defer readTx.Rollback(ctx)
+
+	events, err := getEvents(ctx, readTx)
+	if err != nil {
+		return false, err
+	}
+
+	return len(events) > 0, nil
+}
+
 // prepareValidatorVoteBodyTx authors the ValidatorVoteBody transaction to be included by the leader in the block.
 // It fetches the events which does not have resolutions yet and creates a validator vote body transaction.
 // The number of events to be included in a single transaction is limited either by MaxVotesPerTx or the maxTxSize
