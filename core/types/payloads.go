@@ -20,7 +20,6 @@ import (
 	"strconv"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
-	"github.com/kwilteam/kwil-db/core/types/decimal"
 )
 
 // PayloadType is the type of payload
@@ -631,7 +630,7 @@ func (e *EncodedValue) Decode() (any, error) {
 		case Uint256Type.Name:
 			return Uint256FromBytes(data)
 		case NumericStr:
-			return decimal.NewFromString(string(data))
+			return ParseDecimal(string(data))
 		default:
 			return nil, fmt.Errorf("cannot decode type %s", typeName)
 		}
@@ -711,14 +710,14 @@ func (e *EncodedValue) Decode() (any, error) {
 			}
 			arrAny = arr
 		case NumericStr:
-			arr := make(decimal.DecimalArray, 0, len(e.Data))
+			arr := make(DecimalArray, 0, len(e.Data))
 			for _, elem := range e.Data {
 				dec, err := decodeScalar(elem, e.Type.Name, true)
 				if err != nil {
 					return nil, err
 				}
 
-				arr = append(arr, dec.(*decimal.Decimal))
+				arr = append(arr, dec.(*Decimal))
 			}
 			arrAny = arr
 		default:
@@ -780,15 +779,15 @@ func EncodeValue(v any) (*EncodedValue, error) {
 		case nil: // since we quick return for nil, we can only reach this point if the type is nil
 			// and we are in an array
 			return nil, nil, fmt.Errorf("cannot encode nil in type array")
-		case *decimal.Decimal:
-			decTyp, err := NewDecimalType(t.Precision(), t.Scale())
+		case *Decimal:
+			decTyp, err := NewNumericType(t.Precision(), t.Scale())
 			if err != nil {
 				return nil, nil, err
 			}
 
 			return []byte(t.String()), decTyp, nil
-		case decimal.Decimal:
-			decTyp, err := NewDecimalType(t.Precision(), t.Scale())
+		case Decimal:
+			decTyp, err := NewNumericType(t.Precision(), t.Scale())
 			if err != nil {
 				return nil, nil, err
 			}

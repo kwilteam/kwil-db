@@ -10,7 +10,6 @@ import (
 	"unicode/utf8"
 
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/types/decimal"
 )
 
 type MethodDefinition struct {
@@ -128,7 +127,7 @@ func typeToSchemaType(t reflect.Type) string {
 		return "string"
 	case reflect.TypeFor[types.Uint256](): // MarshalJSON also makes JSON string
 		return "string"
-	case reflect.TypeFor[decimal.Decimal](): // MarshalJSON also makes JSON string
+	case reflect.TypeFor[types.Decimal](): // MarshalJSON also makes JSON string
 		return "string"
 	case reflect.TypeFor[[]byte]():
 		// A regular []byte field is a base64 string.

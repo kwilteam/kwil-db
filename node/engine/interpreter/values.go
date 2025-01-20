@@ -10,7 +10,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/node/engine"
 )
 
@@ -115,13 +114,13 @@ func init() {
 			},
 		},
 		valueMapping{
-			KwilType: types.DecimalType,
+			KwilType: types.NumericType,
 			ZeroValue: func(t *types.DataType) (value, error) {
 				if !t.HasMetadata() {
 					return nil, fmt.Errorf("cannot create zero value of decimal type with zero precision and scale")
 				}
 
-				dec, err := decimal.NewFromString("0")
+				dec, err := types.ParseDecimal("0")
 				if err != nil {
 					return nil, err
 				}
@@ -197,7 +196,7 @@ func init() {
 			},
 		},
 		valueMapping{
-			KwilType: types.DecimalArrayType,
+			KwilType: types.NumericArrayType,
 			ZeroValue: func(t *types.DataType) (value, error) {
 				if !t.HasMetadata() {
 					return nil, fmt.Errorf("cannot create zero value of decimal type with zero precision and scale")
@@ -220,7 +219,7 @@ func init() {
 				prec := t.Metadata[0]
 				scale := t.Metadata[1]
 
-				arr := newNullDecArr(types.DecimalArrayType)
+				arr := newNullDecArr(types.NumericArrayType)
 				arr.metadata = &precAndScale{prec, scale}
 				return arr, nil
 			},
@@ -344,9 +343,9 @@ func newValue(v any) (value, error) {
 		return makeUUID(v), nil
 	case types.UUID:
 		return makeUUID(&v), nil
-	case *decimal.Decimal:
+	case *types.Decimal:
 		return makeDecimal(v), nil
-	case decimal.Decimal:
+	case types.Decimal:
 		return makeDecimal(&v), nil
 	case []int64:
 		pgInts := make([]pgtype.Int8, len(v))
@@ -464,7 +463,7 @@ func newValue(v any) (value, error) {
 		return &blobArrayValue{
 			singleDimArray: newValidArr(pgBlobs),
 		}, nil
-	case []*decimal.Decimal:
+	case []*types.Decimal:
 		pgDecs := make([]pgtype.Numeric, len(v))
 		for i, val := range v {
 			pgDecs[i] = pgTypeFromDec(val)
@@ -695,7 +694,7 @@ func (i *int8Value) Cast(t *types.DataType) (value, error) {
 			return nil, castErr(errors.New("cannot cast int to decimal array"))
 		}
 
-		dec, err := decimal.NewFromString(fmt.Sprint(i.Int64))
+		dec, err := types.ParseDecimal(fmt.Sprint(i.Int64))
 		if err != nil {
 			return nil, castErr(err)
 		}
@@ -818,7 +817,7 @@ func (s *textValue) Cast(t *types.DataType) (value, error) {
 			return nil, castErr(errors.New("cannot cast text to decimal array"))
 		}
 
-		dec, err := decimal.NewFromString(s.String)
+		dec, err := types.ParseDecimal(s.String)
 		if err != nil {
 			return nil, castErr(err)
 		}
@@ -1168,7 +1167,7 @@ func (u *uuidValue) Cast(t *types.DataType) (value, error) {
 	}
 }
 
-func pgTypeFromDec(d *decimal.Decimal) pgtype.Numeric {
+func pgTypeFromDec(d *types.Decimal) pgtype.Numeric {
 	if d == nil {
 		return pgtype.Numeric{
 			Valid: false,
@@ -1196,16 +1195,16 @@ func pgTypeFromDec(d *decimal.Decimal) pgtype.Numeric {
 	}
 }
 
-func decFromPgType(n pgtype.Numeric, meta *precAndScale) (*decimal.Decimal, error) {
+func decFromPgType(n pgtype.Numeric, meta *precAndScale) (*types.Decimal, error) {
 	if n.NaN {
-		return decimal.NewNaN(), nil
+		return types.NewNaNDecimal(), nil
 	}
 	if !n.Valid {
 		// we should never get here, but just in case
 		return nil, fmt.Errorf("internal bug: null decimal")
 	}
 
-	dec, err := decimal.NewFromBigInt(n.Int, n.Exp)
+	dec, err := types.NewDecimalFromBigInt(n.Int, n.Exp)
 	if err != nil {
 		return nil, err
 	}
@@ -1220,7 +1219,7 @@ func decFromPgType(n pgtype.Numeric, meta *precAndScale) (*decimal.Decimal, erro
 	return dec, nil
 }
 
-func makeDecimal(d *decimal.Decimal) *decimalValue {
+func makeDecimal(d *types.Decimal) *decimalValue {
 	if d == nil {
 		return &decimalValue{
 			Numeric: pgtype.Numeric{
@@ -1248,7 +1247,7 @@ func (d *decimalValue) Null() bool {
 	return !d.Valid
 }
 
-func (d *decimalValue) dec() (*decimal.Decimal, error) {
+func (d *decimalValue) dec() (*types.Decimal, error) {
 	if d.NaN {
 		return nil, fmt.Errorf("NaN")
 	}
@@ -1257,7 +1256,7 @@ func (d *decimalValue) dec() (*decimal.Decimal, error) {
 		return nil, fmt.Errorf("internal bug: null decimal")
 	}
 
-	d2, err := decimal.NewFromBigInt(d.Int, d.Exp)
+	d2, err := types.NewDecimalFromBigInt(d.Int, d.Exp)
 	if err != nil {
 		return nil, err
 	}
@@ -1327,20 +1326,20 @@ func (d *decimalValue) Arithmetic(v scalarValue, op engine.ArithmeticOp) (scalar
 		return nil, err
 	}
 
-	var d2 *decimal.Decimal
+	var d2 *types.Decimal
 	switch op {
 	case engine.ADD:
-		d2, err = decimal.Add(dec1, dec2)
+		d2, err = types.DecimalAdd(dec1, dec2)
 	case engine.SUB:
-		d2, err = decimal.Sub(dec1, dec2)
+		d2, err = types.DecimalSub(dec1, dec2)
 	case engine.MUL:
-		d2, err = decimal.Mul(dec1, dec2)
+		d2, err = types.DecimalMul(dec1, dec2)
 	case engine.DIV:
-		d2, err = decimal.Div(dec1, dec2)
+		d2, err = types.DecimalDiv(dec1, dec2)
 	case engine.EXP:
-		d2, err = decimal.Pow(dec1, dec2)
+		d2, err = types.DecimalPow(dec1, dec2)
 	case engine.MOD:
-		d2, err = decimal.Mod(dec1, dec2)
+		d2, err = types.DecimalMod(dec1, dec2)
 	default:
 		return nil, fmt.Errorf("%w: unexpected operator id %d for decimal", engine.ErrArithmetic, op)
 	}
@@ -1383,10 +1382,10 @@ func (d *decimalValue) Unary(op engine.UnaryOp) (scalarValue, error) {
 
 func (d *decimalValue) Type() *types.DataType {
 	if d.metadata == nil {
-		return types.DecimalType
+		return types.NumericType
 	}
 
-	t := types.DecimalType.Copy()
+	t := types.NumericType.Copy()
 	t.Metadata = *d.metadata
 	return t
 }
@@ -1650,8 +1649,8 @@ func (a *int8ArrayValue) Cast(t *types.DataType) (value, error) {
 			return nil, castErr(errors.New("cannot cast int array to decimal"))
 		}
 
-		return castArrWithPtr(a, func(i int64) (*decimal.Decimal, error) {
-			return decimal.NewExplicit(strconv.FormatInt(i, 10), t.Metadata[0], t.Metadata[1])
+		return castArrWithPtr(a, func(i int64) (*types.Decimal, error) {
+			return types.NewDecimalExplicit(strconv.FormatInt(i, 10), t.Metadata[0], t.Metadata[1])
 		}, newDecArrFn(t))
 	}
 
@@ -1740,8 +1739,8 @@ func (a *textArrayValue) Cast(t *types.DataType) (value, error) {
 			return nil, castErr(errors.New("cannot cast text array to decimal"))
 		}
 
-		return castArrWithPtr(a, func(s string) (*decimal.Decimal, error) {
-			return decimal.NewExplicit(s, t.Metadata[0], t.Metadata[1])
+		return castArrWithPtr(a, func(s string) (*types.Decimal, error) {
+			return types.NewDecimalExplicit(s, t.Metadata[0], t.Metadata[1])
 		}, newDecArrFn(t))
 	}
 
@@ -1919,13 +1918,13 @@ func newNullDecArr(t *types.DataType) *decimalArrayValue {
 
 // newDecArrFn returns a function that creates a new DecimalArrayValue.
 // It is used for type casting.
-func newDecArrFn(t *types.DataType) func(d []*decimal.Decimal) *decimalArrayValue {
-	return func(d []*decimal.Decimal) *decimalArrayValue {
+func newDecArrFn(t *types.DataType) func(d []*types.Decimal) *decimalArrayValue {
+	return func(d []*types.Decimal) *decimalArrayValue {
 		return newDecimalArrayValue(d, t)
 	}
 }
 
-func newDecimalArrayValue(d []*decimal.Decimal, t *types.DataType) *decimalArrayValue {
+func newDecimalArrayValue(d []*types.Decimal, t *types.DataType) *decimalArrayValue {
 	vals := make([]pgtype.Numeric, len(d))
 	for i, v := range d {
 		var newDec pgtype.Numeric
@@ -2057,10 +2056,10 @@ func (a *decimalArrayValue) Set(i int32, v scalarValue) error {
 
 func (a *decimalArrayValue) Type() *types.DataType {
 	if a.metadata == nil {
-		return types.DecimalArrayType
+		return types.NumericArrayType
 	}
 
-	t := types.DecimalArrayType.Copy()
+	t := types.NumericArrayType.Copy()
 	t.Metadata = *a.metadata
 	return t
 }
@@ -2070,7 +2069,7 @@ func (a *decimalArrayValue) RawValue() any {
 		return nil
 	}
 
-	res := make([]*decimal.Decimal, len(a.Elements))
+	res := make([]*types.Decimal, len(a.Elements))
 	for i, v := range a.Elements {
 		if v.Valid {
 			dec, err := decFromPgType(v, a.metadata)
@@ -2096,7 +2095,7 @@ func (a *decimalArrayValue) Cast(t *types.DataType) (value, error) {
 		}
 
 		// otherwise, we need to alter the precision and scale
-		res := make([]*decimal.Decimal, a.Len())
+		res := make([]*types.Decimal, a.Len())
 		for i := int32(1); i <= a.Len(); i++ {
 			v, err := a.Get(i)
 			if err != nil {
@@ -2110,7 +2109,7 @@ func (a *decimalArrayValue) Cast(t *types.DataType) (value, error) {
 
 			// we need to make a copy of the decimal because SetPrecisionAndScale
 			// will modify the decimal in place.
-			dec2, err := decimal.NewExplicit(dec.String(), dec.Precision(), dec.Scale())
+			dec2, err := types.NewDecimalExplicit(dec.String(), dec.Precision(), dec.Scale())
 			if err != nil {
 				return nil, err
 			}
@@ -2128,10 +2127,10 @@ func (a *decimalArrayValue) Cast(t *types.DataType) (value, error) {
 
 	switch *t {
 	case *types.TextArrayType:
-		return castArr(a, func(d *decimal.Decimal) (string, error) { return d.String(), nil }, newTextArrayValue)
+		return castArr(a, func(d *types.Decimal) (string, error) { return d.String(), nil }, newTextArrayValue)
 	case *types.IntArrayType:
-		return castArr(a, func(d *decimal.Decimal) (int64, error) { return d.Int64() }, newIntArr)
-	case *types.DecimalArrayType:
+		return castArr(a, func(d *types.Decimal) (int64, error) { return d.Int64() }, newIntArr)
+	case *types.NumericArrayType:
 		return a, nil
 	default:
 		return nil, castErr(fmt.Errorf("cannot cast decimal array to %s", t))
@@ -2571,7 +2570,7 @@ func parseValue(s string, t *types.DataType) (value, error) {
 	}
 
 	if t.Name == types.NumericStr {
-		dec, err := decimal.NewExplicit(s, t.Metadata[0], t.Metadata[1])
+		dec, err := types.NewDecimalExplicit(s, t.Metadata[0], t.Metadata[1])
 		if err != nil {
 			return nil, err
 		}

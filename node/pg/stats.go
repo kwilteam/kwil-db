@@ -10,9 +10,7 @@ import (
 	"strings"
 
 	"github.com/jackc/pgx/v5/pgtype"
-
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )
 
@@ -249,7 +247,7 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 					ins(stat, b, cmpBool)
 
 				case ColTypeNumeric: // use *decimal.Decimal in stats
-					var dec *decimal.Decimal
+					var dec *types.Decimal
 					switch v := val.(type) {
 					case *pgtype.Numeric:
 						if !v.Valid {
@@ -279,7 +277,7 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 							continue
 						}
 
-					case *decimal.Decimal:
+					case *types.Decimal:
 						if v.NaN() { // we're pretending this is NULL by our sql.Scanner's convetion
 							stat.NullCount++
 							continue
@@ -289,7 +287,7 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 							v = &v2
 						}
 						dec = v
-					case decimal.Decimal:
+					case types.Decimal:
 						if v.NaN() { // we're pretending this is NULL by our sql.Scanner's convetion
 							stat.NullCount++
 							continue
@@ -385,7 +383,7 @@ func cmpBool(a, b bool) int {
 	return 0 // false == false
 }
 
-func cmpDecimal(val, mm *decimal.Decimal) int {
+func cmpDecimal(val, mm *types.Decimal) int {
 	d, err := val.Cmp(mm)
 	if err != nil {
 		panic(fmt.Sprintf("%s: (nan decimal?) %v or %v", err, val, mm))

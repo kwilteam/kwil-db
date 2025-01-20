@@ -1,4 +1,4 @@
-package decimal_test
+package types_test
 
 import (
 	"errors"
@@ -6,10 +6,9 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-
-	"github.com/kwilteam/kwil-db/core/types/decimal"
 )
 
 func Test_NewParsedDecimal(t *testing.T) {
@@ -114,7 +113,7 @@ func Test_NewParsedDecimal(t *testing.T) {
 	// test cases for decimal creation
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d, err := decimal.NewExplicit(tt.decimal, tt.prec, tt.scale)
+			d, err := types.NewDecimalExplicit(tt.decimal, tt.prec, tt.scale)
 			if tt.err {
 				require.Errorf(t, err, "result: %v", d)
 				return
@@ -179,7 +178,7 @@ func Test_DecimalParsing(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d, err := decimal.NewFromString(tt.in)
+			d, err := types.ParseDecimal(tt.in)
 			if tt.err {
 				require.Error(t, err)
 				return
@@ -198,10 +197,10 @@ func Test_MulDecimal(t *testing.T) {
 	a := "123.456"
 	b := "2.000"
 
-	decA, err := decimal.NewFromString(a)
+	decA, err := types.ParseDecimal(a)
 	require.NoError(t, err)
 
-	decB, err := decimal.NewFromString(b)
+	decB, err := types.ParseDecimal(b)
 	require.NoError(t, err)
 
 	decMul, err := decA.Mul(decA, decB)
@@ -210,23 +209,23 @@ func Test_MulDecimal(t *testing.T) {
 	assert.Equal(t, "246.912", decMul.String())
 
 	// overflow
-	decA, err = decimal.NewFromString("123.456")
+	decA, err = types.ParseDecimal("123.456")
 	require.NoError(t, err)
 
-	decB, err = decimal.NewFromString("10.000")
+	decB, err = types.ParseDecimal("10.000")
 	require.NoError(t, err)
 
 	_, err = decA.Mul(decA, decB)
 	require.Error(t, err)
 
 	// handle the overflow error
-	decA, err = decimal.NewFromString("123.456")
+	decA, err = types.ParseDecimal("123.456")
 	require.NoError(t, err)
 
-	decB, err = decimal.NewFromString("10.000")
+	decB, err = types.ParseDecimal("10.000")
 	require.NoError(t, err)
 
-	res := decimal.Decimal{}
+	res := types.Decimal{}
 	err = res.SetPrecisionAndScale(6, 2)
 	require.NoError(t, err)
 
@@ -303,8 +302,8 @@ func Test_DecimalMath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var a *decimal.Decimal
-			var b *decimal.Decimal
+			var a *types.Decimal
+			var b *types.Decimal
 			// greatestScale is the greatest scale of the two decimals
 			var greatestScale uint16
 
@@ -312,10 +311,10 @@ func Test_DecimalMath(t *testing.T) {
 			// since their pointers get shared between tests.
 			reset := func() {
 				var err error
-				a, err = decimal.NewFromString(tt.a)
+				a, err = types.ParseDecimal(tt.a)
 				require.NoError(t, err)
 
-				b, err = decimal.NewFromString(tt.b)
+				b, err = types.ParseDecimal(tt.b)
 				require.NoError(t, err)
 
 				if a.Scale() > b.Scale() {
@@ -354,7 +353,7 @@ func Test_DecimalMath(t *testing.T) {
 
 			// reset()
 
-			pow, err := decimal.Pow(a, b)
+			pow, err := types.DecimalPow(a, b)
 
 			switch v := tt.pow.(type) {
 			case string:
@@ -371,8 +370,8 @@ func Test_DecimalMath(t *testing.T) {
 
 // eq checks that a decimal is equal to a string.
 // It will round the decimal to the given scale.
-func eq(t *testing.T, dec *decimal.Decimal, want string, round uint16) {
-	dec2, err := decimal.NewFromString(want)
+func eq(t *testing.T, dec *types.Decimal, want string, round uint16) {
+	dec2, err := types.ParseDecimal(want)
 	require.NoError(t, err)
 
 	old := dec.String()
@@ -396,7 +395,7 @@ func eq(t *testing.T, dec *decimal.Decimal, want string, round uint16) {
 }
 
 func Test_AdjustPrecAndScale(t *testing.T) {
-	a, err := decimal.NewFromString("111.111")
+	a, err := types.ParseDecimal("111.111")
 	require.NoError(t, err)
 
 	err = a.SetPrecisionAndScale(9, 6)
@@ -416,13 +415,13 @@ func Test_AdjustPrecAndScale(t *testing.T) {
 }
 
 func Test_AdjustScaleMath(t *testing.T) {
-	a, err := decimal.NewFromString("111.111")
+	a, err := types.ParseDecimal("111.111")
 	require.NoError(t, err)
 
 	err = a.SetPrecisionAndScale(6, 3)
 	require.NoError(t, err)
 
-	b, err := decimal.NewFromString("222.22")
+	b, err := types.ParseDecimal("222.22")
 	require.NoError(t, err)
 
 	_, err = a.Add(a, b)
@@ -436,7 +435,7 @@ func Test_AdjustScaleMath(t *testing.T) {
 
 	require.Equal(t, "333.33", a.String())
 
-	c, err := decimal.NewFromString("30.22")
+	c, err := types.ParseDecimal("30.22")
 	require.NoError(t, err)
 
 	_, err = a.Sub(a, c)
@@ -446,7 +445,7 @@ func Test_AdjustScaleMath(t *testing.T) {
 }
 
 func Test_RemoveScale(t *testing.T) {
-	a, err := decimal.NewFromString("111.111")
+	a, err := types.ParseDecimal("111.111")
 	require.NoError(t, err)
 
 	err = a.SetPrecisionAndScale(6, 2)
@@ -503,10 +502,10 @@ func Test_DecimalCmp(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			a, err := decimal.NewFromString(tt.a)
+			a, err := types.ParseDecimal(tt.a)
 			require.NoError(t, err)
 
-			b, err := decimal.NewFromString(tt.b)
+			b, err := types.ParseDecimal(tt.b)
 			require.NoError(t, err)
 
 			cmp, err := a.Cmp(b)
@@ -576,7 +575,7 @@ func Test_BigAndExp(t *testing.T) {
 			bigInt, ok := new(big.Int).SetString(tt.big, 10)
 			require.True(t, ok)
 
-			d, err := decimal.NewFromBigInt(bigInt, tt.exp)
+			d, err := types.NewDecimalFromBigInt(bigInt, tt.exp)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
@@ -629,14 +628,14 @@ func TestDecimalBinaryMarshaling(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			d, err := decimal.NewExplicit(tt.decimal, tt.prec, tt.scale)
+			d, err := types.NewDecimalExplicit(tt.decimal, tt.prec, tt.scale)
 			require.NoError(t, err)
 
 			marshaled, err := d.MarshalBinary()
 			require.NoError(t, err)
 			assert.Equal(t, tt.expected, marshaled)
 
-			var unmarshaled decimal.Decimal
+			var unmarshaled types.Decimal
 			err = unmarshaled.UnmarshalBinary(marshaled)
 			require.NoError(t, err)
 
@@ -672,7 +671,7 @@ func TestDecimalBinaryUnmarshalingErrors(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var d decimal.Decimal
+			var d types.Decimal
 			err := d.UnmarshalBinary(tt.input)
 			require.Error(t, err)
 			assert.Contains(t, err.Error(), tt.expectedErr)
@@ -681,13 +680,13 @@ func TestDecimalBinaryUnmarshalingErrors(t *testing.T) {
 }
 
 func TestDecimalBinaryRoundTrip(t *testing.T) {
-	original, err := decimal.NewFromString("12345.6789")
+	original, err := types.ParseDecimal("12345.6789")
 	require.NoError(t, err)
 
 	marshaled, err := original.MarshalBinary()
 	require.NoError(t, err)
 
-	var unmarshaled decimal.Decimal
+	var unmarshaled types.Decimal
 	err = unmarshaled.UnmarshalBinary(marshaled)
 	require.NoError(t, err)
 
@@ -698,14 +697,14 @@ func TestDecimalBinaryRoundTrip(t *testing.T) {
 
 func TestDecimalJSONRoundTrip(t *testing.T) {
 	str := "12345.6789"
-	original, err := decimal.NewFromString(str)
+	original, err := types.ParseDecimal(str)
 	require.NoError(t, err)
 
 	marshaled, err := original.MarshalJSON()
 	require.NoError(t, err)
 	require.Equal(t, `"`+str+`"`, string(marshaled))
 
-	var unmarshaled decimal.Decimal
+	var unmarshaled types.Decimal
 	err = unmarshaled.UnmarshalJSON(marshaled)
 	require.NoError(t, err)
 

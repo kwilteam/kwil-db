@@ -7,7 +7,6 @@ import (
 
 	antlr "github.com/antlr4-go/antlr/v4"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/types/decimal"
 )
 
 // this file contains the ASTs for SQL, DDL, and actions.
@@ -97,7 +96,7 @@ func literalToString(value any) (string, error) {
 		str.WriteString(fmt.Sprint(v))
 	case *types.Uint256:
 		str.WriteString(v.String())
-	case *decimal.Decimal:
+	case *types.Decimal:
 		str.WriteString(v.String())
 	case bool: // for bool type
 		if v {

@@ -58,6 +58,15 @@ func ParseUUID(s string) (*UUID, error) {
 	return &u2, nil
 }
 
+// MustParseUUID parses a uuid from a string and panics on error
+func MustParseUUID(s string) *UUID {
+	u, err := ParseUUID(s)
+	if err != nil {
+		panic(err)
+	}
+	return u
+}
+
 // String returns the string representation of the uuid
 func (u UUID) String() string {
 	return uuid.UUID(u).String()

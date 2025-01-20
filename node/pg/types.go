@@ -12,7 +12,6 @@ import (
 
 	"github.com/jackc/pgx/v5/pgtype"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )
 
@@ -125,7 +124,7 @@ type datatype struct {
 
 var ErrNaN = errors.New("NaN")
 
-func pgNumericToDecimal(num pgtype.Numeric) (*decimal.Decimal, error) {
+func pgNumericToDecimal(num pgtype.Numeric) (*types.Decimal, error) {
 	if num.NaN { // TODO: create a decimal.Decimal that supports NaN
 		return nil, ErrNaN
 	}
@@ -147,7 +146,7 @@ func pgNumericToDecimal(num pgtype.Numeric) (*decimal.Decimal, error) {
 
 	// Really this could be uint256, which is same underlying type (a domain) as
 	// Numeric. If the caller needs to know, that has to happen differently.
-	return decimal.NewFromBigInt(i, e)
+	return types.NewDecimalFromBigInt(i, e)
 }
 
 var (
@@ -456,15 +455,15 @@ var (
 	}
 
 	decimalType = &datatype{
-		KwilType: types.DecimalType,
-		Matches:  []reflect.Type{reflect.TypeOf(decimal.Decimal{}), reflect.TypeOf(&decimal.Decimal{})},
+		KwilType: types.NumericType,
+		Matches:  []reflect.Type{reflect.TypeOf(types.Decimal{}), reflect.TypeOf(&types.Decimal{})},
 		OID:      func(*pgtype.Map) uint32 { return pgtype.NumericOID },
 		EncodeInferred: func(v any) (any, error) {
-			var dec *decimal.Decimal
+			var dec *types.Decimal
 			switch v := v.(type) {
-			case decimal.Decimal:
+			case types.Decimal:
 				dec = &v
-			case *decimal.Decimal:
+			case *types.Decimal:
 				dec = v
 			default:
 				return nil, fmt.Errorf("unexpected type encoding decimal %T", v)
@@ -486,7 +485,7 @@ var (
 		},
 		SerializeChangeset: func(value string) ([]byte, error) {
 			// parse to ensure it is a valid decimal, then re-encode it to ensure it is in the correct format.
-			dec, err := decimal.NewFromString(value)
+			dec, err := types.ParseDecimal(value)
 			if err != nil {
 				return nil, err
 			}
@@ -494,16 +493,16 @@ var (
 			return []byte(dec.String()), nil
 		},
 		DeserializeChangeset: func(b []byte) (any, error) {
-			return decimal.NewFromString(string(b))
+			return types.ParseDecimal(string(b))
 		},
 	}
 
 	decimalArrayType = &datatype{
-		KwilType: types.DecimalArrayType,
-		Matches:  []reflect.Type{reflect.TypeOf(decimal.DecimalArray{})},
+		KwilType: types.NumericArrayType,
+		Matches:  []reflect.Type{reflect.TypeOf(types.DecimalArray{})},
 		OID:      func(*pgtype.Map) uint32 { return pgtype.NumericArrayOID },
 		EncodeInferred: func(v any) (any, error) {
-			val, ok := v.(decimal.DecimalArray)
+			val, ok := v.(types.DecimalArray)
 			if !ok {
 				return nil, fmt.Errorf("expected DecimalArray, got %T", v)
 			}
@@ -525,19 +524,19 @@ var (
 				return nil, fmt.Errorf("expected []any, got %T", a)
 			}
 
-			vals := make(decimal.DecimalArray, len(arr))
+			vals := make(types.DecimalArray, len(arr))
 			for i, v := range arr {
 				val, err := decimalType.Decode(v)
 				if err != nil {
 					return nil, err
 				}
-				vals[i] = val.(*decimal.Decimal)
+				vals[i] = val.(*types.Decimal)
 			}
 
 			return vals, nil
 		},
 		SerializeChangeset:   arrayFromChildFunc(2, decimalType.SerializeChangeset),
-		DeserializeChangeset: deserializeArrayFn[*decimal.Decimal](2, decimalType.DeserializeChangeset),
+		DeserializeChangeset: deserializeArrayFn[*types.Decimal](2, decimalType.DeserializeChangeset),
 	}
 
 	uint256Type = &datatype{

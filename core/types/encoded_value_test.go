@@ -5,7 +5,6 @@ import (
 	"math/big"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -45,13 +44,13 @@ func TestEncodedValue_EdgeCases(t *testing.T) {
 
 	// THIS IS INCORRECT WITH scientific notation e.g 1e-28
 	t.Run("encode decimal with max precision", func(t *testing.T) {
-		d, err := decimal.NewFromBigInt(new(big.Int).SetInt64(1), -6)
+		d, err := NewDecimalFromBigInt(new(big.Int).SetInt64(1), -6)
 		require.NoError(t, err)
 		ev, err := EncodeValue(d)
 		require.NoError(t, err)
 		decoded, err := ev.Decode()
 		require.NoError(t, err)
-		assert.Equal(t, d.String(), decoded.(*decimal.Decimal).String())
+		assert.Equal(t, d.String(), decoded.(*Decimal).String())
 	})
 
 	t.Run("encode mixed array types should fail", func(t *testing.T) {
@@ -103,9 +102,9 @@ func TestEncodedValue_EdgeCases(t *testing.T) {
 	})
 
 	t.Run("encode/decode decimal array", func(t *testing.T) {
-		d1, _ := decimal.NewFromString("100")
-		d2, _ := decimal.NewFromString("200")
-		arr := decimal.DecimalArray{d1, d2}
+		d1, _ := ParseDecimal("100")
+		d2, _ := ParseDecimal("200")
+		arr := DecimalArray{d1, d2}
 
 		ev, err := EncodeValue(arr)
 		require.NoError(t, err)
@@ -113,7 +112,7 @@ func TestEncodedValue_EdgeCases(t *testing.T) {
 		decoded, err := ev.Decode()
 		require.NoError(t, err)
 
-		decodedArr, ok := decoded.(decimal.DecimalArray)
+		decodedArr, ok := decoded.(DecimalArray)
 		require.True(t, ok)
 		assert.Equal(t, arr[0].String(), decodedArr[0].String())
 		assert.Equal(t, arr[1].String(), decodedArr[1].String())

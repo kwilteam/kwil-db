@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/node/utils/conv"
 	"github.com/stretchr/testify/require"
 )
@@ -327,7 +326,7 @@ func Test_Decimal(t *testing.T) {
 	tests := []struct {
 		name    string
 		arg     any
-		want    *decimal.Decimal
+		want    *types.Decimal
 		wantErr bool
 	}{
 		{
@@ -372,8 +371,8 @@ func Test_Decimal(t *testing.T) {
 	}
 }
 
-func mustDecimal(s string) *decimal.Decimal {
-	d, err := decimal.NewFromString(s)
+func mustDecimal(s string) *types.Decimal {
+	d, err := types.ParseDecimal(s)
 	if err != nil {
 		panic(err)
 	}
@@ -848,7 +847,7 @@ func TestDecimalAdditionalCases(t *testing.T) {
 	tests := []struct {
 		name    string
 		arg     any
-		want    *decimal.Decimal
+		want    *types.Decimal
 		wantErr bool
 	}{
 		{
