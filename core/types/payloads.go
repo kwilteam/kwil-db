@@ -637,6 +637,16 @@ func (e *EncodedValue) Decode() (any, error) {
 		}
 	}
 
+	if e.Type.Name == NullType.Name {
+		if e.Type.IsArray {
+			return nil, fmt.Errorf("cannot decode array of type 'null'")
+		}
+		if e.Data == nil {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("expected nil data for type 'null'")
+	}
+
 	typeName, ok := typeAlias[e.Type.Name]
 	if !ok {
 		return nil, fmt.Errorf(`unknown type "%s"`, e.Type.Name)
@@ -647,8 +657,6 @@ func (e *EncodedValue) Decode() (any, error) {
 
 		// postgres requires arrays to be of the correct type, not of []any
 		switch typeName {
-		case NullType.Name:
-			return nil, fmt.Errorf("cannot decode array of type 'null'")
 		case TextType.Name:
 			arr := make([]string, 0, len(e.Data))
 			for _, elem := range e.Data {
@@ -732,12 +740,6 @@ func (e *EncodedValue) Decode() (any, error) {
 		return arrAny, nil
 	}
 
-	if typeName == NullType.Name {
-		if e.Data == nil {
-			return nil, nil
-		}
-		return nil, fmt.Errorf("expected nil data for type 'null'")
-	}
 	if len(e.Data) != 1 {
 		return nil, fmt.Errorf("expected 1 element, got %d", len(e.Data))
 	}
