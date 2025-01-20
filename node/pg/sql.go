@@ -50,18 +50,6 @@ END$$;`
 
 	sqlCreateUUIDExtension = `CREATE EXTENSION IF NOT EXISTS "uuid-ossp";`
 
-	// have to run this in a DO block because you cannot do CREATE DOMAIN IF NOT EXISTS.
-	// We have to hard-code the string and then convert to numeric instead of using 2^256-1,
-	// because Postgres will not precisely evaluate 2^256-1.
-	sqlCreateUint256Domain = `
-	DO $$ BEGIN
-		CREATE DOMAIN uint256 AS NUMERIC(78)
-		CHECK (VALUE >= 0 AND VALUE <= '115792089237316195423570985008687907853269984665640564039457584007913129639935'::NUMERIC(78))
-		CHECK (SCALE(VALUE) = 0);
-	EXCEPTION
-		WHEN duplicate_object THEN null;
-	END $$;`
-
 	// postgres returns EXTRACT as a double precision, but will only at most have 6
 	// decimal places of precision (to measure microseconds). We cast to numeric(16, 6)
 	// which should allow for up to 6 decimal places of precision.
@@ -147,11 +135,6 @@ func ensureUUIDExtension(ctx context.Context, conn *pgx.Conn) error {
 
 func ensurePgCryptoExtension(ctx context.Context, conn *pgx.Conn) error {
 	_, err := conn.Exec(ctx, `CREATE EXTENSION IF NOT EXISTS pgcrypto;`)
-	return err
-}
-
-func ensureUint256Domain(ctx context.Context, conn *pgx.Conn) error {
-	_, err := conn.Exec(ctx, sqlCreateUint256Domain)
 	return err
 }
 

@@ -140,8 +140,6 @@ func (c *DataType) PGScalar() (string, error) {
 		scalar = "BYTEA"
 	case uuidStr:
 		scalar = "UUID"
-	case uint256Str:
-		scalar = "UINT256"
 	case NumericStr:
 		if !c.HasMetadata() {
 			return "", errors.New("decimal type requires metadata")
@@ -166,7 +164,7 @@ func (c *DataType) Clean() error {
 	}
 
 	switch referencedType {
-	case intStr, textStr, boolStr, byteaStr, uuidStr, uint256Str: // ok
+	case intStr, textStr, boolStr, byteaStr, uuidStr: // ok
 		if c.HasMetadata() {
 			return fmt.Errorf("type %s cannot have metadata", c.Name)
 		}
@@ -237,7 +235,7 @@ func (c *DataType) IsNumeric() bool {
 		return false
 	}
 
-	return c.Name == intStr || c.Name == NumericStr || c.Name == uint256Str || c.Name == nullStr
+	return c.Name == intStr || c.Name == NumericStr || c.Name == nullStr
 }
 
 // declared DataType constants.
@@ -271,10 +269,6 @@ var (
 		Metadata: [2]uint16{0, 0}, // unspecified precision and scale
 	}
 	DecimalArrayType = ArrayType(DecimalType)
-	Uint256Type      = &DataType{
-		Name: uint256Str, // TODO: delete
-	}
-	Uint256ArrayType = ArrayType(Uint256Type)
 	// NullType is a special type used to denote a null value where
 	// we do not yet know the type.
 	NullType = &DataType{
@@ -296,12 +290,11 @@ func ArrayType(t *DataType) *DataType {
 }
 
 const (
-	textStr    = "text"
-	intStr     = "int8"
-	boolStr    = "bool"
-	byteaStr   = "bytea"
-	uuidStr    = "uuid"
-	uint256Str = "uint256"
+	textStr  = "text"
+	intStr   = "int8"
+	boolStr  = "bool"
+	byteaStr = "bytea"
+	uuidStr  = "uuid"
 	// NumericStr is a fixed point number.
 	NumericStr = "numeric"
 	nullStr    = "null"

@@ -70,7 +70,7 @@ func TestColumnInfo(t *testing.T) {
 	require.NoError(t, err)
 	_, err = tx.Execute(ctx, `create table if not exists `+tbl+
 		` (a int8 not null, b int4 default 42, c text,
-		   d bytea, e numeric(20,5), f int8[], g uint256)`)
+		   d bytea, e numeric(20,5), f int8[])`)
 	require.NoError(t, err)
 
 	cols, err := ColumnInfo(ctx, tx, "", tbl)
@@ -85,7 +85,6 @@ func TestColumnInfo(t *testing.T) {
 		{Pos: 4, Name: "d", DataType: "bytea", Nullable: true},
 		{Pos: 5, Name: "e", DataType: "numeric", Nullable: true},
 		{Pos: 6, Name: "f", DataType: "bigint", Array: true, Nullable: true},
-		{Pos: 7, Name: "g", DataType: "uint256", Nullable: true},
 	}
 
 	assert.Equal(t, wantCols, cols) // t.Logf("%#v", cols)
@@ -113,24 +112,12 @@ func TestQueryRowFunc(t *testing.T) {
 	}
 	_, err = tx.Execute(ctx, `create table if not exists `+tbl+
 		` (a int8 not null, b int4 default 42, c text,
-		   d bytea, e numeric(20,3), f int8[], g uint256, h uint256[])`)
+		   d bytea, e numeric(20,3), f int8[])`)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	cols, err := ColumnInfo(ctx, tx, "", tbl)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	// 10 * math.MaxUint64
-	hugeIntStr := "184467440737095516150"
-	hugeInt, err := types.Uint256FromString(hugeIntStr)
-	require.NoError(t, err)
-
-	stmt := fmt.Sprintf(`insert into %[1]s values (5, null, 'a', '\xabab', 12.5, `+
-		`'{2,3,4}', %[2]s::uint256, '{%[2]s,4,3}'::uint256[])`, tbl, hugeIntStr)
-	_, err = tx.Execute(ctx, stmt)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -144,8 +131,6 @@ func TestQueryRowFunc(t *testing.T) {
 		reflect.TypeFor[*[]uint8](),
 		reflect.TypeFor[*decimal.Decimal](),
 		reflect.TypeFor[*pgtype.Array[pgtype.Int8]](),
-		reflect.TypeFor[*types.Uint256](),
-		reflect.TypeFor[*types.Uint256Array](),
 	}
 
 	var scans []any
@@ -179,8 +164,6 @@ func TestQueryRowFunc(t *testing.T) {
 			Dims:     []pgtype.ArrayDimension{{Length: 3, LowerBound: 1}},
 			Valid:    true,
 		},
-		hugeInt,
-		&types.Uint256Array{hugeInt, types.Uint256FromInt(4), types.Uint256FromInt(3)},
 	}
 
 	err = QueryRowFunc(ctx, tx, `SELECT * FROM `+tbl, scans,
@@ -272,14 +255,12 @@ func TestScanVal(t *testing.T) {
 		{Pos: 3, Name: "c", DataType: "text", Nullable: true},
 		{Pos: 4, Name: "d", DataType: "bytea", Nullable: true},
 		{Pos: 5, Name: "e", DataType: "numeric", Nullable: true},
-		{Pos: 6, Name: "f", DataType: "uint256", Nullable: true},
 
 		{Pos: 7, Name: "aa", DataType: "bigint", Array: true, Nullable: false},
 		{Pos: 8, Name: "ba", DataType: "integer", Array: true, Nullable: true},
 		{Pos: 9, Name: "ca", DataType: "text", Array: true, Nullable: true},
 		{Pos: 10, Name: "da", DataType: "bytea", Array: true, Nullable: true},
 		{Pos: 11, Name: "ea", DataType: "numeric", Array: true, Nullable: true},
-		{Pos: 12, Name: "fa", DataType: "uint256", Array: true, Nullable: true},
 	}
 	var scans []any
 	for _, col := range cols {
@@ -292,7 +273,6 @@ func TestScanVal(t *testing.T) {
 	var i8 pgtype.Int8
 	var txt pgtype.Text
 	var num decimal.Decimal // pgtype.Numeric
-	var u256 types.Uint256
 
 	// want pointers to these slices for array types
 	// var ia []pgtype.Int8
@@ -303,10 +283,9 @@ func TestScanVal(t *testing.T) {
 	var ta pgtype.Array[pgtype.Text]
 	var baa pgtype.Array[[]byte]
 	var na decimal.DecimalArray // pgtype.Array[pgtype.Numeric]
-	var u256a types.Uint256Array
 
-	wantScans := []any{&i8, &i8, &txt, &ba, &num, &u256,
-		&ia, &ia, &ta, &baa, &na, &u256a}
+	wantScans := []any{&i8, &i8, &txt, &ba, &num,
+		&ia, &ia, &ta, &baa, &na}
 
 	assert.Equal(t, wantScans, scans)
 }
@@ -584,11 +563,6 @@ func TestSelectLiteralType(t *testing.T) {
 		}
 	})
 
-	err = registerTypes(ctx, conn)
-	if err != nil {
-		t.Fatal(err)
-	}
-
 	// var arg any = int64(1)
 	// args := []any{arg, arg}
 	argMap := map[string]any{
@@ -829,14 +803,6 @@ func TestTypeRoundtrip(t *testing.T) {
 			typ: "decimal(5,0)",
 			val: mustDecimal("12300"),
 		},
-		// this is an unavoidable issue with Postgres. We need to decode data into
-		// a value, rather than decode based on the OID
-		// https://www.postgresql.org/message-id/87fvoydtxx.fsf%40locaine.bese.it
-		{
-			typ:  "uint256",
-			val:  types.Uint256FromInt(100),
-			want: mustDecimal("100"),
-		},
 		{
 			typ:  "int8[]",
 			val:  []int64{1, 2, 3},
@@ -866,11 +832,6 @@ func TestTypeRoundtrip(t *testing.T) {
 			typ:  "decimal(6,4)[]",
 			val:  decimal.DecimalArray{mustDecimal("12.4223"), mustDecimal("22.4425"), mustDecimal("23.7423")},
 			want: decimal.DecimalArray{mustDecimal("12.4223"), mustDecimal("22.4425"), mustDecimal("23.7423")},
-		},
-		{
-			typ:  "uint256[]",
-			val:  types.Uint256Array{types.Uint256FromInt(100), types.Uint256FromInt(200), types.Uint256FromInt(300)},
-			want: types.Uint256Array{types.Uint256FromInt(100), types.Uint256FromInt(200), types.Uint256FromInt(300)},
 		},
 		{
 			typ:  "text[]",
@@ -983,15 +944,6 @@ func mustParseUUID(s string) *types.UUID {
 	return u
 }
 
-// mustUint256 panics if the string cannot be converted to a Uint256.
-func mustUint256(s string) *types.Uint256 {
-	u, err := types.Uint256FromString(s)
-	if err != nil {
-		panic(err)
-	}
-	return u
-}
-
 func Test_DelayedTx(t *testing.T) {
 	ctx := context.Background()
 
@@ -1066,13 +1018,6 @@ func Test_Changesets(t *testing.T) {
 			arrayVal:  types.UUIDArray{mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d1"), mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d1")},
 			val2:      mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d2"),
 			arrayVal2: types.UUIDArray{mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d2"), mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d2")},
-		},
-		&changesetTestcase[*types.Uint256, types.Uint256Array]{
-			datatype:  "uint256",
-			val:       mustUint256("18446744073709551615000000"),
-			arrayVal:  types.Uint256Array{mustUint256("184467440737095516150000002"), mustUint256("184467440737095516150000001")},
-			val2:      mustUint256("18446744073709551615000001"),
-			arrayVal2: types.Uint256Array{mustUint256("184467440737095516150000012"), mustUint256("1844674407370955161500000123")},
 		},
 	} {
 		t.Run(fmt.Sprint(i), tc.run)

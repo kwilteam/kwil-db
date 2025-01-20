@@ -1128,7 +1128,7 @@ func formatPGLiteral(value any) (string, error) {
 		str.WriteString(fmt.Sprint(v))
 	case types.UUID:
 		str.WriteString(v.String())
-	case *types.Uint256:
+	case *types.UUID:
 		str.WriteString(v.String())
 	case *decimal.Decimal:
 		str.WriteString(v.String())

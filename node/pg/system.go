@@ -15,7 +15,6 @@ import (
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgtype"
 
-	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/decimal"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )
@@ -262,8 +261,6 @@ func scanVal(ct ColType) any {
 		// easier to work with and instantiate, but using our types here helps
 		// test their scanners/valuers.
 		return new(decimal.Decimal)
-	case ColTypeUINT256:
-		return new(types.Uint256)
 	case ColTypeFloat:
 		return new(pgtype.Float8)
 	case ColTypeTime:
@@ -290,8 +287,6 @@ func scanArrayVal(ct ColType) any {
 		// pgArray is also simpler and more efficient, but as long as we
 		// explicitly define array types, we should test them.
 		return new(decimal.DecimalArray)
-	case ColTypeUINT256:
-		return new(types.Uint256Array)
 	case ColTypeFloat:
 		return pgArray[pgtype.Float8]()
 	case ColTypeTime:
@@ -349,7 +344,6 @@ const (
 	ColTypeByteA   ColType = "bytea"
 	ColTypeUUID    ColType = "uuid"
 	ColTypeNumeric ColType = "numeric"
-	ColTypeUINT256 ColType = "uint256"
 	ColTypeFloat   ColType = "float"
 	ColTypeTime    ColType = "timestamp"
 
@@ -359,7 +353,6 @@ const (
 	ColTypeByteAArray   ColType = "bytea[]"
 	ColTypeUUIDArray    ColType = "uuid[]"
 	ColTypeNumericArray ColType = "numeric[]"
-	ColTypeUINT256Array ColType = "uint256[]"
 	ColTypeFloatArray   ColType = "float[]"
 	ColTypeTimeArray    ColType = "timestamp[]"
 
@@ -380,8 +373,6 @@ func arrayType(ct ColType) ColType {
 		return ColTypeUUIDArray
 	case ColTypeNumeric:
 		return ColTypeNumericArray
-	case ColTypeUINT256:
-		return ColTypeUINT256Array
 	case ColTypeFloat:
 		return ColTypeFloatArray
 	case ColTypeTime:
@@ -417,9 +408,6 @@ func (ci *ColInfo) baseType() ColType {
 	}
 	if ci.IsNumeric() {
 		return ColTypeNumeric
-	}
-	if ci.IsUINT256() {
-		return ColTypeUINT256
 	}
 	if ci.IsFloat() {
 		return ColTypeFloat
@@ -481,14 +469,6 @@ func (ci *ColInfo) IsUUID() bool {
 func (ci *ColInfo) IsByteA() bool {
 	switch strings.ToLower(ci.DataType) {
 	case "bytea":
-		return true
-	}
-	return false
-}
-
-func (ci *ColInfo) IsUINT256() bool {
-	switch strings.ToLower(ci.DataType) {
-	case "uint256":
 		return true
 	}
 	return false

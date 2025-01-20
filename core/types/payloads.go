@@ -628,8 +628,6 @@ func (e *EncodedValue) Decode() (any, error) {
 			return data[0] == 1, nil
 		case NullType.Name:
 			return nil, nil
-		case Uint256Type.Name:
-			return Uint256FromBytes(data)
 		case NumericStr:
 			return decimal.NewFromString(string(data))
 		default:
@@ -710,17 +708,6 @@ func (e *EncodedValue) Decode() (any, error) {
 				}
 
 				arr = append(arr, dec.(bool))
-			}
-			arrAny = arr
-		case Uint256Type.Name:
-			arr := make(Uint256Array, 0, len(e.Data))
-			for _, elem := range e.Data {
-				dec, err := decodeScalar(elem, typeName, true)
-				if err != nil {
-					return nil, err
-				}
-
-				arr = append(arr, dec.(*Uint256))
 			}
 			arrAny = arr
 		case NumericStr:
@@ -804,10 +791,6 @@ func EncodeValue(v any) (*EncodedValue, error) {
 			}
 
 			return []byte(t.String()), decTyp, nil
-		case *Uint256:
-			return t.Bytes(), Uint256Type, nil
-		case Uint256:
-			return t.Bytes(), Uint256Type, nil
 		default:
 			return nil, nil, fmt.Errorf("cannot encode type %T", v)
 		}

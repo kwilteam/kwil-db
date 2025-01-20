@@ -126,8 +126,6 @@ func typeToSchemaType(t reflect.Type) string {
 		return "string"
 	case reflect.TypeFor[types.UUID](): // MarshalJSON also makes JSON string
 		return "string"
-	case reflect.TypeFor[types.Uint256](): // MarshalJSON also makes JSON string
-		return "string"
 	case reflect.TypeFor[decimal.Decimal](): // MarshalJSON also makes JSON string
 		return "string"
 	case reflect.TypeFor[[]byte]():

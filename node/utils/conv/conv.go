@@ -3,7 +3,6 @@ package conv
 import (
 	"errors"
 	"fmt"
-	"math/big"
 	"strconv"
 	"unicode/utf8"
 
@@ -212,36 +211,6 @@ func UUID(a any) (*types.UUID, error) {
 	return types.ParseUUID(str)
 }
 
-// Uint256 converts a value to a Uint256.
-func Uint256(a any) (*types.Uint256, error) {
-	switch a := a.(type) {
-	case *types.Uint256:
-		return a, nil
-	case []byte:
-		b := new(big.Int).SetBytes(a)
-		return types.Uint256FromBig(b)
-	case string:
-		return types.Uint256FromString(a)
-	case *decimal.Decimal:
-		return types.Uint256FromString(a.String())
-	case decimal.Decimal:
-		return types.Uint256FromString(a.String())
-	case int, int8, int16, int32, int64:
-		return types.Uint256FromString(fmt.Sprint(a))
-	case fmt.Stringer:
-		return types.Uint256FromString(a.String())
-	case nil:
-		return types.Uint256FromString("0")
-	}
-
-	str, err := String(a)
-	if err != nil {
-		return nil, err
-	}
-
-	return types.Uint256FromString(str)
-}
-
 // Decimal converts a value to a Decimal.
 func Decimal(a any) (*decimal.Decimal, error) {
 	switch a := a.(type) {
@@ -249,10 +218,6 @@ func Decimal(a any) (*decimal.Decimal, error) {
 		return a, nil
 	case string:
 		return decimal.NewFromString(a)
-	case *types.Uint256:
-		return decimal.NewFromString(a.String())
-	case types.Uint256:
-		return decimal.NewFromString(a.String())
 	case int, int8, int16, int32, int64:
 		return decimal.NewFromString(fmt.Sprint(a))
 	case fmt.Stringer:
