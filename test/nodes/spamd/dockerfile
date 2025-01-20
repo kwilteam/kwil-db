@@ -16,4 +16,4 @@ WORKDIR /app
 COPY --from=build /app/dist/spamd ./kwild
 RUN chmod +x ./kwild 
 EXPOSE 8484 6600
-ENTRYPOINT ["/app/kwild"]
+ENTRYPOINT ["/app/kwild", "start"]
