@@ -836,7 +836,7 @@ func TestKwildEthDepositOracleValidatorUpdates(t *testing.T) {
 
 	rpcClients := make([]setup.JSONRPCClient, 3)
 	adminClients := make([]*setup.AdminClient, 3)
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		rpcClients[i] = p.Nodes[i].JSONRPCClient(t, ctx, &setup.ClientOptions{
 			PrivateKey: UserPrivkey1,
 		})
