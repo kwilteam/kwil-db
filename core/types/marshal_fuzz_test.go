@@ -93,8 +93,8 @@ func FuzzDataTypeUnmarshalBinary(f *testing.F) {
 					// If Clean() succeeds, verify the type is one of the known types
 					validTypes := map[string]bool{
 						"int8": true, "text": true, "bool": true,
-						"bytea": true, "uuid": true, "uint256": true,
-						"numeric": true, "null": true, "unknown": true,
+						"bytea": true, "uuid": true,
+						"numeric": true, "null": true,
 					}
 					if !validTypes[dt.Name] {
 						t.Errorf("unmarshaled invalid type name: %s", dt.Name)

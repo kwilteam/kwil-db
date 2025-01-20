@@ -719,8 +719,6 @@ var (
 				case args[0].Name == types.NumericStr:
 					retType = args[0].Copy()
 					retType.Metadata[0] = 1000 // max precision
-				case args[0].Equals(types.Uint256Type):
-					retType = decimal1000.Copy()
 				default:
 					panic(fmt.Sprintf("unexpected numeric type: %s", retType.String()))
 				}

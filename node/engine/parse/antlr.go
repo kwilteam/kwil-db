@@ -246,7 +246,7 @@ func (s *schemaVisitor) VisitInteger_literal(ctx *gen.Integer_literalContext) an
 		i = "-" + i
 	}
 
-	// integer literal can be either a uint256 or int64
+	// integer literal can only be int64
 	bigNum := new(big.Int)
 	_, ok := bigNum.SetString(i, 10)
 	if !ok {
@@ -255,19 +255,8 @@ func (s *schemaVisitor) VisitInteger_literal(ctx *gen.Integer_literalContext) an
 	}
 
 	if bigNum.Cmp(maxInt64) > 0 {
-		// it is a uint256
-		u256, err := types.Uint256FromBig(bigNum)
-		if err != nil {
-			s.errs.RuleErr(ctx, ErrSyntax, "invalid integer literal: %s", i)
-			return unknownExpression(ctx)
-		}
-
-		e := &ExpressionLiteral{
-			Type:  types.Uint256Type,
-			Value: u256,
-		}
-		e.Set(ctx)
-		return e
+		s.errs.RuleErr(ctx, ErrSyntax, "integer exceeds max int8: %s", i)
+		return unknownExpression(ctx)
 	}
 	if bigNum.Cmp(minInt64) < 0 {
 		s.errs.RuleErr(ctx, ErrType, "integer literal out of range: %s", i)
