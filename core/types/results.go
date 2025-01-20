@@ -182,10 +182,9 @@ func (qr *QueryResult) ExportToStringMap() []map[string]string {
 // The passed values can be of type *string, *int64, *int, *bool, *[]byte, *UUID, *Decimal,
 // *[]string, *[]int64, *[]int, *[]bool, *[]*int64, *[]*int, *[]*bool, *[]*UUID, *[]*Decimal,
 // *[]UUID, *[]Decimal, *[][]byte, or *[]*[]byte.
-func (q *QueryResult) Scan(vals []any, fn func() error) error {
-
+func (q *QueryResult) Scan(fn func() error, vals ...any) error {
 	for _, row := range q.Values {
-		if err := ScanTo(row, vals); err != nil {
+		if err := ScanTo(row, vals...); err != nil {
 			return err
 		}
 		if err := fn(); err != nil {
@@ -197,7 +196,7 @@ func (q *QueryResult) Scan(vals []any, fn func() error) error {
 }
 
 // ScanTo scans the src values into the dst values.
-func ScanTo(src []any, dst []any) error {
+func ScanTo(src []any, dst ...any) error {
 	if len(src) != len(dst) {
 		return fmt.Errorf("expected %d columns, got %d", len(dst), len(src))
 	}
