@@ -91,7 +91,7 @@ func RemoveNonValidatorSpecification(ctx context.Context, t *testing.T, netops V
 	require.NoError(t, err)
 
 	// non validator node tries to remove a validator
-	rec, err := netops.ValidatorNodeRemove(ctx, target, 0)
+	rec, err := netops.ValidatorNodeRemove(ctx, target, crypto.KeyTypeSecp256k1)
 	require.NoError(t, err)
 
 	// Ensure that the Validator Remove Tx is mined.
@@ -218,7 +218,7 @@ func ValidatorNodeApproveSpecification(ctx context.Context, t *testing.T, netops
 		- If Join request approved (2/3rd majority), Join request should be removed
 		- If not approved, ensure that the vote is included, i.e #approvals = preApprovalCnt + 1
 	*/
-	joinStatus, err = netops.ValidatorJoinStatus(ctx, joiner, 0)
+	joinStatus, err = netops.ValidatorJoinStatus(ctx, joiner, crypto.KeyTypeSecp256k1)
 	if approved {
 		assert.Error(t, err)
 		assert.Nil(t, joinStatus)

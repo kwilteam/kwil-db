@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/spf13/cobra"
+
 	"github.com/kwilteam/kwil-db/app/custom"
 	"github.com/kwilteam/kwil-db/app/key"
 	"github.com/kwilteam/kwil-db/app/node/conf"
@@ -17,8 +19,8 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/utils"
+	authExt "github.com/kwilteam/kwil-db/extensions/auth"
 	"github.com/kwilteam/kwil-db/node"
-	"github.com/spf13/cobra"
 )
 
 const (
@@ -126,7 +128,7 @@ func InitCmd() *cobra.Command {
 				genCfg = config.DefaultGenesisConfig()
 				genCfg, err = mergeGenesisFlags(genCfg, cmd, &genFlags)
 				if err != nil {
-					return display.PrintErr(cmd, err)
+					return display.PrintErr(cmd, fmt.Errorf("failed to create genesis file: %w", err))
 				}
 
 				genCfg.Leader = types.PublicKey{PublicKey: privKey.Public()}
@@ -141,7 +143,7 @@ func InitCmd() *cobra.Command {
 				// If DB owner is not set, set it to the node's public key
 				if genCfg.DBOwner == "" {
 					signer := auth.GetUserSigner(privKey)
-					ident, err := auth.GetIdentifierFromSigner(signer)
+					ident, err := authExt.GetIdentifierFromSigner(signer)
 					if err != nil {
 						return display.PrintErr(cmd, fmt.Errorf("failed to get identifier for dbOwner: %w", err))
 					}

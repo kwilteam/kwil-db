@@ -1,9 +1,12 @@
 package account
 
 import (
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 
+	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
@@ -20,10 +23,28 @@ func (r *respAccount) MarshalJSON() ([]byte, error) {
 }
 
 func (r *respAccount) MarshalText() ([]byte, error) {
-	msg := fmt.Sprintf(`%x (%s)
+	var msg string
+	if len(r.Identifier) == auth.EthAddressIdentLength &&
+		r.KeyType == string(crypto.KeyTypeSecp256k1) {
+		addr, err := auth.EthSecp256k1Authenticator{}.Identifier(r.Identifier)
+		if err != nil {
+			addr = hex.EncodeToString(r.Identifier)
+		}
+		msg = fmt.Sprintf(`%s (Ethereum %s)
+Balance: %s
+Nonce: %d
+`, addr, r.KeyType, r.Balance, r.Nonce)
+	} else if len(r.Identifier) == 0 {
+		msg = fmt.Sprintf(`%s
+Balance: %s
+Nonce: %d
+`, "[Account not found]", r.Balance, r.Nonce)
+	} else {
+		msg = fmt.Sprintf(`%x (%s)
 Balance: %s
 Nonce: %d
 `, r.Identifier, r.KeyType, r.Balance, r.Nonce)
+	}
 
 	return []byte(msg), nil
 }

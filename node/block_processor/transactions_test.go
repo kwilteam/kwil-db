@@ -7,6 +7,8 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -15,7 +17,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/txapp"
 	"github.com/kwilteam/kwil-db/node/types/sql"
-	"github.com/stretchr/testify/require"
 )
 
 /*func marshalTx(t *testing.T, tx *types.Transaction) []byte {
@@ -74,7 +75,7 @@ func TestPrepareMempoolTxns(t *testing.T) {
 
 	chainCtx := &common.ChainContext{
 		ChainID: "test",
-		NetworkParameters: &common.NetworkParameters{
+		NetworkParameters: &types.NetworkParameters{
 			MaxBlockSize:     6 * 1024 * 1024,
 			MaxVotesPerTx:    100,
 			DisabledGasCosts: true,
@@ -281,6 +282,7 @@ func genNodeKeyAndSigner(t *testing.T) (crypto.PrivateKey, auth.Signer) {
 
 func TestPrepareVoteIDTx(t *testing.T) {
 	leaderPrivKey, leaderSigner := genNodeKeyAndSigner(t)
+	leaderPubKey := leaderPrivKey.Public()
 	valPriv, valSigner := genNodeKeyAndSigner(t)
 	_, sentrySigner := genNodeKeyAndSigner(t)
 	valSet := []*types.Validator{
@@ -300,16 +302,16 @@ func TestPrepareVoteIDTx(t *testing.T) {
 		},
 	}
 	genCfg := config.DefaultGenesisConfig()
-	genCfg.Leader = types.PublicKey{PublicKey: leaderPrivKey.Public()}
-	netParams := genCfg.NetworkParameters
+	genCfg.Leader = types.PublicKey{PublicKey: leaderPubKey}
 
+	netParams := genCfg.NetworkParameters.Clone()
 	bp := &BlockProcessor{
 		db:     &mockDB{},
 		log:    log.DiscardLogger,
 		signer: leaderSigner,
 		chainCtx: &common.ChainContext{
 			ChainID:           "test",
-			NetworkParameters: &netParams,
+			NetworkParameters: netParams,
 		},
 		txapp:         &mockTxApp{},
 		genesisParams: genCfg,
@@ -471,8 +473,9 @@ func TestPrepareVoteIDTx(t *testing.T) {
 
 func TestPrepareVoteBodyTx(t *testing.T) {
 	privKey, signer := genNodeKeyAndSigner(t)
+	pubKey := privKey.Public()
 	genCfg := config.DefaultGenesisConfig()
-	genCfg.Leader = types.PublicKey{PublicKey: privKey.Public()}
+	genCfg.Leader = types.PublicKey{PublicKey: pubKey}
 
 	bp := &BlockProcessor{
 		db:     &mockDB{},
@@ -480,10 +483,11 @@ func TestPrepareVoteBodyTx(t *testing.T) {
 		signer: signer,
 		chainCtx: &common.ChainContext{
 			ChainID: "test",
-			NetworkParameters: &common.NetworkParameters{
+			NetworkParameters: &types.NetworkParameters{
 				MaxBlockSize:     6 * 1024 * 1024,
 				MaxVotesPerTx:    100,
 				DisabledGasCosts: true,
+				// No Leader!
 			},
 		},
 		txapp:         &mockTxApp{},

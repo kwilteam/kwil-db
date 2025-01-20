@@ -53,7 +53,7 @@ func TestMemBS_StoreAndGet(t *testing.T) {
 
 	block, appHash := createTestBlock(t, 1, 2)
 
-	err := bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
+	err := bs.Store(block, &types.CommitInfo{AppHash: appHash})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -83,7 +83,7 @@ func TestMemBS_GetByHeight(t *testing.T) {
 
 	for i, block := range blocks {
 		appHash := types.Hash{byte(i + 1)}
-		if err := bs.Store(block, &ktypes.CommitInfo{AppHash: appHash}); err != nil {
+		if err := bs.Store(block, &types.CommitInfo{AppHash: appHash}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -117,7 +117,7 @@ func TestMemBS_Best(t *testing.T) {
 
 	for i, block := range blocks {
 		appHash := types.Hash{byte(i + 1)}
-		if err := bs.Store(block, &ktypes.CommitInfo{AppHash: appHash}); err != nil {
+		if err := bs.Store(block, &types.CommitInfo{AppHash: appHash}); err != nil {
 			t.Fatal(err)
 		}
 	}
@@ -152,7 +152,7 @@ func TestMemBS_StoreAndGetTx(t *testing.T) {
 	tx1 := block.Txns[0]
 
 	appHash := types.Hash{1, 2, 3}
-	if err := bs.Store(block, &ktypes.CommitInfo{AppHash: appHash}); err != nil {
+	if err := bs.Store(block, &types.CommitInfo{AppHash: appHash}); err != nil {
 		t.Fatal(err)
 	}
 
@@ -188,7 +188,7 @@ func TestMemBS_PreFetch(t *testing.T) {
 	bs := NewMemBS()
 	block := &ktypes.Block{Header: &ktypes.BlockHeader{Height: 1}}
 
-	if err := bs.Store(block, &ktypes.CommitInfo{AppHash: types.Hash{}}); err != nil {
+	if err := bs.Store(block, &types.CommitInfo{AppHash: types.Hash{}}); err != nil {
 		t.Fatal(err)
 	}
 

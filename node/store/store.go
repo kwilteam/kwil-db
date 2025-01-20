@@ -92,7 +92,7 @@ func NewBlockStore(dir string, opts ...Option) (*BlockStore, error) {
 	pfxLen := len(nsHeader)
 
 	var hash types.Hash // reuse in loop
-	var ci ktypes.CommitInfo
+	var ci types.CommitInfo
 
 	err = db.View(func(txn *badger.Txn) error {
 		it := txn.NewIterator(itOpts)
@@ -294,7 +294,7 @@ func (bki *BlockStore) Result(hash types.Hash, idx uint32) (*ktypes.TxResult, er
 	return &res, err
 }
 
-func (bki *BlockStore) Store(blk *ktypes.Block, commitInfo *ktypes.CommitInfo) error {
+func (bki *BlockStore) Store(blk *ktypes.Block, commitInfo *types.CommitInfo) error {
 	blkHash := blk.Hash()
 	height := blk.Header.Height
 
@@ -400,13 +400,13 @@ func (bki *BlockStore) Best() (height int64, blkHash, appHash types.Hash, stamp 
 	return
 }
 
-func (bki *BlockStore) Get(blkHash types.Hash) (*ktypes.Block, *ktypes.CommitInfo, error) {
+func (bki *BlockStore) Get(blkHash types.Hash) (*ktypes.Block, *types.CommitInfo, error) {
 	if !bki.Have(blkHash) {
 		return nil, nil, types.ErrNotFound
 	}
 
 	var block *ktypes.Block
-	var ci ktypes.CommitInfo
+	var ci types.CommitInfo
 	err := bki.db.View(func(txn *badger.Txn) error {
 		// Load the block and get the tx
 		blockKey := slices.Concat(nsBlock, blkHash[:])
@@ -446,7 +446,7 @@ func (bki *BlockStore) Get(blkHash types.Hash) (*ktypes.Block, *ktypes.CommitInf
 // GetByHeight retrieves the full block based on the block height. The returned
 // hash is a convenience for the caller to spare computing it. The app hash,
 // which is encoded in the next block header, is also returned.
-func (bki *BlockStore) GetByHeight(height int64) (types.Hash, *ktypes.Block, *ktypes.CommitInfo, error) {
+func (bki *BlockStore) GetByHeight(height int64) (types.Hash, *ktypes.Block, *types.CommitInfo, error) {
 	bki.mtx.RLock()
 	defer bki.mtx.RUnlock()
 

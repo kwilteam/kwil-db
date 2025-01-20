@@ -4,7 +4,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/app/shared/display"
@@ -45,14 +44,9 @@ func InfoCmd() *cobra.Command {
 				}
 				keyType := crypto.KeyTypeSecp256k1 // default
 				if keyTypeStr != "" {
-					keyTypeInt, err := strconv.ParseUint(keyTypeStr, 10, 16)
-					if err != nil { // maybe it's a string like "secp256k1"
-						keyType, err = crypto.ParseKeyType(keyTypeStr)
-						if err != nil {
-							return display.PrintErr(cmd, fmt.Errorf("invalid key type (%s): %w", keyTypeStr, err))
-						}
-					} else {
-						keyType = crypto.KeyType(keyTypeInt)
+					keyType, err = crypto.ParseKeyType(keyTypeStr)
+					if err != nil {
+						return display.PrintErr(cmd, fmt.Errorf("invalid key type (%s): %w", keyTypeStr, err))
 					}
 				}
 				priv, err := crypto.UnmarshalPrivateKey(keyBts, keyType)
@@ -65,11 +59,7 @@ func InfoCmd() *cobra.Command {
 				if err != nil {
 					return display.PrintErr(cmd, err)
 				}
-				return display.PrintCmd(cmd, &PrivateKeyInfo{
-					KeyType:       key.Type().String(),
-					PrivateKeyHex: hex.EncodeToString(key.Bytes()),
-					PublicKeyHex:  hex.EncodeToString(key.Public().Bytes()),
-				})
+				return display.PrintCmd(cmd, privKeyInfo(key))
 			}
 
 			cmd.Usage()

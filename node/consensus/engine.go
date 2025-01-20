@@ -177,7 +177,7 @@ type WhitelistFns struct {
 type ProposalBroadcaster func(ctx context.Context, blk *ktypes.Block)
 
 // BlkAnnouncer broadcasts the new committed block to the network using the blockAnn message
-type BlkAnnouncer func(ctx context.Context, blk *ktypes.Block, ci *ktypes.CommitInfo)
+type BlkAnnouncer func(ctx context.Context, blk *ktypes.Block, ci *types.CommitInfo)
 
 // TxAnnouncer broadcasts the new transaction to the network
 type TxAnnouncer func(ctx context.Context, txHash types.Hash, rawTx []byte)
@@ -186,7 +186,7 @@ type TxAnnouncer func(ctx context.Context, txHash types.Hash, rawTx []byte)
 type AckBroadcaster func(ack bool, height int64, blkID types.Hash, appHash *types.Hash, Signature []byte) error
 
 // BlkRequester requests the block from the network based on the height
-type BlkRequester func(ctx context.Context, height int64) (types.Hash, []byte, *ktypes.CommitInfo, error)
+type BlkRequester func(ctx context.Context, height int64) (types.Hash, []byte, *types.CommitInfo, error)
 
 type ResetStateBroadcaster func(height int64, txIDs []ktypes.Hash) error
 
@@ -229,9 +229,9 @@ type state struct {
 
 	// Votes: Applicable only to the leader
 	// These are the Acks received from the validators.
-	votes map[string]*ktypes.VoteInfo
+	votes map[string]*types.VoteInfo
 
-	commitInfo *ktypes.CommitInfo
+	commitInfo *types.CommitInfo
 }
 
 type blockResult struct {
@@ -249,7 +249,7 @@ type lastCommit struct {
 	appHash types.Hash
 
 	blk        *ktypes.Block // for reannounce and other status getters
-	commitInfo *ktypes.CommitInfo
+	commitInfo *types.CommitInfo
 }
 
 // New creates a new consensus engine.
@@ -283,7 +283,7 @@ func New(cfg *Config) *ConsensusEngine {
 				blkHash: zeroHash,
 				appHash: zeroHash,
 			},
-			votes: make(map[string]*ktypes.VoteInfo),
+			votes: make(map[string]*types.VoteInfo),
 		},
 		stateInfo: StateInfo{
 			height:  0,
@@ -384,7 +384,7 @@ func (ce *ConsensusEngine) close() {
 	}
 }
 
-func (ce *ConsensusEngine) Status() *ktypes.NodeStatus {
+func (ce *ConsensusEngine) Status() *types.NodeStatus {
 	params := ce.blockProcessor.ConsensusParams()
 	ce.stateInfo.mtx.RLock()
 	defer ce.stateInfo.mtx.RUnlock()
@@ -393,7 +393,7 @@ func (ce *ConsensusEngine) Status() *ktypes.NodeStatus {
 	if lc.blk != nil {
 		hdr = lc.blk.Header
 	}
-	return &ktypes.NodeStatus{
+	return &types.NodeStatus{
 		Role:            ce.role.Load().(types.Role).String(),
 		CatchingUp:      ce.inSync.Load(),
 		CommittedHeader: hdr,

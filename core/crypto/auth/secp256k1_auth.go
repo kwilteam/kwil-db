@@ -45,3 +45,7 @@ func (e Secp25k1Authenticator) Verify(publicKey, msg, signature []byte) error {
 
 	return nil
 }
+
+func (e Secp25k1Authenticator) KeyType() crypto.KeyType {
+	return crypto.KeyTypeSecp256k1
+}

@@ -5,9 +5,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSetParamNames(t *testing.T) {
@@ -89,7 +88,19 @@ func TestSetParamNames(t *testing.T) {
 	}
 }
 
+/*func acctIDForPubKey(pub crypto.PublicKey) AccountID {
+	return AccountID{
+		Identifier: pub.Bytes(),
+		KeyType:    pub.Type(),
+	}
+}*/
+
 func TestParamUpdatesMarshalBinary(t *testing.T) {
+	_, pub, err := crypto.GenerateSecp256k1Key(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	tests := []struct {
 		name    string
 		updates ParamUpdates
@@ -103,7 +114,7 @@ func TestParamUpdatesMarshalBinary(t *testing.T) {
 		{
 			name: "all parameter types",
 			updates: ParamUpdates{
-				ParamNameLeader:           newPubKey(),
+				ParamNameLeader:           PublicKey{pub},
 				ParamNameDBOwner:          "test_owner",
 				ParamNameMaxBlockSize:     int64(1000),
 				ParamNameJoinExpiry:       Duration(10 * time.Second),
@@ -226,24 +237,17 @@ func TestParamUpdatesUnmarshalBinary(t *testing.T) {
 	}
 }
 
-func newPubKey() PublicKey {
-	_, pub, err := crypto.GenerateSecp256k1Key(nil)
-	if err != nil {
-		panic(err)
-	}
-	// fmt.Printf("%#v\n", pub.Bytes())
-	return PublicKey{pub}
-}
-
 func TestMergeUpdates(t *testing.T) {
 	pub0, err := crypto.UnmarshalSecp256k1PublicKey([]byte{0x2, 0xe0, 0x9d, 0x79, 0x32, 0xde, 0xf1, 0x1d, 0x82, 0x72, 0xdd, 0x3b, 0x58, 0x9d, 0xf8, 0xb1, 0xcf, 0x7a, 0xff, 0xb0, 0x41, 0x50, 0x19, 0x4f, 0xc2, 0x28, 0xf8, 0x17, 0xae, 0xba, 0xb2, 0xc9, 0xda})
 	if err != nil {
 		t.Fatal(err)
 	}
+	// acct0 := acctIDForPubKey(pub0)
 	pub1, err := crypto.UnmarshalSecp256k1PublicKey([]byte{0x3, 0x16, 0xb4, 0x4c, 0xab, 0xfb, 0xc, 0xc, 0xa1, 0x3b, 0x58, 0xc4, 0x69, 0x3f, 0x71, 0xd8, 0xd0, 0xf1, 0x6e, 0xcb, 0x16, 0xe9, 0xb6, 0xed, 0xd3, 0xa2, 0x23, 0x74, 0xef, 0x38, 0xc7, 0xf0, 0xb})
 	if err != nil {
 		t.Fatal(err)
 	}
+	// acct1 := acctIDForPubKey(pub1)
 	tests := []struct {
 		name    string
 		np      *NetworkParameters
@@ -262,7 +266,7 @@ func TestMergeUpdates(t *testing.T) {
 			wantErr: false,
 			verify: func(t *testing.T, np *NetworkParameters) {
 				if !pub1.Equals(np.Leader.PublicKey) {
-					t.Errorf("Leader not updated correctly, got %v want %v", np.Leader, pub0)
+					t.Errorf("Leader not updated correctly, got %v want %v", np.Leader, pub1)
 				}
 			},
 		},
@@ -363,10 +367,12 @@ func TestParamUpdatesMerge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// acct0 := acctIDForPubKey(pub0)
 	pub1, err := crypto.UnmarshalSecp256k1PublicKey([]byte{0x3, 0x16, 0xb4, 0x4c, 0xab, 0xfb, 0xc, 0xc, 0xa1, 0x3b, 0x58, 0xc4, 0x69, 0x3f, 0x71, 0xd8, 0xd0, 0xf1, 0x6e, 0xcb, 0x16, 0xe9, 0xb6, 0xed, 0xd3, 0xa2, 0x23, 0x74, 0xef, 0x38, 0xc7, 0xf0, 0xb})
 	if err != nil {
 		t.Fatal(err)
 	}
+	// acct1 := acctIDForPubKey(pub1)
 
 	tests := []struct {
 		name     string
@@ -379,40 +385,40 @@ func TestParamUpdatesMerge(t *testing.T) {
 			name: "merge into empty base",
 			base: ParamUpdates{},
 			other: ParamUpdates{
-				ParamNameLeader:       pub0,
+				ParamNameLeader:       PublicKey{pub0},
 				ParamNameMaxBlockSize: int64(5000),
 			},
 			expected: ParamUpdates{
-				ParamNameLeader:       pub0,
+				ParamNameLeader:       PublicKey{pub0},
 				ParamNameMaxBlockSize: int64(5000),
 			},
 		},
 		{
 			name: "merge empty other",
 			base: ParamUpdates{
-				ParamNameLeader:       pub0,
+				ParamNameLeader:       PublicKey{pub0},
 				ParamNameMaxBlockSize: int64(5000),
 			},
 			other: ParamUpdates{},
 			expected: ParamUpdates{
-				ParamNameLeader:       pub0,
+				ParamNameLeader:       PublicKey{pub0},
 				ParamNameMaxBlockSize: int64(5000),
 			},
 		},
 		{
 			name: "override existing values",
 			base: ParamUpdates{
-				ParamNameLeader:           pub0,
+				ParamNameLeader:           PublicKey{pub0},
 				ParamNameMaxBlockSize:     int64(5000),
 				ParamNameDisabledGasCosts: true,
 			},
 			other: ParamUpdates{
-				ParamNameLeader:          pub1,
+				ParamNameLeader:          PublicKey{pub1},
 				ParamNameMaxBlockSize:    int64(6000),
 				ParamNameMigrationStatus: MigrationStatus("completed"),
 			},
 			expected: ParamUpdates{
-				ParamNameLeader:           pub1,
+				ParamNameLeader:           PublicKey{pub1},
 				ParamNameMaxBlockSize:     int64(6000),
 				ParamNameDisabledGasCosts: true,
 				ParamNameMigrationStatus:  MigrationStatus("completed"),

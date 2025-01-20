@@ -8,6 +8,8 @@ import (
 	"sort"
 
 	"github.com/kwilteam/kwil-db/core/types"
+	authExt "github.com/kwilteam/kwil-db/extensions/auth"
+	"github.com/kwilteam/kwil-db/node/txapp"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )
 
@@ -125,7 +127,7 @@ func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs []*t
 
 		// Drop transactions from unfunded accounts in gasEnabled mode
 		if !bp.chainCtx.NetworkParameters.DisabledGasCosts {
-			ident, err := tx.SenderInfo()
+			ident, err := txapp.TxSenderAcctID(tx.Transaction)
 			if err != nil {
 				bp.log.Error("failed to get sender info", "error", err)
 				continue
@@ -383,7 +385,7 @@ func (bp *BlockProcessor) PrepareValidatorVoteIDTx(ctx context.Context, db sql.D
 	myPubKey := bp.signer.PubKey()
 
 	// check if the node is a leader
-	if myPubKey.Equals(bp.chainCtx.NetworkParameters.Leader.PublicKey) {
+	if myPubKey.Equals(bp.chainCtx.NetworkParameters.Leader) {
 		bp.log.Debug("Leader node is not allowed to propose voteID transactions")
 		return nil, nil, nil
 	}
@@ -453,4 +455,15 @@ func (bp *BlockProcessor) PrepareValidatorVoteIDTx(ctx context.Context, db sql.D
 	}
 
 	return tx, ids, nil
+}
+
+// verifyTransaction verifies a transaction's signature using the Authenticator
+// registry in this package.
+func verifyTransaction(tx *types.Transaction) error {
+	msg, err := tx.SerializeMsg()
+	if err != nil {
+		return err
+	}
+
+	return authExt.VerifySignature(tx.Sender, msg, tx.Signature)
 }

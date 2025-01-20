@@ -9,7 +9,7 @@ import (
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	"github.com/kwilteam/kwil-db/core/rpc/json/function"
 	userjson "github.com/kwilteam/kwil-db/core/rpc/json/user"
-	"github.com/kwilteam/kwil-db/node/ident"
+	authExt "github.com/kwilteam/kwil-db/extensions/auth"
 	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/version"
 )
@@ -77,7 +77,7 @@ func (Service) VerifySignature(_ context.Context, req *function.VerifySignatureR
 		Type: req.Signature.SignatureType,
 	}
 
-	err := ident.VerifySignature(req.Sender, req.Msg, &convSignature)
+	err := authExt.VerifySignature(req.Sender, req.Msg, &convSignature)
 	if err != nil {
 		return &function.VerifySignatureResponse{
 			Valid:  false,

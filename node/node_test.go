@@ -261,7 +261,7 @@ type dummyCE struct {
 	rejectACK    bool
 
 	ackHandler         func(validatorPK []byte, ack types.AckRes)
-	blockCommitHandler func(blk *ktypes.Block, ci *ktypes.CommitInfo)
+	blockCommitHandler func(blk *ktypes.Block, ci *types.CommitInfo)
 	blockPropHandler   func(blk *ktypes.Block)
 	resetStateHandler  func(height int64, txIDs []types.Hash)
 
@@ -280,19 +280,19 @@ func (ce *dummyCE) AcceptProposal(height int64, blkID, prevBlkID types.Hash, lea
 	return !ce.rejectProp
 }
 
-func (ce *dummyCE) AcceptCommit(height int64, blkID types.Hash, ci *ktypes.CommitInfo, leaderSig []byte) bool {
+func (ce *dummyCE) AcceptCommit(height int64, blkID types.Hash, ci *types.CommitInfo, leaderSig []byte) bool {
 	return !ce.rejectCommit
 }
 
-func (ce *dummyCE) NotifyBlockCommit(blk *ktypes.Block, ci *ktypes.CommitInfo) {
+func (ce *dummyCE) NotifyBlockCommit(blk *ktypes.Block, ci *types.CommitInfo) {
 	if ce.blockCommitHandler != nil {
 		ce.blockCommitHandler(blk, ci)
 		return
 	}
 }
 
-func (ce *dummyCE) Status() *ktypes.NodeStatus {
-	return &ktypes.NodeStatus{}
+func (ce *dummyCE) Status() *types.NodeStatus {
+	return &types.NodeStatus{}
 }
 
 func (ce *dummyCE) NotifyACK(validatorPK []byte, ack types.AckRes) {
@@ -383,7 +383,7 @@ func (f *faker) RequestBlock(ctx context.Context, height int64) {
 	f.blkRequester(ctx, height)
 }
 
-func (f *faker) AnnounceBlock(ctx context.Context, blk *ktypes.Block, ci *ktypes.CommitInfo) {
+func (f *faker) AnnounceBlock(ctx context.Context, blk *ktypes.Block, ci *types.CommitInfo) {
 	f.blkAnnouncer(ctx, blk, ci)
 }
 
@@ -399,7 +399,7 @@ func (f *faker) SetACKHandler(ackHandler func(validatorPK []byte, ack types.AckR
 	f.ackHandler = ackHandler
 }
 
-func (f *faker) SetBlockCommitHandler(blockCommitHandler func(blk *ktypes.Block, ci *ktypes.CommitInfo)) {
+func (f *faker) SetBlockCommitHandler(blockCommitHandler func(blk *ktypes.Block, ci *types.CommitInfo)) {
 	f.blockCommitHandler = blockCommitHandler
 }
 
@@ -420,7 +420,7 @@ func TestStreamsBlockFetch(t *testing.T) {
 
 	// to n1's block store, one block at height 1 with 2 txns
 	blk1, appHash1 := createTestBlock(1, 2)
-	n1.bki.Store(blk1, &ktypes.CommitInfo{AppHash: appHash1})
+	n1.bki.Store(blk1, &types.CommitInfo{AppHash: appHash1})
 
 	startNodes(t, nodes)
 

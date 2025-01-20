@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"math/big"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -147,31 +146,31 @@ func (gc *GenesisConfig) SanityChecks() error {
 func DecodePubKeyAndType(encodedPubKey string) ([]byte, crypto.KeyType, error) {
 	parts := strings.Split(encodedPubKey, "#")
 	if len(parts) != 2 {
-		return nil, 0, errors.New("invalid pubkey format, expected <pubkey#pubkeytype>")
+		return nil, "", errors.New("invalid pubkey format, expected <pubkey#pubkeytype>")
 	}
 
 	pubKey, err := hex.DecodeString(parts[0])
 	if err != nil {
-		return nil, 0, fmt.Errorf("error decoding public key: %s error: %s", parts[0], err)
+		return nil, "", fmt.Errorf("error decoding public key: %s error: %s", parts[0], err)
 	}
 
-	pubKeyType, err := strconv.ParseInt(parts[1], 10, 64)
-	if err != nil {
-		return nil, 0, fmt.Errorf("error parsing public key type: %s error: %s", parts[1], err)
+	pubKeyType := parts[1]
+	if pubKeyType == "" || strings.ContainsRune(pubKeyType, ' ') {
+		return nil, "", errors.New("invalid pubkey type, expected <pubkey#pubkeytype>")
 	}
 
 	return pubKey, crypto.KeyType(pubKeyType), nil
 }
 
 func EncodePubKeyAndType(pubKey []byte, pubKeyType crypto.KeyType) string {
-	return fmt.Sprintf("%s#%d", hex.EncodeToString(pubKey), pubKeyType)
+	return fmt.Sprintf("%s#%s", hex.EncodeToString(pubKey), pubKeyType)
 }
 
 func FormatAccountID(acctID *types.AccountID) string {
 	if acctID == nil {
 		return ""
 	}
-	return fmt.Sprintf("%s#%d", acctID.Identifier.String(), acctID.KeyType)
+	return fmt.Sprintf("%s#%s", acctID.Identifier.String(), acctID.KeyType)
 }
 
 // MigrationParams is the migration configuration required for zero downtime

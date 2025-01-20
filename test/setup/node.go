@@ -336,9 +336,7 @@ func SetupTests(t *testing.T, testConfig *TestConfig) *Testnet {
 				t.Fatal("first node must be a validator")
 			}
 
-			genesisConfig.Leader = types.PublicKey{
-				PublicKey: nodeCfg.PrivateKey.Public(),
-			}
+			genesisConfig.Leader = types.PublicKey{PublicKey: nodeCfg.PrivateKey.Public()}
 		}
 
 		if nodeCfg.Validator {
@@ -648,7 +646,7 @@ func (k *kwilNode) JSONRPCEndpoint(t *testing.T, ctx context.Context) (string, s
 // This is of the format <hexPubKey#keyType>
 func (k *kwilNode) PeerID() string {
 	pubkey := k.PrivateKey().Public()
-	return fmt.Sprintf("%s#%d", hex.EncodeToString(pubkey.Bytes()), pubkey.Type())
+	return fmt.Sprintf("%s#%s", hex.EncodeToString(pubkey.Bytes()), pubkey.Type())
 }
 
 type KwilNode interface {

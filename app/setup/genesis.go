@@ -9,12 +9,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/spf13/cobra"
+
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node"
-	"github.com/spf13/cobra"
 )
 
 var (
@@ -76,7 +77,7 @@ func GenesisCmd() *cobra.Command {
 			conf := config.DefaultGenesisConfig()
 			conf, err = mergeGenesisFlags(conf, cmd, &flagCfg)
 			if err != nil {
-				return display.PrintErr(cmd, err)
+				return display.PrintErr(cmd, fmt.Errorf("failed to create genesis file: %w", err))
 			}
 
 			existingFile, err := os.Stat(genesisFile)
@@ -117,9 +118,6 @@ func bindGenesisFlags(cmd *cobra.Command, cfg *genesisFlagConfig) {
 
 // mergeGenesisFlags merges the genesis configuration flags with the given configuration.
 func mergeGenesisFlags(conf *config.GenesisConfig, cmd *cobra.Command, flagCfg *genesisFlagConfig) (*config.GenesisConfig, error) {
-	makeErr := func(e error) error {
-		return display.PrintErr(cmd, fmt.Errorf("failed to create genesis file: %w", e))
-	}
 	if cmd.Flags().Changed("chain-id") {
 		conf.ChainID = flagCfg.chainID
 	}
@@ -129,30 +127,29 @@ func mergeGenesisFlags(conf *config.GenesisConfig, cmd *cobra.Command, flagCfg *
 		for _, v := range flagCfg.validators {
 			parts := strings.Split(v, ":")
 			if len(parts) != 2 {
-				return nil, makeErr(fmt.Errorf("invalid format for validator, expected key:power, received: %s", v))
+				return nil, fmt.Errorf("invalid format for validator, expected key:power, received: %s", v)
 			}
 
 			keyParts := strings.Split(parts[0], "#")
 			hexPub, err := hex.DecodeString(keyParts[0])
 			if err != nil {
-				return nil, makeErr(fmt.Errorf("invalid public key for validator: %s", parts[0]))
+				return nil, fmt.Errorf("invalid public key for validator: %s", parts[0])
 			}
 
 			power, err := strconv.ParseInt(parts[1], 10, 64)
 			if err != nil {
-				return nil, makeErr(fmt.Errorf("invalid power for validator: %s", parts[1]))
+				return nil, fmt.Errorf("invalid power for validator: %s", parts[1])
 			}
 
-			// string to Int
-			keyType, err := strconv.ParseInt(keyParts[1], 10, 64)
+			keyType, err := crypto.ParseKeyType(keyParts[1])
 			if err != nil {
-				return nil, makeErr(fmt.Errorf("invalid power for validator: %s", keyParts[1]))
+				return nil, fmt.Errorf("invalid key type for validator: %s", keyParts[1])
 			}
 
 			conf.Validators = append(conf.Validators, &types.Validator{
 				AccountID: types.AccountID{
 					Identifier: hexPub,
-					KeyType:    crypto.KeyType(keyType),
+					KeyType:    keyType,
 				},
 				Power: power,
 			})
@@ -164,32 +161,27 @@ func mergeGenesisFlags(conf *config.GenesisConfig, cmd *cobra.Command, flagCfg *
 		for _, a := range flagCfg.allocs {
 			parts := strings.Split(a, ":")
 			if len(parts) != 2 {
-				return nil, makeErr(fmt.Errorf("invalid format for alloc, expected address:balance, received: %s", a))
+				return nil, fmt.Errorf("invalid format for alloc, expected id#keyType:balance, received: %s", a)
 			}
 
 			keyParts := strings.Split(parts[0], "#")
 			if len(keyParts) != 2 {
-				return nil, makeErr(fmt.Errorf("invalid address for alloc: %s", parts[0]))
+				return nil, fmt.Errorf("invalid address for alloc: %s", parts[0])
 			}
 
-			keyTypeInt, err := strconv.ParseInt(keyParts[1], 10, 64)
+			keyType, err := crypto.ParseKeyType(keyParts[1])
 			if err != nil {
-				return nil, makeErr(fmt.Errorf("invalid key type for genesis allocs: %s", keyParts[1]))
-			}
-			keyType := crypto.KeyType(keyTypeInt)
-
-			if !keyType.Valid() {
-				return nil, makeErr(fmt.Errorf("invalid key type for genesis allocs: %s", keyParts[1]))
+				return nil, fmt.Errorf("invalid key type for validator: %s", keyParts[1])
 			}
 
 			balance, ok := new(big.Int).SetString(parts[1], 10)
 			if !ok {
-				return nil, makeErr(fmt.Errorf("invalid balance for alloc: %s", parts[1]))
+				return nil, fmt.Errorf("invalid balance for alloc: %s", parts[1])
 			}
 
 			keyStr, err := hex.DecodeString(keyParts[0])
 			if err != nil {
-				return nil, makeErr(fmt.Errorf("invalid address for alloc: %s", keyParts[0]))
+				return nil, fmt.Errorf("invalid address for alloc: %s", keyParts[0])
 			}
 
 			conf.Allocs = append(conf.Allocs, config.GenesisAlloc{
@@ -209,11 +201,11 @@ func mergeGenesisFlags(conf *config.GenesisConfig, cmd *cobra.Command, flagCfg *
 	if cmd.Flags().Changed("leader") {
 		pubkeyBts, keyType, err := config.DecodePubKeyAndType(flagCfg.leader)
 		if err != nil {
-			return nil, makeErr(err)
+			return nil, err
 		}
 		pubkey, err := crypto.UnmarshalPublicKey(pubkeyBts, keyType)
 		if err != nil {
-			return nil, makeErr(err)
+			return nil, err
 		}
 		conf.Leader = types.PublicKey{PublicKey: pubkey}
 	}
@@ -237,7 +229,7 @@ func mergeGenesisFlags(conf *config.GenesisConfig, cmd *cobra.Command, flagCfg *
 	if cmd.Flags().Changed("genesis-state") {
 		hash, err := appHashFromSnapshotFile(flagCfg.genesisState)
 		if err != nil {
-			return nil, makeErr(err)
+			return nil, err
 		}
 		conf.StateHash = hash
 	}

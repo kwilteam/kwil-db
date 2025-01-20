@@ -226,26 +226,26 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
-func addVotes(t *testing.T, blkHash, appHash ktypes.Hash, n1, n2 *ConsensusEngine) *ktypes.CommitInfo {
-	ci := &ktypes.CommitInfo{
+func addVotes(t *testing.T, blkHash, appHash ktypes.Hash, n1, n2 *ConsensusEngine) *types.CommitInfo {
+	ci := &types.CommitInfo{
 		AppHash: appHash,
-		Votes:   make([]*ktypes.VoteInfo, 0),
+		Votes:   make([]*types.VoteInfo, 0),
 	}
 
-	sig1, err := ktypes.SignVote(blkHash, true, &appHash, n1.privKey)
+	sig1, err := types.SignVote(blkHash, true, &appHash, n1.privKey)
 	require.NoError(t, err)
 
-	ci.Votes = append(ci.Votes, &ktypes.VoteInfo{
+	ci.Votes = append(ci.Votes, &types.VoteInfo{
 		Signature: *sig1,
-		AckStatus: ktypes.AckStatusAgree,
+		AckStatus: types.AckStatusAgree,
 	})
 
-	sig2, err := ktypes.SignVote(blkHash, true, &appHash, n2.privKey)
+	sig2, err := types.SignVote(blkHash, true, &appHash, n2.privKey)
 	require.NoError(t, err)
 
-	ci.Votes = append(ci.Votes, &ktypes.VoteInfo{
+	ci.Votes = append(ci.Votes, &types.VoteInfo{
 		Signature: *sig2,
-		AckStatus: ktypes.AckStatusAgree,
+		AckStatus: types.AckStatusAgree,
 	})
 
 	return ci
@@ -312,7 +312,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "commit(InvalidAppHash)",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.NotifyBlockCommit(blkProp1.blk, &ktypes.CommitInfo{AppHash: ktypes.Hash{}})
+						val.NotifyBlockCommit(blkProp1.blk, &types.CommitInfo{AppHash: ktypes.Hash{}})
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						if val.lastCommitHeight() != 0 {
@@ -624,7 +624,7 @@ func TestValidatorStateMachine(t *testing.T) {
 
 						rawBlk := ktypes.EncodeBlock(blkProp2.blk)
 						cnt := 0
-						val.blkRequester = func(ctx context.Context, height int64) (types.Hash, []byte, *ktypes.CommitInfo, error) {
+						val.blkRequester = func(ctx context.Context, height int64) (types.Hash, []byte, *types.CommitInfo, error) {
 							defer func() { cnt += 1 }()
 
 							if cnt <= 1 {
@@ -661,7 +661,7 @@ func TestValidatorStateMachine(t *testing.T) {
 						ci := addVotes(t, blkProp2.blkHash, blockAppHash, leader, val)
 
 						rawBlk := ktypes.EncodeBlock(blkProp2.blk)
-						val.blkRequester = func(ctx context.Context, height int64) (types.Hash, []byte, *ktypes.CommitInfo, error) {
+						val.blkRequester = func(ctx context.Context, height int64) (types.Hash, []byte, *types.CommitInfo, error) {
 							return blkProp2.blkHash, rawBlk, ci, nil
 						}
 						val.doCatchup(context.Background())
@@ -728,8 +728,7 @@ func createBlockProposals(t *testing.T, ce *ConsensusEngine, valSet map[string]k
 
 	for _, key := range keys {
 		val := valSet[key]
-		hasher.Write(val.Identifier)
-		binary.Write(hasher, binary.BigEndian, val.KeyType)
+		hasher.Write(val.AccountID.Bytes())
 		binary.Write(hasher, binary.BigEndian, val.Power)
 	}
 	hash := hasher.Sum(nil)
@@ -813,7 +812,7 @@ func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
 	require.NotNil(t, blProp)
 
 	// node2 should send a vote to node1
-	sig, err := ktypes.SignVote(blProp.blkHash, true, &blockAppHash, ceConfigs[1].PrivateKey)
+	sig, err := types.SignVote(blProp.blkHash, true, &blockAppHash, ceConfigs[1].PrivateKey)
 	assert.NoError(t, err)
 
 	vote := &vote{
@@ -875,10 +874,10 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 	assert.NotNil(t, b)
 	nextAppHash := nextAppHash(nextAppHash(zeroHash))
 
-	sig1, err := ktypes.SignVote(b.blkHash, true, &nextAppHash, ceConfigs[1].PrivateKey)
+	sig1, err := types.SignVote(b.blkHash, true, &nextAppHash, ceConfigs[1].PrivateKey)
 	assert.NoError(t, err)
 
-	sig2, err := ktypes.SignVote(b.blkHash, true, &nextAppHash, ceConfigs[2].PrivateKey)
+	sig2, err := types.SignVote(b.blkHash, true, &nextAppHash, ceConfigs[2].PrivateKey)
 	assert.NoError(t, err)
 
 	// node2 should send a vote to node1
@@ -908,7 +907,7 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 }
 
 // MockBroadcasters
-func mockBlkRequester(ctx context.Context, height int64) (types.Hash, []byte, *ktypes.CommitInfo, error) {
+func mockBlkRequester(ctx context.Context, height int64) (types.Hash, []byte, *types.CommitInfo, error) {
 	return types.Hash{}, nil, nil, types.ErrBlkNotFound
 }
 
@@ -918,7 +917,7 @@ func mockVoteBroadcaster(ack bool, height int64, blkID types.Hash, appHash *type
 	return nil
 }
 
-func mockBlkAnnouncer(_ context.Context, blk *ktypes.Block, ci *ktypes.CommitInfo) {}
+func mockBlkAnnouncer(_ context.Context, blk *ktypes.Block, ci *types.CommitInfo) {}
 
 func mockTxAnnouncer(ctx context.Context, txHash types.Hash, rawTx []byte) {}
 

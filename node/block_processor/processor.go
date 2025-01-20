@@ -22,7 +22,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	authExt "github.com/kwilteam/kwil-db/extensions/auth"
-	"github.com/kwilteam/kwil-db/node/ident"
 	"github.com/kwilteam/kwil-db/node/meta"
 	"github.com/kwilteam/kwil-db/node/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
@@ -140,8 +139,9 @@ func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Account
 	}
 
 	networkParams, err := meta.LoadParams(ctx, tx)
-	if errors.Is(err, meta.ErrParamsNotFound) { // eh, genesis?
+	if errors.Is(err, meta.ErrParamsNotFound) {
 		bp.log.Debug("Network parameters not found in the database, expected if node is bootstrapping from genesis")
+		networkParams = &genesisCfg.NetworkParameters // don't store, just use the genesis config for initial ChainContext until startup
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to load the network parameters: %w", err)
 	}
@@ -188,7 +188,7 @@ func (bp *BlockProcessor) LoadFromDBState(ctx context.Context) error {
 	// persist last changeset height in the migrator if it is in migration
 	bp.migrator.PersistLastChangesetHeight(ctx, tx, height)
 
-	networkParams, err := meta.LoadParams(ctx, tx)
+	networkParams, err := bp.loadNetworkParams(ctx, tx)
 	if err != nil {
 		return fmt.Errorf("failed to load the network parameters: %w", err)
 	}
@@ -252,17 +252,30 @@ func (bp *BlockProcessor) Rollback(ctx context.Context, height int64, appHash kt
 	}
 	defer readTx.Rollback(ctx)
 
-	networkParams, err := meta.LoadParams(ctx, readTx)
+	networkParams, err := bp.loadNetworkParams(ctx, readTx)
 	if err != nil {
 		return fmt.Errorf("failed to load the network parameters: %w", err)
 	}
-
 	bp.chainCtx.NetworkParameters = networkParams
 
 	// Rollback internal state updates to the validators, accounts and mempool.
 	bp.txapp.Rollback()
 
 	return nil
+}
+
+func (bp *BlockProcessor) loadNetworkParams(ctx context.Context, readTx sql.Tx) (*ktypes.NetworkParameters, error) {
+	networkParams, err := meta.LoadParams(ctx, readTx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to load the network parameters: %w", err)
+	}
+	// networkParamsParsed, err := types.ImportNetParams(networkParams)
+	// if err != nil {
+	// 	return nil, fmt.Errorf("failed to import the network parameters: %w", err)
+	// }
+
+	// bp.chainCtx.NetworkParameters = networkParamsParsed
+	return networkParams, nil
 }
 
 func (bp *BlockProcessor) CheckTx(ctx context.Context, tx *ktypes.Transaction, height int64, blockTime time.Time, recheck bool) error {
@@ -284,7 +297,7 @@ func (bp *BlockProcessor) CheckTx(ctx context.Context, tx *ktypes.Transaction, h
 		}
 
 		// Ensure that the transaction is valid in terms of the signature and the payload type
-		if err := ident.VerifyTransaction(tx); err != nil {
+		if err := verifyTransaction(tx); err != nil {
 			bp.log.Debug("Failed to verify the transaction", "err", err)
 			return fmt.Errorf("failed to verify the transaction: %w", err)
 		}
@@ -296,14 +309,9 @@ func (bp *BlockProcessor) CheckTx(ctx context.Context, tx *ktypes.Transaction, h
 	}
 	defer readTx.Rollback(ctx)
 
-	auth, err := authExt.GetAuthenticator(tx.Signature.Type)
+	ident, err := authExt.GetIdentifier(tx.Signature.Type, tx.Sender)
 	if err != nil {
-		return fmt.Errorf("failed to get authenticator: %w", err)
-	}
-
-	ident, err := auth.Identifier(tx.Sender)
-	if err != nil {
-		return fmt.Errorf("failed to get identifier: %w", err)
+		return fmt.Errorf("failed to get tx sender identifier: %w", err)
 	}
 
 	err = bp.txapp.ApplyMempool(&common.TxContext{
@@ -368,10 +376,10 @@ func (bp *BlockProcessor) InitChain(ctx context.Context) (int64, []byte, error) 
 		return -1, nil, fmt.Errorf("error storing the genesis state: %w", err)
 	}
 
-	if err := meta.StoreParams(ctx, genesisTx, &genCfg.NetworkParameters); err != nil {
+	bp.chainCtx.NetworkParameters = genCfg.NetworkParameters.Clone()
+	if err := meta.StoreParams(ctx, genesisTx, bp.chainCtx.NetworkParameters); err != nil {
 		return -1, nil, fmt.Errorf("error storing the genesis network parameters: %w", err)
 	}
-	bp.chainCtx.NetworkParameters = &genCfg.NetworkParameters
 
 	if err := bp.txapp.Commit(); err != nil {
 		return -1, nil, fmt.Errorf("txapp commit failed: %w", err)
@@ -428,12 +436,7 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 	txHashes := bp.initBlockExecutionStatus(req.Block)
 
 	for i, tx := range req.Block.Txns {
-		auth := auth.GetAuthenticator(tx.Signature.Type)
-		if auth == nil {
-			return nil, fmt.Errorf("unsupported signature type: %v", tx.Signature.Type)
-		}
-
-		identifier, err := auth.Identifier(tx.Sender)
+		identifier, err := authExt.GetIdentifier(tx.Signature.Type, tx.Sender)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get identifier for the block tx: %w", err)
 		}
@@ -603,17 +606,12 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 }
 
 func formatNodeID(identifier []byte, keyType crypto.KeyType) string {
-	return fmt.Sprintf("%s#%d", hex.EncodeToString(identifier), keyType)
+	return fmt.Sprintf("%s#%s", hex.EncodeToString(identifier), keyType.String())
 }
 
 func (bp *BlockProcessor) updatePeers(valUpdates []*ktypes.Validator, approvedJoins, expiredJoins []*ktypes.AccountID) {
 	// update the peers in the network
-	keyType, err := auth.GetAuthenticatorKeyType(bp.signer.AuthType())
-	if err != nil {
-		bp.log.Error("Failed to get the key type of the authenticator", "err", err)
-		return
-	}
-	localPeer := formatNodeID(bp.signer.CompactID(), keyType)
+	localPeer := formatNodeID(bp.signer.CompactID(), bp.signer.PubKey().Type())
 
 	for _, val := range valUpdates {
 		nodeID := formatNodeID(val.Identifier, val.KeyType)
@@ -822,8 +820,7 @@ func (bp *BlockProcessor) accountsHash() types.Hash {
 
 	hasher := ktypes.NewHasher()
 	for _, acc := range accounts {
-		hasher.Write([]byte(acc.ID.Identifier))
-		binary.Write(hasher, binary.BigEndian, acc.ID.KeyType)
+		hasher.Write(acc.ID.Bytes())
 		binary.Write(hasher, binary.BigEndian, acc.Balance.Bytes())
 		binary.Write(hasher, binary.BigEndian, acc.Nonce)
 	}

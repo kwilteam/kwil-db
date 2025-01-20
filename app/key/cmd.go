@@ -27,17 +27,27 @@ func KeyCmd() *cobra.Command {
 }
 
 func privKeyInfo(priv crypto.PrivateKey) *PrivateKeyInfo {
+	var keyText, keyFmt string
+	s, ok := priv.(interface{ ASCII() (string, string) })
+	if ok {
+		keyFmt, keyText = s.ASCII()
+	} else {
+		keyText = hex.EncodeToString(priv.Bytes())
+		keyFmt = "hex"
+	}
 	return &PrivateKeyInfo{
-		KeyType:       priv.Type().String(),
-		PrivateKeyHex: hex.EncodeToString(priv.Bytes()),
-		PublicKeyHex:  hex.EncodeToString(priv.Public().Bytes()),
+		KeyType:        priv.Type().String(),
+		PrivateKeyText: keyText,
+		privKeyFmt:     keyFmt,
+		PublicKeyHex:   hex.EncodeToString(priv.Public().Bytes()),
 	}
 }
 
 type PrivateKeyInfo struct {
-	KeyType       string `json:"key_type"`
-	PrivateKeyHex string `json:"private_key_hex"`
-	PublicKeyHex  string `json:"public_key_hex"`
+	KeyType        string `json:"key_type"`
+	PrivateKeyText string `json:"private_key_text"`
+	privKeyFmt     string `json:"-"`
+	PublicKeyHex   string `json:"public_key_hex"`
 }
 
 func (p *PrivateKeyInfo) MarshalJSON() ([]byte, error) {
@@ -47,10 +57,11 @@ func (p *PrivateKeyInfo) MarshalJSON() ([]byte, error) {
 
 func (p *PrivateKeyInfo) MarshalText() ([]byte, error) {
 	return []byte(fmt.Sprintf(`Key type: %s
-Private key (hex): %s
+Private key (%s): %s
 Public key (plain hex): %v`,
 		p.KeyType,
-		p.PrivateKeyHex,
+		p.privKeyFmt,
+		p.PrivateKeyText,
 		p.PublicKeyHex,
 	)), nil
 }

@@ -154,7 +154,6 @@ func (a *AdminClient) ValidatorsList(ctx context.Context) ([]*types.Validator, e
 		if err != nil {
 			return nil, err
 		}
-
 		pubKeyType, err := crypto.ParseKeyType(v.PubKeyType)
 		if err != nil {
 			return nil, err

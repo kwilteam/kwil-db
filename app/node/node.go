@@ -18,6 +18,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
+	authExt "github.com/kwilteam/kwil-db/extensions/auth"
 	"github.com/kwilteam/kwil-db/node"
 	"github.com/kwilteam/kwil-db/node/consensus"
 	"github.com/kwilteam/kwil-db/node/listeners"
@@ -319,7 +320,7 @@ func loadGenesisAndPrivateKey(rootDir string, autogen bool, dbOwner string) (pri
 		genCfg.DBOwner = dbOwner
 	} else {
 		signer := auth.GetUserSigner(privKey)
-		ident, err := auth.GetIdentifierFromSigner(signer)
+		ident, err := authExt.GetIdentifierFromSigner(signer)
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to get identifier from user signer: %w", err)
 		}

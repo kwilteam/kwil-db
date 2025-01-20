@@ -11,8 +11,8 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/crypto"
-	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
+	authExt "github.com/kwilteam/kwil-db/extensions/auth"
 	"github.com/kwilteam/kwil-db/extensions/consensus"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/node/accounts"
@@ -370,7 +370,7 @@ func (d *transferRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *ty
 }
 
 func (d *transferRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
-	sender, err := tx.SenderInfo()
+	sender, err := TxSenderAcctID(tx)
 	if err != nil {
 		return types.CodeInvalidSender, err
 	}
@@ -420,7 +420,7 @@ func (d *validatorJoinRoute) PreTx(ctx *common.TxContext, svc *common.Service, t
 
 func (d *validatorJoinRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
 	// ensure this candidate is not already a validator
-	keyType, err := auth.GetAuthenticatorKeyType(tx.Signature.Type)
+	keyType, err := authExt.GetAuthenticatorKeyType(tx.Signature.Type)
 	if err != nil {
 		return types.CodeInvalidSender, fmt.Errorf("failed to parse key type: %w", err)
 	}
@@ -521,7 +521,7 @@ func (d *validatorApproveRoute) InTx(ctx *common.TxContext, app *common.App, tx 
 		return types.CodeUnknownError, errors.New("validator has more than one pending join request. this is an internal bug")
 	}
 
-	keyType, err := auth.GetAuthenticatorKeyType(tx.Signature.Type)
+	keyType, err := authExt.GetAuthenticatorKeyType(tx.Signature.Type)
 	if err != nil {
 		return types.CodeUnknownError, fmt.Errorf("failed to parse key type: %w", err)
 	}
@@ -596,7 +596,7 @@ func (d *validatorRemoveRoute) InTx(ctx *common.TxContext, app *common.App, tx *
 		Type: voting.ValidatorRemoveEventType,
 	}
 
-	senderKeyType, err := auth.GetAuthenticatorKeyType(tx.Signature.Type)
+	senderKeyType, err := authExt.GetAuthenticatorKeyType(tx.Signature.Type)
 	if err != nil {
 		return types.CodeUnknownError, fmt.Errorf("failed to parse key type: %w", err)
 	}
@@ -672,7 +672,7 @@ func (d *validatorLeaveRoute) InTx(ctx *common.TxContext, app *common.App, tx *t
 		return types.CodeInvalidSender, errors.New("leader cannot leave validator set")
 	}
 
-	keyType, err := auth.GetAuthenticatorKeyType(tx.Signature.Type)
+	keyType, err := authExt.GetAuthenticatorKeyType(tx.Signature.Type)
 	if err != nil {
 		return types.CodeInvalidSender, fmt.Errorf("failed to parse key type: %w", err)
 	}
@@ -724,7 +724,7 @@ func (d *validatorVoteIDsRoute) PreTx(ctx *common.TxContext, svc *common.Service
 
 func (d *validatorVoteIDsRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
 	// if the caller has 0 power, they are not a validator, and should not be able to vote
-	keyType, err := auth.GetAuthenticatorKeyType(tx.Signature.Type)
+	keyType, err := authExt.GetAuthenticatorKeyType(tx.Signature.Type)
 	if err != nil {
 		return types.CodeInvalidSender, fmt.Errorf("failed to parse key type: %w", err)
 	}
@@ -839,7 +839,7 @@ func (d *validatorVoteBodiesRoute) InTx(ctx *common.TxContext, app *common.App, 
 			Body: event.Body,
 		}
 
-		keyType, err := auth.GetAuthenticatorKeyType(tx.Signature.Type)
+		keyType, err := authExt.GetAuthenticatorKeyType(tx.Signature.Type)
 		if err != nil {
 			return types.CodeInvalidSender, fmt.Errorf("failed to parse key type: %w", err)
 		}
@@ -929,7 +929,7 @@ func (d *createResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx 
 	// ensure the sender is a validator
 	// only validators can create resolutions
 
-	keyType, err := auth.GetAuthenticatorKeyType(tx.Signature.Type)
+	keyType, err := authExt.GetAuthenticatorKeyType(tx.Signature.Type)
 	if err != nil {
 		return types.CodeInvalidSender, err
 	}
@@ -991,7 +991,7 @@ func (d *approveResolutionRoute) PreTx(ctx *common.TxContext, svc *common.Servic
 func (d *approveResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
 	// ensure the sender is a validator
 
-	keyType, err := auth.GetAuthenticatorKeyType(tx.Signature.Type)
+	keyType, err := authExt.GetAuthenticatorKeyType(tx.Signature.Type)
 	if err != nil {
 		return types.CodeInvalidSender, err
 	}

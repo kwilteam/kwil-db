@@ -19,9 +19,9 @@ import (
 	userjson "github.com/kwilteam/kwil-db/core/rpc/json/user"
 	"github.com/kwilteam/kwil-db/core/types"
 	adminTypes "github.com/kwilteam/kwil-db/core/types/admin"
+	authExt "github.com/kwilteam/kwil-db/extensions/auth"
 	nodeConsensus "github.com/kwilteam/kwil-db/node/consensus"
 	"github.com/kwilteam/kwil-db/node/engine"
-	"github.com/kwilteam/kwil-db/node/ident"
 	"github.com/kwilteam/kwil-db/node/migrations"
 	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/node/services/jsonrpc/ratelimit"
@@ -714,7 +714,7 @@ func (svc *Service) txCtx(ctx context.Context, msg *types.CallMessage) (*common.
 	caller := "" // string representation of sender, if signed.  Otherwise, empty string
 	if signer != nil && msg.AuthType != "" {
 		var err error
-		caller, err = ident.Identifier(msg.AuthType, signer)
+		caller, err = authExt.GetIdentifier(msg.AuthType, signer)
 		if err != nil {
 			return nil, jsonrpc.NewError(jsonrpc.ErrorIdentInvalid, "failed to get caller: "+err.Error(), nil)
 		}
@@ -768,7 +768,7 @@ func (svc *Service) authenticate(msg *types.CallMessage, sigTxt string) *jsonrpc
 	if err := svc.verifyCallChallenge([32]byte(msg.Body.Challenge)); err != nil {
 		return err
 	}
-	err := ident.VerifySignature(msg.Sender, []byte(sigTxt), msg.Signature)
+	err := authExt.VerifySignature(msg.Sender, []byte(sigTxt), msg.Signature)
 	if err != nil {
 		return jsonrpc.NewError(jsonrpc.ErrorInvalidCallSignature, "invalid signature on call message", nil)
 	}

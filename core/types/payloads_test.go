@@ -130,7 +130,7 @@ func TestValidatorRemove_MarshalUnmarshal(t *testing.T) {
 		buf := &bytes.Buffer{}
 		binary.Write(buf, SerializationByteOrder, uint16(1))
 		WriteBytes(buf, []byte("validator"))
-		binary.Write(buf, SerializationByteOrder, int32(crypto.KeyTypeSecp256k1))
+		WriteString(buf, string(crypto.KeyTypeSecp256k1)) // binary.Write(buf, SerializationByteOrder, int32(crypto.KeyTypeSecp256k1))
 
 		var unmarshaled ValidatorRemove
 		err := unmarshaled.UnmarshalBinary(buf.Bytes())
@@ -142,12 +142,15 @@ func TestValidatorRemove_MarshalUnmarshal(t *testing.T) {
 		buf := &bytes.Buffer{}
 		binary.Write(buf, SerializationByteOrder, uint16(vrVersion))
 		WriteBytes(buf, []byte("validator"))
-		binary.Write(buf, SerializationByteOrder, int32(999))
+		// ktStr := "invalid-key-type"
+		// binary.Write(buf, SerializationByteOrder, uint16(len(ktStr)))
+		// buf.WriteString(ktStr)
+		binary.Write(buf, SerializationByteOrder, uint32(999))
 
 		var unmarshaled ValidatorRemove
 		err := unmarshaled.UnmarshalBinary(buf.Bytes())
 		require.Error(t, err)
-		require.Contains(t, err.Error(), "invalid key type")
+		require.Contains(t, err.Error(), "invalid key type encoding")
 	})
 
 	t.Run("truncated data", func(t *testing.T) {
@@ -271,7 +274,7 @@ func TestValidatorApprove_MarshalUnmarshal(t *testing.T) {
 		buf := &bytes.Buffer{}
 		binary.Write(buf, SerializationByteOrder, []byte{0xFF})
 		WriteBytes(buf, []byte("candidate"))
-		binary.Write(buf, SerializationByteOrder, int32(crypto.KeyTypeSecp256k1))
+		WriteString(buf, string(crypto.KeyTypeSecp256k1)) // binary.Write(buf, SerializationByteOrder, int32(crypto.KeyTypeSecp256k1))
 
 		var unmarshaled ValidatorApprove
 		err := unmarshaled.UnmarshalBinary(buf.Bytes())

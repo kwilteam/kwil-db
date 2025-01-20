@@ -70,7 +70,7 @@ type AckRes struct {
 
 	// Signature
 	PubKeyType crypto.KeyType
-	PubKey     []byte
+	PubKey     []byte // crypto.PublicKey
 	Signature  []byte
 }
 
@@ -122,7 +122,7 @@ func (ar AckRes) MarshalBinary() ([]byte, error) {
 		}
 	}
 
-	if err := binary.Write(&buf, binary.LittleEndian, ar.PubKeyType); err != nil {
+	if err := types.WriteString(&buf, string(ar.PubKeyType)); err != nil {
 		return nil, fmt.Errorf("failed to write key type in AckRes: %v", err)
 	}
 
@@ -173,9 +173,11 @@ func (ar *AckRes) UnmarshalBinary(data []byte) error {
 		ar.AppHash = &appHash
 	}
 
-	if err := binary.Read(buf, binary.LittleEndian, &ar.PubKeyType); err != nil {
+	kt, err := types.ReadString(buf)
+	if err != nil {
 		return fmt.Errorf("failed to read key type in AckRes: %v", err)
 	}
+	ar.PubKeyType = crypto.KeyType(kt)
 
 	pubKeyBts, err := types.ReadBytes(buf)
 	if err != nil {

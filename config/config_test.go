@@ -164,7 +164,7 @@ func TestEncodeDecodePubKeyType(t *testing.T) {
 	}{
 		{
 			name:          "valid encoded public key",
-			encodedPubKey: "021072159608e8bfa10102cc74d3e1b533dfdf1904538a61de42811cc3066de014#0",
+			encodedPubKey: "021072159608e8bfa10102cc74d3e1b533dfdf1904538a61de42811cc3066de014#secp256k1",
 			decodedPubKey: "021072159608e8bfa10102cc74d3e1b533dfdf1904538a61de42811cc3066de014",
 			keyType:       crypto.KeyTypeSecp256k1,
 			wantErr:       false,
@@ -185,18 +185,24 @@ func TestEncodeDecodePubKeyType(t *testing.T) {
 		},
 		{
 			name:          "invalid encoded public key",
-			encodedPubKey: "0abcd#0",
+			encodedPubKey: "0abcd#secp256k1",
 			decodedPubKey: "",
 			keyType:       crypto.KeyTypeSecp256k1,
 			wantErr:       true,
 		},
 		{
-			name:          "invalid key type",
-			encodedPubKey: "021072159608e8bfa10102cc74d3e1b533dfdf1904538a61de42811cc3066de014#2",
+			name:          "custom key type",
+			encodedPubKey: "021072159608e8bfa10102cc74d3e1b533dfdf1904538a61de42811cc3066de014#custom",
 			decodedPubKey: "021072159608e8bfa10102cc74d3e1b533dfdf1904538a61de42811cc3066de014",
-			keyType:       crypto.KeyTypeSecp256k1,
+			keyType:       "custom", // some custom key type
 			wantErr:       false,
-			typeErr:       true,
+		},
+		{
+			name:          "invalid key type with space",
+			encodedPubKey: "021072159608e8bfa10102cc74d3e1b533dfdf1904538a61de42811cc3066de014#custom invalid",
+			decodedPubKey: "",
+			keyType:       "",
+			wantErr:       true,
 		},
 	}
 
@@ -212,15 +218,7 @@ func TestEncodeDecodePubKeyType(t *testing.T) {
 
 			require.Equal(t, tt.decodedPubKey, hex.EncodeToString(pubKeyBts))
 
-			parsedType, err := crypto.ParseKeyType(keyType.String())
-			if tt.typeErr {
-				require.Error(t, err)
-				return
-			} else {
-				require.NoError(t, err)
-			}
-
-			require.Equal(t, tt.keyType, parsedType)
+			require.Equal(t, tt.keyType, keyType)
 		})
 	}
 

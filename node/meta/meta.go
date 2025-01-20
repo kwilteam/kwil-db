@@ -9,7 +9,7 @@ import (
 	"fmt"
 	"slices"
 
-	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/versioning"
 )
@@ -135,7 +135,7 @@ func SetChainState(ctx context.Context, db sql.TxMaker, height int64, appHash []
 }
 
 // StoreParams stores the current consensus params in the store.
-func StoreParams(ctx context.Context, db sql.TxMaker, params *common.NetworkParameters) error {
+func StoreParams(ctx context.Context, db sql.TxMaker, params *types.NetworkParameters) error {
 	paramBts, err := params.MarshalBinary()
 	if err != nil {
 		return err
@@ -167,7 +167,7 @@ func StoreParams(ctx context.Context, db sql.TxMaker, params *common.NetworkPara
 var ErrParamsNotFound = errors.New("params not found")
 
 // LoadParams loads the consensus params from the store.
-func LoadParams(ctx context.Context, db sql.Executor) (*common.NetworkParameters, error) {
+func LoadParams(ctx context.Context, db sql.Executor) (*types.NetworkParameters, error) {
 	res, err := db.Execute(ctx, getParams)
 	if err != nil {
 		return nil, err
@@ -181,7 +181,7 @@ func LoadParams(ctx context.Context, db sql.Executor) (*common.NetworkParameters
 		return nil, fmt.Errorf("expected at most one row, got %d", n)
 	}
 
-	params := &common.NetworkParameters{}
+	params := &types.NetworkParameters{}
 	row := res.Rows[0]
 	if len(row) != 1 {
 		return nil, fmt.Errorf("expected one column, got %d", len(row))

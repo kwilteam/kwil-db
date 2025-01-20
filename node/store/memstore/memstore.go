@@ -22,7 +22,7 @@ type MemBS struct {
 	idx        map[types.Hash]int64
 	hashes     map[int64]blockHashes
 	blocks     map[types.Hash]*ktypes.Block
-	commitInfo map[types.Hash]*ktypes.CommitInfo
+	commitInfo map[types.Hash]*types.CommitInfo
 	txResults  map[types.Hash][]ktypes.TxResult
 	txIds      map[types.Hash]types.Hash // tx hash -> block hash
 	fetching   map[types.Hash]bool       // TODO: remove, app concern
@@ -36,13 +36,13 @@ func NewMemBS() *MemBS {
 		txResults:  make(map[types.Hash][]ktypes.TxResult),
 		txIds:      make(map[types.Hash]types.Hash),
 		fetching:   make(map[types.Hash]bool),
-		commitInfo: make(map[types.Hash]*ktypes.CommitInfo),
+		commitInfo: make(map[types.Hash]*types.CommitInfo),
 	}
 }
 
 var _ types.BlockStore = &MemBS{}
 
-func (bs *MemBS) Get(hash types.Hash) (*ktypes.Block, *ktypes.CommitInfo, error) {
+func (bs *MemBS) Get(hash types.Hash) (*ktypes.Block, *types.CommitInfo, error) {
 	bs.mtx.RLock()
 	defer bs.mtx.RUnlock()
 	blk, have := bs.blocks[hash]
@@ -56,7 +56,7 @@ func (bs *MemBS) Get(hash types.Hash) (*ktypes.Block, *ktypes.CommitInfo, error)
 	return blk, ci, nil
 }
 
-func (bs *MemBS) GetByHeight(height int64) (types.Hash, *ktypes.Block, *ktypes.CommitInfo, error) {
+func (bs *MemBS) GetByHeight(height int64) (types.Hash, *ktypes.Block, *types.CommitInfo, error) {
 	// time.Sleep(100 * time.Millisecond) // wtf where is there a logic race in CE?
 	bs.mtx.RLock()
 	defer bs.mtx.RUnlock()
@@ -82,7 +82,7 @@ func (bs *MemBS) Have(blkid types.Hash) bool {
 	return have
 }
 
-func (bs *MemBS) Store(block *ktypes.Block, ci *ktypes.CommitInfo) error {
+func (bs *MemBS) Store(block *ktypes.Block, ci *types.CommitInfo) error {
 	if ci == nil {
 		return fmt.Errorf("commit info is nil")
 	}

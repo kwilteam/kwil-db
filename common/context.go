@@ -16,7 +16,7 @@ type ChainContext struct {
 
 	// NetworkParams holds network level parameters that can be evolved
 	// over the lifetime of a network.
-	NetworkParameters *types.NetworkParameters
+	NetworkParameters *NetworkParameters
 
 	NetworkUpdates types.ParamUpdates
 
@@ -24,6 +24,8 @@ type ChainContext struct {
 	// block info to poll for the changesets from the old chain during migration.
 	MigrationParams *MigrationContext
 }
+
+type NetworkParameters = types.NetworkParameters
 
 // BlockContext provides context for all block operations.
 type BlockContext struct {

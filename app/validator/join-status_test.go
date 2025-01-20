@@ -31,7 +31,7 @@ func Test_respValJoinStatus_MarshalJSON(t *testing.T) {
 					Approved: []bool{true, false},
 				},
 			},
-			want: `{"candidate":{"identifier":"1234","key_type":0},"power":100,"board":[{"identifier":"ef12","key_type":0}],"approved":[true,false]}`,
+			want: `{"candidate":{"identifier":"1234","key_type":"secp256k1"},"power":100,"board":[{"identifier":"ef12","key_type":""}],"approved":[true,false]}`,
 		},
 		{
 			name: "empty board",
@@ -46,7 +46,7 @@ func Test_respValJoinStatus_MarshalJSON(t *testing.T) {
 					Approved: []bool{},
 				},
 			},
-			want: `{"candidate":{"identifier":"ff","key_type":0},"power":50,"board":[],"approved":[]}`,
+			want: `{"candidate":{"identifier":"ff","key_type":"secp256k1"},"power":50,"board":[],"approved":[]}`,
 		},
 	}
 

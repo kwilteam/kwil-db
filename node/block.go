@@ -126,7 +126,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 		// Since we are aware, ask other peers. we could also put this in a goroutine
 		s.Close() // close the announcers stream first
 		var gotHeight int64
-		var gotCI *ktypes.CommitInfo
+		var gotCI *types.CommitInfo
 
 		gotHeight, rawBlk, gotCI, err = n.getBlkWithRetry(ctx, blkHash, 500*time.Millisecond, 10)
 		if err != nil {
@@ -167,7 +167,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 	}()
 }
 
-func (n *Node) announceBlk(ctx context.Context, blk *ktypes.Block, ci *ktypes.CommitInfo) {
+func (n *Node) announceBlk(ctx context.Context, blk *ktypes.Block, ci *types.CommitInfo) {
 	blkHash := blk.Hash()
 	n.log.Debugln("announceBlk", blk.Header.Height, blkHash, ci.AppHash)
 	rawBlk := ktypes.EncodeBlock(blk)
@@ -176,7 +176,7 @@ func (n *Node) announceBlk(ctx context.Context, blk *ktypes.Block, ci *ktypes.Co
 }
 
 func (n *Node) announceRawBlk(ctx context.Context, blkHash types.Hash, height int64,
-	rawBlk []byte, ci *ktypes.CommitInfo, from peer.ID, blkSig []byte) {
+	rawBlk []byte, ci *types.CommitInfo, from peer.ID, blkSig []byte) {
 	peers := n.peers()
 	if len(peers) == 0 {
 		n.log.Warn("No peers to advertise block to")
@@ -210,7 +210,7 @@ func (n *Node) announceRawBlk(ctx context.Context, blkHash types.Hash, height in
 }
 
 func (n *Node) getBlkWithRetry(ctx context.Context, blkHash types.Hash, baseDelay time.Duration,
-	maxAttempts int) (int64, []byte, *ktypes.CommitInfo, error) {
+	maxAttempts int) (int64, []byte, *types.CommitInfo, error) {
 	var attempts int
 	for {
 		height, raw, ci, err := n.getBlk(ctx, blkHash)
@@ -232,7 +232,7 @@ func (n *Node) getBlkWithRetry(ctx context.Context, blkHash types.Hash, baseDela
 	}
 }
 
-func (n *Node) getBlk(ctx context.Context, blkHash types.Hash) (int64, []byte, *ktypes.CommitInfo, error) {
+func (n *Node) getBlk(ctx context.Context, blkHash types.Hash) (int64, []byte, *types.CommitInfo, error) {
 	for _, peer := range n.peers() {
 		n.log.Infof("requesting block %v from %v", blkHash, peer)
 		t0 := time.Now()
@@ -271,7 +271,7 @@ func (n *Node) getBlk(ctx context.Context, blkHash types.Hash) (int64, []byte, *
 			continue
 		}
 
-		var ci ktypes.CommitInfo
+		var ci types.CommitInfo
 		if err = ci.UnmarshalBinary(ciBts); err != nil {
 			n.log.Info("failed to unmarshal commit info", "error", err)
 			continue
@@ -288,7 +288,7 @@ func (n *Node) getBlk(ctx context.Context, blkHash types.Hash) (int64, []byte, *
 	return 0, nil, nil, ErrBlkNotFound
 }
 
-func (n *Node) getBlkHeight(ctx context.Context, height int64) (types.Hash, []byte, *ktypes.CommitInfo, error) {
+func (n *Node) getBlkHeight(ctx context.Context, height int64) (types.Hash, []byte, *types.CommitInfo, error) {
 	for _, peer := range n.peers() {
 		n.log.Infof("requesting block number %d from %v", height, peer)
 		t0 := time.Now()
@@ -328,7 +328,7 @@ func (n *Node) getBlkHeight(ctx context.Context, height int64) (types.Hash, []by
 			continue
 		}
 
-		var ci ktypes.CommitInfo
+		var ci types.CommitInfo
 		if err = ci.UnmarshalBinary(ciBts); err != nil {
 			n.log.Warn("failed to unmarshal commit info", "error", err)
 			continue
@@ -346,7 +346,7 @@ func (n *Node) getBlkHeight(ctx context.Context, height int64) (types.Hash, []by
 
 // BlockByHeight returns the block by height. If height <= 0, the latest block
 // will be returned.
-func (n *Node) BlockByHeight(height int64) (types.Hash, *ktypes.Block, *ktypes.CommitInfo, error) {
+func (n *Node) BlockByHeight(height int64) (types.Hash, *ktypes.Block, *types.CommitInfo, error) {
 	if height <= 0 { // I think this is correct since block height starts from 1
 		height, _, _, _ = n.bki.Best()
 	}
@@ -354,7 +354,7 @@ func (n *Node) BlockByHeight(height int64) (types.Hash, *ktypes.Block, *ktypes.C
 }
 
 // BlockByHash returns the block by block hash.
-func (n *Node) BlockByHash(hash types.Hash) (*ktypes.Block, *ktypes.CommitInfo, error) {
+func (n *Node) BlockByHash(hash types.Hash) (*ktypes.Block, *types.CommitInfo, error) {
 	return n.bki.Get(hash)
 }
 

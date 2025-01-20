@@ -1022,7 +1022,7 @@ func (v ValidatorApprove) MarshalBinary() ([]byte, error) {
 	buf := &bytes.Buffer{}
 	binary.Write(buf, SerializationByteOrder, uint16(vaVersion))
 	WriteBytes(buf, v.Candidate)
-	binary.Write(buf, SerializationByteOrder, int32(v.KeyType))
+	v.KeyType.WriteTo(buf) // buf.Write(v.KeyType.Bytes())
 	return buf.Bytes(), nil
 }
 
@@ -1040,18 +1040,14 @@ func (v *ValidatorApprove) UnmarshalBinary(b []byte) error {
 	if err != nil {
 		return err
 	}
-	var keyType int32
-	err = binary.Read(rd, SerializationByteOrder, &keyType)
+	var keyType crypto.KeyType
+	_, err = keyType.ReadFrom(rd)
 	if err != nil {
 		return err
 	}
-	kt := crypto.KeyType(keyType)
-	if !kt.Valid() {
-		return fmt.Errorf("invalid key type")
-	}
 
 	v.Candidate = candidate
-	v.KeyType = kt
+	v.KeyType = keyType
 
 	return nil
 }
@@ -1076,8 +1072,7 @@ func (v ValidatorRemove) MarshalBinary() ([]byte, error) {
 	binary.Write(buf, SerializationByteOrder, uint16(vrVersion))
 
 	WriteBytes(buf, v.Validator)
-
-	binary.Write(buf, SerializationByteOrder, int32(v.KeyType))
+	v.KeyType.WriteTo(buf) // buf.Write(v.KeyType.Bytes())
 
 	return buf.Bytes(), nil
 }
@@ -1097,18 +1092,14 @@ func (v *ValidatorRemove) UnmarshalBinary(b []byte) error {
 		return err
 	}
 
-	var keyType int32
-	err = binary.Read(rd, SerializationByteOrder, &keyType)
+	var keyType crypto.KeyType
+	_, err = keyType.ReadFrom(rd)
 	if err != nil {
 		return err
 	}
-	kt := crypto.KeyType(keyType)
-	if !kt.Valid() {
-		return fmt.Errorf("invalid key type")
-	}
 
 	v.Validator = val
-	v.KeyType = kt
+	v.KeyType = keyType
 
 	return nil
 }

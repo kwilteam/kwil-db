@@ -20,6 +20,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
+	authExt "github.com/kwilteam/kwil-db/extensions/auth"
 	"github.com/kwilteam/kwil-db/node"
 )
 
@@ -157,7 +158,7 @@ func GenerateTestnetConfigs(cfg *TestnetConfig, opts *ConfigOpts) error {
 	genConfig.DBOwner = cfg.Owner
 	if genConfig.DBOwner == "" {
 		signer := auth.GetUserSigner(keys[0])
-		ident, err := auth.GetIdentifierFromSigner(signer)
+		ident, err := authExt.GetIdentifierFromSigner(signer)
 		if err != nil {
 			return fmt.Errorf("failed to get identifier from user signer for dbOwner: %w", err)
 		}

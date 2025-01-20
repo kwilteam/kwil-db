@@ -14,6 +14,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 )
 
@@ -72,4 +73,59 @@ func GetAuthenticator(name string) (auth.Authenticator, error) {
 	}
 
 	return auth, nil
+}
+
+func init() {
+	err := RegisterAuthenticator(ModAdd, auth.Ed25519Auth, auth.Ed25519Authenticator{})
+	if err != nil {
+		panic(err)
+	}
+
+	err = RegisterAuthenticator(ModAdd, auth.EthPersonalSignAuth, auth.EthSecp256k1Authenticator{})
+	if err != nil {
+		panic(err)
+	}
+
+	err = RegisterAuthenticator(ModAdd, auth.Secp256k1Auth, auth.Secp25k1Authenticator{})
+	if err != nil {
+		panic(err)
+	}
+}
+
+func IsAuthTypeValid(authType string) bool {
+	_, ok := registeredAuthenticators[authType] // case sensistive to avoid tx maleability
+	return ok
+}
+
+func GetIdentifierFromSigner(signer auth.Signer) (string, error) {
+	return GetIdentifier(signer.AuthType(), signer.CompactID())
+}
+
+// GetIdentifier returns the identifier for a given sender and authType.
+func GetIdentifier(authType string, sender []byte) (string, error) {
+	authn, err := GetAuthenticator(authType)
+	if err != nil {
+		return "", fmt.Errorf("authenticator not found: %s", authType)
+	}
+
+	return authn.Identifier(sender)
+}
+
+// GetAuthenticatorKeyType returns the crypto.KeyType for a given authType.
+func GetAuthenticatorKeyType(authType string) (crypto.KeyType, error) {
+	authn, err := GetAuthenticator(authType)
+	if err != nil {
+		return "", fmt.Errorf("authenticator not found: %s", authType)
+	}
+	return authn.KeyType(), nil
+}
+
+// VerifySignature verifies a message's signature.
+func VerifySignature(sender, msg []byte, sig *auth.Signature) error {
+	authn, err := GetAuthenticator(sig.Type)
+	if err != nil {
+		return err
+	}
+
+	return authn.Verify(sender, msg, sig.Data)
 }

@@ -21,11 +21,7 @@ signing.
 */
 package auth
 
-import (
-	"fmt"
-
-	"github.com/kwilteam/kwil-db/core/crypto"
-)
+import "github.com/kwilteam/kwil-db/core/crypto"
 
 // Authenticator is an interface for verifying signatures and
 // deriving a string identifier from the sender bytes. Custom
@@ -44,52 +40,13 @@ type Authenticator interface {
 	// interacting with the Kuneiform engine, and will be used as
 	// the `@caller` variable in the engine.
 	Identifier(compactID []byte) (string, error)
-}
 
-func GetAuthenticator(authType string) Authenticator {
-	switch authType {
-	case Secp256k1Auth:
-		return Secp25k1Authenticator{}
-	case EthPersonalSignAuth:
-		return EthSecp256k1Authenticator{}
-	case Ed25519Auth:
-		return Ed25519Authenticator{}
-	default:
-		return nil
-	}
-}
-
-func IsAuthTypeValid(authType string) bool {
-	switch authType {
-	case Secp256k1Auth, EthPersonalSignAuth, Ed25519Auth:
-		return true
-	default:
-		return false
-	}
-}
-
-func GetIdentifierFromSigner(signer Signer) (string, error) {
-	return GetIdentifier(signer.AuthType(), signer.CompactID())
-}
-
-// GetIdentifier returns the identifier for a given sender and authType.
-func GetIdentifier(authType string, sender []byte) (string, error) {
-	auth := GetAuthenticator(authType)
-	if auth == nil {
-		return "", fmt.Errorf("authenticator not found: %s", authType)
-	}
-
-	return auth.Identifier(sender)
-}
-
-// GetAuthenticatorKeyType returns the crypto.KeyType for a given authType.
-func GetAuthenticatorKeyType(authType string) (crypto.KeyType, error) {
-	switch authType {
-	case Secp256k1Auth, EthPersonalSignAuth:
-		return crypto.KeyTypeSecp256k1, nil
-	case Ed25519Auth:
-		return crypto.KeyTypeEd25519, nil
-	default:
-		return -1, fmt.Errorf("invalid auth type: %s", authType)
-	}
+	// KeyType returns the type of key used by this Authenticator. This is
+	// different from the AuthType of a Signer, although an AuthType will have a
+	// corresponding key type (but not the other way around). For example, both
+	// the EthSecp256k1Authenticator and Secp25k1Authenticator Authenticators
+	// correspond to crypto.KeyTypeSecp256k1. This information is important to
+	// determine the key type of a transaction Sender from the AuthType in the
+	// signature.
+	KeyType() crypto.KeyType
 }

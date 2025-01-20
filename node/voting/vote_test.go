@@ -102,10 +102,10 @@ func Test_Voting(t *testing.T) {
 				// I add power here because this is part of the domain of validator management
 				// if test setup changes, this test will still be valid
 				ctx := context.Background()
-				err := v.SetValidatorPower(ctx, db, []byte("a"), 1, 100)
+				err := v.SetValidatorPower(ctx, db, []byte("a"), crypto.KeyTypeEd25519, 100)
 				require.NoError(t, err)
 
-				err = v.SetValidatorPower(ctx, db, []byte("b"), 1, 100)
+				err = v.SetValidatorPower(ctx, db, []byte("b"), crypto.KeyTypeEd25519, 100)
 				require.NoError(t, err)
 
 				voters := v.GetValidators()

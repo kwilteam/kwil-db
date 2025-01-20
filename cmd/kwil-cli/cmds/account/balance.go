@@ -5,6 +5,9 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"strings"
+
+	"github.com/spf13/cobra"
 
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/client"
@@ -12,43 +15,34 @@ import (
 	clientType "github.com/kwilteam/kwil-db/core/client/types"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/spf13/cobra"
 )
 
 func balanceCmd() *cobra.Command {
 	var pending bool
+	var keyTypeStr string
 	cmd := &cobra.Command{
 		Use:   "balance accountID keyType",
 		Short: "Gets an account's balance and nonce",
 		Long:  `Gets an account's balance and nonce.`,
-		Args:  cobra.MaximumNArgs(2), // no args means own account
+		Args:  cobra.MaximumNArgs(1), // no args means own account
 		RunE: func(cmd *cobra.Command, args []string) (err error) {
 			var acctID *types.AccountID
-			var typeStr string
 			var clientFlags uint8
 
 			if len(args) > 0 {
 				clientFlags = client.WithoutPrivateKey
 
-				id, err := hex.DecodeString(args[0])
+				// Recognize 0x prefix to permit ethereum address format rather
+				// than compact ID hex bytes.
+				idStr := strings.TrimPrefix(args[0], "0x")
+				id, err := hex.DecodeString(idStr)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("failed to decode account ID: %w", err))
 				}
 
-				if len(args) == 1 {
-					typeStr = crypto.KeyTypeSecp256k1.String()
-				} else {
-					typeStr = args[1]
-				}
-
-				keyType, err := crypto.ParseKeyType(typeStr)
-				if err != nil {
-					return display.PrintErr(cmd, fmt.Errorf("failed to parse key type %s: %w", typeStr, err))
-				}
-
 				acctID = &types.AccountID{
 					Identifier: id,
-					KeyType:    keyType,
+					KeyType:    crypto.KeyType(keyTypeStr),
 				}
 			} // else use our account from the signer
 
@@ -73,8 +67,7 @@ func balanceCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("get account failed: %w", err))
 				}
 				// NOTE: empty acct.Identifier means it doesn't even have a record
-				// on the network. Perhaps we convey that to the caller? Their
-				// balance is zero regardless, assuming it's the correct acct ID.
+				// on the network. We now convey that to the caller.
 
 				resp := &respAccount{
 					Balance: acct.Balance.String(),
@@ -93,6 +86,7 @@ func balanceCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&pending, "pending", false, "reflect pending updates from mempool (default is confirmed only)")
+	cmd.Flags().StringVarP(&keyTypeStr, "keytype", "t", crypto.KeyTypeSecp256k1.String(), "key type of account ID (default secp256k1 for Ethereum)")
 
 	return cmd
 }

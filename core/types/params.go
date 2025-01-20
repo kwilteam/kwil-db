@@ -311,7 +311,7 @@ func (pu ParamUpdates) MarshalBinary() ([]byte, error) {
 				return nil, fmt.Errorf("invalid type for %s", key)
 			}
 
-			bts := crypto.WireEncodePublicKey(pk)
+			bts := crypto.WireEncodeKey(pk)
 			if err := binary.Write(buf, binary.LittleEndian, uint16(len(bts))); err != nil {
 				return nil, err
 			}
@@ -525,7 +525,7 @@ func (np *NetworkParameters) Equals(other *NetworkParameters) bool {
 
 func (np *NetworkParameters) SanityChecks() error {
 	// Leader shouldn't be empty
-	if np.Leader.PublicKey == nil || len(np.Leader.Bytes()) == 0 || !np.Leader.Type().Valid() {
+	if np.Leader.PublicKey == nil || len(np.Leader.Bytes()) == 0 {
 		return errors.New("leader should not be empty")
 	}
 	// DBOwner shouldn't be empty
@@ -564,6 +564,6 @@ func (np NetworkParameters) String() string {
 	Disabled Gas Costs: %t
 	Max Votes Per Tx: %d
 	Migration Status: %s`,
-		np.Leader, np.DBOwner, np.MaxBlockSize, np.JoinExpiry,
+		&np.Leader, np.DBOwner, np.MaxBlockSize, np.JoinExpiry,
 		np.DisabledGasCosts, np.MaxVotesPerTx, np.MigrationStatus)
 }
