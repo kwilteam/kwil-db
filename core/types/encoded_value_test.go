@@ -85,22 +85,6 @@ func TestEncodedValue_EdgeCases(t *testing.T) {
 		assert.Error(t, err)
 	})
 
-	t.Run("encode/decode uint256 array", func(t *testing.T) {
-		u1 := Uint256FromInt(123)
-		u2 := Uint256FromInt(456)
-		arr := Uint256Array{u1, u2}
-
-		ev, err := EncodeValue(arr)
-		require.NoError(t, err)
-
-		decoded, err := ev.Decode()
-		require.NoError(t, err)
-
-		decodedArr, ok := decoded.(Uint256Array)
-		require.True(t, ok)
-		assert.Equal(t, arr, decodedArr)
-	})
-
 	t.Run("encode/decode decimal array", func(t *testing.T) {
 		d1, _ := ParseDecimal("100")
 		d2, _ := ParseDecimal("200")

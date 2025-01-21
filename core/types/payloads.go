@@ -636,17 +636,30 @@ func (e *EncodedValue) Decode() (any, error) {
 		}
 	}
 
+	if e.Type.Name == NullType.Name {
+		if e.Type.IsArray {
+			return nil, fmt.Errorf("cannot decode array of type 'null'")
+		}
+		if e.Data == nil {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("expected nil data for type 'null'")
+	}
+
+	typeName, ok := typeAlias[e.Type.Name]
+	if !ok {
+		return nil, fmt.Errorf(`unknown type "%s"`, e.Type.Name)
+	}
+
 	if e.Type.IsArray {
 		var arrAny any
 
 		// postgres requires arrays to be of the correct type, not of []any
-		switch e.Type.Name {
-		case NullType.Name:
-			return nil, fmt.Errorf("cannot decode array of type 'null'")
+		switch typeName {
 		case TextType.Name:
 			arr := make([]string, 0, len(e.Data))
 			for _, elem := range e.Data {
-				dec, err := decodeScalar(elem, e.Type.Name, true)
+				dec, err := decodeScalar(elem, typeName, true)
 				if err != nil {
 					return nil, err
 				}
@@ -657,7 +670,7 @@ func (e *EncodedValue) Decode() (any, error) {
 		case IntType.Name:
 			arr := make([]int64, 0, len(e.Data))
 			for _, elem := range e.Data {
-				dec, err := decodeScalar(elem, e.Type.Name, true)
+				dec, err := decodeScalar(elem, typeName, true)
 				if err != nil {
 					return nil, err
 				}
@@ -668,7 +681,7 @@ func (e *EncodedValue) Decode() (any, error) {
 		case BlobType.Name:
 			arr := make([][]byte, 0, len(e.Data))
 			for _, elem := range e.Data {
-				dec, err := decodeScalar(elem, e.Type.Name, true)
+				dec, err := decodeScalar(elem, typeName, true)
 				if err != nil {
 					return nil, err
 				}
@@ -679,7 +692,7 @@ func (e *EncodedValue) Decode() (any, error) {
 		case UUIDType.Name:
 			arr := make(UUIDArray, 0, len(e.Data))
 			for _, elem := range e.Data {
-				dec, err := decodeScalar(elem, e.Type.Name, true)
+				dec, err := decodeScalar(elem, typeName, true)
 				if err != nil {
 					return nil, err
 				}
@@ -690,7 +703,7 @@ func (e *EncodedValue) Decode() (any, error) {
 		case BoolType.Name:
 			arr := make([]bool, 0, len(e.Data))
 			for _, elem := range e.Data {
-				dec, err := decodeScalar(elem, e.Type.Name, true)
+				dec, err := decodeScalar(elem, typeName, true)
 				if err != nil {
 					return nil, err
 				}
@@ -701,7 +714,7 @@ func (e *EncodedValue) Decode() (any, error) {
 		case Uint256Type.Name:
 			arr := make(Uint256Array, 0, len(e.Data))
 			for _, elem := range e.Data {
-				dec, err := decodeScalar(elem, e.Type.Name, true)
+				dec, err := decodeScalar(elem, typeName, true)
 				if err != nil {
 					return nil, err
 				}
@@ -712,7 +725,7 @@ func (e *EncodedValue) Decode() (any, error) {
 		case NumericStr:
 			arr := make(DecimalArray, 0, len(e.Data))
 			for _, elem := range e.Data {
-				dec, err := decodeScalar(elem, e.Type.Name, true)
+				dec, err := decodeScalar(elem, typeName, true)
 				if err != nil {
 					return nil, err
 				}
@@ -721,19 +734,16 @@ func (e *EncodedValue) Decode() (any, error) {
 			}
 			arrAny = arr
 		default:
-			return nil, fmt.Errorf("unknown type `%s`", e.Type.Name)
+			return nil, fmt.Errorf("unknown type `%s`", typeName)
 		}
 		return arrAny, nil
 	}
 
-	if e.Type.Name == NullType.Name {
-		return nil, nil
-	}
 	if len(e.Data) != 1 {
 		return nil, fmt.Errorf("expected 1 element, got %d", len(e.Data))
 	}
 
-	return decodeScalar(e.Data[0], e.Type.Name, false)
+	return decodeScalar(e.Data[0], typeName, false)
 }
 
 // EncodeValue encodes a value to its detected type.
