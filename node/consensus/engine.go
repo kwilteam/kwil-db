@@ -608,7 +608,7 @@ func (ce *ConsensusEngine) replayFromBlockStore(ctx context.Context, startHeight
 	height := startHeight
 	t0 := time.Now()
 
-	if startHeight <= bestHeight {
+	if startHeight >= bestHeight {
 		return nil // already caught up with the blockstore
 	}
 
