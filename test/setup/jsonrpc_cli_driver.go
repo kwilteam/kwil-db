@@ -431,7 +431,7 @@ func (j *jsonRPCCLIDriver) WaitTx(ctx context.Context, txHash types.Hash, interv
 }
 
 func (j *jsonRPCCLIDriver) Transfer(ctx context.Context, to *types.AccountID, amount *big.Int, opts ...client.TxOpt) (types.Hash, error) {
-	return j.exec(ctx, []string{"account", "transfer", to.Identifier.String(), to.KeyType.String(), amount.String()})
+	return j.exec(ctx, []string{"account", "transfer", to.Identifier.String(), to.KeyType.String(), amount.String()}, opts...)
 }
 
 func (j *jsonRPCCLIDriver) TransferAmt(ctx context.Context, to *types.AccountID, amt *big.Int, opts ...client.TxOpt) (types.Hash, error) {

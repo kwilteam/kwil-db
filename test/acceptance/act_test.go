@@ -19,10 +19,8 @@ import (
 )
 
 // TODO:
-// - transfer
-// - engine
+// - kgw tests
 // - type roundtripping
-// - private rpc
 
 var (
 	//go:embed users.sql
@@ -62,9 +60,6 @@ func Test_Transfer(t *testing.T) {
 	ctx := context.Background()
 
 	for _, driver := range setup.AllDrivers {
-		if driver == setup.CLI {
-			continue // TODO: delete this once it works for jsonrpc
-		}
 		t.Run("transfer_"+driver.String(), func(t *testing.T) {
 			userPrivateKey, _, err := crypto.GenerateSecp256k1Key(nil)
 			require.NoError(t, err)
@@ -120,12 +115,12 @@ func Test_Transfer(t *testing.T) {
 			// user 2 tries to execute, gets rejected from mempool because no gas
 			_, err = user2.Execute(ctx, "", "do_something", nil, opts)
 			require.Error(t, err)
-			require.Contains(t, err.Error(), "insufficient balances")
+			require.Contains(t, err.Error(), "insufficient balance")
 
 			tx, err = user1.Transfer(ctx, &types.AccountID{
 				Identifier: address(user2.PrivateKey()),
 				KeyType:    crypto.KeyTypeSecp256k1,
-			}, big.NewInt(100000000000000000))
+			}, big.NewInt(100000000000000000), opts)
 			require.NoError(t, err)
 			test.ExpectTxSuccess(t, user1, ctx, tx)
 
@@ -142,9 +137,6 @@ var opts = ctypes.WithSyncBroadcast(true)
 
 func Test_Engine(t *testing.T) {
 	for _, driver := range setup.AllDrivers {
-		// if driver == setup.Go {
-		// 	continue // TODO: delete this once it works for jsonrpc
-		// }
 		t.Run("engine_"+driver.String(), func(t *testing.T) {
 			ctx := context.Background()
 			client := setupSingleNodeClient(t, ctx, driver, false)

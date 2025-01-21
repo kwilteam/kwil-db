@@ -2,7 +2,6 @@ package common
 
 import (
 	"context"
-	"time"
 
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	client "github.com/kwilteam/kwil-db/core/client/types"
@@ -47,7 +46,7 @@ func DisplayTxResult(ctx context.Context, client1 client.Client, txHash types.Ha
 	}
 
 	if len(txHash) > 0 && txFlags.SyncBroadcast {
-		time.Sleep(500 * time.Millisecond) // otherwise it says not found at first
+		// time.Sleep(500 * time.Millisecond) // TODO: remove once we have fixed race condition
 		resp, err := client1.TxQuery(ctx, txHash)
 		if err != nil {
 			return display.PrintErr(cmd, err)
