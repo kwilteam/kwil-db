@@ -3,6 +3,7 @@ package config
 import (
 	"encoding/hex"
 	"fmt"
+	"os"
 	"slices"
 	"testing"
 	"time"
@@ -252,4 +253,210 @@ func Test_KeyHexBytes(t *testing.T) {
 
 	require.Equal(t, k.HexBytes, k3.HexBytes)
 	require.Equal(t, `"0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D"`, string(bts))
+}
+
+func TestDisallowUnknownFields(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		wantErr bool
+	}{
+		{
+			name: "unknown field present",
+			input: `
+				log_level = "debug"
+				unknown_field = "value"
+				log_format = "json"
+			`,
+			wantErr: true,
+		},
+		{
+			name: "nested unknown field",
+			input: `
+				[p2p]
+				listen_address = "0.0.0.0:6600"
+				unknown_nested = true
+			`,
+			wantErr: true,
+		},
+		{
+			name: "array with unknown field",
+			input: `
+				[p2p.boot_nodes]
+				address = "test"
+				unknown_array_field = 123
+			`,
+			wantErr: true,
+		},
+		{
+			name: "valid config no unknown fields",
+			input: `
+				log_level = "debug"
+				log_format = "json"
+				[p2p]
+				listen = "0.0.0.0:6600"
+			`,
+			wantErr: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tempFile := t.TempDir() + "/config.toml"
+			err := os.WriteFile(tempFile, []byte(tt.input), 0644)
+			require.NoError(t, err)
+
+			_, err = LoadConfig(tempFile)
+			if tt.wantErr {
+				require.Error(t, err)
+				require.ErrorIs(t, err, ErrorExtraFields)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestConfigFromTOML(t *testing.T) {
+	tests := []struct {
+		name    string
+		input   string
+		want    Config
+		wantErr bool
+	}{
+		{
+			name: "minimal valid config",
+			input: `
+				log_level = "info"
+				log_format = "plain"
+			`,
+			want: Config{
+				LogLevel:  log.LevelInfo,
+				LogFormat: log.FormatUnstructured,
+			},
+			wantErr: false,
+		},
+		{
+			name:    "empty config bytes",
+			input:   "",
+			want:    Config{},
+			wantErr: false,
+		},
+		{
+			name: "invalid TOML syntax",
+			input: `
+				log_level = "debug"
+				log_format = ["invalid"
+			`,
+			wantErr: true,
+		},
+		{
+			name: "invalid log level value",
+			input: `
+				log_level = "invalid"
+				log_format = "json"
+			`,
+			wantErr: true,
+		},
+		{
+			name: "config with missing struct fields",
+			input: `
+				log_format = "json"
+				[p2p]
+				listen_address = "0.0.0.0:6600"
+				pex = true
+				boot_nodes = ["/ip4/192.168.1.1/tcp/8080/p2p/test"]
+				[db]
+				host = "localhost"
+				port = "5432"
+				user = "testuser"
+				pass = "testpass"
+				dbname = "testdb"
+				read_tx_timeout = "30s"
+				max_conns = 20
+			`,
+			wantErr: true,
+		},
+		{
+			name: "full config with all fields and correct names",
+			input: `
+				log_level = "debug"
+				log_format = "json"
+				[p2p]
+				listen = "0.0.0.0:6600"
+				pex = true
+				bootnodes = ["/ip4/192.168.1.1/tcp/8080/p2p/test"]
+				[db]
+				host = "localhost"
+				port = "5432"
+				user = "testuser"
+				pass = "testpass"
+				dbname = "testdb"
+				read_timeout = "30s"
+				max_connections = 20
+			`,
+			want: Config{
+				LogLevel:  log.LevelDebug,
+				LogFormat: log.FormatJSON,
+				P2P: PeerConfig{
+					ListenAddress: "0.0.0.0:6600",
+					Pex:           true,
+					BootNodes:     []string{"/ip4/192.168.1.1/tcp/8080/p2p/test"},
+				},
+				DB: DBConfig{
+					Host:          "localhost",
+					Port:          "5432",
+					User:          "testuser",
+					Pass:          "testpass",
+					DBName:        "testdb",
+					ReadTxTimeout: Duration(30 * time.Second),
+					MaxConns:      20,
+				},
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid duration format",
+			input: `
+				[db]
+				read_tx_timeout = "invalid"
+			`,
+			wantErr: true,
+		},
+		{
+			name: "negative max_conns",
+			input: `
+				[db]
+				max_conns = -1
+			`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var cfg Config
+			err := cfg.FromTOML([]byte(tt.input))
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			if !tt.wantErr {
+				require.Equal(t, tt.want.LogLevel, cfg.LogLevel)
+				require.Equal(t, tt.want.LogFormat, cfg.LogFormat)
+				require.Equal(t, tt.want.P2P.ListenAddress, cfg.P2P.ListenAddress)
+				require.Equal(t, tt.want.P2P.Pex, cfg.P2P.Pex)
+				require.Equal(t, tt.want.P2P.BootNodes, cfg.P2P.BootNodes)
+				require.Equal(t, tt.want.DB.Host, cfg.DB.Host)
+				require.Equal(t, tt.want.DB.Port, cfg.DB.Port)
+				require.Equal(t, tt.want.DB.User, cfg.DB.User)
+				require.Equal(t, tt.want.DB.Pass, cfg.DB.Pass)
+				require.Equal(t, tt.want.DB.DBName, cfg.DB.DBName)
+				require.Equal(t, tt.want.DB.ReadTxTimeout, cfg.DB.ReadTxTimeout)
+				require.Equal(t, tt.want.DB.MaxConns, cfg.DB.MaxConns)
+			}
+		})
+	}
 }

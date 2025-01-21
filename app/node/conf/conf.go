@@ -16,6 +16,7 @@
 package conf
 
 import (
+	"bytes"
 	"errors"
 	"fmt"
 	"os"
@@ -30,6 +31,7 @@ import (
 	"github.com/knadh/koanf/providers/file"
 	"github.com/knadh/koanf/providers/posflag"
 	"github.com/knadh/koanf/v2"
+	gotoml "github.com/pelletier/go-toml/v2"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -149,10 +151,7 @@ func PreRunBindEnvAllSections(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-// PreRunBindConfigFile loads and merges settings from the config file. This
-// used shared.RootDir to get the root directory. As such, the command should be
-// use shared.BindRootDirVar.
-func PreRunBindConfigFile(cmd *cobra.Command, args []string) error {
+func preRunBindConfigFile(cmd *cobra.Command, args []string, parser koanf.Parser) error {
 	// Grab the root directory like other commands that will access it via
 	// persistent flags from the root command.
 	rootDir, err := bind.RootDir(cmd)
@@ -173,7 +172,8 @@ func PreRunBindConfigFile(cmd *cobra.Command, args []string) error {
 
 	// Load config from file
 	confPath, _ := filepath.Abs(config.ConfigFilePath(rootDir))
-	if err := k.Load(file.Provider(confPath), toml.Parser() /*, mergeFn*/); err != nil {
+
+	if err := k.Load(file.Provider(confPath), parser /*, mergeFn*/); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			return fmt.Errorf("error loading config: %v", err)
 		}
@@ -181,6 +181,51 @@ func PreRunBindConfigFile(cmd *cobra.Command, args []string) error {
 		bind.Debugf("No config file present at %v", confPath)
 	}
 	return nil
+}
+
+// PreRunBindConfigFile loads and merges settings from the config file. This
+// used shared.RootDir to get the root directory. As such, the command should be
+// use shared.BindRootDirVar.
+func PreRunBindConfigFile(cmd *cobra.Command, args []string) error {
+	return preRunBindConfigFile(cmd, args, toml.Parser())
+}
+
+// PreRunBindConfigFileStrict is like PreRunBindConfigFile, but it strictly
+// requires that the parsed TOML does not contain any fields that are not
+// recognized present in the config struct, which is specified by the type
+// parameter T.
+func PreRunBindConfigFileStrict[T any](cmd *cobra.Command, args []string) error {
+	return preRunBindConfigFile(cmd, args, &strictTOMLParser[T]{})
+}
+
+// strictTOMLParser implements a TOML parser that disallows unknown fields when
+// unmarshalling.
+type strictTOMLParser[T any] struct{}
+
+// Unmarshal parses the given TOML bytes.
+func (stp *strictTOMLParser[T]) Unmarshal(b []byte) (map[string]interface{}, error) {
+	var prototype T
+	dec := gotoml.NewDecoder(bytes.NewReader(b))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&prototype); err != nil {
+		var tomlErr *gotoml.StrictMissingError
+		if errors.As(err, &tomlErr) {
+			err = fmt.Errorf("%w:\n%s", config.ErrorExtraFields, tomlErr.String())
+		}
+		return nil, err
+	}
+
+	var outMap map[string]interface{}
+	if err := gotoml.Unmarshal(b, &outMap); err != nil {
+		return nil, err
+	}
+
+	return outMap, nil
+}
+
+// Marshal marshals the given config map to TOML bytes.
+func (stp *strictTOMLParser[T]) Marshal(o map[string]interface{}) ([]byte, error) {
+	return gotoml.Marshal(&o)
 }
 
 // PreRunPrintEffectiveConfig prints the effective config map if CLI debugging

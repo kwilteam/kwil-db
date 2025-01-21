@@ -114,18 +114,23 @@ func InitCmd() *cobra.Command {
 				return err
 			}
 
-			var genCfg *config.GenesisConfig
 			genFile := filepath.Join(outDir, "genesis.json")
 			if genesisPath != "" { // Init for the node to join an existing network
 				if genesisPath, err = node.ExpandPath(genesisPath); err != nil {
 					return display.PrintErr(cmd, err)
 				}
 
-				if err := utils.CopyFile(genesisPath, genFile); err != nil {
+				// Load and save rather than copy file so that we validate the file.
+				genCfg, err := config.LoadGenesisConfig(genesisPath)
+				if err != nil {
+					return display.PrintErr(cmd, fmt.Errorf("failed to load genesis file: %w", err))
+				}
+
+				if err := genCfg.SaveAs(genFile); err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("failed to copy genesis file: %w", err))
 				}
 			} else { // Init command for creating a new network, new genesis file will be created
-				genCfg = config.DefaultGenesisConfig()
+				genCfg := config.DefaultGenesisConfig()
 				genCfg, err = mergeGenesisFlags(genCfg, cmd, &genFlags)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("failed to create genesis file: %w", err))

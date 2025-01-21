@@ -22,6 +22,7 @@ import (
 	"github.com/kwilteam/kwil-db/app/utils"
 	"github.com/kwilteam/kwil-db/app/validator"
 	"github.com/kwilteam/kwil-db/app/whitelist"
+	"github.com/kwilteam/kwil-db/config"
 	_ "github.com/kwilteam/kwil-db/extensions" // a base location where all extensions can be registered
 	_ "github.com/kwilteam/kwil-db/extensions/auth"
 	"github.com/kwilteam/kwil-db/version"
@@ -47,7 +48,7 @@ func RootCmd() *cobra.Command {
 		Version: version.KwilVersion,
 		Example: custom.BinaryConfig.NodeCmd + " -r ~/.kwild",
 		// PersistentPreRunE so k has all the settings in all (sub)command's RunE funcs
-		PersistentPreRunE: bind.ChainPreRuns(bind.MaybeEnableCLIDebug, conf.PreRunBindConfigFile,
+		PersistentPreRunE: bind.ChainPreRuns(bind.MaybeEnableCLIDebug, conf.PreRunBindConfigFileStrict[config.Config],
 			conf.PreRunBindFlags, conf.PreRunBindEnvMatching, conf.PreRunPrintEffectiveConfig),
 	}
 
