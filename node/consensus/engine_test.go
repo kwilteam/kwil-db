@@ -164,6 +164,7 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) ([]*Config, ma
 			// ValidatorSet:          validatorSet,
 			Logger:                logger,
 			ProposeTimeout:        1 * time.Second,
+			EmptyBlockTimeout:     1 * time.Second,
 			BlockProposalInterval: 1 * time.Second,
 			BlockAnnInterval:      3 * time.Second,
 			BroadcastTxTimeout:    10 * time.Second,
@@ -993,6 +994,12 @@ func (m *mockEventStore) GetUnbroadcastedEvents(ctx context.Context) ([]*ktypes.
 	}
 	return ids, nil
 }
+
+func (m *mockEventStore) HasEvents() bool {
+	return true
+}
+
+func (m *mockEventStore) UpdateStats(cnt int64) {}
 
 type mockMigrator struct{}
 

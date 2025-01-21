@@ -162,6 +162,7 @@ func (r *TxApp) Execute(ctx *common.TxContext, db sql.DB, tx *types.Transaction)
 	// no need to error out if we cannot track the validator join approval
 	r.trackValidatorJoinApprovals(tx)
 
+	// track event count
 	return route.Execute(ctx, r, db, tx)
 }
 

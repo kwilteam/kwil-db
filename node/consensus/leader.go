@@ -33,17 +33,8 @@ import (
 // reproposing the block.
 
 func (ce *ConsensusEngine) newBlockRound(ctx context.Context) error {
-	// wait for the minBlockTime to start a new block round
-	select {
-	case <-time.After(ce.proposeTimeout):
-		// can propose a new block as soon as the txs are available
-	case <-ctx.Done():
-		ce.log.Warn("Context cancelled, stopping the new block round")
-		return nil
-	}
-
-	ticker := time.NewTicker(500 * time.Millisecond)
-	emptyBlockTicker := time.NewTicker(ce.emptyBlockTimeout - ce.proposeTimeout)
+	ticker := time.NewTicker(ce.proposeTimeout)
+	emptyBlockTicker := time.NewTicker(ce.emptyBlockTimeout)
 
 	for {
 		select {
@@ -59,21 +50,15 @@ func (ce *ConsensusEngine) newBlockRound(ctx context.Context) error {
 			if ce.mempool.TxsAvailable() {
 				ce.newBlockProposal <- struct{}{}
 				return nil
-			} else {
-				// check if the leader has any new events to broadcast a voteID transaction
-				hasEvents, err := ce.blockProcessor.HasEvents(ctx)
-				if err != nil {
-					ce.log.Errorf("Error checking for events: %v", err)
-					return err
-				}
-
-				if hasEvents {
-					ce.newBlockProposal <- struct{}{}
-					return nil
-				}
 			}
-			// no transactions available, wait till the next tick to recheck the mempool
+
+			// check if the leader has any new events to broadcast a voteID transaction
+			if ce.blockProcessor.HasEvents() {
+				ce.newBlockProposal <- struct{}{}
+				return nil
+			}
 		}
+		// no transactions available, wait till the next tick to recheck the mempool
 	}
 }
 

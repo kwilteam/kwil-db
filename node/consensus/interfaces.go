@@ -55,5 +55,5 @@ type BlockProcessor interface {
 	ConsensusParams() *ktypes.NetworkParameters
 
 	BlockExecutionStatus() *ktypes.BlockExecutionStatus
-	HasEvents(ctx context.Context) (bool, error)
+	HasEvents() bool
 }

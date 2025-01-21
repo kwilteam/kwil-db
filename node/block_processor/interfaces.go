@@ -77,6 +77,12 @@ type EventStore interface {
 
 	// MarkBroadcasted marks list of events as broadcasted.
 	MarkBroadcasted(ctx context.Context, ids []*types.UUID) error
+
+	// HasEvents return true if there are any events to be broadcasted
+	HasEvents() bool
+
+	// records the events for which the resolutions have been created.
+	UpdateStats(deleteCnt int64)
 }
 
 var (

@@ -206,19 +206,12 @@ func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs []*t
 	return finalTxs, invalidTxs, nil
 }
 
-func (bp *BlockProcessor) HasEvents(ctx context.Context) (bool, error) {
-	readTx, err := bp.db.BeginReadTx(ctx)
-	if err != nil {
-		return false, err
-	}
-	defer readTx.Rollback(ctx)
+func (bp *BlockProcessor) HasEvents() bool {
+	return bp.events.HasEvents()
+}
 
-	events, err := getEvents(ctx, readTx)
-	if err != nil {
-		return false, err
-	}
-
-	return len(events) > 0, nil
+func (bp *BlockProcessor) UpdateStats(delectCnt int64) {
+	bp.events.UpdateStats(delectCnt)
 }
 
 // prepareValidatorVoteBodyTx authors the ValidatorVoteBody transaction to be included by the leader in the block.

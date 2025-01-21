@@ -413,6 +413,8 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 	inMigration := bp.chainCtx.NetworkParameters.MigrationStatus == ktypes.MigrationInProgress
 	haltNetwork := bp.chainCtx.NetworkParameters.MigrationStatus == ktypes.MigrationCompleted
 
+	isLeader := bytes.Equal(bp.signer.CompactID(), req.Proposer.Bytes())
+
 	blockCtx := &common.BlockContext{
 		Height:       req.Height,
 		Timestamp:    req.Block.Header.Timestamp.Unix(),
@@ -472,6 +474,16 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 			}
 
 			txResults[i] = txResult
+
+			if isLeader && tx.Body.PayloadType == ktypes.PayloadTypeValidatorVoteBodies {
+				body := &ktypes.ValidatorVoteBodies{}
+				if err := body.UnmarshalBinary(tx.Body.Payload); err != nil {
+					return nil, fmt.Errorf("failed to unmarshal validator votebody tx")
+				}
+
+				numEvents := int64(len(body.Events))
+				bp.events.UpdateStats(numEvents)
+			}
 		}
 	}
 

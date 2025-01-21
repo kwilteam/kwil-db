@@ -812,6 +812,13 @@ func (m *mockEventStore) MarkBroadcasted(ctx context.Context, ids []*types.UUID)
 	return nil
 }
 
+func (m *mockEventStore) HasEvents() bool {
+	return true
+}
+
+func (m *mockEventStore) UpdateStats(cnt int64) {
+}
+
 type mockValidatorStore struct {
 	valSet []*types.Validator
 }

@@ -137,6 +137,10 @@ type EventStore struct {
 	eventWriter DB
 
 	writerMtx sync.Mutex // protects eventWriter, not applicable to read-only operations
+
+	// numEvents tracks the count of events added by the listeners
+	// which doesn't have resolutions yet.
+	numEvents int64
 }
 
 // NewEventStore will initialize the event and vote store with the provided DB
@@ -236,6 +240,7 @@ func (e *EventStore) Store(ctx context.Context, data []byte, eventType string) e
 	}
 	// fmt.Printf("inserted event new event: type %v, id %v\n", eventType, id)
 
+	e.numEvents++
 	return tx.Commit(ctx)
 }
 
@@ -344,6 +349,24 @@ func DeleteEvents(ctx context.Context, db sql.DB, ids ...*types.UUID) error {
 
 	_, err := db.Execute(ctx, deleteEvents, types.UUIDArray(ids).Bytes())
 	return err
+}
+
+func (e *EventStore) UpdateStats(deletedEvts int64) {
+	e.writerMtx.Lock()
+	defer e.writerMtx.Unlock()
+
+	if e.numEvents > deletedEvts {
+		e.numEvents -= deletedEvts
+	} else {
+		e.numEvents = 0
+	}
+}
+
+func (e *EventStore) HasEvents() bool {
+	e.writerMtx.Lock()
+	defer e.writerMtx.Unlock()
+
+	return e.numEvents > 0
 }
 
 // KV returns a kv store that is scoped to the given prefix.
