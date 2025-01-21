@@ -221,7 +221,7 @@ func Test_TxHashAndExecResponse(t *testing.T) {
 	resp := &TxHashAndExecResponse{
 		Res: qr,
 	}
-	expectJSON := `{"hash":"0102030405000000000000000000000000000000000000000000000000000000","height":10,"tx":{"signature":{"sig":"yz/tf2/zblkFTASoMbIV5RQFJ1PuNT5v4x1LTvc2rNYVUSfbVV0wBroU/LTHm7rVbI5juBqYljGbsFOp4lNHWAA=","type":"secp256k1_ep"},"body":{"desc":"This is a test transaction for cli","payload":"AAA5AAAAeGY2MTdhZjFjYTc3NGViYmQ2ZDIzZThmZTEyYzU2ZDQxZDI1YTIyZDgxZTg4ZjY3YzZjNmVlMGQ0CwAAAGNyZWF0ZV91c2VyAQABAB4AAAAAAA8AAAAAAAAAAAR0ZXh0AAAAAAABAAMAAABmb28=","type":"execute","fee":"100","nonce":10,"chain_id":"asdf"},"serialization":"concat","sender":null},"tx_result":{"code":0,"gas":10,"log":"This is log","events":null}}`
+	expectJSON := `{"tx_hash":"0102030405000000000000000000000000000000000000000000000000000000","height":10,"tx":{"signature":{"sig":"yz/tf2/zblkFTASoMbIV5RQFJ1PuNT5v4x1LTvc2rNYVUSfbVV0wBroU/LTHm7rVbI5juBqYljGbsFOp4lNHWAA=","type":"secp256k1_ep"},"body":{"desc":"This is a test transaction for cli","payload":"AAA5AAAAeGY2MTdhZjFjYTc3NGViYmQ2ZDIzZThmZTEyYzU2ZDQxZDI1YTIyZDgxZTg4ZjY3YzZjNmVlMGQ0CwAAAGNyZWF0ZV91c2VyAQABAB4AAAAAAA8AAAAAAAAAAAR0ZXh0AAAAAAABAAMAAABmb28=","type":"execute","fee":"100","nonce":10,"chain_id":"asdf"},"serialization":"concat","sender":null},"tx_result":{"code":0,"gas":10,"log":"This is log","events":null}}`
 	expectText := "TxHash: 0102030405000000000000000000000000000000000000000000000000000000\nStatus: success\nHeight: 10\nLog: This is log"
 
 	outText, err := resp.MarshalText()
