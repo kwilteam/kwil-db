@@ -92,7 +92,7 @@ func Test_Transfer(t *testing.T) {
 
 						// giving gas to the user
 						gc.Allocs = append(gc.Allocs, config.GenesisAlloc{
-							ID:      config.KeyHexBytes(address(userPrivateKey)),
+							ID:      config.KeyHexBytes{HexBytes: address(userPrivateKey)},
 							KeyType: crypto.KeyTypeSecp256k1.String(),
 							Amount:  big.NewInt(1000000000000000000),
 						})
@@ -117,10 +117,10 @@ func Test_Transfer(t *testing.T) {
 			// auto-generate the private key for user 2
 			user2 := testnet.Nodes[0].JSONRPCClient(t, ctx, nil)
 
-			// user 2 tries to execute, gets rejected because no gas
-			tx, err = user2.Execute(ctx, "", "do_something", nil, opts)
-			require.NoError(t, err)
-			test.ExpectTxError(t, user2, ctx, tx, "insufficient gas")
+			// user 2 tries to execute, gets rejected from mempool because no gas
+			_, err = user2.Execute(ctx, "", "do_something", nil, opts)
+			require.Error(t, err)
+			require.Contains(t, err.Error(), "insufficient balances")
 
 			tx, err = user1.Transfer(ctx, &types.AccountID{
 				Identifier: address(user2.PrivateKey()),

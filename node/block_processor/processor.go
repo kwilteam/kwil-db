@@ -353,7 +353,7 @@ func (bp *BlockProcessor) InitChain(ctx context.Context) (int64, []byte, error) 
 
 		genesisAllocs = append(genesisAllocs, &ktypes.Account{
 			ID: &ktypes.AccountID{
-				Identifier: types.HexBytes(acct.ID),
+				Identifier: acct.ID.HexBytes,
 				KeyType:    keyType,
 			},
 			Balance: acct.Amount,

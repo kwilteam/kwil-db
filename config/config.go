@@ -52,12 +52,12 @@ type GenesisAlloc struct {
 }
 
 // KeyHexBytes wraps hex bytes, and allows it to receive Ethereum 0x addresses
-type KeyHexBytes types.HexBytes
+type KeyHexBytes struct{ types.HexBytes }
 
 func (l *KeyHexBytes) UnmarshalJSON(b []byte) error {
 	if len(b) < 2 || b[0] != '"' || b[len(b)-1] != '"' {
 		if bytes.Equal(b, []byte("null")) {
-			*l = nil
+			l.HexBytes = nil
 			return nil
 		}
 		return fmt.Errorf("invalid hex string: %s", b)
@@ -74,7 +74,7 @@ func (l *KeyHexBytes) UnmarshalJSON(b []byte) error {
 	if err != nil {
 		return err
 	}
-	*l = dec
+	l.HexBytes = types.HexBytes(dec)
 	return nil
 }
 

@@ -153,7 +153,9 @@ func InitCmd() *cobra.Command {
 				if !genCfg.DisabledGasCosts {
 					for _, v := range genCfg.Validators {
 						genCfg.Allocs = append(genCfg.Allocs, config.GenesisAlloc{
-							ID:      config.KeyHexBytes(v.Identifier),
+							ID: config.KeyHexBytes{
+								HexBytes: v.AccountID.Identifier,
+							},
 							KeyType: v.Identifier.String(),
 							Amount:  genesisValidatorGas,
 						})

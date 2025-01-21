@@ -192,7 +192,9 @@ func mergeGenesisFlags(conf *config.GenesisConfig, cmd *cobra.Command, flagCfg *
 			}
 
 			conf.Allocs = append(conf.Allocs, config.GenesisAlloc{
-				ID:      keyStr,
+				ID: config.KeyHexBytes{
+					HexBytes: keyStr,
+				},
 				KeyType: keyType.String(),
 				Amount:  balance,
 			})
