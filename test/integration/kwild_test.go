@@ -11,6 +11,7 @@ import (
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/types"
 	ethdeposits "github.com/kwilteam/kwil-db/extensions/listeners/eth_deposits"
 	"github.com/kwilteam/kwil-db/test/setup"
 	"github.com/kwilteam/kwil-db/test/specifications"
@@ -163,7 +164,7 @@ func TestValidatorJoinExpirySpecification(t *testing.T) {
 				}),
 			},
 			ConfigureGenesis: func(genDoc *config.GenesisConfig) {
-				genDoc.JoinExpiry = 5 // 5 sec at 1block/sec
+				genDoc.JoinExpiry = types.Duration(5 * time.Second)
 			},
 			DBOwner: "0xabc",
 		},

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -53,7 +54,7 @@ func proposalStatusCmd() *cobra.Command {
 
 type MigrationStatus struct {
 	ProposalID *types.UUID
-	ExpiresAt  int64              `json:"expires_at"` // ExpiresAt is the block height at which the migration proposal expires
+	ExpiresAt  time.Time          `json:"expires_at"` // ExpiresAt is the block height at which the migration proposal expires
 	Board      []*types.AccountID `json:"board"`      // Board is the list of validators who are eligible to vote on the migration proposal
 	Approved   []bool             `json:"approved"`   // Approved is the list of bools indicating if the corresponding validator approved the migration proposal
 }
@@ -74,7 +75,7 @@ func (m *MigrationStatus) MarshalText() ([]byte, error) {
 	var msg bytes.Buffer
 	msg.WriteString("Migration Status:\n")
 	msg.WriteString(fmt.Sprintf("\tProposal ID: %s\n", m.ProposalID.String()))
-	msg.WriteString(fmt.Sprintf("\tExpires At: %d\n", m.ExpiresAt))
+	msg.WriteString(fmt.Sprintf("\tExpires At: %s\n", m.ExpiresAt.String()))
 	msg.WriteString(fmt.Sprintf("\tApprovals Received: %d (needed %d)\n", approved, needed))
 
 	for i := range m.Board {

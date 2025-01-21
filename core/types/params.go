@@ -99,13 +99,15 @@ type NetworkParameters struct {
 
 	// MaxBlockSize is the maximum size of a block in bytes.
 	MaxBlockSize int64 `json:"max_block_size"`
-	// JoinExpiry is the number of blocks after which the validators
-	// join request expires if not approved.
-	JoinExpiry int64 `json:"join_expiry"`
-	// DisabledGasCosts dictates whether gas costs are disabled.
+
+	// JoinExpiry is the time duration (in seconds) after which a resolution is
+	// considered expired since its creation.
+	JoinExpiry Duration `json:"join_expiry"`
+
+	// DisabledGasCosts indicates whether gas costs are disabled.
 	DisabledGasCosts bool `json:"disabled_gas_costs"`
-	// MaxVotesPerTx is the maximum number of votes that can be included in a
-	// single transaction.
+
+	// MaxVotesPerTx is the maximum number of votes allowed in a single transaction.
 	MaxVotesPerTx int64 `json:"max_votes_per_tx"`
 
 	MigrationStatus MigrationStatus `json:"migration_status"`
@@ -206,7 +208,7 @@ func MergeUpdates(np *NetworkParameters, updates ParamUpdates) (err error) {
 		case ParamNameMaxBlockSize:
 			np.MaxBlockSize = update.(int64)
 		case ParamNameJoinExpiry:
-			np.JoinExpiry = update.(int64)
+			np.JoinExpiry = update.(Duration)
 		case ParamNameDisabledGasCosts:
 			np.DisabledGasCosts = update.(bool)
 		case ParamNameMaxVotesPerTx:
@@ -339,7 +341,15 @@ func (pu ParamUpdates) MarshalBinary() ([]byte, error) {
 			} else {
 				return nil, fmt.Errorf("invalid type for %s", key)
 			}
-		case ParamNameMaxBlockSize, ParamNameJoinExpiry, ParamNameMaxVotesPerTx:
+		case ParamNameJoinExpiry:
+			if val, ok := value.(Duration); ok {
+				if err := binary.Write(buf, binary.LittleEndian, val); err != nil {
+					return nil, err
+				}
+			} else {
+				return nil, fmt.Errorf("invalid type for %s", key)
+			}
+		case ParamNameMaxBlockSize, ParamNameMaxVotesPerTx:
 			if val, ok := value.(int64); ok {
 				if err := binary.Write(buf, binary.LittleEndian, val); err != nil {
 					return nil, err
@@ -427,7 +437,13 @@ func (pu *ParamUpdates) UnmarshalBinary(data []byte) error {
 				return err
 			}
 			updates[paramName] = string(val)
-		case ParamNameMaxBlockSize, ParamNameJoinExpiry, ParamNameMaxVotesPerTx:
+		case ParamNameJoinExpiry:
+			var expiry Duration
+			if err := binary.Read(buf, binary.LittleEndian, &expiry); err != nil {
+				return err
+			}
+			updates[paramName] = expiry
+		case ParamNameMaxBlockSize, ParamNameMaxVotesPerTx:
 			var val int64
 			if err := binary.Read(buf, binary.LittleEndian, &val); err != nil {
 				return err

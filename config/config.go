@@ -28,24 +28,6 @@ const (
 	AdminCertName       = "admin.cert"
 )
 
-// Duration is a wrapper around time.Duration that implements text
-// (un)marshalling for the go-toml package to work with Go duration strings
-// instead of integers.
-type Duration time.Duration
-
-func (d Duration) MarshalText() ([]byte, error) {
-	return []byte(time.Duration(d).String()), nil
-}
-
-func (d *Duration) UnmarshalText(text []byte) error {
-	duration, err := time.ParseDuration(string(text))
-	if err != nil {
-		return err
-	}
-	*d = Duration(duration)
-	return nil
-}
-
 type GenesisAlloc struct {
 	ID      KeyHexBytes `json:"id"`
 	KeyType string      `json:"key_type"`
@@ -239,7 +221,7 @@ func DefaultGenesisConfig() *GenesisConfig {
 			Leader:           types.PublicKey{},
 			DBOwner:          "",
 			MaxBlockSize:     6 * 1024 * 1024,
-			JoinExpiry:       14400,
+			JoinExpiry:       types.Duration(86400 * time.Second),
 			DisabledGasCosts: true,
 			MaxVotesPerTx:    200,
 			MigrationStatus:  types.NoActiveMigration,
@@ -259,10 +241,10 @@ func DefaultConfig() *Config {
 			BootNodes:     []string{},
 		},
 		Consensus: ConsensusConfig{
-			ProposeTimeout:        Duration(1000 * time.Millisecond),
-			EmptyBlockTimeout:     Duration(1 * time.Minute),
-			BlockProposalInterval: Duration(1 * time.Second),
-			BlockAnnInterval:      Duration(3 * time.Second),
+			ProposeTimeout:        types.Duration(1000 * time.Millisecond),
+			EmptyBlockTimeout:     types.Duration(1 * time.Minute),
+			BlockProposalInterval: types.Duration(1 * time.Second),
+			BlockAnnInterval:      types.Duration(3 * time.Second),
 		},
 		DB: DBConfig{
 			Host:          "127.0.0.1",
@@ -270,16 +252,16 @@ func DefaultConfig() *Config {
 			User:          "kwild",
 			Pass:          "",
 			DBName:        "kwild",
-			ReadTxTimeout: Duration(45 * time.Second),
+			ReadTxTimeout: types.Duration(45 * time.Second),
 			MaxConns:      60,
 		},
 		RPC: RPCConfig{
 			ListenAddress:      "0.0.0.0:8484",
-			BroadcastTxTimeout: Duration(15 * time.Second),
-			Timeout:            Duration(20 * time.Second),
+			BroadcastTxTimeout: types.Duration(15 * time.Second),
+			Timeout:            types.Duration(20 * time.Second),
 			MaxReqSize:         6_000_000,
 			Private:            false,
-			ChallengeExpiry:    Duration(30 * time.Second),
+			ChallengeExpiry:    types.Duration(30 * time.Second),
 			ChallengeRateLimit: 10,
 		},
 		Admin: AdminConfig{
@@ -297,7 +279,7 @@ func DefaultConfig() *Config {
 		},
 		StateSync: StateSyncConfig{
 			Enable:           false,
-			DiscoveryTimeout: Duration(30 * time.Second),
+			DiscoveryTimeout: types.Duration(30 * time.Second),
 			MaxRetries:       3,
 		},
 		Extensions: make(map[string]map[string]string),
@@ -347,39 +329,39 @@ type DBConfig struct {
 	// However, this is less error prone, and prevents passing settings that
 	// would alter the functionality of the connection. An advanced option could
 	// be added to supplement the conn string if that seems useful.
-	Host          string   `toml:"host" comment:"postgres host name (IP or UNIX socket path)"`
-	Port          string   `toml:"port" comment:"postgres TCP port (leave empty for UNIX socket)"`
-	User          string   `toml:"user" comment:"postgres role/user name"`
-	Pass          string   `toml:"pass" comment:"postgres password if required for the user and host"`
-	DBName        string   `toml:"dbname" comment:"postgres database name"`
-	ReadTxTimeout Duration `toml:"read_timeout" comment:"timeout on read transactions from user RPC calls and queries"`
-	MaxConns      uint32   `toml:"max_connections" comment:"maximum number of DB connections to permit"`
+	Host          string         `toml:"host" comment:"postgres host name (IP or UNIX socket path)"`
+	Port          string         `toml:"port" comment:"postgres TCP port (leave empty for UNIX socket)"`
+	User          string         `toml:"user" comment:"postgres role/user name"`
+	Pass          string         `toml:"pass" comment:"postgres password if required for the user and host"`
+	DBName        string         `toml:"dbname" comment:"postgres database name"`
+	ReadTxTimeout types.Duration `toml:"read_timeout" comment:"timeout on read transactions from user RPC calls and queries"`
+	MaxConns      uint32         `toml:"max_connections" comment:"maximum number of DB connections to permit"`
 }
 
 type ConsensusConfig struct {
-	ProposeTimeout Duration `toml:"propose_timeout" comment:"minimum time to wait before proposing a block with transactions (applies to leader). If set to 0, the leader will propose a block as soon as it has transactions"`
+	ProposeTimeout types.Duration `toml:"propose_timeout" comment:"minimum time to wait before proposing a block with transactions (applies to leader). If set to 0, the leader will propose a block as soon as it has transactions"`
 
-	EmptyBlockTimeout Duration `toml:"empty_block_timeout" comment:"timeout for proposing an empty block"`
+	EmptyBlockTimeout types.Duration `toml:"empty_block_timeout" comment:"timeout for proposing an empty block"`
 	// reannounce intervals
 
 	// BlockProposalInterval is the interval between block proposal reannouncements by the leader.
 	// This impacts the time it takes for an out-of-sync validator to receive the current block proposal,
 	// thereby impacting the block times. Default is 1 second.
-	BlockProposalInterval Duration `toml:"block_proposal_interval" comment:"interval between block proposal reannouncements by the leader"`
+	BlockProposalInterval types.Duration `toml:"block_proposal_interval" comment:"interval between block proposal reannouncements by the leader"`
 	// BlockAnnInterval is the frequency with which the block commit messages are reannouncements by the leader,
 	// and votes reannounced by validators. Default is 3 second. This impacts the time it takes for an
 	// out-of-sync nodes to catch up with the latest block.
-	BlockAnnInterval Duration `toml:"block_ann_interval" comment:"interval between block commit reannouncements by the leader, and votes reannouncements by validators"`
+	BlockAnnInterval types.Duration `toml:"block_ann_interval" comment:"interval between block commit reannouncements by the leader, and votes reannouncements by validators"`
 }
 
 type RPCConfig struct {
-	ListenAddress      string   `toml:"listen" comment:"address in host:port format on which the RPC server will listen"`
-	BroadcastTxTimeout Duration `toml:"broadcast_tx_timeout" comment:"duration to wait for a tx to be committed when transactions are authored with --sync flag"`
-	Timeout            Duration `toml:"timeout" comment:"user request duration limit after which it is cancelled"`
-	MaxReqSize         int      `toml:"max_req_size" comment:"largest permissible user request size"`
-	Private            bool     `toml:"private" comment:"enable private mode that requires challenge authentication for each call"`
-	ChallengeExpiry    Duration `toml:"challenge_expiry" comment:"lifetime of a server-generated challenge"`
-	ChallengeRateLimit float64  `toml:"challenge_rate_limit" comment:"maximum number of challenges per second that a user can request"`
+	ListenAddress      string         `toml:"listen" comment:"address in host:port format on which the RPC server will listen"`
+	BroadcastTxTimeout types.Duration `toml:"broadcast_tx_timeout" comment:"duration to wait for a tx to be committed when transactions are authored with --sync flag"`
+	Timeout            types.Duration `toml:"timeout" comment:"user request duration limit after which it is cancelled"`
+	MaxReqSize         int            `toml:"max_req_size" comment:"largest permissible user request size"`
+	Private            bool           `toml:"private" comment:"enable private mode that requires challenge authentication for each call"`
+	ChallengeExpiry    types.Duration `toml:"challenge_expiry" comment:"lifetime of a server-generated challenge"`
+	ChallengeRateLimit float64        `toml:"challenge_rate_limit" comment:"maximum number of challenges per second that a user can request"`
 }
 
 type AdminConfig struct {
@@ -401,8 +383,8 @@ type StateSyncConfig struct {
 	Enable           bool     `toml:"enable" comment:"enable using statesync rather than blocksync"`
 	TrustedProviders []string `toml:"trusted_providers" comment:"trusted snapshot providers in node ID format (see bootnodes)"`
 
-	DiscoveryTimeout Duration `toml:"discovery_time" comment:"how long to discover snapshots before selecting one to use"`
-	MaxRetries       uint64   `toml:"max_retries" comment:"how many times to try after failing to apply a snapshot before switching to blocksync"`
+	DiscoveryTimeout types.Duration `toml:"discovery_time" comment:"how long to discover snapshots before selecting one to use"`
+	MaxRetries       uint64         `toml:"max_retries" comment:"how many times to try after failing to apply a snapshot before switching to blocksync"`
 }
 
 type MigrationConfig struct {

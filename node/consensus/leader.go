@@ -172,6 +172,8 @@ func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 		return err
 	}
 
+	ce.log.Info("Waiting for votes from the validators", "height", blkProp.height, "hash", blkProp.blkHash)
+
 	ce.state.votes[string(ce.pubKey.Bytes())] = &ktypes.VoteInfo{
 		AppHash:   &ce.state.blockRes.appHash,
 		AckStatus: ktypes.AckStatusAgree,
@@ -179,7 +181,6 @@ func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 	}
 
 	ce.processVotes(ctx)
-	ce.log.Info("Waiting for votes from the validators", "height", blkProp.height, "hash", blkProp.blkHash)
 	return nil
 }
 

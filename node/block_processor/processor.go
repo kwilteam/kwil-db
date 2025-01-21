@@ -578,7 +578,9 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 	}
 
 	bp.log.Info("Executed Block", "height", req.Height, "blkHash", req.BlockID, "appHash", nextHash)
-	bp.log.Infoln("network param updates:", bp.chainCtx.NetworkUpdates)
+	if bp.chainCtx.NetworkUpdates != nil {
+		bp.log.Infoln("network param updates:", bp.chainCtx.NetworkUpdates)
+	}
 
 	return &ktypes.BlockExecResult{
 		TxResults:        txResults,

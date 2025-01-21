@@ -76,7 +76,7 @@ func makeTestHosts(t *testing.T, nNodes, nExtraHosts int, blockInterval time.Dur
 	})
 
 	defaultConfigSet := config.DefaultConfig()
-	defaultConfigSet.Consensus.ProposeTimeout = config.Duration(blockInterval)
+	defaultConfigSet.Consensus.ProposeTimeout = ktypes.Duration(blockInterval)
 
 	var nodes []*Node
 	var hosts []host.Host

@@ -5,6 +5,7 @@ package meta_test
 import (
 	"context"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -53,7 +54,7 @@ func Test_NetworkParams(t *testing.T) {
 	param := &common.NetworkParameters{
 		Leader:           types.PublicKey{PublicKey: pubkey},
 		MaxBlockSize:     1000,
-		JoinExpiry:       100,
+		JoinExpiry:       types.Duration(100 * time.Second),
 		DisabledGasCosts: true,
 		MaxVotesPerTx:    100,
 	}

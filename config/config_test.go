@@ -12,6 +12,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/core/types"
 )
 
 // TestMarshalDuration ensures that a time.Duration can be marshaled and
@@ -19,10 +20,10 @@ import (
 // case for some reason **cough specs cough**.
 func TestMarshalDuration(t *testing.T) {
 	type td struct {
-		Duration Duration `koanf:"duration" toml:"duration"`
+		Duration types.Duration `koanf:"duration" toml:"duration"`
 	}
 	tt := td{
-		Duration: Duration(10 * time.Second),
+		Duration: types.Duration(10 * time.Second),
 	}
 	bts, err := gotoml.Marshal(tt)
 	if err != nil {
@@ -63,7 +64,7 @@ func TestConfigSaveAndLoad(t *testing.T) {
 					User:          "kwild",
 					Pass:          "kwild",
 					DBName:        "kwild",
-					ReadTxTimeout: Duration(45 * time.Second),
+					ReadTxTimeout: types.Duration(45 * time.Second),
 					MaxConns:      10,
 				},
 			},

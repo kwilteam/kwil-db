@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"testing"
+	"time"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -54,18 +55,20 @@ func Test_Voting(t *testing.T) {
 			fn: func(t *testing.T, db sql.DB, v *VoteStore) {
 				ctx := context.Background()
 
-				err := CreateResolution(ctx, db, dummyEvent, 10, []byte("a"), crypto.KeyTypeEd25519)
+				now := time.Now()
+				expiration := now.Unix()
+				err := CreateResolution(ctx, db, dummyEvent, expiration, []byte("a"), crypto.KeyTypeEd25519)
 				require.Error(t, err)
 
 				// Can't approve non-existent resolutions
 				err = ApproveResolution(ctx, db, testEvent.ID(), []byte("a"), crypto.KeyTypeEd25519)
 				require.Error(t, err)
 
-				err = CreateResolution(ctx, db, testEvent, 10, []byte("a"), crypto.KeyTypeEd25519)
+				err = CreateResolution(ctx, db, testEvent, expiration, []byte("a"), crypto.KeyTypeEd25519)
 				require.NoError(t, err)
 
 				// duplicate creation should fail
-				err = CreateResolution(ctx, db, testEvent, 10, []byte("a"), crypto.KeyTypeEd25519)
+				err = CreateResolution(ctx, db, testEvent, expiration, []byte("a"), crypto.KeyTypeEd25519)
 				require.Error(t, err)
 
 				// voter doesn't exist (non existent pubkey)
@@ -90,7 +93,6 @@ func Test_Voting(t *testing.T) {
 				require.Equal(t, testEvent.Body, events[0].Body)
 				require.Equal(t, testEvent.Type, events[0].Type)
 				require.Equal(t, testEvent.ID(), events[0].ID)
-				require.Equal(t, int64(10), events[0].ExpirationHeight)
 				require.Equal(t, int64(200), events[0].ApprovedPower)
 			},
 		},
@@ -215,7 +217,6 @@ func Test_Voting(t *testing.T) {
 				require.Equal(t, testEvent.Body, info.Body)
 				require.Equal(t, testEvent.Type, info.Type)
 				require.Equal(t, testEvent.ID(), info.ID)
-				require.Equal(t, int64(10), info.ExpirationHeight)
 				require.Equal(t, int64(200), info.ApprovedPower)
 
 				hasValidator1Info := false
@@ -243,10 +244,15 @@ func Test_Voting(t *testing.T) {
 			fn: func(t *testing.T, db sql.DB, v *VoteStore) {
 				ctx := context.Background()
 
-				err := CreateResolution(ctx, db, testEvent, 10, []byte("a"), crypto.KeyTypeEd25519)
+				expiration := time.Now().Unix()
+				err := CreateResolution(ctx, db, testEvent, expiration, []byte("a"), crypto.KeyTypeEd25519)
 				require.NoError(t, err)
 
-				expired, err := GetExpired(ctx, db, 10)
+				expired, err := GetExpired(ctx, db, expiration-5)
+				require.NoError(t, err)
+				require.Equal(t, 0, len(expired))
+
+				expired, err = GetExpired(ctx, db, expiration+5)
 				require.NoError(t, err)
 				require.Equal(t, 1, len(expired))
 
@@ -257,6 +263,7 @@ func Test_Voting(t *testing.T) {
 				require.Equal(t, resolutionInfo.Proposer.Power, int64(100))
 				require.Equal(t, resolutionInfo.Proposer.KeyType, crypto.KeyTypeEd25519)
 				require.Equal(t, []byte(resolutionInfo.Proposer.Identifier[:]), []byte("a"))
+
 			},
 		},
 		{

@@ -474,7 +474,7 @@ func (svc *Service) toPendingInfo(resolution *resolutions.Resolution, allVoters 
 			KeyType:    resolutionBody.PubKeyType,
 		},
 		Power:     resolutionBody.Power,
-		ExpiresAt: resolution.ExpirationHeight,
+		ExpiresAt: resolution.Expiration,
 		Board:     board,
 		Approved:  approvals,
 	}, nil
@@ -597,7 +597,7 @@ func (svc *Service) ResolutionStatus(ctx context.Context, req *adminjson.Resolut
 		Status: &ktypes.PendingResolution{
 			Type:         resolution.Type,
 			ResolutionID: req.ResolutionID,
-			ExpiresAt:    resolution.ExpirationHeight,
+			ExpiresAt:    resolution.Expiration,
 			Board:        board,
 			Approved:     approvals,
 		},

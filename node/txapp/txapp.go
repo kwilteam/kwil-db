@@ -319,7 +319,7 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 	}
 
 	// now we will expire resolutions
-	expired, err := getExpired(ctx, db, block.Height)
+	expired, err := getExpired(ctx, db, block.Timestamp)
 	if err != nil {
 		return nil, err
 	}
