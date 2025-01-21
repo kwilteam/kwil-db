@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 
@@ -65,7 +66,7 @@ func (l *KeyHexBytes) UnmarshalJSON(b []byte) error {
 	sub := b[1 : len(b)-1] // strip the quotes
 
 	// if it's an ethereum address, strip the 0x prefix
-	if len(sub) >= 2 && sub[0] == '0' && sub[1] == 'x' {
+	if len(sub) == hex.EncodedLen(ethAddressLength)+2 && sub[0] == '0' && sub[1] == 'x' {
 		sub = sub[2:]
 	}
 
@@ -76,6 +77,25 @@ func (l *KeyHexBytes) UnmarshalJSON(b []byte) error {
 	}
 	l.HexBytes = types.HexBytes(dec)
 	return nil
+}
+
+const ethAddressLength = 20 // 20 bytes = 40 hex chars
+
+func (l *KeyHexBytes) MarshalJSON() ([]byte, error) {
+	if l.HexBytes == nil {
+		return []byte("null"), nil
+	}
+
+	if len(l.HexBytes) == ethAddressLength {
+		checksummed, err := auth.EthSecp256k1Authenticator{}.Identifier(l.HexBytes)
+		if err != nil {
+			return nil, err
+		}
+
+		return []byte(`"` + checksummed + `"`), nil
+	}
+
+	return []byte(`"` + hex.EncodeToString(l.HexBytes) + `"`), nil
 }
 
 type GenesisConfig struct {
