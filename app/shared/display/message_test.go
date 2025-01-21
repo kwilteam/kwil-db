@@ -324,3 +324,32 @@ func mustUnmarshalHash(s string) types.Hash {
 	}
 	return h
 }
+
+// This tests that the result of json marshalling TxHashAndExecResponse
+// can be unmarshalled into a RespTxQuery. This is important because RespTxQuery
+// is used for regular (no --sync flag) transactions, while TxHashAndExecResponse
+// is used for --sync transactions. This ensures that anyone can unmarshal the result
+// of a --sync transaction into a RespTxQuery.
+func Test_MarshallingTxResults(t *testing.T) {
+	hash := types.Hash{0x1} // simple hash for testing
+	execRes := &TxHashAndExecResponse{
+		Res: &types.TxQueryResponse{
+			Hash:   hash,
+			Height: 100,
+			Result: &types.TxResult{
+				Code: uint32(types.CodeOk),
+				Log:  "transaction successful",
+			},
+		},
+	}
+
+	execBts, err := execRes.MarshalJSON()
+	require.NoError(t, err)
+
+	var txRes RespTxHash
+	err = txRes.UnmarshalJSON(execBts)
+	require.NoError(t, err)
+
+	// check that they have the right hash
+	require.Equal(t, hash.String(), txRes.Hex())
+}

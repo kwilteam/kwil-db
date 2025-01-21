@@ -837,6 +837,41 @@ func Test_Roundtrip(t *testing.T) {
 	}
 }
 
+func Test_RoundtripNull(t *testing.T) {
+
+	db, err := newTestDB()
+	require.NoError(t, err)
+	defer db.Close()
+
+	ctx := context.Background()
+	tx, err := db.BeginTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx) // always rollback
+
+	interp := newTestInterp(t, tx, nil, false)
+
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, "CREATE TABLE tbl (id int primary key, val int);", nil, nil)
+	require.NoError(t, err)
+
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, "INSERT INTO tbl (id, val) VALUES (1, $a);", map[string]any{
+		"$a": nil,
+	}, nil)
+	require.NoError(t, err)
+
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, "SELECT val FROM tbl WHERE id = 1;", nil, exact(nil))
+	require.NoError(t, err)
+
+	// action
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, "CREATE ACTION act($a int) public { INSERT INTO tbl (id, val) VALUES (2, $a); };", nil, nil)
+	require.NoError(t, err)
+
+	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "", "act", []any{nil}, nil)
+	require.NoError(t, err)
+
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, "SELECT val FROM tbl WHERE id = 2;", nil, exact(nil))
+	require.NoError(t, err)
+}
+
 // Test_CreateAndDelete tests creating and dropping different objects,
 // as well as how created objects are read from the database on startup.
 func Test_CreateAndDelete(t *testing.T) {
@@ -1554,7 +1589,7 @@ func Test_Actions(t *testing.T) {
 		$arr[1] := null;
 		`),
 		rawTest("set null to untyped value", `
-		 	$a := null;`, engine.ErrInvalidNull),
+		 	$a := null;`),
 		rawTest("allocate null to typed variable", `
 			$a int := null;`),
 		rawTest("set new type to variable", `
@@ -1681,6 +1716,15 @@ func Test_Actions(t *testing.T) {
 			},
 			action: "call_change_param",
 		},
+		{
+			name: "nested action returns null",
+			stmt: []string{
+				`CREATE ACTION get_null() public view returns (a int) { RETURN null; }`,
+				`CREATE ACTION call_get_null() public view { $a := get_null(); if $a is not null { error('a is not null'); } }`,
+			},
+			action: "call_get_null",
+		},
+		// TODO: test that actions returning nulls to other actions does not error
 	}
 
 	db, err := newTestDB()

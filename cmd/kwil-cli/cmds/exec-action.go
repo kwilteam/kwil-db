@@ -138,9 +138,9 @@ func execActionCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&namespace, "namespace", "n", "", "namespace to execute the action in")
-	cmd.Flags().StringArrayVarP(&namedParams, "param", "p", nil, "named parameters that will override any positional or CSV parameters")
-	cmd.Flags().StringVarP(&csvFile, "csv", "c", "", "CSV file containing the parameters to pass to the action")
-	cmd.Flags().StringArrayVarP(&csvParams, "csv-mapping", "m", nil, "mapping of CSV columns to action parameters")
+	cmd.Flags().StringArrayVarP(&namedParams, "param", "p", nil, `named parameters that will override any positional or CSV parameters. format: "name:type=value"`)
+	cmd.Flags().StringVar(&csvFile, "csv", "", "CSV file containing the parameters to pass to the action")
+	cmd.Flags().StringArrayVarP(&csvParams, "csv-mapping", "m", nil, `mapping of CSV columns to action parameters. format: "csv_column:action_param_name" OR "csv_column:action_param_position"`)
 	common.BindTxFlags(cmd)
 	return cmd
 }
@@ -292,19 +292,23 @@ func getNamedParams(actionNamedParams []NamedParameter, unparsedNamedValues []st
 
 // parseTypedParam takes a string of form type:value and returns the value as the correct type.
 func parseTypedParam(param string) (datatype *types.DataType, val any, err error) {
+	if param == NullLiteral {
+		return types.NullType.Copy(), nil, nil
+	}
+
 	parts := strings.SplitN(param, ":", 2)
 	if len(parts) != 2 {
-		return nil, nil, fmt.Errorf("invalid parameter format: %s", param)
+		return nil, nil, fmt.Errorf(`invalid parameter format: "%s". error: %w`, param, err)
 	}
 
 	datatype, err = types.ParseDataType(parts[0])
 	if err != nil {
-		return nil, nil, fmt.Errorf("invalid parameter type: %s", parts[0])
+		return nil, nil, fmt.Errorf(`invalid parameter type: "%s". error: %w`, parts[0], err)
 	}
 
 	val, err = stringAndTypeToVal(parts[1], datatype)
 	if err != nil {
-		return nil, nil, fmt.Errorf("invalid parameter value: %s", parts[1])
+		return nil, nil, fmt.Errorf(`invalid parameter value: "%s". error: %w`, parts[1], err)
 	}
 
 	return datatype, val, nil

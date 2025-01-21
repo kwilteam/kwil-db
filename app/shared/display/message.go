@@ -25,6 +25,10 @@ func (h *TxHashAndExecResponse) MarshalJSON() ([]byte, error) {
 	return json.Marshal(h.Res)
 }
 
+func (h *TxHashAndExecResponse) UnmarshalJSON(b []byte) error {
+	return json.Unmarshal(b, &h.Res)
+}
+
 // MarshalText deduplicates the tx hash for a compact readable output, unlike
 // the JSON marshalling that is meant to be a composition of both RespTxHash and
 // RespTxQuery.
@@ -62,6 +66,15 @@ func (h RespTxHash) MarshalJSON() ([]byte, error) {
 
 func (h RespTxHash) MarshalText() ([]byte, error) {
 	return []byte("TxHash: " + h.Hex()), nil
+}
+
+func (h *RespTxHash) UnmarshalJSON(b []byte) error {
+	var res TxHashResponse
+	if err := json.Unmarshal(b, &res); err != nil {
+		return err
+	}
+	*h = RespTxHash(res.TxHash)
+	return nil
 }
 
 // RespString is used to represent a string in cli

@@ -23,18 +23,26 @@ func makeActionToExecutable(namespace string, act *Action) *executable {
 		stmtFns[j] = stmt.Accept(planner).(stmtFunc)
 	}
 
-	validateArgs := func(v []value) error {
+	validateArgs := func(v []value) ([]value, error) {
+		newVal := make([]value, len(v))
 		if len(v) != len(act.Parameters) {
-			return fmt.Errorf("expected %d arguments, got %d", len(act.Parameters), len(v))
+			return nil, fmt.Errorf("expected %d arguments, got %d", len(act.Parameters), len(v))
 		}
 
 		for i, arg := range v {
 			if !act.Parameters[i].Type.Equals(arg.Type()) {
-				return fmt.Errorf("%w: expected argument %d to be %s, got %s", engine.ErrType, i+1, act.Parameters[i].Type, arg.Type())
+				return nil, fmt.Errorf("%w: expected argument %d to be %s, got %s", engine.ErrType, i+1, act.Parameters[i].Type, arg.Type())
+			}
+
+			var err error
+			// type cast, in case of precision and scale or nulls
+			newVal[i], err = arg.Cast(act.Parameters[i].Type)
+			if err != nil {
+				return nil, err
 			}
 		}
 
-		return nil
+		return newVal, nil
 	}
 
 	return &executable{
@@ -45,13 +53,14 @@ func makeActionToExecutable(namespace string, act *Action) *executable {
 			}
 
 			// validate the args
-			err := validateArgs(args)
+			args, err := validateArgs(args)
 			if err != nil {
 				return err
 			}
 
 			// get the expected return col names
 			var returnColNames []string
+			var expectedReturnTypes []*types.DataType
 			if act.Returns != nil {
 				for _, f := range act.Returns.Fields {
 					cName := f.Name
@@ -59,6 +68,7 @@ func makeActionToExecutable(namespace string, act *Action) *executable {
 						cName = unknownColName
 					}
 					returnColNames = append(returnColNames, cName)
+					expectedReturnTypes = append(expectedReturnTypes, f.Type.Copy())
 				}
 			}
 
@@ -75,6 +85,28 @@ func makeActionToExecutable(namespace string, act *Action) *executable {
 			for _, stmt := range stmtFns {
 				err := stmt(exec2, func(row *row) error {
 					row.columns = returnColNames
+
+					// we will ensure that the return values match the expected return types
+					if len(row.Values) != len(expectedReturnTypes) {
+						return fmt.Errorf("%w: expected %d return values, got %d", engine.ErrReturnShape, len(expectedReturnTypes), len(row.Values))
+					}
+
+					// we will iterate over and check it is of the correct type.
+					// We will also type cast it to the correct type, to ensure we maintain precision and scale,
+					// and account for any nulls
+					for i, val := range row.Values {
+						// only equals, not equals strict, because we want to accept
+						// nulls.
+						if !val.Type().Equals(expectedReturnTypes[i]) {
+							return fmt.Errorf("%w: expected return value %d to be %s, got %s", engine.ErrType, i+1, expectedReturnTypes[i], val.Type())
+						}
+
+						row.Values[i], err = val.Cast(expectedReturnTypes[i])
+						if err != nil {
+							return err
+						}
+					}
+
 					err := fn(row)
 					if err != nil {
 						return err

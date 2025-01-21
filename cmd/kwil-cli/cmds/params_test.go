@@ -22,6 +22,7 @@ func Test_ParseInputs(t *testing.T) {
 		{"username:text=satoshi", "username", "satoshi", false},
 		{`username:text="satoshi"`, "username", "satoshi", false},
 		{"username:text='satoshi'", "username", "satoshi", false},
+		{"username:text='null'", "username", "null", false},
 		{"age:int=25", "age", int64(25), false},
 		{"age:int8='25'", "age", nil, true}, // shouldnt have quotes around the value
 		{"balance:numeric(10,5)=100.5", "balance", *types.MustParseDecimalExplicit("100.5", 10, 5), false},

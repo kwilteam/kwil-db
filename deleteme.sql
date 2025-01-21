@@ -6,6 +6,8 @@ CREATE TABLE accounts (
     id UUID PRIMARY KEY
 );
 
+insert into accounts (id) values ('d33fd73c-e81c-463c-9773-5947fc20d23d'::uuid);
+
 -- profiles tracks the public-facing information about a user
 CREATE TABLE profiles (
     id UUID PRIMARY KEY,
@@ -15,12 +17,19 @@ CREATE TABLE profiles (
     account_id UUID NOT NULL REFERENCES accounts(id) ON UPDATE CASCADE ON DELETE CASCADE
 );
 
+insert into profiles (id, username, age, bio, account_id) values
+('afdc0da2-c49b-4952-9cc9-027f4c7640bc'::uuid, 'satoshi', 30, 'I am the creator of Bitcoin', 'd33fd73c-e81c-463c-9773-5947fc20d23d'::uuid),
+('e1a227bc-2e5f-4603-962d-b32f1d085973'::uuid, 'vitalik', 27, 'I am the creator of Ethereum', 'd33fd73c-e81c-463c-9773-5947fc20d23d'::uuid);
+
 -- wallets tracks the wallet information for a user
 CREATE TABLE wallets (
     id UUID PRIMARY KEY,
     address TEXT UNIQUE NOT NULL,
     account_id UUID NOT NULL REFERENCES accounts(id) ON UPDATE CASCADE ON DELETE CASCADE
 );
+
+insert into wallets (id, address, account_id) values
+('c656107c-7049-4d4a-af2f-f093f9fa6e7c'::uuid, '0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D', 'd33fd73c-e81c-463c-9773-5947fc20d23d'::uuid);
 
 -- posts tracks the posts made by users
 -- posts can be threaded, like a comment on a post
@@ -31,6 +40,11 @@ CREATE TABLE posts (
     author_id UUID NOT NULL REFERENCES profiles(id) ON UPDATE CASCADE ON DELETE CASCADE,
     parent_id UUID REFERENCES posts(id) ON UPDATE CASCADE ON DELETE CASCADE
 );
+
+insert into posts (id, content, created_at, author_id, parent_id) values
+('f1b1b1b1-1b1b-1b1b-1b1b-1b1b1b1b1b1b'::uuid, 'Hello, world!', 1630000000, 'afdc0da2-c49b-4952-9cc9-027f4c7640bc'::uuid, null),
+('f1b1b1b1-1b1b-1b1b-1b1b-1b1b1b1b1b1c'::uuid, 'Hello, world! 2', 1630000001, 'e1a227bc-2e5f-4603-962d-b32f1d085973'::uuid, 'f1b1b1b1-1b1b-1b1b-1b1b-1b1b1b1b1b1b'::uuid),
+('f1b1b1b1-1b1b-1b1b-1b1b-1b1b1b1b1b1d'::uuid, 'Hello, world! 3', 1630000002, 'afdc0da2-c49b-4952-9cc9-027f4c7640bc'::uuid, 'f1b1b1b1-1b1b-1b1b-1b1b-1b1b1b1b1b1b'::uuid);
 
 -- likes tracks the likes made by users
 CREATE TABLE likes (
@@ -171,12 +185,11 @@ CREATE ACTION get_friends($username TEXT) public view returns TABLE(username TEX
 
 -- get_posts returns the list of posts for the specified profile
 CREATE ACTION get_posts($username TEXT) public view returns table(post_id UUID, content TEXT, created_at INT, likes INT) {
-    return WITH post_likes AS (
+    return WITH likes AS (
         SELECT post_id, COUNT(*) as likes FROM likes GROUP BY post_id
     )
-    SELECT p.id, p.content, p.created_at, COALESCE(l.likes, 0) as likes
-    FROM posts p
-    LEFT JOIN post_likes l
+    SELECT p.id, p.content, p,created_at, COALESCE(l.likes, 0) as likes FROM posts p
+    LEFT JOIN likes l
     ON p.id = l.post_id
     JOIN profiles pr
     ON p.author_id = pr.id

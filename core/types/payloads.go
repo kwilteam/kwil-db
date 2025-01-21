@@ -405,7 +405,7 @@ func (a *ActionExecution) UnmarshalBinary(b []byte) error {
 // transactions.ActionExecution for the transaction payload used for executing
 // an action.
 type ActionCall struct {
-	DBID      string
+	DBID      string // TODO: rename to Namespace
 	Action    string
 	Arguments []*EncodedValue
 }
@@ -638,7 +638,7 @@ func (e *EncodedValue) Decode() (any, error) {
 		if e.Type.IsArray {
 			return nil, fmt.Errorf("cannot decode array of type 'null'")
 		}
-		if e.Data == nil {
+		if len(e.Data) == 0 {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("expected nil data for type 'null'")
@@ -748,6 +748,16 @@ func EncodeValue(v any) (*EncodedValue, error) {
 	// encodeScalar encodes a scalar value into a byte slice.
 	// It also returns the data type of the value.
 	encodeScalar := func(v any) ([]byte, *DataType, error) {
+		// if it is a pointer, check if it is nil and dereference if not
+		valueOf := reflect.ValueOf(v)
+		if valueOf.Kind() == reflect.Ptr {
+			if valueOf.IsNil() {
+				return nil, nil, nil
+			}
+
+			v = valueOf.Elem().Interface()
+		}
+
 		switch t := v.(type) {
 		case string:
 			return []byte(t), TextType, nil
@@ -796,8 +806,21 @@ func EncodeValue(v any) (*EncodedValue, error) {
 	}
 
 	dt := &DataType{}
-	// check if it is an array
+	// check if it is an array or pointer
 	typeOf := reflect.TypeOf(v)
+	if typeOf.Kind() == reflect.Ptr {
+		// if nil, encode as null
+		// otherwise, dereference and encode
+		valOf := reflect.ValueOf(v)
+		if valOf.IsNil() {
+			return &EncodedValue{
+				Type: *NullType,
+				Data: nil,
+			}, nil
+		}
+
+		v = valOf.Elem().Interface()
+	}
 	if typeOf.Kind() == reflect.Slice && typeOf.Elem().Kind() != reflect.Uint8 { // ignore byte slices
 		// encode each element of the array
 		encoded := make([][]byte, 0)

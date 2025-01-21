@@ -186,8 +186,13 @@ func mergeGenesisFlags(conf *config.GenesisConfig, cmd *cobra.Command, flagCfg *
 				return nil, makeErr(fmt.Errorf("invalid balance for alloc: %s", parts[1]))
 			}
 
+			keyStr, err := hex.DecodeString(keyParts[0])
+			if err != nil {
+				return nil, makeErr(fmt.Errorf("invalid address for alloc: %s", keyParts[0]))
+			}
+
 			conf.Allocs = append(conf.Allocs, config.GenesisAlloc{
-				ID:      keyParts[0],
+				ID:      keyStr,
 				KeyType: keyType.String(),
 				Amount:  balance,
 			})

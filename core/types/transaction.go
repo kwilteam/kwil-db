@@ -25,7 +25,7 @@ type ResultBroadcastTx struct {
 
 // TxQueryResponse is the response of a transaction query.
 type TxQueryResponse struct {
-	Hash   Hash         `json:"hash,omitempty"`
+	Hash   Hash         `json:"tx_hash,omitempty"`
 	Height int64        `json:"height,omitempty"`
 	Tx     *Transaction `json:"tx"`
 	Result *TxResult    `json:"tx_result"`

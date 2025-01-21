@@ -237,6 +237,15 @@ func init() {
 				}, nil
 			},
 		},
+		valueMapping{
+			KwilType: types.NullType,
+			ZeroValue: func(t *types.DataType) (value, error) {
+				return nil, fmt.Errorf("cannot create zero value of null type")
+			},
+			NullValue: func(t *types.DataType) (value, error) {
+				return &nullValue{}, nil
+			},
+		},
 	)
 }
 
@@ -728,6 +737,21 @@ func makeNull(t *types.DataType) (value, error) {
 	}
 
 	return m.NullValue(t)
+}
+
+// makeNullScalar creates a new null scalar value of the given type.
+func makeNullScalar(t *types.DataType) (scalarValue, error) {
+	v, err := makeNull(t)
+	if err != nil {
+		return nil, err
+	}
+
+	s, ok := v.(scalarValue)
+	if !ok {
+		return nil, fmt.Errorf("expected to create a null scalar value, got %T", v)
+	}
+
+	return s, nil
 }
 
 func makeText(s string) *textValue {
@@ -1483,6 +1507,20 @@ func (o *singleDimArray[T]) pgtypeArr() *pgtype.Array[T] {
 type internalArray[T any] interface {
 	pgtypeArr() *pgtype.Array[T]
 	Type() *types.DataType
+	Len() int32
+}
+
+// getArr gets the value at index i in the array.
+// It treats the array as 1-based.
+func getArr[T any](arr internalArray[T], i int32, fn func(T) scalarValue) (scalarValue, error) {
+	// to match postgres, accessing a non-existent index should return null
+	if i < 1 || i > arr.Len() {
+		return makeNullScalar(arr.Type())
+	}
+
+	pgArr := arr.pgtypeArr()
+
+	return fn(pgArr.Elements[i-1]), nil
 }
 
 // setArr sets the value at index i in the array.
@@ -1605,11 +1643,9 @@ func (a *int8ArrayValue) Len() int32 {
 }
 
 func (a *int8ArrayValue) Get(i int32) (scalarValue, error) {
-	if i < 1 || i > a.Len() {
-		return nil, engine.ErrIndexOutOfBounds
-	}
-
-	return &int8Value{a.Elements[i-1]}, nil // indexing is 1-based
+	return getArr(a, i, func(i pgtype.Int8) scalarValue {
+		return &int8Value{i}
+	})
 }
 
 func (a *int8ArrayValue) Set(i int32, v scalarValue) error {
@@ -1698,11 +1734,9 @@ func (a *textArrayValue) Len() int32 {
 }
 
 func (a *textArrayValue) Get(i int32) (scalarValue, error) {
-	if i < 1 || i > a.Len() {
-		return nil, engine.ErrIndexOutOfBounds
-	}
-
-	return &textValue{a.Elements[i-1]}, nil
+	return getArr(a, i, func(i pgtype.Text) scalarValue {
+		return &textValue{i}
+	})
 }
 
 func (a *textArrayValue) Set(i int32, v scalarValue) error {
@@ -1843,11 +1877,9 @@ func (a *boolArrayValue) Len() int32 {
 }
 
 func (a *boolArrayValue) Get(i int32) (scalarValue, error) {
-	if i < 1 || i > a.Len() {
-		return nil, engine.ErrIndexOutOfBounds
-	}
-
-	return &boolValue{a.Elements[i-1]}, nil
+	return getArr(a, i, func(i pgtype.Bool) scalarValue {
+		return &boolValue{i}
+	})
 }
 
 func (a *boolArrayValue) Set(i int32, v scalarValue) error {
@@ -2027,11 +2059,12 @@ func (a *decimalArrayValue) Len() int32 {
 }
 
 func (a *decimalArrayValue) Get(i int32) (scalarValue, error) {
-	if i < 1 || i > a.Len() {
-		return nil, engine.ErrIndexOutOfBounds
-	}
-
-	return &decimalValue{Numeric: a.Elements[i-1]}, nil
+	return getArr(a, i, func(i pgtype.Numeric) scalarValue {
+		return &decimalValue{
+			Numeric:  i,
+			metadata: a.metadata,
+		}
+	})
 }
 
 func (a *decimalArrayValue) Set(i int32, v scalarValue) error {
@@ -2185,11 +2218,9 @@ func (a *blobArrayValue) Len() int32 {
 }
 
 func (a *blobArrayValue) Get(i int32) (scalarValue, error) {
-	if i < 1 || i > a.Len() {
-		return nil, engine.ErrIndexOutOfBounds
-	}
-
-	return a.Elements[i-1], nil
+	return getArr(a, i, func(i *blobValue) scalarValue {
+		return i
+	})
 }
 
 func (a *blobArrayValue) Set(i int32, v scalarValue) error {
@@ -2265,11 +2296,9 @@ func (a *uuidArrayValue) Len() int32 {
 }
 
 func (a *uuidArrayValue) Get(i int32) (scalarValue, error) {
-	if i < 1 || i > a.Len() {
-		return nil, engine.ErrIndexOutOfBounds
-	}
-
-	return &uuidValue{a.Elements[i-1]}, nil
+	return getArr(a, i, func(i pgtype.UUID) scalarValue {
+		return &uuidValue{i}
+	})
 }
 
 func (a *uuidArrayValue) Set(i int32, v scalarValue) error {
@@ -2463,10 +2492,11 @@ func (n *nullValue) RawValue() any {
 	return nil
 }
 
+func (n *nullValue) Value() (driver.Value, error) {
+	return nil, nil
+}
+
 func (n *nullValue) Cast(t *types.DataType) (value, error) {
-	if n.Null() {
-		return makeNull(t)
-	}
 	return makeNull(t)
 }
 
@@ -2475,7 +2505,7 @@ func (n *nullValue) Arithmetic(v scalarValue, op engine.ArithmeticOp) (scalarVal
 }
 
 func (n *nullValue) Unary(op engine.UnaryOp) (scalarValue, error) {
-	return nil, fmt.Errorf("%w: cannot perform unary operation %s on null", engine.ErrArithmetic, op)
+	return n, nil
 }
 
 func (n *nullValue) Len() int32 {
@@ -2483,7 +2513,7 @@ func (n *nullValue) Len() int32 {
 }
 
 func (n *nullValue) Get(i int32) (scalarValue, error) {
-	return nil, fmt.Errorf("%w: cannot get element from null", engine.ErrArrayDimensionality)
+	return n, nil
 }
 
 func (n *nullValue) Set(i int32, v scalarValue) error {

@@ -3,7 +3,6 @@ package integration
 import (
 	"context"
 	"crypto/rand"
-	"encoding/hex"
 	"math/big"
 	"testing"
 	"time"
@@ -655,7 +654,7 @@ func TestSingleNodeKwildEthDepositsOracleIntegration(t *testing.T) {
 			ConfigureGenesis: func(genDoc *config.GenesisConfig) {
 				genDoc.DisabledGasCosts = false
 				alloc := config.GenesisAlloc{
-					ID:      hex.EncodeToString(addr),
+					ID:      addr,
 					KeyType: "secp256k1",
 					Amount:  big.NewInt(100000000000000),
 				}
@@ -738,7 +737,7 @@ func TestKwildEthDepositFundTransfer(t *testing.T) {
 			ConfigureGenesis: func(genDoc *config.GenesisConfig) {
 				genDoc.DisabledGasCosts = false
 				alloc := config.GenesisAlloc{
-					ID:      hex.EncodeToString(addr),
+					ID:      addr,
 					KeyType: "secp256k1",
 					Amount:  big.NewInt(100000000000000),
 				}

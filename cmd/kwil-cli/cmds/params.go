@@ -21,7 +21,7 @@ func parseParams(args []string) (map[string]any, error) {
 		// split the arg into name and value.  only split on the first '='
 		split := strings.SplitN(arg, "=", 2)
 		if len(split) != 2 {
-			return nil, fmt.Errorf("invalid argument: %s.  argument must be in the form of name=value", arg)
+			return nil, fmt.Errorf("invalid argument: %s.  argument must be in the form of name=value, received", arg)
 		}
 
 		// it is now split into name:type and value
@@ -61,7 +61,7 @@ func stringAndTypeToVal(s string, dt *types.DataType) (any, error) {
 			}
 
 			var arr []*types.Decimal
-			err = types.ScanTo([]any{split}, []any{&arr})
+			err = types.ScanTo([]any{split}, &arr)
 			if err != nil {
 				return nil, err
 			}
@@ -136,7 +136,7 @@ func stringAndTypeToVal(s string, dt *types.DataType) (any, error) {
 	if s == "" {
 		if dt.IsArray {
 			// we call scan here to ensure it is properly set to a 0-length array
-			err := types.ScanTo([]any{[]string{}}, []any{scan})
+			err := types.ScanTo([]any{[]string{}}, scan)
 			if err != nil {
 				return nil, err
 			}
@@ -185,7 +185,7 @@ func stringAndTypeToVal(s string, dt *types.DataType) (any, error) {
 		}
 	}
 
-	err := types.ScanTo([]any{from}, []any{scan})
+	err := types.ScanTo([]any{from}, scan)
 	if err != nil {
 		return nil, err
 	}

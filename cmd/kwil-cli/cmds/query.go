@@ -68,7 +68,7 @@ func queryCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringArrayVarP(&namedParams, "param", "p", nil, "named parameters that will be used in the query")
+	cmd.Flags().StringArrayVarP(&namedParams, "param", "p", nil, `named parameters that will be used in the query. format: "key:type=value"`)
 	cmd.Flags().BoolVar(&rpcAuth, "rpc-auth", false, "signals that the call is being made to a kwil node and should be authenticated with the private key")
 	cmd.Flags().BoolVar(&gwAuth, "gateway-auth", false, "signals that the call is being made to a gateway and should be authenticated with the private key")
 	bindTableOutputFlags(cmd)

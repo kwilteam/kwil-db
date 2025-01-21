@@ -279,7 +279,7 @@ func decodeMany(inputs []string) ([][]byte, bool) {
 
 // FormatByteEncoding formats bytes to be read on the CLI.
 func FormatByteEncoding(b []byte) string {
-	return base64.StdEncoding.EncodeToString(b) + "#b64"
+	return base64.StdEncoding.EncodeToString(b)
 }
 
 // encodeBasedOnType will encode the input value based on the type of the input.

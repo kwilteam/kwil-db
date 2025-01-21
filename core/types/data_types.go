@@ -373,7 +373,8 @@ func ParseDataType(s string) (*DataType, error) {
 	return dt, dt.Clean()
 }
 
-// maps type names to their base names
+// maps type names to their base names.
+// null is not included here because it is a special type.
 var typeAlias = map[string]string{
 	"string":  textStr,
 	"text":    textStr,

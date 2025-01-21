@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -45,9 +46,36 @@ func (d *Duration) UnmarshalText(text []byte) error {
 }
 
 type GenesisAlloc struct {
-	ID      string   `json:"id"`
-	KeyType string   `json:"key_type"`
-	Amount  *big.Int `json:"amount"`
+	ID      KeyHexBytes `json:"id"`
+	KeyType string      `json:"key_type"`
+	Amount  *big.Int    `json:"amount"`
+}
+
+// KeyHexBytes wraps hex bytes, and allows it to receive Ethereum 0x addresses
+type KeyHexBytes types.HexBytes
+
+func (l *KeyHexBytes) UnmarshalJSON(b []byte) error {
+	if len(b) < 2 || b[0] != '"' || b[len(b)-1] != '"' {
+		if bytes.Equal(b, []byte("null")) {
+			*l = nil
+			return nil
+		}
+		return fmt.Errorf("invalid hex string: %s", b)
+	}
+	sub := b[1 : len(b)-1] // strip the quotes
+
+	// if it's an ethereum address, strip the 0x prefix
+	if len(sub) >= 2 && sub[0] == '0' && sub[1] == 'x' {
+		sub = sub[2:]
+	}
+
+	dec := make([]byte, hex.DecodedLen(len(sub)))
+	_, err := hex.Decode(dec, sub)
+	if err != nil {
+		return err
+	}
+	*l = dec
+	return nil
 }
 
 type GenesisConfig struct {
