@@ -242,7 +242,7 @@ func convertArray(src any, dst any) error {
 			return fmt.Errorf("unexpected type: %T", src)
 		}
 		arr = make([]any, val.Len())
-		for i := 0; i < val.Len(); i++ {
+		for i := range val.Len() {
 			arr[i] = val.Index(i).Interface()
 		}
 	}
