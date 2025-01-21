@@ -413,7 +413,7 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 	inMigration := bp.chainCtx.NetworkParameters.MigrationStatus == ktypes.MigrationInProgress
 	haltNetwork := bp.chainCtx.NetworkParameters.MigrationStatus == ktypes.MigrationCompleted
 
-	isLeader := bytes.Equal(bp.signer.CompactID(), req.Proposer.Bytes())
+	isLeader := bp.signer.PubKey().Equals(req.Proposer)
 
 	blockCtx := &common.BlockContext{
 		Height:       req.Height,

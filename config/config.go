@@ -339,17 +339,17 @@ type DBConfig struct {
 }
 
 type ConsensusConfig struct {
-	ProposeTimeout types.Duration `toml:"propose_timeout" comment:"minimum time to wait before proposing a block with transactions (applies to leader). If set to 0, the leader will propose a block as soon as it has transactions"`
+	ProposeTimeout types.Duration `toml:"propose_timeout" comment:"minimum duration to wait before proposing a block with transactions (applies to leader). This value can't be zero, if set to 0, default of 1 sec will be used for block production."`
 
-	EmptyBlockTimeout types.Duration `toml:"empty_block_timeout" comment:"timeout for proposing an empty block"`
-	// reannounce intervals
+	EmptyBlockTimeout types.Duration `toml:"empty_block_timeout" comment:"timeout for proposing an empty block. If set to 0, disables empty blocks, leader will wait indefinitely until transactions are available to produce a block."`
 
 	// BlockProposalInterval is the interval between block proposal reannouncements by the leader.
-	// This impacts the time it takes for an out-of-sync validator to receive the current block proposal,
+	// This affects the time it takes for an out-of-sync validator to receive the current block proposal,
 	// thereby impacting the block times. Default is 1 second.
 	BlockProposalInterval types.Duration `toml:"block_proposal_interval" comment:"interval between block proposal reannouncements by the leader"`
-	// BlockAnnInterval is the frequency with which the block commit messages are reannouncements by the leader,
-	// and votes reannounced by validators. Default is 3 second. This impacts the time it takes for an
+
+	// BlockAnnInterval is the frequency with which the block commit messages are reannounced by the leader,
+	// and votes reannounced by validators. Default is 3 seconds. This affects the time it takes for
 	// out-of-sync nodes to catch up with the latest block.
 	BlockAnnInterval types.Duration `toml:"block_ann_interval" comment:"interval between block commit reannouncements by the leader, and votes reannouncements by validators"`
 }

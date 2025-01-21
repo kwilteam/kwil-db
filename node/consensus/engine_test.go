@@ -602,6 +602,38 @@ func TestValidatorStateMachine(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Catchup mode",
+			setup: func(t *testing.T) ([]*Config, map[string]ktypes.Validator) {
+				return generateTestCEConfig(t, 2, false)
+			},
+			actions: []action{
+				{
+					name: "blkPropNew",
+					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
+						val.NotifyBlockProposal(blkProp2.blk)
+					},
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Executed, 0, blkProp2.blkHash)
+					},
+				},
+				{
+					name: "catchup",
+					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
+						ci := addVotes(t, blkProp2.blkHash, blockAppHash, leader, val)
+
+						rawBlk := ktypes.EncodeBlock(blkProp2.blk)
+						val.blkRequester = func(ctx context.Context, height int64) (types.Hash, []byte, *ktypes.CommitInfo, error) {
+							return blkProp2.blkHash, rawBlk, ci, nil
+						}
+						val.doCatchup(context.Background())
+					},
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Committed, 1, blkProp2.blkHash)
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testcases {
@@ -932,13 +964,6 @@ type mockAccounts struct{}
 
 func (m *mockAccounts) Updates() []*ktypes.Account {
 	return nil
-}
-
-func (ce *ConsensusEngine) lastCommitHeight() int64 {
-	ce.stateInfo.mtx.RLock()
-	defer ce.stateInfo.mtx.RUnlock()
-
-	return ce.stateInfo.height
 }
 
 func (ce *ConsensusEngine) info() (int64, Status, *blockProposal) {

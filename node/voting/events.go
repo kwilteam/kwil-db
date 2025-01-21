@@ -136,7 +136,9 @@ type EventStore struct {
 	// connection.
 	eventWriter DB
 
-	writerMtx sync.Mutex // protects eventWriter, not applicable to read-only operations
+	// protects eventWriter, not applicable to read-only operations
+	// also protects access to the numEvents
+	writerMtx sync.Mutex
 
 	// numEvents tracks the count of events added by the listeners
 	// which doesn't have resolutions yet.

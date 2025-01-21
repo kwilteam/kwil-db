@@ -34,30 +34,37 @@ import (
 
 func (ce *ConsensusEngine) newBlockRound(ctx context.Context) error {
 	ticker := time.NewTicker(ce.proposeTimeout)
-	emptyBlockTicker := time.NewTicker(ce.emptyBlockTimeout)
+	now := time.Now()
+
+	// if EmptyBlockTimeout = 0, leader doesn't propose empty blocks.
+	// Behavior is similar to automine feature where the blocks are produced
+	// the moment transactions are available once the proposeTimeout is elapsed.
+	// if EmptyBlockTimeout is not 0, leader will propose an empty block
+	// if no transactions or events are available for emptyBlockTimeout duration.
+	allowEmptyBlocks := ce.emptyBlockTimeout != 0
+	ce.log.Info("Starting a new consensus round", "height", ce.lastCommitHeight()+1)
 
 	for {
 		select {
 		case <-ctx.Done():
 			ce.log.Warn("Context cancelled, stopping the new block round")
 			return nil
-		case <-emptyBlockTicker.C:
-			// can propose a new block even if the txs are not available
-			ce.newBlockProposal <- struct{}{}
-			return nil
 		case <-ticker.C:
-			// check for the availability of transactions in the mempool
-			if ce.mempool.TxsAvailable() {
+			// check for the availability of transactions in the mempool or
+			// if the leader has any new events to broadcast a voteID transaction
+			if ce.mempool.TxsAvailable() || ce.blockProcessor.HasEvents() {
 				ce.newBlockProposal <- struct{}{}
 				return nil
 			}
 
-			// check if the leader has any new events to broadcast a voteID transaction
-			if ce.blockProcessor.HasEvents() {
+			// If the emptyBlockTimeout duration has elapsed, produce an empty block if
+			// empty blocks are allowed
+			if allowEmptyBlocks && time.Since(now) >= ce.emptyBlockTimeout {
 				ce.newBlockProposal <- struct{}{}
 				return nil
 			}
 		}
+
 		// no transactions available, wait till the next tick to recheck the mempool
 	}
 }
@@ -74,8 +81,6 @@ func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 		ce.haltChan <- haltReason // signal the network to halt
 		return nil
 	}
-
-	ce.log.Info("Starting a new consensus round", "height", ce.state.lc.height+1)
 
 	blkProp, err := ce.createBlockProposal(ctx)
 	if err != nil {

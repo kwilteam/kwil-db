@@ -24,6 +24,8 @@ const (
 	// Use these accordingly
 	MaxBlockSize = 4 * 1024 * 1024 // 1 MB
 	blockTxCount = 50
+
+	defaultProposeTimeout = 1 * time.Second
 )
 
 var zeroHash = types.Hash{}
@@ -306,6 +308,10 @@ func New(cfg *Config) *ConsensusEngine {
 	// Status, etc. tries to access the role.
 	ce.role.Store(types.RoleSentry)
 
+	if ce.proposeTimeout == 0 { // can't be zero
+		ce.proposeTimeout = defaultProposeTimeout
+	}
+
 	return ce
 }
 
@@ -423,6 +429,7 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 
 		case <-ce.newRound:
 			go ce.newBlockRound(ctx)
+
 		case <-ce.newBlockProposal:
 			params := ce.blockProcessor.ConsensusParams()
 			if params.MigrationStatus == ktypes.MigrationCompleted {
@@ -493,8 +500,7 @@ func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg cons
 
 }
 
-// catchup syncs the node first with the local blockstore and then with the network.
-func (ce *ConsensusEngine) catchup(ctx context.Context) error {
+func (ce *ConsensusEngine) initializeState(ctx context.Context) (int64, int64, error) {
 	// Figure out the app state and initialize the node state.
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
@@ -504,7 +510,7 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 
 	readTx, err := ce.db.BeginReadTx(ctx)
 	if err != nil {
-		return err
+		return -1, -1, err
 	}
 	defer readTx.Rollback(ctx)
 
@@ -514,18 +520,18 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 	// retrieve the app state from the meta table
 	appHeight, appHash, dirty, err := meta.GetChainState(ctx, readTx)
 	if err != nil {
-		return err
+		return -1, -1, err
 	}
 
 	if dirty {
-		return fmt.Errorf("app state is dirty, error in the blockprocessor initialization, height: %d, appHash: %x", appHeight, appHash)
+		return -1, -1, fmt.Errorf("app state is dirty, error in the blockprocessor initialization, height: %d, appHash: %x", appHeight, appHash)
 	}
 
 	ce.log.Info("Initial Node state: ", "appHeight", appHeight, "storeHeight", storeHeight, "appHash", appHash, "storeAppHash", storeAppHash)
 
 	if appHeight > storeHeight && appHeight != ce.genesisHeight {
 		// This is not possible, App can't be ahead of the store
-		return fmt.Errorf("app height %d is greater than the store height %d (did you forget to reset postgres?)", appHeight, storeHeight)
+		return -1, -1, fmt.Errorf("app height %d is greater than the store height %d (did you forget to reset postgres?)", appHeight, storeHeight)
 	}
 
 	if appHeight == -1 {
@@ -533,7 +539,7 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 		// initialize the db with the genesis state
 		appHeight, appHash, err = ce.blockProcessor.InitChain(ctx)
 		if err != nil {
-			return fmt.Errorf("error initializing the chain: %w", err)
+			return -1, -1, fmt.Errorf("error initializing the chain: %w", err)
 		}
 
 		ce.setLastCommitInfo(appHeight, nil, appHash)
@@ -542,13 +548,24 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 		// restart or statesync init or zdt init
 		if appHeight == storeHeight && !bytes.Equal(appHash, storeAppHash[:]) {
 			// This is not possible, PG mismatches with the Blockstore return error
-			return fmt.Errorf("AppHash mismatch, appHash: %x, storeAppHash: %v", appHash, storeAppHash)
+			return -1, -1, fmt.Errorf("AppHash mismatch, appHash: %x, storeAppHash: %v", appHash, storeAppHash)
 		}
 		ce.setLastCommitInfo(appHeight, blkHash[:], appHash)
 	}
 
 	// Set the role and validator set based on the initial state of the voters before starting the replay
 	ce.updateValidatorSetAndRole()
+
+	return appHeight, storeHeight, nil
+}
+
+// catchup syncs the node first with the local blockstore and then with the network.
+func (ce *ConsensusEngine) catchup(ctx context.Context) error {
+	// initialize the chain state
+	appHeight, storeHeight, err := ce.initializeState(ctx)
+	if err != nil {
+		return err
+	}
 
 	// Replay the blocks from the blockstore if the app hasn't played all the blocks yet.
 	if appHeight < storeHeight {
@@ -621,6 +638,9 @@ func (ce *ConsensusEngine) setLastCommitInfo(height int64, blkHash []byte, appHa
 
 // replayBlocks replays all the blocks from the blockstore if the app hasn't played all the blocks yet.
 func (ce *ConsensusEngine) replayFromBlockStore(ctx context.Context, startHeight, bestHeight int64) error {
+	ce.state.mtx.Lock()
+	defer ce.state.mtx.Unlock()
+
 	height := startHeight
 	t0 := time.Now()
 
@@ -693,15 +713,32 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 		return nil
 	}
 
-	ce.state.mtx.Lock()
-	defer ce.state.mtx.Unlock()
-
 	if ce.role.Load() == types.RoleLeader {
 		return nil
 	}
 
-	startHeight := ce.state.lc.height + 1
+	startHeight := ce.lastCommitHeight()
 	t0 := time.Now()
+
+	if err := ce.processCurrentBlock(ctx); err != nil {
+		ce.log.Error("error during block processing in catchup", "height", startHeight+1, "error", err)
+		return err
+	}
+
+	err := ce.replayBlockFromNetwork(ctx)
+	if err != nil {
+		return err
+	}
+
+	endHeight := ce.lastCommitHeight()
+	ce.log.Info("Network Sync: ", "from", startHeight, "to", endHeight, "time", time.Since(t0), "appHash", ce.state.lc.appHash)
+
+	return nil
+}
+
+func (ce *ConsensusEngine) processCurrentBlock(ctx context.Context) error {
+	ce.state.mtx.Lock()
+	defer ce.state.mtx.Unlock()
 
 	if ce.role.Load() == types.RoleValidator {
 		// If validator is in the middle of processing a block, finish it first
@@ -745,14 +782,6 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 			}
 		}
 	}
-
-	err := ce.replayBlockFromNetwork(ctx)
-	if err != nil {
-		return err
-	}
-
-	ce.log.Info("Network Sync: ", "from", startHeight, "to", ce.state.lc.height, "time", time.Since(t0), "appHash", ce.state.lc.appHash)
-
 	return nil
 }
 
@@ -855,4 +884,11 @@ func (ce *ConsensusEngine) UnsubscribeTx(txHash ktypes.Hash) {
 	defer ce.subMtx.Unlock()
 
 	delete(ce.txSubscribers, txHash)
+}
+
+func (ce *ConsensusEngine) lastCommitHeight() int64 {
+	ce.stateInfo.mtx.RLock()
+	defer ce.stateInfo.mtx.RUnlock()
+
+	return ce.stateInfo.height
 }
