@@ -186,25 +186,14 @@ func writeAndReturnGenesisHash(cmd *cobra.Command, genesisFile string, appHash [
 			return display.PrintErr(cmd, err)
 		}
 
-		file, err := os.ReadFile(genesisFile)
-		if err != nil {
-			return display.PrintErr(cmd, err)
-		}
-
-		var cfg config.GenesisConfig
-		err = json.Unmarshal(file, &cfg)
+		cfg, err := config.LoadGenesisConfig(genesisFile)
 		if err != nil {
 			return display.PrintErr(cmd, err)
 		}
 
 		cfg.StateHash = appHash
 
-		file, err = json.MarshalIndent(cfg, "", "  ")
-		if err != nil {
-			return display.PrintErr(cmd, err)
-		}
-
-		err = os.WriteFile(genesisFile, file, 0644)
+		err = cfg.SaveAs(genesisFile)
 		if err != nil {
 			return display.PrintErr(cmd, err)
 		}

@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"strconv"
@@ -18,6 +19,10 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 
 	"github.com/pelletier/go-toml/v2"
+)
+
+var (
+	ErrorExtraFields = errors.New("unrecognized fields")
 )
 
 const (
@@ -215,13 +220,16 @@ func (nc *GenesisConfig) SaveAs(filename string) error {
 }
 
 func LoadGenesisConfig(filename string) (*GenesisConfig, error) {
-	bts, err := os.ReadFile(filename)
+	fid, err := os.Open(filename)
 	if err != nil {
 		return nil, err // can be os.ErrNotExist
 	}
+	defer fid.Close()
 
 	var nc GenesisConfig
-	if err := json.Unmarshal(bts, &nc); err != nil {
+	dec := json.NewDecoder(fid)
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&nc); err != nil {
 		return nil, err
 	}
 
@@ -421,7 +429,18 @@ func (nc Config) ToTOML() ([]byte, error) {
 }
 
 func (nc *Config) FromTOML(b []byte) error {
-	return toml.Unmarshal(b, &nc)
+	return nc.fromTOML(bytes.NewReader(b))
+}
+
+func (nc *Config) fromTOML(rd io.Reader) error {
+	dec := toml.NewDecoder(rd)
+	dec.DisallowUnknownFields()
+	err := dec.Decode(&nc)
+	var tomlErr *toml.StrictMissingError
+	if errors.As(err, &tomlErr) {
+		err = fmt.Errorf("%w:\n%s", ErrorExtraFields, tomlErr.String())
+	}
+	return err
 }
 
 // SaveAs writes the Config to the specified TOML file.
@@ -442,13 +461,14 @@ func (nc *Config) SaveAs(filename string) error {
 }
 
 func LoadConfig(filename string) (*Config, error) {
-	bts, err := os.ReadFile(filename)
+	fid, err := os.Open(filename)
 	if err != nil {
 		return nil, err
 	}
+	defer fid.Close()
 
 	var nc Config
-	if err := toml.Unmarshal(bts, &nc); err != nil {
+	if err := nc.fromTOML(fid); err != nil {
 		return nil, err
 	}
 

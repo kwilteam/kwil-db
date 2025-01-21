@@ -104,7 +104,7 @@ func GenesisCmd() *cobra.Command {
 func bindGenesisFlags(cmd *cobra.Command, cfg *genesisFlagConfig) {
 	cmd.Flags().StringVar(&cfg.chainID, "chain-id", "", "chainID for the genesis.json file")
 	cmd.Flags().StringSliceVar(&cfg.validators, "validators", nil, "public key, keyType and power of initial validator(s)") // accept: [hexpubkey1#keyType1:power1]
-	cmd.Flags().StringSliceVar(&cfg.allocs, "allocs", nil, "address and initial balance allocation(s)")
+	cmd.Flags().StringSliceVar(&cfg.allocs, "allocs", nil, "address and initial balance allocation(s) in the format id#keyType:amount")
 	cmd.Flags().BoolVar(&cfg.withGas, "with-gas", false, "include gas costs in the genesis.json file")
 	cmd.Flags().StringVar(&cfg.leader, "leader", "", "public key of the block proposer")
 	cmd.Flags().StringVar(&cfg.dbOwner, "db-owner", "", "owner of the database")
