@@ -79,8 +79,7 @@ type Pool struct {
 	// how postgres itself reserves connections with the reserved_connections
 	// and superuser_reserved_connections system settings.
 	// https://www.postgresql.org/docs/current/runtime-config-connection.html#GUC-RESERVED-CONNECTIONS
-	// oidTypes maps an OID to the datatype it represents. Since Kwil has data types such as uint256,
-	// which are registered as Postgres Domains, each pg instance will have its own random OID for it.
+	// oidTypes maps an OID to the datatype it represents.
 	idTypes map[uint32]*datatype
 
 	// subscribers is a map of channels that are subscribed to notifices.
@@ -188,10 +187,6 @@ func NewPool(ctx context.Context, cfg *PoolConfig) (*Pool, error) {
 		return defaultOnPgError(c, n) // automatically close any fatal errors (default we are overridding)
 	}
 
-	pCfg.AfterConnect = func(ctx context.Context, conn *pgx.Conn) error {
-		return registerTypes(ctx, conn)
-	}
-
 	db, err := pgxpool.NewWithConfig(ctx, pCfg)
 	if err != nil {
 		return nil, err
@@ -228,33 +223,6 @@ func NewPool(ctx context.Context, cfg *PoolConfig) (*Pool, error) {
 	}
 
 	return pool, db.Ping(ctx)
-}
-
-// registerTypes ensures that the custom types used by Kwil are registered with
-// the pgx connection.
-func registerTypes(ctx context.Context, conn *pgx.Conn) error {
-	err := ensureUint256Domain(ctx, conn)
-	if err != nil {
-		return err
-	}
-
-	// PostgreSQL "domains" will use codec of the underlying type, but the
-	// dynamic OID of the custom domain needs to be registered with pgx.
-
-	pt, err := conn.LoadType(ctx, "uint256")
-	if err != nil {
-		return err
-	}
-
-	conn.TypeMap().RegisterType(pt)
-
-	pt, err = conn.LoadType(ctx, "uint256[]")
-	if err != nil {
-		return err
-	}
-
-	conn.TypeMap().RegisterType(pt)
-	return nil
 }
 
 // Query performs a read-only query using the read connection pool. It is

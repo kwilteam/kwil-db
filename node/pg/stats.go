@@ -298,19 +298,6 @@ func colStats(ctx context.Context, qualifiedTable string, colInfo []ColInfo, db 
 
 					ins(stat, dec, cmpDecimal)
 
-				case ColTypeUINT256:
-					v, ok := val.(*types.Uint256)
-					if !ok {
-						return fmt.Errorf("not a *types.Uint256: %T", val)
-					}
-
-					if v.Null {
-						stat.NullCount++
-						continue
-					}
-
-					ins(stat, v.Clone(), types.CmpUint256)
-
 				case ColTypeFloat: // we don't want, don't have
 					var varFloat float64
 					switch v := val.(type) {

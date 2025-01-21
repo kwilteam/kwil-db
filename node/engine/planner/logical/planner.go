@@ -1523,10 +1523,6 @@ func (s *scopeContext) exprWithAggRewrite(node parse.Expression, currentRel *Rel
 			if !scalar.IsNumeric() {
 				return nil, nil, false, fmt.Errorf("negation can only be applied to numeric types")
 			}
-
-			if scalar.Equals(types.Uint256Type) {
-				return nil, nil, false, fmt.Errorf("negation cannot be applied to uint256")
-			}
 		case Not:
 			if !scalar.Equals(types.BoolType) {
 				return nil, nil, false, fmt.Errorf("logical negation can only be applied to boolean types")

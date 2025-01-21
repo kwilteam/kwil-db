@@ -22,7 +22,6 @@ func init() {
 	registerDatatype(blobType, blobArrayType)
 	registerDatatype(uuidType, uuidArrayType)
 	registerDatatype(decimalType, decimalArrayType)
-	registerDatatype(uint256Type, uint256ArrayType)
 }
 
 var (
@@ -537,123 +536,6 @@ var (
 		},
 		SerializeChangeset:   arrayFromChildFunc(2, decimalType.SerializeChangeset),
 		DeserializeChangeset: deserializeArrayFn[*types.Decimal](2, decimalType.DeserializeChangeset),
-	}
-
-	uint256Type = &datatype{
-		KwilType: types.Uint256Type,
-		Matches:  []reflect.Type{reflect.TypeOf(types.Uint256{}), reflect.TypeOf(&types.Uint256{})},
-		// OID is a custom OID, since Postgres doesn't have a built-in type for uint256,
-		// so Kwil uses a Postgres Domain.
-		OID: func(m *pgtype.Map) uint32 {
-			pgt, ok := m.TypeForName("uint256")
-			if !ok {
-				// if this happens, it is an internal bug where we are not registering the type
-				panic("uint256 domain not found")
-			}
-
-			return pgt.OID
-		},
-		// Under the hood, Kwil's uint256 is a Domain built on a numeric type.
-		EncodeInferred: func(a any) (any, error) {
-			var val *types.Uint256
-			switch v := a.(type) {
-			case types.Uint256:
-				val = &v
-			case *types.Uint256:
-				val = v
-			default:
-				panic("unreachable")
-			}
-
-			return pgtype.Numeric{
-				Int:   val.ToBig(),
-				Exp:   0,
-				Valid: true,
-			}, nil
-		},
-		Decode: func(a any) (any, error) {
-			pgType, ok := a.(pgtype.Numeric)
-			if !ok {
-				return nil, fmt.Errorf("expected pgtype.Numeric, got %T", a)
-			}
-
-			if pgType.Exp == 0 {
-				return types.Uint256FromBig(pgType.Int)
-			}
-
-			dec, err := pgNumericToDecimal(pgType)
-			if err != nil {
-				return nil, err
-			}
-			if dec.Exp() != 0 {
-				return nil, errors.New("fractional numeric")
-			}
-			return types.Uint256FromBig(dec.BigInt())
-		},
-		SerializeChangeset: func(value string) ([]byte, error) {
-			// parse to ensure it is a valid uint256, then re-encode it to ensure it is in the correct format.
-			u, err := types.Uint256FromString(value)
-			if err != nil {
-				return nil, err
-			}
-
-			return u.Bytes(), nil
-		},
-		DeserializeChangeset: func(b []byte) (any, error) {
-			return types.Uint256FromBytes(b)
-		},
-	}
-
-	uint256ArrayType = &datatype{
-		KwilType: types.Uint256ArrayType,
-		Matches:  []reflect.Type{reflect.TypeOf(types.Uint256Array{})},
-		// OID is a custom OID, since Postgres doesn't have a built-in type for uint256,
-		// See the comment on uint256Type for more information.
-		OID: func(m *pgtype.Map) uint32 {
-			pgt, ok := m.TypeForName("uint256[]")
-			if !ok {
-				// if this happens, it is an internal bug where we are not registering the type
-				panic("uint256[] domain not found")
-			}
-
-			return pgt.OID
-		},
-		EncodeInferred: func(a any) (any, error) {
-			val, ok := a.(types.Uint256Array)
-			if !ok {
-				return nil, fmt.Errorf("expected Uint256Array, got %T", a)
-			}
-
-			vals := make([]pgtype.Numeric, len(val))
-			for i, u := range val {
-				v2, err := uint256Type.EncodeInferred(u)
-				if err != nil {
-					return nil, err
-				}
-				vals[i] = v2.(pgtype.Numeric)
-			}
-
-			return vals, nil
-		},
-		Decode: func(a any) (any, error) {
-			arr, ok := a.([]any) // pgx always returns arrays as []any
-			if !ok {
-				return nil, fmt.Errorf("expected []any, got %T", a)
-			}
-
-			vals := make(types.Uint256Array, len(arr))
-			for i, v := range arr {
-				val, err := uint256Type.Decode(v)
-				if err != nil {
-					return nil, err
-				}
-				vals[i] = val.(*types.Uint256)
-			}
-
-			return vals, nil
-		},
-		SerializeChangeset:   arrayFromChildFunc(2, uint256Type.SerializeChangeset),
-		DeserializeChangeset: deserializeArrayFn[*types.Uint256](2, uint256Type.DeserializeChangeset),
 	}
 )
 

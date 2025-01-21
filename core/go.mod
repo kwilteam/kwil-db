@@ -8,7 +8,6 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0
 	github.com/decred/slog v1.2.0
 	github.com/google/uuid v1.6.0
-	github.com/holiman/uint256 v1.3.2
 	github.com/jrick/logrotate v1.1.2
 	github.com/stretchr/testify v1.10.0
 	golang.org/x/crypto v0.31.0
