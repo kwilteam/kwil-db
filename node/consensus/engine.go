@@ -730,14 +730,14 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 	t0 := time.Now()
 
 	if err := ce.processCurrentBlock(ctx); err != nil {
-		ce.log.Error("error during block processing in catchup", "height", startHeight+1, "error", err)
-		if err == types.ErrBlkNotFound {
+		if errors.Is(err, types.ErrBlkNotFound) {
 			return nil // retry again
 		}
+		ce.log.Error("error during block processing in catchup", "height", startHeight+1, "error", err)
 		return err
 	}
 
-	err := ce.replayBlockFromNetwork(ctx)
+	err := ce.replayBlockFromNetwork(ctx, ce.syncBlockWithRetry)
 	if err != nil {
 		return err
 	}

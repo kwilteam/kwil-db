@@ -23,7 +23,7 @@ func (ce *ConsensusEngine) doBlockSync(ctx context.Context) error {
 	// Validators and sentry nodes can do best effort block sync
 	// and start the consensus engine at the latest height. If they
 	// are behind, they can catch up as they process blocks.
-	return ce.replayBlockFromNetwork(ctx)
+	return ce.replayBlockFromNetwork(ctx, ce.syncBlock)
 }
 
 func (ce *ConsensusEngine) leaderBlockSync(ctx context.Context) error {
@@ -109,14 +109,14 @@ func (ce *ConsensusEngine) discoverBestHeight(ctx context.Context) (int64, error
 
 // replayBlockFromNetwork attempts to synchronize the local node with the network by fetching
 // and processing blocks from peers.
-func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context) error {
+func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context, requester func(context.Context, int64) error) error {
 	var startHeight, height int64
 	startHeight = ce.lastCommitHeight() + 1
 	height = startHeight
 	t0 := time.Now()
 
 	for {
-		if err := ce.syncBlockWithRetry(ctx, height); err != nil {
+		if err := requester(ctx, height); err != nil {
 			ce.log.Info("block request from the network failed", "height", height, "error", err)
 			break
 		}
@@ -149,6 +149,16 @@ func (ce *ConsensusEngine) syncBlocksUntilHeight(ctx context.Context, startHeigh
 // the block is successfully retrieved from the network.
 func (ce *ConsensusEngine) syncBlockWithRetry(ctx context.Context, height int64) error {
 	_, rawblk, ci, err := ce.getBlock(ctx, height)
+	if err != nil { // all kinds of errors?
+		return fmt.Errorf("error requesting block from network: height : %d, error: %w", height, err)
+	}
+
+	return ce.applyBlock(ctx, rawblk, ci)
+}
+
+// syncBlock fetches the specified block from the network
+func (ce *ConsensusEngine) syncBlock(ctx context.Context, height int64) error {
+	_, rawblk, ci, err := ce.blkRequester(ctx, height)
 	if err != nil { // all kinds of errors?
 		return fmt.Errorf("error requesting block from network: height : %d, error: %w", height, err)
 	}

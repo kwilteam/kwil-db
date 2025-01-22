@@ -711,7 +711,7 @@ func TestValidatorStateMachine(t *testing.T) {
 						return false
 					}
 					return true
-				}, 6*time.Second, 100*time.Millisecond)
+				}, 6*time.Second, 500*time.Millisecond)
 			}
 		})
 	}
@@ -909,7 +909,7 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 
 // MockBroadcasters
 func mockBlkRequester(ctx context.Context, height int64) (types.Hash, []byte, *ktypes.CommitInfo, error) {
-	return types.Hash{}, nil, nil, fmt.Errorf("not implemented")
+	return types.Hash{}, nil, nil, types.ErrBlkNotFound
 }
 
 func mockBlockPropBroadcaster(_ context.Context, blk *ktypes.Block) {}
