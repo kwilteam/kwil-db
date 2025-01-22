@@ -34,15 +34,27 @@ kwil-cli query "SELECT * FROM my_table WHERE id = $id" --param id:int=1`
 func queryCmd() *cobra.Command {
 	var namedParams []string
 	var gwAuth, rpcAuth bool
+	var stmt string
 
 	cmd := &cobra.Command{
 		Use:     "query",
 		Short:   "Execute a SELECT statement against the database",
 		Long:    queryLong,
 		Example: queryExample,
+		Args:    cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) != 1 {
-				return display.PrintErr(cmd, fmt.Errorf("SELECT statement must be the only argument"))
+			var sqlStmt string
+			switch {
+			case stmt != "" && len(args) == 0:
+				sqlStmt = stmt
+			case stmt == "" && len(args) == 1:
+				sqlStmt = args[0]
+			case stmt != "" && len(args) == 1:
+				return display.PrintErr(cmd, fmt.Errorf("cannot provide both a --stmt flag and an argument"))
+			case stmt == "" && len(args) == 0:
+				return display.PrintErr(cmd, fmt.Errorf("no SQL statement provided"))
+			default:
+				return display.PrintErr(cmd, fmt.Errorf("unexpected error"))
 			}
 
 			tblConf, err := getTableConfig(cmd)
@@ -69,13 +81,13 @@ func queryCmd() *cobra.Command {
 				return display.PrintErr(cmd, err)
 			}
 
-			_, err = parse.Parse(args[0])
+			_, err = parse.Parse(sqlStmt)
 			if err != nil {
 				return display.PrintErr(cmd, fmt.Errorf("failed to parse SQL statement: %s", err))
 			}
 
 			return client.DialClient(cmd.Context(), cmd, dialFlags, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
-				res, err := cl.Query(ctx, args[0], params)
+				res, err := cl.Query(ctx, sqlStmt, params)
 				if err != nil {
 					return display.PrintErr(cmd, err)
 				}
@@ -85,6 +97,7 @@ func queryCmd() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().StringVarP(&stmt, "stmt", "s", "", "the SELECT statement to execute")
 	cmd.Flags().StringArrayVarP(&namedParams, "param", "p", nil, `named parameters that will be used in the query. format: "key:type=value"`)
 	cmd.Flags().BoolVar(&rpcAuth, "rpc-auth", false, "signals that the call is being made to a kwil node and should be authenticated with the private key")
 	cmd.Flags().BoolVar(&gwAuth, "gateway-auth", false, "signals that the call is being made to a gateway and should be authenticated with the private key")
@@ -106,5 +119,5 @@ func (r *respRelations) MarshalJSON() ([]byte, error) {
 }
 
 func (r *respRelations) MarshalText() ([]byte, error) {
-	return recordsToTable(r.Data.ExportToStringMap(), r.conf), nil
+	return recordsToTable(r.Data.ColumnNames, getStringRows(r.Data.Values), r.conf), nil
 }

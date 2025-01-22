@@ -38,7 +38,7 @@ func generateKeyCmd() *cobra.Command {
 			pubKeyBts := pubKey.Bytes()
 
 			pubKeyHex := hex.EncodeToString(pubKeyBts)
-			address, err := auth.EthSecp256k1Authenticator{}.Identifier(crypto.EthereumAddressFromPubKey(pubKey.(*crypto.Secp256k1PublicKey)))
+			address, err := auth.EthSecp256k1Authenticator{}.Identifier(auth.GetUserSigner(pk).CompactID())
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
