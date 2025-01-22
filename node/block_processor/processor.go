@@ -352,23 +352,7 @@ func (bp *BlockProcessor) InitChain(ctx context.Context) (int64, []byte, error) 
 
 	genCfg := bp.genesisParams
 
-	genesisAllocs := make([]*ktypes.Account, 0, len(genCfg.Allocs))
-	for _, acct := range genCfg.Allocs {
-		keyType, err := crypto.ParseKeyType(acct.KeyType)
-		if err != nil {
-			return -1, nil, fmt.Errorf("failed to parse key type %s: %w", acct.KeyType, err)
-		}
-
-		genesisAllocs = append(genesisAllocs, &ktypes.Account{
-			ID: &ktypes.AccountID{
-				Identifier: acct.ID.HexBytes,
-				KeyType:    keyType,
-			},
-			Balance: acct.Amount,
-		})
-	}
-
-	if err := bp.txapp.GenesisInit(ctx, genesisTx, genCfg.Validators, genesisAllocs, genCfg.InitialHeight, genCfg.DBOwner, bp.chainCtx); err != nil {
+	if err := bp.txapp.GenesisInit(ctx, genesisTx, genCfg, bp.chainCtx); err != nil {
 		return -1, nil, err
 	}
 
@@ -428,6 +412,7 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 		Timestamp:    req.Block.Header.Timestamp.Unix(),
 		ChainContext: bp.chainCtx,
 		Proposer:     req.Proposer,
+		Hash:         req.BlockID,
 	}
 
 	// Begin executing transactions. The chain context may be updated during the block execution.

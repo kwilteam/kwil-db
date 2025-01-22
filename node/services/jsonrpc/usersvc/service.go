@@ -724,9 +724,10 @@ func (svc *Service) txCtx(ctx context.Context, msg *types.CallMessage) (*common.
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to get chain status: "+err.Error(), nil)
 	}
-	height, stamp := chainStat.Sync.BestBlockHeight, chainStat.Sync.BestBlockTime.Unix()
+	height, hash, stamp := chainStat.Sync.BestBlockHeight, chainStat.Sync.BestBlockHash, chainStat.Sync.BestBlockTime.Unix()
 	if chainStat.Sync.Syncing { // don't use known stale height and time stamp if node is syncing
 		height = -1
+		hash = types.Hash{}
 		stamp = -1
 	}
 
@@ -738,6 +739,7 @@ func (svc *Service) txCtx(ctx context.Context, msg *types.CallMessage) (*common.
 		BlockContext: &common.BlockContext{
 			Height:    height,
 			Timestamp: stamp,
+			Hash:      hash,
 		},
 	}, nil
 }

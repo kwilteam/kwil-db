@@ -5,6 +5,7 @@ import (
 	"math/big"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/config"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/migrations"
 	"github.com/kwilteam/kwil-db/node/snapshotter"
@@ -40,7 +41,7 @@ type TxApp interface {
 	Finalize(ctx context.Context, db sql.DB, block *common.BlockContext) (approvedJoins, expiredJoins []*ktypes.AccountID, err error)
 	Commit() error
 	Rollback()
-	GenesisInit(ctx context.Context, db sql.DB, validators []*ktypes.Validator, genesisAccounts []*ktypes.Account, initialHeight int64, initialDBOwner string, chain *common.ChainContext) error
+	GenesisInit(ctx context.Context, db sql.DB, genesisConfig *config.GenesisConfig, chain *common.ChainContext) error
 	ApplyMempool(ctx *common.TxContext, db sql.DB, tx *ktypes.Transaction) error
 
 	Price(ctx context.Context, dbTx sql.DB, tx *ktypes.Transaction, chainContext *common.ChainContext) (*big.Int, error)
