@@ -663,6 +663,18 @@ func Test_SQL(t *testing.T) {
 				"contract_id": mustUUID("d3b3b3b3-3b3b-3b3b-3b3b-3b3b3b3b3b3b"),
 			},
 		},
+		{
+			// this is testing that, even though we send pgtype.Array[pgtype.Text] as all nils,
+			// it works for int[]
+			name: "insert array of nulls",
+			sql: []string{
+				`CREATE TABLE IF NOT EXISTS tbl (id INT PRIMARY KEY, arr INT[]);`,
+			},
+			execSQL: `INSERT INTO tbl (id, arr) VALUES (1, $a);`,
+			execVars: map[string]any{
+				"$a": []any{nil, nil},
+			},
+		},
 	}
 
 	db, err := newTestDB()
@@ -764,32 +776,32 @@ func Test_Roundtrip(t *testing.T) {
 		{
 			name:     "int_array",
 			datatype: "INT[]",
-			value:    ptrArr[int64](1, 2),
+			value:    append(ptrArr[int64](1, 2), nil),
 		},
 		{
 			name:     "text_array",
 			datatype: "TEXT[]",
-			value:    ptrArr("hello", "world"),
+			value:    append(ptrArr("hello", "world"), nil),
 		},
 		{
 			name:     "bool_array",
 			datatype: "BOOL[]",
-			value:    ptrArr(true, false),
+			value:    append(ptrArr(true, false), nil),
 		},
 		{
 			name:     "decimal_array",
 			datatype: "DECIMAL(70,5)[]",
-			value:    []*types.Decimal{mustExplicitDecimal("100.101", 70, 5), mustExplicitDecimal("200.202", 70, 5)},
+			value:    append([]*types.Decimal{mustExplicitDecimal("100.101", 70, 5), mustExplicitDecimal("200.202", 70, 5)}, nil),
 		},
 		{
 			name:     "uuid_array",
 			datatype: "UUID[]",
-			value:    []*types.UUID{mustUUID("d3b3b3b3-3b3b-3b3b-3b3b-3b3b3b3b3b3b"), mustUUID("d3b3b3b3-3b3b-3b3b-3b3b-3b3b3b3b3b3b")},
+			value:    append([]*types.UUID{mustUUID("d3b3b3b3-3b3b-3b3b-3b3b-3b3b3b3b3b3b"), mustUUID("d3b3b3b3-3b3b-3b3b-3b3b-3b3b3b3b3b3b")}, nil),
 		},
 		{
 			name:     "bytea_array",
 			datatype: "BYTEA[]",
-			value:    [][]byte{[]byte("hello"), []byte("world")},
+			value:    append(ptrArr([]byte("hello"), []byte("world")), nil),
 		},
 	}
 
@@ -833,8 +845,67 @@ func Test_Roundtrip(t *testing.T) {
 				return nil
 			})
 			require.NoError(t, err)
+
+			// create actions
+			err = interp.ExecuteWithoutEngineCtx(ctx, tx, fmt.Sprintf("CREATE ACTION act_%s($id int, $a %s) public { INSERT INTO tbl_%s (id, val) VALUES ($id, $a); };", test.name, test.datatype, test.name), nil, nil)
+			require.NoError(t, err)
+
+			// call the action
+			_, err = interp.Call(newEngineCtx(defaultCaller), tx, "", fmt.Sprintf("act_%s", test.name), []any{3, test.value}, nil)
+			require.NoError(t, err)
+
+			// select the value
+			err = interp.ExecuteWithoutEngineCtx(ctx, tx, fmt.Sprintf("SELECT val FROM tbl_%s WHERE id = 3;", test.name), nil, func(r *common.Row) error {
+				assert.EqualValues(t, test.value, r.Values[0])
+				return nil
+			})
+			require.NoError(t, err)
+
+			// roundtrip nulls to the action as well
+			_, err = interp.Call(newEngineCtx(defaultCaller), tx, "", fmt.Sprintf("act_%s", test.name), []any{4, nil}, nil)
+			require.NoError(t, err)
+
+			err = interp.ExecuteWithoutEngineCtx(ctx, tx, fmt.Sprintf("SELECT val FROM tbl_%s WHERE id = 4;", test.name), nil, func(r *common.Row) error {
+				assert.True(t, r.Values[0] == nil)
+				return nil
+			})
 		})
 	}
+}
+
+func Test_RoundtripNull(t *testing.T) {
+
+	db, err := newTestDB()
+	require.NoError(t, err)
+	defer db.Close()
+
+	ctx := context.Background()
+	tx, err := db.BeginTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx) // always rollback
+
+	interp := newTestInterp(t, tx, nil, false)
+
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, "CREATE TABLE tbl (id int primary key, val int);", nil, nil)
+	require.NoError(t, err)
+
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, "INSERT INTO tbl (id, val) VALUES (1, $a);", map[string]any{
+		"$a": nil,
+	}, nil)
+	require.NoError(t, err)
+
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, "SELECT val FROM tbl WHERE id = 1;", nil, exact(nil))
+	require.NoError(t, err)
+
+	// action
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, "CREATE ACTION act($a int) public { INSERT INTO tbl (id, val) VALUES (2, $a); };", nil, nil)
+	require.NoError(t, err)
+
+	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "", "act", []any{nil}, nil)
+	require.NoError(t, err)
+
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, "SELECT val FROM tbl WHERE id = 2;", nil, exact(nil))
+	require.NoError(t, err)
 }
 
 // Test_CreateAndDelete tests creating and dropping different objects,
@@ -1554,7 +1625,7 @@ func Test_Actions(t *testing.T) {
 		$arr[1] := null;
 		`),
 		rawTest("set null to untyped value", `
-		 	$a := null;`, engine.ErrInvalidNull),
+		 	$a := null;`),
 		rawTest("allocate null to typed variable", `
 			$a int := null;`),
 		rawTest("set new type to variable", `
@@ -1681,6 +1752,15 @@ func Test_Actions(t *testing.T) {
 			},
 			action: "call_change_param",
 		},
+		{
+			name: "nested action returns null",
+			stmt: []string{
+				`CREATE ACTION get_null() public view returns (a int) { RETURN null; }`,
+				`CREATE ACTION call_get_null() public view { $a := get_null(); if $a is not null { error('a is not null'); } }`,
+			},
+			action: "call_get_null",
+		},
+		// TODO: test that actions returning nulls to other actions does not error
 	}
 
 	db, err := newTestDB()
@@ -1860,12 +1940,12 @@ func Test_Extensions(t *testing.T) {
 				tc.makeGetMethod(types.IntType),
 				tc.makeGetMethod(types.BoolType),
 				tc.makeGetMethod(mustDecType(10, 2)),
-				tc.makeGetMethod(types.BlobType),
+				tc.makeGetMethod(types.ByteaType),
 				tc.makeGetMethod(types.UUIDType),
 				tc.makeGetMethod(types.ArrayType(types.TextType)),
 				tc.makeGetMethod(types.ArrayType(types.IntType)),
 				tc.makeGetMethod(types.ArrayType(types.BoolType)),
-				tc.makeGetMethod(types.ArrayType(types.BlobType)),
+				tc.makeGetMethod(types.ArrayType(types.ByteaType)),
 				tc.makeGetMethod(types.ArrayType(types.UUIDType)),
 				tc.makeGetMethod(mustDecArrType(10, 2)),
 			},
@@ -2016,7 +2096,7 @@ func Test_Extensions(t *testing.T) {
 			{"text_array", []string{"text"}},
 			{"int8_array", []int64{1}},
 			{"bool_array", []bool{true}},
-			{"bytea_array", [][]byte{{1, 2, 3}}},
+			{"bytea_array", []*[]byte{{1, 2, 3}}},
 			{"uuid_array", []*types.UUID{mustUUID("f47ac10b-58cc-4372-a567-0e02b2c3d479")}},
 			{"numeric_array", []*types.Decimal{mustExplicitDecimal("1.23", 10, 2)}},
 		} {
@@ -2480,7 +2560,7 @@ func eq(a, b any) error {
 }
 
 func mustExplicitDecimal(s string, prec, scale uint16) *types.Decimal {
-	d, err := types.NewDecimalExplicit(s, prec, scale)
+	d, err := types.ParseDecimalExplicit(s, prec, scale)
 	if err != nil {
 		panic(err)
 	}

@@ -51,11 +51,12 @@ func batchCmd() *cobra.Command {
 	var inputValueMappings []string // these override the csv column mappings
 
 	cmd := &cobra.Command{
-		Use:     "batch <procedure_or_action>",
-		Short:   "Batch execute an action using inputs from a CSV file.",
-		Long:    batchLong,
-		Example: batchExample,
-		Args:    cobra.NoArgs,
+		Use:        "batch <procedure_or_action>",
+		Short:      "Batch execute an action using inputs from a CSV file.",
+		Long:       batchLong,
+		Example:    batchExample,
+		Deprecated: `Use "kwil-cli exec-action" instead.`,
+		Args:       cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return client.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
 				dbid, _, err := getSelectedNamespace(cmd)

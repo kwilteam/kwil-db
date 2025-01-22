@@ -89,17 +89,23 @@ func (c *DataType) UnmarshalBinary(data []byte) error {
 // String returns the string representation of the type.
 func (c *DataType) String() string {
 	str := strings.Builder{}
-	str.WriteString(c.Name)
-	if c.IsArray {
-		return str.String() + "[]"
+	aliased, ok := typeAlias[c.Name]
+	if !ok {
+		aliased = "[!invalid!]" + c.Name
 	}
 
-	if c.Name == NumericStr {
+	str.WriteString(aliased)
+
+	if aliased == NumericStr {
 		str.WriteString("(")
 		str.WriteString(strconv.FormatUint(uint64(c.Metadata[0]), 10))
 		str.WriteString(",")
 		str.WriteString(strconv.FormatUint(uint64(c.Metadata[1]), 10))
 		str.WriteString(")")
+	}
+
+	if c.IsArray {
+		return str.String() + "[]"
 	}
 
 	return str.String()
@@ -221,7 +227,17 @@ func (c *DataType) EqualsStrict(other *DataType) bool {
 
 // Equals returns true if the type is equal to the other type, or if either type is null.
 func (c *DataType) Equals(other *DataType) bool {
-	if c.Name == nullStr || other.Name == nullStr {
+	// we have a special case for null here because null can be any type.
+	// Null can be assigned to any type.
+	// A null array (which itself is not null) can be assigned to any array.
+	if (c.Name == nullStr && !c.IsArray) || (other.Name == nullStr && !other.IsArray) {
+		// if either is a scalar null, always true
+		return true
+	}
+	if (c.Name == nullStr && c.IsArray) && other.IsArray {
+		return true
+	}
+	if (other.Name == nullStr && other.IsArray) && c.IsArray {
 		return true
 	}
 
@@ -251,11 +267,11 @@ var (
 		Name: boolStr,
 	}
 	BoolArrayType = ArrayType(BoolType)
-	BlobType      = &DataType{
+	ByteaType     = &DataType{
 		Name: byteaStr,
 	}
-	BlobArrayType = ArrayType(BlobType)
-	UUIDType      = &DataType{
+	ByteaArrayType = ArrayType(ByteaType)
+	UUIDType       = &DataType{
 		Name: uuidStr,
 	}
 	UUIDArrayType = ArrayType(UUIDType)
@@ -272,6 +288,7 @@ var (
 	NullType = &DataType{
 		Name: nullStr,
 	}
+	NullArrayType = ArrayType(NullType)
 )
 
 // ArrayType creates an array type of the given type.
@@ -373,7 +390,8 @@ func ParseDataType(s string) (*DataType, error) {
 	return dt, dt.Clean()
 }
 
-// maps type names to their base names
+// maps type names to their base names.
+// null is not included here because it is a special type.
 var typeAlias = map[string]string{
 	"string":  textStr,
 	"text":    textStr,

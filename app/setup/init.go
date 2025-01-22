@@ -152,13 +152,13 @@ func InitCmd() *cobra.Command {
 				// if no funds are allocated to that validators.
 				if !genCfg.DisabledGasCosts {
 					for _, v := range genCfg.Validators {
-						hexPubKey := v.Identifier.String()
 						genCfg.Allocs = append(genCfg.Allocs, config.GenesisAlloc{
-							ID:      hexPubKey,
+							ID: config.KeyHexBytes{
+								HexBytes: v.AccountID.Identifier,
+							},
 							KeyType: v.Identifier.String(),
 							Amount:  genesisValidatorGas,
 						})
-
 					}
 				}
 

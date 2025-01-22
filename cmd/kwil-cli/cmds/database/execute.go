@@ -40,10 +40,11 @@ func executeCmd() *cobra.Command {
 	var sqlFilepath string
 
 	cmd := &cobra.Command{
-		Use:     "execute --sql <sql_stmt> <parameter_1:value_1> <parameter_2:value_2> ...",
-		Short:   "Execute SQL or an action against a database.",
-		Long:    executeLong,
-		Example: executeExample,
+		Use:        "execute --sql <sql_stmt> <parameter_1:value_1> <parameter_2:value_2> ...",
+		Short:      "Execute SQL or an action against a database.",
+		Long:       executeLong,
+		Example:    executeExample,
+		Deprecated: `Use "kwil-cli exec-action" or "kwil-cli exec-sql" instead.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return client.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
 				/*

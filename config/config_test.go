@@ -224,3 +224,33 @@ func TestEncodeDecodePubKeyType(t *testing.T) {
 	}
 
 }
+
+func Test_KeyHexBytes(t *testing.T) {
+	k := &KeyHexBytes{
+		HexBytes: []byte("test"),
+	}
+	bts, err := k.MarshalJSON()
+	require.NoError(t, err)
+
+	var k2 KeyHexBytes
+	err = k2.UnmarshalJSON(bts)
+	require.NoError(t, err)
+
+	require.Equal(t, k.HexBytes, k2.HexBytes)
+
+	k = &KeyHexBytes{}
+
+	// ethereum 0x address
+	err = k.UnmarshalJSON([]byte(`"0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D"`))
+	require.NoError(t, err)
+
+	bts, err = k.MarshalJSON()
+	require.NoError(t, err)
+
+	var k3 KeyHexBytes
+	err = k3.UnmarshalJSON(bts)
+	require.NoError(t, err)
+
+	require.Equal(t, k.HexBytes, k3.HexBytes)
+	require.Equal(t, `"0xAfFDC06cF34aFD7D5801A13d48C92AD39609901D"`, string(bts))
+}

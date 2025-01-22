@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -12,6 +13,7 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 
@@ -45,9 +47,55 @@ func (d *Duration) UnmarshalText(text []byte) error {
 }
 
 type GenesisAlloc struct {
-	ID      string   `json:"id"`
-	KeyType string   `json:"key_type"`
-	Amount  *big.Int `json:"amount"`
+	ID      KeyHexBytes `json:"id"`
+	KeyType string      `json:"key_type"`
+	Amount  *big.Int    `json:"amount"`
+}
+
+// KeyHexBytes wraps hex bytes, and allows it to receive Ethereum 0x addresses
+type KeyHexBytes struct{ types.HexBytes }
+
+func (l *KeyHexBytes) UnmarshalJSON(b []byte) error {
+	if len(b) < 2 || b[0] != '"' || b[len(b)-1] != '"' {
+		if bytes.Equal(b, []byte("null")) {
+			l.HexBytes = nil
+			return nil
+		}
+		return fmt.Errorf("invalid hex string: %s", b)
+	}
+	sub := b[1 : len(b)-1] // strip the quotes
+
+	// if it's an ethereum address, strip the 0x prefix
+	if len(sub) == hex.EncodedLen(ethAddressLength)+2 && sub[0] == '0' && sub[1] == 'x' {
+		sub = sub[2:]
+	}
+
+	dec := make([]byte, hex.DecodedLen(len(sub)))
+	_, err := hex.Decode(dec, sub)
+	if err != nil {
+		return err
+	}
+	l.HexBytes = types.HexBytes(dec)
+	return nil
+}
+
+const ethAddressLength = 20 // 20 bytes = 40 hex chars
+
+func (l *KeyHexBytes) MarshalJSON() ([]byte, error) {
+	if l.HexBytes == nil {
+		return []byte("null"), nil
+	}
+
+	if len(l.HexBytes) == ethAddressLength {
+		checksummed, err := auth.EthSecp256k1Authenticator{}.Identifier(l.HexBytes)
+		if err != nil {
+			return nil, err
+		}
+
+		return []byte(`"` + checksummed + `"`), nil
+	}
+
+	return []byte(`"` + hex.EncodeToString(l.HexBytes) + `"`), nil
 }
 
 type GenesisConfig struct {

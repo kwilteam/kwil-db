@@ -3,25 +3,27 @@ package setup
 import (
 	"bytes"
 	"context"
+	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"math/big"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/kwilteam/kwil-db/app/shared/display"
-	root "github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds"
+	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/database"
 	clientImpl "github.com/kwilteam/kwil-db/core/client"
 	client "github.com/kwilteam/kwil-db/core/client/types"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/spf13/cobra"
 )
 
 type jsonRPCCLIDriver struct {
@@ -30,10 +32,10 @@ type jsonRPCCLIDriver struct {
 	chainID      string
 	usingGateway bool
 	logFunc      logFunc
-	cobraCmd     *cobra.Command
+	testCtx      *testingContext
 }
 
-func newKwilCI(ctx context.Context, endpoint string, l logFunc, opts *ClientOptions) (JSONRPCClient, error) {
+func newKwilCI(ctx context.Context, endpoint string, l logFunc, testCtx *testingContext, opts *ClientOptions) (JSONRPCClient, error) {
 	if opts == nil {
 		opts = &ClientOptions{}
 	}
@@ -45,7 +47,7 @@ func newKwilCI(ctx context.Context, endpoint string, l logFunc, opts *ClientOpti
 		chainID:      opts.ChainID,
 		usingGateway: opts.UsingKGW,
 		logFunc:      l,
-		cobraCmd:     root.NewRootCmd(),
+		testCtx:      testCtx,
 	}, nil
 }
 
@@ -56,7 +58,7 @@ func cmd[T any](j *jsonRPCCLIDriver, ctx context.Context, res T, args ...string)
 
 	buf := new(bytes.Buffer)
 
-	cmd := root.NewRootCmd()
+	cmd := cmds.NewRootCmd()
 	cmd.SetOut(buf)
 	cmd.SetArgs(append(flags, args...))
 	err := cmd.ExecuteContext(ctx)
@@ -68,7 +70,7 @@ func cmd[T any](j *jsonRPCCLIDriver, ctx context.Context, res T, args ...string)
 		return fmt.Errorf("no output from command")
 	}
 
-	fmt.Println("Running Command ", `/app/kwil-cli `+strings.Join(args, " "), " with output ", buf.String())
+	j.logFunc("Running Command ", `/app/kwil-cli `+strings.Join(args, " "), " with output ", buf.String())
 
 	d := display.MessageReader[T]{
 		Result: res,
@@ -109,11 +111,17 @@ func (j *jsonRPCCLIDriver) Identifier() string {
 }
 
 func (j *jsonRPCCLIDriver) Call(ctx context.Context, namespace string, action string, inputs []any) (*types.CallResult, error) {
-	args := []string{"database", "call", "--logs"}
+	args := []string{"call-action", "--logs", "--rpc-auth"}
 	if j.usingGateway {
-		args = append(args, "--authenticate")
+		args = append(args, "--gateway-auth")
 	}
-	params, err := j.buildActionParams(ctx, namespace, action, inputs)
+
+	if namespace != "" {
+		args = append(args, "--namespace", namespace)
+	}
+	args = append(args, action)
+
+	params, err := formatActionParams(inputs)
 	if err != nil {
 		return nil, err
 	}
@@ -129,38 +137,28 @@ func (j *jsonRPCCLIDriver) Call(ctx context.Context, namespace string, action st
 	return r, nil
 }
 
-// buildActionParams takes a list of arguments to an action, finds the name of their parameters, and returns them as a list
-// of strings that can be used in a CLI command
-func (j *jsonRPCCLIDriver) buildActionParams(ctx context.Context, namespace string, action string, inputs []any) ([]string, error) {
-	params, err := database.GetParamList(ctx, j.Query, namespace, action)
-	if err != nil {
-		return nil, err
-	}
-
-	// there can be less inputs than params, but not more.
-	// Any params not included or left nil should not get passed to the action
-	if len(inputs) > len(params) {
-		return nil, fmt.Errorf("too many arguments for action %s.%s", namespace, action)
-	}
-
-	args := []string{action}
-	for i, in := range inputs {
+// formatActionParams formats positional args for the kwil-cli call-action and exec-action commands
+func formatActionParams(inputs []any) ([]string, error) {
+	var res []string
+	for _, in := range inputs {
 		if in == nil {
+			// special case: if a positional arg is "null", cli does not need a type
+			res = append(res, cmds.NullLiteral)
 			continue
 		}
 
-		args = append(args, delimitNameAndArg(params[i].Name, in))
+		// sort've a hack where I am relying on the EncodeValue type to detect the data
+		// type instead of writing a switch myself
+		encoded, err := types.EncodeValue(in)
+		if err != nil {
+			return nil, err
+		}
+
+		// res = append(res, "--param")
+		res = append(res, encoded.Type.String()+":"+stringifyCLIArg(in))
 	}
 
-	if namespace != "" {
-		args = append(args, "--namespace", namespace)
-	}
-
-	return args, nil
-}
-
-func delimitNameAndArg(name string, arg any) string {
-	return name + ":" + stringifyCLIArg(arg)
+	return res, nil
 }
 
 func (j *jsonRPCCLIDriver) ChainID() string {
@@ -182,16 +180,78 @@ func (j *jsonRPCCLIDriver) ChainInfo(ctx context.Context) (*types.ChainInfo, err
 	return r, nil
 }
 
-func (j *jsonRPCCLIDriver) Execute(ctx context.Context, namespace string, action string, tuples [][]any, opts ...client.TxOpt) (types.Hash, error) {
-	if len(tuples) > 1 {
-		// TODO: we could fix this by supporting the batch command in the driver.
-		// I will come back to this
-		return types.Hash{}, fmt.Errorf("only one tuple is supported in cli driver")
+func randomName() string {
+	return fmt.Sprintf("file-%d", time.Now().UnixNano())
+}
+
+// WriteCSV writes a 2D array of strings to a CSV file with the given column names.
+func writeCSV(filePath string, columnNames []string, data [][]string) error {
+	// Open the file for writing
+	file, err := os.Create(filePath)
+	if err != nil {
+		return fmt.Errorf("failed to create file: %w", err)
+	}
+	defer file.Close()
+
+	// Create a CSV writer
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Write the column names as the header row
+	if err := writer.Write(columnNames); err != nil {
+		return fmt.Errorf("failed to write header: %w", err)
 	}
 
-	args := []string{"database", "execute"}
+	// Write the data rows
+	if err := writer.WriteAll(data); err != nil {
+		return fmt.Errorf("failed to write data rows: %w", err)
+	}
+
+	return nil
+}
+
+func (j *jsonRPCCLIDriver) Execute(ctx context.Context, namespace string, action string, tuples [][]any, opts ...client.TxOpt) (types.Hash, error) {
+	if len(tuples) > 1 {
+		// if more than 1 tuple, we will use batch execution with a csv
+		fp := filepath.Join(j.testCtx.tmpdir, randomName())
+
+		var columnNames []string
+		for i := range tuples[0] {
+			columnNames = append(columnNames, fmt.Sprintf("param%d", i))
+		}
+
+		var data [][]string
+		for _, tuple := range tuples {
+			var row []string
+			for _, val := range tuple {
+				row = append(row, stringifyCLIArg(val))
+			}
+			data = append(data, row)
+		}
+
+		err := writeCSV(fp, columnNames, data)
+		if err != nil {
+			return types.Hash{}, err
+		}
+
+		args := []string{"exec-action", action, "--csv", fp}
+		if namespace != "" {
+			args = append(args, "--namespace", namespace)
+		}
+
+		// now, I need to create the mappings that map the csv columns to the action params.
+		// I can simply use 1-based indexing for the action's params
+		for i, colName := range columnNames {
+			args = append(args, "--csv-mapping", fmt.Sprintf("%s:%d", colName, i+1))
+		}
+
+		return j.exec(ctx, args, opts...)
+	}
+
+	// first arg is the action
+	args := []string{"exec-action", action}
 	if len(tuples) == 1 {
-		res, err := j.buildActionParams(ctx, namespace, action, tuples[0])
+		res, err := formatActionParams(tuples[0])
 		if err != nil {
 			return types.Hash{}, err
 		}
@@ -199,19 +259,34 @@ func (j *jsonRPCCLIDriver) Execute(ctx context.Context, namespace string, action
 	}
 	// if 0 len tuples, no args are needed
 
+	if namespace != "" {
+		args = append(args, "--namespace", namespace)
+	}
+
 	return j.exec(ctx, args, opts...)
 }
 
 func stringifyCLIArg(a any) string {
+	if a == nil {
+		return cmds.NullLiteral
+	}
+
 	// if it is an array, we need to delimit it with commas
 	typeof := reflect.TypeOf(a)
 	if typeof.Kind() == reflect.Slice && typeof.Elem().Kind() != reflect.Uint8 {
 		slice := reflect.ValueOf(a)
 		args := make([]string, slice.Len())
 		for i := range slice.Len() {
+			idx := slice.Index(i)
+			// it might be nil
+			if idx.IsNil() {
+				args[i] = cmds.NullLiteral
+				continue
+			}
+
 			args[i] = stringifyCLIArg(slice.Index(i).Interface())
 		}
-		return strings.Join(args, ",")
+		return "[" + strings.Join(args, ",") + "]"
 	}
 
 	switch t := a.(type) {
@@ -219,23 +294,38 @@ func stringifyCLIArg(a any) string {
 		return t
 	case []byte:
 		return database.FormatByteEncoding(t)
+		// we check against the non-pointer types for decimal and uuid since
+		// the String() method for both has a pointer receiver
+	case types.Decimal:
+		return t.String()
+	case types.UUID:
+		return t.String()
 	case fmt.Stringer:
 		return t.String()
 	default:
+		// if it is a pointer, we should dereference it
+		if typeof.Kind() == reflect.Ptr {
+			return stringifyCLIArg(reflect.ValueOf(a).Elem().Interface())
+		}
 		return fmt.Sprintf("%v", t)
 	}
 }
 
 func (j *jsonRPCCLIDriver) ExecuteSQL(ctx context.Context, sql string, params map[string]any, opts ...client.TxOpt) (types.Hash, error) {
-	args := append([]string{"database", "execute"}, "--sql", sql)
+	args := append([]string{"exec-sql"}, "--statement", sql)
 	for k, v := range params {
-		args = append(args, k+":"+stringifyCLIArg(v))
+		encoded, err := types.EncodeValue(v)
+		if err != nil {
+			return types.Hash{}, err
+		}
+
+		args = append(args, "--param", k+":"+encoded.Type.String()+"="+stringifyCLIArg(v))
 	}
 
 	return j.exec(ctx, args, opts...)
 }
 
-// exec executes the kwil-cli database execute command
+// exec executes a kwil-cli command that issues a transaction and returns the hash.
 func (j *jsonRPCCLIDriver) exec(ctx context.Context, args []string, opts ...client.TxOpt) (types.Hash, error) {
 	opts2 := client.GetTxOpts(opts)
 	if opts2.Fee != nil {
@@ -305,9 +395,14 @@ func (j *jsonRPCCLIDriver) Ping(ctx context.Context) (string, error) {
 }
 
 func (j *jsonRPCCLIDriver) Query(ctx context.Context, query string, params map[string]any) (*types.QueryResult, error) {
-	args := []string{"database", "query", query}
+	args := []string{"query", query}
 	for k, v := range params {
-		args = append(args, k+":"+stringifyCLIArg(v))
+		encoded, err := types.EncodeValue(v)
+		if err != nil {
+			return nil, err
+		}
+
+		args = append(args, "--param", k+":"+encoded.Type.String()+"="+stringifyCLIArg(v))
 	}
 
 	r := &types.QueryResult{}
@@ -351,7 +446,7 @@ func (j *jsonRPCCLIDriver) WaitTx(ctx context.Context, txHash types.Hash, interv
 }
 
 func (j *jsonRPCCLIDriver) Transfer(ctx context.Context, to *types.AccountID, amount *big.Int, opts ...client.TxOpt) (types.Hash, error) {
-	return j.exec(ctx, []string{"account", "transfer", to.Identifier.String(), to.KeyType.String(), amount.String()})
+	return j.exec(ctx, []string{"account", "transfer", to.Identifier.String(), to.KeyType.String(), amount.String()}, opts...)
 }
 
 func (j *jsonRPCCLIDriver) TransferAmt(ctx context.Context, to *types.AccountID, amt *big.Int, opts ...client.TxOpt) (types.Hash, error) {

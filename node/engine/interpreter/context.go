@@ -303,10 +303,6 @@ func (e *executionContext) setVariable(name string, value value) error {
 
 // allocateVariable allocates a variable in the current scope.
 func (e *executionContext) allocateVariable(name string, value value) error {
-	if value.Type().EqualsStrict(types.NullType) && value.Null() {
-		return fmt.Errorf("%w: cannot allocate untyped null value", engine.ErrInvalidNull)
-	}
-
 	_, ok := e.scope.variables[name]
 	if ok {
 		return fmt.Errorf(`variable "%s" already exists`, name)
@@ -318,6 +314,7 @@ func (e *executionContext) allocateVariable(name string, value value) error {
 
 // allocateNullVariable allocates a null variable in the current scope.
 // It requires a valid type to allocate the variable.
+// TODO: since we now support nullValue, we should remove this function
 func (e *executionContext) allocateNullVariable(name string, dataType *types.DataType) error {
 	nv, err := makeNull(dataType)
 	if err != nil {

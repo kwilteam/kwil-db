@@ -44,9 +44,25 @@ type Decimal struct {
 	precision uint16
 }
 
-// NewDecimalExplicit creates a new Decimal from a string, with an explicit precision and scale.
+// ParseDecimal creates a new Decimal from a string. It automatically infers the precision and scale.
+func ParseDecimal(s string) (*Decimal, error) {
+	inferredPrecision, inferredScale := inferPrecisionAndScale(s)
+
+	return ParseDecimalExplicit(s, inferredPrecision, inferredScale)
+}
+
+// MustParseDecimal is like ParseDecimal but panics if the string cannot be parsed.
+func MustParseDecimal(s string) *Decimal {
+	dec, err := ParseDecimal(s)
+	if err != nil {
+		panic(err)
+	}
+	return dec
+}
+
+// ParseDecimalExplicit creates a new Decimal from a string, with an explicit precision and scale.
 // The precision must be between 1 and 1000, and the scale must be between 0 and precision.
-func NewDecimalExplicit(s string, precision, scale uint16) (*Decimal, error) {
+func ParseDecimalExplicit(s string, precision, scale uint16) (*Decimal, error) {
 	dec := &Decimal{}
 
 	if err := dec.SetPrecisionAndScale(precision, scale); err != nil {
@@ -60,16 +76,9 @@ func NewDecimalExplicit(s string, precision, scale uint16) (*Decimal, error) {
 	return dec, nil
 }
 
-// ParseDecimal creates a new Decimal from a string. It automatically infers the precision and scale.
-func ParseDecimal(s string) (*Decimal, error) {
-	inferredPrecision, inferredScale := inferPrecisionAndScale(s)
-
-	return NewDecimalExplicit(s, inferredPrecision, inferredScale)
-}
-
-// MustParseDecimal is like ParseDecimal but panics if the string cannot be parsed.
-func MustParseDecimal(s string) *Decimal {
-	dec, err := ParseDecimal(s)
+// MustParseDecimalExplicit is like ParseDecimalExplicit but panics if the string cannot be parsed.
+func MustParseDecimalExplicit(s string, precision, scale uint16) *Decimal {
+	dec, err := ParseDecimalExplicit(s, precision, scale)
 	if err != nil {
 		panic(err)
 	}

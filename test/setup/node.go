@@ -270,6 +270,7 @@ func SetupTests(t *testing.T, testConfig *TestConfig) *Testnet {
 		composePath:     composePath, // used if we need to add more services later
 		generatedConfig: nil,
 		networkName:     dockerNetworkName,
+		tmpdir:          tmpDir,
 	}
 
 	genesisConfig := config.DefaultGenesisConfig()
@@ -433,10 +434,6 @@ func runDockerCompose(ctx context.Context, t *testing.T, testCtx *testingContext
 	t.Cleanup(func() {
 		if t.Failed() {
 			t.Logf("Stopping but keeping containers for inspection after failed test: %v", dc.Services())
-			// cancel() // Stop, not Down, which would remove the containers too --- this doesn't work, dang
-			time.Sleep(5 * time.Second)
-
-			// There is no dc.Stop, but there should be! Do this instead:
 			svcs := dc.Services()
 			slices.Sort(svcs)
 			for _, svc := range svcs {
@@ -580,13 +577,13 @@ type testingContext struct {
 	containers      map[string]*testcontainers.DockerContainer
 	generatedConfig *generatedNodeConfig
 	networkName     string
+	tmpdir          string
 }
 type kwilNode struct {
 	config         *config.Config
 	nodeTestConfig *NodeConfig
 	testCtx        *testingContext
 	generatedInfo  *generatedNodeInfo
-	client         JSONRPCClient
 }
 
 type EthNode struct {
@@ -613,10 +610,6 @@ func (k *kwilNode) Config() *config.Config {
 }
 
 func (k *kwilNode) JSONRPCClient(t *testing.T, ctx context.Context, opts *ClientOptions) JSONRPCClient {
-	if k.client != nil {
-		return k.client
-	}
-
 	container, ok := k.testCtx.containers[k.generatedInfo.KwilNodeServiceName]
 	if !ok {
 		t.Fatalf("container %s not found", k.generatedInfo.KwilNodeServiceName)
@@ -625,10 +618,9 @@ func (k *kwilNode) JSONRPCClient(t *testing.T, ctx context.Context, opts *Client
 	endpoint, _, err := kwildJSONRPCEndpoints(container, ctx)
 	require.NoError(t, err)
 
-	client, err := getNewClientFn(k.testCtx.config.ClientDriver)(ctx, endpoint, t.Logf, opts)
+	client, err := getNewClientFn(k.testCtx.config.ClientDriver)(ctx, endpoint, t.Logf, k.testCtx, opts)
 	require.NoError(t, err)
 
-	k.client = client
 	return client
 }
 

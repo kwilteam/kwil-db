@@ -405,7 +405,7 @@ func (a *ActionExecution) UnmarshalBinary(b []byte) error {
 // transactions.ActionExecution for the transaction payload used for executing
 // an action.
 type ActionCall struct {
-	DBID      string
+	DBID      string // TODO: rename to Namespace
 	Action    string
 	Arguments []*EncodedValue
 }
@@ -593,52 +593,25 @@ func (e *EncodedValue) UnmarshalBinary(bts []byte) error {
 // Decode decodes the encoded value to its native Go type.
 func (e *EncodedValue) Decode() (any, error) {
 	// decodeScalar decodes a scalar value from a byte slice.
-	decodeScalar := func(data []byte, typeName string, isArr bool) (any, error) {
-		if data == nil {
-			if typeName != NullType.Name {
-				// this is not super clean, but gives a much more helpful error message
-				pref := ""
-				if isArr {
-					pref = "[]"
-				}
-				return nil, fmt.Errorf("cannot decode nil data into type %s"+pref, typeName)
-			}
-			return nil, nil
-		}
-
-		switch typeName {
-		case TextType.Name:
-			return string(data), nil
-		case IntType.Name:
-			if len(data) != 8 {
-				return nil, fmt.Errorf("int must be 8 bytes")
-			}
-			return int64(binary.BigEndian.Uint64(data)), nil
-		case BlobType.Name:
-			return data, nil
-		case UUIDType.Name:
-			if len(data) != 16 {
-				return nil, fmt.Errorf("uuid must be 16 bytes")
-			}
-			var uuid UUID
-			copy(uuid[:], data)
-			return &uuid, nil
-		case BoolType.Name:
-			return data[0] == 1, nil
-		case NullType.Name:
-			return nil, nil
-		case NumericStr:
-			return ParseDecimal(string(data))
-		default:
-			return nil, fmt.Errorf("cannot decode type %s", typeName)
-		}
-	}
-
 	if e.Type.Name == NullType.Name {
 		if e.Type.IsArray {
-			return nil, fmt.Errorf("cannot decode array of type 'null'")
+			return make([]any, len(e.Data)), nil
 		}
-		if e.Data == nil {
+
+		// it should always have 1 element signaling null
+		if len(e.Data) == 1 {
+			switch len(e.Data[0]) {
+			case 0:
+				return nil, nil
+			case 1:
+				if e.Data[0][0] == 0 {
+					return nil, nil
+				}
+				return nil, fmt.Errorf("expected zero first byte for type 'null'")
+			default:
+				return nil, fmt.Errorf("expected nil data for type 'null'")
+			}
+		} else if len(e.Data) == 0 {
 			return nil, nil
 		}
 		return nil, fmt.Errorf("expected nil data for type 'null'")
@@ -650,87 +623,30 @@ func (e *EncodedValue) Decode() (any, error) {
 	}
 
 	if e.Type.IsArray {
-		var arrAny any
-
 		// postgres requires arrays to be of the correct type, not of []any
 		switch typeName {
 		case TextType.Name:
-			arr := make([]string, 0, len(e.Data))
-			for _, elem := range e.Data {
-				dec, err := decodeScalar(elem, typeName, true)
-				if err != nil {
-					return nil, err
-				}
-
-				arr = append(arr, dec.(string))
-			}
-			arrAny = arr
+			return decodeAnyArr[string](e.Data, typeName, e.Type.Metadata)
 		case IntType.Name:
-			arr := make([]int64, 0, len(e.Data))
-			for _, elem := range e.Data {
-				dec, err := decodeScalar(elem, typeName, true)
-				if err != nil {
-					return nil, err
-				}
-
-				arr = append(arr, dec.(int64))
-			}
-			arrAny = arr
-		case BlobType.Name:
-			arr := make([][]byte, 0, len(e.Data))
-			for _, elem := range e.Data {
-				dec, err := decodeScalar(elem, typeName, true)
-				if err != nil {
-					return nil, err
-				}
-
-				arr = append(arr, dec.([]byte))
-			}
-			arrAny = arr
+			return decodeAnyArr[int64](e.Data, typeName, e.Type.Metadata)
+		case ByteaType.Name:
+			return decodeAnyArr[[]byte](e.Data, typeName, e.Type.Metadata)
 		case UUIDType.Name:
-			arr := make(UUIDArray, 0, len(e.Data))
-			for _, elem := range e.Data {
-				dec, err := decodeScalar(elem, typeName, true)
-				if err != nil {
-					return nil, err
-				}
-
-				arr = append(arr, dec.(*UUID))
-			}
-			arrAny = arr
+			return decodeAnyArr[UUID](e.Data, typeName, e.Type.Metadata)
 		case BoolType.Name:
-			arr := make([]bool, 0, len(e.Data))
-			for _, elem := range e.Data {
-				dec, err := decodeScalar(elem, typeName, true)
-				if err != nil {
-					return nil, err
-				}
-
-				arr = append(arr, dec.(bool))
-			}
-			arrAny = arr
+			return decodeAnyArr[bool](e.Data, typeName, e.Type.Metadata)
 		case NumericStr:
-			arr := make(DecimalArray, 0, len(e.Data))
-			for _, elem := range e.Data {
-				dec, err := decodeScalar(elem, typeName, true)
-				if err != nil {
-					return nil, err
-				}
-
-				arr = append(arr, dec.(*Decimal))
-			}
-			arrAny = arr
+			return decodeAnyArr[Decimal](e.Data, typeName, e.Type.Metadata)
 		default:
 			return nil, fmt.Errorf("unknown type `%s`", typeName)
 		}
-		return arrAny, nil
 	}
 
 	if len(e.Data) != 1 {
 		return nil, fmt.Errorf("expected 1 element, got %d", len(e.Data))
 	}
 
-	return decodeScalar(e.Data[0], typeName, false)
+	return decodeScalar(e.Data[0], typeName, e.Type.Metadata)
 }
 
 // EncodeValue encodes a value to its detected type.
@@ -748,9 +664,19 @@ func EncodeValue(v any) (*EncodedValue, error) {
 	// encodeScalar encodes a scalar value into a byte slice.
 	// It also returns the data type of the value.
 	encodeScalar := func(v any) ([]byte, *DataType, error) {
+		// if it is a pointer, check if it is nil and dereference if not
+		valueOf := reflect.ValueOf(v)
+		if valueOf.Kind() == reflect.Ptr {
+			if valueOf.IsNil() {
+				return encodeNull(), NullType.Copy(), nil
+			}
+
+			v = valueOf.Elem().Interface()
+		}
+
 		switch t := v.(type) {
 		case string:
-			return []byte(t), TextType, nil
+			return encodeNotNull([]byte(t)), TextType, nil
 		case int, int16, int32, int64, int8, uint, uint16, uint32, uint64: // intentionally ignore uint8 since it is an alias for byte
 			i64, err := strconv.ParseInt(fmt.Sprint(t), 10, 64)
 			if err != nil {
@@ -759,77 +685,100 @@ func EncodeValue(v any) (*EncodedValue, error) {
 
 			var buf [8]byte
 			binary.BigEndian.PutUint64(buf[:], uint64(i64))
-			return buf[:], IntType, nil
+			return encodeNotNull(buf[:]), IntType, nil
 		case []byte:
-			return t, BlobType, nil
+			if t == nil {
+				return encodeNull(), NullType, nil
+			}
+			return encodeNotNull(t), ByteaType, nil
 		case [16]byte:
-			return t[:], UUIDType, nil
+			return encodeNotNull(t[:]), UUIDType, nil
 		case UUID:
-			return t[:], UUIDType, nil
+			return encodeNotNull(t[:]), UUIDType, nil
 		case *UUID:
-			return t[:], UUIDType, nil
+			return encodeNotNull(t[:]), UUIDType, nil
 		case bool:
 			if t {
-				return []byte{1}, BoolType, nil
+				return encodeNotNull([]byte{1}), BoolType, nil
 			}
-			return []byte{0}, BoolType, nil
-		case nil: // since we quick return for nil, we can only reach this point if the type is nil
-			// and we are in an array
-			return nil, nil, fmt.Errorf("cannot encode nil in type array")
+			return encodeNotNull([]byte{0}), BoolType, nil
+		case nil:
+			return encodeNull(), NullType, nil
 		case *Decimal:
 			decTyp, err := NewNumericType(t.Precision(), t.Scale())
 			if err != nil {
 				return nil, nil, err
 			}
 
-			return []byte(t.String()), decTyp, nil
+			return encodeNotNull([]byte(t.String())), decTyp, nil
 		case Decimal:
 			decTyp, err := NewNumericType(t.Precision(), t.Scale())
 			if err != nil {
 				return nil, nil, err
 			}
 
-			return []byte(t.String()), decTyp, nil
+			return encodeNotNull([]byte(t.String())), decTyp, nil
 		default:
 			return nil, nil, fmt.Errorf("cannot encode type %T", v)
 		}
 	}
 
-	dt := &DataType{}
-	// check if it is an array
+	// check if it is an array or pointer
 	typeOf := reflect.TypeOf(v)
+	if typeOf.Kind() == reflect.Ptr {
+		// if nil, encode as null
+		// otherwise, dereference and encode
+		valOf := reflect.ValueOf(v)
+		if valOf.IsNil() {
+			return &EncodedValue{
+				Type: *NullType,
+				Data: nil,
+			}, nil
+		}
+
+		v = valOf.Elem().Interface()
+		typeOf = reflect.TypeOf(v)
+	}
 	if typeOf.Kind() == reflect.Slice && typeOf.Elem().Kind() != reflect.Uint8 { // ignore byte slices
 		// encode each element of the array
 		encoded := make([][]byte, 0)
 		// it can be of any slice type, e.g. []any, []string, []int, etc.
 		valueOf := reflect.ValueOf(v)
+		var firstDt *DataType
 		for i := range valueOf.Len() {
 			elem := valueOf.Index(i).Interface()
 			enc, t, err := encodeScalar(elem)
 			if err != nil {
 				return nil, err
 			}
+			t = t.Copy() // to avoid modifying the original type
 
-			if !t.EqualsStrict(NullType) {
-				if dt.Name == "" {
-					*dt = *t
-				} else if !dt.EqualsStrict(t) {
-					return nil, fmt.Errorf("array contains elements of different types")
-				}
+			// if no first datatype, then set it.
+			// If it was null, then update it.
+			// Otherwise, ensure the new value is equal or null
+			if firstDt == nil {
+				firstDt = t
+			} else if firstDt.EqualsStrict(NullType) {
+				firstDt = t
+			} else if !firstDt.Equals(t) {
+				return nil, fmt.Errorf("mismatched types in array: %s and %s", firstDt, t)
 			}
 
 			encoded = append(encoded, enc)
 		}
 
 		// edge case where all elements are nil
-		if dt.Name == "" {
-			dt.Name = NullType.Name
+		if firstDt == nil {
+			return nil, fmt.Errorf("all null elements in array")
+		}
+		if firstDt.Name == "" {
+			firstDt = NullType.Copy()
+		} else {
+			firstDt.IsArray = true
 		}
 
-		dt.IsArray = true
-
 		return &EncodedValue{
-			Type: *dt,
+			Type: *firstDt,
 			Data: encoded,
 		}, nil
 	}
@@ -838,11 +787,104 @@ func EncodeValue(v any) (*EncodedValue, error) {
 	if err != nil {
 		return nil, err
 	}
+	t = t.Copy() // to avoid modifying the original type
 
 	return &EncodedValue{
 		Type: *t,
 		Data: [][]byte{enc},
 	}, nil
+}
+
+func encodeNull() []byte {
+	return []byte{0}
+}
+
+func encodeNotNull(v []byte) []byte {
+	return append([]byte{1}, v...)
+}
+
+func decodeNullable(v []byte) (val []byte, null bool, err error) {
+	if len(v) == 0 {
+		panic("empty byte slice")
+	}
+
+	if v[0] == 0 {
+		if len(v) != 1 {
+			return nil, false, fmt.Errorf("null byte must be only byte")
+		}
+
+		return nil, true, nil
+	}
+	if v[0] != 1 {
+		return nil, false, fmt.Errorf("expected 0 or 1 for first byte, got %d", v[0])
+	}
+
+	return v[1:], false, nil
+}
+
+func decodeAnyArr[T any](v [][]byte, typename string, metadata [2]uint16) ([]*T, error) {
+	arr := make([]*T, 0, len(v))
+
+	for _, elem := range v {
+		dec, err := decodeScalar(elem, typename, metadata)
+		if err != nil {
+			return nil, err
+		}
+
+		if dec == nil {
+			arr = append(arr, nil)
+			continue
+		}
+
+		decT, ok := dec.(*T)
+		if !ok {
+			panic(fmt.Sprintf("expected type %T, got %T", decT, dec))
+		}
+
+		arr = append(arr, decT)
+	}
+
+	return arr, nil
+}
+
+func decodeScalar(data []byte, typename string, metadata [2]uint16) (any, error) {
+	data, null, err := decodeNullable(data)
+	if err != nil {
+		return nil, err
+	}
+	if null {
+		return nil, nil
+	}
+
+	switch typename {
+	case TextType.Name:
+		s := string(data)
+		return &s, nil
+	case IntType.Name:
+		if len(data) != 8 {
+			return nil, fmt.Errorf("int must be 8 bytes")
+		}
+		i := int64(binary.BigEndian.Uint64(data))
+		return &i, nil
+	case ByteaType.Name:
+		return &data, nil
+	case UUIDType.Name:
+		if len(data) != 16 {
+			return nil, fmt.Errorf("uuid must be 16 bytes")
+		}
+		var uuid UUID
+		copy(uuid[:], data)
+		return &uuid, nil
+	case BoolType.Name:
+		bb := data[0] == 1
+		return &bb, nil
+	case NullType.Name:
+		return nil, nil
+	case NumericStr:
+		return ParseDecimalExplicit(string(data), metadata[0], metadata[1])
+	default:
+		return nil, fmt.Errorf("cannot decode type %s", typename)
+	}
 }
 
 // Transfer transfers an amount of tokens from the sender to the receiver.

@@ -221,7 +221,7 @@ func Test_TxHashAndExecResponse(t *testing.T) {
 	resp := &TxHashAndExecResponse{
 		Res: qr,
 	}
-	expectJSON := `{"hash":"0102030405000000000000000000000000000000000000000000000000000000","height":10,"tx":{"signature":{"sig":"yz/tf2/zblkFTASoMbIV5RQFJ1PuNT5v4x1LTvc2rNYVUSfbVV0wBroU/LTHm7rVbI5juBqYljGbsFOp4lNHWAA=","type":"secp256k1_ep"},"body":{"desc":"This is a test transaction for cli","payload":"AAA5AAAAeGY2MTdhZjFjYTc3NGViYmQ2ZDIzZThmZTEyYzU2ZDQxZDI1YTIyZDgxZTg4ZjY3YzZjNmVlMGQ0CwAAAGNyZWF0ZV91c2VyAQABAB4AAAAAAA8AAAAAAAAAAAR0ZXh0AAAAAAABAAMAAABmb28=","type":"execute","fee":"100","nonce":10,"chain_id":"asdf"},"serialization":"concat","sender":null},"tx_result":{"code":0,"gas":10,"log":"This is log","events":null}}`
+	expectJSON := `{"tx_hash":"0102030405000000000000000000000000000000000000000000000000000000","height":10,"tx":{"signature":{"sig":"yz/tf2/zblkFTASoMbIV5RQFJ1PuNT5v4x1LTvc2rNYVUSfbVV0wBroU/LTHm7rVbI5juBqYljGbsFOp4lNHWAA=","type":"secp256k1_ep"},"body":{"desc":"This is a test transaction for cli","payload":"AAA5AAAAeGY2MTdhZjFjYTc3NGViYmQ2ZDIzZThmZTEyYzU2ZDQxZDI1YTIyZDgxZTg4ZjY3YzZjNmVlMGQ0CwAAAGNyZWF0ZV91c2VyAQABAB4AAAAAAA8AAAAAAAAAAAR0ZXh0AAAAAAABAAMAAABmb28=","type":"execute","fee":"100","nonce":10,"chain_id":"asdf"},"serialization":"concat","sender":null},"tx_result":{"code":0,"gas":10,"log":"This is log","events":null}}`
 	expectText := "TxHash: 0102030405000000000000000000000000000000000000000000000000000000\nStatus: success\nHeight: 10\nLog: This is log"
 
 	outText, err := resp.MarshalText()
@@ -323,4 +323,33 @@ func mustUnmarshalHash(s string) types.Hash {
 		panic(err)
 	}
 	return h
+}
+
+// This tests that the result of json marshalling TxHashAndExecResponse
+// can be unmarshalled into a RespTxQuery. This is important because RespTxQuery
+// is used for regular (no --sync flag) transactions, while TxHashAndExecResponse
+// is used for --sync transactions. This ensures that anyone can unmarshal the result
+// of a --sync transaction into a RespTxQuery.
+func Test_MarshallingTxResults(t *testing.T) {
+	hash := types.Hash{0x1} // simple hash for testing
+	execRes := &TxHashAndExecResponse{
+		Res: &types.TxQueryResponse{
+			Hash:   hash,
+			Height: 100,
+			Result: &types.TxResult{
+				Code: uint32(types.CodeOk),
+				Log:  "transaction successful",
+			},
+		},
+	}
+
+	execBts, err := execRes.MarshalJSON()
+	require.NoError(t, err)
+
+	var txRes RespTxHash
+	err = txRes.UnmarshalJSON(execBts)
+	require.NoError(t, err)
+
+	// check that they have the right hash
+	require.Equal(t, hash.String(), txRes.Hex())
 }

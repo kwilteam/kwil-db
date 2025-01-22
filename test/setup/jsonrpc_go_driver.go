@@ -21,7 +21,7 @@ type jsonrpcGoDriver struct {
 
 var _ JSONRPCClient = (*jsonrpcGoDriver)(nil)
 
-func newClient(ctx context.Context, endpoint string, l logFunc, opts *ClientOptions) (JSONRPCClient, error) {
+func newClient(ctx context.Context, endpoint string, l logFunc, _ *testingContext, opts *ClientOptions) (JSONRPCClient, error) {
 	if opts == nil {
 		opts = &ClientOptions{}
 	}

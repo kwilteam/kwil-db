@@ -55,7 +55,7 @@ func (d ClientDriver) String() string {
 	return string(d)
 }
 
-type newClientFunc func(ctx context.Context, endpoint string, log logFunc, opts *ClientOptions) (JSONRPCClient, error)
+type newClientFunc func(ctx context.Context, endpoint string, log logFunc, testCtx *testingContext, opts *ClientOptions) (JSONRPCClient, error)
 
 func getNewClientFn(driver ClientDriver) newClientFunc {
 	switch driver {

@@ -54,12 +54,14 @@ CREATE ACTION register_account() public returns (UUID) {
     $id = uuid_generate_kwil(@txid||'account'); 
     INSERT INTO accounts (id) VALUES ($id);
     INSERT INTO wallets (id, address, account_id) VALUES (uuid_generate_kwil(@txid||'wallet'), @caller, $id);
+
+    return $id;
 };
 
 -- register_wallet creates a new wallet for the account of the caller
 CREATE ACTION register_wallet($address text) public {
     $account_id := account_id(@caller);
-    if $account_id == null {
+    if $account_id is null {
         error('Account does not exist');
     }
 
@@ -79,7 +81,7 @@ CREATE ACTION account_id($address TEXT) public view returns (UUID) {
 -- remove_wallet removes a wallet from the account of the caller
 CREATE ACTION remove_wallet($address TEXT) public {
     $account_id := account_id(@caller);
-    if $account_id == null {
+    if $account_id is null {
         error('Account does not exist');
     }
 
@@ -90,12 +92,12 @@ CREATE ACTION remove_wallet($address TEXT) public {
 -- If the account does not exist, it will be created.
 CREATE ACTION create_profile($username TEXT, $age INT, $bio TEXT) public {
     $account_id := account_id(@caller);
-    if $account_id == null {
+    if $account_id is null {
         $account_id = register_account();
     }
 
     INSERT INTO profiles (id, username, age, bio, account_id) VALUES (
-        uuid_generate_kwil(@txid||'profile'),
+        uuid_generate_kwil(@txid||'profile'||$username),
         $username, $age, $bio, $account_id
     );
 };
@@ -169,11 +171,12 @@ CREATE ACTION get_friends($username TEXT) public view returns TABLE(username TEX
 
 -- get_posts returns the list of posts for the specified profile
 CREATE ACTION get_posts($username TEXT) public view returns table(post_id UUID, content TEXT, created_at INT, likes INT) {
-    return WITH likes AS (
+    return WITH post_likes AS (
         SELECT post_id, COUNT(*) as likes FROM likes GROUP BY post_id
     )
-    SELECT p.id, p.content, p,created_at, COALESCE(l.likes, 0) as likes FROM posts p
-    LEFT JOIN likes l
+    SELECT p.id, p.content, p.created_at, COALESCE(l.likes, 0) as likes
+    FROM posts p
+    LEFT JOIN post_likes l
     ON p.id = l.post_id
     JOIN profiles pr
     ON p.author_id = pr.id
@@ -197,7 +200,7 @@ CREATE ACTION get_thread($post_id UUID, $max_depth int) public view returns tabl
         SELECT id, content, created_at, author_id, parent_id, 0 as depth
         FROM posts WHERE parent_id = $post_id
         UNION ALL
-        SELECT p.id, p.content, created_at, p.author_id, p.parent_id, c.depth + 1
+        SELECT p.id, p.content, p.created_at, p.author_id, p.parent_id, c.depth + 1
         FROM posts p 
         JOIN children c
         ON p.parent_id = c.id
@@ -205,13 +208,13 @@ CREATE ACTION get_thread($post_id UUID, $max_depth int) public view returns tabl
     ), like_counts AS (
         SELECT post_id, COUNT(*) as likes FROM likes GROUP BY post_id
     )
-    SELECT c.id as post_id, c.content, created_at, pr.username as author, COALESCE(l.likes, 0) as likes, ARRAY_AGG(c.id) as children, c.depth
+    SELECT c.id as post_id, c.content, c.created_at, pr.username as author, COALESCE(l.likes, 0) as likes, ARRAY_AGG(c.id) as children, c.depth
     FROM children c
     LEFT JOIN like_counts l
     ON c.id = l.post_id
     JOIN profiles pr
     ON c.author_id = pr.id
-    GROUP BY c.id, c.content, pr.username, l.likes, c.depth
+    GROUP BY c.id, c.content, c.created_at, pr.username, l.likes, c.depth
     ORDER BY c.depth;
 };
 

@@ -422,7 +422,7 @@ func (svc *Service) Broadcast(ctx context.Context, req *userjson.BroadcastReques
 	res, err := svc.chainClient.BroadcastTx(ctx, req.Tx, uint8(sync))
 	if err != nil {
 		logger.Error("failed to broadcast tx", "error", err)
-		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, "failed to broadcast transaction", nil)
+		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, fmt.Sprintf("failed to broadcast transaction: %s", err.Error()), nil)
 	}
 
 	code, txHash := res.Code, res.Hash

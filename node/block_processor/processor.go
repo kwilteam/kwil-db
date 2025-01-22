@@ -346,11 +346,6 @@ func (bp *BlockProcessor) InitChain(ctx context.Context) (int64, []byte, error) 
 
 	genesisAllocs := make([]*ktypes.Account, 0, len(genCfg.Allocs))
 	for _, acct := range genCfg.Allocs {
-		acctID, err := hex.DecodeString(acct.ID)
-		if err != nil {
-			return -1, nil, fmt.Errorf("failed to decode genesis account %s: %w", acct.ID, err)
-		}
-
 		keyType, err := crypto.ParseKeyType(acct.KeyType)
 		if err != nil {
 			return -1, nil, fmt.Errorf("failed to parse key type %s: %w", acct.KeyType, err)
@@ -358,7 +353,7 @@ func (bp *BlockProcessor) InitChain(ctx context.Context) (int64, []byte, error) 
 
 		genesisAllocs = append(genesisAllocs, &ktypes.Account{
 			ID: &ktypes.AccountID{
-				Identifier: acctID,
+				Identifier: acct.ID.HexBytes,
 				KeyType:    keyType,
 			},
 			Balance: acct.Amount,
