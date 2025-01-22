@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -45,10 +46,24 @@ func TestParamUpdatesDeclaration_MarshalBinary(t *testing.T) {
 					types.ParamNameLeader:           types.PublicKey{PublicKey: pubkey},
 					types.ParamNameDBOwner:          "0x1234567890123456789012345678901234567890",
 					types.ParamNameDisabledGasCosts: false,
-					types.ParamNameJoinExpiry:       int64(444),
+					types.ParamNameJoinExpiry:       types.Duration(10 * time.Second),
 					types.ParamNameMigrationStatus:  types.MigrationCompleted,
 				},
 			},
+		},
+		{
+			name: "invalid expiry param updates",
+			declaration: ParamUpdatesDeclaration{
+				Description: "test update",
+				ParamUpdates: types.ParamUpdates{
+					types.ParamNameLeader:           types.PublicKey{PublicKey: pubkey},
+					types.ParamNameDBOwner:          "0x1234567890123456789012345678901234567890",
+					types.ParamNameDisabledGasCosts: false,
+					types.ParamNameJoinExpiry:       int64(10),
+					types.ParamNameMigrationStatus:  types.MigrationCompleted,
+				},
+			},
+			wantErr: true,
 		},
 	}
 

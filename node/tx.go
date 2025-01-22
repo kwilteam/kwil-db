@@ -16,9 +16,9 @@ import (
 
 var (
 	ErrNotFound    = errors.New("resource not available")
-	ErrTxNotFound  = errors.New("tx not available")
-	ErrBlkNotFound = errors.New("block not available")
-	ErrNoResponse  = errors.New("stream closed without response")
+	ErrTxNotFound  = types.ErrTxNotFound
+	ErrBlkNotFound = types.ErrBlkNotFound
+	ErrNoResponse  = types.ErrNoResponse
 )
 
 const (

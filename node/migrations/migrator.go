@@ -669,7 +669,7 @@ func formatGenesisInfoFileName(mdir string) string {
 // - Remove all the pending migration, changeset, validator join and validator remove resolutions
 // - Fix the expiry heights of all the pending resolutions
 // (how to handle this for offline migrations? we have no way to know the last height of the old chain)
-func CleanupResolutionsAfterMigration(ctx context.Context, db sql.DB, adjustExpiration bool, snapshotHeight int64) error {
+func CleanupResolutionsAfterMigration(ctx context.Context, db sql.DB) error {
 	tx, err := db.BeginTx(ctx)
 	if err != nil {
 		return err
@@ -688,13 +688,8 @@ func CleanupResolutionsAfterMigration(ctx context.Context, db sql.DB, adjustExpi
 		return err
 	}
 
-	if adjustExpiration {
-		// Fix the expiry heights of all the pending resolutions
-		err = voting.ReadjustExpirations(ctx, tx, snapshotHeight)
-		if err != nil {
-			return err
-		}
-	}
+	// probably no need to adjust expirations, they should automatically be expired as we use timestamps
+	// unlike block heights in Kwil V1.0 where the heights get reset to 0
 
 	return tx.Commit(ctx)
 }

@@ -77,7 +77,7 @@ func (r *respJoinList) MarshalText() ([]byte, error) {
 	msg.WriteString(fmt.Sprintf("Pending join requests (%d %s needed):\n", needed, approvalTerm))
 	msg.WriteString(" Candidate                                                        | Power | Approvals | Expiration\n")
 	msg.WriteString("------------------------------------------------------------------+-------+-----------+------------")
-	//ref spacing:    22cbbb666c26b2c1f42502df72c32de4d521138a1a2c96121d417a2f341a759c | 1     | 100	   | 100
+	//ref spacing:    22cbbb666c26b2c1f42502df72c32de4d521138a1a2c96121d417a2f341a759c | 1     | 100	   | 2025-01-21 11:01:49-0600 CST
 	for _, j := range r.Joins {
 		approvals := 0
 		for _, a := range j.Approved {
@@ -86,7 +86,7 @@ func (r *respJoinList) MarshalText() ([]byte, error) {
 			}
 		}
 
-		msg.WriteString(fmt.Sprintf("\n %s | % 5d | % 9d | %d", j.Candidate.String(), j.Power, approvals, j.ExpiresAt))
+		msg.WriteString(fmt.Sprintf("\n %s | % 5d | % 9d | %s", j.Candidate.String(), j.Power, approvals, j.ExpiresAt.String()))
 
 	}
 

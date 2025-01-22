@@ -3,6 +3,7 @@ package validator
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -24,24 +25,22 @@ func Test_respJoinList_MarshalJSON(t *testing.T) {
 							Identifier: []byte{0x12, 0x34},
 							KeyType:    crypto.KeyTypeEd25519,
 						},
-						Power:     100,
-						ExpiresAt: 900,
-						Board:     []*types.AccountID{{Identifier: []byte{0xAB, 0xCD}, KeyType: crypto.KeyTypeSecp256k1}},
-						Approved:  []bool{true},
+						Power:    100,
+						Board:    []*types.AccountID{{Identifier: []byte{0xAB, 0xCD}, KeyType: crypto.KeyTypeSecp256k1}},
+						Approved: []bool{true},
 					},
 					{
 						Candidate: &types.AccountID{
 							Identifier: []byte{0x56, 0x78},
 							KeyType:    crypto.KeyTypeSecp256k1,
 						},
-						Power:     200,
-						ExpiresAt: 1000,
-						Board:     []*types.AccountID{{Identifier: []byte{0xEF, 0x12}, KeyType: crypto.KeyTypeSecp256k1}},
-						Approved:  []bool{false},
+						Power:    200,
+						Board:    []*types.AccountID{{Identifier: []byte{0xEF, 0x12}, KeyType: crypto.KeyTypeSecp256k1}},
+						Approved: []bool{false},
 					},
 				},
 			},
-			want: `[{"candidate":{"identifier":"1234","key_type":1},"power":100,"expires_at":900,"board":[{"identifier":"abcd","key_type":0}],"approved":[true]},{"candidate":{"identifier":"5678","key_type":0},"power":200,"expires_at":1000,"board":[{"identifier":"ef12","key_type":0}],"approved":[false]}]`,
+			want: `[{"candidate":{"identifier":"1234","key_type":1},"power":100,"expires_at": "0001-01-01T00:00:00Z","board":[{"identifier":"abcd","key_type":0}],"approved":[true]},{"candidate":{"identifier":"5678","key_type":0},"power":200,"expires_at":"0001-01-01T00:00:00Z","board":[{"identifier":"ef12","key_type":0}],"approved":[false]}]`,
 		},
 		{
 			name: "empty joins",
@@ -59,14 +58,13 @@ func Test_respJoinList_MarshalJSON(t *testing.T) {
 							Identifier: []byte{0x12, 0x34},
 							KeyType:    crypto.KeyTypeEd25519,
 						},
-						Power:     150,
-						ExpiresAt: 1200,
-						Board:     []*types.AccountID{{Identifier: []byte{0xAB, 0xCD}, KeyType: crypto.KeyTypeSecp256k1}},
-						Approved:  []bool{true, false},
+						Power:    150,
+						Board:    []*types.AccountID{{Identifier: []byte{0xAB, 0xCD}, KeyType: crypto.KeyTypeSecp256k1}},
+						Approved: []bool{true, false},
 					},
 				},
 			},
-			want: `[{"candidate":{"identifier":"1234","key_type":1},"power":150,"expires_at":1200,"board":[{"identifier":"abcd","key_type":0}],"approved":[true,false]}]`,
+			want: `[{"candidate":{"identifier":"1234","key_type":1},"power":150,"expires_at": "0001-01-01T00:00:00Z","board":[{"identifier":"abcd","key_type":0}],"approved":[true,false]}]`,
 		},
 	}
 
@@ -80,6 +78,8 @@ func Test_respJoinList_MarshalJSON(t *testing.T) {
 }
 
 func Test_respJoinList_MarshalText(t *testing.T) {
+	now := time.Now()
+	nowStr := now.String()
 	tests := []struct {
 		name     string
 		response respJoinList
@@ -102,13 +102,13 @@ func Test_respJoinList_MarshalText(t *testing.T) {
 							KeyType:    crypto.KeyTypeEd25519,
 						},
 						Power:     100,
-						ExpiresAt: 1000,
+						ExpiresAt: now,
 						Board:     []*types.AccountID{{Identifier: []byte{0xAB}}},
 						Approved:  []bool{true},
 					},
 				},
 			},
-			want: "Pending join requests (1 approval needed):\n Candidate                                                        | Power | Approvals | Expiration\n------------------------------------------------------------------+-------+-----------+------------\n AccountID{identifier = 1234, keyType = ed25519} |   100 |         1 | 1000",
+			want: "Pending join requests (1 approval needed):\n Candidate                                                        | Power | Approvals | Expiration\n------------------------------------------------------------------+-------+-----------+------------\n AccountID{identifier = 1234, keyType = ed25519} |   100 |         1 | " + nowStr,
 		},
 		{
 			name: "multiple approvals needed",
@@ -120,7 +120,7 @@ func Test_respJoinList_MarshalText(t *testing.T) {
 							KeyType:    crypto.KeyTypeEd25519,
 						},
 						Power:     100,
-						ExpiresAt: 1000,
+						ExpiresAt: now,
 						Board: []*types.AccountID{
 							{Identifier: []byte{0xAB}},
 							{Identifier: []byte{0xCD}},
@@ -133,7 +133,7 @@ func Test_respJoinList_MarshalText(t *testing.T) {
 							Identifier: []byte{0x56, 0x78},
 						},
 						Power:     200,
-						ExpiresAt: 2000,
+						ExpiresAt: now,
 						Board: []*types.AccountID{
 							{Identifier: []byte{0xAB}},
 							{Identifier: []byte{0xCD}},
@@ -143,7 +143,7 @@ func Test_respJoinList_MarshalText(t *testing.T) {
 					},
 				},
 			},
-			want: "Pending join requests (2 approvals needed):\n Candidate                                                        | Power | Approvals | Expiration\n------------------------------------------------------------------+-------+-----------+------------\n AccountID{identifier = 1234, keyType = ed25519} |   100 |         2 | 1000\n AccountID{identifier = 5678, keyType = secp256k1} |   200 |         0 | 2000",
+			want: "Pending join requests (2 approvals needed):\n Candidate                                                        | Power | Approvals | Expiration\n------------------------------------------------------------------+-------+-----------+------------\n AccountID{identifier = 1234, keyType = ed25519} |   100 |         2 | " + nowStr + "\n AccountID{identifier = 5678, keyType = secp256k1} |   200 |         0 | " + nowStr,
 		},
 	}
 

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"math/big"
 	"sync"
+	"time"
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -458,7 +459,8 @@ func (d *validatorJoinRoute) InTx(ctx *common.TxContext, app *common.App, tx *ty
 		Type: voting.ValidatorJoinEventType,
 	}
 
-	expiry := ctx.BlockContext.Height + ctx.BlockContext.ChainContext.NetworkParameters.JoinExpiry
+	joinExpiry := time.Duration(ctx.BlockContext.ChainContext.NetworkParameters.JoinExpiry).Seconds()
+	expiry := ctx.BlockContext.Timestamp + int64(joinExpiry)
 	err = createResolution(ctx.Ctx, app.DB, event, expiry, tx.Sender, keyType)
 	if err != nil {
 		return types.CodeUnknownError, err
@@ -628,7 +630,8 @@ func (d *validatorRemoveRoute) InTx(ctx *common.TxContext, app *common.App, tx *
 
 	// if the resolution does not exist, create it
 	if !exists {
-		expiry := ctx.BlockContext.Height + ctx.BlockContext.ChainContext.NetworkParameters.JoinExpiry
+		joinExpiry := time.Duration(ctx.BlockContext.ChainContext.NetworkParameters.JoinExpiry).Seconds()
+		expiry := ctx.BlockContext.Timestamp + int64(joinExpiry)
 		err = createResolution(ctx.Ctx, app.DB, event, expiry, tx.Sender, senderKeyType)
 		if err != nil {
 			return types.CodeUnknownError, err
@@ -841,7 +844,7 @@ func (d *validatorVoteBodiesRoute) InTx(ctx *common.TxContext, app *common.App, 
 			return types.CodeInvalidSender, fmt.Errorf("failed to parse key type: %w", err)
 		}
 
-		expiryHeight := ctx.BlockContext.Height + resCfg.ExpirationPeriod
+		expiryHeight := ctx.BlockContext.Timestamp + int64(resCfg.ExpirationPeriod.Seconds())
 		err = createResolution(ctx.Ctx, app.DB, ev, expiryHeight, tx.Sender, keyType)
 		if err != nil {
 			return types.CodeUnknownError, err
@@ -917,7 +920,7 @@ func (d *createResolutionRoute) PreTx(ctx *common.TxContext, svc *common.Service
 	}
 
 	d.resolution = res.Resolution
-	d.expiry = resCfg.ExpirationPeriod + ctx.BlockContext.Height
+	d.expiry = int64(resCfg.ExpirationPeriod.Seconds()) + ctx.BlockContext.Timestamp
 
 	return 0, nil
 }

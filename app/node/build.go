@@ -172,10 +172,10 @@ func buildDB(ctx context.Context, d *coreDependencies, closers *closeFuncs) *pg.
 		// 	adjustExpiration = true
 		// }
 
-		// err = migrations.CleanupResolutionsAfterMigration(d.ctx, db, adjustExpiration, startHeight)
-		// if err != nil {
-		// 	failBuild(err, "failed to cleanup resolutions after snapshot restore")
-		// }
+		err = migrations.CleanupResolutionsAfterMigration(d.ctx, db)
+		if err != nil {
+			failBuild(err, "failed to cleanup resolutions after snapshot restore")
+		}
 
 		if err = db.EnsureFullReplicaIdentityDatasets(d.ctx); err != nil {
 			failBuild(err, "failed enable full replica identity on user datasets")
@@ -404,6 +404,7 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB,
 		Mempool:               mempool,
 		Logger:                d.logger.New("CONS"),
 		ProposeTimeout:        time.Duration(d.cfg.Consensus.ProposeTimeout),
+		EmptyBlockTimeout:     time.Duration(d.cfg.Consensus.EmptyBlockTimeout),
 		BlockProposalInterval: time.Duration(d.cfg.Consensus.BlockProposalInterval),
 		BlockAnnInterval:      time.Duration(d.cfg.Consensus.BlockAnnInterval),
 		BroadcastTxTimeout:    time.Duration(d.cfg.RPC.BroadcastTxTimeout),

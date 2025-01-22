@@ -97,7 +97,7 @@ func (rs MsgResolutionStatus) MarshalText() ([]byte, error) {
 	var buf bytes.Buffer
 	fmt.Fprintf(&buf, "%sID:         %s\n", rs.indent, rs.ResolutionID)
 	fmt.Fprintf(&buf, "%sType:       %s\n", rs.indent, rs.Type)
-	fmt.Fprintf(&buf, "%sExpiresAt:  %d\n", rs.indent, rs.ExpiresAt)
+	fmt.Fprintf(&buf, "%sExpiresAt:  %s\n", rs.indent, rs.ExpiresAt)
 	fmt.Fprintf(&buf, "%sBoard:      %s\n", rs.indent, rs.Board)
 	fmt.Fprintf(&buf, "%sApprovals:  %v\n", rs.indent, rs.Approved)
 	return buf.Bytes(), nil

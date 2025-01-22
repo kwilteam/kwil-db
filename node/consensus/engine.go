@@ -24,6 +24,8 @@ const (
 	// Use these accordingly
 	MaxBlockSize = 4 * 1024 * 1024 // 1 MB
 	blockTxCount = 50
+
+	defaultProposeTimeout = 1 * time.Second
 )
 
 var zeroHash = types.Hash{}
@@ -44,8 +46,11 @@ type ConsensusEngine struct {
 	log     log.Logger
 
 	// proposeTimeout specifies the time duration to wait before proposing a new block for the next height.
-	// Default is 1 second.
+	// This timeout is used by the leader to propose a block if transactions are available. Default is 1 second.
 	proposeTimeout time.Duration
+	// emptyBlockTimeout specifies the time duration to wait before proposing an empty block.
+	// This should always be greater than the proposeTimeout. Default is 1 minute.
+	emptyBlockTimeout time.Duration
 
 	// blkProposalInterval specifies the time duration to wait before reannouncing the block proposal message.
 	// This is only applicable for the leader. This timeout influences how quickly the out-of-sync nodes can
@@ -77,6 +82,10 @@ type ConsensusEngine struct {
 	numResets      int64
 
 	// Channels
+	newBlockProposal chan struct{} // triggers block production in the leader
+	// newRound triggers the start of a new round in the consensus engine.
+	// leader waits for the minBlockInterval before proposing a new block if txs are available.
+	// if no txs are available for the maxBlockInterval duration, the leader proposes an empty block.
 	newRound     chan struct{}
 	msgChan      chan consensusMessage
 	haltChan     chan string        // can take a msg or reason for halting the network
@@ -109,6 +118,9 @@ type ConsensusEngine struct {
 
 	// waitgroup to track all the consensus goroutines
 	wg sync.WaitGroup
+
+	catchupTicker  *time.Ticker
+	catchupTimeout time.Duration
 }
 
 // Config is the struct given to the constructor, [New].
@@ -119,8 +131,13 @@ type Config struct {
 	Leader crypto.PublicKey
 	// GenesisHeight is the initial height of the network.
 	GenesisHeight int64
-	// ProposeTimeout is the timeout for proposing a block.
+
+	// ProposeTimeout is the minimum time duration to wait before proposing a new block.
+	// Leader can propose a block with transactions as soon as this timeout is reached. Default is 1 second.
 	ProposeTimeout time.Duration
+	// EmptyBlockTimeout is the maximum time duration to wait before proposing a new block without transactions.
+	// Default is 1 minute.
+	EmptyBlockTimeout time.Duration
 	// BlkPropReannounceInterval is the frequency at which block proposal messages are reannounced by the Leader.
 	BlockProposalInterval time.Duration
 	// BlkAnnReannounceInterval is the frequency at which block commit messages are reannounced by the Leader.
@@ -253,6 +270,7 @@ func New(cfg *Config) *ConsensusEngine {
 		privKey:             cfg.PrivateKey,
 		leader:              cfg.Leader,
 		proposeTimeout:      cfg.ProposeTimeout,
+		emptyBlockTimeout:   cfg.EmptyBlockTimeout,
 		blkProposalInterval: cfg.BlockProposalInterval,
 		blkAnnInterval:      cfg.BlockAnnInterval,
 		broadcastTxTimeout:  cfg.BroadcastTxTimeout,
@@ -272,12 +290,14 @@ func New(cfg *Config) *ConsensusEngine {
 			status:  Committed,
 			blkProp: nil,
 		},
-		genesisHeight: cfg.GenesisHeight,
-		msgChan:       make(chan consensusMessage, 1), // buffer size??
-		haltChan:      make(chan string, 1),
-		resetChan:     make(chan *resetMsg, 1),
-		bestHeightCh:  make(chan *discoveryMsg, 1),
-		newRound:      make(chan struct{}, 1),
+		genesisHeight:    cfg.GenesisHeight,
+		msgChan:          make(chan consensusMessage, 1), // buffer size??
+		haltChan:         make(chan string, 1),
+		resetChan:        make(chan *resetMsg, 1),
+		bestHeightCh:     make(chan *discoveryMsg, 1),
+		newRound:         make(chan struct{}, 1),
+		newBlockProposal: make(chan struct{}, 1),
+
 		// interfaces
 		mempool:        cfg.Mempool,
 		blockStore:     cfg.BlockStore,
@@ -290,6 +310,10 @@ func New(cfg *Config) *ConsensusEngine {
 	// Not initializing the role here will panic the node, as a lot of RPC calls such as HealthCheck,
 	// Status, etc. tries to access the role.
 	ce.role.Store(types.RoleSentry)
+
+	if ce.proposeTimeout == 0 { // can't be zero
+		ce.proposeTimeout = defaultProposeTimeout
+	}
 
 	return ce
 }
@@ -304,6 +328,8 @@ func (ce *ConsensusEngine) Start(ctx context.Context, fns BroadcastFns, peerFns 
 	ce.txAnnouncer = fns.TxAnnouncer
 
 	ce.blockProcessor.SetCallbackFns(fns.TxBroadcaster, peerFns.AddPeer, peerFns.RemovePeer)
+	ce.catchupTimeout = min(5*time.Second, ce.emptyBlockTimeout+ce.blkProposalInterval)
+	ce.catchupTicker = time.NewTicker(ce.catchupTimeout)
 
 	ce.log.Info("Starting the consensus engine")
 	ctx, cancel := context.WithCancel(ctx)
@@ -318,7 +344,7 @@ func (ce *ConsensusEngine) Start(ctx context.Context, fns BroadcastFns, peerFns 
 	// nodes are activated when they receive a block proposal or block announce msg.
 	if ce.role.Load() == types.RoleLeader {
 		ce.log.Infof("Starting the leader node")
-		ce.newRound <- struct{}{} // recv by runConsensusEventLoop, buffered
+		ce.newBlockProposal <- struct{}{} // recv by runConsensusEventLoop, buffered
 	} else {
 		ce.log.Infof("Starting the validator/sentry node")
 	}
@@ -392,9 +418,13 @@ func (ce *ConsensusEngine) Status() *ktypes.NodeStatus {
 // catchup with the network and reannounce the messages.
 func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 	ce.log.Info("Starting the consensus event loop...")
-	catchUpTicker := time.NewTicker(5 * time.Second)        // Should this be configurable??
 	reannounceTicker := time.NewTicker(ce.blkAnnInterval)   // 3 secs (default)
 	blkPropTicker := time.NewTicker(ce.blkProposalInterval) // 1 sec (default)
+
+	// If no messages are received within the below specified duration after the last consensus message,
+	// and given that the leader is expected to produce a block within the emptyBlockTimeout interval,
+	// initiate catchup mode to request any missed messages.
+	// The catchupticker resets with each processed consensus message that successfully advances the node's state
 
 	for {
 		select {
@@ -407,18 +437,21 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 			return nil
 
 		case <-ce.newRound:
+			go ce.newBlockRound(ctx)
+
+		case <-ce.newBlockProposal:
 			params := ce.blockProcessor.ConsensusParams()
 			if params.MigrationStatus == ktypes.MigrationCompleted {
 				ce.log.Info("Network halted due to migration, no more blocks will be produced")
 			}
 
-			if err := ce.startNewRound(ctx); err != nil {
+			if err := ce.proposeBlock(ctx); err != nil {
 				ce.log.Error("Error starting a new round", "error", err)
 				return err
 			}
 
-		case <-catchUpTicker.C:
-			err := ce.doCatchup(ctx) // better name??
+		case <-ce.catchupTicker.C:
+			err := ce.doCatchup(ctx)
 			if err != nil {
 				return err
 			}
@@ -477,8 +510,7 @@ func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg cons
 
 }
 
-// catchup syncs the node first with the local blockstore and then with the network.
-func (ce *ConsensusEngine) catchup(ctx context.Context) error {
+func (ce *ConsensusEngine) initializeState(ctx context.Context) (int64, int64, error) {
 	// Figure out the app state and initialize the node state.
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
@@ -488,7 +520,7 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 
 	readTx, err := ce.db.BeginReadTx(ctx)
 	if err != nil {
-		return err
+		return -1, -1, err
 	}
 	defer readTx.Rollback(ctx)
 
@@ -498,18 +530,18 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 	// retrieve the app state from the meta table
 	appHeight, appHash, dirty, err := meta.GetChainState(ctx, readTx)
 	if err != nil {
-		return err
+		return -1, -1, err
 	}
 
 	if dirty {
-		return fmt.Errorf("app state is dirty, error in the blockprocessor initialization, height: %d, appHash: %x", appHeight, appHash)
+		return -1, -1, fmt.Errorf("app state is dirty, error in the blockprocessor initialization, height: %d, appHash: %x", appHeight, appHash)
 	}
 
 	ce.log.Info("Initial Node state: ", "appHeight", appHeight, "storeHeight", storeHeight, "appHash", appHash, "storeAppHash", storeAppHash)
 
 	if appHeight > storeHeight && appHeight != ce.genesisHeight {
 		// This is not possible, App can't be ahead of the store
-		return fmt.Errorf("app height %d is greater than the store height %d (did you forget to reset postgres?)", appHeight, storeHeight)
+		return -1, -1, fmt.Errorf("app height %d is greater than the store height %d (did you forget to reset postgres?)", appHeight, storeHeight)
 	}
 
 	if appHeight == -1 {
@@ -517,7 +549,7 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 		// initialize the db with the genesis state
 		appHeight, appHash, err = ce.blockProcessor.InitChain(ctx)
 		if err != nil {
-			return fmt.Errorf("error initializing the chain: %w", err)
+			return -1, -1, fmt.Errorf("error initializing the chain: %w", err)
 		}
 
 		ce.setLastCommitInfo(appHeight, nil, appHash)
@@ -526,13 +558,24 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 		// restart or statesync init or zdt init
 		if appHeight == storeHeight && !bytes.Equal(appHash, storeAppHash[:]) {
 			// This is not possible, PG mismatches with the Blockstore return error
-			return fmt.Errorf("AppHash mismatch, appHash: %x, storeAppHash: %v", appHash, storeAppHash)
+			return -1, -1, fmt.Errorf("AppHash mismatch, appHash: %x, storeAppHash: %v", appHash, storeAppHash)
 		}
 		ce.setLastCommitInfo(appHeight, blkHash[:], appHash)
 	}
 
 	// Set the role and validator set based on the initial state of the voters before starting the replay
 	ce.updateValidatorSetAndRole()
+
+	return appHeight, storeHeight, nil
+}
+
+// catchup syncs the node first with the local blockstore and then with the network.
+func (ce *ConsensusEngine) catchup(ctx context.Context) error {
+	// initialize the chain state
+	appHeight, storeHeight, err := ce.initializeState(ctx)
+	if err != nil {
+		return err
+	}
 
 	// Replay the blocks from the blockstore if the app hasn't played all the blocks yet.
 	if appHeight < storeHeight {
@@ -605,6 +648,9 @@ func (ce *ConsensusEngine) setLastCommitInfo(height int64, blkHash []byte, appHa
 
 // replayBlocks replays all the blocks from the blockstore if the app hasn't played all the blocks yet.
 func (ce *ConsensusEngine) replayFromBlockStore(ctx context.Context, startHeight, bestHeight int64) error {
+	ce.state.mtx.Lock()
+	defer ce.state.mtx.Unlock()
+
 	height := startHeight
 	t0 := time.Now()
 
@@ -671,30 +717,50 @@ func (ce *ConsensusEngine) rebroadcastBlkProposal(ctx context.Context) {
 
 func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 	// status check, nodes halt here if the migration is completed
+	ce.log.Info("No consensus messages received recently, initiating network catchup.")
 	params := ce.blockProcessor.ConsensusParams()
 	if params.MigrationStatus == ktypes.MigrationCompleted {
 		ce.log.Info("Network halted due to migration, no more blocks will be produced")
 		return nil
 	}
 
-	ce.state.mtx.Lock()
-	defer ce.state.mtx.Unlock()
-
 	if ce.role.Load() == types.RoleLeader {
 		return nil
 	}
 
-	startHeight := ce.state.lc.height + 1
+	startHeight := ce.lastCommitHeight()
 	t0 := time.Now()
+
+	if err := ce.processCurrentBlock(ctx); err != nil {
+		if errors.Is(err, types.ErrBlkNotFound) {
+			return nil // retry again
+		}
+		ce.log.Error("error during block processing in catchup", "height", startHeight+1, "error", err)
+		return err
+	}
+
+	err := ce.replayBlockFromNetwork(ctx, ce.syncBlockWithRetry)
+	if err != nil {
+		return err
+	}
+
+	endHeight := ce.lastCommitHeight()
+	ce.log.Info("Network Sync: ", "from", startHeight, "to", endHeight, "time", time.Since(t0), "appHash", ce.state.lc.appHash)
+
+	return nil
+}
+
+func (ce *ConsensusEngine) processCurrentBlock(ctx context.Context) error {
+	ce.state.mtx.Lock()
+	defer ce.state.mtx.Unlock()
 
 	if ce.role.Load() == types.RoleValidator {
 		// If validator is in the middle of processing a block, finish it first
-
 		if ce.state.blkProp != nil && ce.state.blockRes != nil { // Waiting for the commit message
-			blkHash, rawBlk, ci, err := ce.blkRequester(ctx, ce.state.blkProp.height)
+			blkHash, rawBlk, ci, err := ce.getBlock(ctx, ce.state.blkProp.height) // retries it
 			if err != nil {
-				ce.log.Warn("Error requesting block from network", "height", ce.state.blkProp.height, "error", err)
-				return nil // not an error, just retry later
+				ce.log.Debug("Error requesting block from network", "height", ce.state.blkProp.height, "error", err)
+				return err
 			}
 
 			if blkHash != ce.state.blkProp.blkHash { // processed incorrect block
@@ -729,14 +795,6 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 			}
 		}
 	}
-
-	err := ce.replayBlockFromNetwork(ctx)
-	if err != nil {
-		return err
-	}
-
-	ce.log.Info("Network Sync: ", "from", startHeight, "to", ce.state.lc.height, "time", time.Since(t0), "appHash", ce.state.lc.appHash)
-
 	return nil
 }
 
@@ -839,4 +897,11 @@ func (ce *ConsensusEngine) UnsubscribeTx(txHash ktypes.Hash) {
 	defer ce.subMtx.Unlock()
 
 	delete(ce.txSubscribers, txHash)
+}
+
+func (ce *ConsensusEngine) lastCommitHeight() int64 {
+	ce.stateInfo.mtx.RLock()
+	defer ce.stateInfo.mtx.RUnlock()
+
+	return ce.stateInfo.height
 }

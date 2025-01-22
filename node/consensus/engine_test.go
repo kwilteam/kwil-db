@@ -164,6 +164,7 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) ([]*Config, ma
 			// ValidatorSet:          validatorSet,
 			Logger:                logger,
 			ProposeTimeout:        1 * time.Second,
+			EmptyBlockTimeout:     1 * time.Second,
 			BlockProposalInterval: 1 * time.Second,
 			BlockAnnInterval:      3 * time.Second,
 			BroadcastTxTimeout:    10 * time.Second,
@@ -601,6 +602,76 @@ func TestValidatorStateMachine(t *testing.T) {
 				},
 			},
 		},
+		{
+			name: "Catchup mode with blk request fail",
+			setup: func(t *testing.T) ([]*Config, map[string]ktypes.Validator) {
+				return generateTestCEConfig(t, 2, false)
+			},
+			actions: []action{
+				{
+					name: "blkPropNew",
+					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
+						val.NotifyBlockProposal(blkProp2.blk)
+					},
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Executed, 0, blkProp2.blkHash)
+					},
+				},
+				{
+					name: "catchup",
+					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
+						ci := addVotes(t, blkProp2.blkHash, blockAppHash, leader, val)
+
+						rawBlk := ktypes.EncodeBlock(blkProp2.blk)
+						cnt := 0
+						val.blkRequester = func(ctx context.Context, height int64) (types.Hash, []byte, *ktypes.CommitInfo, error) {
+							defer func() { cnt += 1 }()
+
+							if cnt <= 1 {
+								return zeroHash, nil, nil, types.ErrBlkNotFound
+							}
+							return blkProp2.blkHash, rawBlk, ci, nil
+						}
+						val.doCatchup(context.Background())
+					},
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Committed, 1, blkProp2.blkHash)
+					},
+				},
+			},
+		},
+		{
+			name: "Catchup mode with blk request success",
+			setup: func(t *testing.T) ([]*Config, map[string]ktypes.Validator) {
+				return generateTestCEConfig(t, 2, false)
+			},
+			actions: []action{
+				{
+					name: "blkPropNew",
+					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
+						val.NotifyBlockProposal(blkProp2.blk)
+					},
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Executed, 0, blkProp2.blkHash)
+					},
+				},
+				{
+					name: "catchup",
+					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
+						ci := addVotes(t, blkProp2.blkHash, blockAppHash, leader, val)
+
+						rawBlk := ktypes.EncodeBlock(blkProp2.blk)
+						val.blkRequester = func(ctx context.Context, height int64) (types.Hash, []byte, *ktypes.CommitInfo, error) {
+							return blkProp2.blkHash, rawBlk, ci, nil
+						}
+						val.doCatchup(context.Background())
+					},
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Committed, 1, blkProp2.blkHash)
+					},
+				},
+			},
+		},
 	}
 
 	for _, tc := range testcases {
@@ -640,7 +711,7 @@ func TestValidatorStateMachine(t *testing.T) {
 						return false
 					}
 					return true
-				}, 6*time.Second, 100*time.Millisecond)
+				}, 6*time.Second, 500*time.Millisecond)
 			}
 		})
 	}
@@ -838,7 +909,7 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 
 // MockBroadcasters
 func mockBlkRequester(ctx context.Context, height int64) (types.Hash, []byte, *ktypes.CommitInfo, error) {
-	return types.Hash{}, nil, nil, fmt.Errorf("not implemented")
+	return types.Hash{}, nil, nil, types.ErrBlkNotFound
 }
 
 func mockBlockPropBroadcaster(_ context.Context, blk *ktypes.Block) {}
@@ -933,13 +1004,6 @@ func (m *mockAccounts) Updates() []*ktypes.Account {
 	return nil
 }
 
-func (ce *ConsensusEngine) lastCommitHeight() int64 {
-	ce.stateInfo.mtx.RLock()
-	defer ce.stateInfo.mtx.RUnlock()
-
-	return ce.stateInfo.height
-}
-
 func (ce *ConsensusEngine) info() (int64, Status, *blockProposal) {
 	ce.stateInfo.mtx.RLock()
 	defer ce.stateInfo.mtx.RUnlock()
@@ -993,6 +1057,12 @@ func (m *mockEventStore) GetUnbroadcastedEvents(ctx context.Context) ([]*ktypes.
 	}
 	return ids, nil
 }
+
+func (m *mockEventStore) HasEvents() bool {
+	return true
+}
+
+func (m *mockEventStore) UpdateStats(cnt int64) {}
 
 type mockMigrator struct{}
 

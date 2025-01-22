@@ -45,7 +45,7 @@ const (
 		body BYTEA, -- body is the actual resolution info
 		type BYTEA NOT NULL, -- type is the type of resolution
 		vote_body_proposer BYTEA, -- vote_body_proposer is the identifier of the node that supplied the vote body
-		expiration INT8 NOT NULL, -- expiration is the blockheight at which the resolution expires
+		expiration INT8 NOT NULL, -- expiration is the UNIX epoch time in secs at which the resolution expires
 		extra_vote_id BOOLEAN NOT NULL DEFAULT FALSE, -- If vote_body_proposer had sent VoteID before VoteBody, this is set to true
 		UNIQUE (id, type),
 		FOREIGN KEY(type) REFERENCES ` + votingSchemaName + `.resolution_types(id) ON UPDATE CASCADE ON DELETE CASCADE
@@ -150,9 +150,6 @@ const (
 	deleteResolution = `DELETE FROM ` + votingSchemaName + `.resolutions WHERE id = $1;`
 
 	deleteResolutionsByTypeSQL = `DELETE FROM ` + votingSchemaName + `.resolutions WHERE type = ANY($1);`
-
-	// Subtracts the start height from the expiration height of all resolutions.
-	readjustExpirationsSQL = `UPDATE ` + votingSchemaName + `.resolutions SET expiration = expiration - $1;`
 
 	// createResolutionType creates a resolution type
 	createResolutionType = `INSERT INTO ` + votingSchemaName + `.resolution_types (id, name) VALUES ($1, $2)

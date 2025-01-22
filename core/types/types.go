@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
@@ -110,7 +111,7 @@ type ChainInfo struct {
 type JoinRequest struct {
 	Candidate *AccountID   `json:"candidate"`  // pubkey of the candidate validator
 	Power     int64        `json:"power"`      // the requested power
-	ExpiresAt int64        `json:"expires_at"` // the block height at which the join request expires
+	ExpiresAt time.Time    `json:"expires_at"` // the timestamp at which the join request expires
 	Board     []*AccountID `json:"board"`      // slice of pubkeys of all the eligible voting validators
 	Approved  []bool       `json:"approved"`   // slice of bools indicating if the corresponding validator approved
 }
@@ -253,7 +254,7 @@ func (e *VotableEvent) UnmarshalBinary(b []byte) error {
 type PendingResolution struct {
 	Type         string       `json:"type"`
 	ResolutionID *UUID        `json:"resolution_id"` // Resolution ID
-	ExpiresAt    int64        `json:"expires_at"`    // ExpiresAt is the block height at which the resolution expires
+	ExpiresAt    time.Time    `json:"expires_at"`    // ExpiresAt is the timestamp at which the resolution expires
 	Board        []*AccountID `json:"board"`         // Board is the list of validators who are eligible to vote on the resolution
 	Approved     []bool       `json:"approved"`      // Approved is the list of bools indicating if the corresponding validator approved the resolution
 }

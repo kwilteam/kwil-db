@@ -13,8 +13,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
-	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
+	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/pg"
 	"github.com/kwilteam/kwil-db/node/types"
 )
@@ -107,7 +107,7 @@ func SetFlagsFromStructTags(fs *pflag.FlagSet, cfg interface{}, nameTag, descTag
 		case time.Duration:
 			fs.Duration(flagName, vt, desc)
 			return
-		case config.Duration:
+		case ktypes.Duration:
 			fs.Duration(flagName, time.Duration(vt), desc)
 			return
 		case types.HexBytes:

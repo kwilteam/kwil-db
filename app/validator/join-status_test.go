@@ -3,6 +3,7 @@ package validator
 import (
 	"encoding/json"
 	"testing"
+	"time"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -59,6 +60,8 @@ func Test_respValJoinStatus_MarshalJSON(t *testing.T) {
 }
 
 func Test_respValJoinStatus_MarshalText(t *testing.T) {
+	now := time.Now()
+	nowStr := now.String()
 	tests := []struct {
 		name     string
 		response respValJoinStatus
@@ -70,7 +73,7 @@ func Test_respValJoinStatus_MarshalText(t *testing.T) {
 				Data: &types.JoinRequest{
 					Candidate: &types.AccountID{Identifier: []byte{0x12, 0x34}, KeyType: crypto.KeyTypeSecp256k1},
 					Power:     1000,
-					ExpiresAt: 5000,
+					ExpiresAt: now,
 					Board: []*types.AccountID{
 						{Identifier: []byte{0xAB, 0xCD}, KeyType: crypto.KeyTypeSecp256k1},
 						{Identifier: []byte{0xEF, 0x12}, KeyType: crypto.KeyTypeSecp256k1},
@@ -79,7 +82,7 @@ func Test_respValJoinStatus_MarshalText(t *testing.T) {
 					Approved: []bool{true, true, true},
 				},
 			},
-			want: "Candidate: AccountID{identifier = 1234, keyType = secp256k1}\nRequested Power: 1000\nExpiration Height: 5000\n3 Approvals Received (2 needed):\nValidator AccountID{identifier = abcd, keyType = secp256k1}, approved\nValidator AccountID{identifier = ef12, keyType = secp256k1}, approved\nValidator AccountID{identifier = 5678, keyType = secp256k1}, approved\n",
+			want: "Candidate: AccountID{identifier = 1234, keyType = secp256k1}\nRequested Power: 1000\nExpiration Timestamp: " + nowStr + "\n3 Approvals Received (2 needed):\nValidator AccountID{identifier = abcd, keyType = secp256k1}, approved\nValidator AccountID{identifier = ef12, keyType = secp256k1}, approved\nValidator AccountID{identifier = 5678, keyType = secp256k1}, approved\n",
 		},
 		{
 			name: "mixed approvals",
@@ -87,7 +90,7 @@ func Test_respValJoinStatus_MarshalText(t *testing.T) {
 				Data: &types.JoinRequest{
 					Candidate: &types.AccountID{Identifier: []byte{0xFF}, KeyType: crypto.KeyTypeSecp256k1},
 					Power:     500,
-					ExpiresAt: 1000,
+					ExpiresAt: now,
 					Board: []*types.AccountID{
 						{Identifier: []byte{0x11, 0x22}, KeyType: crypto.KeyTypeSecp256k1},
 						{Identifier: []byte{0x33, 0x44}, KeyType: crypto.KeyTypeSecp256k1},
@@ -95,7 +98,7 @@ func Test_respValJoinStatus_MarshalText(t *testing.T) {
 					Approved: []bool{true, false},
 				},
 			},
-			want: "Candidate: AccountID{identifier = ff, keyType = secp256k1}\nRequested Power: 500\nExpiration Height: 1000\n1 Approvals Received (2 needed):\nValidator AccountID{identifier = 1122, keyType = secp256k1}, approved\nValidator AccountID{identifier = 3344, keyType = secp256k1}, not approved\n",
+			want: "Candidate: AccountID{identifier = ff, keyType = secp256k1}\nRequested Power: 500\nExpiration Timestamp: " + nowStr + "\n1 Approvals Received (2 needed):\nValidator AccountID{identifier = 1122, keyType = secp256k1}, approved\nValidator AccountID{identifier = 3344, keyType = secp256k1}, not approved\n",
 		},
 	}
 

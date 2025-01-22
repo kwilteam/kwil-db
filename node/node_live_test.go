@@ -128,6 +128,7 @@ func TestSingleNodeMocknet(t *testing.T) {
 		BlockProcessor:        bp,
 		Logger:                log.New(log.WithName("CE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
 		ProposeTimeout:        1 * time.Second,
+		EmptyBlockTimeout:     1 * time.Second,
 		BlockProposalInterval: 1 * time.Second,
 		BlockAnnInterval:      3 * time.Second,
 		BroadcastTxTimeout:    15 * time.Second,
@@ -266,6 +267,7 @@ func TestDualNodeMocknet(t *testing.T) {
 		BlockStore:            bs1,
 		Logger:                log.New(log.WithName("CE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
 		ProposeTimeout:        1 * time.Second,
+		EmptyBlockTimeout:     1 * time.Second,
 		BlockProposalInterval: 1 * time.Second,
 		BlockAnnInterval:      3 * time.Second,
 		DB:                    db1,
@@ -335,6 +337,7 @@ func TestDualNodeMocknet(t *testing.T) {
 		BlockProcessor:        bp2,
 		Logger:                log.New(log.WithName("CE2"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
 		ProposeTimeout:        1 * time.Second,
+		EmptyBlockTimeout:     1 * time.Second,
 		BlockProposalInterval: 1 * time.Second,
 		BlockAnnInterval:      3 * time.Second,
 		DB:                    db2,
@@ -508,6 +511,12 @@ func (m *mockEventStore) GetUnbroadcastedEvents(ctx context.Context) ([]*ktypes.
 	}
 	return ids, nil
 }
+
+func (m *mockEventStore) HasEvents() bool {
+	return true
+}
+
+func (m *mockEventStore) UpdateStats(cnt int64) {}
 
 // TODO: can test with real migrator
 /*type mockMigrator struct{}

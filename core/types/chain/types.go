@@ -64,7 +64,7 @@ type Genesis struct {
 	MaxBlockSize int64 `json:"max_block_size"`
 	// JoinExpiry is the number of blocks after which the validators
 	// join request expires if not approved.
-	JoinExpiry int64 `json:"join_expiry"`
+	JoinExpiry types.Duration `json:"join_expiry"`
 	// DisabledGasCosts dictates whether gas costs are disabled.
 	DisabledGasCosts bool `json:"disabled_gas_costs"`
 	// MaxVotesPerTx is the maximum number of votes that can be included in a

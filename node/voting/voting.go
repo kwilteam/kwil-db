@@ -11,6 +11,7 @@ import (
 	"os"
 	"slices"
 	"sync"
+	"time"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -200,7 +201,7 @@ func ApproveResolution(ctx context.Context, db sql.TxMaker, resolutionID *types.
 }
 
 // CreateResolution creates a resolution for a votable event. The expiration
-// should be a block height. Resolution creation will fail if the resolution
+// is the UNIX epoch timestamp in secs. Resolution creation will fail if the resolution
 // either already exists or has been processed.
 func CreateResolution(ctx context.Context, db sql.TxMaker, event *types.VotableEvent, expiration int64, voteBodyProposer []byte, proposerKeyType crypto.KeyType) error {
 	tx, err := db.BeginTx(ctx)
@@ -274,10 +275,11 @@ func fromRow(ctx context.Context, db sql.Executor, row []any) (*resolutions.Reso
 		return nil, fmt.Errorf("invalid type for type (%T)", row[2])
 	}
 
-	v.ExpirationHeight, ok = sql.Int64(row[3])
+	expiration, ok := sql.Int64(row[3])
 	if !ok {
 		return nil, fmt.Errorf("invalid type for expiration (%T)", row[3])
 	}
+	v.Expiration = time.Unix(expiration, 0)
 
 	if row[4] == nil {
 		v.ApprovedPower = 0
@@ -376,10 +378,9 @@ func GetResolutionInfo(ctx context.Context, db sql.Executor, id *types.UUID) (*r
 	return fromRow(ctx, db, res.Rows[0])
 }
 
-// GetExpired returns all resolutions with an expiration
-// less than or equal to the given block height.
-func GetExpired(ctx context.Context, db sql.Executor, blockHeight int64) ([]*resolutions.Resolution, error) {
-	res, err := db.Execute(ctx, getResolutionsFullInfoByExpiration, blockHeight)
+// GetExpired returns all resolutions with an expiration time less than the currentTime
+func GetExpired(ctx context.Context, db sql.Executor, currentTime int64) ([]*resolutions.Resolution, error) {
+	res, err := db.Execute(ctx, getResolutionsFullInfoByExpiration, currentTime)
 	if err != nil {
 		return nil, err
 	}
@@ -566,12 +567,6 @@ func DeleteResolutionsByType(ctx context.Context, db sql.Executor, resTypes []st
 		uuids[i] = types.NewUUIDV5([]byte(resType))
 	}
 	_, err := db.Execute(ctx, deleteResolutionsByTypeSQL, types.UUIDArray(uuids).Bytes())
-	return err
-}
-
-func ReadjustExpirations(ctx context.Context, db sql.Executor, startHeight int64) error {
-	// Subtracts the start height from the expiration height of all resolutions
-	_, err := db.Execute(ctx, readjustExpirationsSQL, startHeight)
 	return err
 }
 

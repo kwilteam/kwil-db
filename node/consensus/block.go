@@ -148,6 +148,9 @@ func (ce *ConsensusEngine) executeBlock(ctx context.Context, blkProp *blockPropo
 		paramUpdates: results.ParamUpdates,
 	}
 
+	// reset the catchup timer as we have successfully processed a new block proposal
+	ce.catchupTicker.Reset(ce.catchupTimeout)
+
 	ce.log.Info("Executed block", "height", blkProp.height, "blkID", blkProp.blkHash, "numTxs", blkProp.blk.Header.NumTxns, "appHash", results.AppHash.String())
 	return nil
 }
@@ -196,6 +199,9 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 
 	// update the role of the node based on the final validator set at the end of the commit.
 	ce.updateValidatorSetAndRole()
+
+	// reset the catchup timer as we have successfully processed a new block proposal
+	ce.catchupTicker.Reset(ce.catchupTimeout)
 
 	ce.log.Info("Committed Block", "height", height, "hash", blkProp.blkHash.String(),
 		"appHash", appHash.String(), "updates", ce.state.blockRes.paramUpdates)

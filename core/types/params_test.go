@@ -3,6 +3,7 @@ package types
 import (
 	"reflect"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 
@@ -105,7 +106,7 @@ func TestParamUpdatesMarshalBinary(t *testing.T) {
 				ParamNameLeader:           newPubKey(),
 				ParamNameDBOwner:          "test_owner",
 				ParamNameMaxBlockSize:     int64(1000),
-				ParamNameJoinExpiry:       int64(3600),
+				ParamNameJoinExpiry:       Duration(10 * time.Second),
 				ParamNameDisabledGasCosts: true,
 				ParamNameMaxVotesPerTx:    int64(10),
 				ParamNameMigrationStatus:  MigrationStatus("pending"),

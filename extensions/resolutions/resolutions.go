@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 	"strings"
+	"time"
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -102,14 +103,11 @@ type ResolutionConfig struct {
 	// number must be a fraction between 0 and 1. If this field is
 	// nil, it will default to 2/3.
 	ConfirmationThreshold *big.Rat
-	// ExpirationPeriod is the amount of blocks that the resolution
-	// will be valid for before it expires. It is applied additively
-	// to the current block height when the resolution is proposed;
-	// if the current block height is 10 and the expiration height is
-	// 5, the resolution will expire at block 15. If this field is
-	// <1, it will default to 14400, which is approximately 1 day
-	// assuming 6 second blocks.
-	ExpirationPeriod int64
+	// ExpirationPeriod is the duration for which the resolution will
+	// be valid for before it expires. This is applied additively to the
+	// block timestamp in the header when the resolution is created.
+	// If not set, the resolution expiry is defaulted to 86400 secs (1 day)
+	ExpirationPeriod time.Duration
 	// ResolveFunc is a function that is called once a resolution has
 	// received a required number of votes, as defined by the
 	// ConfirmationThreshold. It is given a readwrite database
@@ -133,10 +131,10 @@ type Resolution struct {
 	// Type is the type of the resolution. It is used to determine
 	// the logic for the resolution.
 	Type string
-	// ExpirationHeight is the block height at which the resolution
-	// is set to expire, if it has not received the required number
-	// of votes.
-	ExpirationHeight int64
+	// Expiration is the timestamp at which the resolution is set to
+	// Expire.
+	Expiration time.Time
+	// Expiration          int64
 	// ApprovedPower is the total power of the voters that have
 	// approved the resolution.
 	ApprovedPower int64

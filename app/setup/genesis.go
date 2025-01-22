@@ -7,6 +7,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/config"
@@ -39,7 +40,7 @@ type genesisFlagConfig struct {
 	leader        string
 	dbOwner       string
 	maxBlockSize  int64
-	joinExpiry    int64
+	joinExpiry    time.Duration
 	maxVotesPerTx int64
 	genesisState  string
 }
@@ -109,7 +110,7 @@ func bindGenesisFlags(cmd *cobra.Command, cfg *genesisFlagConfig) {
 	cmd.Flags().StringVar(&cfg.leader, "leader", "", "public key of the block proposer")
 	cmd.Flags().StringVar(&cfg.dbOwner, "db-owner", "", "owner of the database")
 	cmd.Flags().Int64Var(&cfg.maxBlockSize, "max-block-size", 0, "maximum block size")
-	cmd.Flags().Int64Var(&cfg.joinExpiry, "join-expiry", 0, "Number of blocks before a join proposal expires")
+	cmd.Flags().DurationVar(&cfg.joinExpiry, "join-expiry", 0, "Number of blocks before a join proposal expires")
 	cmd.Flags().Int64Var(&cfg.maxVotesPerTx, "max-votes-per-tx", 0, "Maximum votes per transaction")
 	cmd.Flags().StringVar(&cfg.genesisState, "genesis-snapshot", "", "path to genesis state snapshot file")
 }
@@ -226,7 +227,7 @@ func mergeGenesisFlags(conf *config.GenesisConfig, cmd *cobra.Command, flagCfg *
 	}
 
 	if cmd.Flags().Changed("join-expiry") {
-		conf.JoinExpiry = flagCfg.joinExpiry
+		conf.JoinExpiry = types.Duration(flagCfg.joinExpiry)
 	}
 
 	if cmd.Flags().Changed("max-votes-per-tx") {

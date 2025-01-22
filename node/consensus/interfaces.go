@@ -27,6 +27,7 @@ type Mempool interface {
 	Remove(txid types.Hash)
 	RecheckTxs(ctx context.Context, checkFn mempool.CheckFn)
 	Store(types.Hash, *ktypes.Transaction)
+	TxsAvailable() bool
 }
 
 // BlockStore includes both txns and blocks
@@ -54,4 +55,5 @@ type BlockProcessor interface {
 	ConsensusParams() *ktypes.NetworkParameters
 
 	BlockExecutionStatus() *ktypes.BlockExecutionStatus
+	HasEvents() bool
 }

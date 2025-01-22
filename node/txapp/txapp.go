@@ -162,6 +162,7 @@ func (r *TxApp) Execute(ctx *common.TxContext, db sql.DB, tx *types.Transaction)
 	// no need to error out if we cannot track the validator join approval
 	r.trackValidatorJoinApprovals(tx)
 
+	// track event count
 	return route.Execute(ctx, r, db, tx)
 }
 
@@ -319,7 +320,7 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 	}
 
 	// now we will expire resolutions
-	expired, err := getExpired(ctx, db, block.Height)
+	expired, err := getExpired(ctx, db, block.Timestamp)
 	if err != nil {
 		return nil, err
 	}

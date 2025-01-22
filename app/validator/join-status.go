@@ -101,7 +101,7 @@ func (r *respValJoinStatus) MarshalText() ([]byte, error) {
 	var msg bytes.Buffer
 	msg.WriteString(fmt.Sprintf("Candidate: %s\n", r.Data.Candidate.String()))
 	msg.WriteString(fmt.Sprintf("Requested Power: %d\n", r.Data.Power))
-	msg.WriteString(fmt.Sprintf("Expiration Height: %d\n", r.Data.ExpiresAt))
+	msg.WriteString(fmt.Sprintf("Expiration Timestamp: %s\n", r.Data.ExpiresAt.String()))
 
 	msg.WriteString(fmt.Sprintf("%d Approvals Received (%d needed):\n", approved, needed))
 
