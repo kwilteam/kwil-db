@@ -203,8 +203,12 @@ func blkRetrier(ctx context.Context, maxRetries int64, fn func() error) error {
 
 	for {
 		err := fn()
-		if err == nil || errors.Is(err, types.ErrBlkNotFound) {
+		if err == nil {
 			return nil
+		}
+
+		if errors.Is(err, types.ErrBlkNotFound) {
+			return err
 		}
 
 		// fail after maxRetries retries
