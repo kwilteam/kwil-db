@@ -41,7 +41,7 @@ type CallMessage struct {
 	// RPCs, in which case the Challenge field of the call body is also set.
 	// Note that this was historically called Signature, which was an
 	// *auth.Signature struct, but it is now a []byte that represents just the
-	// signature data since the signature is already in the AuthType field.
+	// signature data since the type is already in the AuthType field above.
 	SignatureData []byte `json:"signature"`
 }
 
