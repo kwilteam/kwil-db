@@ -308,7 +308,6 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Blo
 
 	ce.log.Info("Processing committed block", "height", blk.Header.Height, "hash", blkID, "appHash", ci.AppHash)
 	if err := ce.validateBlock(blk); err != nil {
-		// ce.log.Errorf("Error validating block: %v", err)
 		return err
 	}
 
@@ -331,12 +330,12 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Blo
 	if !ce.state.blockRes.paramUpdates.Equals(ci.ParamUpdates) { // this is absorbed in apphash anyway, but helps diagnostics
 		haltR := fmt.Sprintf("processAndCommit: Incorrect ParamUpdates, halting the node. received: %s, computed: %s", ci.ParamUpdates, ce.state.blockRes.paramUpdates)
 		ce.haltChan <- haltR
-		return fmt.Errorf("paramUpdates mismatch, expected: %v, received: %v", ce.state.blockRes.paramUpdates, ci.ParamUpdates)
+		return errors.New(haltR)
 	}
 	if ce.state.blockRes.appHash != ci.AppHash { // do in acceptCommitInfo?
-		haltR := fmt.Sprintf("processAndCommit: Incorrect AppHash, halting the node. received: %s, computed: %s", ci.AppHash, ce.state.blockRes.appHash)
+		haltR := fmt.Sprintf("processAndCommit: AppHash mismatch, halting the node. expected: %s, received: %s", ce.state.blockRes.appHash, ci.AppHash)
 		ce.haltChan <- haltR
-		return fmt.Errorf("appHash mismatch, expected: %s, received: %s", ci.AppHash, ce.state.blockRes.appHash)
+		return errors.New(haltR)
 	}
 
 	// Commit the block if the appHash and commitInfo is valid

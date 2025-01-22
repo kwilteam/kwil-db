@@ -50,6 +50,8 @@ func (ce *ConsensusEngine) leaderBlockSync(ctx context.Context) error {
 	return ce.syncBlocksUntilHeight(ctx, startHeight+1, bestHeight)
 }
 
+// discoverBestHeight is a discovery process that leader uses to figure out the
+// latest network height from the validators.
 func (ce *ConsensusEngine) discoverBestHeight(ctx context.Context) (int64, error) {
 	cancelCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
@@ -105,8 +107,8 @@ func (ce *ConsensusEngine) discoverBestHeight(ctx context.Context) (int64, error
 	}
 }
 
-// replayBlockFromNetwork requests the next blocks from the network and processes it
-// until it catches up with its peers.
+// replayBlockFromNetwork attempts to synchronize the local node with the network by fetching
+// and processing blocks from peers.
 func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context) error {
 	var startHeight, height int64
 	startHeight = ce.lastCommitHeight() + 1
@@ -125,8 +127,8 @@ func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context) error {
 	return nil
 }
 
-// replayBlockFromNetwork requests the next blocks from the network and processes it
-// until it catches up with its peers.
+// syncBlocksUntilHeight fetches and processes blocks from startHeight to endHeight,
+// retrying if necessary until successful or the maximum retries are reached.
 func (ce *ConsensusEngine) syncBlocksUntilHeight(ctx context.Context, startHeight, endHeight int64) error {
 	height := startHeight
 	t0 := time.Now()
@@ -143,6 +145,7 @@ func (ce *ConsensusEngine) syncBlocksUntilHeight(ctx context.Context, startHeigh
 	return nil
 }
 
+// syncBlock attempts to fetch the next block from peers and process it.
 func (ce *ConsensusEngine) syncBlock(ctx context.Context, height int64) error {
 	ce.log.Info("Requesting block from network (replay mode)", "height", height)
 
@@ -151,42 +154,25 @@ func (ce *ConsensusEngine) syncBlock(ctx context.Context, height int64) error {
 		return err
 	}
 
-	ce.state.mtx.Lock()
-	defer ce.state.mtx.Unlock()
-
-	if ce.state.lc.height != 0 && ci != nil && ci.AppHash.IsZero() {
-		return nil
-	}
-
-	blk, err := ktypes.DecodeBlock(rawblk)
-	if err != nil {
-		return fmt.Errorf("failed to decode block: %w", err)
-	}
-
-	if err := ce.processAndCommit(ctx, blk, ci); err != nil {
-		return err
-	}
-
-	return nil
+	return ce.applyBlock(ctx, rawblk, ci)
 }
 
-// syncBlockWithRetry requests the network for the specified block and retries until the block
-// is received and applied to the db.
+// syncBlockWithRetry fetches the specified block from the network and keeps retrying until
+// the block is successfully retrieved from the network.
 func (ce *ConsensusEngine) syncBlockWithRetry(ctx context.Context, height int64) error {
 	_, rawblk, ci, err := ce.getBlock(ctx, height)
 	if err != nil { // all kinds of errors?
-		ce.log.Info("Error requesting block from network", "height", height, "error", err)
 		return fmt.Errorf("error requesting block from network: height : %d, error: %w", height, err)
 	}
 
+	return ce.applyBlock(ctx, rawblk, ci)
+}
+
+func (ce *ConsensusEngine) applyBlock(ctx context.Context, rawBlk []byte, ci *ktypes.CommitInfo) error {
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
-	if ce.state.lc.height != 0 && ci != nil && ci.AppHash.IsZero() {
-		return nil
-	}
-
-	blk, err := ktypes.DecodeBlock(rawblk)
+	blk, err := ktypes.DecodeBlock(rawBlk)
 	if err != nil {
 		return fmt.Errorf("failed to decode block: %w", err)
 	}

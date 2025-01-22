@@ -566,7 +566,6 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 	if err != nil {
 		return nil, fmt.Errorf("failed to compute the consensus updates hash: %w", err)
 	}
-	bp.log.Info("Consensus updates", "hash", paramUpdatesHash, "updates", bp.chainCtx.NetworkUpdates)
 
 	nextHash := bp.nextAppHash(stateHashes{
 		prevApp:      bp.appHash,
@@ -589,9 +588,9 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 		}
 	}
 
-	bp.log.Info("Executed Block", "height", req.Height, "blkHash", req.BlockID, "appHash", nextHash)
-	if bp.chainCtx.NetworkUpdates != nil {
-		bp.log.Infoln("network param updates:", bp.chainCtx.NetworkUpdates)
+	bp.log.Info("Executed Block", "height", req.Height, "blkID", req.BlockID, "appHash", nextHash, "numTxs", req.Block.Header.NumTxns)
+	if len(bp.chainCtx.NetworkUpdates) != 0 {
+		bp.log.Info("Consensus updates", "hash", paramUpdatesHash, "updates", bp.chainCtx.NetworkUpdates)
 	}
 
 	return &ktypes.BlockExecResult{
@@ -725,9 +724,9 @@ func (bp *BlockProcessor) Commit(ctx context.Context, req *ktypes.CommitRequest)
 	bp.clearBlockExecutionStatus() // TODO: not very sure where to clear this
 
 	// Announce final validators to subscribers
-	bp.announceValidators() // can be in goroutine?
+	bp.announceValidators() // can be in goroutine? no, because the modules state need to be updated by the next consensus round?
 
-	bp.log.Info("Committed Block", "height", req.Height, "appHash", req.AppHash.String())
+	bp.log.Debug("Committed Block", "height", req.Height, "appHash", req.AppHash.String())
 	return nil
 }
 
