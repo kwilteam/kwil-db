@@ -38,7 +38,7 @@ func generateKeyCmd() *cobra.Command {
 			pubKeyBts := pubKey.Bytes()
 
 			pubKeyHex := hex.EncodeToString(pubKeyBts)
-			address, err := auth.EthSecp256k1Authenticator{}.Identifier(pubKeyBts)
+			address, err := auth.EthSecp256k1Authenticator{}.Identifier(crypto.EthereumAddressFromPubKey(pubKey.(*crypto.Secp256k1PublicKey)))
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
@@ -89,7 +89,7 @@ func (p *privateKeyFileRes) MarshalText() (text []byte, err error) {
 	bts = append(bts, p.PrivateKeyPath...)
 	bts = append(bts, []byte("\nPublic key: ")...)
 	bts = append(bts, p.PublicKey...)
-	bts = append(bts, []byte("\nAddress: ")...)
+	bts = append(bts, []byte("\nAddress:    ")...)
 	bts = append(bts, p.Address...)
 	return bts, nil
 }
@@ -108,9 +108,9 @@ func (p *privateKeyRes) MarshalJSON() ([]byte, error) {
 func (p *privateKeyRes) MarshalText() (text []byte, err error) {
 	bts := []byte("Private key: ")
 	bts = append(bts, p.PrivateKey...)
-	bts = append(bts, []byte("\nPublic key: ")...)
+	bts = append(bts, []byte("\nPublic key:  ")...)
 	bts = append(bts, p.PublicKey...)
-	bts = append(bts, []byte("\nAddress: ")...)
+	bts = append(bts, []byte("\nAddress:     ")...)
 	bts = append(bts, p.Address...)
 	return bts, nil
 }
