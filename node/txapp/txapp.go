@@ -82,11 +82,10 @@ func NewTxApp(ctx context.Context, db sql.Executor, engine common.Engine, signer
 // and before any session is started.
 // It can assign the initial validator set and initial account balances.
 // It is only called once for a new chain.
-func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.Validator, genesisAccounts []*types.Account,
-	initialHeight int64, dbOwner string, chainCtx *common.ChainContext) error {
+func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, genCfg *config.GenesisConfig, chainCtx *common.ChainContext) error {
 
 	// Add Genesis Validators
-	for _, validator := range validators {
+	for _, validator := range genCfg.Validators {
 		err := r.Validators.SetValidatorPower(ctx, db, validator.Identifier, validator.KeyType, validator.Power)
 		if err != nil {
 			return err
@@ -94,11 +93,24 @@ func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.
 	}
 
 	// Fund Genesis Accounts
-	for _, account := range genesisAccounts {
-		err := r.Accounts.Credit(ctx, db, account.ID, account.Balance)
+	for _, alloc := range genCfg.Allocs {
+		keyType, err := crypto.ParseKeyType(alloc.KeyType)
 		if err != nil {
 			return err
 		}
+
+		err = r.Accounts.Credit(ctx, db, &types.AccountID{
+			Identifier: alloc.ID.HexBytes,
+			KeyType:    keyType,
+		}, alloc.Amount)
+		if err != nil {
+			return err
+		}
+	}
+
+	initialHash := types.Hash{}
+	if len(genCfg.StateHash) == types.HashLen {
+		copy(initialHash[:], genCfg.StateHash)
 	}
 
 	// we set an initial owner as the initial creator of schemas, roles, etc.
@@ -109,11 +121,12 @@ func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, validators []*types.
 			Caller: "genesis",
 			Signer: []byte("genesis"),
 			BlockContext: &common.BlockContext{
-				Height: initialHeight,
+				Height: genCfg.InitialHeight,
+				Hash:   initialHash,
 			},
 		},
 	}, db, "GRANT owner TO $user", map[string]any{
-		"user": dbOwner,
+		"user": genCfg.DBOwner,
 	}, nil)
 	if err != nil {
 		return err
