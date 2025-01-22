@@ -108,6 +108,11 @@ func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, genCfg *config.Genes
 		}
 	}
 
+	initialHash := types.Hash{}
+	if len(genCfg.StateHash) == types.HashLen {
+		copy(initialHash[:], genCfg.StateHash)
+	}
+
 	// we set an initial owner as the initial creator of schemas, roles, etc.
 	err := r.Engine.Execute(&common.EngineContext{
 		OverrideAuthz: true,
@@ -117,7 +122,7 @@ func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, genCfg *config.Genes
 			Signer: []byte("genesis"),
 			BlockContext: &common.BlockContext{
 				Height: genCfg.InitialHeight,
-				Hash:   types.Hash(genCfg.StateHash),
+				Hash:   initialHash,
 			},
 		},
 	}, db, "GRANT owner TO $user", map[string]any{
