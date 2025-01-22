@@ -603,7 +603,45 @@ func TestValidatorStateMachine(t *testing.T) {
 			},
 		},
 		{
-			name: "Catchup mode",
+			name: "Catchup mode with blk request fail",
+			setup: func(t *testing.T) ([]*Config, map[string]ktypes.Validator) {
+				return generateTestCEConfig(t, 2, false)
+			},
+			actions: []action{
+				{
+					name: "blkPropNew",
+					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
+						val.NotifyBlockProposal(blkProp2.blk)
+					},
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Executed, 0, blkProp2.blkHash)
+					},
+				},
+				{
+					name: "catchup",
+					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
+						ci := addVotes(t, blkProp2.blkHash, blockAppHash, leader, val)
+
+						rawBlk := ktypes.EncodeBlock(blkProp2.blk)
+						cnt := 0
+						val.blkRequester = func(ctx context.Context, height int64) (types.Hash, []byte, *ktypes.CommitInfo, error) {
+							defer func() { cnt += 1 }()
+
+							if cnt <= 1 {
+								return zeroHash, nil, nil, types.ErrBlkNotFound
+							}
+							return blkProp2.blkHash, rawBlk, ci, nil
+						}
+						val.doCatchup(context.Background())
+					},
+					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
+						return verifyStatus(t, val, Committed, 1, blkProp2.blkHash)
+					},
+				},
+			},
+		},
+		{
+			name: "Catchup mode with blk request success",
 			setup: func(t *testing.T) ([]*Config, map[string]ktypes.Validator) {
 				return generateTestCEConfig(t, 2, false)
 			},

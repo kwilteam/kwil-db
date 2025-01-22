@@ -116,7 +116,7 @@ func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context) error {
 	t0 := time.Now()
 
 	for {
-		if err := ce.syncBlock(ctx, height); err != nil {
+		if err := ce.syncBlockWithRetry(ctx, height); err != nil {
 			ce.log.Info("block request from the network failed", "height", height, "error", err)
 			break
 		}
@@ -143,18 +143,6 @@ func (ce *ConsensusEngine) syncBlocksUntilHeight(ctx context.Context, startHeigh
 	ce.log.Info("Block sync completed", "startHeight", startHeight, "endHeight", endHeight, "duration", time.Since(t0))
 
 	return nil
-}
-
-// syncBlock attempts to fetch the next block from peers and process it.
-func (ce *ConsensusEngine) syncBlock(ctx context.Context, height int64) error {
-	ce.log.Info("Requesting block from network (replay mode)", "height", height)
-
-	_, rawblk, ci, err := ce.blkRequester(ctx, height)
-	if err != nil {
-		return err
-	}
-
-	return ce.applyBlock(ctx, rawblk, ci)
 }
 
 // syncBlockWithRetry fetches the specified block from the network and keeps retrying until

@@ -413,9 +413,15 @@ func (ce *ConsensusEngine) Status() *ktypes.NodeStatus {
 // catchup with the network and reannounce the messages.
 func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 	ce.log.Info("Starting the consensus event loop...")
-	catchUpTicker := time.NewTicker(5 * time.Second)        // Should this be configurable??
 	reannounceTicker := time.NewTicker(ce.blkAnnInterval)   // 3 secs (default)
 	blkPropTicker := time.NewTicker(ce.blkProposalInterval) // 1 sec (default)
+
+	// If no messages are received within the below specified duration after the last consensus message,
+	// and given that the leader is expected to produce a block within the emptyBlockTimeout interval,
+	// initiate catchup mode to request any missed messages.
+	// The ticker resets with each processed consensus message.
+	catchupDur := min(5*time.Second, ce.emptyBlockTimeout+ce.blkProposalInterval)
+	catchUpTicker := time.NewTicker(catchupDur)
 
 	for {
 		select {
@@ -440,6 +446,7 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 				ce.log.Error("Error starting a new round", "error", err)
 				return err
 			}
+
 		case <-catchUpTicker.C:
 			err := ce.doCatchup(ctx)
 			if err != nil {
@@ -451,6 +458,8 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 
 		case m := <-ce.msgChan:
 			ce.handleConsensusMessages(ctx, m)
+			// reset the ticker as we just processed consensus messages
+			catchUpTicker.Reset(catchupDur)
 
 		case <-blkPropTicker.C:
 			ce.rebroadcastBlkProposal(ctx)
@@ -722,6 +731,9 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 
 	if err := ce.processCurrentBlock(ctx); err != nil {
 		ce.log.Error("error during block processing in catchup", "height", startHeight+1, "error", err)
+		if err == types.ErrBlkNotFound {
+			return nil // retry again
+		}
 		return err
 	}
 
@@ -742,12 +754,11 @@ func (ce *ConsensusEngine) processCurrentBlock(ctx context.Context) error {
 
 	if ce.role.Load() == types.RoleValidator {
 		// If validator is in the middle of processing a block, finish it first
-
 		if ce.state.blkProp != nil && ce.state.blockRes != nil { // Waiting for the commit message
-			blkHash, rawBlk, ci, err := ce.blkRequester(ctx, ce.state.blkProp.height)
+			blkHash, rawBlk, ci, err := ce.getBlock(ctx, ce.state.blkProp.height) // retries it
 			if err != nil {
-				ce.log.Warn("Error requesting block from network", "height", ce.state.blkProp.height, "error", err)
-				return nil // not an error, just retry later
+				ce.log.Debug("Error requesting block from network", "height", ce.state.blkProp.height, "error", err)
+				return err
 			}
 
 			if blkHash != ce.state.blkProp.blkHash { // processed incorrect block

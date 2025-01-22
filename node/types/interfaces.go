@@ -1,6 +1,7 @@
 package types
 
 import (
+	"errors"
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/types"
@@ -8,7 +9,12 @@ import (
 
 var ErrNotFound = types.ErrNotFound
 
-var HashBytes = types.HashBytes
+var (
+	HashBytes      = types.HashBytes
+	ErrTxNotFound  = errors.New("tx not available")
+	ErrBlkNotFound = errors.New("block not available")
+	ErrNoResponse  = errors.New("stream closed without response")
+)
 
 const HashLen = types.HashLen
 
