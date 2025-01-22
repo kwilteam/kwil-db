@@ -1,6 +1,7 @@
 package interpreter
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types"
@@ -168,6 +169,10 @@ func eq(t *testing.T, a, b any) {
 
 		require.Len(t, aDec, len(bDec))
 		for i := range aDec {
+			if aDec[i] == nil {
+				assert.Nil(t, bDec[i])
+				continue
+			}
 			eq(t, aDec[i], bDec[i])
 		}
 		return
@@ -354,6 +359,16 @@ func Test_Comparison(t *testing.T) {
 			is:           false,
 			distinctFrom: true,
 		},
+		{
+			name:         "nullarray-nullarray",
+			a:            []any{nil, nil, nil},
+			b:            []any{nil, nil, nil},
+			eq:           true,
+			gt:           engine.ErrComparison,
+			lt:           engine.ErrComparison,
+			is:           engine.ErrComparison,
+			distinctFrom: false,
+		},
 	}
 
 	for _, tt := range tests {
@@ -442,6 +457,7 @@ func Test_Cast(t *testing.T) {
 		}
 		return res
 	}
+	_ = mDecArr
 
 	tests := []testcase{
 		{
@@ -526,14 +542,14 @@ func Test_Cast(t *testing.T) {
 			name:    "text-array",
 			val:     []string{"hello", "world"},
 			textArr: []string{"hello", "world"},
-			blobArr: [][]byte{[]byte("hello"), []byte("world")},
+			blobArr: []*[]byte{ptr([]byte("hello")), ptr([]byte("world"))},
 		},
 		{
 			name:    "text-array (uuid)",
 			val:     []string{"550e8400-e29b-41d4-a716-446655440000"},
 			uuidArr: []*types.UUID{mustUUID("550e8400-e29b-41d4-a716-446655440000")},
 			textArr: []string{"550e8400-e29b-41d4-a716-446655440000"},
-			blobArr: [][]byte{[]byte("550e8400-e29b-41d4-a716-446655440000")},
+			blobArr: []*[]byte{ptr([]byte("550e8400-e29b-41d4-a716-446655440000"))},
 		},
 		{
 			name:    "bool-array",
@@ -554,13 +570,23 @@ func Test_Cast(t *testing.T) {
 			val:     []*types.UUID{mustUUID("550e8400-e29b-41d4-a716-446655440000")},
 			uuidArr: []*types.UUID{mustUUID("550e8400-e29b-41d4-a716-446655440000")},
 			textArr: []string{"550e8400-e29b-41d4-a716-446655440000"},
-			blobArr: [][]byte{mustUUID("550e8400-e29b-41d4-a716-446655440000").Bytes()},
+			blobArr: []*[]byte{ptr(mustUUID("550e8400-e29b-41d4-a716-446655440000").Bytes())},
 		},
 		{
 			name:    "blob-array",
-			val:     [][]byte{[]byte("hello"), []byte("world")},
-			blobArr: [][]byte{[]byte("hello"), []byte("world")},
-			textArr: []string{"hello", "world"},
+			val:     [][]byte{[]byte("hello"), []byte("world"), nil},
+			blobArr: []*[]byte{ptr([]byte("hello")), ptr([]byte("world")), nil},
+			textArr: []*string{ptr("hello"), ptr("world"), nil},
+		},
+		{
+			name:       "null array",
+			val:        []any{nil, nil},
+			intArr:     make([]*int64, 2),
+			textArr:    make([]*string, 2),
+			boolArr:    make([]*bool, 2),
+			decimalArr: make([]*types.Decimal, 2),
+			uuidArr:    make([]*types.UUID, 2),
+			blobArr:    []*[]byte{nil, nil},
 		},
 	}
 
@@ -570,6 +596,10 @@ func Test_Cast(t *testing.T) {
 			require.NoError(t, err)
 
 			check := func(dataType *types.DataType, want any) {
+				if dataType.Name == types.NumericStr {
+					fmt.Println("numeric")
+				}
+
 				t.Log(dataType.String())
 				if want == nil {
 					want = engine.ErrCast
@@ -701,7 +731,7 @@ func Test_Unary(t *testing.T) {
 	}
 }
 
-func Test_Array(t *testing.T) {
+func Test_MakeArray(t *testing.T) {
 	type testcase struct {
 		name    string
 		vals    []any
@@ -798,7 +828,7 @@ func Test_Array(t *testing.T) {
 }
 
 // this test tests setting null values to an array of different types
-func Test_ArrayNull(t *testing.T) {
+func Test_SetArrayNull(t *testing.T) {
 	decType, err := types.NewNumericType(10, 5)
 	require.NoError(t, err)
 	decType.IsArray = true
@@ -826,6 +856,10 @@ func ptrArr[T any](arr []T) []*T {
 		res = append(res, &arr[i])
 	}
 	return res
+}
+
+func ptr[T any](v T) *T {
+	return &v
 }
 
 func mustDec(dec string) *types.Decimal {
@@ -856,7 +890,10 @@ func mustUUID(s string) *types.UUID {
 // testRoundTripParse is a helper function that formats a value to a string, then parses it back to a value.
 // It is meant to be used within these other tests.
 func testRoundTripParse(t *testing.T, v value) {
-	if v.Null() {
+	if _, ok := v.(*nullValue); ok {
+		return
+	}
+	if _, ok := v.(*arrayOfNulls); ok {
 		return
 	}
 	str, err := stringifyValue(v)

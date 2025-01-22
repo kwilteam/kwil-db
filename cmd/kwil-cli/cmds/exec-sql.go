@@ -16,10 +16,23 @@ import (
 )
 
 var (
-	execSQLLong = `TODO: fill me out`
+	execSQLLong = `Execute SQL statements against a database.
 
-	execSQLExample = `TODO: fill me out
-`
+This command executes SQL and DDL statements against a database.  It is meant to be used for statements that
+do not return data, such as INSERT, UPDATE, DELETE, CREATE TABLE, etc. For SELECT statements, use the 'query'
+command.
+
+This command requires a private key. Each statement issued will use the private key to author a transaction
+to the network.`
+
+	execSQLExample = `# Execute a create table statement
+kwil-cli exec-sql "CREATE TABLE my_table (id int primary key, name text)"
+
+# Execute a create table statement from a file
+kwil-cli exec-sql --file /path/to/file.sql
+
+# Execute an insert statement with parameters
+kwil-cli exec-sql "INSERT INTO my_table (id, name) VALUES ($id, $name)" --param id:int=1 --param name:text=foo`
 )
 
 func execSQLCmd() *cobra.Command {
@@ -68,7 +81,7 @@ func execSQLCmd() *cobra.Command {
 					return display.PrintErr(cmd, err)
 				}
 
-				sqlStmt = string(file)
+				stmt = string(file)
 			}
 
 			if stmt == "" {

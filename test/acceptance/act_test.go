@@ -20,7 +20,7 @@ import (
 
 // TODO:
 // - kgw tests
-// - type roundtripping
+// - log / "notice()" tests
 
 var (
 	//go:embed users.sql
@@ -192,6 +192,172 @@ func Test_Engine(t *testing.T) {
 	}
 }
 
+// Test_Roundtrip tests roundtripping types through the database for both
+// actions and regular SQL
+func Test_Roundtrip(t *testing.T) {
+	for _, driver := range setup.AllDrivers {
+		t.Run("roundtrip_"+driver.String(), func(t *testing.T) {
+			ctx := context.Background()
+			client := setupSingleNodeClient(t, ctx, driver, false)
+
+			// a table that stores all data types
+			tx, err := client.ExecuteSQL(ctx, `
+			CREATE TABLE data_types (
+				id int PRIMARY KEY,
+				-- text
+				text_col TEXT,
+				text_arr TEXT[],
+				-- numbers
+				int_col INT8,
+				int_arr INT8[],
+				num_col NUMERIC(100,50),
+				num_arr NUMERIC(100,50)[],
+				-- booleans
+				bool_col BOOLEAN,
+				bool_arr BOOLEAN[],
+				-- bytes
+				bytes_col BYTEA,
+				bytes_arr BYTEA[],
+				-- uuid
+				uuid_col UUID,
+				uuid_arr UUID[]
+			);
+
+			CREATE ACTION insert_data_types(
+				$id int,
+				$text_col TEXT,
+				$text_arr TEXT[],
+				$int_col INT8,
+				$int_arr INT8[],
+				$num_col NUMERIC(100,50),
+				$num_arr NUMERIC(100,50)[],
+				$bool_col BOOLEAN,
+				$bool_arr BOOLEAN[],
+				$bytes_col BYTEA,
+				$bytes_arr BYTEA[],
+				$uuid_col UUID,
+				$uuid_arr UUID[]
+			) public {
+				INSERT INTO data_types (
+					id, text_col, text_arr, int_col, int_arr, num_col, num_arr, bool_col, bool_arr, bytes_col, bytes_arr, uuid_col, uuid_arr
+				) VALUES (
+				 	$id, $text_col, $text_arr, $int_col, $int_arr, $num_col, $num_arr, $bool_col, $bool_arr, $bytes_col, $bytes_arr, $uuid_col, $uuid_arr
+				);
+			};
+			`, nil, opts)
+			require.NoError(t, err)
+			test.ExpectTxSuccess(t, client, ctx, tx)
+
+			textVal := "hello world"
+			textArrVal := []*string{p("hello"), p("world"), nil}
+			intVal := int64(123)
+			intArrVal := []*int64{p(intVal), p(intVal + 1), nil}
+			boolVal := true
+			boolArrVal := []*bool{p(boolVal), p(!boolVal), nil}
+			bytesVal := []byte{0x01, 0x02, 0x03}
+			bytesArrVal := []*[]byte{&bytesVal, nil}
+			uuidVal := *types.NewUUIDV5([]byte{0x01, 0x02, 0x03})
+			uuidArrVal := []*types.UUID{&uuidVal, nil}
+			numeric := *types.MustParseDecimalExplicit("100.5", 100, 50)
+			numericArr := []*types.Decimal{&numeric, nil}
+
+			// assureEqual assures that the given id rows are equal to the expected values
+			assureEqual := func(t *testing.T, id int) {
+				var outID int
+				var outText string
+				var outTextArr []*string
+				var outInt int64
+				var outIntArr []*int64
+				var outNum types.Decimal
+				var outNumArr []*types.Decimal
+				var outBool bool
+				var outBoolArr []*bool
+				var outBytes []byte
+				var outBytesArr []*[]byte
+				var outUUID types.UUID
+				var outUUIDArr []*types.UUID
+
+				res, err := client.Query(ctx, `SELECT * FROM data_types WHERE id = $id`, map[string]any{
+					"id": id,
+				})
+				require.NoError(t, err)
+				err = res.Scan(func() error { return nil }, &outID, &outText, &outTextArr, &outInt, &outIntArr, &outNum, &outNumArr, &outBool, &outBoolArr, &outBytes, &outBytesArr, &outUUID, &outUUIDArr)
+				require.NoError(t, err)
+
+				// since json does not fully preserve precision and scale info for decimals, we need to enforce it and then compare manually
+				err = outNum.SetPrecisionAndScale(100, 50)
+				require.NoError(t, err)
+				decimalsAreEqual(t, &numeric, &outNum)
+
+				// types.DecimalCmp()
+
+				for i, num := range outNumArr {
+					if num == nil {
+						assert.Nil(t, numericArr[i])
+						continue
+					}
+					err = num.SetPrecisionAndScale(100, 50)
+					require.NoError(t, err)
+
+					decimalsAreEqual(t, numericArr[i], num)
+				}
+
+				assert.EqualValues(t, id, outID)
+				assert.EqualValues(t, textVal, outText)
+				assert.EqualValues(t, textArrVal, outTextArr)
+				assert.EqualValues(t, intVal, outInt)
+				assert.EqualValues(t, intArrVal, outIntArr)
+				assert.EqualValues(t, boolVal, outBool)
+				assert.EqualValues(t, boolArrVal, outBoolArr)
+				assert.EqualValues(t, bytesVal, outBytes)
+				assert.EqualValues(t, bytesArrVal, outBytesArr)
+				assert.EqualValues(t, uuidVal, outUUID)
+				assert.EqualValues(t, uuidArrVal, outUUIDArr)
+			}
+
+			// insert using INSERT
+			tx, err = client.ExecuteSQL(ctx, `
+			INSERT INTO data_types (
+				id, text_col, text_arr, int_col, int_arr, num_col, num_arr, bool_col, bool_arr, bytes_col, bytes_arr, uuid_col, uuid_arr
+			) VALUES (
+			 	$id, $text_col, $text_arr, $int_col, $int_arr, $num_col, $num_arr, $bool_col, $bool_arr, $bytes_col, $bytes_arr, $uuid_col, $uuid_arr
+			);
+			`, map[string]any{
+				"id":        1,
+				"text_col":  textVal,
+				"text_arr":  textArrVal,
+				"int_col":   intVal,
+				"int_arr":   intArrVal,
+				"num_col":   numeric,
+				"num_arr":   numericArr,
+				"bool_col":  boolVal,
+				"bool_arr":  boolArrVal,
+				"bytes_col": bytesVal,
+				"bytes_arr": bytesArrVal,
+				"uuid_col":  uuidVal,
+				"uuid_arr":  uuidArrVal,
+			}, opts)
+			require.NoError(t, err)
+			test.ExpectTxSuccess(t, client, ctx, tx)
+			assureEqual(t, 1)
+
+			// insert using action
+			tx, err = client.Execute(ctx, "", "insert_data_types", [][]any{
+				{2, textVal, textArrVal, intVal, intArrVal, numeric, numericArr, boolVal, boolArrVal, bytesVal, bytesArrVal, uuidVal, uuidArrVal},
+			}, opts)
+			require.NoError(t, err)
+			test.ExpectTxSuccess(t, client, ctx, tx)
+
+			assureEqual(t, 2)
+		})
+	}
+}
+
+// p makes a pointer to a value
+func p[T any](v T) *T {
+	return &v
+}
+
 // getLatestPostID returns the latest post from a user
 func getLatestPostID(ctx context.Context, client setup.JSONRPCClient, user string) (id *types.UUID, err error) {
 	res, err := client.Call(ctx, "", "get_posts", []any{user})
@@ -209,4 +375,20 @@ func getLatestPostID(ctx context.Context, client setup.JSONRPCClient, user strin
 	}
 
 	return types.ParseUUID(str)
+}
+
+func decimalsAreEqual(t *testing.T, a, b *types.Decimal) {
+	if a == nil && b == nil {
+		return
+	}
+	if a == nil || b == nil {
+		assert.Fail(t, "one of the decimals is nil")
+	}
+	require.NotNil(t, a)
+	require.NotNil(t, b)
+
+	c, err := types.DecimalCmp(a, b)
+	require.NoError(t, err)
+
+	assert.Equal(t, int64(0), c)
 }

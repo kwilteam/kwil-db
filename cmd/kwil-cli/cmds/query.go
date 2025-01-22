@@ -10,13 +10,25 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	clientType "github.com/kwilteam/kwil-db/core/client/types"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/node/engine/parse"
 	"github.com/spf13/cobra"
 )
 
 var (
-	queryLong = `TODO: fill me out`
+	queryLong = `Execute a SELECT statement against the database.
 
-	queryExample = `TODO: fill me out`
+This command executes a SELECT statement against the database and formats the results in a table.
+It can only be used to execute SELECT statements, and cannot be used with any other type of SQL statement.
+If you need to execute a SQL statement that modifies the database, use the 'exec-sql' command.
+
+It is not required to have a private key configured, unless the RPC you are calling is in private mode, or
+you are talking to Kwil Gateway.`
+
+	queryExample = `# Execute a simple SELECT statement
+kwil-cli query "SELECT * FROM my_table"
+
+# Execute a SELECT statement with a named parameter
+kwil-cli query "SELECT * FROM my_table WHERE id = $id" --param id:int=1`
 )
 
 func queryCmd() *cobra.Command {
@@ -55,6 +67,11 @@ func queryCmd() *cobra.Command {
 			params, err := parseParams(namedParams)
 			if err != nil {
 				return display.PrintErr(cmd, err)
+			}
+
+			_, err = parse.Parse(args[0])
+			if err != nil {
+				return display.PrintErr(cmd, fmt.Errorf("failed to parse SQL statement: %s", err))
 			}
 
 			return client.DialClient(cmd.Context(), cmd, dialFlags, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {

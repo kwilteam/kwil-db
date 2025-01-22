@@ -18,7 +18,6 @@ import (
 
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds"
-	root "github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds/database"
 	clientImpl "github.com/kwilteam/kwil-db/core/client"
 	client "github.com/kwilteam/kwil-db/core/client/types"
@@ -59,7 +58,7 @@ func cmd[T any](j *jsonRPCCLIDriver, ctx context.Context, res T, args ...string)
 
 	buf := new(bytes.Buffer)
 
-	cmd := root.NewRootCmd()
+	cmd := cmds.NewRootCmd()
 	cmd.SetOut(buf)
 	cmd.SetArgs(append(flags, args...))
 	err := cmd.ExecuteContext(ctx)
@@ -278,6 +277,13 @@ func stringifyCLIArg(a any) string {
 		slice := reflect.ValueOf(a)
 		args := make([]string, slice.Len())
 		for i := range slice.Len() {
+			idx := slice.Index(i)
+			// it might be nil
+			if idx.IsNil() {
+				args[i] = cmds.NullLiteral
+				continue
+			}
+
 			args[i] = stringifyCLIArg(slice.Index(i).Interface())
 		}
 		return "[" + strings.Join(args, ",") + "]"
@@ -288,10 +294,19 @@ func stringifyCLIArg(a any) string {
 		return t
 	case []byte:
 		return database.FormatByteEncoding(t)
+		// we check against the non-pointer types for decimal and uuid since
+		// the String() method for both has a pointer receiver
+	case types.Decimal:
+		return t.String()
+	case types.UUID:
+		return t.String()
 	case fmt.Stringer:
 		return t.String()
-
 	default:
+		// if it is a pointer, we should dereference it
+		if typeof.Kind() == reflect.Ptr {
+			return stringifyCLIArg(reflect.ValueOf(a).Elem().Interface())
+		}
 		return fmt.Sprintf("%v", t)
 	}
 }
@@ -304,7 +319,7 @@ func (j *jsonRPCCLIDriver) ExecuteSQL(ctx context.Context, sql string, params ma
 			return types.Hash{}, err
 		}
 
-		args = append(args, k+":"+encoded.Type.String()+"="+stringifyCLIArg(v))
+		args = append(args, "--param", k+":"+encoded.Type.String()+"="+stringifyCLIArg(v))
 	}
 
 	return j.exec(ctx, args, opts...)
@@ -387,7 +402,7 @@ func (j *jsonRPCCLIDriver) Query(ctx context.Context, query string, params map[s
 			return nil, err
 		}
 
-		args = append(args, k+":"+encoded.Type.String()+"="+stringifyCLIArg(v))
+		args = append(args, "--param", k+":"+encoded.Type.String()+"="+stringifyCLIArg(v))
 	}
 
 	r := &types.QueryResult{}

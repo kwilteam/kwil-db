@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"reflect"
 	"strconv"
 	"strings"
 
@@ -186,12 +187,12 @@ func init() {
 			KwilType: types.ByteaArrayType,
 			ZeroValue: func(t *types.DataType) (value, error) {
 				return &blobArrayValue{
-					singleDimArray: newValidArr([]*blobValue{}),
+					singleDimArray: newValidArr([]blobValue{}),
 				}, nil
 			},
 			NullValue: func(t *types.DataType) (value, error) {
 				return &blobArrayValue{
-					singleDimArray: newNullArray[*blobValue](),
+					singleDimArray: newNullArray[blobValue](),
 				}, nil
 			},
 		},
@@ -244,6 +245,15 @@ func init() {
 			},
 			NullValue: func(t *types.DataType) (value, error) {
 				return &nullValue{}, nil
+			},
+		},
+		valueMapping{
+			KwilType: types.NullArrayType,
+			ZeroValue: func(t *types.DataType) (value, error) {
+				return &arrayOfNulls{}, nil
+			},
+			NullValue: func(t *types.DataType) (value, error) {
+				return nil, fmt.Errorf("cannot create null value of null array type")
 			},
 		},
 	)
@@ -340,14 +350,39 @@ func newValue(v any) (value, error) {
 		return v, nil
 	case int64:
 		return makeInt8(v), nil
+	case *int64:
+		if v == nil {
+			return makeNull(types.IntType)
+		}
+		return makeInt8(*v), nil
 	case int:
 		return makeInt8(int64(v)), nil
+	case *int:
+		if v == nil {
+			return makeNull(types.IntType)
+		}
+		return makeInt8(int64(*v)), nil
 	case string:
 		return makeText(v), nil
+	case *string:
+		if v == nil {
+			return makeNull(types.TextType)
+		}
+		return makeText(*v), nil
 	case bool:
 		return makeBool(v), nil
+	case *bool:
+		if v == nil {
+			return makeNull(types.BoolType)
+		}
+		return makeBool(*v), nil
 	case []byte:
 		return makeBlob(v), nil
+	case *[]byte:
+		if v == nil {
+			return makeNull(types.ByteaType)
+		}
+		return makeBlob(*v), nil
 	case *types.UUID:
 		return makeUUID(v), nil
 	case types.UUID:
@@ -451,21 +486,25 @@ func newValue(v any) (value, error) {
 			singleDimArray: newValidArr(pgBools),
 		}, nil
 	case [][]byte:
-		pgBlobs := make([]*blobValue, len(v))
+		pgBlobs := make([]blobValue, len(v))
 		for i, val := range v {
-			pgBlobs[i] = makeBlob(val)
+			if val == nil {
+				pgBlobs[i] = blobValue{}
+			} else {
+				pgBlobs[i] = *makeBlob(val)
+			}
 		}
 
 		return &blobArrayValue{
 			singleDimArray: newValidArr(pgBlobs),
 		}, nil
 	case []*[]byte:
-		pgBlobs := make([]*blobValue, len(v))
+		pgBlobs := make([]blobValue, len(v))
 		for i, val := range v {
 			if val == nil {
-				pgBlobs[i] = &blobValue{}
+				pgBlobs[i] = blobValue{}
 			} else {
-				pgBlobs[i] = makeBlob(*val)
+				pgBlobs[i] = *makeBlob(*val)
 			}
 		}
 
@@ -474,14 +513,18 @@ func newValue(v any) (value, error) {
 		}, nil
 	case []*types.Decimal:
 		pgDecs := make([]pgtype.Numeric, len(v))
+		var firstNonNilDecimal *types.Decimal
 		for i, val := range v {
 			pgDecs[i] = pgTypeFromDec(val)
+			if val != nil && firstNonNilDecimal == nil {
+				firstNonNilDecimal = val
+			}
 		}
 
 		var metadata *precAndScale
-		if len(v) > 0 {
-			precCopy := v[0].Precision()
-			scaleCopy := v[0].Scale()
+		if firstNonNilDecimal != nil {
+			precCopy := firstNonNilDecimal.Precision()
+			scaleCopy := firstNonNilDecimal.Scale()
 			metadata = &precAndScale{precCopy, scaleCopy}
 		}
 
@@ -505,7 +548,24 @@ func newValue(v any) (value, error) {
 		}, nil
 	case nil:
 		return &nullValue{}, nil
+	case []any:
+		// if type []any, they all must be nil
+		for _, val := range v {
+			if val != nil {
+				return nil, fmt.Errorf("values passed as []any must all be nil. Got: %v", v)
+			}
+		}
+
+		return &arrayOfNulls{
+			length: int32(len(v)),
+		}, nil
 	default:
+		// if they are pointers, dereference them
+		// TODO: handle this with a type switch
+		ref := reflect.ValueOf(v)
+		if ref.Kind() == reflect.Ptr {
+			return newValue(ref.Elem().Interface())
+		}
 		return nil, fmt.Errorf("unexpected type %T", v)
 	}
 }
@@ -980,12 +1040,12 @@ func (b *boolValue) Cast(t *types.DataType) (value, error) {
 
 func makeBlob(b []byte) *blobValue {
 	return &blobValue{
-		bts: b,
+		bts: &b,
 	}
 }
 
 type blobValue struct {
-	bts []byte
+	bts *[]byte
 }
 
 func (b *blobValue) Null() bool {
@@ -1005,9 +1065,9 @@ func (b *blobValue) Compare(v value, op engine.ComparisonOp) (*boolValue, error)
 	var b2 bool
 	switch op {
 	case engine.EQUAL:
-		b2 = string(b.bts) == string(val2.bts)
+		b2 = string(*b.bts) == string(*val2.bts)
 	case engine.IS_DISTINCT_FROM:
-		b2 = string(b.bts) != string(val2.bts)
+		b2 = string(*b.bts) != string(*val2.bts)
 	default:
 		return nil, fmt.Errorf("%w: cannot use comparison operator %s with type %s", engine.ErrComparison, b.Type(), op)
 	}
@@ -1026,7 +1086,7 @@ func (b *blobValue) Arithmetic(v scalarValue, op engine.ArithmeticOp) (scalarVal
 	}
 
 	if op == engine.CONCAT {
-		return makeBlob(append(b.bts, val2.bts...)), nil
+		return makeBlob(append(*b.bts, *val2.bts...)), nil
 	}
 
 	return nil, fmt.Errorf("%w: cannot perform arithmetic operation %s on blob", engine.ErrArithmetic, op)
@@ -1046,7 +1106,7 @@ func (b *blobValue) RawValue() any {
 	if b.bts == nil {
 		return nil
 	}
-	return b.bts
+	return *b.bts
 }
 
 func (b *blobValue) Cast(t *types.DataType) (value, error) {
@@ -1056,14 +1116,14 @@ func (b *blobValue) Cast(t *types.DataType) (value, error) {
 
 	switch *t {
 	case *types.IntType:
-		i, err := strconv.ParseInt(string(b.bts), 10, 64)
+		i, err := strconv.ParseInt(string(*b.bts), 10, 64)
 		if err != nil {
 			return nil, castErr(err)
 		}
 
 		return makeInt8(i), nil
 	case *types.TextType:
-		return makeText(string(b.bts)), nil
+		return makeText(string(*b.bts)), nil
 	case *types.ByteaType:
 		return b, nil
 	default:
@@ -1081,19 +1141,14 @@ func (b *blobValue) ScanBytes(src []byte) error {
 		return nil
 	}
 
-	// copy the src bytes into the prealloc bytes
-	b.bts = make([]byte, len(src))
-	copy(b.bts, src)
-	return nil
-}
-
-// Value implements the driver.Valuer interface.
-func (b *blobValue) Value() (driver.Value, error) {
-	if b.Null() {
-		return nil, nil
+	if b.bts == nil {
+		b.bts = new([]byte)
 	}
 
-	return b.bts, nil
+	// copy the src bytes into the prealloc bytes
+	*b.bts = make([]byte, len(src))
+	copy(*b.bts, src)
+	return nil
 }
 
 // BytesValue implements the pgtype.BytesValuer interface.
@@ -1102,7 +1157,16 @@ func (b *blobValue) BytesValue() ([]byte, error) {
 		return nil, nil
 	}
 
-	return b.bts, nil
+	return *b.bts, nil
+}
+
+// Value implements the driver.Valuer interface.
+func (b *blobValue) Value() (driver.Value, error) {
+	if b.Null() {
+		return nil, nil
+	}
+
+	return *b.bts, nil
 }
 
 func makeUUID(u *types.UUID) *uuidValue {
@@ -1510,6 +1574,30 @@ type internalArray[T any] interface {
 	Len() int32
 }
 
+var _ pgtype.ArraySetter = (*singleDimArray[any])(nil)
+var _ pgtype.ArrayGetter = (*singleDimArray[any])(nil)
+
+func (a *singleDimArray[T]) SetDimensions(dims []pgtype.ArrayDimension) error {
+	// if len(dims) is 0, it is null.
+	// if len(dims) is 1, it is a 1D array.
+	// Kwil does not support multi-dimensional arrays.
+	switch len(dims) {
+	case 0, 1:
+		return a.Array.SetDimensions(dims)
+	default:
+		return fmt.Errorf("%w: expected 1 dimension, got %d", engine.ErrArrayDimensionality, len(dims))
+	}
+}
+
+func (a *singleDimArray[T]) Value() (driver.Value, error) {
+	if !a.Valid {
+		return nil, nil
+	}
+	// for some reason, not having this Value method causes the OneDArray type
+	// to not function despite implementing the pgtype.ArrayGetter interface.
+	return a.Array, nil
+}
+
 // getArr gets the value at index i in the array.
 // It treats the array as 1-based.
 func getArr[T any](arr internalArray[T], i int32, fn func(T) scalarValue) (scalarValue, error) {
@@ -1603,27 +1691,6 @@ func setArr[T, B any](arr internalArray[T], i int32, v scalarValue, fn func(B) T
 
 	pgArr.Elements[i-1] = fn(val)
 	return nil
-}
-
-var _ pgtype.ArraySetter = (*singleDimArray[any])(nil)
-var _ pgtype.ArrayGetter = (*singleDimArray[any])(nil)
-
-func (a *singleDimArray[T]) SetDimensions(dims []pgtype.ArrayDimension) error {
-	// if len(dims) is 0, it is null.
-	// if len(dims) is 1, it is a 1D array.
-	// Kwil does not support multi-dimensional arrays.
-	switch len(dims) {
-	case 0, 1:
-		return a.Array.SetDimensions(dims)
-	default:
-		return fmt.Errorf("%w: expected 1 dimension, got %d", engine.ErrArrayDimensionality, len(dims))
-	}
-}
-
-func (a *singleDimArray[T]) Value() (driver.Value, error) {
-	// for some reason, not having this Value method causes the OneDArray type
-	// to not function despite implementing the pgtype.ArrayGetter interface.
-	return a.Array, nil
 }
 
 type int8ArrayValue struct {
@@ -2135,13 +2202,18 @@ func (a *decimalArrayValue) Cast(t *types.DataType) (value, error) {
 				return nil, err
 			}
 
+			if v.Null() {
+				res[i-1] = nil
+				continue
+			}
+
 			dec, err := v.(*decimalValue).dec()
 			if err != nil {
 				return nil, err
 			}
 
 			// we need to make a copy of the decimal because SetPrecisionAndScale
-			// will modify the decimal in place.
+			// will modify the decimal in place. TODO: this is not true
 			dec2, err := types.ParseDecimalExplicit(dec.String(), dec.Precision(), dec.Scale())
 			if err != nil {
 				return nil, err
@@ -2171,12 +2243,12 @@ func (a *decimalArrayValue) Cast(t *types.DataType) (value, error) {
 }
 
 func newBlobArrayValue(b []*[]byte) *blobArrayValue {
-	vals := make([]*blobValue, len(b))
+	vals := make([]blobValue, len(b))
 	for i, v := range b {
 		if v == nil {
-			vals[i] = &blobValue{bts: nil}
+			vals[i] = blobValue{bts: nil}
 		} else {
-			vals[i] = &blobValue{bts: *v}
+			vals[i] = blobValue{bts: v}
 		}
 	}
 
@@ -2188,7 +2260,7 @@ func newBlobArrayValue(b []*[]byte) *blobArrayValue {
 type blobArrayValue struct {
 	// we embed BlobValue because unlike other types, there is no native pgtype embedded within
 	// blob value that allows pgx to scan the value into the struct.
-	singleDimArray[*blobValue]
+	singleDimArray[blobValue]
 }
 
 func (a *blobArrayValue) Null() bool {
@@ -2199,8 +2271,8 @@ func (a *blobArrayValue) Null() bool {
 func (a *blobArrayValue) Value() (driver.Value, error) {
 	var btss [][]byte
 	for _, v := range a.Elements {
-		if v != nil {
-			btss = append(btss, v.bts)
+		if v.bts != nil {
+			btss = append(btss, *v.bts)
 		} else {
 			btss = append(btss, nil)
 		}
@@ -2218,14 +2290,14 @@ func (a *blobArrayValue) Len() int32 {
 }
 
 func (a *blobArrayValue) Get(i int32) (scalarValue, error) {
-	return getArr(a, i, func(i *blobValue) scalarValue {
-		return i
+	return getArr(a, i, func(i blobValue) scalarValue {
+		return &i
 	})
 }
 
 func (a *blobArrayValue) Set(i int32, v scalarValue) error {
-	return setArr(a, i, v, func(v2 *blobValue) *blobValue {
-		return v2
+	return setArr(a, i, v, func(v2 *blobValue) blobValue {
+		return *v2
 	})
 }
 
@@ -2233,16 +2305,17 @@ func (a *blobArrayValue) Type() *types.DataType {
 	return types.ByteaArrayType
 }
 
-func (a *blobArrayValue) RawValue() any {
+func (a *blobArrayValue) RawValue() (v any) {
 	if !a.Valid {
 		return nil
 	}
 
-	res := make([][]byte, len(a.Elements))
+	res := make([]*[]byte, len(a.Elements))
 	for i, v := range a.Elements {
-		if v != nil {
-			res[i] = make([]byte, len(v.bts))
-			copy(res[i], v.bts)
+		if v.bts != nil {
+			rr := make([]byte, len(*v.bts))
+			res[i] = &rr
+			copy(*res[i], *v.bts)
 		}
 	}
 
@@ -2520,6 +2593,87 @@ func (n *nullValue) Set(i int32, v scalarValue) error {
 	return fmt.Errorf("%w: cannot set element in null", engine.ErrArrayDimensionality)
 }
 
+// arrayOfNulls represents an array of nulls that does not (yet) have a type.
+// It itself is NOT a null value; simply all of its values were sent by the client
+// as null, so we do not know the type. It itself can never be null, and can be casted
+// to any array type. If one of its fields is set to a non-null value, then the array
+// will be converted to that type.
+type arrayOfNulls struct {
+	length int32 // 0-based
+}
+
+var _ arrayValue = (*arrayOfNulls)(nil)
+
+func (n *arrayOfNulls) Len() int32 {
+	return n.length + 1 // 1-based
+}
+
+func (n *arrayOfNulls) Get(i int32) (scalarValue, error) {
+	return &nullValue{}, nil
+}
+
+func (n *arrayOfNulls) Value() (driver.Value, error) {
+	sd := newValidArr(make([]pgtype.Text, n.length))
+	for i := int32(1); i <= n.length; i++ {
+		sd.Elements[i-1] = pgtype.Text{Valid: false}
+	}
+	return sd.Value()
+}
+
+func (n *arrayOfNulls) Set(i int32, v scalarValue) error {
+	// if the incoming value is a null value, then we simply expand
+	// the array to the new length. If it is not a null value, then we
+	// will convert the null array to that type.
+	vt := v.Type().Copy()
+	vt.IsArray = true
+	newVal, err := v.Cast(vt)
+	if err != nil {
+		return err
+	}
+
+	return newVal.(arrayValue).Set(i, v)
+}
+
+func (n *arrayOfNulls) Type() *types.DataType {
+	return types.NullArrayType.Copy()
+}
+
+func (n *arrayOfNulls) RawValue() any {
+	return make([]any, n.length)
+}
+
+func (n *arrayOfNulls) Null() bool {
+	return false
+}
+
+func (n *arrayOfNulls) Compare(v value, op engine.ComparisonOp) (*boolValue, error) {
+	return cmpArrs(n, v, op)
+}
+
+func (n *arrayOfNulls) Cast(t *types.DataType) (value, error) {
+	if !t.IsArray {
+		return nil, fmt.Errorf("%w: cannot cast null array to non-array type", engine.ErrCast)
+	}
+
+	switch *t {
+	case *types.IntArrayType:
+		return newIntArr(make([]*int64, n.length)), nil
+	case *types.TextArrayType:
+		return newTextArrayValue(make([]*string, n.length)), nil
+	case *types.BoolArrayType:
+		return newBoolArrayValue(make([]*bool, n.length)), nil
+	case *types.UUIDArrayType:
+		return newUUIDArrayValue(make([]*types.UUID, n.length)), nil
+	case *types.ByteaArrayType:
+		return newBlobArrayValue(make([]*[]byte, n.length)), nil
+	default:
+		if t.Name == types.NumericStr {
+			return newDecimalArrayValue(make([]*types.Decimal, n.length), t), nil
+		}
+		return nil, fmt.Errorf("%w: cannot cast null array to %s", engine.ErrCast, t)
+	}
+}
+
 func cmpIntegers(a, b int, op engine.ComparisonOp) (*boolValue, error) {
 	switch op {
 	case engine.EQUAL:
@@ -2580,7 +2734,7 @@ func stringifyValue(v value) (string, error) {
 
 		return dec.String(), nil
 	case *blobValue:
-		return string(val.bts), nil
+		return string(*val.bts), nil
 	case *recordValue:
 		return "", fmt.Errorf("cannot convert record to string")
 	default:
@@ -2685,6 +2839,7 @@ func castErr(e error) error {
 // makeArray creates an array value from a list of scalar values.
 // All of the scalar values must be of the same type.
 // If t is nil, it will infer the type from the first element.
+
 func makeArray(vals []scalarValue, t *types.DataType) (arrayValue, error) {
 	expectedType := t
 	if len(vals) == 0 && expectedType == nil {

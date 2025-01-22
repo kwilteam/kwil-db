@@ -51,34 +51,7 @@ func parseParams(args []string) (map[string]any, error) {
 // e.g. 5 and int8, or "satoshi" and text.
 // we should probably refactor this since its sort've a mess, but its unexported
 // and the tests are pretty good so its ok for now.
-func stringAndTypeToVal(s string, dt *types.DataType) (any, error) {
-	// we can't type switch on numeric since it can have any metadata.
-	if dt.Name == types.NumericStr {
-		if dt.IsArray {
-			split, err := splitByCommas(s)
-			if err != nil {
-				return nil, err
-			}
-
-			var arr []*types.Decimal
-			err = types.ScanTo([]any{split}, &arr)
-			if err != nil {
-				return nil, err
-			}
-
-			for _, dec := range arr {
-				err = dec.SetPrecisionAndScale(dt.Metadata[0], dt.Metadata[1])
-				if err != nil {
-					return nil, err
-				}
-			}
-
-			return arr, nil
-		}
-
-		return types.ParseDecimalExplicit(s, dt.Metadata[0], dt.Metadata[1])
-	}
-
+func stringAndTypeToVal(s string, dt *types.DataType) (v any, err error) {
 	// before checking the type (which sometimes leads to trimming),
 	// we should see if it is the NullLiteral
 	if s == NullLiteral {
@@ -119,7 +92,38 @@ func stringAndTypeToVal(s string, dt *types.DataType) (any, error) {
 	case *types.UUIDArrayType:
 		scan = new([]*types.UUID)
 	default:
-		return nil, fmt.Errorf("unsupported data type: %s", dt.Name)
+		// numerics have metadata so they cannot be type switched on
+		if dt.Name == types.NumericStr {
+			if dt.IsArray {
+				arr := new([]*types.Decimal)
+				scan = arr
+				defer func() {
+					for _, dec := range *arr {
+						if dec == nil {
+							continue
+						}
+						err2 := dec.SetPrecisionAndScale(dt.Metadata[0], dt.Metadata[1])
+						if err != nil {
+							v = nil
+							err = fmt.Errorf("error setting precision and scale: %w", err2)
+							return
+						}
+					}
+				}()
+			} else {
+				d := new(types.Decimal)
+				scan = d
+				defer func() {
+					err2 := d.SetPrecisionAndScale(dt.Metadata[0], dt.Metadata[1])
+					if err2 != nil {
+						v = nil
+						err = fmt.Errorf("error setting precision and scale: %w", err2)
+					}
+				}()
+			}
+		} else {
+			return nil, fmt.Errorf("unsupported data type: %s", dt.Name)
+		}
 	}
 
 	if dt.IsArray {
@@ -185,7 +189,7 @@ func stringAndTypeToVal(s string, dt *types.DataType) (any, error) {
 		}
 	}
 
-	err := types.ScanTo([]any{from}, scan)
+	err = types.ScanTo([]any{from}, scan)
 	if err != nil {
 		return nil, err
 	}
@@ -257,13 +261,17 @@ func splitByCommas(input string) ([]*string, error) {
 		case len(curTok) == 0 && !sawQuote:
 			// If nothing accumulated and no quotes => nil
 			result = append(result, nil)
-		case curTok == NullLiteral && !sawQuote:
-			// If token is exactly "null" and unquoted => nil
+		case strings.TrimSpace(curTok) == NullLiteral && !sawQuote:
+			// If token is exactly "null" (ignoring whitespace) and unquoted => nil
 			result = append(result, nil)
 		case len(curTok) == 0 && sawQuote:
 			// If nothing accumulated but we did see quotes => ""
 			empty := ""
 			result = append(result, &empty)
+		case !sawQuote:
+			// if we did not see quotes, trim whitespace
+			trimmed := strings.TrimSpace(curTok)
+			result = append(result, &trimmed)
 		default:
 			// Else normal token
 			result = append(result, &curTok)

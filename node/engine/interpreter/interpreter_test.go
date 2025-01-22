@@ -663,6 +663,18 @@ func Test_SQL(t *testing.T) {
 				"contract_id": mustUUID("d3b3b3b3-3b3b-3b3b-3b3b-3b3b3b3b3b3b"),
 			},
 		},
+		{
+			// this is testing that, even though we send pgtype.Array[pgtype.Text] as all nils,
+			// it works for int[]
+			name: "insert array of nulls",
+			sql: []string{
+				`CREATE TABLE IF NOT EXISTS tbl (id INT PRIMARY KEY, arr INT[]);`,
+			},
+			execSQL: `INSERT INTO tbl (id, arr) VALUES (1, $a);`,
+			execVars: map[string]any{
+				"$a": []any{nil, nil},
+			},
+		},
 	}
 
 	db, err := newTestDB()
@@ -764,32 +776,32 @@ func Test_Roundtrip(t *testing.T) {
 		{
 			name:     "int_array",
 			datatype: "INT[]",
-			value:    ptrArr[int64](1, 2),
+			value:    append(ptrArr[int64](1, 2), nil),
 		},
 		{
 			name:     "text_array",
 			datatype: "TEXT[]",
-			value:    ptrArr("hello", "world"),
+			value:    append(ptrArr("hello", "world"), nil),
 		},
 		{
 			name:     "bool_array",
 			datatype: "BOOL[]",
-			value:    ptrArr(true, false),
+			value:    append(ptrArr(true, false), nil),
 		},
 		{
 			name:     "decimal_array",
 			datatype: "DECIMAL(70,5)[]",
-			value:    []*types.Decimal{mustExplicitDecimal("100.101", 70, 5), mustExplicitDecimal("200.202", 70, 5)},
+			value:    append([]*types.Decimal{mustExplicitDecimal("100.101", 70, 5), mustExplicitDecimal("200.202", 70, 5)}, nil),
 		},
 		{
 			name:     "uuid_array",
 			datatype: "UUID[]",
-			value:    []*types.UUID{mustUUID("d3b3b3b3-3b3b-3b3b-3b3b-3b3b3b3b3b3b"), mustUUID("d3b3b3b3-3b3b-3b3b-3b3b-3b3b3b3b3b3b")},
+			value:    append([]*types.UUID{mustUUID("d3b3b3b3-3b3b-3b3b-3b3b-3b3b3b3b3b3b"), mustUUID("d3b3b3b3-3b3b-3b3b-3b3b-3b3b3b3b3b3b")}, nil),
 		},
 		{
 			name:     "bytea_array",
 			datatype: "BYTEA[]",
-			value:    [][]byte{[]byte("hello"), []byte("world")},
+			value:    append(ptrArr([]byte("hello"), []byte("world")), nil),
 		},
 	}
 
@@ -833,6 +845,30 @@ func Test_Roundtrip(t *testing.T) {
 				return nil
 			})
 			require.NoError(t, err)
+
+			// create actions
+			err = interp.ExecuteWithoutEngineCtx(ctx, tx, fmt.Sprintf("CREATE ACTION act_%s($id int, $a %s) public { INSERT INTO tbl_%s (id, val) VALUES ($id, $a); };", test.name, test.datatype, test.name), nil, nil)
+			require.NoError(t, err)
+
+			// call the action
+			_, err = interp.Call(newEngineCtx(defaultCaller), tx, "", fmt.Sprintf("act_%s", test.name), []any{3, test.value}, nil)
+			require.NoError(t, err)
+
+			// select the value
+			err = interp.ExecuteWithoutEngineCtx(ctx, tx, fmt.Sprintf("SELECT val FROM tbl_%s WHERE id = 3;", test.name), nil, func(r *common.Row) error {
+				assert.EqualValues(t, test.value, r.Values[0])
+				return nil
+			})
+			require.NoError(t, err)
+
+			// roundtrip nulls to the action as well
+			_, err = interp.Call(newEngineCtx(defaultCaller), tx, "", fmt.Sprintf("act_%s", test.name), []any{4, nil}, nil)
+			require.NoError(t, err)
+
+			err = interp.ExecuteWithoutEngineCtx(ctx, tx, fmt.Sprintf("SELECT val FROM tbl_%s WHERE id = 4;", test.name), nil, func(r *common.Row) error {
+				assert.True(t, r.Values[0] == nil)
+				return nil
+			})
 		})
 	}
 }
@@ -2060,7 +2096,7 @@ func Test_Extensions(t *testing.T) {
 			{"text_array", []string{"text"}},
 			{"int8_array", []int64{1}},
 			{"bool_array", []bool{true}},
-			{"bytea_array", [][]byte{{1, 2, 3}}},
+			{"bytea_array", []*[]byte{{1, 2, 3}}},
 			{"uuid_array", []*types.UUID{mustUUID("f47ac10b-58cc-4372-a567-0e02b2c3d479")}},
 			{"numeric_array", []*types.Decimal{mustExplicitDecimal("1.23", 10, 2)}},
 		} {

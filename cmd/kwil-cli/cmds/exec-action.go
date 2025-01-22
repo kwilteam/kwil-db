@@ -21,9 +21,39 @@ import (
 )
 
 var (
-	execActionLong = `TODO: fill me out`
+	execActionLong = `Execute an action against the database.
+	
+This command executes an action against the database. It is meant to only call actions that write to the database,
+and will not return any results from the action. If you need to see results, use the 'call-action' command instead.
 
-	execActionExample = `TODO: fill me out`
+This command requires a private key, and it will author a transaction from the private key to the network.
+
+Actions can be given any mix of positional and named parameters in order to execute an action one. If you wish
+to batch execute an action, you can provide a CSV file, and map the CSV column names to either the action parameter
+name or the action parameter position. If any named parameters are specified while using a CSV file, then all batch
+action calls will set the named parameter to the same value.`
+
+	execActionExample = `# Execute the action 'register' with no parameters
+kwil-cli exec-action register
+
+# Execute the action 'register' with a positional parameter
+
+kwil-cli exec-action register text:satoshi
+
+# Execute the action 'register' with a one positional parameter and one named parameter
+# Assume the action signature REGISTER($name text, $age int)
+kwil-cli exec-action register text:satoshi --param age:int=30
+
+# Execute the action 'register' with a CSV file
+# Assume the action signature REGISTER($name text, $age int), and
+# the CSV file has the following contents:
+# name,age
+# satoshi,30
+kwil-cli exec-action register --csv /path/to/file.csv --csv-mapping name:0 --csv-mapping age:1
+
+# Execute the action 'register' with a CSV file, but override all ages to be 10
+# Assume the same action signature and CSV file as above
+kwil-cli exec-action register --csv /path/to/file.csv --csv-mapping name:0 --param age:int=10`
 )
 
 func execActionCmd() *cobra.Command {
@@ -32,7 +62,7 @@ func execActionCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:     "exec-action",
-		Short:   "Execute an action against the database",
+		Short:   "Execute an action against the database.",
 		Long:    execActionLong,
 		Example: execActionExample,
 		RunE: func(cmd *cobra.Command, args []string) error {

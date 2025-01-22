@@ -17,7 +17,6 @@
       {{ .PGServicePrefix }}{{ .NodeNumber }}:
         condition: service_healthy
     command: |
-      start
       --root=/app/kwil
       --log-format=plain
       --admin.listen=/tmp/kwild.socket

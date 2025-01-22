@@ -14,9 +14,31 @@ import (
 )
 
 var (
-	callActionLong = `TODO: fill me out`
+	callActionLong = `Call a view action.
+	
+This command calls a view action against the database, and formats the results in a table.
+It can only be used to call view actions, not write actions.
 
-	callActionExample = `TODO: fill me out`
+It is not required to have a private key configured, unless the RPC you are calling is in
+private mode, or you are talking to Kwil Gateway.`
+
+	callActionExample = `# Call the action 'get-accounts' with no parameters
+kwil-cli call-action get-accounts
+
+# Call the action 'get-posts' with one positional parameter
+kwil-cli call-action get-posts int:1
+
+# Call the action 'get-posts' with one named parameter
+kwil-cli call-action get-posts --param id:int=1
+
+# Call the action 'get-account' in the namespace 'users'
+kwil-cli call-action get-account --namespace users
+
+# Call the action 'get-account' and authenticate with a private RPC
+kwil-cli call-action get-account --rpc-auth
+
+# Call the action 'get-account' and authenticate with Kwil Gateway
+kwil-cli call-action get-account --gateway-auth`
 )
 
 func callActionCmd() *cobra.Command {
@@ -26,9 +48,10 @@ func callActionCmd() *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:     "call-action",
-		Short:   "Call a view action",
+		Short:   "Call a view action.",
 		Long:    callActionLong,
 		Example: callActionExample,
+		Args:    cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) < 1 {
 				return display.PrintErr(cmd, fmt.Errorf("no action provided"))

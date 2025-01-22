@@ -49,9 +49,12 @@ func Test_ParseInputs(t *testing.T) {
 		{"bts:bytea[]=AQID,BAUG;b64", "bts", ptrArr[[]byte]([]byte{1, 2, 3}, []byte{4, 5, 6}), false},
 		{"bts:bytea[]=AQID,BAUG;base64", "bts", ptrArr[[]byte]([]byte{1, 2, 3}, []byte{4, 5, 6}), false},
 		{"bts:bytea[]=AQID,BAUG", "bts", ptrArr[[]byte]([]byte{1, 2, 3}, []byte{4, 5, 6}), false}, // no encoding specified, should default to base64
-		{"bools:boolean[]=", "bools", ptrArr[bool](), false},                                      // no value for an array is a zero value (zero length array), not null
+		{"bts:bytea[]=AQID,null", "bts", ptrArr[[]byte]([]byte{1, 2, 3}, nil), false},
+		{"bools:boolean[]=", "bools", ptrArr[bool](), false}, // no value for an array is a zero value (zero length array), not null
 		{"bools:boolean[]=[]", "bools", ptrArr[bool](), false},
 		{"bools:boolean[]=true,false", "bools", ptrArr[bool](true, false), false},
+		{"nums:numeric(10,5)[]=100.5,200.5", "nums", ptrArr[types.Decimal](*types.MustParseDecimalExplicit("100.5", 10, 5), *types.MustParseDecimalExplicit("200.5", 10, 5)), false},
+		{"nums:numeric(10,5)[]=[100.5,200.5000]", "nums", ptrArr[types.Decimal](*types.MustParseDecimalExplicit("100.5", 10, 5), *types.MustParseDecimalExplicit("200.5", 10, 5)), false},
 	}
 
 	for _, tt := range tests {
@@ -89,6 +92,28 @@ func Test_ParseInputs(t *testing.T) {
 	}
 }
 
+func Test_StringToVal(t *testing.T) {
+	type testcase struct {
+		str  string
+		dt   *types.DataType
+		want any
+	}
+
+	tests := []testcase{
+		{"satoshi", types.TextType, ptr("satoshi")},
+		{"satoshi,nakamoto", types.TextArrayType, ptr(ptrArr[string]("satoshi", "nakamoto"))},
+		{"a0195549-8982-4f94-956d-9d77c5f5c6aa,a0195549-8982-4f94-956d-9d77c5f5c6aa", types.UUIDArrayType, ptr(ptrArr[types.UUID](*types.MustParseUUID("a0195549-8982-4f94-956d-9d77c5f5c6aa"), *types.MustParseUUID("a0195549-8982-4f94-956d-9d77c5f5c6aa")))},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.str, func(t *testing.T) {
+			got, err := stringAndTypeToVal(tt.str, tt.dt)
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func Test_Split(t *testing.T) {
 	type testcase struct {
 		input   string
@@ -99,6 +124,7 @@ func Test_Split(t *testing.T) {
 	tests := []testcase{
 		{"a", []string{"a"}, false},
 		{"a,b", []string{"a", "b"}, false},
+		{"a, b", []string{"a", "b"}, false},
 		{"a,,b", []string{"a", NullLiteral, "b"}, false},
 		{"a,'',b", []string{"a", "", "b"}, false},
 		{"'a','b'", []string{"a", "b"}, false},
@@ -119,6 +145,8 @@ func Test_Split(t *testing.T) {
 		{`a\,b`, []string{"a,b"}, false},
 		{"null", []string{NullLiteral}, false},
 		{"null,null", []string{NullLiteral, NullLiteral}, false},
+		{"null,' null'", []string{NullLiteral, " null"}, false},
+		{"null, null", []string{NullLiteral, NullLiteral}, false},
 	}
 
 	for _, tt := range tests {

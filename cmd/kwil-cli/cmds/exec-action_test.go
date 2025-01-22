@@ -6,6 +6,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/csv"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -121,6 +122,56 @@ func Test_CSVParams(t *testing.T) {
 			require.EqualValues(t, tt.want, res)
 		})
 	}
+}
+
+func Test_ParseTypedParam(t *testing.T) {
+	type testcase struct {
+		in      string
+		out     any
+		outType *types.DataType
+		err     bool
+	}
+
+	tests := []testcase{
+		{
+
+			in:      "numeric(10,5)[]:[100.6, null]",
+			out:     ptr(ptrArr[types.Decimal](*types.MustParseDecimalExplicit("100.6", 10, 5), nil)),
+			outType: mustNewNumericArr(10, 5),
+			err:     false,
+		},
+		{
+
+			in:      "numeric(10,5)[]:[null, 100.6]",
+			out:     ptr(ptrArr[types.Decimal](nil, *types.MustParseDecimalExplicit("100.6", 10, 5))),
+			outType: mustNewNumericArr(10, 5),
+			err:     false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			outType, outVal, err := parseTypedParam(tt.in)
+			if tt.err {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			assert.EqualValues(t, tt.outType, outType)
+			assert.EqualValues(t, tt.out, outVal)
+		})
+	}
+}
+
+func mustNewNumericArr(prec, scale uint16) *types.DataType {
+	dt, err := types.NewNumericType(prec, scale)
+	if err != nil {
+		panic(err)
+	}
+	dt.IsArray = true
+
+	return dt
 }
 
 func ptr[T any](a T) *T {

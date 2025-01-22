@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/base64"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -207,7 +208,15 @@ func ScanTo(src []any, dst ...any) error {
 		typeOf := reflect.TypeOf(col)
 		if col == nil {
 			continue
-		} else if typeOf.Kind() == reflect.Slice && typeOf.Elem().Kind() != reflect.Uint8 {
+		}
+
+		// if it is a pointer, we need to dereference it
+		if typeOf.Kind() == reflect.Ptr {
+			col = reflect.ValueOf(col).Elem().Interface()
+			typeOf = reflect.TypeOf(col)
+		}
+
+		if typeOf.Kind() == reflect.Slice && typeOf.Elem().Kind() != reflect.Uint8 {
 			if err := convertArray(col, dst[j]); err != nil {
 				return err
 			}
@@ -243,6 +252,15 @@ func convertArray(src any, dst any) error {
 		}
 		arr = make([]any, val.Len())
 		for i := range val.Len() {
+			idx := val.Index(i)
+			// if nil, we skip it.
+			// We only call IsNil if it is a pointer, any, or slice.
+			// Otherwise, it will panic.
+			if (idx.Kind() == reflect.Ptr || idx.Kind() == reflect.Slice || idx.Kind() == reflect.Array) &&
+				idx.IsNil() {
+				continue
+			}
+
 			arr[i] = val.Index(i).Interface()
 		}
 	}
@@ -306,7 +324,7 @@ func convPtrArr[T any](src []any, dst *[]*T) error {
 			return err
 		}
 		if !wrote {
-			// if it didnt write a value, do not add the empty pointer to the slice
+			// if convertScalar did not write to val, we should not add the new pointer to the slice
 			continue
 		}
 
@@ -324,17 +342,14 @@ func convertScalar(src any, dst any) (wroteValue bool, err error) {
 	if err != nil {
 		return false, err
 	}
+	if null {
+		return false, nil
+	}
 	switch v := dst.(type) {
 	case *string:
-		if null {
-			return false, nil
-		}
 		*v = str
 		return true, nil
 	case *int64:
-		if null {
-			return false, nil
-		}
 		i, err := strconv.ParseInt(str, 10, 64)
 		if err != nil {
 			return false, err
@@ -342,9 +357,6 @@ func convertScalar(src any, dst any) (wroteValue bool, err error) {
 		*v = i
 		return true, nil
 	case *int:
-		if null {
-			return false, nil
-		}
 		i, err := strconv.Atoi(str)
 		if err != nil {
 			return false, err
@@ -352,9 +364,6 @@ func convertScalar(src any, dst any) (wroteValue bool, err error) {
 		*v = i
 		return true, nil
 	case *bool:
-		if null {
-			return false, nil
-		}
 		b, err := strconv.ParseBool(str)
 		if err != nil {
 			return true, err
@@ -362,15 +371,29 @@ func convertScalar(src any, dst any) (wroteValue bool, err error) {
 		*v = b
 		return true, nil
 	case *[]byte:
-		if null {
-			return false, nil
+		// there are a few special cases for []byte
+		// First, we will check if the src value is bool.
+		// if so, we will convert it to a byte slice with a single byte
+		bv, ok := src.(bool)
+		if ok {
+			if bv {
+				*v = []byte{1}
+			} else {
+				*v = []byte{0}
+			}
+			return true, nil
 		}
+
+		// if the string is base64 encoded, we decode it
+		bts, err := base64.StdEncoding.DecodeString(str)
+		if err == nil {
+			*v = bts
+			return true, nil
+		}
+
 		*v = []byte(str)
 		return true, nil
 	case *UUID:
-		if null {
-			return false, nil
-		}
 
 		if len([]byte(str)) == 16 {
 			*v = UUID([]byte(str))
@@ -384,9 +407,6 @@ func convertScalar(src any, dst any) (wroteValue bool, err error) {
 		*v = *u
 		return true, nil
 	case *Decimal:
-		if null {
-			return false, nil
-		}
 
 		dec, err := ParseDecimal(str)
 		if err != nil {

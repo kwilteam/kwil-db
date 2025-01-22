@@ -429,8 +429,14 @@ func (i *baseInterpreter) copy() *baseInterpreter {
 }
 
 // Execute executes a statement against the database.
-func (i *baseInterpreter) execute(ctx *common.EngineContext, db sql.DB, statement string, params map[string]any, fn func(*common.Row) error, toplevel bool) error {
-	err := ctx.Valid()
+func (i *baseInterpreter) execute(ctx *common.EngineContext, db sql.DB, statement string, params map[string]any, fn func(*common.Row) error, toplevel bool) (err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic: %v", r)
+		}
+	}()
+
+	err = ctx.Valid()
 	if err != nil {
 		return err
 	}
@@ -519,8 +525,14 @@ func isValidVarName(s string) error {
 
 // Call executes an action against the database.
 // The resultFn is called with the result of the action, if any.
-func (i *baseInterpreter) call(ctx *common.EngineContext, db sql.DB, namespace, action string, args []any, resultFn func(*common.Row) error, toplevel bool) (*common.CallResult, error) {
-	err := ctx.Valid()
+func (i *baseInterpreter) call(ctx *common.EngineContext, db sql.DB, namespace, action string, args []any, resultFn func(*common.Row) error, toplevel bool) (callRes *common.CallResult, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			err = fmt.Errorf("panic: %v", r)
+		}
+	}()
+
+	err = ctx.Valid()
 	if err != nil {
 		return nil, err
 	}
