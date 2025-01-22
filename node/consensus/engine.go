@@ -118,6 +118,9 @@ type ConsensusEngine struct {
 
 	// waitgroup to track all the consensus goroutines
 	wg sync.WaitGroup
+
+	catchupTicker  *time.Ticker
+	catchupTimeout time.Duration
 }
 
 // Config is the struct given to the constructor, [New].
@@ -325,6 +328,8 @@ func (ce *ConsensusEngine) Start(ctx context.Context, fns BroadcastFns, peerFns 
 	ce.txAnnouncer = fns.TxAnnouncer
 
 	ce.blockProcessor.SetCallbackFns(fns.TxBroadcaster, peerFns.AddPeer, peerFns.RemovePeer)
+	ce.catchupTimeout = min(5*time.Second, ce.emptyBlockTimeout+ce.blkProposalInterval)
+	ce.catchupTicker = time.NewTicker(ce.catchupTimeout)
 
 	ce.log.Info("Starting the consensus engine")
 	ctx, cancel := context.WithCancel(ctx)
@@ -419,9 +424,7 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 	// If no messages are received within the below specified duration after the last consensus message,
 	// and given that the leader is expected to produce a block within the emptyBlockTimeout interval,
 	// initiate catchup mode to request any missed messages.
-	// The ticker resets with each processed consensus message.
-	catchupDur := min(5*time.Second, ce.emptyBlockTimeout+ce.blkProposalInterval)
-	catchUpTicker := time.NewTicker(catchupDur)
+	// The catchupticker resets with each processed consensus message that successfully advances the node's state
 
 	for {
 		select {
@@ -447,7 +450,7 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 				return err
 			}
 
-		case <-catchUpTicker.C:
+		case <-ce.catchupTicker.C:
 			err := ce.doCatchup(ctx)
 			if err != nil {
 				return err
@@ -458,8 +461,6 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 
 		case m := <-ce.msgChan:
 			ce.handleConsensusMessages(ctx, m)
-			// reset the ticker as we just processed consensus messages
-			catchUpTicker.Reset(catchupDur)
 
 		case <-blkPropTicker.C:
 			ce.rebroadcastBlkProposal(ctx)
@@ -716,6 +717,7 @@ func (ce *ConsensusEngine) rebroadcastBlkProposal(ctx context.Context) {
 
 func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 	// status check, nodes halt here if the migration is completed
+	ce.log.Info("No consensus messages received recently, initiating network catchup.")
 	params := ce.blockProcessor.ConsensusParams()
 	if params.MigrationStatus == ktypes.MigrationCompleted {
 		ce.log.Info("Network halted due to migration, no more blocks will be produced")

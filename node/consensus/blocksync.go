@@ -3,6 +3,7 @@ package consensus
 import (
 	"context"
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"time"
 
@@ -183,7 +184,7 @@ func (ce *ConsensusEngine) applyBlock(ctx context.Context, rawBlk []byte, ci *kt
 }
 
 func (ce *ConsensusEngine) getBlock(ctx context.Context, height int64) (blkID types.Hash, rawBlk []byte, ci *ktypes.CommitInfo, err error) {
-	err = retry(ctx, 15, func() error {
+	err = blkRetrier(ctx, 15, func() error {
 		blkID, rawBlk, ci, err = ce.blkRequester(ctx, height)
 		return err
 	})
@@ -192,7 +193,7 @@ func (ce *ConsensusEngine) getBlock(ctx context.Context, height int64) (blkID ty
 }
 
 // retry will retry the function until it is successful, or reached the max retries
-func retry(ctx context.Context, maxRetries int64, fn func() error) error {
+func blkRetrier(ctx context.Context, maxRetries int64, fn func() error) error {
 	retrier := &backoff.Backoff{
 		Min:    100 * time.Millisecond,
 		Max:    500 * time.Millisecond,
@@ -202,7 +203,7 @@ func retry(ctx context.Context, maxRetries int64, fn func() error) error {
 
 	for {
 		err := fn()
-		if err == nil {
+		if err == nil || errors.Is(err, types.ErrBlkNotFound) {
 			return nil
 		}
 
