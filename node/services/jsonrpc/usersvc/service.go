@@ -710,7 +710,7 @@ func (r *rowReader) read(row *common.Row) error {
 func (svc *Service) txCtx(ctx context.Context, msg *types.CallMessage) (*common.TxContext, *jsonrpc.Error) {
 	signer := msg.Sender
 	caller := "" // string representation of sender, if signed.  Otherwise, empty string
-	if signer != nil && msg.AuthType != "" {
+	if len(signer) > 0 && msg.AuthType != "" {
 		var err error
 		caller, err = authExt.GetIdentifier(msg.AuthType, signer)
 		if err != nil {
