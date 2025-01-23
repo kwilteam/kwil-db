@@ -83,3 +83,11 @@ func ListUsersSpecification(ctx context.Context, t *testing.T, execute ExecuteQu
 	fmt.Println(res)
 	require.Equal(t, numUsers, len(res.Values))
 }
+
+func AddUserActionSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl, user *User) {
+	// add a user
+	txHash, err := execute.Execute(ctx, namespace, "create_user", [][]any{{user.Id, user.Name, user.Age}})
+	require.NoError(t, err)
+
+	expectTxSuccess(t, execute, ctx, txHash, defaultTxQueryTimeout)()
+}

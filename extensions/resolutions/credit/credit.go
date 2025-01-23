@@ -2,21 +2,23 @@
 package credit
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
-	"github.com/kwilteam/kwil-db/node/rlp" // TODO: remove
 )
 
 const CreditAccountEventType = "credit_account"
+const accountCreditVersion = 0
 
 // use golang's init function, which runs before main, to register the extension
 // see more here: https://www.digitalocean.com/community/tutorials/understanding-init-in-go
@@ -55,13 +57,61 @@ type AccountCreditResolution struct {
 // to be deterministic. Kwil contains a serialization library that uses Ethereum's
 // RLP encoding, which is deterministic and used for all serialization in Kwil.
 func (a *AccountCreditResolution) MarshalBinary() ([]byte, error) {
-	return serialize.EncodeWithEncodingType(a, rlp.EncodingTypeRLP)
+	buf := &bytes.Buffer{}
+
+	if err := binary.Write(buf, types.SerializationByteOrder, uint16(accountCreditVersion)); err != nil {
+		return nil, err
+	}
+
+	if err := types.WriteBytes(buf, a.Account); err != nil {
+		return nil, err
+	}
+
+	if err := types.WriteString(buf, a.KeyType); err != nil {
+		return nil, err
+	}
+
+	if err := types.WriteBigInt(buf, a.Amount); err != nil {
+		return nil, err
+	}
+
+	if err := types.WriteBytes(buf, a.TxHash); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
 }
 
 // UnmarshalBinary unmarshals the AccountCreditResolution from binary.
 // It is the inverse of MarshalBinary, and uses the same serialization library.
-func (a *AccountCreditResolution) UnmarshalBinary(data []byte) error {
-	return serialize.Decode(data, a)
+func (a *AccountCreditResolution) UnmarshalBinary(data []byte) (err error) {
+	buf := bytes.NewReader(data)
+
+	var version uint16
+	if err := binary.Read(buf, types.SerializationByteOrder, &version); err != nil {
+		return err
+	}
+	if int(version) != accountCreditVersion {
+		return fmt.Errorf("invalid account credit resolution version: %d", version)
+	}
+
+	if a.Account, err = types.ReadBytes(buf); err != nil {
+		return err
+	}
+
+	if a.KeyType, err = types.ReadString(buf); err != nil {
+		return err
+	}
+
+	if a.Amount, err = types.ReadBigInt(buf); err != nil {
+		return err
+	}
+
+	if a.TxHash, err = types.ReadBytes(buf); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // resolutionConfig defines the rules for the credit_account resolution.
@@ -78,10 +128,10 @@ var resolutionConfig = resolutions.ResolutionConfig{
 	// a resolution of this type, then it will be applied. If less than 2/3 of the network votes
 	// have voted on this resolution by expiration, the resolution will fail.
 	ConfirmationThreshold: big.NewRat(2, 3),
-	// Setting the expiration height to 600 gives the validators approximately 1 hour to vote
-	// on the resolution after it has been created (assuming 6s block times). If the resolution
+	// Setting the expiration duration to 1 hr. This gives the validators approximately
+	// 1 hour to vote on the resolution after it has been created. If the resolution
 	// has not received enough votes by the expiration height, it will fail.
-	ExpirationPeriod: 600,
+	ExpirationPeriod: 1 * time.Hour,
 	// ResolveFunc defines what will happen if the resolution is approved by the network.
 	// For the credit_account resolution, we will credit the account with the given amount.
 	// The amount cannot be negative.

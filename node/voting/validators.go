@@ -1,6 +1,7 @@
 package voting
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -9,6 +10,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 )
 
@@ -68,20 +70,45 @@ type UpdatePowerRequest struct {
 	Power      int64
 }
 
+const updatePowerRequestVersion = 0
+
 // MarshalBinary returns the binary representation of the join request
 // It is deterministic
 func (j *UpdatePowerRequest) MarshalBinary() ([]byte, error) {
-	powerBts := make([]byte, 8)
-	binary.BigEndian.PutUint64(powerBts, uint64(j.Power))
-	return append(j.PubKey, powerBts...), nil
+	buf := &bytes.Buffer{}
+	if err := binary.Write(buf, types.SerializationByteOrder, uint16(updatePowerRequestVersion)); err != nil {
+		return nil, err
+	}
+	if err := types.WriteBytes(buf, j.PubKey); err != nil {
+		return nil, err
+	}
+	if err := types.WriteString(buf, j.PubKeyType.String()); err != nil {
+		return nil, err
+	}
+	if err := binary.Write(buf, types.SerializationByteOrder, j.Power); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
 }
 
 // UnmarshalBinary unmarshals the join request from its binary representation
 func (j *UpdatePowerRequest) UnmarshalBinary(data []byte) error {
-	if len(data) < 8 {
-		return errors.New("data too short")
+	buf := bytes.NewReader(data)
+	var err error
+	var version uint16
+	if err = binary.Read(buf, types.SerializationByteOrder, &version); err != nil {
+		return err
 	}
-	j.PubKey = data[:len(data)-8]
-	j.Power = int64(binary.BigEndian.Uint64(data[len(data)-8:]))
-	return nil
+	if version != updatePowerRequestVersion {
+		return fmt.Errorf("invalid version %d", version)
+	}
+	if j.PubKey, err = types.ReadBytes(buf); err != nil {
+		return err
+	}
+	pubKeyType, err := types.ReadString(buf)
+	if err != nil {
+		return err
+	}
+	j.PubKeyType = crypto.KeyType(pubKeyType)
+	return binary.Read(buf, types.SerializationByteOrder, &j.Power)
 }

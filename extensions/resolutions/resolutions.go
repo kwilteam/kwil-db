@@ -52,7 +52,7 @@ func RegisterResolution(name string, mod ModOperation, resolution ResolutionConf
 		resolution.ConfirmationThreshold = big.NewRat(2, 3) // 66.67%
 	}
 	if resolution.ExpirationPeriod < 1 {
-		resolution.ExpirationPeriod = 14400 // 1 day
+		resolution.ExpirationPeriod = 24 * time.Hour // 1 day
 	}
 
 	registeredResolutions[name] = resolution

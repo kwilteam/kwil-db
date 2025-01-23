@@ -269,3 +269,20 @@ func (a *AdminClient) ConnectedPeers(ctx context.Context) ([]string, error) {
 
 	return peers, nil
 }
+
+type snapshotRes struct {
+	Logs      []string       `json:"logs"`
+	Height    int64          `json:"height"`
+	Snapshot  string         `json:"snapshot"`
+	StateHash types.HexBytes `json:"state_hash"`
+}
+
+func (a *AdminClient) CreateSnapshot(ctx context.Context, host, port, dbname, user, snapDir string) (string, types.HexBytes, error) {
+	var res snapshotRes
+	err := exec(a, ctx, &res, "snapshot", "create", "--host", host, "--port", port, "--dbname", dbname, "--user", user, "--snapdir", snapDir)
+	if err != nil {
+		return "", nil, err
+	}
+
+	return res.Snapshot, res.StateHash, nil
+}

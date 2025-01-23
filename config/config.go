@@ -9,6 +9,7 @@ import (
 	"io"
 	"math/big"
 	"os"
+	"slices"
 	"strings"
 	"time"
 
@@ -129,6 +130,17 @@ func (gc *GenesisConfig) SanityChecks() error {
 	if (gc.Migration.StartHeight == 0 && gc.Migration.EndHeight != 0) ||
 		(gc.Migration.StartHeight != 0 && gc.Migration.EndHeight == 0) {
 		return errors.New("both start and end height should be set or unset")
+	}
+
+	// ensure that the leader is part of the validator set
+	isValidator := slices.ContainsFunc(gc.Validators, func(v *types.Validator) bool {
+		if v.KeyType != gc.Leader.Type() {
+			return false
+		}
+		return bytes.Equal(v.Identifier, gc.Leader.Bytes())
+	})
+	if !isValidator {
+		return errors.New("leader is not part of the validator set")
 	}
 
 	return nil
@@ -286,7 +298,7 @@ func DefaultConfig() *Config {
 		},
 		StateSync: StateSyncConfig{
 			Enable:           false,
-			DiscoveryTimeout: types.Duration(30 * time.Second),
+			DiscoveryTimeout: types.Duration(15 * time.Second),
 			MaxRetries:       3,
 		},
 		Extensions: make(map[string]map[string]string),

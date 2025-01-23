@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/rand"
 	"math/big"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,6 +30,8 @@ var (
 		}
 		return privk
 	}()
+
+	defaultContainerTimeout = 30 * time.Second
 )
 
 // TestKwildDatabaseIntegration is to ensure that nodes are able to
@@ -245,10 +249,19 @@ func TestKwildBlockSync(t *testing.T) {
 	p.RunServices(t, ctx, []*setup.ServiceDefinition{
 		setup.KwildServiceDefinition("node3"),
 		setup.PostgresServiceDefinition("pg3"),
-	})
+	}, defaultContainerTimeout)
 
 	// time for node to blocksync and catch up
 	time.Sleep(4 * time.Second)
+
+	clt := p.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{PrivateKey: UserPrivkey1})
+
+	// Deploy some tables and insert some data
+	specifications.CreateNamespaceSpecification(ctx, t, clt, false)
+	specifications.CreateSchemaSpecification(ctx, t, clt)
+	user := &specifications.User{Id: 1, Name: "Alice", Age: 25}
+	specifications.AddUserSpecification(ctx, t, clt, user)
+	specifications.ListUsersSpecification(ctx, t, clt, false, 1)
 
 	// ensure that all nodes are in sync
 	info, err := p.Nodes[3].JSONRPCClient(t, ctx, nil).ChainInfo(ctx)
@@ -291,21 +304,31 @@ func TestStatesync(t *testing.T) {
 					}
 				}),
 			},
-			DBOwner: "0xabc",
+			DBOwner: OwnerAddress,
 		},
-		ContainerStartTimeout: 2 * time.Minute,                                          // increase the timeout for statesync, it generally doesn't take this long, docker can be slow
-		InitialServices:       []string{"node0", "node1", "node2", "pg0", "pg1", "pg2"}, // should bringup only node 0,1,2
+		InitialServices: []string{"node0", "node1", "node2", "pg0", "pg1", "pg2"}, // should bringup only node 0,1,2
 	})
 	ctx := context.Background()
 
 	// wait for all the nodes to discover each other and to produce snapshots
 	time.Sleep(50 * time.Second)
 
+	clt := p.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
+		PrivateKey: UserPrivkey1,
+	})
+
+	specifications.CreateNamespaceSpecification(ctx, t, clt, false)
+	specifications.CreateSchemaSpecification(ctx, t, clt)
+
+	user := &specifications.User{Id: 1, Name: "Alice", Age: 25}
+	specifications.AddUserSpecification(ctx, t, clt, user)
+	specifications.ListUsersSpecification(ctx, t, clt, false, 1)
+
 	// bring up node3, pg3 and ensure that it does blocksync correctly
 	p.RunServices(t, ctx, []*setup.ServiceDefinition{
 		setup.KwildServiceDefinition("node3"),
 		setup.PostgresServiceDefinition("pg3"),
-	})
+	}, 2*time.Minute)
 
 	// time for node to blocksync and catch up
 	time.Sleep(4 * time.Second)
@@ -315,7 +338,79 @@ func TestStatesync(t *testing.T) {
 	require.NoError(t, err)
 	require.Greater(t, info.BlockHeight, uint64(50))
 
-	// TODO: Add some kind of data verification here
+	clt3 := p.Nodes[3].JSONRPCClient(t, ctx, &setup.ClientOptions{
+		PrivateKey: UserPrivkey1,
+	})
+	specifications.ListUsersSpecification(ctx, t, clt3, false, 1)
+}
+
+func TestOfflineMigrations(t *testing.T) {
+	net1 := setup.SetupTests(t, &setup.TestConfig{
+		ClientDriver: setup.CLI,
+		Network: &setup.NetworkConfig{
+			Nodes: []*setup.NodeConfig{
+				setup.DefaultNodeConfig(),
+				setup.DefaultNodeConfig(),
+				setup.DefaultNodeConfig(),
+				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+					nc.Validator = false
+				}),
+			},
+			DBOwner: OwnerAddress,
+		},
+	})
+
+	ctx := context.Background()
+	time.Sleep(2 * time.Second)
+
+	clt := net1.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
+		PrivateKey: UserPrivkey1,
+	})
+
+	specifications.CreateNamespaceSpecification(ctx, t, clt, false)
+	specifications.CreateSchemaSpecification(ctx, t, clt)
+
+	user := &specifications.User{Id: 1, Name: "Alice", Age: 25}
+	specifications.AddUserSpecification(ctx, t, clt, user)
+	specifications.ListUsersSpecification(ctx, t, clt, false, 1)
+
+	_, hostname, err := net1.Nodes[0].PostgresEndpoint(t, ctx, "pg0")
+	require.NoError(t, err)
+	parts := strings.Split(hostname, ":")
+	require.Len(t, parts, 3)
+	host := strings.Trim(parts[1], "/")
+
+	// Create a network snapshot
+	n0Admin := net1.Nodes[0].AdminClient(t, ctx)
+	_, hash, err := n0Admin.CreateSnapshot(ctx, host, parts[2], "kwild", "kwild", "/app/kwil/gensnaps")
+	require.NoError(t, err)
+
+	// Create second network with this snapshot
+	net2 := setup.SetupTests(t, &setup.TestConfig{
+		ClientDriver: setup.CLI,
+		Network: &setup.NetworkConfig{
+			Nodes: []*setup.NodeConfig{
+				setup.DefaultNodeConfig(),
+				setup.DefaultNodeConfig(),
+			},
+			DBOwner: OwnerAddress,
+			ConfigureGenesis: func(genDoc *config.GenesisConfig) {
+				genDoc.ChainID = "kwil-test-chain2"
+				genDoc.StateHash = hash
+			},
+			GenesisSnapshot: filepath.Join(net1.TestDir(), "node0", "gensnaps", "snapshot.sql.gz"),
+		},
+		PortOffset:     100,
+		ServicesPrefix: "new-",
+	})
+
+	time.Sleep(5 * time.Second)
+
+	// Verify the existence of some data
+	clt = net2.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
+		PrivateKey: UserPrivkey1,
+	})
+	specifications.ListUsersSpecification(ctx, t, clt, false, 1)
 }
 
 func TestLongRunningNetworkMigrations(t *testing.T) {
@@ -330,19 +425,14 @@ func TestLongRunningNetworkMigrations(t *testing.T) {
 					nc.Validator = false
 				}),
 			},
-			DBOwner: "0xabc",
+			DBOwner: OwnerAddress,
 		},
 	})
 
 	ctx := context.Background()
 	time.Sleep(2 * time.Second)
 
-	// rpc listen addresses of the nodes?
-
-	// Deploy some tables and insert some data
-
 	// Trigger a network migration request
-
 	var listenAddresses []string
 	for _, node := range net1.Nodes {
 		_, addr, err := node.JSONRPCEndpoint(t, ctx)
@@ -354,6 +444,17 @@ func TestLongRunningNetworkMigrations(t *testing.T) {
 	n1Admin := net1.Nodes[1].AdminClient(t, ctx)
 	// n2Admin := net1.Nodes[2].AdminClient(t, ctx)
 	n3Admin := net1.Nodes[3].AdminClient(t, ctx)
+
+	clt := net1.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
+		PrivateKey: UserPrivkey1,
+	})
+
+	// Deploy some tables and insert some data
+	specifications.CreateNamespaceSpecification(ctx, t, clt, false)
+	specifications.CreateSchemaSpecification(ctx, t, clt)
+	user := &specifications.User{Id: 1, Name: "Alice", Age: 25}
+	specifications.AddUserSpecification(ctx, t, clt, user)
+	specifications.ListUsersSpecification(ctx, t, clt, false, 1)
 
 	specifications.SubmitMigrationProposal(ctx, t, n0Admin)
 
@@ -406,45 +507,53 @@ func TestLongRunningNetworkMigrations(t *testing.T) {
 						conf.Migrations.MigrateFrom = listenAddresses[3]
 
 						conf.StateSync.Enable = true
+						conf.StateSync.DiscoveryTimeout = types.Duration(5 * time.Second)
 					}
 					nc.Validator = false
 				}),
 			},
-			DBOwner: "0xabc",
+			// DBOwner: OwnerAddress,
 			ConfigureGenesis: func(genDoc *config.GenesisConfig) {
 				genDoc.ChainID = "kwil-test-chain2"
 			},
 		},
+		ContainerStartTimeout: 2 * time.Minute,
 		InitialServices:       []string{"new-node0", "new-node1", "new-node2", "new-pg0", "new-pg1", "new-pg2"}, // should bringup only node 0,1,2
 		ServicesPrefix:        "new-",
 		PortOffset:            100,
 		DockerNetwork:         net1.NetworkName(),
-		ContainerStartTimeout: 2 * time.Minute, // increase the timeout for downloading the genesis state and starting migration
 	})
 
-	// Verify the existence of some data
-
-	// time for node to do blocksync and catchup
-	// net2.RunServices(t, ctx, []*setup.ServiceDefinition{
-	// 	setup.KwildServiceDefinition("new-node2"),
-	// 	setup.KwildServiceDefinition("new-pg2"),
-	// })
+	user2 := &specifications.User{Id: 2, Name: "Bob", Age: 30}
+	specifications.AddUserActionSpecification(ctx, t, clt, user2)
+	specifications.ListUsersSpecification(ctx, t, clt, false, 2)
 
 	// time for node to do statesync and catchup
 	net2.RunServices(t, ctx, []*setup.ServiceDefinition{
 		setup.KwildServiceDefinition("new-node3"),
 		setup.PostgresServiceDefinition("new-pg3"),
-	})
+	}, 5*time.Minute)
 
 	// time for node to blocksync and catch up
 	time.Sleep(4 * time.Second)
 
 	// ensure that all nodes are in sync
-	info, err := net2.Nodes[3].JSONRPCClient(t, ctx, &setup.ClientOptions{
-		ChainID: "kwil-test-chain2",
-	}).ChainInfo(ctx)
-	require.NoError(t, err)
-	require.Greater(t, info.BlockHeight, uint64(50)) // TODO: height > 50 + migration height
+	clt2 := net2.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
+		PrivateKey: UserPrivkey1,
+		ChainID:    "kwil-test-chain2",
+	})
+	// Verify that the genesis state and the changesets are correctly applied
+	// on the new chain and the data is in sync with the old network
+	specifications.ListUsersSpecification(ctx, t, clt2, false, 2)
+
+	clt3 := net2.Nodes[2].JSONRPCClient(t, ctx, &setup.ClientOptions{
+		PrivateKey: UserPrivkey1,
+		ChainID:    "kwil-test-chain2",
+	})
+
+	// Test that the statesync node is able to sync with the network
+	// and the database state is in sync
+	specifications.ListUsersSpecification(ctx, t, clt3, false, 2)
 }
 
 func TestKwildPrivateNetworks(t *testing.T) {
@@ -480,7 +589,7 @@ func TestKwildPrivateNetworks(t *testing.T) {
 			},
 			DBOwner: ident,
 			ConfigureGenesis: func(genDoc *config.GenesisConfig) {
-				genDoc.JoinExpiry = 20 // 20 sec at 1block/sec
+				genDoc.JoinExpiry = types.Duration(20 * time.Second)
 			},
 		},
 		InitialServices: []string{"node0", "pg0"},
@@ -493,7 +602,7 @@ func TestKwildPrivateNetworks(t *testing.T) {
 		{Name: "node2", WaitMsg: &msgStr},
 		setup.PostgresServiceDefinition("pg1"),
 		setup.PostgresServiceDefinition("pg2"),
-	})
+	}, defaultContainerTimeout)
 
 	ctx := context.Background()
 

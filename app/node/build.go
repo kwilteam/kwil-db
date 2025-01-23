@@ -212,12 +212,7 @@ func restoreDB(d *coreDependencies) bool {
 	}
 
 	// Snapshot file exists
-	genFileName, err := node.ExpandPath(appCfg.GenesisState)
-	if err != nil {
-		failBuild(err, "failed to expand genesis state path")
-	}
-
-	snapFile, err := os.Open(genFileName)
+	snapFile, err := os.Open(appCfg.GenesisState)
 	if err != nil {
 		failBuild(err, "failed to open genesis state file")
 	}
@@ -381,7 +376,7 @@ func buildMigrator(d *coreDependencies, db *pg.DB, accounts *accounts.Accounts, 
 		RecurringHeight: d.cfg.Snapshots.RecurringHeight,
 		Enable:          d.cfg.Snapshots.Enable,
 		DBConfig:        &d.cfg.DB,
-	}, d.logger.New("SNAP"))
+	}, d.namespaceManager, d.logger.New("SNAP"))
 	if err != nil {
 		failBuild(err, "failed to create migration's snapshot store")
 	}
@@ -502,7 +497,7 @@ func buildSnapshotStore(d *coreDependencies) *snapshotter.SnapshotStore {
 		failBuild(err, "failed to create snapshot directory")
 	}
 
-	ss, err := snapshotter.NewSnapshotStore(cfg, d.logger.New("SNAP"))
+	ss, err := snapshotter.NewSnapshotStore(cfg, d.namespaceManager, d.logger.New("SNAP"))
 	if err != nil {
 		failBuild(err, "failed to create snapshot store")
 	}

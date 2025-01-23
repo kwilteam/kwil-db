@@ -50,7 +50,11 @@ func (ce *ConsensusEngine) validateBlock(blk *ktypes.Block) error {
 
 func (ce *ConsensusEngine) CheckTx(ctx context.Context, tx *ktypes.Transaction) error {
 	ce.stateInfo.mtx.RLock()
-	height, timestamp := ce.stateInfo.height, ce.stateInfo.lastCommit.blk.Header.Timestamp
+	height := ce.stateInfo.height
+	var timestamp time.Time
+	if ce.stateInfo.lastCommit.blk != nil {
+		timestamp = ce.stateInfo.lastCommit.blk.Header.Timestamp
+	}
 	ce.stateInfo.mtx.RUnlock()
 
 	ce.mempoolMtx.Lock()
@@ -61,7 +65,11 @@ func (ce *ConsensusEngine) CheckTx(ctx context.Context, tx *ktypes.Transaction) 
 
 func (ce *ConsensusEngine) recheckTx(ctx context.Context, tx *ktypes.Transaction) error {
 	ce.stateInfo.mtx.RLock()
-	height, timestamp := ce.stateInfo.height, ce.stateInfo.lastCommit.blk.Header.Timestamp
+	height := ce.stateInfo.height
+	var timestamp time.Time
+	if ce.stateInfo.lastCommit.blk != nil {
+		timestamp = ce.stateInfo.lastCommit.blk.Header.Timestamp
+	}
 	ce.stateInfo.mtx.RUnlock()
 
 	return ce.blockProcessor.CheckTx(ctx, tx, height, timestamp, true)

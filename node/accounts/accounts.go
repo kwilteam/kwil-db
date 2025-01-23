@@ -1,7 +1,9 @@
 package accounts
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"encoding/hex"
 	"errors"
 	"fmt"
@@ -44,6 +46,62 @@ type Spend struct {
 	Account *types.AccountID
 	Amount  *big.Int
 	Nonce   uint64
+}
+
+const spendVersion = 0
+
+func (s *Spend) MarshalBinary() ([]byte, error) {
+	buf := &bytes.Buffer{}
+
+	if err := binary.Write(buf, types.SerializationByteOrder, uint16(spendVersion)); err != nil {
+		return nil, err
+	}
+
+	idBts, err := s.Account.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+	if err := types.WriteBytes(buf, idBts); err != nil {
+		return nil, err
+	}
+
+	if err := types.WriteBigInt(buf, s.Amount); err != nil {
+		return nil, err
+	}
+
+	if err := binary.Write(buf, types.SerializationByteOrder, s.Nonce); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+func (s *Spend) UnmarshalBinary(data []byte) (err error) {
+	buf := bytes.NewReader(data)
+
+	var version uint16
+	if err = binary.Read(buf, types.SerializationByteOrder, &version); err != nil {
+		return err
+	}
+	if int(version) != spendVersion {
+		return fmt.Errorf("invalid spend version: %d", version)
+	}
+
+	idBts, err := types.ReadBytes(buf)
+	if err != nil {
+		return err
+	}
+
+	s.Account = &types.AccountID{}
+	if err := s.Account.UnmarshalBinary(idBts); err != nil {
+		return err
+	}
+
+	if s.Amount, err = types.ReadBigInt(buf); err != nil {
+		return err
+	}
+
+	return binary.Read(buf, types.SerializationByteOrder, &s.Nonce)
 }
 
 func InitializeAccountStore(ctx context.Context, db sql.DB, logger log.Logger) (*Accounts, error) {

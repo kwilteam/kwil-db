@@ -113,30 +113,6 @@ type JoinRequest struct {
 	Approved  []bool       `json:"approved"`   // slice of bools indicating if the corresponding validator approved
 }
 
-// NodeKey is a public key of a validator node.
-type NodeKey struct {
-	PubKey HexBytes       `json:"pubkey"`
-	Type   crypto.KeyType `json:"type"`
-}
-
-func (n *NodeKey) String() string {
-	if n == nil {
-		return "NodeKey{nil}"
-	}
-	return fmt.Sprintf("NodeKey{pubkey = %x, keyType = %s}", n.PubKey, n.Type)
-}
-
-// func (n *NodeKey) AuthType() (string, error) {
-// 	switch n.Type {
-// 	case crypto.KeyTypeSecp256k1:
-// 		return auth.Secp256k1Auth, nil
-// 	case crypto.KeyTypeEd25519:
-// 		return auth.Ed25519Auth, nil
-// 	default:
-// 		return "", fmt.Errorf("unknown key type: %s", n.Type)
-// 	}
-// }
-
 type Validator struct {
 	AccountID
 	Power int64 `json:"power"`

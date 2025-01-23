@@ -124,6 +124,10 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config, autogen bo
 		return fmt.Errorf("genesis configuration failed sanity checks: %w", err)
 	}
 
+	if cfg.GenesisState != "" {
+		cfg.GenesisState = rootedPath(cfg.GenesisState, rootDir)
+	}
+
 	// if running in autogen mode, and config.toml does not exist, write it
 	tomlFile := config.ConfigFilePath(rootDir)
 	if autogen && !fileExists(tomlFile) {

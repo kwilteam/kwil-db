@@ -1,23 +1,25 @@
 package migrations
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"errors"
 	"math/big"
+	"time"
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/extensions/hooks"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
-	"github.com/kwilteam/kwil-db/node/pg"
-	"github.com/kwilteam/kwil-db/node/rlp" // TODO: remove
+	"github.com/kwilteam/kwil-db/node/pg" // TODO: remove
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
 )
 
 const (
-	changesetsEndBlockHook = "changesets"
+	changesetsEndBlockHook    = "changesets"
+	changesetMigrationVersion = 0
 )
 
 var (
@@ -66,12 +68,82 @@ type changesetMigration struct {
 
 // MarshalBinary marshals the ChangesetMigration into a binary format.
 func (cs *changesetMigration) MarshalBinary() ([]byte, error) {
-	return serialize.EncodeWithEncodingType(cs, rlp.EncodingTypeRLP)
+	buf := &bytes.Buffer{}
+
+	// version
+	if err := binary.Write(buf, types.SerializationByteOrder, int16(changesetMigrationVersion)); err != nil {
+		return nil, err
+	}
+
+	// height
+	if err := binary.Write(buf, types.SerializationByteOrder, cs.Height); err != nil {
+		return nil, err
+	}
+
+	// chunk index
+	if err := binary.Write(buf, types.SerializationByteOrder, cs.ChunkIdx); err != nil {
+		return nil, err
+	}
+
+	// total chunks
+	if err := binary.Write(buf, types.SerializationByteOrder, cs.TotalChunks); err != nil {
+		return nil, err
+	}
+
+	// changeset bytes
+	if err := types.WriteBytes(buf, cs.Changeset); err != nil {
+		return nil, err
+	}
+
+	// previous block
+	if err := binary.Write(buf, types.SerializationByteOrder, cs.PreviousBlock); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
 }
 
 // UnmarshalBinary unmarshals the ChangesetMigration from a binary format.
 func (cs *changesetMigration) UnmarshalBinary(data []byte) error {
-	return serialize.Decode(data, cs)
+	buf := bytes.NewReader(data)
+
+	// version
+	var version int16
+	if err := binary.Read(buf, types.SerializationByteOrder, &version); err != nil {
+		return err
+	}
+	if version != changesetMigrationVersion {
+		return errors.New("invalid changeset migration version")
+	}
+
+	// height
+	if err := binary.Read(buf, types.SerializationByteOrder, &cs.Height); err != nil {
+		return err
+	}
+
+	// chunk index
+	if err := binary.Read(buf, types.SerializationByteOrder, &cs.ChunkIdx); err != nil {
+		return err
+	}
+
+	// total chunks
+	if err := binary.Read(buf, types.SerializationByteOrder, &cs.TotalChunks); err != nil {
+		return err
+	}
+
+	// changeset bytes
+	changeset, err := types.ReadBytes(buf)
+	if err != nil {
+		return err
+	}
+	cs.Changeset = changeset
+
+	// previous block
+	if err := binary.Read(buf, types.SerializationByteOrder, &cs.PreviousBlock); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // ChangesetMigrationResolution is the definition for changeset migration vote type in Kwil's voting system.
@@ -81,7 +153,7 @@ func (cs *changesetMigration) UnmarshalBinary(data []byte) error {
 // The changesets are applied in the order of block heights.
 var changesetMigrationResolution = resolutions.ResolutionConfig{
 	ConfirmationThreshold: big.NewRat(2, 3),
-	ExpirationPeriod:      24 * 60 * 10, // 1 day in blocks
+	ExpirationPeriod:      24 * time.Hour, // 1 day
 	ResolveFunc: func(ctx context.Context, app *common.App, resolution *resolutions.Resolution, block *common.BlockContext) error {
 		var migration changesetMigration
 		err := migration.UnmarshalBinary(resolution.Body)

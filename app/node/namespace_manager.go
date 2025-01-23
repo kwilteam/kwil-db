@@ -1,10 +1,13 @@
 package node
 
 import (
+	"context"
+	"fmt"
 	"sync"
 
 	"github.com/kwilteam/kwil-db/core/utils/order"
 	"github.com/kwilteam/kwil-db/node/engine"
+	"github.com/kwilteam/kwil-db/node/types/sql"
 )
 
 func newNamespaceManager() *namespaceManager {
@@ -86,4 +89,41 @@ func (n *namespaceManager) ListPostgresSchemasToDump() []string {
 	}
 
 	return res
+}
+
+type DB interface {
+	sql.ReadTxMaker
+}
+
+func UserNamespaces(ctx context.Context, db DB) ([]string, error) {
+	tx, err := db.BeginReadTx(ctx)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback(ctx)
+
+	res, err := tx.Execute(ctx, "select name from kwild_engine.namespaces where type='USER'")
+	if err != nil {
+		return nil, fmt.Errorf("failed to execute query: %w", err)
+	}
+
+	if len(res.Columns) != 1 {
+		return nil, fmt.Errorf("unexpected number of columns: %d", len(res.Columns))
+	}
+
+	var userNamespaces []string
+	for _, row := range res.Rows {
+		if len(row) != 1 {
+			return nil, fmt.Errorf("unexpected number of columns in row: %d", len(row))
+		}
+
+		ns, ok := row[0].(string)
+		if !ok {
+			return nil, fmt.Errorf("failed to convert namespace to string: %v", row[0])
+		}
+
+		userNamespaces = append(userNamespaces, ns)
+	}
+
+	return userNamespaces, nil
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/core/utils"
 	authExt "github.com/kwilteam/kwil-db/extensions/auth"
 	"github.com/kwilteam/kwil-db/node"
 )
@@ -242,7 +243,7 @@ func GenerateNodeRoot(ncfg *NodeGenConfig) error {
 	// Admin RPC
 	cfg.Admin.ListenAddress = net.JoinHostPort("127.0.0.1", strconv.FormatUint(uint64(8584+ncfg.PortOffset), 10))
 
-	return GenerateNodeDir(ncfg.RootDir, ncfg.Genesis, cfg, ncfg.NodeKey)
+	return GenerateNodeDir(ncfg.RootDir, ncfg.Genesis, cfg, ncfg.NodeKey, "")
 }
 
 type deterministicPRNG struct {
@@ -286,13 +287,14 @@ type TestnetNodeConfig struct {
 // GenerateTestnetDir generates a testnet configuration for multiple nodes.
 // It is a minimal function that takes full configurations.
 // Most users should use GenerateTestnetConfigs instead.
-func GenerateTestnetDir(testnetDir string, genesis *config.GenesisConfig, nodes []*TestnetNodeConfig) error {
+// copies the snapshot file to each node directory if it is not empty.
+func GenerateTestnetDir(testnetDir string, genesis *config.GenesisConfig, nodes []*TestnetNodeConfig, snapshot string) error {
 	if err := os.MkdirAll(testnetDir, 0755); err != nil {
 		return err
 	}
 
 	for _, node := range nodes {
-		if err := GenerateNodeDir(filepath.Join(testnetDir, node.DirName), genesis, node.Config, node.PrivateKey); err != nil {
+		if err := GenerateNodeDir(filepath.Join(testnetDir, node.DirName), genesis, node.Config, node.PrivateKey, snapshot); err != nil {
 			return err
 		}
 	}
@@ -303,9 +305,16 @@ func GenerateTestnetDir(testnetDir string, genesis *config.GenesisConfig, nodes 
 // GenerateNodeDir generates a node configuration directory.
 // It is a minimal function that takes a full configuration.
 // Most users should use GenerateNodeRoot instead.
-func GenerateNodeDir(rootDir string, genesis *config.GenesisConfig, node *config.Config, privateKey *crypto.Secp256k1PrivateKey) error {
+func GenerateNodeDir(rootDir string, genesis *config.GenesisConfig, node *config.Config, privateKey *crypto.Secp256k1PrivateKey, snapshot string) error {
 	if err := os.MkdirAll(rootDir, 0755); err != nil {
 		return err
+	}
+
+	if snapshot != "" {
+		node.GenesisState = "genesis-state.sql.gz"
+		if err := utils.CopyFile(snapshot, config.GenesisStateFileName(rootDir)); err != nil {
+			return err
+		}
 	}
 
 	if err := node.SaveAs(config.ConfigFilePath(rootDir)); err != nil {

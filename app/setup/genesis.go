@@ -167,14 +167,28 @@ func mergeGenesisFlags(conf *config.GenesisConfig, cmd *cobra.Command, flagCfg *
 				return nil, fmt.Errorf("invalid format for alloc, expected id#keyType:balance, received: %s", a)
 			}
 
+			// 0x addresses: <address>:<balance>
+			// others: <pubkey#keyType>:<balance>
 			keyParts := strings.Split(parts[0], "#")
-			if len(keyParts) != 2 {
-				return nil, fmt.Errorf("invalid address for alloc: %s", parts[0])
-			}
+			var keyType crypto.KeyType
+			var keyStr string
+			var err error
 
-			keyType, err := crypto.ParseKeyType(keyParts[1])
-			if err != nil {
-				return nil, fmt.Errorf("invalid key type for validator: %s", keyParts[1])
+			if strings.HasPrefix(parts[1], "0x") {
+				if len(keyParts) != 1 {
+					return nil, fmt.Errorf("invalid address for alloc: %s, expected format <address:balance>", parts[0])
+				}
+				keyStr = strings.TrimPrefix(parts[0], "0x")
+				keyType = crypto.KeyTypeSecp256k1
+			} else {
+				if len(keyParts) != 2 {
+					return nil, fmt.Errorf("invalid address for alloc: %s, expected format <key#keyType:balance>", parts[0])
+				}
+				keyType, err = crypto.ParseKeyType(keyParts[1])
+				if err != nil {
+					return nil, fmt.Errorf("invalid key type for validator: %s", keyParts[1])
+				}
+				keyStr = keyParts[0]
 			}
 
 			balance, ok := new(big.Int).SetString(parts[1], 10)
@@ -182,14 +196,14 @@ func mergeGenesisFlags(conf *config.GenesisConfig, cmd *cobra.Command, flagCfg *
 				return nil, fmt.Errorf("invalid balance for alloc: %s", parts[1])
 			}
 
-			keyStr, err := hex.DecodeString(keyParts[0])
+			id, err := hex.DecodeString(keyStr)
 			if err != nil {
-				return nil, fmt.Errorf("invalid address for alloc: %s", keyParts[0])
+				return nil, fmt.Errorf("invalid hex address for alloc: %s", keyStr)
 			}
 
 			conf.Allocs = append(conf.Allocs, config.GenesisAlloc{
 				ID: config.KeyHexBytes{
-					HexBytes: keyStr,
+					HexBytes: id,
 				},
 				KeyType: keyType.String(),
 				Amount:  balance,

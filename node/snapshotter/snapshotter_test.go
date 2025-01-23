@@ -16,11 +16,20 @@ const (
 	dump2File = "test_data/dump2.sql"
 )
 
+type MockNamespaceManager struct {
+}
+
+func (m *MockNamespaceManager) ListPostgresSchemasToDump() []string {
+	return nil
+}
+
 func TestSanitizeLogicalDump(t *testing.T) {
 	dir := t.TempDir()
 	logger := log.DiscardLogger
 	// Create a snapshotter
-	snapshotter := NewSnapshotter(nil, dir, logger)
+	ns := &MockNamespaceManager{}
+
+	snapshotter := NewSnapshotter(nil, dir, ns, logger)
 
 	// Create snapshot directory
 	height := uint64(1)

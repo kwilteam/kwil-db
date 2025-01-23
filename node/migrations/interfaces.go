@@ -32,3 +32,7 @@ type Accounts interface {
 type Validators interface {
 	GetValidators() []*types.Validator
 }
+
+type NamespaceManager interface {
+	ListPostgresSchemasToDump() ([]string, error)
+}

@@ -852,9 +852,10 @@ func (svc *Service) ListPendingMigrations(ctx context.Context, req *userjson.Lis
 	var pendingMigrations []*types.Migration
 
 	for _, res := range resolutions {
+		svc.log.Info("migration resolution", "res", res)
 		mig := &migrations.MigrationDeclaration{}
 		if err := mig.UnmarshalBinary(res.Body); err != nil {
-			return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to unmarshal migration declaration", nil)
+			return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to unmarshal migration declaration"+err.Error(), nil)
 		}
 		pendingMigrations = append(pendingMigrations, &types.Migration{
 			ID:               res.ID,
