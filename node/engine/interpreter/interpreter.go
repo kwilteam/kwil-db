@@ -448,7 +448,7 @@ func (i *baseInterpreter) execute(ctx *common.EngineContext, db sql.DB, statemen
 	// parse the statement
 	ast, err := parse.Parse(statement)
 	if err != nil {
-		return fmt.Errorf("%w: %w", engine.ErrParse, err)
+		return fmt.Errorf("%w: error in top-level statement %s: %w", engine.ErrParse, statement, err)
 	}
 
 	if len(ast) == 0 {

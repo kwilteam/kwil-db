@@ -138,7 +138,7 @@ func (e *executionContext) query(sql string, fn func(*row) error) error {
 
 	res, err := parse.Parse(sql)
 	if err != nil {
-		return fmt.Errorf("%w: %w", engine.ErrParse, err)
+		return fmt.Errorf("%w: invalid query '%s': %w", engine.ErrParse, sql, err)
 	}
 
 	if len(res) != 1 {
