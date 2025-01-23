@@ -188,3 +188,9 @@ type NamespaceRegister interface {
 	RegisterNamespace(ns string)
 	UnregisterAllNamespaces()
 }
+
+const (
+	DefaultNamespace       = "main"
+	InfoNamespace          = "info"
+	InternalEnginePGSchema = "kwild_engine"
+)

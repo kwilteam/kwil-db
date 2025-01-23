@@ -1982,7 +1982,7 @@ func (i *interpreterPlanner) VisitDropNamespaceStatement(p0 *parse.DropNamespace
 			return fmt.Errorf(`%w: namespace "%s" does not exist`, engine.ErrNamespaceNotFound, p0.Namespace)
 		}
 
-		if p0.Namespace == DefaultNamespace || p0.Namespace == infoNamespace {
+		if p0.Namespace == engine.DefaultNamespace || p0.Namespace == engine.InfoNamespace {
 			return fmt.Errorf(`%w: "%s"`, engine.ErrCannotDropBuiltinNamespace, p0.Namespace)
 		}
 		if ns.namespaceType == namespaceTypeExtension {

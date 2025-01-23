@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/node/engine/interpreter"
+	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/spf13/cobra"
 )
 
@@ -19,7 +19,7 @@ const (
 // If the namespace flag is not set, returns wasSet as false.
 func getSelectedNamespace(cmd *cobra.Command) (namespace string, wasSet bool, err error) {
 	if !cmd.Flags().Changed(nameFlag) {
-		return interpreter.DefaultNamespace, false, nil
+		return engine.DefaultNamespace, false, nil
 	}
 
 	name, err := cmd.Flags().GetString(nameFlag)

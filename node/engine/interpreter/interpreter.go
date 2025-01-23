@@ -486,7 +486,7 @@ func (i *baseInterpreter) execute(ctx *common.EngineContext, db sql.DB, statemen
 		}
 	}()
 
-	execCtx, err := i.newExecCtx(ctx, db, DefaultNamespace, toplevel)
+	execCtx, err := i.newExecCtx(ctx, db, engine.DefaultNamespace, toplevel)
 	if err != nil {
 		return err
 	}
@@ -564,7 +564,7 @@ func (i *baseInterpreter) call(ctx *common.EngineContext, db sql.DB, namespace, 
 	}
 
 	if namespace == "" {
-		namespace = DefaultNamespace
+		namespace = engine.DefaultNamespace
 	}
 	namespace = strings.ToLower(namespace)
 	action = strings.ToLower(action)
@@ -662,17 +662,12 @@ func (i *baseInterpreter) syncNamespaceManager() {
 	defer i.namespaceRegister.Unlock()
 	i.namespaceRegister.UnregisterAllNamespaces()
 	for ns := range i.namespaces {
-		if ns == infoNamespace {
+		if ns == engine.InfoNamespace {
 			continue
 		}
 		i.namespaceRegister.RegisterNamespace(ns)
 	}
 }
-
-const (
-	DefaultNamespace = "main"
-	infoNamespace    = "info"
-)
 
 var builtInExecutables = func() map[string]*executable {
 	execs := make(map[string]*executable)

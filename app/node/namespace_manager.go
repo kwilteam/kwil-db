@@ -1,6 +1,11 @@
 package node
 
-import "sync"
+import (
+	"sync"
+
+	"github.com/kwilteam/kwil-db/core/utils/order"
+	"github.com/kwilteam/kwil-db/node/engine"
+)
 
 func newNamespaceManager() *namespaceManager {
 	return &namespaceManager{
@@ -41,7 +46,9 @@ func (n *namespaceManager) Unlock() {
 	n.mu.Unlock()
 }
 
-// Filter returns true if the namespace is registered.
+// Filter returns true if the namespace containers user data.
+// It will return false for internal kwild schemas (e.g. "kwild_engine")
+// and for namespaces that are only views (e.g. "info")
 // If it is not ready, it panics.
 func (n *namespaceManager) Filter(ns string) bool {
 	if !n.ready {
@@ -59,4 +66,17 @@ func (n *namespaceManager) Ready() {
 	n.mu.Lock()
 	defer n.mu.Unlock()
 	n.ready = true
+}
+
+// ListPostgresSchemasToDump returns an ordered list of postgres
+// schemas that should be included when exporting database state.
+func (n *namespaceManager) ListPostgresSchemasToDump() []string {
+	res := make([]string, len(n.namespaces)+2)
+	res[0] = engine.InternalEnginePGSchema
+	res[1] = engine.InfoNamespace
+	for i, ns := range order.OrderMap(n.namespaces) {
+		res[i+2] = ns.Key
+	}
+
+	return res
 }

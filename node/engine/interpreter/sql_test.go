@@ -1186,7 +1186,7 @@ func Test_Transactionality(t *testing.T) {
 	require.NoError(t, err)
 
 	// we will check that the first table was not created
-	_, ok := interp.i.namespaces[DefaultNamespace].tables["table1"]
+	_, ok := interp.i.namespaces[engine.DefaultNamespace].tables["table1"]
 	require.False(t, ok)
 
 	// fix the bug and continue
