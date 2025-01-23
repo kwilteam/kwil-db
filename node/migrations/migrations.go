@@ -64,7 +64,7 @@ func (md MigrationDeclaration) MarshalBinary() ([]byte, error) {
 
 // UnmarshalBinary unmarshals the MigrationDeclaration from a binary format.
 func (md *MigrationDeclaration) UnmarshalBinary(data []byte) error {
-	return serialize.DecodeWithEncodingType(data, md, rlp.EncodingTypeRLP)
+	return serialize.Decode(data, md)
 }
 
 // MigrationResolution is the definition for the network migration vote type in Kwil's

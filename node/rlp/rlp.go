@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	serialize.RegisterCodec(rlpCodec)
+	serialize.RegisterCodec(Codec)
 }
 
 // RLP is still used in a few places in the node codebase, including
@@ -20,7 +20,7 @@ func init() {
 
 const EncodingTypeRLP = serialize.EncodingTypeCustom + 1
 
-var rlpCodec = &serialize.Codec{
+var Codec = &serialize.Codec{
 	Type: EncodingTypeRLP,
 	Name: "RLP",
 	Encode: func(val any) ([]byte, error) {

@@ -156,14 +156,6 @@ func Decode(bts []byte, v any) error {
 	return codec.Decode(val, v)
 }
 
-func DecodeWithEncodingType(bts []byte, v any, encodingType EncodingType) error {
-	codec, ok := encodings[encodingType]
-	if !ok {
-		return fmt.Errorf("unregistered encoding type: %d", encodingType)
-	}
-	return codec.Decode(bts, v)
-}
-
 // DecodeGeneric decodes the given serialized data into the given value. See
 // also Decode for use with an existing instance. This is generally no more
 // useful than Decode; it is syntactic sugar that requires no existing instance
