@@ -78,22 +78,7 @@ func RootCmd() *cobra.Command {
 	cmd.AddCommand(verCmd.NewVersionCmd())
 
 	// Apply the custom help function to the current command
-	shared.SetSanitizedHelpFunc(cmd)
-
-	// Recursively apply to all subcommands
-	for _, subCmd := range cmd.Commands() {
-		applySanitizedHelpFuncRecursively(subCmd)
-	}
+	shared.ApplySanitizedHelpFuncRecursively(cmd)
 
 	return cmd
-}
-
-func applySanitizedHelpFuncRecursively(cmd *cobra.Command) {
-	// Apply the custom help function to the current command
-	shared.SetSanitizedHelpFunc(cmd)
-
-	// Recursively apply to all subcommands
-	for _, subCmd := range cmd.Commands() {
-		applySanitizedHelpFuncRecursively(subCmd)
-	}
 }
