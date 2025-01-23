@@ -1761,6 +1761,17 @@ func Test_Actions(t *testing.T) {
 			action: "call_get_null",
 		},
 		// TODO: test that actions returning nulls to other actions does not error
+		{
+			// this is a regression test
+			name: "special functions called in new namespaces works as expected",
+			stmt: []string{
+				`CREATE NAMESPACE test;`,
+				`{test} create action get_uuid() public view returns (uuid) {return uuid_generate_kwil('a');}`,
+			},
+			namespace: "test",
+			action:    "get_uuid",
+			results:   [][]any{{mustUUID("819ab751-e64c-5259-bbae-4d36f25bdd84")}},
+		},
 	}
 
 	db, err := newTestDB()
