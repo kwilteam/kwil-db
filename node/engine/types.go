@@ -181,3 +181,10 @@ const (
 	// A primary index cannot exist on a table that also has a primary key.
 	PRIMARY IndexType = "PRIMARY"
 )
+
+type NamespaceRegister interface {
+	Lock()
+	Unlock()
+	RegisterNamespace(ns string)
+	UnregisterAllNamespaces()
+}

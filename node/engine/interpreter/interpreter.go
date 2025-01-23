@@ -181,9 +181,23 @@ func (n namespaceType) valid() bool {
 	}
 }
 
+type nilNamespaceRegister struct{}
+
+func (n nilNamespaceRegister) RegisterNamespace(ns string) {}
+
+func (n nilNamespaceRegister) UnregisterAllNamespaces() {}
+
+func (n nilNamespaceRegister) Lock() {}
+
+func (n nilNamespaceRegister) Unlock() {}
+
 // NewInterpreter creates a new interpreter.
 // It reads currently stored namespaces and loads them into memory.
-func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service, accounts common.Accounts, validators common.Validators) (*ThreadSafeInterpreter, error) {
+func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service, accounts common.Accounts, validators common.Validators, nsr engine.NamespaceRegister) (*ThreadSafeInterpreter, error) {
+	if nsr == nil {
+		nsr = nilNamespaceRegister{}
+	}
+
 	var exists bool
 	count := 0
 	// we need to check if it is initialized. We will do this by checking if the schema kwild_engine exists
@@ -215,8 +229,11 @@ func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service, acc
 	}
 
 	interpreter := &baseInterpreter{
-		namespaces: make(map[string]*namespace),
-		service:    service,
+		namespaces:        make(map[string]*namespace),
+		service:           service,
+		validators:        validators,
+		accounts:          accounts,
+		namespaceRegister: nsr,
 	}
 	interpreter.accessController, err = newAccessController(ctx, db)
 	if err != nil {
@@ -314,6 +331,8 @@ func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service, acc
 		}
 	}
 
+	interpreter.syncNamespaceManager()
+
 	return threadSafe, nil
 }
 
@@ -407,6 +426,8 @@ type baseInterpreter struct {
 	validators common.Validators
 	// accounts is the account manager for the application
 	accounts common.Accounts
+	// namespaceRegister is used to register and unregister namespaces
+	namespaceRegister engine.NamespaceRegister
 }
 
 // copy deep copies the state of the interpreter.
@@ -431,6 +452,7 @@ func (i *baseInterpreter) copy() *baseInterpreter {
 // Execute executes a statement against the database.
 func (i *baseInterpreter) execute(ctx *common.EngineContext, db sql.DB, statement string, params map[string]any, fn func(*common.Row) error, toplevel bool) (err error) {
 	defer func() {
+		i.syncNamespaceManager()
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic: %v", r)
 		}
@@ -527,6 +549,7 @@ func isValidVarName(s string) error {
 // The resultFn is called with the result of the action, if any.
 func (i *baseInterpreter) call(ctx *common.EngineContext, db sql.DB, namespace, action string, args []any, resultFn func(*common.Row) error, toplevel bool) (callRes *common.CallResult, err error) {
 	defer func() {
+		i.syncNamespaceManager()
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic: %v", r)
 		}
@@ -631,6 +654,19 @@ func (i *baseInterpreter) newExecCtx(txCtx *common.EngineContext, db sql.DB, nam
 	e.scope.isTopLevel = toplevel
 
 	return e, nil
+}
+
+// syncNamespaceManager syncs all current namespaces with the namespace manager.
+func (i *baseInterpreter) syncNamespaceManager() {
+	i.namespaceRegister.Lock()
+	defer i.namespaceRegister.Unlock()
+	i.namespaceRegister.UnregisterAllNamespaces()
+	for ns := range i.namespaces {
+		if ns == infoNamespace {
+			continue
+		}
+		i.namespaceRegister.RegisterNamespace(ns)
+	}
 }
 
 const (

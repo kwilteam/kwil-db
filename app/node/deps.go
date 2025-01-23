@@ -17,7 +17,7 @@ import (
 // datasets in different postgresql "schema".
 type dbOpener func(ctx context.Context, dbName string, maxConns uint32) (*pg.DB, error)
 
-func newDBOpener(host, port, user, pass string) dbOpener {
+func newDBOpener(host, port, user, pass string, filterSchemas func(string) bool) dbOpener {
 	return func(ctx context.Context, dbName string, maxConns uint32) (*pg.DB, error) {
 		cfg := &pg.DBConfig{
 			PoolConfig: pg.PoolConfig{
@@ -66,9 +66,10 @@ type coreDependencies struct {
 	adminKey *tls.Certificate
 	// autogen  bool
 
-	logger     log.Logger
-	dbOpener   dbOpener
-	poolOpener poolOpener
+	logger           log.Logger
+	dbOpener         dbOpener
+	namespaceManager *namespaceManager
+	poolOpener       poolOpener
 }
 
 // closeFuncs holds a list of closers

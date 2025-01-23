@@ -182,7 +182,7 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 					Logger:      logger,
 					LocalConfig: &config.Config{},
 					Identity:    []byte("node"),
-				}, accs, votes)
+				}, accs, votes, nil)
 				if err != nil {
 					return err
 				}
