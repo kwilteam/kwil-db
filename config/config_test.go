@@ -409,7 +409,7 @@ func TestConfigFromTOML(t *testing.T) {
 					User:          "testuser",
 					Pass:          "testpass",
 					DBName:        "testdb",
-					ReadTxTimeout: Duration(30 * time.Second),
+					ReadTxTimeout: types.Duration(30 * time.Second),
 					MaxConns:      20,
 				},
 			},
