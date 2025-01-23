@@ -15,10 +15,11 @@ import (
 )
 
 var (
-	ErrNotFound    = errors.New("resource not available")
-	ErrTxNotFound  = types.ErrTxNotFound
-	ErrBlkNotFound = types.ErrBlkNotFound
-	ErrNoResponse  = types.ErrNoResponse
+	ErrNotFound        = errors.New("resource not available")
+	ErrTxNotFound      = types.ErrTxNotFound
+	ErrTxAlreadyExists = types.ErrTxAlreadyExists
+	ErrBlkNotFound     = types.ErrBlkNotFound
+	ErrNoResponse      = types.ErrNoResponse
 )
 
 const (
