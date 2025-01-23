@@ -33,6 +33,9 @@ func InfoCmd() *cobra.Command {
 		Long:    infoLong,
 		Example: infoExample,
 		Args:    cobra.MaximumNArgs(1),
+		// Override the root command's PersistentPreRunE, so that we don't
+		// try to read the config from a ~/.kwild directory
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error { return nil },
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// if len(args) == 1, then the private key is passed as a hex string
 			// otherwise, it is passed as a file path

@@ -183,7 +183,11 @@ func PrintCmd(cmd *cobra.Command, msg MsgFormatter) error {
 	return prettyPrint(wrappedMsg, OutputFormat(format), cmd.OutOrStdout(), cmd.OutOrStderr())
 }
 
-// PrintErr prints the error according to the commands output format flag.
+// PrintErr prints the error according to the commands output format flag. The
+// returned error is nil if the message it was printed successfully. Thus, this
+// function must ONLY be called from within a cobra.Command's RunE function or
+// or returned directly by the RunE function, NOT used to direct application
+// logic since the returned error no longer pertains to the initial error.
 func PrintErr(cmd *cobra.Command, err error) error {
 	outputFormat, err2 := getOutputFormat(cmd)
 	if err2 != nil {

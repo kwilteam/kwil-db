@@ -57,6 +57,10 @@ func InitCmd() *cobra.Command {
 			DisableDefaultCmd: true,
 		},
 		Args: cobra.NoArgs,
+		// Override parent persistent prerun so we don't try to read an existing
+		// config file; only the default+flags+env for generating a new root.
+		PersistentPreRunE: bind.ChainPreRuns(bind.MaybeEnableCLIDebug,
+			conf.PreRunBindFlags, conf.PreRunBindEnvMatching, conf.PreRunPrintEffectiveConfig),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			genSnapshotFlag := cmd.Flag("genesis-snapshot").Changed
 			genStateFlag := cmd.Flag("genesis-state").Changed
@@ -75,6 +79,12 @@ func InitCmd() *cobra.Command {
 				return err
 			}
 
+			// Ensure the output directory does not already exist...
+			if _, err := os.Stat(outDir); err == nil {
+				return display.PrintErr(cmd, fmt.Errorf("output directory %s already exists", outDir))
+			}
+
+			// create the output directory
 			if err := os.MkdirAll(outDir, nodeDirPerm); err != nil {
 				return err
 			}

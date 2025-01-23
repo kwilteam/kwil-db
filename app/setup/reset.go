@@ -6,7 +6,11 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/kwilteam/kwil-db/app/custom"
+	"github.com/kwilteam/kwil-db/app/node/conf"
 	"github.com/kwilteam/kwil-db/app/shared/bind"
+	"github.com/kwilteam/kwil-db/app/shared/display"
+	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/node"
 	"github.com/kwilteam/kwil-db/node/pg"
 
@@ -31,6 +35,9 @@ func ResetCmd() *cobra.Command {
 		Long:    resetLong,
 		Example: resetExample,
 		Args:    cobra.NoArgs,
+		// Override the root's PersistentPreRunE to bind only the config file,
+		// not the full node flag set.
+		PersistentPreRunE: bind.ChainPreRuns(conf.PreRunBindConfigFileStrict[config.Config]), // but not the flags
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rootDir, err := bind.RootDir(cmd)
 			if err != nil {
@@ -45,9 +52,10 @@ func ResetCmd() *cobra.Command {
 				return fmt.Errorf("root directory %s does not exist", rootDir)
 			}
 
-			pgConf, err := loadPGConfigFromTOML(cmd, rootDir)
+			dbCfg := conf.ActiveConfig().DB
+			pgConf, err := bind.GetPostgresFlags(cmd, &dbCfg)
 			if err != nil {
-				return err
+				return display.PrintErr(cmd, fmt.Errorf("failed to get postgres flags: %v", err))
 			}
 
 			err = resetPGState(cmd.Context(), pgConf)
@@ -96,7 +104,7 @@ func ResetCmd() *cobra.Command {
 	}
 
 	cmd.Flags().BoolVar(&all, "all", false, "reset all data, if this is not set, only the app state will be reset")
-	bind.BindPostgresFlags(cmd)
+	bind.BindPostgresFlags(cmd, &custom.DefaultConfig().DB)
 
 	return cmd
 }

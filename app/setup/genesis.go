@@ -61,6 +61,9 @@ func GenesisCmd() *cobra.Command {
 			DisableDefaultCmd: true,
 		},
 		Args: cobra.NoArgs,
+		// Override the root command's PersistentPreRunE, so that we don't
+		// try to read the config from a ~/.kwild directory.
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error { return nil },
 		RunE: func(cmd *cobra.Command, args []string) error {
 			outDir, err := node.ExpandPath(output)
 			if err != nil {

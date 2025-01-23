@@ -28,6 +28,9 @@ func GenCmd() *cobra.Command {
 		Long:    "The `gen` command generates a private key for use by validators.",
 		Example: genExample,
 		Args:    cobra.RangeArgs(0, 1),
+		// Override the root command's PersistentPreRunE, so that we don't
+		// try to read the config from a ~/.kwild directory
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error { return nil },
 		RunE: func(cmd *cobra.Command, args []string) error {
 			keyType := crypto.KeyTypeSecp256k1 // default with 0 args
 			if len(args) > 0 {

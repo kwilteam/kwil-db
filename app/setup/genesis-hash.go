@@ -11,12 +11,12 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/kwilteam/kwil-db/app/node/conf"
 	"github.com/kwilteam/kwil-db/app/shared/bind"
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/app/snapshot"
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/node"
-	"github.com/kwilteam/kwil-db/node/pg"
 	"github.com/spf13/cobra"
 )
 
@@ -41,7 +41,7 @@ kwild setup genesis-hash --snapshot "/path/to/snapshot.sql.gz" --genesis "~/.kwi
 )
 
 func GenesisHashCmd() *cobra.Command {
-	var genesisFile, rootDir, snapshotFile string
+	var genesisFile, snapshotFile string
 
 	cmd := &cobra.Command{
 		Use:     "genesis-hash",
@@ -49,8 +49,11 @@ func GenesisHashCmd() *cobra.Command {
 		Long:    genesisHashLong,
 		Example: genesisHashExample,
 		Args:    cobra.NoArgs,
+		// Override the root's PersistentPreRunE to bind only the config file,
+		// not the full node flag set.
+		PersistentPreRunE: bind.ChainPreRuns(conf.PreRunBindConfigFileStrict[config.Config]), // but not the flags
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if cmd.Flags().Changed("snapshot") && cmd.Flags().Changed("root-dir") {
+			if cmd.Flags().Changed("snapshot") && cmd.Flags().Changed(bind.RootFlagName) {
 				return display.PrintErr(cmd, errors.New("cannot use both --snapshot and --root-dir"))
 			}
 
@@ -61,27 +64,20 @@ func GenesisHashCmd() *cobra.Command {
 				if err != nil {
 					return display.PrintErr(cmd, err)
 				}
-			} else {
-				var pgConf *pg.ConnConfig
-				var err error
-				if rootDir != "" {
-					rootDir, err = node.ExpandPath(rootDir)
-					if err != nil {
-						return display.PrintErr(cmd, err)
-					}
-
-					pgConf, err = loadPGConfigFromTOML(cmd, rootDir)
-					if err != nil {
-						return display.PrintErr(cmd, err)
-					}
-				} else {
-					pgConf, err = bind.GetPostgresFlags(cmd)
-					if err != nil {
-						return display.PrintErr(cmd, err)
-					}
+			} else { // create a snapshot first
+				dbCfg := conf.ActiveConfig().DB
+				pgConf, err := bind.GetPostgresFlags(cmd, &dbCfg)
+				if err != nil {
+					return display.PrintErr(cmd, fmt.Errorf("failed to get postgres flags: %v", err))
 				}
 
 				dir, err := tmpKwilAdminSnapshotDir()
+				if err != nil {
+					return display.PrintErr(cmd, err)
+				}
+
+				// clean up any previous temp admin snapshots
+				err = cleanupTmpKwilAdminDir(dir)
 				if err != nil {
 					return display.PrintErr(cmd, err)
 				}
@@ -93,12 +89,6 @@ func GenesisHashCmd() *cobra.Command {
 				}
 				defer cleanupTmpKwilAdminDir(dir) // clean up temp admin snapshots directory on exit after app hash computation
 
-				// clean up any previous temp admin snapshots
-				err = cleanupTmpKwilAdminDir(dir)
-				if err != nil {
-					return display.PrintErr(cmd, err)
-				}
-
 				_, _, genCfg, err := snapshot.PGDump(cmd.Context(), pgConf.DBName, pgConf.User, pgConf.Pass, pgConf.Host, pgConf.Port, dir)
 				if err != nil {
 					return display.PrintErr(cmd, err)
@@ -107,15 +97,22 @@ func GenesisHashCmd() *cobra.Command {
 				appHash = genCfg.StateHash
 			}
 
-			return writeAndReturnGenesisHash(cmd, genesisFile, appHash)
+			if genesisFile != "" {
+				err := writeAndReturnGenesisHash(genesisFile, appHash)
+				if err != nil {
+					return display.PrintErr(cmd, err)
+				}
+			}
+			return display.PrintCmd(cmd, &genesisHashRes{
+				Hash: base64.StdEncoding.EncodeToString(appHash),
+			})
 		},
 	}
 
 	cmd.Flags().StringVarP(&genesisFile, "genesis", "g", "", "optional path to the genesis file to patch with the computed app hash")
-	cmd.Flags().StringVarP(&rootDir, "root-dir", "r", "", "optional path to the root directory of the kwild node from which the genesis hash will be computed")
 	cmd.Flags().StringVarP(&snapshotFile, "snapshot", "s", "", "optional path to the snapshot file to use for the genesis hash computation")
 
-	bind.BindPostgresFlags(cmd)
+	bind.BindPostgresFlags(cmd, &conf.ActiveConfig().DB)
 	return cmd
 }
 
@@ -152,56 +149,20 @@ func appHashFromSnapshotFile(filePath string) ([]byte, error) {
 	return hash.Sum(nil), nil
 }
 
-// loadPGConfigFromTOML loads the postgres connection configuration from the toml file
-// and merges it with the flags set in the command.
-func loadPGConfigFromTOML(cmd *cobra.Command, rootDir string) (*pg.ConnConfig, error) {
-	tomlFile := config.ConfigFilePath(rootDir)
-
-	// Check if the config file exists
-	if _, err := os.Stat(tomlFile); os.IsNotExist(err) {
-		return bind.GetPostgresFlags(cmd) // return the flags if the config file does not exist
-	}
-
-	cfg, err := config.LoadConfig(tomlFile)
+func writeAndReturnGenesisHash(genesisFile string, appHash []byte) error {
+	genesisFile, err := node.ExpandPath(genesisFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config from toml file: %w", err)
+		return err
 	}
 
-	conf := &pg.ConnConfig{
-		Host:   cfg.DB.Host,
-		Port:   cfg.DB.Port,
-		User:   cfg.DB.User,
-		Pass:   cfg.DB.Pass,
-		DBName: cfg.DB.DBName,
+	cfg, err := config.LoadGenesisConfig(genesisFile)
+	if err != nil {
+		return err
 	}
 
-	// merge the flags with the config file
-	return bind.MergePostgresFlags(conf, cmd)
-}
+	cfg.StateHash = appHash
 
-func writeAndReturnGenesisHash(cmd *cobra.Command, genesisFile string, appHash []byte) error {
-	if genesisFile != "" {
-		genesisFile, err := node.ExpandPath(genesisFile)
-		if err != nil {
-			return display.PrintErr(cmd, err)
-		}
-
-		cfg, err := config.LoadGenesisConfig(genesisFile)
-		if err != nil {
-			return display.PrintErr(cmd, err)
-		}
-
-		cfg.StateHash = appHash
-
-		err = cfg.SaveAs(genesisFile)
-		if err != nil {
-			return display.PrintErr(cmd, err)
-		}
-	}
-
-	return display.PrintCmd(cmd, &genesisHashRes{
-		Hash: base64.StdEncoding.EncodeToString(appHash),
-	})
+	return cfg.SaveAs(genesisFile)
 }
 
 type genesisHashRes struct {
@@ -234,14 +195,11 @@ func tmpKwilAdminSnapshotDir() (string, error) {
 
 // ensureTmpKwilAdminDir ensures that the temporary directory for kwil-admin snapshots exists.
 func ensureTmpKwilAdminDir(dir string) error {
-	if _, err := os.Stat(dir); os.IsNotExist(err) {
+	_, err := os.Stat(dir)
+	if os.IsNotExist(err) {
 		err = os.Mkdir(dir, 0755)
-		if err != nil {
-			return err
-		}
 	}
-
-	return nil
+	return err
 }
 
 // cleanupTmpKwilAdminDir removes the temporary directory for kwil-admin snapshots.
