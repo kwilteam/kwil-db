@@ -454,7 +454,7 @@ func (bs BlockSpends) MarshalBinary() ([]byte, error) {
 var _ encoding.BinaryUnmarshaler = (*BlockSpends)(nil)
 
 func (bs *BlockSpends) UnmarshalBinary(bts []byte) error {
-	return serialize.DecodeWithEncodingType(bts, bs, rlp.EncodingTypeRLP)
+	return serialize.Decode(bts, bs)
 }
 
 type chunkWriter struct {

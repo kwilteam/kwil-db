@@ -61,7 +61,7 @@ func (a *AccountCreditResolution) MarshalBinary() ([]byte, error) {
 // UnmarshalBinary unmarshals the AccountCreditResolution from binary.
 // It is the inverse of MarshalBinary, and uses the same serialization library.
 func (a *AccountCreditResolution) UnmarshalBinary(data []byte) error {
-	return serialize.DecodeWithEncodingType(data, a, rlp.EncodingTypeRLP)
+	return serialize.Decode(data, a)
 }
 
 // resolutionConfig defines the rules for the credit_account resolution.

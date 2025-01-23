@@ -71,7 +71,7 @@ func (cs *changesetMigration) MarshalBinary() ([]byte, error) {
 
 // UnmarshalBinary unmarshals the ChangesetMigration from a binary format.
 func (cs *changesetMigration) UnmarshalBinary(data []byte) error {
-	return serialize.DecodeWithEncodingType(data, cs, rlp.EncodingTypeRLP)
+	return serialize.Decode(data, cs)
 }
 
 // ChangesetMigrationResolution is the definition for changeset migration vote type in Kwil's voting system.
