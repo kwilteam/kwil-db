@@ -413,6 +413,7 @@ func WaitForTx(ctx context.Context, txQuery func(context.Context, types.Hash) (*
 		if err != nil {
 			// Only error out if it's something other than not found.
 			if !errors.Is(err, rpcclient.ErrNotFound) {
+				fmt.Println("not found, still trying")
 				return nil, err
 			} // else not found, try again next time
 		} else if resp.Height > 0 {

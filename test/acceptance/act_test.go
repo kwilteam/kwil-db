@@ -170,8 +170,8 @@ func Test_Transfer(t *testing.T) {
 	}
 }
 
-// TODO: delete opts once we fix the race condition where query tx returns an error
-var opts = ctypes.WithSyncBroadcast(true)
+// In case we need "sync" broadcast for testing:
+var opts = func(*ctypes.TxOptions) {} // ctypes.WithSyncBroadcast(true)
 
 func Test_Engine(t *testing.T) {
 	for _, driver := range setup.AllDrivers {

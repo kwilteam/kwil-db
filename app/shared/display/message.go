@@ -127,8 +127,11 @@ func (r *RespTxQuery) MarshalJSON() ([]byte, error) {
 		Hash:   r.Msg.Hash.String(),
 		Height: r.Msg.Height,
 		Tx:     r.Msg.Tx,
-		Result: *r.Msg.Result,
 	}
+	if r.Msg.Result != nil {
+		out.Result = *r.Msg.Result
+	}
+
 	// Always try to serialize to verify hash, but only show raw if requested.
 	if r.Msg.Tx != nil {
 		raw := r.Msg.Tx.Bytes()
