@@ -14,9 +14,11 @@ tasks:
 
   tools:
     aliases: [install:deps]
+    deps:
+      - task: linter
     desc: Install tools required to build this app
     cmds:
-      - go install "golang.org/x/tools/cmd/goimports@v0.27.0"
+      - go install "golang.org/x/tools/cmd/goimports@v0.29.0"
 
   fmt:
     desc: Format the code
