@@ -151,7 +151,7 @@ func TestSingleNodeMocknet(t *testing.T) {
 		Statesync:   &defaultConfigSet.StateSync,
 		BlockProc:   &dummyBP{vals: valSetList},
 	}
-	node1, err := NewNode(cfg1, WithHost(h1))
+	node1, err := NewNode(context.Background(), cfg1, WithHost(h1))
 	if err != nil {
 		t.Fatalf("Failed to create Node 1: %v", err)
 	}
@@ -290,7 +290,7 @@ func TestDualNodeMocknet(t *testing.T) {
 		Statesync:   &defaultConfigSet.StateSync,
 		BlockProc:   &dummyBP{vals: valSetList},
 	}
-	node1, err := NewNode(cfg1, WithHost(h1))
+	node1, err := NewNode(context.Background(), cfg1, WithHost(h1))
 	if err != nil {
 		t.Fatalf("Failed to create Node 1: %v", err)
 	}
@@ -359,7 +359,7 @@ func TestDualNodeMocknet(t *testing.T) {
 		Statesync:   &defaultConfigSet.StateSync,
 		BlockProc:   &dummyBP{vals: valSetList},
 	}
-	node2, err := NewNode(cfg2, WithHost(h2))
+	node2, err := NewNode(context.Background(), cfg2, WithHost(h2))
 	if err != nil {
 		t.Fatalf("Failed to create Node 2: %v", err)
 	}

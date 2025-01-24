@@ -144,7 +144,7 @@ type Node struct {
 
 // NewNode creates a new node. The config struct is for required configuration,
 // and the functional options for optional settings, like dependency overrides.
-func NewNode(cfg *Config, opts ...Option) (*Node, error) {
+func NewNode(ctx context.Context, cfg *Config, opts ...Option) (*Node, error) {
 	options := &options{}
 	for _, opt := range opts {
 		opt(options)
@@ -218,7 +218,6 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 	}
 
 	mode := dht.ModeServer
-	ctx := context.Background()
 	dht, err := makeDHT(ctx, host, nil, mode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create DHT: %w", err)

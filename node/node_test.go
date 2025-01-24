@@ -114,7 +114,7 @@ func makeTestHosts(t *testing.T, nNodes, nExtraHosts int, blockInterval time.Dur
 			Consensus:   ce,
 			BlockProc:   &dummyBP{},
 		}
-		node, err := NewNode(cfg, WithHost(h))
+		node, err := NewNode(context.Background(), cfg, WithHost(h))
 		if err != nil {
 			t.Fatalf("Failed to create Node 1: %v", err)
 		}

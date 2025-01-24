@@ -440,7 +440,7 @@ func buildNode(d *coreDependencies, mp *mempool.Mempool, bs *store.BlockStore,
 		DBConfig:    &d.cfg.DB,
 	}
 
-	node, err := node.NewNode(nc)
+	node, err := node.NewNode(d.ctx, nc)
 	if err != nil {
 		failBuild(err, "failed to create node")
 	}
