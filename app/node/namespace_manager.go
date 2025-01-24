@@ -71,6 +71,9 @@ func (n *namespaceManager) Ready() {
 // ListPostgresSchemasToDump returns an ordered list of postgres
 // schemas that should be included when exporting database state.
 func (n *namespaceManager) ListPostgresSchemasToDump() []string {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
 	res := make([]string, len(n.namespaces)+2)
 	res[0] = engine.InternalEnginePGSchema
 	res[1] = engine.InfoNamespace
