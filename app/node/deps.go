@@ -30,6 +30,7 @@ func newDBOpener(host, port, user, pass string, filterSchemas func(string) bool)
 				},
 				MaxConns: maxConns,
 			},
+			SchemaFilter: filterSchemas,
 		}
 		return pg.NewDB(ctx, cfg)
 	}
