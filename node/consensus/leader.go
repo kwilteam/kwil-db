@@ -1,6 +1,8 @@
 package consensus
 
 import (
+	"bytes"
+	"cmp"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -32,7 +34,7 @@ import (
 // the current block, revert any state changes made, and remove the problematic transactions from the mempool before
 // reproposing the block.
 
-func (ce *ConsensusEngine) newBlockRound(ctx context.Context) error {
+func (ce *ConsensusEngine) newBlockRound(ctx context.Context) {
 	ticker := time.NewTicker(ce.proposeTimeout)
 	now := time.Now()
 
@@ -48,20 +50,20 @@ func (ce *ConsensusEngine) newBlockRound(ctx context.Context) error {
 		select {
 		case <-ctx.Done():
 			ce.log.Warn("Context cancelled, stopping the new block round")
-			return nil
+			return
 		case <-ticker.C:
 			// check for the availability of transactions in the mempool or
 			// if the leader has any new events to broadcast a voteID transaction
 			if ce.mempool.TxsAvailable() || ce.blockProcessor.HasEvents() {
 				ce.newBlockProposal <- struct{}{}
-				return nil
+				return
 			}
 
 			// If the emptyBlockTimeout duration has elapsed, produce an empty block if
 			// empty blocks are allowed
 			if allowEmptyBlocks && time.Since(now) >= ce.emptyBlockTimeout {
 				ce.newBlockProposal <- struct{}{}
-				return nil
+				return
 			}
 		}
 
@@ -162,15 +164,15 @@ func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 		return err
 	}
 
-	ce.log.Info("Waiting for votes from the validators", "height", blkProp.height, "hash", blkProp.blkHash)
-
 	ce.state.votes[string(ce.pubKey.Bytes())] = &types.VoteInfo{
 		AppHash:   &ce.state.blockRes.appHash,
 		AckStatus: types.AckStatusAgree,
 		Signature: *sig,
 	}
 
+	// We may be ready to commit if we're the only validator.
 	ce.processVotes(ctx)
+
 	return nil
 }
 
@@ -288,12 +290,13 @@ func (ce *ConsensusEngine) addVote(ctx context.Context, vote *vote, sender strin
 // 1. Commit the block
 // 2. Re-announce the block proposal
 // 3. Halt the network (should there be a message to halt the network?)
-func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
+func (ce *ConsensusEngine) processVotes(ctx context.Context) {
 	ce.log.Debug("Processing votes", "height", ce.state.lc.height+1)
 
-	if ce.state.blkProp == nil || ce.state.blockRes == nil {
+	blkProp, blkRes := ce.state.blkProp, ce.state.blockRes
+	if blkProp == nil || blkRes == nil {
 		// Moved onto the next round or leader still processing the current block
-		return nil
+		return
 	}
 
 	// Count the votes
@@ -306,47 +309,55 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) error {
 		}
 	}
 
-	if ce.hasMajorityCeil(acks) {
-		ce.log.Info("Majority of the validators have accepted the block, proceeding to commit the block",
-			"height", ce.state.blkProp.blk.Header.Height, "hash", ce.state.blkProp.blkHash, "acks", acks, "nacks", nacks)
-
-		votes := make([]*types.VoteInfo, 0)
-		for _, v := range ce.state.votes {
-			votes = append(votes, v)
-		}
-
-		ci := &types.CommitInfo{
-			AppHash:      ce.state.blockRes.appHash,
-			Votes:        votes,
-			ParamUpdates: ce.state.blockRes.paramUpdates,
-		}
-		ce.state.commitInfo = ci
-
-		// Commit the block and broadcast the blockAnn message
-		if err := ce.commit(ctx); err != nil {
-			ce.log.Errorf("Error committing the block (process votes): %v", err)
-			return err
-		}
-
-		ce.log.Infoln("Announce committed block", ce.state.blkProp.blk.Header.Height, ce.state.blkProp.blkHash,
-			ce.state.blockRes.paramUpdates)
-		// Broadcast the blockAnn message
-		go ce.blkAnnouncer(ctx, ce.state.blkProp.blk, ce.state.commitInfo)
-
-		// start the next round
-		ce.nextState()
-
-		// signal ce to start a new round
-		ce.newRound <- struct{}{}
-
-	} else if ce.hasMajorityCeil(nacks) {
+	if ce.hasMajorityCeil(nacks) {
 		haltReason := fmt.Sprintf("Majority of the validators have rejected the block, halting the network: %d acks, %d nacks", acks, nacks)
 		ce.haltChan <- haltReason
-		return nil
+		return
 	}
 
-	// No majority yet, wait for more votes
-	return nil
+	if !ce.hasMajorityCeil(acks) {
+		// No majority yet, wait for more votes
+		ce.log.Info("Waiting for votes from the validators", "height", blkProp.height, "hash", blkProp.blkHash)
+		return
+	}
+
+	ce.log.Info("Majority of the validators have accepted the block, proceeding to commit the block",
+		"height", blkProp.blk.Header.Height, "hash", blkProp.blkHash, "acks", acks, "nacks", nacks)
+
+	votes := make([]*types.VoteInfo, 0, len(ce.state.votes))
+	for _, v := range ce.state.votes {
+		votes = append(votes, v)
+	}
+	slices.SortFunc(votes, func(a, b *types.VoteInfo) int {
+		if diff := bytes.Compare(a.Signature.PubKey, b.Signature.PubKey); diff != 0 {
+			return diff
+		}
+		return cmp.Compare(a.Signature.PubKeyType, b.Signature.PubKeyType)
+	})
+
+	// Set the commit info for the accepted block
+	ce.state.commitInfo = &types.CommitInfo{
+		AppHash:      blkRes.appHash,
+		Votes:        votes,
+		ParamUpdates: blkRes.paramUpdates,
+	}
+
+	// Commit the block and broadcast the blockAnn message
+	if err := ce.commit(ctx); err != nil {
+		ce.haltChan <- fmt.Sprintf("Error committing block %v: %v", blkProp.blkHash, err)
+		return
+	}
+
+	ce.log.Infoln("Announce committed block", blkProp.blk.Header.Height, blkProp.blkHash, blkRes.paramUpdates)
+
+	// Broadcast the blockAnn message
+	go ce.blkAnnouncer(ctx, blkProp.blk, ce.state.commitInfo)
+
+	// start the next round
+	ce.nextState()
+
+	// signal ce to start a new round
+	ce.newRound <- struct{}{}
 }
 
 func (ce *ConsensusEngine) validatorSetHash() types.Hash {

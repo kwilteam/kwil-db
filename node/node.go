@@ -208,7 +208,7 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 		Logger:            logger.New("PEERS"),
 		Host:              host,
 		ChainID:           cfg.ChainID,
-		TargetConnections: 20,
+		TargetConnections: cfg.P2P.TargetConnections,
 		ConnGater:         wcg,
 		RequiredProtocols: RequiredStreamProtocols,
 	}

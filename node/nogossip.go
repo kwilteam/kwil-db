@@ -223,6 +223,9 @@ func (n *Node) startTxAnns(ctx context.Context, reannouncePeriod time.Duration) 
 
 				const sendN = 20
 				txns := n.mp.PeekN(sendN)
+				if len(txns) == 0 {
+					return // from this anon func, not the goroutine!
+				}
 				n.log.Infof("re-announcing %d unconfirmed txns", len(txns))
 
 				for _, nt := range txns {

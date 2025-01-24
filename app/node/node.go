@@ -130,11 +130,17 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config, autogen bo
 
 	// if running in autogen mode, and config.toml does not exist, write it
 	tomlFile := config.ConfigFilePath(rootDir)
-	if autogen && !fileExists(tomlFile) {
-		logger.Infof("Writing config file to %s", tomlFile)
-		cfg.LogOutput = logOutputPaths // restore log output paths before writing toml file
-		if err := cfg.SaveAs(tomlFile); err != nil {
-			return fmt.Errorf("failed to write config file: %w", err)
+	if autogen {
+		// In autogen mode where there is one node (self) be quiet in the peer
+		// manager when we cannot get peers.
+		cfg.P2P.TargetConnections = 0
+
+		if !fileExists(tomlFile) {
+			logger.Infof("Writing config file to %s", tomlFile)
+			cfg.LogOutput = logOutputPaths // restore log output paths before writing toml file
+			if err := cfg.SaveAs(tomlFile); err != nil {
+				return fmt.Errorf("failed to write config file: %w", err)
+			}
 		}
 	}
 
@@ -310,7 +316,15 @@ func loadGenesisAndPrivateKey(rootDir string, autogen bool, dbOwner string) (pri
 		if err != nil {
 			return nil, nil, fmt.Errorf("error loading genesis file %s: %w", genFile, err)
 		}
+		// If the genesis file exists and --autogen was used, disallow a genesis
+		// file with either multiple validators or a different leader the self.
+		if autogen && (len(genCfg.Validators) > 0 || !genCfg.Leader.PublicKey.Equals(privKey.Public())) {
+			return nil, nil, errors.New("cannot use --autogen with genesis config for a multi-node network")
+		}
 		return privKey, genCfg, nil
+	} else if !autogen {
+		// If not using --autogen, the genesis file must exist!
+		return nil, nil, fmt.Errorf("genesis file %s does not exist (did you mean to use --autogen for a test node?)", genFile)
 	}
 
 	genCfg = config.DefaultGenesisConfig()

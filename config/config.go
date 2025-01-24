@@ -255,9 +255,10 @@ func DefaultConfig() *Config {
 		LogFormat: log.FormatUnstructured,
 		LogOutput: []string{"stdout", "kwild.log"},
 		P2P: PeerConfig{
-			ListenAddress: "0.0.0.0:6600",
-			Pex:           true,
-			BootNodes:     []string{},
+			ListenAddress:     "0.0.0.0:6600",
+			Pex:               true,
+			BootNodes:         []string{},
+			TargetConnections: 20,
 		},
 		Consensus: ConsensusConfig{
 			ProposeTimeout:        types.Duration(1000 * time.Millisecond),
@@ -328,11 +329,12 @@ type Config struct {
 
 // PeerConfig corresponds to the [p2p] section of the config.
 type PeerConfig struct {
-	ListenAddress string   `toml:"listen" comment:"address in host:port format to listen on for P2P connections"`
-	Pex           bool     `toml:"pex" comment:"enable peer exchange"`
-	BootNodes     []string `toml:"bootnodes" comment:"bootnodes to connect to on startup"`
-	PrivateMode   bool     `toml:"private" comment:"operate in private mode using a node ID whitelist"`
-	Whitelist     []string `toml:"whitelist" comment:"allowed node IDs when in private mode"`
+	ListenAddress     string   `toml:"listen" comment:"address in host:port format to listen on for P2P connections"`
+	Pex               bool     `toml:"pex" comment:"enable peer exchange"`
+	BootNodes         []string `toml:"bootnodes" comment:"bootnodes to connect to on startup"`
+	PrivateMode       bool     `toml:"private" comment:"operate in private mode using a node ID whitelist"`
+	Whitelist         []string `toml:"whitelist" comment:"allowed node IDs when in private mode"`
+	TargetConnections int      `toml:"target_connections" comment:"target number of connections to maintain"`
 }
 
 type DBConfig struct {

@@ -65,7 +65,6 @@ type coreDependencies struct {
 	closers *closeFuncs // for clean close on failBuild
 
 	adminKey *tls.Certificate
-	// autogen  bool
 
 	logger           log.Logger
 	dbOpener         dbOpener
