@@ -66,7 +66,6 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	es, vs := buildVoteStore(ctx, d, closers) // ev, vs
 
 	// engine
-
 	e := buildEngine(d, db, accounts, vs, d.namespaceManager)
 	d.namespaceManager.Ready()
 
