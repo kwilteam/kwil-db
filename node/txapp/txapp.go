@@ -83,7 +83,6 @@ func NewTxApp(ctx context.Context, db sql.Executor, engine common.Engine, signer
 // It can assign the initial validator set and initial account balances.
 // It is only called once for a new chain.
 func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, genCfg *config.GenesisConfig, chainCtx *common.ChainContext) error {
-
 	// Add Genesis Validators
 	for _, validator := range genCfg.Validators {
 		err := r.Validators.SetValidatorPower(ctx, db, validator.Identifier, validator.KeyType, validator.Power)
@@ -114,18 +113,7 @@ func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, genCfg *config.Genes
 	}
 
 	// we set an initial owner as the initial creator of schemas, roles, etc.
-	err := r.Engine.Execute(&common.EngineContext{
-		OverrideAuthz: true,
-		TxContext: &common.TxContext{
-			Ctx:    ctx,
-			Caller: "genesis",
-			Signer: []byte("genesis"),
-			BlockContext: &common.BlockContext{
-				Height: genCfg.InitialHeight,
-				Hash:   initialHash,
-			},
-		},
-	}, db, "GRANT owner TO $user", map[string]any{
+	err := r.Engine.ExecuteWithoutEngineCtx(ctx, db, "TRANSFER OWNERSHIP TO $user", map[string]any{
 		"user": genCfg.DBOwner,
 	}, nil)
 	if err != nil {
