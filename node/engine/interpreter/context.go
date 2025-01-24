@@ -111,7 +111,7 @@ func (e *executionContext) getTable(namespace, tableName string) (*engine.Table,
 // These rules are not handled in the accessController because they are always
 // enforced, regardless of the roles and privileges of the caller.
 func (e *executionContext) checkNamespaceMutatbility() error {
-	if e.scope.namespace == infoNamespace {
+	if e.scope.namespace == engine.InfoNamespace {
 		return engine.ErrCannotMutateInfoNamespace
 	}
 

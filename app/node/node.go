@@ -134,16 +134,19 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config, autogen bo
 		}
 	}
 
+	nsmgr := newNamespaceManager()
+
 	d := &coreDependencies{
-		ctx:        ctx,
-		rootDir:    rootDir,
-		adminKey:   tlsKeyPair,
-		cfg:        cfg,
-		genesisCfg: genConfig,
-		privKey:    privKey,
-		logger:     logger,
-		dbOpener:   newDBOpener(host, port, user, pass),
-		poolOpener: newPoolBOpener(host, port, user, pass),
+		ctx:              ctx,
+		rootDir:          rootDir,
+		adminKey:         tlsKeyPair,
+		cfg:              cfg,
+		genesisCfg:       genConfig,
+		privKey:          privKey,
+		logger:           logger,
+		dbOpener:         newDBOpener(host, port, user, pass, nsmgr.Filter),
+		namespaceManager: nsmgr,
+		poolOpener:       newPoolBOpener(host, port, user, pass),
 	}
 
 	// Catch any panic from buildServer. We use a panic based build failure

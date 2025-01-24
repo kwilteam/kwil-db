@@ -13,7 +13,7 @@ import (
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 	clientType "github.com/kwilteam/kwil-db/core/client/types"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/node/engine/interpreter"
+	"github.com/kwilteam/kwil-db/node/engine"
 
 	"github.com/spf13/cobra"
 )
@@ -184,7 +184,7 @@ func GetParamList(ctx context.Context,
 	query func(ctx context.Context, query string, args map[string]any) (*types.QueryResult, error),
 	namespace, action string) ([]NamedParameter, error) {
 	if namespace == "" {
-		namespace = interpreter.DefaultNamespace
+		namespace = engine.DefaultNamespace
 	}
 
 	res, err := query(ctx, "{info}SELECT parameter_names, parameter_types FROM actions WHERE namespace = $namespace AND name = $action", map[string]any{

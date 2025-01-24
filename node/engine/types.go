@@ -181,3 +181,16 @@ const (
 	// A primary index cannot exist on a table that also has a primary key.
 	PRIMARY IndexType = "PRIMARY"
 )
+
+type NamespaceRegister interface {
+	Lock()
+	Unlock()
+	RegisterNamespace(ns string)
+	UnregisterAllNamespaces()
+}
+
+const (
+	DefaultNamespace       = "main"
+	InfoNamespace          = "info"
+	InternalEnginePGSchema = "kwild_engine"
+)

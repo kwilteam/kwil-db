@@ -2609,7 +2609,7 @@ func newTestDB() (*pg.DB, error) {
 // It is seeded with the default tables.
 
 func newTestInterp(t *testing.T, tx sql.DB, seeds []string, includeTestTables bool) *interpreter.ThreadSafeInterpreter {
-	interp, err := interpreter.NewInterpreter(context.Background(), tx, &common.Service{}, nil, nil)
+	interp, err := interpreter.NewInterpreter(context.Background(), tx, &common.Service{}, nil, nil, nil)
 	require.NoError(t, err)
 
 	engCtx := newEngineCtx(defaultCaller)

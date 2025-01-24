@@ -23,6 +23,7 @@ import (
 	"github.com/kwilteam/kwil-db/node/accounts"
 	blockprocessor "github.com/kwilteam/kwil-db/node/block_processor"
 	"github.com/kwilteam/kwil-db/node/consensus"
+	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/engine/interpreter"
 	"github.com/kwilteam/kwil-db/node/listeners"
 	"github.com/kwilteam/kwil-db/node/mempool"
@@ -66,7 +67,8 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 
 	// engine
 
-	e := buildEngine(d, db, accounts, vs)
+	e := buildEngine(d, db, accounts, vs, d.namespaceManager)
+	d.namespaceManager.Ready()
 
 	// Mempool
 	mp := mempool.New()
@@ -462,7 +464,7 @@ func failBuild(err error, msg string) {
 	})
 }
 
-func buildEngine(d *coreDependencies, db *pg.DB, accounts common.Accounts, validators common.Validators) *interpreter.ThreadSafeInterpreter {
+func buildEngine(d *coreDependencies, db *pg.DB, accounts common.Accounts, validators common.Validators, namespaceManager engine.NamespaceRegister) *interpreter.ThreadSafeInterpreter {
 	extensions := precompiles.RegisteredPrecompiles()
 	for name := range extensions {
 		d.logger.Info("registered extension", "name", name)
@@ -474,7 +476,7 @@ func buildEngine(d *coreDependencies, db *pg.DB, accounts common.Accounts, valid
 	}
 	defer tx.Rollback(d.ctx)
 
-	interp, err := interpreter.NewInterpreter(d.ctx, tx, d.service("engine"), accounts, validators)
+	interp, err := interpreter.NewInterpreter(d.ctx, tx, d.service("engine"), accounts, validators, namespaceManager)
 	if err != nil {
 		failBuild(err, "failed to initialize engine")
 	}

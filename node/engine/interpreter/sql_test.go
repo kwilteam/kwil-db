@@ -318,7 +318,7 @@ func Test_built_in_sql(t *testing.T) {
 			require.NoError(t, err)
 			defer tx.Rollback(ctx) // always rollback to avoid cleanup
 
-			interp, err := NewInterpreter(ctx, tx, &common.Service{}, nil, nil)
+			interp, err := NewInterpreter(ctx, tx, &common.Service{}, nil, nil, nil)
 			require.NoError(t, err)
 			_ = interp
 
@@ -374,7 +374,7 @@ func Test_Metadata(t *testing.T) {
 	err = precompiles.RegisterPrecompile("store_test", testSchemaExt)
 	require.NoError(t, err)
 
-	interp, err := NewInterpreter(ctx, tx, &common.Service{}, nil, nil)
+	interp, err := NewInterpreter(ctx, tx, &common.Service{}, nil, nil, nil)
 	require.NoError(t, err)
 	_ = interp
 
@@ -1164,7 +1164,7 @@ func Test_Transactionality(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback(ctx) // always rollback to avoid cleanup
 
-	interp, err := NewInterpreter(ctx, tx, &common.Service{}, nil, nil)
+	interp, err := NewInterpreter(ctx, tx, &common.Service{}, nil, nil, nil)
 	require.NoError(t, err)
 	_ = interp
 
@@ -1186,7 +1186,7 @@ func Test_Transactionality(t *testing.T) {
 	require.NoError(t, err)
 
 	// we will check that the first table was not created
-	_, ok := interp.i.namespaces[DefaultNamespace].tables["table1"]
+	_, ok := interp.i.namespaces[engine.DefaultNamespace].tables["table1"]
 	require.False(t, ok)
 
 	// fix the bug and continue
