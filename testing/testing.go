@@ -198,7 +198,7 @@ func (tc SchemaTest) Run(ctx context.Context, opts *Options) error {
 						},
 					},
 					OverrideAuthz: true,
-				}, outerTx, "GRANT owner TO $user", map[string]any{
+				}, outerTx, "TRANSFER OWNERSHIP TO $user", map[string]any{
 					"user": tc.Owner,
 				}, func(r *common.Row) error {
 					// do nothing
