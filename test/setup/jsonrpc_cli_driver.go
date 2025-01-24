@@ -312,7 +312,7 @@ func stringifyCLIArg(a any) string {
 }
 
 func (j *jsonRPCCLIDriver) ExecuteSQL(ctx context.Context, sql string, params map[string]any, opts ...client.TxOpt) (types.Hash, error) {
-	args := append([]string{"exec-sql"}, "--statement", sql)
+	args := append([]string{"exec-sql"}, "--stmt", sql)
 	for k, v := range params {
 		encoded, err := types.EncodeValue(v)
 		if err != nil {

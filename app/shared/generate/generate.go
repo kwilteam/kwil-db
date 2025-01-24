@@ -13,6 +13,7 @@ import (
 type writeFunc func(string) (*os.File, error)
 
 func WriteDocs(cmd *cobra.Command, dir string) error {
+
 	return writeCmd(cmd, ".", 0, func(s string) (*os.File, error) {
 		fullPath := filepath.Join(dir, s)
 		err := os.MkdirAll(filepath.Dir(fullPath), 0755)
@@ -71,7 +72,7 @@ func createIndexFile(cmd *cobra.Command, dir string, write writeFunc, first bool
 
 	file.WriteString(header.String() + "\n\n")
 
-	return doc.GenMarkdownCustom(cmd, file, linkHandler(dir))
+	return doc.GenMarkdownCustom(cmd, file, linkHandler())
 }
 
 // createCmdFile creates a file for the command, and writes the command's documentation to it.
@@ -94,10 +95,10 @@ func createCmdFile(cmd *cobra.Command, dir string, idx int, write writeFunc) err
 
 	file.WriteString(header.String() + "\n\n")
 
-	return doc.GenMarkdownCustom(cmd, file, linkHandler(dir))
+	return doc.GenMarkdownCustom(cmd, file, linkHandler())
 }
 
-func linkHandler(dir string) func(string) string { // dir string unused -- what is it?
+func linkHandler() func(string) string {
 	return func(s string) string {
 		// trying just linking ids??
 		s = strings.TrimSuffix(s, ".md")

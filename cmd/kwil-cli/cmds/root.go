@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/app/custom"
+	"github.com/kwilteam/kwil-db/app/shared"
 	"github.com/kwilteam/kwil-db/app/shared/bind"
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/app/shared/version"
@@ -71,6 +72,8 @@ func NewRootCmd() *cobra.Command {
 		callActionCmd(),
 		queryCmd(),
 	)
+
+	shared.ApplySanitizedHelpFuncRecursively(rootCmd)
 
 	return rootCmd
 }

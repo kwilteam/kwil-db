@@ -1956,7 +1956,7 @@ func (i *interpreterPlanner) VisitCreateNamespaceStatement(p0 *parse.CreateNames
 		}
 
 		exec.interpreter.namespaces[p0.Namespace] = &namespace{
-			availableFunctions: make(map[string]*executable),
+			availableFunctions: copyBuiltinExecutables(),
 			tables:             make(map[string]*engine.Table),
 			onDeploy:           func(*executionContext) error { return nil },
 			onUndeploy:         func(*executionContext) error { return nil },

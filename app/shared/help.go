@@ -18,8 +18,10 @@ func SetSanitizedHelpFunc(cmd *cobra.Command) {
 	originalHelpFunc := cmd.HelpFunc()
 
 	cmd.SetHelpFunc(func(cmd *cobra.Command, args []string) {
-		cmd.Short = removeBackticks(cmd.Short)
-		cmd.Long = removeBackticks(cmd.Long)
+		cmd.Short = wrapTextToTerminalWidth(removeBackticks(cmd.Short))
+		cmd.Long = wrapTextToTerminalWidth(removeBackticks(cmd.Long))
+		wrapFlags(cmd.Flags())
+		wrapFlags(cmd.PersistentFlags())
 
 		// Delegate to the original HelpFunc to avoid recursion
 		if originalHelpFunc != nil {
@@ -31,4 +33,12 @@ func SetSanitizedHelpFunc(cmd *cobra.Command) {
 			}
 		}
 	})
+}
+
+func ApplySanitizedHelpFuncRecursively(cmd *cobra.Command) {
+	SetSanitizedHelpFunc(cmd)
+
+	for _, subCmd := range cmd.Commands() {
+		ApplySanitizedHelpFuncRecursively(subCmd)
+	}
 }

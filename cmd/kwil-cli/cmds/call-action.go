@@ -150,12 +150,25 @@ func (r *respCall) MarshalJSON() ([]byte, error) {
 	return bts, nil
 }
 
-func (r *respCall) MarshalText() (text []byte, err error) {
-	if !r.PrintLogs {
-		return recordsToTable(r.Data.QueryResult.ExportToStringMap(), r.tableConf), nil
+func getStringRows(v [][]any) [][]string {
+	var rows [][]string
+	for _, r := range v {
+		var row []string
+		for _, c := range r {
+			row = append(row, fmt.Sprintf("%v", c))
+		}
+		rows = append(rows, row)
 	}
 
-	bts := recordsToTable(r.Data.QueryResult.ExportToStringMap(), r.tableConf)
+	return rows
+}
+
+func (r *respCall) MarshalText() (text []byte, err error) {
+	if !r.PrintLogs {
+		return recordsToTable(r.Data.QueryResult.ColumnNames, getStringRows(r.Data.QueryResult.Values), r.tableConf), nil
+	}
+
+	bts := recordsToTable(r.Data.QueryResult.ColumnNames, getStringRows(r.Data.QueryResult.Values), r.tableConf)
 
 	if len(r.Data.Logs) > 0 {
 		bts = append(bts, []byte("\n\nLogs:")...)

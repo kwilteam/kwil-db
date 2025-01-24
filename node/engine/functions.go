@@ -279,18 +279,25 @@ var (
 		},
 		"array_length": &ScalarFunctionDefinition{
 			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
-				if len(args) != 1 {
-					return nil, wrapErrArgumentNumber(1, len(args))
+				if len(args) < 1 || len(args) > 2 {
+					return nil, fmt.Errorf("invalid number of arguments: expected 1 or 2, got %d", len(args))
 				}
 
 				if !args[0].IsArray {
 					return nil, fmt.Errorf("%w: expected argument to be an array, got %s", ErrType, args[0].String())
 				}
 
+				if len(args) == 2 && !args[1].Equals(types.IntType) {
+					return nil, wrapErrArgumentType(types.IntType, args[1])
+				}
+
 				return types.IntType, nil
 			},
 			PGFormatFunc: func(inputs []string) (string, error) {
-				return fmt.Sprintf("array_length(%s, 1)", inputs[0]), nil
+				if len(inputs) == 1 {
+					return fmt.Sprintf("array_length(%s, 1)", inputs[0]), nil
+				}
+				return fmt.Sprintf("array_length(%s, %s)", inputs[0], inputs[1]), nil
 			},
 		},
 		"array_remove": &ScalarFunctionDefinition{
