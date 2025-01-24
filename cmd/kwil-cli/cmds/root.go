@@ -17,12 +17,12 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var longDesc = `Command line interface client for using %s.
+var longDesc = `Command line interface client for using ` + "`%s`." + `
 	
-` + "`" + `%s` + "`" + ` is a command line interface for interacting with %s. It can be used to deploy, update, and query databases.
+` + "`%s`" + ` is a command line interface for interacting with %s. It can be used to deploy, update, and query databases.
 	
-` + "`" + `%s` + "`" + ` can be configured with a persistent configuration file. This file can be configured with the '%s configure' command.
-` + "`" + `%s` + "`" + ` will look for a configuration file at ` + "`" + `$HOME/.kwil-cli/config.json` + "`" + `.`
+` + "`%s`" + ` can be configured with a persistent configuration file. This file can be configured with the '%s configure' command.
+` + "`%s`" + ` will look for a configuration file at ` + "`$HOME/.kwil-cli/config.json`."
 
 func NewRootCmd() *cobra.Command {
 	// The basis for ActiveConfig starts with defaults defined in DefaultKwilCliPersistedConfig.

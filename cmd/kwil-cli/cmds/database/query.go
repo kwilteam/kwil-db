@@ -17,15 +17,13 @@ var (
 
 Requires a SQL SELECT statement as an argument.
 
-You can either specify the database to execute this against with the ` + "`" + `--name` + "`" + ` and ` + "`" + `--owner` + "`" + `
-flags, or you can specify the database by passing the database id with the ` + "`" + `--dbid` + "`" + ` flag.  If a ` + "`" + `--name` + "`" + `
-flag is passed and no ` + "`" + `--owner` + "`" + ` flag is passed, the owner will be inferred from your configured wallet.
+You specify the database namespace to execute this against with the ` + "`--namespace` flag." + `
 
 Note that ad-hoc queries will be rejected on RPC servers that are operating with
 authenticated call requests enabled.`
 
-	queryExample = `# Querying the "users" table in the "mydb" database
-kwil-cli database query "SELECT * FROM users WHERE age > 25" --name mydb --owner 0x9228624C3185FCBcf24c1c9dB76D8Bef5f5DAd64`
+	queryExample = `# Querying the "users" table in the "somedb" database namespace
+kwil-cli database query "SELECT * FROM users WHERE age > 25" --namespace somedb`
 )
 
 func queryCmd() *cobra.Command {

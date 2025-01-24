@@ -23,16 +23,14 @@ var (
 var (
 	batchLong = `Batch executes an action or procedure on a database using inputs from a CSV file.
 
-To map a CSV column name to a procedure input, use the ` + "`" + `--map-inputs` + "`" + ` flag.
-The format is ` + "`" + `--map-inputs "<csv_column_1>:<procedure_input_1>,<csv_column_2>:<procedure_input_2>"` + "`" + `.  If the ` + "`" + `--map-inputs` + "`" + ` flag is not passed,
-the CSV column name will be used as the procedure input name.
+To map a CSV column name to a procedure input, use the ` + "`--map-inputs`" + ` flag.
+The format is ` + "`--map-inputs <csv_column_1>:<procedure_input_1>,<csv_column_2>:<procedure_input_2>`." +
+		`  If the ` + "`--map-inputs`" + ` flag is not passed, the CSV column name will be used as the procedure input name.
 
 You can also specify the input values directly using the ` + "`" + `--values` + "`" + ` flag, delimited by a colon.
 These values will apply to all inserted rows, and will override the CSV column mappings.
 
-You can either specify the database to execute this against with the ` + "`" + `--name` + "`" + ` and ` + "`" + `--owner` + "`" + `
-flags, or you can specify the database by passing the database id with the ` + "`" + `--dbid` + "`" + ` flag.  If a ` + "`" + `--name` + "`" + `
-flag is passed and no ` + "`" + `--owner` + "`" + ` flag is passed, the owner will be inferred from your configured wallet.`
+You can specify the namespace with the ` + "`--namespace`" + ` flag.`
 
 	batchExample = `# Given a CSV file with the following contents:
 # id,name,age
@@ -40,8 +38,8 @@ flag is passed and no ` + "`" + `--owner` + "`" + ` flag is passed, the owner wi
 # 2,jane,30
 # 3,jack,35
 
-# Executing the ` + "`" + `create_user($user_id, $username, $user_age, $created_at)` + "`" + ` action on the "mydb" database
-kwil-cli database batch create_user --path ./users.csv --name mydb --owner 0x9228624C3185FCBcf24c1c9dB76D8Bef5f5DAd64 --map-inputs "id:user_id,name:username,age:user_age" --values created_at:$(date +%s)`
+# Executing the ` + "`" + `create_user($user_id, $username, $user_age, $created_at)` + "`" + ` action in the "mydb" database namespace
+kwil-cli database batch create_user --path ./users.csv --namespace mydb --map-inputs "id:user_id,name:username,age:user_age" --values created_at:$(date +%s)`
 )
 
 // batch is used for batch operations on databases
@@ -59,9 +57,9 @@ func batchCmd() *cobra.Command {
 		Args:       cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return client.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
-				dbid, _, err := getSelectedNamespace(cmd)
+				namespace, _, err := getSelectedNamespace(cmd)
 				if err != nil {
-					return display.PrintErr(cmd, fmt.Errorf("error getting selected dbid from CLI flags: %w", err))
+					return display.PrintErr(cmd, fmt.Errorf("error getting selected namespace from CLI flags: %w", err))
 				}
 
 				action, _, err := getSelectedAction(cmd, args)
@@ -88,12 +86,12 @@ func batchCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("error building inputs: %w", err))
 				}
 
-				tuples, err := buildExecutionInputs(ctx, cl, dbid, action, inputs)
+				tuples, err := buildExecutionInputs(ctx, cl, namespace, action, inputs)
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error creating action inputs: %w", err))
 				}
 
-				txHash, err := cl.Execute(ctx, dbid, strings.ToLower(action), tuples,
+				txHash, err := cl.Execute(ctx, namespace, strings.ToLower(action), tuples,
 					clientType.WithNonce(nonceOverride), clientType.WithSyncBroadcast(syncBcast))
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error executing action: %w", err))
@@ -112,7 +110,7 @@ func batchCmd() *cobra.Command {
 		},
 	}
 
-	bindFlagsTargetingAction(cmd)
+	bindFlagsTargetingAction(cmd) // --namespace/-n , --action/-a
 	cmd.Flags().StringSliceVarP(&csvColumnMappings, "map-inputs", "m", []string{}, "csv column to action parameter mappings (e.g. csv_id:user_id, csv_name:user_name)")
 	cmd.Flags().StringSliceVarP(&inputValueMappings, "values", "v", []string{}, "action parameter mappings applied to all executions (e.g. id:123, name:john)")
 	cmd.Flags().StringVarP(&filePath, "path", "p", "", "path to the CSV file to use")
