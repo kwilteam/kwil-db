@@ -188,9 +188,9 @@ func (v *Validator) UnmarshalJSON(b []byte) error {
 
 // DatasetIdentifier contains the information required to identify a dataset.
 type DatasetIdentifier struct {
-	Name  string   `json:"name"`
-	Owner HexBytes `json:"owner"`
-	DBID  string   `json:"dbid"`
+	Name      string   `json:"name"`
+	Owner     HexBytes `json:"owner"`
+	Namespace string   `json:"namespace"`
 }
 
 // VotableEventID returns the ID of an event that can be voted on. This may be

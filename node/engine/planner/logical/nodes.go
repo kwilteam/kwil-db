@@ -178,7 +178,7 @@ func (f *ProcedureScanSource) FormatScan() string {
 	str.WriteString(strconv.FormatBool(f.IsForeign))
 	str.WriteString("] ")
 	if f.IsForeign {
-		str.WriteString("[dbid=")
+		str.WriteString("[namespace=")
 		str.WriteString(f.ContextualArgs[0].String())
 		str.WriteString("] ")
 		str.WriteString("[proc=")

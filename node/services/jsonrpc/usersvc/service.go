@@ -618,9 +618,6 @@ func unmarshalActionCall(req *userjson.CallRequest) (*types.ActionCall, *types.C
 
 	cm := *req
 
-	// sigtxt := transactions.CallSigText(actionPayload.DBID, actionPayload.Action,
-	// 	req.Body.Payload, req.Body.Challenge)
-
 	return &actionPayload, &cm, nil
 }
 
@@ -651,7 +648,7 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "failed to convert action call: "+err.Error(), nil)
 	}
 
-	if jsonRPCErr := svc.authenticate(msg, types.CallSigText(body.DBID, body.Action,
+	if jsonRPCErr := svc.authenticate(msg, types.CallSigText(body.Namespace, body.Action,
 		msg.Body.Payload, msg.Body.Challenge)); jsonRPCErr != nil {
 		return nil, jsonRPCErr
 	}
@@ -682,7 +679,7 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 	defer readTx.Rollback(ctx)
 
 	r := &rowReader{}
-	callRes, err := svc.engine.Call(&common.EngineContext{TxContext: txContext}, readTx, body.DBID, body.Action, args, r.read)
+	callRes, err := svc.engine.Call(&common.EngineContext{TxContext: txContext}, readTx, body.Namespace, body.Action, args, r.read)
 	if err != nil {
 		return nil, engineError(err)
 	}

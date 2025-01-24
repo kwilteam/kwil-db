@@ -795,8 +795,8 @@ func TestRawStatement_MarshalUnmarshal(t *testing.T) {
 func TestActionExecution_MarshalUnmarshal(t *testing.T) {
 	t.Run("valid action execution with multiple calls", func(t *testing.T) {
 		original := ActionExecution{
-			DBID:   "testdb",
-			Action: "test_action",
+			Namespace: "testdb",
+			Action:    "test_action",
 			Arguments: [][]*EncodedValue{
 				{
 					{Type: DataType{Name: TextType.Name}, Data: [][]byte{[]byte("arg1")}},
@@ -815,7 +815,7 @@ func TestActionExecution_MarshalUnmarshal(t *testing.T) {
 		var decoded ActionExecution
 		err = decoded.UnmarshalBinary(data)
 		require.NoError(t, err)
-		require.Equal(t, original.DBID, decoded.DBID)
+		require.Equal(t, original.Namespace, decoded.Namespace)
 		require.Equal(t, original.Action, decoded.Action)
 		require.Equal(t, len(original.Arguments), len(decoded.Arguments))
 		require.Equal(t, original.Arguments, decoded.Arguments)
@@ -823,7 +823,7 @@ func TestActionExecution_MarshalUnmarshal(t *testing.T) {
 
 	t.Run("empty arguments array", func(t *testing.T) {
 		original := ActionExecution{
-			DBID:      "testdb",
+			Namespace: "testdb",
 			Action:    "empty_action",
 			Arguments: [][]*EncodedValue{},
 		}
@@ -834,15 +834,15 @@ func TestActionExecution_MarshalUnmarshal(t *testing.T) {
 		var decoded ActionExecution
 		err = decoded.UnmarshalBinary(data)
 		require.NoError(t, err)
-		require.Equal(t, original.DBID, decoded.DBID)
+		require.Equal(t, original.Namespace, decoded.Namespace)
 		require.Equal(t, original.Action, decoded.Action)
 		require.Empty(t, decoded.Arguments)
 	})
 
-	t.Run("empty strings for DBID and Action", func(t *testing.T) {
+	t.Run("empty strings for Namespace and Action", func(t *testing.T) {
 		original := ActionExecution{
-			DBID:   "",
-			Action: "",
+			Namespace: "",
+			Action:    "",
 			Arguments: [][]*EncodedValue{
 				{
 					{Type: DataType{Name: TextType.Name}, Data: [][]byte{[]byte("test")}},
@@ -856,7 +856,7 @@ func TestActionExecution_MarshalUnmarshal(t *testing.T) {
 		var decoded ActionExecution
 		err = decoded.UnmarshalBinary(data)
 		require.NoError(t, err)
-		require.Empty(t, decoded.DBID)
+		require.Empty(t, decoded.Namespace)
 		require.Empty(t, decoded.Action)
 		require.Len(t, decoded.Arguments, 1)
 	})
@@ -914,8 +914,8 @@ func TestActionExecution_MarshalUnmarshal(t *testing.T) {
 func TestActionCall_MarshalUnmarshal(t *testing.T) {
 	t.Run("valid action call with multiple arguments", func(t *testing.T) {
 		original := ActionCall{
-			DBID:   "testdb",
-			Action: "test_action",
+			Namespace: "testdb",
+			Action:    "test_action",
 			Arguments: []*EncodedValue{
 				{
 					Type: DataType{Name: TextType.Name},
@@ -934,7 +934,7 @@ func TestActionCall_MarshalUnmarshal(t *testing.T) {
 		var decoded ActionCall
 		err = decoded.UnmarshalBinary(data)
 		require.NoError(t, err)
-		require.Equal(t, original.DBID, decoded.DBID)
+		require.Equal(t, original.Namespace, decoded.Namespace)
 		require.Equal(t, original.Action, decoded.Action)
 		require.Len(t, decoded.Arguments, len(original.Arguments))
 		for i, arg := range original.Arguments {
@@ -943,9 +943,9 @@ func TestActionCall_MarshalUnmarshal(t *testing.T) {
 		}
 	})
 
-	t.Run("empty dbid and action with no arguments", func(t *testing.T) {
+	t.Run("empty namespace and action with no arguments", func(t *testing.T) {
 		original := ActionCall{
-			DBID:      "",
+			Namespace: "",
 			Action:    "",
 			Arguments: []*EncodedValue{},
 		}
@@ -956,7 +956,7 @@ func TestActionCall_MarshalUnmarshal(t *testing.T) {
 		var decoded ActionCall
 		err = decoded.UnmarshalBinary(data)
 		require.NoError(t, err)
-		require.Equal(t, original.DBID, decoded.DBID)
+		require.Equal(t, original.Namespace, decoded.Namespace)
 		require.Equal(t, original.Action, decoded.Action)
 		require.Empty(t, decoded.Arguments)
 	})
@@ -971,7 +971,7 @@ func TestActionCall_MarshalUnmarshal(t *testing.T) {
 		}
 
 		original := ActionCall{
-			DBID:      "testdb",
+			Namespace: "testdb",
 			Action:    "bulk_action",
 			Arguments: args,
 		}
@@ -982,7 +982,7 @@ func TestActionCall_MarshalUnmarshal(t *testing.T) {
 		var decoded ActionCall
 		err = decoded.UnmarshalBinary(data)
 		require.NoError(t, err)
-		require.Equal(t, original.DBID, decoded.DBID)
+		require.Equal(t, original.Namespace, decoded.Namespace)
 		require.Equal(t, original.Action, decoded.Action)
 		require.Len(t, decoded.Arguments, len(original.Arguments))
 	})
@@ -1009,7 +1009,7 @@ func TestActionCall_MarshalUnmarshal(t *testing.T) {
 		require.Error(t, err)
 	})
 
-	t.Run("truncated data after dbid", func(t *testing.T) {
+	t.Run("truncated data after namespace", func(t *testing.T) {
 		buf := &bytes.Buffer{}
 		binary.Write(buf, SerializationByteOrder, uint16(acVersion))
 		WriteString(buf, "testdb")

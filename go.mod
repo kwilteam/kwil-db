@@ -25,7 +25,6 @@ require (
 	github.com/manifoldco/promptui v0.9.0
 	github.com/multiformats/go-multiaddr v0.14.0
 	github.com/multiformats/go-multistream v0.6.0
-	github.com/near/borsh-go v0.3.1
 	github.com/olekukonko/tablewriter v0.0.5
 	github.com/pelletier/go-toml/v2 v2.2.3
 	github.com/prometheus/client_golang v1.20.5

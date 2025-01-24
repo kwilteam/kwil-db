@@ -189,27 +189,6 @@ var (
 			},
 			PGFormatFunc: defaultFormat("digest"),
 		},
-		"generate_dbid": &ScalarFunctionDefinition{
-			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
-				// first should be text, second should be blob
-				if len(args) != 2 {
-					return nil, wrapErrArgumentNumber(2, len(args))
-				}
-
-				if !args[0].Equals(types.TextType) {
-					return nil, wrapErrArgumentType(types.TextType, args[0])
-				}
-
-				if !args[1].Equals(types.ByteaType) {
-					return nil, wrapErrArgumentType(types.ByteaType, args[1])
-				}
-
-				return types.TextType, nil
-			},
-			PGFormatFunc: func(inputs []string) (string, error) {
-				return fmt.Sprintf(`(select 'x' || encode(sha224(lower(%s)::bytea || %s), 'hex'))`, inputs[0], inputs[1]), nil
-			},
-		},
 		// array functions
 		"array_append": &ScalarFunctionDefinition{
 			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {

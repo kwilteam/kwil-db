@@ -142,10 +142,10 @@ func NewClient(ctx context.Context, target string, opts *GatewayOptions) (*Gatew
 
 // Call call an action. It returns the result records.  If authentication is needed,
 // it will call the gatewaySigner to sign the authentication message.
-func (c *GatewayClient) Call(ctx context.Context, dbid string, action string, inputs []any) (*types.CallResult, error) {
+func (c *GatewayClient) Call(ctx context.Context, namespace string, action string, inputs []any) (*types.CallResult, error) {
 	// we will try to call with the current cookies set.  If we receive an error and it is an auth error,
 	// we will re-auth and retry.  We will only retry once.
-	res, err := c.Client.Call(ctx, dbid, action, inputs)
+	res, err := c.Client.Call(ctx, namespace, action, inputs)
 	if err == nil {
 		return res, nil
 	}
@@ -164,7 +164,7 @@ func (c *GatewayClient) Call(ctx context.Context, dbid string, action string, in
 	}
 
 	// retry the call
-	return c.Client.Call(ctx, dbid, action, inputs)
+	return c.Client.Call(ctx, namespace, action, inputs)
 }
 
 // authenticate authenticates the client with the gateway.
