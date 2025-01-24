@@ -125,7 +125,7 @@ func (r *TxApp) GenesisInit(ctx context.Context, db sql.DB, genCfg *config.Genes
 				Hash:   initialHash,
 			},
 		},
-	}, db, "GRANT owner TO $user", map[string]any{
+	}, db, "GRANT IF NOT GRANTED owner TO $user", map[string]any{
 		"user": genCfg.DBOwner,
 	}, nil)
 	if err != nil {
