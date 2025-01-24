@@ -74,7 +74,6 @@ allowed_identifier:
     | RESTRICT
     | INDEX
     | RETURNS
-    | CONFLICT
     | FOR
     | IF
     | ELSEIF
@@ -94,6 +93,8 @@ allowed_identifier:
     | UNUSE
     | DEFAULT
     | ACTION
+    | TRANSFER
+    | OWNERSHIP
 ;
 
 identifier_list:
