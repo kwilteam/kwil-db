@@ -1,7 +1,6 @@
 package interpreter
 
 import (
-	"fmt"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/types"
@@ -596,10 +595,6 @@ func Test_Cast(t *testing.T) {
 			require.NoError(t, err)
 
 			check := func(dataType *types.DataType, want any) {
-				if dataType.Name == types.NumericStr {
-					fmt.Println("numeric")
-				}
-
 				t.Log(dataType.String())
 				if want == nil {
 					want = engine.ErrCast

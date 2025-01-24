@@ -401,37 +401,20 @@ func Test_SQL(t *testing.T) {
 			caller:  "user",
 		},
 		{
-			name: "grant owner role to user",
+			name: "transfer owner role to user",
 			sql: []string{
-				"GRANT owner TO 'user';",
+				"TRANSFER OWNERSHIP TO 'user';",
 			},
-			execSQL: "GRANT owner TO 'user2';",
+			execSQL: "TRANSFER OWNERSHIP TO 'user2';",
 			caller:  "user",
 		},
 		{
-			name:    "grant owner role to user, parameterized",
-			execSQL: `grant owner to $user;`,
+			name:    "grant role to user, parameterized",
+			sql:     []string{"CREATE ROLE test_role;"},
+			execSQL: `grant test_role to $user;`,
 			execVars: map[string]any{
 				"user": "new_user",
 			},
-		},
-		{
-			name: "role cannot grant ownership if not owner, even if they have the roles priv",
-			sql: []string{
-				"CREATE ROLE test_role;",
-				"GRANT ROLES TO test_role;",
-				"GRANT test_role TO 'user';",
-			},
-			execSQL: `grant owner to 'user2';`,
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "user",
-		},
-		{
-			name: "owner can revoke another owner",
-			sql: []string{
-				"GRANT owner TO 'user';",
-			},
-			execSQL: "REVOKE owner FROM 'user';",
 		},
 		// here we test that privileges are correctly enforced.
 		// We do this by relying on the default role, which has no privileges
@@ -2354,6 +2337,10 @@ func Test_Ownership(t *testing.T) {
 
 	// default user cannot drop table
 	err = interp.Execute(newEngineCtx(defaultCaller), tx, `DROP TABLE test_table;`, nil, nil)
+	require.ErrorIs(t, err, engine.ErrDoesNotHavePrivilege)
+
+	// default user cannot transfer ownership
+	err = interp.Execute(newEngineCtx(defaultCaller), tx, `TRANSFER OWNERSHIP TO 'user3';`, nil, nil)
 	require.ErrorIs(t, err, engine.ErrDoesNotHavePrivilege)
 }
 
