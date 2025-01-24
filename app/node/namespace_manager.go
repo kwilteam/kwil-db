@@ -55,8 +55,7 @@ func (n *namespaceManager) Filter(ns string) bool {
 	defer n.mu.RUnlock()
 
 	if !n.ready {
-		// this would indicate a bug in our startup process
-		panic("namespace manager not ready")
+		return false
 	}
 	_, ok := n.namespaces[ns]
 	return ok
@@ -76,8 +75,7 @@ func (n *namespaceManager) ListPostgresSchemasToDump() []string {
 	defer n.mu.RUnlock()
 
 	if !n.ready {
-		// this would indicate a bug in our startup process
-		panic("namespace manager not ready")
+		return nil
 	}
 
 	res := make([]string, len(n.namespaces)+2)
