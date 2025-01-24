@@ -80,6 +80,8 @@ func (s *schemaVisitor) VisitStatement(ctx *gen.StatementContext) any {
 		s2 = ctx.Grant_statement().Accept(s).(TopLevelStatement)
 	case ctx.Revoke_statement() != nil:
 		s2 = ctx.Revoke_statement().Accept(s).(TopLevelStatement)
+	case ctx.Transfer_ownership_statement() != nil:
+		s2 = ctx.Transfer_ownership_statement().Accept(s).(TopLevelStatement)
 	case ctx.Create_action_statement() != nil:
 		s3 := ctx.Create_action_statement().Accept(s).(*CreateActionStatement)
 		r := s.getTextFromStream(ctx.GetStart().GetStart(), ctx.GetStop().GetStop()) + ";"
@@ -1099,6 +1101,22 @@ func (s *schemaVisitor) parseGrantOrRevoke(ctx interface {
 	}
 
 	return c
+}
+
+func (s *schemaVisitor) VisitTransfer_ownership_statement(ctx *gen.Transfer_ownership_statementContext) any {
+	stmt := &TransferOwnershipStatement{}
+
+	switch {
+	case ctx.GetUser() != nil:
+		stmt.ToUser = parseStringLiteral(ctx.GetUser().GetText())
+	case ctx.GetUser_var() != nil:
+		stmt.ToVariable = ctx.GetUser_var().Accept(s).(Expression)
+	default:
+		panic("invalid transfer ownership statement")
+	}
+
+	stmt.Set(ctx)
+	return stmt
 }
 
 func (s *schemaVisitor) VisitPrivilege_list(ctx *gen.Privilege_listContext) any {

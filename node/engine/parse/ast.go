@@ -1127,6 +1127,20 @@ func (g *GrantOrRevokeStatement) Accept(v Visitor) any {
 	return v.VisitGrantOrRevokeStatement(g)
 }
 
+type TransferOwnershipStatement struct {
+	Position
+	// ToUser is the user that the ownership is being transferred to.
+	ToUser string
+	// ToVariable is the variable that the ownership is being transferred to.
+	ToVariable Expression
+}
+
+func (t *TransferOwnershipStatement) topLevelStatement() {}
+
+func (t *TransferOwnershipStatement) Accept(v Visitor) any {
+	return v.VisitTransferOwnershipStatement(t)
+}
+
 type CreateRoleStatement struct {
 	Position
 	// IfNotExists is true if the IF NOT EXISTS clause is present.
@@ -1669,6 +1683,7 @@ type DDLVisitor interface {
 	VisitCreateIndexStatement(*CreateIndexStatement) any
 	VisitDropIndexStatement(*DropIndexStatement) any
 	VisitGrantOrRevokeStatement(*GrantOrRevokeStatement) any
+	VisitTransferOwnershipStatement(*TransferOwnershipStatement) any
 	VisitAlterColumnSet(*AlterColumnSet) any
 	VisitAlterColumnDrop(*AlterColumnDrop) any
 	VisitAddColumn(*AddColumn) any

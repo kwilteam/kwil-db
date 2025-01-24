@@ -1323,14 +1323,11 @@ func (i *interpreterPlanner) VisitGrantOrRevokeStatement(p0 *parse.GrantOrRevoke
 			return err
 		}
 
-		// if we are granting ownership, then we need to check if the caller is an owner.
-		if p0.GrantRole == ownerRole && !exec.engineCtx.OverrideAuthz {
-			if !exec.isOwner() {
-				return fmt.Errorf("%w: %s", engine.ErrDoesNotHavePrivilege, `only an owner can grant the "owner" role`)
-			}
-		}
 		if p0.GrantRole == defaultRole {
 			return fmt.Errorf("cannot grant or revoke the default role")
+		}
+		if p0.GrantRole == ownerRole {
+			return fmt.Errorf("cannot grant or revoke the owner role, use TRANSFER OWNERSHIP instead")
 		}
 
 		switch {
@@ -1397,6 +1394,62 @@ func (i *interpreterPlanner) VisitGrantOrRevokeStatement(p0 *parse.GrantOrRevoke
 			// messages can be generated. This is a catch-all for any other invalid cases.
 			return fmt.Errorf("invalid grant/revoke statement")
 		}
+	})
+}
+
+func (i *interpreterPlanner) VisitTransferOwnershipStatement(p0 *parse.TransferOwnershipStatement) any {
+	var getToVar exprFunc
+	if p0.ToVariable != nil {
+		getToVar = p0.ToVariable.Accept(i).(exprFunc)
+	}
+
+	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
+		if !exec.engineCtx.OverrideAuthz {
+			if err := exec.checkPrivilege(RolesPrivilege); err != nil {
+				return err
+			}
+
+			if !exec.isOwner() {
+				return fmt.Errorf("%w: only the db owner can transfer ownership", engine.ErrDoesNotHavePrivilege)
+			}
+		}
+
+		// if a user exists, we should unassign the role from the user
+		if owner, found := exec.interpreter.accessController.GetOwner(); found {
+			err := exec.interpreter.accessController.UnassignRole(exec.engineCtx.TxContext.Ctx, exec.db, ownerRole, owner, false)
+			if err != nil {
+				return err
+			}
+		}
+
+		toUser := p0.ToUser
+		if p0.ToVariable != nil {
+			val, err := getToVar(exec)
+			if err != nil {
+				return err
+			}
+
+			if val.Type() != types.TextType {
+				return fmt.Errorf("%w: expected text, got %s", engine.ErrType, val.Type())
+			}
+
+			strVal, ok := val.RawValue().(string)
+			if !ok {
+				if val.Null() {
+					return fmt.Errorf("cannot transfer ownership to null user")
+				}
+				return fmt.Errorf("%w: expected text, got %T", engine.ErrType, val.RawValue())
+			}
+
+			toUser = strVal
+		}
+
+		err := exec.interpreter.accessController.AssignRole(exec.engineCtx.TxContext.Ctx, exec.db, ownerRole, toUser, false)
+		if err != nil {
+			return err
+		}
+
+		return nil
 	})
 }
 

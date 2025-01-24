@@ -144,6 +144,8 @@ ROLE:       'role';
 REPLACE:    'replace';
 ARRAY:      'array';
 NAMESPACE:  'namespace';
+TRANSFER:   'transfer';
+OWNERSHIP:  'ownership';
 
 // role permissions
 ROLES:      'roles';

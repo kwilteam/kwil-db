@@ -27,6 +27,7 @@ statement:
         | drop_role_statement
         | grant_statement
         | revoke_statement
+        | transfer_ownership_statement
         | create_action_statement
         | drop_action_statement
         | use_extension_statement
@@ -230,6 +231,10 @@ grant_statement:
 
 revoke_statement:
     REVOKE (IF GRANTED)? (privilege_list|grant_role=identifier) (ON namespace=identifier)? FROM (role=identifier|user=STRING_|user_var=action_expr)
+;
+
+transfer_ownership_statement:
+    TRANSFER OWNERSHIP TO (user=STRING_|user_var=action_expr)
 ;
 
 privilege_list:

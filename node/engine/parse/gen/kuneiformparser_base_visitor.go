@@ -175,6 +175,10 @@ func (v *BaseKuneiformParserVisitor) VisitRevoke_statement(ctx *Revoke_statement
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseKuneiformParserVisitor) VisitTransfer_ownership_statement(ctx *Transfer_ownership_statementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseKuneiformParserVisitor) VisitPrivilege_list(ctx *Privilege_listContext) interface{} {
 	return v.VisitChildren(ctx)
 }
