@@ -47,20 +47,25 @@ func (m *mockDB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Re
 	switch stmt {
 	case sqlCreateAccount: // via createAccount and createAccountWithNonce
 		acctID := args[0].([]byte)
-		bal, ok := big.NewInt(0).SetString(args[1].(string), 10)
+		idType := args[1].(uint32)
+		bal, ok := big.NewInt(0).SetString(args[2].(string), 10)
 		if !ok {
 			return nil, errors.New("not a string balance")
 		}
 
-		acct := &types.AccountID{}
-		err := acct.UnmarshalBinary(acctID)
+		keyType, err := crypto.ParseKeyTypeID(idType)
 		if err != nil {
 			return nil, err
 		}
 
-		m.accts[string(acctID)] = &types.Account{
+		acct := &types.AccountID{
+			Identifier: acctID,
+			KeyType:    keyType,
+		}
+
+		m.accts[acctMapKey(acct)] = &types.Account{
 			ID:      acct,
-			Nonce:   args[2].(int64),
+			Nonce:   args[3].(int64),
 			Balance: bal,
 		}
 		return &sql.ResultSet{
@@ -74,9 +79,19 @@ func (m *mockDB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Re
 		if !ok {
 			return nil, errors.New("not a string balance")
 		}
-		acctID, nonce := args[2].([]byte), args[1].(int64)
+		nonce := args[1].(int64)
 
-		acct, ok := m.accts[string(acctID)]
+		acctID, idType := args[2].([]byte), args[3].(uint32)
+		keyType, err := crypto.ParseKeyTypeID(idType)
+		if err != nil {
+			return nil, err
+		}
+		acct := &types.AccountID{
+			Identifier: acctID,
+			KeyType:    keyType,
+		}
+
+		account, ok := m.accts[acctMapKey(acct)]
 		if !ok {
 			return &sql.ResultSet{
 				Status: sql.CommandTag{
@@ -86,8 +101,8 @@ func (m *mockDB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Re
 			}, nil
 		}
 
-		acct.Balance = bal
-		acct.Nonce = nonce
+		account.Balance = bal
+		account.Nonce = nonce
 
 		return &sql.ResultSet{
 			Status: sql.CommandTag{
@@ -97,15 +112,23 @@ func (m *mockDB) Execute(ctx context.Context, stmt string, args ...any) (*sql.Re
 		}, nil
 	case sqlGetAccount: // via getAccount
 		m.accessCnt++
-		acctID := args[0].([]byte)
-		acct, ok := m.accts[string(acctID)]
+		acctID, idType := args[0].([]byte), args[1].(uint32)
+		keyType, err := crypto.ParseKeyTypeID(idType)
+		if err != nil {
+			return nil, err
+		}
+		acct := &types.AccountID{
+			Identifier: acctID,
+			KeyType:    keyType,
+		}
+		account, ok := m.accts[acctMapKey(acct)]
 		if !ok {
 			return &sql.ResultSet{}, nil // not ErrNoRows since we don't use Scan in pg
 		}
 		return &sql.ResultSet{
 			Columns: []string{"balance", "nonce"},
 			Rows: [][]any{
-				{acct.Balance.String(), acct.Nonce},
+				{account.Balance.String(), account.Nonce},
 			},
 		}, nil
 	default:
@@ -162,13 +185,11 @@ var acctsTestCases = []acctsTestCase{
 			// first credit, access db
 			verifyDBAccessCount(t, c, 1, skip)
 
-			acctID1, err := account1.MarshalBinary()
-			require.NoError(t, err)
-
-			_, ok := a.records[string(acctID1)]
+			key := acctMapKey(account1)
+			_, ok := a.records[key]
 			require.False(t, ok)
 
-			acct, ok := a.updates[string(acctID1)]
+			acct, ok := a.updates[key]
 			require.True(t, ok)
 			assert.Equal(t, int64(100), acct.Balance.Int64())
 

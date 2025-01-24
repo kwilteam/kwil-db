@@ -76,6 +76,14 @@ func ParseKeyType(s string) (KeyType, error) {
 	return "", fmt.Errorf("unknown key type: %s", s)
 }
 
+func ParseKeyTypeID(id uint32) (KeyType, error) {
+	kt, ok := encodingIDs[id]
+	if !ok {
+		return "", fmt.Errorf("unknown key type ID: %d", id)
+	}
+	return kt, nil
+}
+
 func UnmarshalPublicKey(b []byte, kt KeyType) (PublicKey, error) {
 	kd, ok := keyTypes[kt]
 	if !ok {

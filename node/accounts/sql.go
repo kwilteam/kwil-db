@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )
@@ -16,19 +17,19 @@ const (
 	accountStoreVersion = 0
 
 	sqlInitTables = `CREATE TABLE IF NOT EXISTS ` + schemaName + `.accounts (
-		identifier BYTEA PRIMARY KEY,
+		identifier BYTEA NOT NULL,
+		id_type INT4 NOT NULL,
 		balance TEXT NOT NULL, -- consider: NUMERIC(32) for uint256 and pgx.Numeric will handle it and provide a *big.Int field
-		nonce BIGINT NOT NULL -- a.k.a. INT8
+		nonce BIGINT NOT NULL, -- a.k.a. INT8
+		PRIMARY KEY(identifier, id_type)
 	);`
 
-	sqlCreateAccount = `INSERT INTO ` + schemaName + `.accounts (identifier, balance, nonce) VALUES ($1, $2, $3)`
-
-	// sqlCreateAccountIfNotExists = `INSERT INTO ` + schemaName + `.accounts (identifier, balance, nonce) VALUES ($1, $2, $3) ON CONFLICT DO NOTHING`
+	sqlCreateAccount = `INSERT INTO ` + schemaName + `.accounts (identifier, id_type, balance, nonce) VALUES ($1, $2, $3, $4)`
 
 	sqlUpdateAccount = `UPDATE ` + schemaName + `.accounts SET balance = $1, nonce = $2
-		WHERE identifier = $3`
+		WHERE identifier = $3 AND id_type = $4`
 
-	sqlGetAccount = `SELECT balance, nonce FROM ` + schemaName + `.accounts WHERE identifier = $1`
+	sqlGetAccount = `SELECT balance, nonce FROM ` + schemaName + `.accounts WHERE identifier = $1 AND id_type = $2`
 )
 
 func initTables(ctx context.Context, tx sql.DB) error {
@@ -41,27 +42,26 @@ func initTables(ctx context.Context, tx sql.DB) error {
 }
 
 // updateAccount updates the balance and nonce of an account.
-func updateAccount(ctx context.Context, db sql.Executor, acctID []byte, amount *big.Int, nonce int64) error {
-	_, err := db.Execute(ctx, sqlUpdateAccount, amount.String(), nonce, acctID)
+func updateAccount(ctx context.Context, db sql.Executor, acctID []byte, acctType uint32, amount *big.Int, nonce int64) error {
+	_, err := db.Execute(ctx, sqlUpdateAccount, amount.String(), nonce, acctID, acctType)
 	return err
 }
 
 // createAccount creates an account with the given identifier and
 // initial balance. The nonce will be set to 0.
-func createAccount(ctx context.Context, db sql.Executor, acctID []byte, amt *big.Int, nonce int64) error {
-	_, err := db.Execute(ctx, sqlCreateAccount, acctID, amt.String(), nonce)
+func createAccount(ctx context.Context, db sql.Executor, acctID []byte, acctType uint32, amt *big.Int, nonce int64) error {
+	_, err := db.Execute(ctx, sqlCreateAccount, acctID, acctType, amt.String(), nonce)
 	return err
 }
 
 // getAccount retrieves an account from the database.
 // if the account is not found, it returns nil, ErrAccountNotFound.
 func getAccount(ctx context.Context, db sql.Executor, account *types.AccountID) (*types.Account, error) {
-	accountID, err := account.MarshalBinary()
-	if err != nil {
-		return nil, err
+	kd, ok := crypto.KeyTypeDefinition(account.KeyType)
+	if !ok {
+		return nil, fmt.Errorf("invalid key type: %s", account.KeyType)
 	}
-
-	results, err := db.Execute(ctx, sqlGetAccount, accountID)
+	results, err := db.Execute(ctx, sqlGetAccount, []byte(account.Identifier), kd.EncodeFlag())
 	if err != nil {
 		return nil, err
 	}

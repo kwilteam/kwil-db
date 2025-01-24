@@ -2,11 +2,13 @@ package accounts
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
 	"sync"
 
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
@@ -85,15 +87,12 @@ func (a *Accounts) getAccount(ctx context.Context, tx sql.Executor, account *typ
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
-	acctID, err := account.MarshalBinary()
-	if err != nil {
-		return nil, err
-	}
+	mapKey := acctMapKey(account)
 
 	var ok bool
 	if uncommitted {
 		// Check in the updates first to see if the account has been updated in the current block
-		acct, ok = a.updates[string(acctID)]
+		acct, ok = a.updates[mapKey]
 		if ok {
 			return &types.Account{
 				ID:      account,
@@ -104,7 +103,7 @@ func (a *Accounts) getAccount(ctx context.Context, tx sql.Executor, account *typ
 	}
 
 	// Check in the records to see if the account has been read before
-	acct, ok = a.records[string(acctID)]
+	acct, ok = a.records[mapKey]
 	if ok {
 		return &types.Account{
 			ID:      account,
@@ -119,7 +118,7 @@ func (a *Accounts) getAccount(ctx context.Context, tx sql.Executor, account *typ
 	}
 
 	// Add the account to the in-memory cache
-	a.records[string(acctID)] = &types.Account{
+	a.records[mapKey] = &types.Account{
 		ID:      account,
 		Balance: big.NewInt(0).Set(acct.Balance),
 		Nonce:   acct.Nonce,
@@ -329,13 +328,16 @@ func (a *Accounts) Rollback() {
 	a.spends = nil
 }
 
-func (a *Accounts) createAccount(ctx context.Context, tx sql.Executor, account *types.AccountID, amt *big.Int, nonce int64) error {
-	accountID, err := account.MarshalBinary()
-	if err != nil {
-		return err
-	}
+func acctMapKey(account *types.AccountID) string {
+	return hex.EncodeToString(account.Identifier) + "#" + account.KeyType.String()
+}
 
-	if err := createAccount(ctx, tx, accountID, amt, nonce); err != nil {
+func (a *Accounts) createAccount(ctx context.Context, tx sql.Executor, account *types.AccountID, amt *big.Int, nonce int64) error {
+	kd, ok := crypto.KeyTypeDefinition(account.KeyType)
+	if !ok {
+		return fmt.Errorf("invalid key type: %s", account.KeyType)
+	}
+	if err := createAccount(ctx, tx, account.Identifier, kd.EncodeFlag(), amt, nonce); err != nil {
 		return err
 	}
 
@@ -343,7 +345,7 @@ func (a *Accounts) createAccount(ctx context.Context, tx sql.Executor, account *
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
-	a.updates[string(accountID)] = &types.Account{
+	a.updates[acctMapKey(account)] = &types.Account{
 		ID:      account,
 		Balance: big.NewInt(0).Set(amt),
 		Nonce:   nonce,
@@ -353,12 +355,11 @@ func (a *Accounts) createAccount(ctx context.Context, tx sql.Executor, account *
 }
 
 func (a *Accounts) updateAccount(ctx context.Context, tx sql.Executor, account *types.AccountID, amount *big.Int, nonce int64) error {
-	accountID, err := account.MarshalBinary()
-	if err != nil {
-		return err
+	kd, ok := crypto.KeyTypeDefinition(account.KeyType)
+	if !ok {
+		return fmt.Errorf("invalid key type: %s", account.KeyType)
 	}
-
-	if err := updateAccount(ctx, tx, accountID, amount, nonce); err != nil {
+	if err := updateAccount(ctx, tx, account.Identifier, kd.EncodeFlag(), amount, nonce); err != nil {
 		return err
 	}
 
@@ -366,7 +367,7 @@ func (a *Accounts) updateAccount(ctx context.Context, tx sql.Executor, account *
 	a.mtx.Lock()
 	defer a.mtx.Unlock()
 
-	a.updates[string(accountID)] = &types.Account{
+	a.updates[acctMapKey(account)] = &types.Account{
 		ID:      account,
 		Balance: big.NewInt(0).Set(amount),
 		Nonce:   nonce,
