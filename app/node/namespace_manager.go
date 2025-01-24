@@ -51,12 +51,13 @@ func (n *namespaceManager) Unlock() {
 // and for namespaces that are only views (e.g. "info")
 // If it is not ready, it panics.
 func (n *namespaceManager) Filter(ns string) bool {
+	n.mu.RLock()
+	defer n.mu.RUnlock()
+
 	if !n.ready {
 		// this would indicate a bug in our startup process
 		panic("namespace manager not ready")
 	}
-	n.mu.RLock()
-	defer n.mu.RUnlock()
 	_, ok := n.namespaces[ns]
 	return ok
 }
@@ -73,6 +74,11 @@ func (n *namespaceManager) Ready() {
 func (n *namespaceManager) ListPostgresSchemasToDump() []string {
 	n.mu.RLock()
 	defer n.mu.RUnlock()
+
+	if !n.ready {
+		// this would indicate a bug in our startup process
+		panic("namespace manager not ready")
+	}
 
 	res := make([]string, len(n.namespaces)+2)
 	res[0] = engine.InternalEnginePGSchema
