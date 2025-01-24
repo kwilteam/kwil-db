@@ -2342,6 +2342,10 @@ func Test_Ownership(t *testing.T) {
 	// default user cannot transfer ownership
 	err = interp.Execute(newEngineCtx(defaultCaller), tx, `TRANSFER OWNERSHIP TO 'user3';`, nil, nil)
 	require.ErrorIs(t, err, engine.ErrDoesNotHavePrivilege)
+
+	// it is impossible to revoke privileges from the owner, even if using WithoutCtx
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `REVOKE insert FROM owner;`, nil, nil)
+	require.Contains(t, err.Error(), "owner role cannot have privileges revoked")
 }
 
 // This tests that the `notice` function works correctly, even when methods call an action that
