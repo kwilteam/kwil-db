@@ -210,7 +210,15 @@ func (stp *strictTOMLParser[T]) Unmarshal(b []byte) (map[string]interface{}, err
 	if err := dec.Decode(&prototype); err != nil {
 		var tomlErr *gotoml.StrictMissingError
 		if errors.As(err, &tomlErr) {
-			err = fmt.Errorf("%w:\n%s", config.ErrorExtraFields, tomlErr.String())
+			detailedErrMsg := tomlErr.String()
+			// Cut the message at the 9th newline, discard the rest. This has
+			// the effect of showing just one "missing field" error.
+			const maxLines = 9 // four are shown before the problem line, so be symmetric
+			if splitMsg := strings.SplitN(detailedErrMsg, "\n", maxLines+1); len(splitMsg) > maxLines {
+				detailedErrMsg = strings.Join(splitMsg[:maxLines], "\n")
+			}
+			oldConfigSuggest := "Is this a config file from a previous release?"
+			err = fmt.Errorf("%w:\n\n%s\n\n%s", config.ErrorExtraFields, detailedErrMsg, oldConfigSuggest)
 		}
 		return nil, err
 	}
