@@ -687,27 +687,39 @@ func (n *Node) Status(ctx context.Context) (*adminTypes.Status, error) {
 }
 
 func (n *Node) TxQuery(ctx context.Context, hash types.Hash, prove bool) (*ktypes.TxQueryResponse, error) {
+	if tx := n.mp.Get(hash); tx != nil {
+		return &ktypes.TxQueryResponse{
+			Tx:     tx,
+			Hash:   hash,
+			Height: -1,
+		}, nil
+	}
+
 	tx, height, blkHash, blkIdx, err := n.bki.GetTx(hash)
 	if err != nil {
-		return nil, err
+		return nil, ErrTxNotFound
 	}
-	blkResults, err := n.bki.Results(blkHash)
+
+	res, err := n.bki.Result(blkHash, blkIdx)
 	if err != nil {
-		return nil, err
+		return nil, ErrTxNotFound
 	}
-	if int(blkIdx) >= len(blkResults) {
-		return nil, errors.New("invalid block index")
-	}
-	res := blkResults[blkIdx]
+
 	return &ktypes.TxQueryResponse{
 		Tx:     tx,
 		Hash:   hash,
 		Height: height,
-		Result: &res,
+		Result: res,
 	}, nil
 }
 
 func (n *Node) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (*ktypes.ResultBroadcastTx, error) {
+	// Do a TxQuery first maybe so as not to spam existing txns.
+	_, err := n.TxQuery(ctx, tx.Hash(), false)
+	if err == nil {
+		return nil, ErrTxAlreadyExists
+	}
+
 	return n.ce.BroadcastTx(ctx, tx, sync)
 }
 

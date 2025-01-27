@@ -3,8 +3,12 @@ package acceptance
 import (
 	"context"
 	_ "embed"
+	"flag"
 	"fmt"
 	"math/big"
+	"os"
+	"os/signal"
+	"syscall"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/config"
@@ -21,6 +25,38 @@ import (
 // TODO:
 // - kgw tests
 // - log / "notice()" tests
+
+var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
+
+func TestLocalDevSetup(t *testing.T) {
+	if !*dev {
+		t.Skip("skipping local dev setup")
+	}
+
+	// running forever for local development
+	ctx, cancel := context.WithCancel(context.Background())
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM)
+	go func() {
+		<-c
+		t.Log("interrupt received, shutting down")
+		cancel()
+	}()
+
+	client := setupSingleNodeClient(t, ctx, setup.Go, false)
+	ci, err := client.ChainInfo(ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log(ci)
+
+	// deploy a schema for convenience
+	tx, err := client.ExecuteSQL(ctx, usersSchema, nil, opts)
+	require.NoError(t, err)
+	test.ExpectTxSuccess(t, client, ctx, tx)
+
+	<-ctx.Done()
+}
 
 var (
 	//go:embed users.sql
@@ -39,7 +75,8 @@ var (
 func setupSingleNodeClient(t *testing.T, ctx context.Context, d setup.ClientDriver, usingKGW bool) setup.JSONRPCClient {
 	t.Helper()
 
-	ident, err := auth.EthSecp256k1Authenticator{}.Identifier(crypto.EthereumAddressFromPubKey(UserPrivkey1.Public().(*crypto.Secp256k1PublicKey)))
+	signer := auth.GetUserSigner(UserPrivkey1)
+	ident, err := auth.EthSecp256k1Authenticator{}.Identifier(signer.CompactID())
 	require.NoError(t, err)
 
 	testnet := setup.SetupTests(t, &setup.TestConfig{
@@ -56,6 +93,7 @@ func setupSingleNodeClient(t *testing.T, ctx context.Context, d setup.ClientDriv
 		PrivateKey: UserPrivkey1,
 	})
 }
+
 func Test_Transfer(t *testing.T) {
 	ctx := context.Background()
 
@@ -132,8 +170,8 @@ func Test_Transfer(t *testing.T) {
 	}
 }
 
-// TODO: delete opts once we fix the race condition where query tx returns an error
-var opts = ctypes.WithSyncBroadcast(true)
+// In case we need "sync" broadcast for testing:
+var opts = func(*ctypes.TxOptions) {} // ctypes.WithSyncBroadcast(true)
 
 func Test_Engine(t *testing.T) {
 	for _, driver := range setup.AllDrivers {

@@ -10,10 +10,11 @@ import (
 var ErrNotFound = types.ErrNotFound
 
 var (
-	HashBytes      = types.HashBytes
-	ErrTxNotFound  = errors.New("tx not available")
-	ErrBlkNotFound = errors.New("block not available")
-	ErrNoResponse  = errors.New("stream closed without response")
+	HashBytes          = types.HashBytes
+	ErrTxNotFound      = errors.New("tx not available")
+	ErrTxAlreadyExists = errors.New("transaction already exists")
+	ErrBlkNotFound     = errors.New("block not available")
+	ErrNoResponse      = errors.New("stream closed without response")
 )
 
 const HashLen = types.HashLen
