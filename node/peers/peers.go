@@ -27,9 +27,15 @@ import (
 )
 
 const (
-	maxRetries         = 500
+	maxRetries      = 500
+	disconnectLimit = 7 * 24 * time.Hour // 1 week
+)
+
+// config for about 48 hrs startup reconnect in backoff, to match peer store TTL
+const (
+	reconnectRetries   = 58
 	baseReconnectDelay = 2 * time.Second
-	disconnectLimit    = 7 * 24 * time.Hour // 1 week
+	maxReconnectDelay  = 1 * time.Hour
 )
 
 // PeerIDStringer provides lazy lazy conversion of a libp2p peer ID into a Kwil
@@ -91,6 +97,7 @@ type PeerMan struct {
 
 	// TODO: revise address book file format as needed if these should persist
 	mtx         sync.Mutex
+	lastAttempt map[peer.ID]time.Time
 	disconnects map[peer.ID]time.Time // Track disconnection timestamps
 	noReconnect map[peer.ID]bool
 }
@@ -151,6 +158,7 @@ func NewPeerMan(cfg *Config) (*PeerMan, error) {
 		addrBook:          cfg.AddrBook,
 		crawlPeerInfos:    make(map[peer.ID]crawlPeerInfo),
 		targetConnections: cfg.TargetConnections,
+		lastAttempt:       make(map[peer.ID]time.Time),
 		disconnects:       make(map[peer.ID]time.Time),
 		noReconnect:       make(map[peer.ID]bool),
 	}
@@ -259,6 +267,8 @@ func (pm *PeerMan) maintainMinPeers(ctx context.Context) {
 	ticker := time.NewTicker(urgentConnInterval)
 	defer ticker.Stop()
 
+	lastAttempts := make(map[peer.ID]*backoffer)
+
 	for {
 		select {
 		case <-ticker.C:
@@ -273,7 +283,7 @@ func (pm *PeerMan) maintainMinPeers(ctx context.Context) {
 				continue
 			}
 
-			pm.log.Infof("Active connections: %d, below target: %d. Initiating new connections.",
+			pm.log.Debugf("Active connections: %d, below target: %d. Initiating new connections.",
 				numActive, pm.targetConnections)
 
 			var added int
@@ -285,6 +295,18 @@ func (pm *PeerMan) maintainMinPeers(ctx context.Context) {
 				if !pm.IsAllowed(pid) {
 					continue // Connect would error anyway, just be silent
 				}
+				bk := lastAttempts[pid]
+				if bk == nil {
+					bk = newBackoffer(reconnectRetries, baseReconnectDelay, maxReconnectDelay, true)
+					lastAttempts[pid] = bk
+				}
+				if !bk.try() {
+					if bk.maxedOut() {
+						pm.removePeer(pid)
+					}
+					continue
+				}
+				pm.log.Infof("Connecting to peer %s", peerIDStringer(pid))
 				err := pm.h.Connect(ctx, peer.AddrInfo{ID: pid})
 				if err != nil {
 					// NOTE: if this fails because of security protocol
@@ -293,6 +315,7 @@ func (pm *PeerMan) maintainMinPeers(ctx context.Context) {
 				} else {
 					pm.log.Infof("Connected to peer %s", peerIDStringer(pid))
 					added++
+
 				}
 			}
 
@@ -362,7 +385,9 @@ type crawlPeerInfo struct {
 
 const recrawlThreshold = time.Minute
 
-func (pm *PeerMan) randomPeer() (peer.ID, bool) {
+// randomPeerToCrawl gets a random peer to crawl i.e. request peers from and
+// begin crawling through them.
+func (pm *PeerMan) randomPeerToCrawl() (peer.ID, bool) {
 	// Connected peers first.
 	peers := filterPeer(pm.h.Network().Peers(), pm.h.ID())
 	// Filter out peers that were crawled too recently.
@@ -384,12 +409,11 @@ func (pm *PeerMan) randomPeer() (peer.ID, bool) {
 		return peers[i], true
 	}
 	return "", false
-
 }
 
 func (pm *PeerMan) crawl(ctx context.Context) {
 	for {
-		peer, found := pm.randomPeer()
+		peer, found := pm.randomPeerToCrawl()
 		if !found {
 			pm.log.Warn("no known peers available to crawl")
 		} else {
@@ -731,7 +755,8 @@ func (pm *PeerMan) loadAddrBook() (int, error) {
 			Protos: pInfo.Protos,
 		}
 
-		if pm.addPeer(peerInfo, peerstore.RecentlyConnectedAddrTTL) {
+		ttl := calculateBackoffTTL(baseReconnectDelay, maxReconnectDelay, reconnectRetries, true)
+		if pm.addPeer(peerInfo, ttl) {
 			count++
 		}
 	}
@@ -772,7 +797,7 @@ func (pm *PeerMan) Connect(ctx context.Context, info AddrInfo) error {
 	if !pm.cg.IsAllowed(info.ID) {
 		return errors.New("peer not whitelisted while in private mode")
 	} // else it still wouldn't pass the connection gater, but we don't want to try or touch the peerstore
-	return pm.c.Connect(ctx, peer.AddrInfo(info))
+	return CompressDialError(pm.c.Connect(ctx, peer.AddrInfo(info)))
 }
 
 func (pm *PeerMan) Allow(p peer.ID) {
@@ -1007,39 +1032,51 @@ func (pm *PeerMan) Disconnected(net network.Network, conn network.Conn) {
 func (pm *PeerMan) Listen(network.Network, multiaddr.Multiaddr)      {}
 func (pm *PeerMan) ListenClose(network.Network, multiaddr.Multiaddr) {}
 
-// Reconnect logic with retry
-
 // Reconnect logic with exponential backoff and capped retries
 func (pm *PeerMan) reconnectWithRetry(ctx context.Context, peerID peer.ID) {
-	for attempt := range maxRetries {
-		addrInfo := peer.AddrInfo{
-			ID:    peerID,
-			Addrs: pm.ps.Addrs(peerID),
-		}
-
-		delay := baseReconnectDelay * (1 << attempt)
-		if delay > 1*time.Minute {
-			delay = 1 * time.Minute // Cap delay at 1 minute
-		}
-
-		pm.log.Infof("Attempting reconnection to peer %s (attempt %d/%d)", peerIDStringer(peerID), attempt+1, maxRetries)
-		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
-		if err := pm.c.Connect(ctx, addrInfo); err != nil {
-			cancel()
-			err = CompressDialError(err)
-			pm.log.Infof("Failed to reconnect to peer %s (trying again in %v): %v", peerIDStringer(peerID), delay, err)
-		} else {
-			cancel()
-			pm.log.Infof("Successfully reconnected to peer %s", peerIDStringer(peerID))
-			return
-		}
-
+	bo := newBackoffer(maxRetries, baseReconnectDelay, time.Minute, true)
+	delay := bo.next() // NOTE: first attempt is always 0 delay
+	for {
 		select {
 		case <-pm.done:
 			return
 		case <-time.After(delay):
 		}
+
+		addrInfo := peer.AddrInfo{
+			ID:    peerID,
+			Addrs: pm.ps.Addrs(peerID),
+		}
+		if len(addrInfo.Addrs) == 0 { // removed from peer store
+			pm.log.Infof("Peer %s no longer has known addresses", peerIDStringer(peerID))
+			return
+		}
+
+		attempt := bo.tries()
+
+		if pm.h.Network().Connectedness(peerID) == network.Connected {
+			return // reestablished since last try
+		}
+
+		pm.log.Infof("Attempting reconnection to peer %s (attempt %d/%d)", peerIDStringer(peerID), attempt, maxRetries)
+		ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+		err := pm.c.Connect(ctx, addrInfo)
+		if err == nil {
+			cancel()
+			pm.log.Infof("Successfully reconnected to peer %s", peerIDStringer(peerID))
+			return
+		}
+		cancel()
+
+		if attempt >= maxRetries { // or bo.maxedOut
+			break
+		}
+
+		delay = bo.next()
+		pm.log.Infof("Failed to reconnect to peer %s (trying again in %v): %v",
+			peerIDStringer(peerID), delay, CompressDialError(err))
 	}
+
 	pm.log.Infof("Exceeded max retries for peer %s. Giving up.", peerIDStringer(peerID))
 }
 

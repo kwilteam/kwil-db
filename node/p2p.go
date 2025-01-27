@@ -13,8 +13,10 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/node/peers"
 	dht "github.com/libp2p/go-libp2p-kad-dht"
+	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/discovery"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
 )
@@ -107,6 +109,16 @@ func NewP2PService(cfg *P2PServiceConfig, host host.Host) (*P2PService, error) {
 		return nil, fmt.Errorf("failed to create peer manager: %w", err)
 	}
 
+	// Set dummy stream handlers for the protocols implemented by the node.
+	// These do nothing until Node takes over and replaces them.
+	host.SetStreamHandler(ProtocolIDTxAnn, dummyStreamHandler)
+	host.SetStreamHandler(ProtocolIDBlkAnn, dummyStreamHandler)
+	host.SetStreamHandler(ProtocolIDBlock, dummyStreamHandler)
+	host.SetStreamHandler(ProtocolIDBlockHeight, dummyStreamHandler)
+	host.SetStreamHandler(ProtocolIDTx, dummyStreamHandler)
+	host.SetStreamHandler(ProtocolIDBlockPropose, dummyStreamHandler)
+	host.SetStreamHandler(pubsub.GossipSubID_v12, dummyStreamHandler)
+
 	mode := dht.ModeServer
 	ctx := context.Background()
 	dht, err := makeDHT(ctx, host, nil, mode)
@@ -124,12 +136,19 @@ func NewP2PService(cfg *P2PServiceConfig, host host.Host) (*P2PService, error) {
 	}, nil
 }
 
+func dummyStreamHandler(s network.Stream) { s.Close() }
+
+// Start launches the P2P service, registering the network Notifiee, and
+// connecting to bootstrap peers. This method is NOT blocking. The context only
+// affects the the connection process, and does not shutdown the service after
+// this method has returned.
 func (p *P2PService) Start(ctx context.Context, bootpeers ...string) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	p.host.Network().Notify(p.pm)
-	defer p.host.Network().StopNotify(p.pm)
+	// NOTE: we do not bother to StopNotify because the lifetime of the P2P
+	// service is tied to the lifetime of the application and thus the Host.
 
 	bootpeersMA, err := peers.ConvertPeersToMultiAddr(bootpeers)
 	if err != nil {
@@ -156,7 +175,7 @@ func (p *P2PService) Start(ctx context.Context, bootpeers ...string) error {
 
 		err = p.pm.Connect(ctx, peers.AddrInfo(*peerInfo))
 		if err != nil {
-			p.log.Errorf("failed to connect to %v: %v", bootpeers[i], err)
+			p.log.Errorf("failed to connect to %v: %v", bootpeers[i], peers.CompressDialError(err))
 			// Add it to the peer store anyway since this was specified as a
 			// bootnode, which is supposed to be persistent, so we should try to
 			// connect again later.
