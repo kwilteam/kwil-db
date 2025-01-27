@@ -89,7 +89,7 @@ func GenesisHashCmd() *cobra.Command {
 				}
 				defer cleanupTmpKwilAdminDir(dir) // clean up temp admin snapshots directory on exit after app hash computation
 
-				_, _, genCfg, err := snapshot.PGDump(cmd.Context(), pgConf.DBName, pgConf.User, pgConf.Pass, pgConf.Host, pgConf.Port, dir)
+				_, _, _, genCfg, err := snapshot.PGDump(cmd.Context(), pgConf.DBName, pgConf.User, pgConf.Pass, pgConf.Host, pgConf.Port, dir)
 				if err != nil {
 					return display.PrintErr(cmd, err)
 				}

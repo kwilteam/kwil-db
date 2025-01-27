@@ -19,13 +19,14 @@ import (
 )
 
 func transferCmd() *cobra.Command {
+	var keyTypeStr string
 	cmd := &cobra.Command{
-		Use:   "transfer <recipientID> <recipientKeyType> <amount>",
+		Use:   "transfer <recipientID> <amount>",
 		Short: "Transfer value to an account",
 		Long:  `Transfers value to an account.`,
-		Args:  cobra.ExactArgs(3), // recipient, keytype, amt
+		Args:  cobra.ExactArgs(2), // recipient, amt
 		RunE: func(cmd *cobra.Command, args []string) error {
-			recipient, typeStr, amt := args[0], args[1], args[2]
+			recipient, amt := args[0], args[1]
 			amount, ok := big.NewInt(0).SetString(amt, 10)
 			if !ok {
 				return display.PrintErr(cmd, errors.New("invalid decimal amount"))
@@ -39,14 +40,13 @@ func transferCmd() *cobra.Command {
 				return display.PrintErr(cmd, fmt.Errorf("failed to decode account ID: %w", err))
 			}
 
-			keyType := crypto.KeyType(typeStr)
 			// NOTE: could validate on client side first if built with extensions:
 			//   keyType, err := crypto.ParseKeyType(typeStr)
 			// Otherwise we leave it to the nodes to decide if it is supported.
 
 			to := &types.AccountID{
 				Identifier: id,
-				KeyType:    keyType,
+				KeyType:    crypto.KeyType(keyTypeStr),
 			}
 
 			return client.DialClient(cmd.Context(), cmd, 0, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
@@ -69,5 +69,6 @@ func transferCmd() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().StringVarP(&keyTypeStr, "keytype", "t", crypto.KeyTypeSecp256k1.String(), "key type of the recipient account ID (default secp256k1 for Ethereum)")
 	return cmd
 }

@@ -18,15 +18,16 @@
 package migrations
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"math/big"
+	"time"
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
-	"github.com/kwilteam/kwil-db/node/rlp"
 	"github.com/kwilteam/kwil-db/node/voting"
 )
 
@@ -40,7 +41,8 @@ func init() {
 	}
 }
 
-const MigrationVersion int = 0
+const MigrationVersion int = 0            // for migration metadata
+const migrationDeclarationVersion int = 0 // for migration declaration
 
 // MigrationDeclaration creates a new migration. It is used to agree on terms of a migration,
 // and is voted on using Kwil's vote store.
@@ -59,19 +61,61 @@ type MigrationDeclaration struct {
 
 // MarshalBinary marshals the MigrationDeclaration into a binary format.
 func (md MigrationDeclaration) MarshalBinary() ([]byte, error) {
-	return serialize.EncodeWithEncodingType(md, rlp.EncodingTypeRLP)
+	buf := &bytes.Buffer{}
+
+	if err := binary.Write(buf, types.SerializationByteOrder, uint16(migrationDeclarationVersion)); err != nil {
+		return nil, err
+	}
+
+	if err := binary.Write(buf, types.SerializationByteOrder, md.ActivationPeriod); err != nil {
+		return nil, err
+	}
+
+	if err := binary.Write(buf, types.SerializationByteOrder, md.Duration); err != nil {
+		return nil, err
+	}
+
+	if err := types.WriteString(buf, md.Timestamp); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
 }
 
 // UnmarshalBinary unmarshals the MigrationDeclaration from a binary format.
 func (md *MigrationDeclaration) UnmarshalBinary(data []byte) error {
-	return serialize.Decode(data, md)
+	rd := bytes.NewReader(data)
+
+	var version uint16
+	if err := binary.Read(rd, types.SerializationByteOrder, &version); err != nil {
+		return err
+	}
+	if int(version) != migrationDeclarationVersion {
+		return fmt.Errorf("invalid migration declaration version: %d", version)
+	}
+
+	if err := binary.Read(rd, types.SerializationByteOrder, &md.ActivationPeriod); err != nil {
+		return err
+	}
+
+	if err := binary.Read(rd, types.SerializationByteOrder, &md.Duration); err != nil {
+		return err
+	}
+
+	timestamp, err := types.ReadString(rd)
+	if err != nil {
+		return err
+	}
+	md.Timestamp = timestamp
+
+	return nil
 }
 
 // MigrationResolution is the definition for the network migration vote type in Kwil's
 // voting system.
 var MigrationResolution = resolutions.ResolutionConfig{
 	ConfirmationThreshold: big.NewRat(2, 3),
-	ExpirationPeriod:      100800, // 1 week
+	ExpirationPeriod:      24 * 7 * time.Hour, // 1 week
 	ResolveFunc: func(ctx context.Context, app *common.App, resolution *resolutions.Resolution, block *common.BlockContext) error {
 		return startMigration(ctx, app, resolution, block)
 	},

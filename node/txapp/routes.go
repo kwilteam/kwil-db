@@ -578,8 +578,9 @@ func (d *validatorRemoveRoute) PreTx(ctx *common.TxContext, svc *common.Service,
 
 func (d *validatorRemoveRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
 	removeReq := &voting.UpdatePowerRequest{
-		PubKey: d.target,
-		Power:  0,
+		PubKey:     d.target,
+		PubKeyType: d.keyType,
+		Power:      0,
 	}
 
 	if bytes.Equal(removeReq.PubKey, ctx.BlockContext.Proposer.Bytes()) {

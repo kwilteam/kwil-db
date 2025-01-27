@@ -39,7 +39,13 @@ This permits rapid prototyping and evaluation of Kwil functionality. An output d
 If no output directory is specified, the node will be initialized ` + "`./testnet`" + `.`
 
 	initExample = `# Initialize a node, with a new network, in the directory ~/.kwil-new
-kwild setup init -r ~/.kwild-new`
+kwild setup init -r ~/.kwild-new
+
+# Run the init command with --allocs flag to initialize a node with initial account balances. 
+The allocs flag should be a comma-separated list of <id#keyType:amount> pairs where the id is the account address or the pubkey and keyType is either "secp256k1" or "ed25519". If id is the ethereum address prefixed with "0x", the keyType is optional as shown below.
+
+kwild setup init --allocs "0xc89D42189f0450C2b2c3c61f58Ec5d628176A1E7:10000000000000000000000,0226b3ff29216dac187cea393f8af685ad419ac9644e55dce83d145c8b1af213bd#secp256k1:56000000000" -r ~/.kwild
+`
 )
 
 func InitCmd() *cobra.Command {
@@ -146,14 +152,19 @@ func InitCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("failed to create genesis file: %w", err))
 				}
 
-				genCfg.Leader = types.PublicKey{PublicKey: privKey.Public()}
-				genCfg.Validators = append(genCfg.Validators, &types.Validator{
-					AccountID: types.AccountID{
-						Identifier: privKey.Public().Bytes(),
-						KeyType:    privKey.Type(),
-					},
-					Power: 1,
-				})
+				if !cmd.Flags().Changed("leader") {
+					genCfg.Leader = types.PublicKey{PublicKey: privKey.Public()}
+				}
+
+				if len(genCfg.Validators) == 0 {
+					genCfg.Validators = append(genCfg.Validators, &types.Validator{
+						AccountID: types.AccountID{
+							Identifier: privKey.Public().Bytes(),
+							KeyType:    privKey.Type(),
+						},
+						Power: 1,
+					})
+				}
 
 				// If DB owner is not set, set it to the node's public key
 				if genCfg.DBOwner == "" {
@@ -188,6 +199,8 @@ func InitCmd() *cobra.Command {
 			if err := cfg.SaveAs(config.ConfigFilePath(rootDir)); err != nil {
 				return err
 			}
+
+			fmt.Println("Kwil node configuration generated successfully at: ", outDir)
 
 			return nil
 		},

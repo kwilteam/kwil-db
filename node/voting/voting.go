@@ -298,7 +298,7 @@ func fromRow(ctx context.Context, db sql.Executor, row []any) (*resolutions.Reso
 			return nil, fmt.Errorf("invalid type for voteBodyProposer (%T)", row[6])
 		}
 
-		pubKey, keyType, err := decodePubKey(vProposer)
+		pubKey, keyType, err := DecodePubKey(vProposer)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode pubKey from voteBodyProposer: %w", err)
 		}
@@ -345,7 +345,7 @@ func fromRow(ctx context.Context, db sql.Executor, row []any) (*resolutions.Reso
 			return nil, fmt.Errorf("failed to read bigendian int64 from voter: %w", err)
 		}
 
-		pubKey, keyType, err := decodePubKey(voter[8:])
+		pubKey, keyType, err := DecodePubKey(voter[8:])
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode pubKey from voter: %w", err)
 		}
@@ -693,7 +693,7 @@ func getValidators(ctx context.Context, db sql.Executor) ([]*types.Validator, er
 			return nil, errors.New("invalid type for voter")
 		}
 
-		pubkey, keyType, err := decodePubKey(voterBts)
+		pubkey, keyType, err := DecodePubKey(voterBts)
 		if err != nil {
 			return nil, fmt.Errorf("failed to decode pubKey from voter: %w", err)
 		}
@@ -743,7 +743,7 @@ func getValidator(ctx context.Context, db sql.Executor, pubKey []byte, keyType c
 		return nil, errors.New("query returned a different voter")
 	}
 
-	pubkey, keyType, err := decodePubKey(voterBts)
+	pubkey, keyType, err := DecodePubKey(voterBts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decode pubKey from voter: %w", err)
 	}
@@ -803,7 +803,7 @@ func encodePubKey(pubKey []byte, keyType crypto.KeyType) []byte {
 }
 
 // decodePubKey decodes a byte slice into a public key and key type.
-func decodePubKey(b []byte) ([]byte, crypto.KeyType, error) {
+func DecodePubKey(b []byte) ([]byte, crypto.KeyType, error) {
 	keyType, b, err := crypto.WireDecodeKeyType(b)
 	if err != nil {
 		return nil, "", err

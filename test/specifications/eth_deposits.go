@@ -238,7 +238,7 @@ func FundValidatorSpecification(ctx context.Context, t *testing.T, sender Deploy
 	require.NoError(t, err)
 
 	// Transfer transferAmt to the Validator
-	txHash, err := executor.Transfer(ctx, valAcct, transferAmt, nil)
+	txHash, err := executor.Transfer(ctx, valAcct, transferAmt)
 	require.NoError(t, err, "failed to send transfer tx")
 
 	// I expect success

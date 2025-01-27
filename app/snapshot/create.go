@@ -20,15 +20,16 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/kwilteam/kwil-db/app/custom"
+	appNode "github.com/kwilteam/kwil-db/app/node"
 	"github.com/kwilteam/kwil-db/app/node/conf"
 	"github.com/kwilteam/kwil-db/app/shared/bind"
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/config"
-	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node"
 	"github.com/kwilteam/kwil-db/node/meta"
 	"github.com/kwilteam/kwil-db/node/pg"
+	"github.com/kwilteam/kwil-db/node/voting"
 )
 
 var (
@@ -81,12 +82,17 @@ func createCmd() *cobra.Command {
 				return display.PrintErr(cmd, fmt.Errorf("failed to get postgres flags: %v", err))
 			}
 
-			height, logs, _, err := PGDump(cmd.Context(), pgConf.DBName, pgConf.User, pgConf.Pass, pgConf.Host, pgConf.Port, snapshotDir)
+			height, logs, snapshot, genCfg, err := PGDump(cmd.Context(), pgConf.DBName, pgConf.User, pgConf.Pass, pgConf.Host, pgConf.Port, snapshotDir)
 			if err != nil {
 				return display.PrintErr(cmd, fmt.Errorf("failed to create database snapshot: %v", err))
 			}
 
-			r := &createSnapshotRes{Logs: logs, Height: height}
+			r := &createSnapshotRes{
+				Logs: logs, Height: height,
+				Snapshot:  snapshot,
+				StateHash: genCfg.StateHash,
+			}
+
 			return display.PrintCmd(cmd, r)
 		},
 	}
@@ -100,12 +106,15 @@ func createCmd() *cobra.Command {
 }
 
 type createSnapshotRes struct {
-	Logs   []string `json:"logs"`
-	Height int64    `json:"height"`
+	Logs      []string       `json:"logs"`
+	Snapshot  string         `json:"snapshot"`
+	StateHash types.HexBytes `json:"state_hash"`
+	Height    int64          `json:"height"`
 }
 
 func (c *createSnapshotRes) MarshalJSON() ([]byte, error) {
-	return json.Marshal(c)
+	type alias createSnapshotRes
+	return json.Marshal((*alias)(c))
 }
 
 func (c *createSnapshotRes) MarshalText() (text []byte, err error) {
@@ -118,22 +127,22 @@ func migrationSnapshotFile(snapshotDir string) string {
 
 // PGDump uses pg_dump to create a snapshot of the database.
 // It returns messages to log and an error if any.
-func PGDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, snapshotDir string) (height int64, logs []string, genesisConfig *config.GenesisConfig, err error) {
+func PGDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, snapshotDir string) (height int64, logs []string, snapshot string, genesisConfig *config.GenesisConfig, err error) {
 	// Get the chain height
 	height, err = chainHeight(ctx, dbName, dbUser, dbPass, dbHost, dbPort)
 	if err != nil {
-		return -1, nil, nil, fmt.Errorf("failed to get chain height: %w", err)
+		return -1, nil, "", nil, fmt.Errorf("failed to get chain height: %w", err)
 	}
 	// Check if the snapshot directory exists, if not create it
 	err = os.MkdirAll(snapshotDir, 0755)
 	if err != nil {
-		return -1, nil, nil, fmt.Errorf("failed to create snapshot directory: %w", err)
+		return -1, nil, "", nil, fmt.Errorf("failed to create snapshot directory: %w", err)
 	}
 
 	dumpFile := migrationSnapshotFile(snapshotDir)
 	outputFile, err := os.Create(dumpFile)
 	if err != nil {
-		return -1, nil, nil, fmt.Errorf("failed to create dump file: %w", err)
+		return -1, nil, "", nil, fmt.Errorf("failed to create dump file: %w", err)
 	}
 	// delete the dump file if an error occurs anywhere during the snapshot process
 	defer func() {
@@ -146,8 +155,7 @@ func PGDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 	gzipWriter := gzip.NewWriter(outputFile)
 	defer gzipWriter.Close()
 
-	pgDumpCmd := exec.CommandContext(ctx,
-		"pg_dump",
+	args := []string{
 		"--dbname", dbName,
 		"--format", "plain",
 		"--schema", "kwild_voting", // Include only the processed table
@@ -155,13 +163,11 @@ func PGDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 
 		// Account Schema
 		"--schema", "kwild_accts",
-
+		"--schema", "kwild_engine",
+		"--schema", "info",
 		// Internal Schema
 		"--schema", "kwild_internal",
 		"-T", "kwild_internal.sentry", // Exclude sentry table (no versioning)
-
-		// User Schemas
-		"--schema", "ds_*",
 
 		// kwild_chain is not included in this snapshot, as this is used for genesis state
 
@@ -183,18 +189,29 @@ func PGDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 		"--host", dbHost,
 		"--port", dbPort,
 		"--no-password",
-	)
+	}
+
+	namespaces, err := namespaces(ctx, dbName, dbUser, dbPass, dbHost, dbPort)
+	if err != nil {
+		return -1, nil, "", nil, fmt.Errorf("failed to get namespaces: %w", err)
+	}
+
+	for _, ns := range namespaces { // user schemas
+		args = append(args, "--schema", ns)
+	}
+
+	pgDumpCmd := exec.CommandContext(ctx, "pg_dump", args...)
 	pgDumpCmd.Env = append(os.Environ(), "PGPASSWORD="+dbPass)
 
 	var stderr bytes.Buffer
 	pgDumpOutput, err := pgDumpCmd.StdoutPipe()
 	if err != nil {
-		return -1, nil, nil, fmt.Errorf("failed to get stdout pipe: %w", err)
+		return -1, nil, "", nil, fmt.Errorf("failed to get stdout pipe: %w", err)
 	}
 	pgDumpCmd.Stderr = &stderr
 
 	if err := pgDumpCmd.Start(); err != nil {
-		return -1, nil, nil, fmt.Errorf("failed to start pg_dump command: %w", err)
+		return -1, nil, "", nil, fmt.Errorf("failed to start pg_dump command: %w", err)
 	}
 	defer pgDumpOutput.Close()
 
@@ -215,7 +232,7 @@ func PGDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 			if err == io.EOF {
 				break
 			}
-			return -1, nil, nil, fmt.Errorf("failed to read pg_dump output: %w", err)
+			return -1, nil, "", nil, fmt.Errorf("failed to read pg_dump output: %w", err)
 		}
 
 		trimLine := strings.TrimSpace(line)
@@ -228,7 +245,7 @@ func PGDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 				inVotersBlock = false
 				n, err := multiWriter.Write([]byte(line)) // line includes the \n
 				if err != nil {
-					return -1, nil, nil, fmt.Errorf("failed to write to gzip writer: %w", err)
+					return -1, nil, "", nil, fmt.Errorf("failed to write to gzip writer: %w", err)
 				}
 				totalBytes += int64(n)
 				continue
@@ -236,29 +253,29 @@ func PGDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 
 			strs := strings.Split(trimLine, "\t")
 			if len(strs) != 3 {
-				return -1, nil, nil, fmt.Errorf("invalid voter line: %s", trimLine)
+				return -1, nil, "", nil, fmt.Errorf("invalid voter line: %s", trimLine)
 			}
+
 			voterID, err := hex.DecodeString(strs[1][3:]) // Remove the leading \\x
 			if err != nil {
-				return -1, nil, nil, fmt.Errorf("failed to decode voter ID: %w", err)
+				return -1, nil, "", nil, fmt.Errorf("failed to decode voter ID: %w", err)
 			}
 
 			// voterID is the encoded public key
-			pubkey, err := crypto.WireDecodePubKey(voterID)
+			pubkey, keyType, err := voting.DecodePubKey(voterID)
 			if err != nil {
-				return -1, nil, nil, fmt.Errorf("failed to decode public key: %w", err)
+				return -1, nil, "", nil, fmt.Errorf("failed to decode public key: %w", err)
 			}
 
 			power, err := strconv.ParseInt(strs[2], 10, 64)
 			if err != nil {
-				return -1, nil, nil, fmt.Errorf("failed to parse power: %w", err)
+				return -1, nil, "", nil, fmt.Errorf("failed to parse power: %w", err)
 			}
 
-			// TODO: update this once the keytype is added to the voters table
 			genCfg.Validators = append(genCfg.Validators, &types.Validator{
 				AccountID: types.AccountID{
-					Identifier: pubkey.Bytes(),
-					KeyType:    pubkey.Type(),
+					Identifier: pubkey,
+					KeyType:    keyType,
 				},
 				Power: power,
 			})
@@ -284,7 +301,7 @@ func PGDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 				// Write the sanitized line to the gzip writer
 				n, err := multiWriter.Write([]byte(line)) // line includes the \n
 				if err != nil {
-					return -1, nil, nil, fmt.Errorf("failed to write to gzip writer: %w", err)
+					return -1, nil, "", nil, fmt.Errorf("failed to write to gzip writer: %w", err)
 				}
 				totalBytes += int64(n)
 			}
@@ -293,34 +310,41 @@ func PGDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 
 	// Close the writer when pg_dump completes to signal EOF to sed
 	if err := pgDumpCmd.Wait(); err != nil {
-		return -1, nil, nil, errors.New(stderr.String())
+		return -1, nil, "", nil, errors.New(stderr.String())
 	}
 
 	// Append the below sql statement to the dump file to adjust the expiration times of the resolutions
 	// This is to ensure that the resolutions are correctly expired on the new network
 	n, err := multiWriter.Write([]byte("UPDATE kwild_voting.resolutions SET expiration = expiration-" + strconv.FormatInt(height, 10) + ";\n"))
 	if err != nil {
-		return -1, nil, nil, fmt.Errorf("failed to write resolution updates to gzip writer: %w", err)
+		return -1, nil, "", nil, fmt.Errorf("failed to write resolution updates to gzip writer: %w", err)
 	}
 
 	totalBytes += int64(n)
 
 	err = gzipWriter.Flush()
 	if err != nil {
-		return -1, nil, nil, fmt.Errorf("failed to flush gzip writer: %w", err)
+		return -1, nil, "", nil, fmt.Errorf("failed to flush gzip writer: %w", err)
 	}
 
 	hash := hasher.Sum(nil)
 	genCfg.StateHash = hash
 
+	leader, err := networkLeader(ctx, dbName, dbUser, dbPass, dbHost, dbPort)
+	if err != nil {
+		return -1, nil, "", nil, fmt.Errorf("failed to get network leader: %w", err)
+	}
+	genCfg.Leader = leader // use the same leader just for the purposes of creating the genesis file
+	// without the leader, the genesis file will not be created due to unmarshal errors
+
 	// Write the genesis config to a file
 	genesisFile := filepath.Join(snapshotDir, "genesis.json")
 	if err := genCfg.SaveAs(genesisFile); err != nil {
-		return -1, nil, nil, fmt.Errorf("failed to save genesis config: %w", err)
+		return -1, nil, "", nil, fmt.Errorf("failed to save genesis config: %w", err)
 	}
 
 	return height, []string{fmt.Sprintf("Snapshot created at: %s, Total bytes written: %d", dumpFile, totalBytes),
-		fmt.Sprintf("Genesis config created at: %s, Genesis hash: %s", genesisFile, fmt.Sprintf("%x", hash))}, genCfg, nil
+		fmt.Sprintf("Genesis config created at: %s, Genesis hash: %s", genesisFile, fmt.Sprintf("%x", hash))}, dumpFile, genCfg, nil
 }
 
 func chainHeight(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string) (int64, error) {
@@ -346,4 +370,50 @@ func chainHeight(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort str
 	}
 
 	return height, nil
+}
+
+func networkLeader(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string) (types.PublicKey, error) {
+	cfg := &pg.PoolConfig{
+		ConnConfig: pg.ConnConfig{
+			Host:   dbHost,
+			Port:   dbPort,
+			User:   dbUser,
+			Pass:   dbPass,
+			DBName: dbName,
+		},
+		MaxConns: 2,
+	}
+	pool, err := pg.NewPool(ctx, cfg)
+	if err != nil {
+		return types.PublicKey{}, fmt.Errorf("failed to create pool: %w", err)
+	}
+	defer pool.Close()
+
+	params, err := meta.LoadParams(ctx, pool)
+	if err != nil {
+		return types.PublicKey{}, fmt.Errorf("failed to get leader: %w", err)
+	}
+
+	return params.Leader, nil
+}
+
+// kwil-cli query “{info}select name from namespaces where name != ‘info’”
+func namespaces(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string) ([]string, error) {
+	cfg := &pg.PoolConfig{
+		ConnConfig: pg.ConnConfig{
+			Host:   dbHost,
+			Port:   dbPort,
+			User:   dbUser,
+			Pass:   dbPass,
+			DBName: dbName,
+		},
+		MaxConns: 2,
+	}
+	pool, err := pg.NewPool(ctx, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create pool: %w", err)
+	}
+	defer pool.Close()
+
+	return appNode.UserNamespaces(ctx, pool)
 }

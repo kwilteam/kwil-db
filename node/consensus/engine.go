@@ -311,6 +311,9 @@ func New(cfg *Config) *ConsensusEngine {
 	// Status, etc. tries to access the role.
 	ce.role.Store(types.RoleSentry)
 
+	// set the node to be in the catchup mode
+	ce.inSync.Store(true)
+
 	if ce.proposeTimeout == 0 { // can't be zero
 		ce.proposeTimeout = defaultProposeTimeout
 	}
@@ -514,9 +517,6 @@ func (ce *ConsensusEngine) initializeState(ctx context.Context) (int64, int64, e
 	// Figure out the app state and initialize the node state.
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
-
-	// set the node to catchup mode
-	ce.inSync.Store(true)
 
 	readTx, err := ce.db.BeginReadTx(ctx)
 	if err != nil {

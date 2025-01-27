@@ -71,6 +71,7 @@ type NetworkConfig struct {
 	// OPTIONAL: ConfigureGenesis is a function that alters the genesis configuration
 	ConfigureGenesis func(*config.GenesisConfig)
 
+	GenesisSnapshot string
 	// OPTIONAL: ExtraServices are services that should be run with the test. The test
 	// Automatically runs kwild and Postgres, but this allows for geth, kgw,
 	// etc. to run as well.
@@ -136,6 +137,10 @@ type Testnet struct {
 	EthNode *EthNode
 }
 
+func (t *Testnet) TestDir() string {
+	return t.testCtx.tmpdir
+}
+
 // ExtraServiceEndpoint gets the endpoint for an extra service that was configured in the testnet
 func (t *Testnet) ExtraServiceEndpoint(ctx context.Context, serviceName string, protocol string, port string) (string, error) {
 	ct, ok := t.testCtx.containers[serviceName]
@@ -196,7 +201,7 @@ func DeployETHNode(t *testing.T, ctx context.Context, dockerName string, privKey
 		composePath: composePath,
 	}
 
-	runDockerCompose(ctx, t, testCtx, composePath, []*ServiceDefinition{{Name: "hardhat"}})
+	runDockerCompose(ctx, t, testCtx, composePath, []*ServiceDefinition{{Name: "hardhat"}}, 30*time.Second)
 
 	// check if the hardhat service is running
 	ctr, ok := testCtx.containers["hardhat"]
@@ -378,12 +383,12 @@ func SetupTests(t *testing.T, testConfig *TestConfig) *Testnet {
 		})
 	}
 
-	err = setup.GenerateTestnetDir(tmpDir, genesisConfig, testnetNodeConfigs)
+	err = setup.GenerateTestnetDir(tmpDir, genesisConfig, testnetNodeConfigs, testConfig.Network.GenesisSnapshot)
 	require.NoError(t, err)
 
 	testCtx.generatedConfig = generatedConfig
 
-	runDockerCompose(ctx, t, testCtx, composePath, servicesToRun)
+	runDockerCompose(ctx, t, testCtx, composePath, servicesToRun, testConfig.ContainerStartTimeout)
 
 	tp := &Testnet{
 		testCtx: testCtx,
@@ -421,7 +426,7 @@ type ServiceDefinition struct {
 }
 
 // runDockerCompose runs docker-compose with the given compose file
-func runDockerCompose(ctx context.Context, t *testing.T, testCtx *testingContext, composePath string, services []*ServiceDefinition) {
+func runDockerCompose(ctx context.Context, t *testing.T, testCtx *testingContext, composePath string, services []*ServiceDefinition, startTimeout time.Duration) {
 	var dc compose.ComposeStack
 	var err error
 	dc, err = compose.NewDockerCompose(composePath)
@@ -432,6 +437,7 @@ func runDockerCompose(ctx context.Context, t *testing.T, testCtx *testingContext
 	t.Cleanup(func() {
 		if t.Failed() {
 			t.Logf("Stopping but keeping containers for inspection after failed test: %v", dc.Services())
+			time.Sleep(10 * time.Minute)
 			svcs := dc.Services()
 			slices.Sort(svcs)
 			for _, svc := range svcs {
@@ -457,7 +463,7 @@ func runDockerCompose(ctx context.Context, t *testing.T, testCtx *testingContext
 	for i, svc := range services {
 		if svc.WaitMsg != nil {
 			// wait for the service to be ready
-			dc = dc.WaitForService(svc.Name, wait.NewLogStrategy(*svc.WaitMsg).WithStartupTimeout(testCtx.config.ContainerStartTimeout))
+			dc = dc.WaitForService(svc.Name, wait.NewLogStrategy(*svc.WaitMsg).WithStartupTimeout(startTimeout))
 		}
 		serviceNames[i] = svc.Name
 	}
@@ -483,6 +489,11 @@ func runDockerCompose(ctx context.Context, t *testing.T, testCtx *testingContext
 func (c *NodeConfig) makeNode(generated *generatedNodeInfo, isFirstNode bool, firstNode *kwilNode) (*kwilNode, error) {
 	defaultConf := config.DefaultConfig()
 	conf := config.DefaultConfig()
+
+	// set this to 1sec by default for tests, can be configured by the user to something else
+	// through configure function depending on the test
+	conf.Consensus.EmptyBlockTimeout = types.Duration(1 * time.Second)
+
 	c.Configure(conf)
 
 	// there are some configurations that the user cannot set, as they will screw up the test.
@@ -560,8 +571,8 @@ func NewServiceDefinition(name string, waitMsg string) *ServiceDefinition {
 	}
 }
 
-func (tt *Testnet) RunServices(t *testing.T, ctx context.Context, services []*ServiceDefinition) {
-	runDockerCompose(ctx, t, tt.testCtx, tt.testCtx.composePath, services)
+func (tt *Testnet) RunServices(t *testing.T, ctx context.Context, services []*ServiceDefinition, startTimeout time.Duration) {
+	runDockerCompose(ctx, t, tt.testCtx, tt.testCtx.composePath, services, startTimeout)
 }
 
 type generatedNodeConfig struct {
@@ -649,6 +660,15 @@ func (k *kwilNode) PeerID() string {
 	return fmt.Sprintf("%s#%s", hex.EncodeToString(pubkey.Bytes()), pubkey.Type())
 }
 
+func (k *kwilNode) PostgresEndpoint(t *testing.T, ctx context.Context, name string) (string, string, error) {
+	container, ok := k.testCtx.containers[name]
+	if !ok {
+		t.Fatalf("container %s not found", name)
+	}
+
+	return getEndpoints(container, ctx, "5432", "tcp")
+}
+
 type KwilNode interface {
 	PrivateKey() *crypto.Secp256k1PrivateKey
 	PublicKey() *crypto.Secp256k1PublicKey
@@ -658,4 +678,5 @@ type KwilNode interface {
 	JSONRPCClient(t *testing.T, ctx context.Context, opts *ClientOptions) JSONRPCClient
 	AdminClient(t *testing.T, ctx context.Context) *AdminClient
 	PeerID() string
+	PostgresEndpoint(t *testing.T, ctx context.Context, name string) (exposed string, unexposed string, err error)
 }

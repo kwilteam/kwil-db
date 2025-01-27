@@ -370,7 +370,7 @@ func (j *jsonRPCCLIDriver) GetAccount(ctx context.Context, acct *types.AccountID
 	// if err != nil {
 	// 	return nil, fmt.Errorf("bad key type %s (%w)", acct.KeyType, err)
 	// }
-	args := []string{"account", "balance", hex.EncodeToString(acct.Identifier), acct.KeyType.String()}
+	args := []string{"account", "balance", hex.EncodeToString(acct.Identifier), "--keytype", acct.KeyType.String()}
 	if status == types.AccountStatusPending {
 		args = append(args, "--pending")
 	}
@@ -450,11 +450,7 @@ func (j *jsonRPCCLIDriver) WaitTx(ctx context.Context, txHash types.Hash, interv
 }
 
 func (j *jsonRPCCLIDriver) Transfer(ctx context.Context, to *types.AccountID, amount *big.Int, opts ...client.TxOpt) (types.Hash, error) {
-	return j.exec(ctx, []string{"account", "transfer", to.Identifier.String(), to.KeyType.String(), amount.String()}, opts...)
-}
-
-func (j *jsonRPCCLIDriver) TransferAmt(ctx context.Context, to *types.AccountID, amt *big.Int, opts ...client.TxOpt) (types.Hash, error) {
-	return j.Transfer(ctx, to, amt, opts...)
+	return j.exec(ctx, []string{"account", "transfer", to.Identifier.String(), amount.String(), "--keytype", to.KeyType.String()}, opts...)
 }
 
 func (j *jsonRPCCLIDriver) AccountBalance(ctx context.Context, identifier string) (*big.Int, error) {

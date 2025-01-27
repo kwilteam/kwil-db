@@ -74,8 +74,8 @@ type DBSnapshotter interface {
 	CreateSnapshot(ctx context.Context, height uint64, snapshotID string, schemas, excludeTables []string, excludeTableData []string) (*Snapshot, error)
 }
 
-func NewSnapshotStore(cfg *SnapshotConfig, logger log.Logger) (*SnapshotStore, error) {
-	snapshotter := NewSnapshotter(cfg.DBConfig, cfg.SnapshotDir, logger)
+func NewSnapshotStore(cfg *SnapshotConfig, ns NamespaceManager, logger log.Logger) (*SnapshotStore, error) {
+	snapshotter := NewSnapshotter(cfg.DBConfig, cfg.SnapshotDir, ns, logger)
 	ss := &SnapshotStore{
 		cfg:         cfg,
 		snapshots:   make(map[uint64]*Snapshot),

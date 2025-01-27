@@ -44,17 +44,23 @@ const (
 // TODO: STAGE2 could be optimized by sorting based on the first column,
 // but it might not work if the first column is not unique.
 
-type Snapshotter struct {
-	dbConfig    *config.DBConfig
-	snapshotDir string
-	log         log.Logger
+type NamespaceManager interface {
+	ListPostgresSchemasToDump() []string
 }
 
-func NewSnapshotter(cfg *config.DBConfig, dir string, logger log.Logger) *Snapshotter {
+type Snapshotter struct {
+	dbConfig     *config.DBConfig
+	snapshotDir  string
+	namespaceMgr NamespaceManager
+	log          log.Logger
+}
+
+func NewSnapshotter(cfg *config.DBConfig, dir string, namespaceMgr NamespaceManager, logger log.Logger) *Snapshotter {
 	return &Snapshotter{
-		dbConfig:    cfg,
-		snapshotDir: dir,
-		log:         logger,
+		dbConfig:     cfg,
+		snapshotDir:  dir,
+		namespaceMgr: namespaceMgr,
+		log:          logger,
 	}
 }
 
@@ -107,7 +113,7 @@ func (s *Snapshotter) CreateSnapshot(ctx context.Context, height uint64, snapsho
 // schemas: List of schemas to include in the snapshot
 // excludeTables: List of tables to exclude from the snapshot
 // excludeTableData: List of tables for which definitions should be included but not the data
-func (s *Snapshotter) dbSnapshot(ctx context.Context, height uint64, format uint32, snapshotID string, schemas, excludeTables []string, excludeTableData []string) error {
+func (s *Snapshotter) dbSnapshot(ctx context.Context, height uint64, format uint32, snapshotID string, internalSchemas, excludeTables []string, excludeTableData []string) error {
 	snapshotDir := snapshotFormatDir(s.snapshotDir, height, format)
 	dumpFile := filepath.Join(snapshotDir, stage1output)
 
@@ -138,8 +144,14 @@ func (s *Snapshotter) dbSnapshot(ctx context.Context, height uint64, format uint
 		"--no-owner",
 	}
 
+	pgSchemas := s.namespaceMgr.ListPostgresSchemasToDump()
+
+	for _, schema := range pgSchemas {
+		args = append(args, "--schema", schema)
+	}
+
 	// Schemas to include in the snapshot
-	for _, schema := range schemas {
+	for _, schema := range internalSchemas {
 		args = append(args, "--schema", schema)
 	}
 

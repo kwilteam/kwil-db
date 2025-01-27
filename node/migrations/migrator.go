@@ -1,8 +1,10 @@
 package migrations
 
 import (
+	"bytes"
 	"context"
 	"encoding"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,10 +16,8 @@ import (
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/core/types/serialize"
 	"github.com/kwilteam/kwil-db/node/accounts"
 	"github.com/kwilteam/kwil-db/node/pg"
-	"github.com/kwilteam/kwil-db/node/rlp"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/versioning"
 	"github.com/kwilteam/kwil-db/node/voting"
@@ -31,7 +31,8 @@ var (
 		"kwild_voting",
 		"kwild_accts",
 		"kwild_internal",
-		"ds_*",
+		// "kwild_engine",
+		// "info", // snapshotter already includes this along with the user schemas
 	}
 
 	// Tables to exclude from the network migration snapshot.
@@ -441,6 +442,8 @@ type BlockSpends struct {
 	Spends []*accounts.Spend
 }
 
+const blockSpendsVersion = 0
+
 var _ pg.ChangeStreamer = (*BlockSpends)(nil)
 
 func (bs BlockSpends) Prefix() byte {
@@ -448,13 +451,69 @@ func (bs BlockSpends) Prefix() byte {
 }
 
 func (bs BlockSpends) MarshalBinary() ([]byte, error) {
-	return serialize.EncodeWithEncodingType(bs, rlp.EncodingTypeRLP)
+	buf := &bytes.Buffer{}
+
+	// version uint16
+	if err := binary.Write(buf, types.SerializationByteOrder, uint16(blockSpendsVersion)); err != nil {
+		return nil, err
+	}
+
+	// numSpends uint32
+	if err := binary.Write(buf, types.SerializationByteOrder, uint32(len(bs.Spends))); err != nil {
+		return nil, err
+	}
+
+	for _, spend := range bs.Spends {
+		spendBts, err := spend.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+
+		// spendBts
+		if err := types.WriteBytes(buf, spendBts); err != nil {
+			return nil, err
+		}
+	}
+
+	return buf.Bytes(), nil
 }
 
 var _ encoding.BinaryUnmarshaler = (*BlockSpends)(nil)
 
 func (bs *BlockSpends) UnmarshalBinary(bts []byte) error {
-	return serialize.Decode(bts, bs)
+	buf := bytes.NewReader(bts)
+
+	// version uint16
+	var version uint16
+	if err := binary.Read(buf, types.SerializationByteOrder, &version); err != nil {
+		return err
+	}
+	if version != blockSpendsVersion {
+		return fmt.Errorf("invalid block spends version: %d", version)
+	}
+
+	// numSpends uint32
+	var numSpends uint32
+	if err := binary.Read(buf, types.SerializationByteOrder, &numSpends); err != nil {
+		return err
+	}
+
+	bs.Spends = make([]*accounts.Spend, numSpends)
+	for i := range numSpends {
+		spendBts, err := types.ReadBytes(buf)
+		if err != nil {
+			return err
+		}
+
+		spend := &accounts.Spend{}
+		if err := spend.UnmarshalBinary(spendBts); err != nil {
+			return err
+		}
+
+		bs.Spends[i] = spend
+	}
+
+	return nil
 }
 
 type chunkWriter struct {
