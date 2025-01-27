@@ -88,8 +88,8 @@ func getExampleTxQueryResponse() *types.TxQueryResponse {
 	}
 
 	rawPayload := types.ActionExecution{
-		DBID:   "xf617af1ca774ebbd6d23e8fe12c56d41d25a22d81e88f67c6c6ee0d4",
-		Action: "create_user",
+		Namespace: "xf617af1ca774ebbd6d23e8fe12c56d41d25a22d81e88f67c6c6ee0d4",
+		Action:    "create_user",
 		Arguments: [][]*types.EncodedValue{
 			{
 				{

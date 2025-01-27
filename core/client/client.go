@@ -242,7 +242,7 @@ func (c *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
 // It returns the receipt, as well as outputs which is the decoded body of the receipt.
 // It can take any number of inputs, and if multiple tuples of inputs are passed,
 // it will execute them in the same transaction.
-func (c *Client) Execute(ctx context.Context, dbid string, procedure string, tuples [][]any, opts ...clientType.TxOpt) (types.Hash, error) {
+func (c *Client) Execute(ctx context.Context, namespace string, procedure string, tuples [][]any, opts ...clientType.TxOpt) (types.Hash, error) {
 	encodedTuples := make([][]*types.EncodedValue, len(tuples))
 	for i, tuple := range tuples {
 		encoded, err := encodeTuple(tuple)
@@ -254,7 +254,7 @@ func (c *Client) Execute(ctx context.Context, dbid string, procedure string, tup
 
 	executionBody := &types.ActionExecution{
 		Action:    procedure,
-		DBID:      dbid,
+		Namespace: namespace,
 		Arguments: encodedTuples,
 	}
 
@@ -265,7 +265,7 @@ func (c *Client) Execute(ctx context.Context, dbid string, procedure string, tup
 	}
 
 	c.logger.Debug("execute action",
-		"DBID", dbid, "action", procedure,
+		"Namespace", namespace, "action", procedure,
 		"signature_type", tx.Signature.Type,
 		"signature", base64.StdEncoding.EncodeToString(tx.Signature.Data),
 		"fee", tx.Body.Fee.String(), "nonce", tx.Body.Nonce)
@@ -306,14 +306,14 @@ func (c *Client) ExecuteSQL(ctx context.Context, stmt string, params map[string]
 }
 
 // Call calls a procedure or action. It returns the result records.
-func (c *Client) Call(ctx context.Context, dbid string, procedure string, inputs []any) (*types.CallResult, error) {
+func (c *Client) Call(ctx context.Context, namespace string, procedure string, inputs []any) (*types.CallResult, error) {
 	encoded, err := encodeTuple(inputs)
 	if err != nil {
 		return nil, err
 	}
 
 	payload := &types.ActionCall{
-		DBID:      dbid,
+		Namespace: namespace,
 		Action:    procedure,
 		Arguments: encoded,
 	}

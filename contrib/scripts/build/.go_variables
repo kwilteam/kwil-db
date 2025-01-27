@@ -33,7 +33,7 @@ if [ "$GO_LINKMODE" = "static" ]; then
     GO_BUILDTAGS="$GO_BUILDTAGS osusergo netgo"
 fi
 
-GO_BUILDTAGS="$GO_BUILDTAGS auth_nep413 auth_ed25519_sha256"
+GO_BUILDTAGS="$GO_BUILDTAGS auth_ed25519_sha256"
 
 GO_LDFLAGS="$GO_LDFLAGS -s -w"
 

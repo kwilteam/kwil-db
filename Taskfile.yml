@@ -14,9 +14,11 @@ tasks:
 
   tools:
     aliases: [install:deps]
+    deps:
+      - task: linter
     desc: Install tools required to build this app
     cmds:
-      - go install "golang.org/x/tools/cmd/goimports@v0.27.0"
+      - go install "golang.org/x/tools/cmd/goimports@v0.29.0"
 
   fmt:
     desc: Format the code
@@ -36,7 +38,7 @@ tasks:
       - |
         (cd core; go mod tidy)
         go mod tidy
-      #  (cd test; go mod tidy)
+        (cd test; go mod tidy)
       #  (cd core/client/example; go mod tidy)
       #  (cd core/gatewayclient/example; go mod tidy)
 
@@ -49,7 +51,7 @@ tasks:
   linter:
     desc: Install the linter # not for CI which has an action for this
     cmds:
-      - go install "github.com/golangci/golangci-lint/cmd/golangci-lint@v1.62.2"
+      - go install "github.com/golangci/golangci-lint/cmd/golangci-lint@v1.63.4"
 
   build:
     desc: Build kwil-cli and kwild

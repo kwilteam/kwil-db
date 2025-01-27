@@ -12,7 +12,7 @@ import (
 func TestCreateCallMessage(t *testing.T) {
 	t.Run("create call message without signer", func(t *testing.T) {
 		ac := &ActionCall{
-			DBID:      "testdb",
+			Namespace: "testdb",
 			Action:    "testaction",
 			Arguments: nil,
 		}
@@ -30,7 +30,7 @@ func TestCreateCallMessage(t *testing.T) {
 
 	t.Run("create call message with signer but no challenge", func(t *testing.T) {
 		ac := &ActionCall{
-			DBID:      "testdb",
+			Namespace: "testdb",
 			Action:    "testaction",
 			Arguments: nil,
 		}
@@ -50,7 +50,7 @@ func TestCreateCallMessage(t *testing.T) {
 
 	t.Run("create call message with invalid action call", func(t *testing.T) {
 		ac := &ActionCall{
-			DBID:      "",
+			Namespace: "",
 			Action:    "",
 			Arguments: nil,
 		}
@@ -62,7 +62,7 @@ func TestCreateCallMessage(t *testing.T) {
 
 	t.Run("create call message with signer and challenge", func(t *testing.T) {
 		ac := &ActionCall{
-			DBID:      "testdb",
+			Namespace: "testdb",
 			Action:    "testaction",
 			Arguments: nil,
 		}

@@ -19,29 +19,27 @@ import (
 )
 
 var (
-	callLong = `Call a ` + "`" + `view` + "`" + ` procedure or action, returning the result.
+	callLong = `Call a ` + "`view`" + ` procedure or action, returning the result.
 
-` + "`" + `view` + "`" + ` procedure are read-only procedure that do not require gas to execute.  They are
-the primary way to query the state of a database. The ` + "`" + `call` + "`" + ` command is used to call
-a ` + "`" + `view` + "`" + ` procedure on a database.  It takes the procedure name as the first positional
+` + "`view`" + ` procedure are read-only procedure that do not require gas to execute.  They are
+the primary way to query the state of a database. The ` + "`call`" + ` command is used to call
+a ` + "`view`" + ` procedure on a database.  It takes the procedure name as the first positional
 argument, and the procedure inputs as all subsequent arguments.
 
 To specify a procedure input, you first need to specify the input name, then the input value, delimited by a colon.
-For example, for procedure ` + "`" + `get_user($username)` + "`" + `, you would specify the procedure as follows:
+For example, for procedure ` + "`get_user($username)`" + `, you would specify the procedure as follows:
 
-` + "`" + `call get_user username:satoshi` + "`" + `
+` + "`call get_user username:satoshi`" + `
 
-You can either specify the database to execute this against with the ` + "`" + `--name` + "`" + ` and ` + "`" + `--owner` + "`" + `
-flags, or you can specify the database by passing the database id with the ` + "`" + `--dbid` + "`" + ` flag.  If a ` + "`" + `--name` + "`" + `
-flag is passed and no ` + "`" + `--owner` + "`" + ` flag is passed, the owner will be inferred from your configured wallet.
+You specify the database namespace in which to execute this with the ` + "`--namespace` flag. " + `
 
-If you are interacting with a Kwil gateway, you can also pass the ` + "`" + `--authenticate` + "`" + ` flag to authenticate the call with your private key.`
+If you are interacting with a Kwil gateway, you can also pass the ` + "`--authenticate`" + ` flag to authenticate the call with your private key.`
 
-	callExample = `# Calling the ` + "`" + `get_user($username)` + "`" + ` procedure on the "mydb" database
-kwil-cli database call get_user --name mydb --owner 0x9228624C3185FCBcf24c1c9dB76D8Bef5f5DAd64 username:satoshi
+	callExample = `# Calling the ` + "`get_user($username)`" + ` procedure on the "somedb" namespace
+kwil-cli database call get_user --namespace somedb username:satoshi
 
-# Calling the ` + "`" + `get_user($username)` + "`" + ` procedure on a database using a dbid, authenticating with a private key
-kwil-cli database call get_user --dbid 0x9228624C3185FCBcf24c1c9dB76D8Bef5f5DAd64 username:satoshi --authenticate`
+# Calling the ` + "`get_user($username)`" + ` procedure on a database using a namespace, authenticating with a private key
+kwil-cli database call get_user --namespace somedb username:satoshi --authenticate`
 )
 
 func callCmd() *cobra.Command {
@@ -63,9 +61,9 @@ func callCmd() *cobra.Command {
 			}
 
 			return client.DialClient(cmd.Context(), cmd, dialFlags, func(ctx context.Context, clnt clientType.Client, conf *config.KwilCliConfig) error {
-				dbid, _, err := getSelectedNamespace(cmd)
+				namespace, _, err := getSelectedNamespace(cmd)
 				if err != nil {
-					return display.PrintErr(cmd, fmt.Errorf("error getting selected dbid from CLI flags: %w", err))
+					return display.PrintErr(cmd, fmt.Errorf("error getting selected namespace from CLI flags: %w", err))
 				}
 
 				action, args, err := getSelectedAction(cmd, args)
@@ -78,7 +76,7 @@ func callCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("error getting inputs: %w", err))
 				}
 
-				tuples, err := buildExecutionInputs(ctx, clnt, dbid, action, []map[string]string{inputs})
+				tuples, err := buildExecutionInputs(ctx, clnt, namespace, action, []map[string]string{inputs})
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error creating action/procedure inputs: %w", err))
 				}
@@ -90,7 +88,7 @@ func callCmd() *cobra.Command {
 					return display.PrintErr(cmd, errors.New("only one set of inputs can be provided to call"))
 				}
 
-				data, err := clnt.Call(ctx, dbid, action, tuples[0])
+				data, err := clnt.Call(ctx, namespace, action, tuples[0])
 				if err != nil {
 					return display.PrintErr(cmd, fmt.Errorf("error calling action/procedure: %w", err))
 				}
@@ -107,7 +105,7 @@ func callCmd() *cobra.Command {
 		},
 	}
 
-	bindFlagsTargetingAction(cmd)
+	bindFlagsTargetingAction(cmd) // --namespace/-n , --action/-a
 	cmd.Flags().BoolVar(&gwAuth, "authenticate", false, "authenticate signals that the call is being made to a gateway and should be authenticated with the private key")
 	cmd.Flags().BoolVar(&logs, "logs", false, "result will include logs from notices raised during the call")
 	return cmd

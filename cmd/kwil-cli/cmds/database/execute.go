@@ -27,11 +27,11 @@ statement "SELECT * FROM users WHERE age > 25", you would specify the following:
 To specify an action to execute, you can pass the action name as the first positional argument, or as the --action flag.
 The action name is specified as the first positional argument, and the action parameters as all subsequent arguments.`
 
-	executeExample = `# Executing a CREATE TABLE statement on the "mydb" database
+	executeExample = `# Executing a CREATE TABLE statement on the "somedb" database namespace
 kwil-cli database execute --sql "CREATE TABLE users (id UUID, name TEXT, age INT8);" --namespace mydb
 	
-# Executing the ` + "`" + `create_user($username, $age)` + "`" + ` procedure on the "mydb" database
-kwil-cli database execute --action create_user username:satoshi age:32 --namespace mydb
+# Executing the ` + "`" + `create_user($username, $age)` + "`" + ` procedure on the "somedb" database
+kwil-cli database execute --action create_user username:satoshi age:32 --namespace somedb
 `
 )
 
@@ -167,7 +167,7 @@ func executeCmd() *cobra.Command {
 		},
 	}
 
-	bindFlagsTargetingAction(cmd)
+	bindFlagsTargetingAction(cmd) // --namespace/-n , --action/-a
 	cmd.Flags().StringVarP(&sqlStmt, "sql", "s", "", "the SQL statement to execute")
 	cmd.Flags().StringVarP(&sqlFilepath, "sql-file", "f", "", "the file containing the SQL statement to execute")
 	return cmd

@@ -291,7 +291,7 @@ func (d *executeActionRoute) PreTx(ctx *common.TxContext, svc *common.Service, t
 	}
 
 	d.action = action.Action
-	d.namespace = action.DBID
+	d.namespace = action.Namespace
 
 	// here, we decode the [][]types.EncodedTypes into [][]any
 	d.args = make([][]any, len(action.Arguments))

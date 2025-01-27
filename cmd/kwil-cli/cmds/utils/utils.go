@@ -21,7 +21,6 @@ func NewCmdUtils() *cobra.Command {
 		chainInfoCmd(),
 		kgwAuthnCmd(),
 		testCmd(),
-		dbidCmd(),
 		generateKeyCmd(),
 	)
 

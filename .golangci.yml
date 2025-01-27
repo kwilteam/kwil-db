@@ -29,6 +29,7 @@ linters:
     - durationcheck
     - canonicalheader
     - copyloopvar
+    - exptostd
     - fatcontext
     - gocheckcompilerdirectives
     - gochecksumtype

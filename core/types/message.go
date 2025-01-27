@@ -44,15 +44,15 @@ type CallMessage struct {
 
 const callMsgToSignTmplV0 = `Kwil view call.
 
-DBID: %s
+Namespace: %s
 Method: %s
 Digest: %x
 Challenge: %x
 `
 
-func CallSigText(dbid, action string, payload []byte, challenge []byte) string {
+func CallSigText(namespace, action string, payload []byte, challenge []byte) string {
 	digest := sha256.Sum256(payload)
-	return fmt.Sprintf(callMsgToSignTmplV0, dbid, action, digest[:20], challenge)
+	return fmt.Sprintf(callMsgToSignTmplV0, namespace, action, digest[:20], challenge)
 }
 
 const stmtMsgToSignTmplV0 = `Kwil SQL statement.
@@ -93,7 +93,7 @@ func CreateCallMessage(ac *ActionCall, challenge []byte, signer auth.Signer) (*C
 	}
 
 	if len(challenge) > 0 {
-		sigText := CallSigText(ac.DBID, ac.Action, bts, challenge)
+		sigText := CallSigText(ac.Namespace, ac.Action, bts, challenge)
 		sig, err := signer.Sign([]byte(sigText))
 		if err != nil {
 			return nil, err

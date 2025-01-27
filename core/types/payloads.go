@@ -275,7 +275,7 @@ func (r RawStatement) Type() PayloadType {
 
 // ActionExecution is the payload that is used to execute an action
 type ActionExecution struct {
-	DBID      string
+	Namespace string
 	Action    string
 	Arguments [][]*EncodedValue
 }
@@ -292,7 +292,7 @@ const aeVersion = 0
 // all cases):
 //
 //   - Two bytes for version (uint16), which is presently 0 (aeVersion).
-//   - The DBID string is written according to WriteString, which has a
+//   - The namespace string is written according to WriteString, which has a
 //	   4 byte length prefix followed by the bytes of the utf8 string.
 //   - The Action string is written according to WriteString.
 //   - The number of batched calls is written as a uint16.
@@ -307,8 +307,8 @@ func (a ActionExecution) MarshalBinary() ([]byte, error) {
 	if err := binary.Write(buf, SerializationByteOrder, uint16(aeVersion)); err != nil {
 		return nil, err
 	}
-	// dbid
-	err := WriteString(buf, a.DBID)
+	// namespace
+	err := WriteString(buf, a.Namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -353,8 +353,8 @@ func (a *ActionExecution) UnmarshalBinary(b []byte) error {
 	if version != aeVersion {
 		return fmt.Errorf("unsupported version %d", version)
 	}
-	// dbid
-	dbid, err := ReadString(rd)
+	// namespace
+	namespace, err := ReadString(rd)
 	if err != nil {
 		return err
 	}
@@ -392,7 +392,7 @@ func (a *ActionExecution) UnmarshalBinary(b []byte) error {
 	}
 
 	a.Action = action
-	a.DBID = dbid
+	a.Namespace = namespace
 	a.Arguments = args
 
 	// ensure all args[i] have same length here or in caller?
@@ -405,7 +405,7 @@ func (a *ActionExecution) UnmarshalBinary(b []byte) error {
 // transactions.ActionExecution for the transaction payload used for executing
 // an action.
 type ActionCall struct {
-	DBID      string // TODO: rename to Namespace
+	Namespace string
 	Action    string
 	Arguments []*EncodedValue
 }
@@ -419,7 +419,7 @@ const acVersion = 0
 // all cases):
 //
 //   - Two bytes for version (uint16), which is presently 0 (acVersion).
-//   - The DBID string is written according to WriteString, which has a
+//   - The namespace string is written according to WriteString, which has a
 //	   4 byte length prefix followed by the bytes of the utf8 string.
 //   - The Action string is written according to WriteString.
 //   - The number of arguments is written as a uint16.
@@ -432,8 +432,8 @@ func (ac ActionCall) MarshalBinary() ([]byte, error) {
 	if err := binary.Write(buf, SerializationByteOrder, uint16(acVersion)); err != nil {
 		return nil, err
 	}
-	// dbid
-	err := WriteString(buf, ac.DBID)
+	// namespace
+	err := WriteString(buf, ac.Namespace)
 	if err != nil {
 		return nil, err
 	}
@@ -471,8 +471,8 @@ func (ac *ActionCall) UnmarshalBinary(b []byte) error {
 	if version != acVersion {
 		return fmt.Errorf("unsupported version %d", version)
 	}
-	// dbid
-	dbid, err := ReadString(rd)
+	// namespace
+	namespace, err := ReadString(rd)
 	if err != nil {
 		return err
 	}
@@ -502,7 +502,7 @@ func (ac *ActionCall) UnmarshalBinary(b []byte) error {
 	}
 
 	ac.Action = action
-	ac.DBID = dbid
+	ac.Namespace = namespace
 	ac.Arguments = args
 
 	return nil

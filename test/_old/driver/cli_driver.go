@@ -209,18 +209,18 @@ func (d *KwilCliDriver) prepareCliActionParams(ctx context.Context, namespace st
 	return args, nil
 }
 
-func (d *KwilCliDriver) Execute(ctx context.Context, dbid string, action string, inputs ...[]any) (types.Hash, error) {
+func (d *KwilCliDriver) Execute(ctx context.Context, namespace string, action string, inputs ...[]any) (types.Hash, error) {
 	if len(inputs) > 1 {
 		return types.Hash{}, fmt.Errorf("kwil-cli does not support batched inputs")
 	}
 
 	// NOTE: kwil-cli does not support batched inputs
-	actionInputs, err := d.prepareCliActionParams(ctx, dbid, action, inputs[0])
+	actionInputs, err := d.prepareCliActionParams(ctx, namespace, action, inputs[0])
 	if err != nil {
 		return types.Hash{}, fmt.Errorf("failed to get action params: %w", err)
 	}
 
-	args := []string{"database", "execute", action, "--dbid", dbid}
+	args := []string{"database", "execute", action, "--namespace", namespace}
 	args = append(args, actionInputs...)
 
 	cmd := d.newKwilCliCmd(args...)

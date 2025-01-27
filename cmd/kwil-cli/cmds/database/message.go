@@ -40,7 +40,7 @@ func (d *respDBList) MarshalText() ([]byte, error) {
 		msg.WriteString(fmt.Sprintf("Databases belonging to '%x':\n", d.owner))
 	}
 	for i, db := range d.Info {
-		msg.WriteString(fmt.Sprintf("  DBID: %s\n", db.DBID))
+		msg.WriteString(fmt.Sprintf("  Namespace: %s\n", db.Namespace))
 		msg.WriteString(fmt.Sprintf("    Name: %s\n", db.Name))
 		msg.WriteString(fmt.Sprintf("    Owner: %x", db.Owner))
 		if i != len(d.Info)-1 {

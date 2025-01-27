@@ -21,7 +21,7 @@ type VersionRequest struct{}
 
 // SchemaRequest contains the request parameters for MethodSchema.
 type SchemaRequest struct {
-	DBID string `json:"dbid"`
+	Namespace string `json:"namespace"`
 }
 
 // AccountRequest contains the request parameters for MethodAccount.

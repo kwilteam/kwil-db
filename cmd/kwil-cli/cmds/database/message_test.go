@@ -1,15 +1,13 @@
 package database
 
 import (
-	"encoding/hex"
-
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
 func Example_respDBlist_text_0() {
 	display.Print(
-		&respDBList{Info: []*types.DatasetIdentifier{}, owner: mustDecodeHex("6f776e6572")},
+		&respDBList{Info: []*types.DatasetIdentifier{}, owner: testOwner},
 		nil, "text")
 	// Output:
 	// No databases found for '6f776e6572'.
@@ -19,57 +17,44 @@ func Example_respDBlist_text() {
 	display.Print(
 		&respDBList{Info: []*types.DatasetIdentifier{
 			{
-				Name:  "db_a",
-				Owner: mustDecodeHex("6f776e6572"),
-				DBID:  "xabc",
+				Name:      "db_a",
+				Owner:     testOwner,
+				Namespace: "one",
 			},
 			{
-				Name:  "db_b",
-				Owner: mustDecodeHex("6f776e6572"),
-				DBID:  "xdef",
+				Name:      "db_b",
+				Owner:     testOwner,
+				Namespace: "two",
 			},
 		},
-			owner: mustDecodeHex("6f776e6572")},
+			owner: testOwner},
 		nil, "text")
 	// Output:
 	// Databases belonging to '6f776e6572':
-	//   DBID: xabc
+	//   Namespace: one
 	//     Name: db_a
 	//     Owner: 6f776e6572
-	//   DBID: xdef
+	//   Namespace: two
 	//     Name: db_b
 	//     Owner: 6f776e6572
 }
 
-func mustDecodeHex(s string) []byte {
-	b, err := hex.DecodeString(s)
-	if err != nil {
-		panic(err)
-	}
-	return b
-}
-
-// func mustDecodeBase64(s string) []byte {
-// 	b, err := base64.StdEncoding.DecodeString(s)
-// 	if err != nil {
-// 		panic(err)
-// 	}
-// 	return b
-// }
+// hex.DecodeString("6f776e6572")
+var testOwner = []byte{0x6f, 0x77, 0x6e, 0x65, 0x72}
 
 func Example_respDBlist_json() {
 
 	display.Print(
 		&respDBList{Info: []*types.DatasetIdentifier{
 			{
-				Name:  "db_a",
-				Owner: mustDecodeHex("6f776e6572"),
-				DBID:  "xabc",
+				Name:      "db_a",
+				Owner:     testOwner,
+				Namespace: "one",
 			},
 			{
-				Name:  "db_b",
-				Owner: mustDecodeHex("6f776e6572"),
-				DBID:  "xdef",
+				Name:      "db_b",
+				Owner:     testOwner,
+				Namespace: "two",
 			},
 		}},
 		nil, "json")
@@ -80,12 +65,12 @@ func Example_respDBlist_json() {
 	//     {
 	//       "name": "db_a",
 	//       "owner": "6f776e6572",
-	//       "dbid": "xabc"
+	//       "namespace": "one"
 	//     },
 	//     {
 	//       "name": "db_b",
 	//       "owner": "6f776e6572",
-	//       "dbid": "xdef"
+	//       "namespace": "two"
 	//     }
 	//   ],
 	//   "error": ""
