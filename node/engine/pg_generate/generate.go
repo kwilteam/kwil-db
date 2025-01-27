@@ -1270,6 +1270,11 @@ func (s *sqlGenerator) VisitDropNamespaceStatement(p0 *parse.DropNamespaceStatem
 	return nil
 }
 
+func (s *sqlGenerator) VisitTransferOwnershipStatement(p0 *parse.TransferOwnershipStatement) any {
+	generateErr(s)
+	return nil
+}
+
 // generateErr is a helper function that panics when a Visit method that is unexpected is called.
 func generateErr(t any) {
 	panic(fmt.Sprintf("SQL generate should never be called on %T", t))

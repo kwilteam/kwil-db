@@ -426,6 +426,27 @@ func (a *accessController) IsOwner(user string) bool {
 	return false
 }
 
+// GetOwner returns the owner of the database.
+func (a *accessController) GetOwner() (owner string, found bool) {
+	i := 0
+	for user, roles := range a.userRoles {
+		for _, role := range roles {
+			if role == ownerRole {
+				owner = user
+				found = true
+				i++
+			}
+		}
+	}
+
+	if i > 1 {
+		// suggests a bug in the engine
+		panic("unexpected error: multiple owners found")
+	}
+
+	return
+}
+
 func (a *accessController) RoleExists(role string) bool {
 	_, ok := a.roles[role]
 	return ok

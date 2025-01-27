@@ -401,37 +401,20 @@ func Test_SQL(t *testing.T) {
 			caller:  "user",
 		},
 		{
-			name: "grant owner role to user",
+			name: "transfer owner role to user",
 			sql: []string{
-				"GRANT owner TO 'user';",
+				"TRANSFER OWNERSHIP TO 'user';",
 			},
-			execSQL: "GRANT owner TO 'user2';",
+			execSQL: "TRANSFER OWNERSHIP TO 'user2';",
 			caller:  "user",
 		},
 		{
-			name:    "grant owner role to user, parameterized",
-			execSQL: `grant owner to $user;`,
+			name:    "grant role to user, parameterized",
+			sql:     []string{"CREATE ROLE test_role;"},
+			execSQL: `grant test_role to $user;`,
 			execVars: map[string]any{
 				"user": "new_user",
 			},
-		},
-		{
-			name: "role cannot grant ownership if not owner, even if they have the roles priv",
-			sql: []string{
-				"CREATE ROLE test_role;",
-				"GRANT ROLES TO test_role;",
-				"GRANT test_role TO 'user';",
-			},
-			execSQL: `grant owner to 'user2';`,
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "user",
-		},
-		{
-			name: "owner can revoke another owner",
-			sql: []string{
-				"GRANT owner TO 'user';",
-			},
-			execSQL: "REVOKE owner FROM 'user';",
 		},
 		// here we test that privileges are correctly enforced.
 		// We do this by relying on the default role, which has no privileges
@@ -2305,6 +2288,66 @@ func Test_NamingOverwrites(t *testing.T) {
 	require.NoError(t, err)
 }
 
+// This tests that db ownership functionality works as expected
+func Test_Ownership(t *testing.T) {
+	db, err := newTestDB()
+	require.NoError(t, err)
+	defer db.Close()
+
+	ctx := context.Background()
+	tx, err := db.BeginTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx) // always rollback
+
+	interp := newTestInterp(t, tx, nil, false)
+
+	user2 := "user2"
+	err = interp.Execute(newEngineCtx(defaultCaller), tx, `TRANSFER OWNERSHIP TO '`+user2+`';`, nil, nil)
+	require.NoError(t, err)
+
+	// test that default user cannot create a table
+	err = interp.Execute(newEngineCtx(defaultCaller), tx, `CREATE TABLE test_table (id INT PRIMARY KEY);`, nil, nil)
+	require.ErrorIs(t, err, engine.ErrDoesNotHavePrivilege)
+
+	// test user2 can create a table
+	err = interp.Execute(newEngineCtx(user2), tx, `CREATE TABLE test_table (id INT PRIMARY KEY);`, nil, nil)
+	require.NoError(t, err)
+
+	// user2 can transfer ownership back to default user
+	err = interp.Execute(newEngineCtx(user2), tx, `TRANSFER OWNERSHIP TO '`+defaultCaller+`';`, nil, nil)
+	require.NoError(t, err)
+
+	// user2 cannot drop table
+	err = interp.Execute(newEngineCtx(user2), tx, `DROP TABLE test_table;`, nil, nil)
+	require.ErrorIs(t, err, engine.ErrDoesNotHavePrivilege)
+
+	// default user can drop table
+	err = interp.Execute(newEngineCtx(defaultCaller), tx, `DROP TABLE test_table;`, nil, nil)
+	require.NoError(t, err)
+
+	// use WithoutCtx to force ownership transfer back to user 2
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `TRANSFER OWNERSHIP TO $user;`, map[string]any{
+		"user": user2,
+	}, nil)
+	require.NoError(t, err)
+
+	// user2 can create a table
+	err = interp.Execute(newEngineCtx(user2), tx, `CREATE TABLE test_table (id INT PRIMARY KEY);`, nil, nil)
+	require.NoError(t, err)
+
+	// default user cannot drop table
+	err = interp.Execute(newEngineCtx(defaultCaller), tx, `DROP TABLE test_table;`, nil, nil)
+	require.ErrorIs(t, err, engine.ErrDoesNotHavePrivilege)
+
+	// default user cannot transfer ownership
+	err = interp.Execute(newEngineCtx(defaultCaller), tx, `TRANSFER OWNERSHIP TO 'user3';`, nil, nil)
+	require.ErrorIs(t, err, engine.ErrDoesNotHavePrivilege)
+
+	// it is impossible to revoke privileges from the owner, even if using WithoutCtx
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `REVOKE insert FROM owner;`, nil, nil)
+	require.Contains(t, err.Error(), "owner role cannot have privileges revoked")
+}
+
 // This tests that the `notice` function works correctly, even when methods call an action that
 // logs a notice, and that method is called from another action (which was a previous bug).
 func Test_Notice(t *testing.T) {
@@ -2614,7 +2657,7 @@ func newTestInterp(t *testing.T, tx sql.DB, seeds []string, includeTestTables bo
 
 	engCtx := newEngineCtx(defaultCaller)
 	engCtx.OverrideAuthz = true
-	err = interp.Execute(engCtx, tx, "GRANT IF NOT GRANTED owner TO $user", map[string]any{
+	err = interp.ExecuteWithoutEngineCtx(context.Background(), tx, "TRANSFER OWNERSHIP TO $user", map[string]any{
 		"user": defaultCaller,
 	}, nil)
 	require.NoError(t, err)

@@ -379,7 +379,7 @@ func Test_Metadata(t *testing.T) {
 	_ = interp
 
 	// set owner
-	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `GRANT OWNER TO '0xUser';`, nil, nil)
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `TRANSFER OWNERSHIP TO '0xUser';`, nil, nil)
 	require.NoError(t, err)
 
 	// 1. Create a bunch of different types of metadata
