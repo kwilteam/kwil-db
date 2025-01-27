@@ -205,9 +205,9 @@ func listTablesInNamespace(ctx context.Context, db sql.DB, namespace string) ([]
 	indexes AS (
 		SELECT i.namespace, i.table_name,
 			json_agg(i.name ORDER BY i.name) AS names,
-			json_agg(i.is_pk ORDER BY i.name) AS is_pks,
+			json_agg(i.is_primary_key ORDER BY i.name) AS is_pks,
 			json_agg(i.is_unique ORDER BY i.name) AS is_uniques,
-			json_agg(i.column_names ORDER BY i.name) AS column_names
+			json_agg(i.columns ORDER BY i.name) AS column_names
 		FROM info.indexes i
 		GROUP BY i.namespace, i.table_name
 	), constraints AS (

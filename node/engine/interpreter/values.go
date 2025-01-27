@@ -2212,14 +2212,7 @@ func (a *decimalArrayValue) Cast(t *types.DataType) (value, error) {
 				return nil, err
 			}
 
-			// we need to make a copy of the decimal because SetPrecisionAndScale
-			// will modify the decimal in place. TODO: this is not true
-			dec2, err := types.ParseDecimalExplicit(dec.String(), dec.Precision(), dec.Scale())
-			if err != nil {
-				return nil, err
-			}
-
-			err = dec2.SetPrecisionAndScale(t.Metadata[0], t.Metadata[1])
+			err = dec.SetPrecisionAndScale(t.Metadata[0], t.Metadata[1])
 			if err != nil {
 				return nil, err
 			}
@@ -2613,6 +2606,12 @@ func (n *arrayOfNulls) Get(i int32) (scalarValue, error) {
 }
 
 func (n *arrayOfNulls) Value() (driver.Value, error) {
+	// returning an array of null TEXT matches the behavior of Postgres.
+	// psql:
+	// postgres=# select pg_typeof(array[null]);
+	// pg_typeof
+	// -----------
+	//  text[]
 	sd := newValidArr(make([]pgtype.Text, n.length))
 	for i := int32(1); i <= n.length; i++ {
 		sd.Elements[i-1] = pgtype.Text{Valid: false}

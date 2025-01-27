@@ -331,9 +331,9 @@ SELECT
     n.nspname::TEXT AS namespace,
     c.relname::TEXT AS table_name,
     ic.relname::TEXT AS name,
-    i.indisprimary AS is_pk,
+    i.indisprimary AS is_primary_key,
     i.indisunique AS is_unique,
-    array_agg(a.attname ORDER BY x.ordinality)::TEXT[] AS column_names
+    array_agg(a.attname ORDER BY x.ordinality)::TEXT[] AS columns
 FROM pg_index i
 JOIN pg_class c ON c.oid = i.indrelid
 JOIN pg_class ic ON ic.oid = i.indexrelid
@@ -435,14 +435,8 @@ CREATE VIEW info.actions AS
 WITH parameters AS (
     SELECT 
         action_id,
-        array_agg(
-            p.name
-            ORDER BY p.position, p.name, kwild_engine.format_type(p.scalar_type, p.is_array, p.metadata)
-        ) AS parameter_names,
-        array_agg(
-            kwild_engine.format_type(p.scalar_type, p.is_array, p.metadata)
-            ORDER BY p.position, p.name, kwild_engine.format_type(p.scalar_type, p.is_array, p.metadata)
-        ) AS parameter_types
+        array_agg(p.name ORDER BY p.position, p.name, kwild_engine.format_type(p.scalar_type, p.is_array, p.metadata)) AS parameter_names,
+        array_agg(kwild_engine.format_type(p.scalar_type, p.is_array, p.metadata) ORDER BY p.position, p.name, kwild_engine.format_type(p.scalar_type, p.is_array, p.metadata)) AS parameter_types
     FROM kwild_engine.parameters p
     GROUP BY action_id
 ), return_fields AS (
@@ -516,8 +510,8 @@ CREATE VIEW info.extensions AS
 SELECT 
     n.name AS namespace,
     ie.base_extension AS extension,
-    array_agg(eip.key ORDER BY eip.key, eip.value) AS parameters,
-    array_agg(eip.value ORDER BY eip.key, eip.value) AS values
+    array_agg(eip.key ORDER BY eip.key, eip.value)::TEXT[] AS parameters,
+    array_agg(eip.value ORDER BY eip.key, eip.value)::TEXT[] AS values
 FROM
     kwild_engine.initialized_extensions ie
 JOIN

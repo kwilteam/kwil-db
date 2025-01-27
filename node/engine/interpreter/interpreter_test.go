@@ -416,6 +416,16 @@ func Test_SQL(t *testing.T) {
 				"user": "new_user",
 			},
 		},
+		{
+			name:    "cannot grant default role",
+			execSQL: `GRANT default TO 'user';`,
+			err:     engine.ErrBuiltInRole,
+		},
+		{
+			name:    "cannot revoke default role",
+			execSQL: `REVOKE default FROM 'user';`,
+			err:     engine.ErrBuiltInRole,
+		},
 		// here we test that privileges are correctly enforced.
 		// We do this by relying on the default role, which has no privileges
 		// except for select and call.
@@ -1743,7 +1753,23 @@ func Test_Actions(t *testing.T) {
 			},
 			action: "call_get_null",
 		},
-		// TODO: test that actions returning nulls to other actions does not error
+		{
+			name: "action returns null to another action",
+			stmt: []string{
+				`CREATE ACTION get_null() public view returns (a int) { RETURN null; }`,
+				`CREATE ACTION call_get_null() public view { $a := get_null()::TEXT; if $a is not null { error('a is not null'); } }`,
+			},
+			action: "call_get_null",
+		},
+		{
+			name: "action returning nothing to another action",
+			stmt: []string{
+				`CREATE ACTION get_nothing() public view { /* returns nothing */ }`,
+				`CREATE ACTION call_get_nothing() public view { $a := get_nothing(); }`,
+			},
+			action: "call_get_nothing",
+			err:    engine.ErrReturnShape,
+		},
 		{
 			// this is a regression test
 			name: "special functions called in new namespaces works as expected",
@@ -1754,6 +1780,60 @@ func Test_Actions(t *testing.T) {
 			namespace: "test",
 			action:    "get_uuid",
 			results:   [][]any{{mustUUID("819ab751-e64c-5259-bbae-4d36f25bdd84")}},
+		},
+		rawTest("loop over array with nulls", `
+		$i := 1;
+		for $name IN ARRAY ['Alice', null, 'Bob'] {
+			if $i == 1 AND $name != 'Alice' {
+				error('name is not Alice');
+			}
+			
+			if $i == 2 AND $name is not null {
+				error('name is not null');
+			}
+
+			if $i == 3 AND $name != 'Bob' {
+				error('name is not Bob');
+			}
+
+			$i := $i + 1;
+		}
+		`),
+		{
+			name: "private actions can be called within the same namespace",
+			stmt: []string{
+				`CREATE ACTION private_action() private { }`,
+				`CREATE ACTION call_private_action() public { private_action(); }`,
+			},
+			action: "call_private_action",
+		},
+		{
+			name: "private actions cannot be called from another namespace",
+			stmt: []string{
+				`CREATE NAMESPACE test;`,
+				`{test} CREATE ACTION private_action() private { }`,
+				`CREATE ACTION call_private_action() public { test.private_action(); }`,
+			},
+			action: "call_private_action",
+			err:    engine.ErrActionPrivate,
+		},
+		{
+			name: "system actions can be called from any namespace",
+			stmt: []string{
+				`CREATE NAMESPACE test;`,
+				`{test} CREATE ACTION call_system_action() system { }`,
+				`{test} CREATE ACTION call_system_action2() system { test.call_system_action(); }`,
+				`CREATE ACTION call_system_action3() public { test.call_system_action2(); }`,
+			},
+			action: "call_system_action3",
+		},
+		{
+			name: "system actions cannot be called publicly",
+			stmt: []string{
+				`CREATE ACTION call_system_action() system { }`,
+			},
+			action: "call_system_action",
+			err:    engine.ErrActionSystemOnly,
 		},
 	}
 
