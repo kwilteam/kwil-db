@@ -5,7 +5,6 @@ package main
 
 import (
 	"context"
-	"encoding/hex"
 	"flag"
 	"fmt"
 	"io"
@@ -216,20 +215,6 @@ func makeEthSigner(keyHex string) auth.Signer {
 func genEthKey() *crypto.Secp256k1PrivateKey {
 	key, _, _ := crypto.GenerateSecp256k1Key(nil)
 	return key.(*crypto.Secp256k1PrivateKey)
-}
-
-func makeEdSigner(keyHex string) auth.Signer {
-	keyBts, err := hex.DecodeString(keyHex)
-	key, err := crypto.UnmarshalEd25519PrivateKey(keyBts)
-	if err != nil {
-		panic(fmt.Sprintf("bad private key: %v", err))
-	}
-	return &auth.Ed25519Signer{Ed25519PrivateKey: *key}
-}
-
-func genEdKey() *crypto.Ed25519PrivateKey {
-	key, _, _ := crypto.GenerateEd25519Key(nil)
-	return key.(*crypto.Ed25519PrivateKey) // fmt.Println(key.Hex())
 }
 
 var testSQLSchema = `
