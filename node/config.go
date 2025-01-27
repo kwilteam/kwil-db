@@ -24,4 +24,6 @@ type Config struct {
 	Snapshotter SnapshotStore
 	BlockProc   BlockProcessor
 	Logger      log.Logger
+
+	P2PService *P2PService
 }

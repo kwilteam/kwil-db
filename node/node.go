@@ -28,14 +28,12 @@ import (
 	"github.com/kwilteam/kwil-db/node/types"
 
 	"github.com/libp2p/go-libp2p"
-	dht "github.com/libp2p/go-libp2p-kad-dht"
 	pubsub "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/core/connmgr"
 	p2pcrypto "github.com/libp2p/go-libp2p/core/crypto"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/libp2p/go-libp2p/core/peerstore"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
@@ -114,6 +112,9 @@ func (wl *WhitelistMgr) List() []string {
 }
 
 type Node struct {
+	// Base services
+	P2PService
+
 	// cfg
 	pex    bool
 	pubkey crypto.PublicKey
@@ -122,14 +123,11 @@ type Node struct {
 	chainID string
 
 	// interfaces
-	bki         types.BlockStore
-	mp          types.MemPool
-	ce          ConsensusEngine
-	pm          peerManager // *peers.PeerMan
-	ss          SnapshotStore
-	host        host.Host
-	statesyncer *StateSyncService
-	bp          BlockProcessor
+	bki types.BlockStore
+	mp  types.MemPool
+	ce  ConsensusEngine
+	ss  SnapshotStore
+	bp  BlockProcessor
 
 	// broadcast channels
 	ackChan  chan AckRes                  // from consensus engine, to gossip to leader
@@ -137,9 +135,8 @@ type Node struct {
 	discReq  chan types.DiscoveryRequest  // from consensus engine, to gossip to leader for calculating best height of the validators during blocksync.
 	discResp chan types.DiscoveryResponse // from gossip, to consensus engine for calculating best height of the validators during blocksync.
 
-	wg        sync.WaitGroup
-	log       log.Logger
-	dhtCloser func() error
+	wg  sync.WaitGroup
+	log log.Logger
 }
 
 // NewNode creates a new node. The config struct is for required configuration,
@@ -157,133 +154,33 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 
 	pubkey := cfg.PrivKey.Public()
 
-	// This connection gater is logically be part of PeerMan, but the libp2p
-	// Host constructor needs it, and PeerMan needs Host for its peerstore
-	// and connect method. For now we create it here and give it to both.
-	var wcg *peers.WhitelistGater
-	if cfg.P2P.PrivateMode {
-		logger.Infof("Private P2P mode enabled")
-		var peerWhitelist []peer.ID
-		for _, nodeID := range cfg.P2P.Whitelist {
-			peerID, err := nodeIDToPeerID(nodeID)
-			if err != nil {
-				return nil, fmt.Errorf("invalid whitelist node ID: %w", err)
-			}
-			peerWhitelist = append(peerWhitelist, peerID)
-			logger.Infof("Adding peer to whitelist: %v", nodeID)
-		}
-		wcg = peers.NewWhitelistGater(peerWhitelist, peers.WithLogger(logger.New("PEERFILT")))
-		// PeerMan adds more from address book.
-	}
-
-	cg := peers.ChainConnectionGaters(wcg) // pointless for one, but can be more
-
-	var err error
-	host := options.host
-	if host == nil {
-		ip, portStr, err := net.SplitHostPort(cfg.P2P.ListenAddress)
-		if err != nil {
-			return nil, fmt.Errorf("invalid P2P listen address: %w", err)
-		}
-		if ip == "" { // handle ":6600" to mean listen on all interfaces
-			ip = "0.0.0.0"
-		}
-
-		port, err := strconv.ParseUint(portStr, 10, 64)
-		if err != nil {
-			return nil, fmt.Errorf("invalid P2P listen port: %s, %w", portStr, err)
-		}
-
-		host, err = newHost(ip, port, cfg.ChainID, cfg.PrivKey, cg, logger)
-		if err != nil {
-			return nil, fmt.Errorf("cannot create host: %w", err)
-		}
-	}
-
-	addrBookPath := filepath.Join(cfg.RootDir, "addrbook.json")
-
-	pmCfg := &peers.Config{
-		PEX:               cfg.P2P.Pex,
-		AddrBook:          addrBookPath,
-		Logger:            logger.New("PEERS"),
-		Host:              host,
-		ChainID:           cfg.ChainID,
-		TargetConnections: cfg.P2P.TargetConnections,
-		ConnGater:         wcg,
-		RequiredProtocols: RequiredStreamProtocols,
-	}
-	pm, err := peers.NewPeerMan(pmCfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create peer manager: %w", err)
-	}
-
-	mode := dht.ModeServer
-	ctx := context.Background()
-	dht, err := makeDHT(ctx, host, nil, mode)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create DHT: %w", err)
-	}
-	discoverer := makeDiscovery(dht)
-
-	// statesyncer
-	rcvdSnapsDir := filepath.Join(cfg.RootDir, "rcvd_snaps")
-	ssCfg := &statesyncConfig{
-		RcvdSnapsDir:  rcvdSnapsDir,
-		StateSyncCfg:  cfg.Statesync,
-		DBConfig:      cfg.DBConfig,
-		Logger:        logger.New("STATESYNC"),
-		DB:            cfg.DB,
-		Host:          host,
-		Discoverer:    discoverer,
-		SnapshotStore: cfg.Snapshotter,
-		BlockStore:    cfg.BlockStore,
-	}
-	ss, err := NewStateSyncService(ctx, ssCfg)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create state sync service: %w", err)
-	}
-
 	node := &Node{
-		log:         logger,
-		pubkey:      pubkey,
-		pex:         cfg.P2P.Pex,
-		host:        host,
-		pm:          pm,
-		statesyncer: ss,
-		dhtCloser:   dht.Close,
-		mp:          cfg.Mempool,
-		bki:         cfg.BlockStore,
-		ce:          cfg.Consensus,
-		dir:         cfg.RootDir,
-		chainID:     cfg.ChainID,
-		ss:          cfg.Snapshotter,
-		bp:          cfg.BlockProc,
+		log:     logger,
+		pubkey:  pubkey,
+		pex:     cfg.P2P.Pex,
+		mp:      cfg.Mempool,
+		bki:     cfg.BlockStore,
+		ce:      cfg.Consensus,
+		dir:     cfg.RootDir,
+		chainID: cfg.ChainID,
+		ss:      cfg.Snapshotter,
+		bp:      cfg.BlockProc,
 
 		ackChan:  make(chan AckRes, 1),
 		resetMsg: make(chan ConsensusReset, 1),
 		discReq:  make(chan types.DiscoveryRequest, 1),
 		discResp: make(chan types.DiscoveryResponse, 1),
+
+		P2PService: *cfg.P2PService,
 	}
 
-	host.SetStreamHandler(ProtocolIDTxAnn, node.txAnnStreamHandler)
-	host.SetStreamHandler(ProtocolIDBlkAnn, node.blkAnnStreamHandler)
-	host.SetStreamHandler(ProtocolIDBlock, node.blkGetStreamHandler)
-	host.SetStreamHandler(ProtocolIDBlockHeight, node.blkGetHeightStreamHandler)
-	host.SetStreamHandler(ProtocolIDTx, node.txGetStreamHandler)
+	node.host.SetStreamHandler(ProtocolIDTxAnn, node.txAnnStreamHandler)
+	node.host.SetStreamHandler(ProtocolIDBlkAnn, node.blkAnnStreamHandler)
+	node.host.SetStreamHandler(ProtocolIDBlock, node.blkGetStreamHandler)
+	node.host.SetStreamHandler(ProtocolIDBlockHeight, node.blkGetHeightStreamHandler)
+	node.host.SetStreamHandler(ProtocolIDTx, node.txGetStreamHandler)
 
-	host.SetStreamHandler(ProtocolIDBlockPropose, node.blkPropStreamHandler)
-
-	// host.SetStreamHandler(peers.ProtocolIDPrefixChainID+protocol.ID(cfg.ChainID), func(s network.Stream) {
-	// 	s.Close() // protocol handshake is all we need
-	// })
-
-	// if cfg.P2P.Pex {
-	// 	host.SetStreamHandler(ProtocolIDDiscover, pm.DiscoveryStreamHandler)
-	// } else {
-	// 	host.SetStreamHandler(ProtocolIDDiscover, func(s network.Stream) {
-	// 		s.Close()
-	// 	})
-	// }
+	node.host.SetStreamHandler(ProtocolIDBlockPropose, node.blkPropStreamHandler)
 
 	return node, nil
 }
@@ -341,9 +238,6 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	n.host.Network().Notify(n.pm)
-	defer n.host.Network().StopNotify(n.pm)
-
 	ps, err := pubsub.NewGossipSub(ctx, n.host)
 	if err != nil {
 		return err
@@ -362,18 +256,6 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 		peerInfo, err := makePeerAddrInfo(peer)
 		if err != nil {
 			n.log.Warnf("invalid bootnode address %v from setting %v", peer, bootpeers[i])
-			continue
-		}
-
-		n.pm.Allow(peerInfo.ID)
-
-		err = n.pm.Connect(ctx, peers.AddrInfo(*peerInfo))
-		if err != nil {
-			n.log.Errorf("failed to connect to %v: %v", bootpeers[i], err)
-			// Add it to the peer store anyway since this was specified as a
-			// bootnode, which is supposed to be persistent, so we should try to
-			// connect again later.
-			n.host.Peerstore().AddAddrs(peerInfo.ID, peerInfo.Addrs, peerstore.PermanentAddrTTL)
 			continue
 		}
 		if err = n.checkPeerProtos(ctx, peerInfo.ID); err != nil {
@@ -427,21 +309,11 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 		}
 	}()
 
-	// Advertise the snapshotcatalog service if snapshots are enabled
-	// umm, but gotcha, if a node has previous snapshots but snapshots are disabled, these snapshots will be unusable.
-	if n.ss.Enabled() {
-		advertise(ctx, snapshotCatalogNS, n.statesyncer.discoverer)
-	}
-
-	if err := n.statesyncer.Bootstrap(ctx); err != nil {
-		return fmt.Errorf("failed to bootstrap DHT service with the trusted snapshot providers: %w", err)
-	}
-
-	// Attempt statesync if enabled
-	if err := n.doStatesync(ctx); err != nil {
-		cancel()
-		return err
-	}
+	// // Attempt statesync if enabled
+	// if err := n.doStatesync(ctx); err != nil {
+	// 	cancel()
+	// 	return err
+	// }
 
 	if err := n.startAckGossip(ctx, ps); err != nil {
 		cancel()
@@ -511,17 +383,8 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 	n.log.Info("Node started.")
 
 	<-ctx.Done()
-	n.log.Info("Stopping Node protocol handlers...")
+	// n.log.Info("Stopping Node protocol handlers...")
 	n.wg.Wait()
-
-	n.log.Info("Stopping P2P services...")
-
-	if err = n.dhtCloser(); err != nil {
-		n.log.Warn("Failed to cleanly stop the DHT service: %v", err)
-	}
-	if err = n.host.Close(); err != nil {
-		n.log.Warn("Failed to cleanly stop P2P host: %v", err)
-	}
 
 	n.log.Info("Node stopped.")
 	return nodeErr
@@ -569,51 +432,6 @@ func pubkeyToPeerID(pubkey crypto.PublicKey) (peer.ID, error) {
 		return "", err
 	}
 	return p2pAddr, nil
-}
-
-// doStatesync attempts to perform statesync if the db is uninitialized.
-// It also initializes the blockstore with the initial block data at the
-// height of the discovered snapshot.
-func (n *Node) doStatesync(ctx context.Context) error {
-	// If statesync is enabled and the db is uninitialized, discover snapshots
-	if !n.statesyncer.cfg.Enable {
-		return nil
-	}
-
-	// Check if the Block store and DB are initialized
-	h, _, _, _ := n.bki.Best()
-	if h != 0 {
-		return nil
-	}
-
-	// check if the db is uninitialized
-	height, err := n.statesyncer.DiscoverSnapshots(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to attempt statesync: %w", err)
-	}
-
-	if height <= 0 { // no snapshots found, or statesync failed
-		return nil
-	}
-
-	// request and commit the block to the blockstore
-	_, rawBlk, ci, err := n.getBlkHeight(ctx, height)
-	if err != nil {
-		return fmt.Errorf("failed to get statesync block %d: %w", height, err)
-	}
-	blk, err := ktypes.DecodeBlock(rawBlk)
-	if err != nil {
-		return fmt.Errorf("failed to decode statesync block %d: %w", height, err)
-	}
-	// store block
-	if err := n.bki.Store(blk, ci); err != nil {
-		return fmt.Errorf("failed to store statesync block to the blockstore %d: %w", height, err)
-	}
-	// update block processor
-	if err := n.bp.LoadFromDBState(ctx); err != nil {
-		return fmt.Errorf("failed to load block processor from the snapshot state: %w", err)
-	}
-	return nil
 }
 
 func multiAddrToHostPort(addr multiaddr.Multiaddr) string {
@@ -785,9 +603,6 @@ var RequiredStreamProtocols = []protocol.ID{
 	ProtocolIDBlkAnn,
 	ProtocolIDBlockPropose,
 	pubsub.GossipSubID_v12,
-	ProtocolIDSnapshotCatalog,
-	ProtocolIDSnapshotChunk,
-	ProtocolIDSnapshotMeta,
 }
 
 func (n *Node) checkPeerProtos(ctx context.Context, peer peer.ID) error {
@@ -805,7 +620,11 @@ func (randSrc) Uint64() uint64 {
 var rng = mrand2.New(randSrc{})
 
 func (n *Node) peers() []peer.ID {
-	peers := n.host.Network().Peers()
+	return peerHosts(n.host)
+}
+
+func peerHosts(host host.Host) []peer.ID {
+	peers := host.Network().Peers()
 	rng.Shuffle(len(peers), func(i, j int) {
 		peers[i], peers[j] = peers[j], peers[i]
 	})

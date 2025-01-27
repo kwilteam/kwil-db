@@ -10,7 +10,6 @@ import (
 	"github.com/kwilteam/kwil-db/node/types"
 )
 
-// TODO: should include consensus params hash
 func (ce *ConsensusEngine) validateBlock(blk *ktypes.Block) error {
 	// Validate if this is the correct block proposal to be processed.
 	if blk.Header.Version != ktypes.BlockVersion {
@@ -102,7 +101,9 @@ func (ce *ConsensusEngine) BroadcastTx(ctx context.Context, tx *ktypes.Transacti
 	if sync == 1 { // Blocking code
 		subChan, err := ce.SubscribeTx(txHash)
 		if err != nil {
-			return nil, err
+			return &ktypes.ResultBroadcastTx{
+				Hash: txHash,
+			}, err
 		}
 		defer ce.UnsubscribeTx(txHash) // Unsubscribe tx if BroadcastTx returns
 

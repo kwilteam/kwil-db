@@ -11,9 +11,12 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
+	ktypes "github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/node/types"
 )
 
 /*
@@ -54,6 +57,11 @@ type SnapshotConfig struct {
 	DBConfig        *config.DBConfig
 }
 
+type BlockStore interface {
+	GetByHeight(height int64) (types.Hash, *ktypes.Block, *types.CommitInfo, error)
+	Best() (height int64, blkHash, appHash types.Hash, stamp time.Time)
+}
+
 type SnapshotStore struct {
 	// Snapshot Config
 	cfg *SnapshotConfig
@@ -66,6 +74,9 @@ type SnapshotStore struct {
 	// Snapshotter
 	snapshotter DBSnapshotter
 
+	// blockStore
+	blockStore BlockStore
+
 	// Logger
 	log log.Logger
 }
@@ -74,13 +85,14 @@ type DBSnapshotter interface {
 	CreateSnapshot(ctx context.Context, height uint64, snapshotID string, schemas, excludeTables []string, excludeTableData []string) (*Snapshot, error)
 }
 
-func NewSnapshotStore(cfg *SnapshotConfig, ns NamespaceManager, logger log.Logger) (*SnapshotStore, error) {
+func NewSnapshotStore(cfg *SnapshotConfig, bs BlockStore, ns NamespaceManager, logger log.Logger) (*SnapshotStore, error) {
 	snapshotter := NewSnapshotter(cfg.DBConfig, cfg.SnapshotDir, ns, logger)
 	ss := &SnapshotStore{
 		cfg:         cfg,
 		snapshots:   make(map[uint64]*Snapshot),
 		snapshotter: snapshotter,
 		log:         logger,
+		blockStore:  bs,
 	}
 
 	err := ss.loadSnapshots()

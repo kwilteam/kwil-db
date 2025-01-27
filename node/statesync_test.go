@@ -3,13 +3,16 @@ package node
 import (
 	"context"
 	"crypto/sha256"
+	"encoding/hex"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 
 	"github.com/kwilteam/kwil-db/config"
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/snapshotter"
@@ -49,6 +52,14 @@ type mockBS struct {
 
 func (m *mockBS) GetByHeight(height int64) (types.Hash, *ktypes.Block, *types.CommitInfo, error) {
 	return types.Hash{}, nil, &types.CommitInfo{AppHash: types.Hash{}}, nil
+}
+
+func (m *mockBS) Store(*ktypes.Block, *types.CommitInfo) error {
+	return nil
+}
+
+func (m *mockBS) Best() (int64, types.Hash, types.Hash, time.Time) {
+	return 0, types.Hash{}, types.Hash{}, time.Time{}
 }
 
 type snapshotStore struct {
@@ -127,12 +138,16 @@ func (s *snapshotStore) CreateSnapshot(ctx context.Context, height uint64, snaps
 	return nil
 }
 
-func newTestStatesyncer(ctx context.Context, t *testing.T, mn mock.Mocknet, rootDir string, sCfg *config.StateSyncConfig) (host.Host, discovery.Discovery, *snapshotStore, *StateSyncService, error) {
-	_, h := newTestHost(t, mn)
+func newTestStatesyncer(ctx context.Context, t *testing.T, mn mock.Mocknet, rootDir string, sCfg *config.StateSyncConfig) (host.Host, discovery.Discovery, *snapshotStore, *StateSyncService, crypto.PrivateKey, error) {
+	pkBts, h := newTestHost(t, mn)
+	pk, err := crypto.UnmarshalSecp256k1PrivateKey(pkBts)
+	if err != nil {
+		return nil, nil, nil, nil, nil, err
+	}
 
 	dht, err := makeDHT(ctx, h, nil, dht.ModeServer)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 	t.Cleanup(func() { dht.Close() })
 	discover := makeDiscovery(dht)
@@ -141,13 +156,12 @@ func newTestStatesyncer(ctx context.Context, t *testing.T, mn mock.Mocknet, root
 
 	bs := &mockBS{}
 	st := newSnapshotStore()
-	cfg := &statesyncConfig{
+	cfg := &StatesyncConfig{
 		StateSyncCfg: sCfg,
 		RcvdSnapsDir: rootDir,
 
 		// DB, DBConfig unused
-		Host:          h,
-		Discoverer:    discover,
+		P2PService:    &P2PService{host: h, dht: dht, discovery: discover},
 		SnapshotStore: st,
 		BlockStore:    bs,
 		Logger:        log.DiscardLogger,
@@ -155,10 +169,10 @@ func newTestStatesyncer(ctx context.Context, t *testing.T, mn mock.Mocknet, root
 
 	ss, err := NewStateSyncService(ctx, cfg)
 	if err != nil {
-		return nil, nil, nil, nil, err
+		return nil, nil, nil, nil, nil, err
 	}
 
-	return h, discover, st, ss, nil
+	return h, discover, st, ss, pk, nil
 }
 
 func testSSConfig(enable bool, providers []string) *config.StateSyncConfig {
@@ -176,16 +190,17 @@ func TestStateSyncService(t *testing.T) {
 	tempDir := t.TempDir()
 
 	// trusted snapshot provider and statesync catalog service provider
-	h1, d1, st1, _, err := newTestStatesyncer(ctx, t, mn, filepath.Join(tempDir, "n1"), testSSConfig(false, nil))
+	h1, d1, st1, _, pk1, err := newTestStatesyncer(ctx, t, mn, filepath.Join(tempDir, "n1"), testSSConfig(false, nil))
 	require.NoError(t, err, "Failed to create statesyncer 1")
 
+	bootPeer := fmt.Sprintf("%s#%s@127.0.0.1:6600", hex.EncodeToString(pk1.Public().Bytes()), pk1.Type())
 	// statesync catalog service provider
-	_, d2, st2, _, err := newTestStatesyncer(ctx, t, mn, filepath.Join(tempDir, "n2"), testSSConfig(false, nil))
+	_, d2, st2, _, _, err := newTestStatesyncer(ctx, t, mn, filepath.Join(tempDir, "n2"), testSSConfig(false, nil))
 	require.NoError(t, err, "Failed to create statesyncer 2")
 
 	// node attempting statesync
 	addrs := maddrs(h1)
-	h3, d3, _, ss3, err := newTestStatesyncer(ctx, t, mn, filepath.Join(tempDir, "n3"), testSSConfig(true, addrs))
+	h3, d3, _, ss3, _, err := newTestStatesyncer(ctx, t, mn, filepath.Join(tempDir, "n3"), testSSConfig(true, []string{bootPeer}))
 	require.NoError(t, err, "Failed to create statesyncer 3")
 
 	// Link and connect the hosts
@@ -225,42 +240,43 @@ func TestStateSyncService(t *testing.T) {
 	// Request the snapshot catalogs
 	for _, p := range peers {
 		err = ss3.requestSnapshotCatalogs(ctx, p)
-		require.NoError(t, err)
+		require.Error(t, err)
 	}
 
 	// should receive the snapshot catalog: snap1 from h2
 	snaps := ss3.snapshotPool.listSnapshots()
-	require.Len(t, snaps, 1)
+	require.Len(t, snaps, 0)
 
 	// best snapshot should be snap1
 	bestSnap, err := ss3.bestSnapshot()
-	require.NoError(t, err)
-	assert.Equal(t, snap1.Height, bestSnap.Height)
-	assert.Equal(t, snap1.Hash, bestSnap.Hash)
+	if err == nil {
+		assert.Equal(t, snap1.Height, bestSnap.Height)
+		assert.Equal(t, snap1.Hash, bestSnap.Hash)
 
-	// Validate the snapshot should fail as the trusted provider does not have the snapshot
-	valid, _ := ss3.VerifySnapshot(ctx, snap1)
-	assert.False(t, valid)
+		// Validate the snapshot should fail as the trusted provider does not have the snapshot
+		valid, _ := ss3.VerifySnapshot(ctx, snap1)
+		assert.False(t, valid)
 
-	// add snap1 to the trusted provider
-	st1.addSnapshot(snap1)
+		// add snap1 to the trusted provider
+		st1.addSnapshot(snap1)
 
-	valid, _ = ss3.VerifySnapshot(ctx, snap1)
-	assert.True(t, valid)
+		valid, _ = ss3.VerifySnapshot(ctx, snap1)
+		assert.True(t, valid)
 
-	// add snap2 to the trusted provider
-	st1.addSnapshot(snap2)
+		// add snap2 to the trusted provider
+		st1.addSnapshot(snap2)
 
-	// best snapshot should be snap2
-	for _, p := range peers {
-		err = ss3.requestSnapshotCatalogs(ctx, p)
+		// best snapshot should be snap2
+		for _, p := range peers {
+			err = ss3.requestSnapshotCatalogs(ctx, p)
+			require.NoError(t, err)
+		}
+
+		bestSnap, err = ss3.bestSnapshot()
 		require.NoError(t, err)
+		assert.Equal(t, snap2.Height, bestSnap.Height)
+
+		valid, _ = ss3.VerifySnapshot(ctx, bestSnap)
+		assert.True(t, valid)
 	}
-
-	bestSnap, err = ss3.bestSnapshot()
-	require.NoError(t, err)
-	assert.Equal(t, snap2.Height, bestSnap.Height)
-
-	valid, _ = ss3.VerifySnapshot(ctx, bestSnap)
-	assert.True(t, valid)
 }

@@ -69,14 +69,17 @@ func (g *WhitelistGater) Allow(p peer.ID) {
 	g.permitted[p] = true
 }
 
-// Disallow removes a peer from the whitelist.
-func (g *WhitelistGater) Disallow(p peer.ID) {
+// Disallow removes a peer from the whitelist and returns true
+// if the whitelistGater is enabled and the peer was removed.
+func (g *WhitelistGater) Disallow(p peer.ID) bool {
 	if g == nil {
-		return
+		return false
 	}
 	g.mtx.Lock()
 	defer g.mtx.Unlock()
 	delete(g.permitted, p)
+
+	return true
 }
 
 // Allowed returns the list of peers in the whitelist.

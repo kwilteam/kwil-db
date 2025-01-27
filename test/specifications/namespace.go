@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -82,6 +83,13 @@ func ListUsersSpecification(ctx context.Context, t *testing.T, execute ExecuteQu
 	require.NotNil(t, res)
 	fmt.Println(res)
 	require.Equal(t, numUsers, len(res.Values))
+}
+
+func ListUsersEventuallySpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl, expectFailure bool, numUsers int) {
+	require.Eventually(t, func() bool {
+		res, err := execute.Query(ctx, fmt.Sprintf("{%s}SELECT * FROM users;", namespace), nil)
+		return expectFailure && err != nil || res != nil && len(res.Values) == numUsers
+	}, 2*time.Minute, 1*time.Second)
 }
 
 func AddUserActionSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl, user *User) {

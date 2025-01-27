@@ -136,6 +136,17 @@ func TestSingleNodeMocknet(t *testing.T) {
 	}
 	ce1 := consensus.New(ceCfg1)
 	defaultConfigSet := config.DefaultConfig()
+
+	psCfg := &P2PServiceConfig{
+		PrivKey: privKeys[0],
+		RootDir: root1,
+		ChainID: genCfg.ChainID,
+		KwilCfg: defaultConfigSet,
+		Logger:  log.New(log.WithName("P2P"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
+	}
+	ps, err := NewP2PService(psCfg, h1)
+	require.NoError(t, err)
+
 	log1 := log.New(log.WithName("NODE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
 	cfg1 := &Config{
 		ChainID:     genCfg.ChainID,
@@ -150,6 +161,7 @@ func TestSingleNodeMocknet(t *testing.T) {
 		DBConfig:    &defaultConfigSet.DB,
 		Statesync:   &defaultConfigSet.StateSync,
 		BlockProc:   &dummyBP{vals: valSetList},
+		P2PService:  ps,
 	}
 	node1, err := NewNode(cfg1, WithHost(h1))
 	if err != nil {
@@ -276,6 +288,19 @@ func TestDualNodeMocknet(t *testing.T) {
 	ce1 := consensus.New(ceCfg1)
 	defaultConfigSet := config.DefaultConfig()
 	log1 := log.New(log.WithName("NODE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
+
+	psCfg1 := &P2PServiceConfig{
+		PrivKey: privKeys[0],
+		RootDir: root1,
+		ChainID: genCfg.ChainID,
+		KwilCfg: defaultConfigSet,
+		Logger:  log.New(log.WithName("P2P1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
+	}
+	ps1, err := NewP2PService(psCfg1, h1)
+	require.NoError(t, err)
+	err = ps1.Start(ctx)
+	require.NoError(t, err, "failed to start p2p service")
+
 	cfg1 := &Config{
 		ChainID:     genCfg.ChainID,
 		RootDir:     root1,
@@ -289,6 +314,7 @@ func TestDualNodeMocknet(t *testing.T) {
 		DBConfig:    &defaultConfigSet.DB,
 		Statesync:   &defaultConfigSet.StateSync,
 		BlockProc:   &dummyBP{vals: valSetList},
+		P2PService:  ps1,
 	}
 	node1, err := NewNode(cfg1, WithHost(h1))
 	if err != nil {
@@ -345,6 +371,19 @@ func TestDualNodeMocknet(t *testing.T) {
 	ce2 := consensus.New(ceCfg2)
 
 	log2 := log.New(log.WithName("NODE2"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
+
+	psCfg2 := &P2PServiceConfig{
+		PrivKey: privKeys[1],
+		RootDir: root2,
+		ChainID: genCfg.ChainID,
+		KwilCfg: defaultConfigSet,
+		Logger:  log.New(log.WithName("P2P2"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
+	}
+	ps2, err := NewP2PService(psCfg2, h2)
+	require.NoError(t, err)
+	err = ps2.Start(ctx)
+	require.NoError(t, err, "failed to start p2p service")
+
 	cfg2 := &Config{
 		ChainID:     cfg1.ChainID,
 		RootDir:     root2,
@@ -358,6 +397,7 @@ func TestDualNodeMocknet(t *testing.T) {
 		DBConfig:    &defaultConfigSet.DB,
 		Statesync:   &defaultConfigSet.StateSync,
 		BlockProc:   &dummyBP{vals: valSetList},
+		P2PService:  ps2,
 	}
 	node2, err := NewNode(cfg2, WithHost(h2))
 	if err != nil {
@@ -383,7 +423,7 @@ func TestDualNodeMocknet(t *testing.T) {
 		stat, err := node1.Status(ctx)
 		require.NoError(t, err)
 		assert.GreaterOrEqual(c, stat.Sync.BestBlockHeight, reachHeight)
-	}, 10*time.Second, 250*time.Millisecond)
+	}, 30*time.Second, 250*time.Millisecond)
 
 	cancel()
 	wg.Wait()

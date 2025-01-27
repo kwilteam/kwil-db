@@ -147,7 +147,6 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config, autogen bo
 	nsmgr := newNamespaceManager()
 
 	d := &coreDependencies{
-		ctx:              ctx,
 		rootDir:          rootDir,
 		adminKey:         tlsKeyPair,
 		cfg:              cfg,

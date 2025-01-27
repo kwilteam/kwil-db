@@ -159,58 +159,6 @@ func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Account
 	return bp, nil
 }
 
-// LoadFromDBState loads the chain state from the database. This is called when the node is
-// bootstraped using statesync and the chain state is starting from a non-genesis height.
-// In this scenario, the InitChain method is not called during the bootstrap process.
-func (bp *BlockProcessor) LoadFromDBState(ctx context.Context) error {
-	bp.mtx.Lock()
-	defer bp.mtx.Unlock()
-
-	tx, err := bp.db.BeginReadTx(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to begin read transaction: %w", err)
-	}
-	defer tx.Rollback(ctx)
-
-	height, appHash, dirty, err := meta.GetChainState(ctx, tx)
-	if err != nil {
-		return fmt.Errorf("failed to get chain state: %w", err)
-	}
-
-	if dirty {
-		return fmt.Errorf("chain state is dirty, should have been cleanedup in the blockprocesser constructor")
-	}
-
-	// set the block proposer back to it's  state loaded from the database after the statesync
-	bp.height.Store(height)
-	copy(bp.appHash[:], appHash)
-
-	// persist last changeset height in the migrator if it is in migration
-	bp.migrator.PersistLastChangesetHeight(ctx, tx, height)
-
-	networkParams, err := bp.loadNetworkParams(ctx, tx)
-	if err != nil {
-		return fmt.Errorf("failed to load the network parameters: %w", err)
-	}
-	bp.chainCtx.NetworkParameters = networkParams
-
-	// Also ensure that all the modules are initialized with the correct validatorset from the statesync.
-	// ce, bp, votestore, listenerMgr etc.
-	// Dang, this is really painful effect of statesync, we have to update any in-memory state of all the
-	// modules to that of the state from the snapshot.
-
-	// Votestore should be loaded from the database
-	err = bp.validators.LoadValidatorSet(ctx, tx)
-	if err != nil {
-		return fmt.Errorf("failed to load the validator set: %w", err)
-	}
-
-	// notify the validator updates to all the subscribers
-	bp.announceValidators()
-
-	return nil
-}
-
 func (bp *BlockProcessor) SetCallbackFns(broadcastFn BroadcastTxFn, addPeer, removePeer func(string) error) {
 	bp.broadcastTxFn = broadcastFn
 	bp.addPeer = addPeer

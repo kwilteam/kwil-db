@@ -26,7 +26,7 @@ type Mempool interface {
 	PeekN(maxSize int) []types.NamedTx
 	Remove(txid types.Hash)
 	RecheckTxs(ctx context.Context, checkFn mempool.CheckFn)
-	Store(types.Hash, *ktypes.Transaction)
+	Store(types.Hash, *ktypes.Transaction) bool
 	TxsAvailable() bool
 }
 
