@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 
+	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/pg"
@@ -312,18 +313,27 @@ func mergeFunc(src, dest map[string]interface{}, keyFn func(s string) string) er
 	return nil
 }
 
-// bindPostgresFlags binds flags to connect to a postgres database.
-func BindPostgresFlags(cmd *cobra.Command) {
-	cmd.Flags().String("dbname", "kwild", "Name of the database in the PostgreSQL server")
-	cmd.Flags().String("user", "postgres", "User with administrative privileges on the database")
-	cmd.Flags().String("password", "", "Password for the database user")
-	cmd.Flags().String("host", "localhost", "Host of the database")
-	cmd.Flags().String("port", "5432", "Port of the database")
+// BindPostgresFlags binds top-level flags to connect to a postgres database.
+// The provided config is used as defaults for the flags.
+func BindPostgresFlags(cmd *cobra.Command, dbCfg *config.DBConfig) {
+	cmd.Flags().String("dbname", dbCfg.DBName, "Name of the database in the PostgreSQL server")
+	cmd.Flags().String("user", dbCfg.User, "User with administrative privileges on the database")
+	cmd.Flags().String("password", dbCfg.Pass, "Password for the database user")
+	cmd.Flags().String("host", dbCfg.Host, "Host of the database")
+	cmd.Flags().String("port", dbCfg.Port, "Port of the database")
 }
 
-// getPostgresFlags returns the postgres flags from the given command.
-func GetPostgresFlags(cmd *cobra.Command) (*pg.ConnConfig, error) {
-	return MergePostgresFlags(defaultPostgresConnConfig(), cmd)
+// GetPostgresFlags returns the postgres flags from the given command, using the
+// given fallback config, which may be a combination of defaults and values from
+// an existing config file.
+func GetPostgresFlags(cmd *cobra.Command, dbCfg *config.DBConfig) (*pg.ConnConfig, error) {
+	return MergePostgresFlags(&pg.ConnConfig{
+		DBName: dbCfg.DBName,
+		User:   dbCfg.User,
+		Pass:   dbCfg.Pass,
+		Host:   dbCfg.Host,
+		Port:   dbCfg.Port,
+	}, cmd)
 }
 
 // MergePostgresFlags merges the given connection config with the flags from the given command.
@@ -366,14 +376,4 @@ func MergePostgresFlags(conf *pg.ConnConfig, cmd *cobra.Command) (*pg.ConnConfig
 	}
 
 	return conf, nil
-}
-
-// DefaultPostgresConnConfig returns a default connection config for a postgres database.
-func defaultPostgresConnConfig() *pg.ConnConfig {
-	return &pg.ConnConfig{
-		DBName: "kwild",
-		User:   "postgres",
-		Host:   "localhost",
-		Port:   "5432",
-	}
 }

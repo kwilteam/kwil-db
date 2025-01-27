@@ -16,7 +16,7 @@ func StartCmd() *cobra.Command {
 	var dbOwner string
 	cmd := &cobra.Command{
 		Use:               "start",
-		Short:             "Start the node (default command if none given)",
+		Short:             "Start the node",
 		Long:              "The `start` command starts the Kwil DB blockchain node.",
 		DisableAutoGenTag: true,
 		SilenceUsage:      true,

@@ -19,6 +19,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/kwilteam/kwil-db/app/custom"
+	"github.com/kwilteam/kwil-db/app/node/conf"
 	"github.com/kwilteam/kwil-db/app/shared/bind"
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/config"
@@ -62,13 +64,19 @@ func createCmd() *cobra.Command {
 		Long:    createLongExplain,
 		Example: createExample,
 		Args:    cobra.NoArgs,
+		// Override the root's PersistentPreRunE to bind only the config file,
+		// not the full node flag set.
+		PersistentPreRunE: bind.ChainPreRuns(conf.PreRunBindConfigFileStrict[config.Config]), // but not the flags
 		RunE: func(cmd *cobra.Command, args []string) error {
 			snapshotDir, err := node.ExpandPath(snapshotDir)
 			if err != nil {
 				return display.PrintErr(cmd, fmt.Errorf("failed to expand snapshot directory path: %v", err))
 			}
 
-			pgConf, err := bind.GetPostgresFlags(cmd)
+			// Get the pg.ConnConfig from the flags, using the active node
+			// config's DBConfig as defaults if the flags were not set.
+			dbCfg := conf.ActiveConfig().DB
+			pgConf, err := bind.GetPostgresFlags(cmd, &dbCfg)
 			if err != nil {
 				return display.PrintErr(cmd, fmt.Errorf("failed to get postgres flags: %v", err))
 			}
@@ -83,7 +91,9 @@ func createCmd() *cobra.Command {
 		},
 	}
 
-	bind.BindPostgresFlags(cmd)
+	// Bind the top level flags like --dbname, --user, --host, etc. using the
+	// defaults from the node's default config.
+	bind.BindPostgresFlags(cmd, &custom.DefaultConfig().DB)
 	cmd.Flags().StringVar(&snapshotDir, "snapdir", "kwild-snaps", "Directory to store the snapshot and hash files")
 	return cmd
 

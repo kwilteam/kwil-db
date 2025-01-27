@@ -61,18 +61,23 @@ func RootCmd() *cobra.Command {
 	display.BindOutputFormatFlag(cmd) // --output/-o
 
 	// There is a virtual "node" command grouping, but no actual "node" command yet.
-	cmd.AddCommand(node.StartCmd())
-	cmd.AddCommand(node.PrintConfigCmd())
+	cmd.AddCommand(node.StartCmd())       // needs merged config
+	cmd.AddCommand(node.PrintConfigCmd()) // needs merged config
 
+	// This group of command uses the merged config for fallback admin listen
+	// addr if the --rpcserver flag is not set.
 	cmd.AddCommand(rpc.NewAdminCmd())
 	cmd.AddCommand(validator.NewValidatorsCmd())
 	cmd.AddCommand(params.NewConsensusCmd())
-	cmd.AddCommand(setup.SetupCmd())
 	cmd.AddCommand(whitelist.WhitelistCmd())
+	cmd.AddCommand(block.NewBlockExecCmd())
+	cmd.AddCommand(migration.NewMigrationCmd())
+
+	cmd.AddCommand(setup.SetupCmd()) // only kinda needs merged config for `setup reset`
+
 	cmd.AddCommand(key.KeyCmd())
 	cmd.AddCommand(snapshot.NewSnapshotCmd())
-	cmd.AddCommand(migration.NewMigrationCmd())
-	cmd.AddCommand(block.NewBlockExecCmd())
+
 	cmd.AddCommand(seed.SeedCmd())
 	cmd.AddCommand(utils.NewCmdUtils())
 	cmd.AddCommand(verCmd.NewVersionCmd())

@@ -33,10 +33,14 @@ func TestnetCmd() *cobra.Command {
 	var outDir, dbOwner string
 
 	cmd := &cobra.Command{
+
 		Use:   "testnet",
 		Short: "Generate configuration for a new test network with multiple nodes",
 		Long: "The `testnet` command generates a configuration for a new test network with multiple nodes. " +
 			"For a configuration set that can be run on the same host, use the `--unique-ports` flag.",
+		// Override the root command's PersistentPreRunE, so that we don't
+		// try to read the config from a ~/.kwild directory
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error { return nil },
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return GenerateTestnetConfigs(&TestnetConfig{
 				RootDir:      outDir,
