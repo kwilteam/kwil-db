@@ -216,6 +216,10 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 	return nil
 }
 
+// nextState sets the lastCommit in state.lc from the current block proposal
+// execution and commit results, resets the other state fields such as block
+// proposal, block result, etc., and updates the status (stateInfo) to reflect
+// the block that was just committed.
 func (ce *ConsensusEngine) nextState() {
 	ce.state.lc = &lastCommit{
 		height:     ce.state.blkProp.height,

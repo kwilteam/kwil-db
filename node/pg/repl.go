@@ -210,8 +210,8 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64, comm
 			if err != nil {
 				return fmt.Errorf("ParsePrimaryKeepaliveMessage failed: %w", err)
 			}
-			logger.Debug("primary keepalive msg", "ServerWALEnd", pkm.ServerWALEnd.String(),
-				"ServerTime:", pkm.ServerTime.String(), "ReplyRequested:", pkm.ReplyRequested)
+			logger.Debug("primary keepalive msg", "ServerWALEnd", pkm.ServerWALEnd,
+				"ServerTime", pkm.ServerTime, "ReplyRequested", pkm.ReplyRequested)
 			if pkm.ServerWALEnd > clientXLogPos {
 				clientXLogPos = pkm.ServerWALEnd
 			}

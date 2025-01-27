@@ -14,6 +14,7 @@ var (
 	ErrTxNotFound      = errors.New("tx not available")
 	ErrTxAlreadyExists = errors.New("transaction already exists")
 	ErrBlkNotFound     = errors.New("block not available")
+	ErrStillProcessing = errors.New("block still being executed")
 	ErrNoResponse      = errors.New("stream closed without response")
 )
 
