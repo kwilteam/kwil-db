@@ -102,7 +102,6 @@ func InitializeVoteStore(ctx context.Context, db sql.TxMaker) (*VoteStore, error
 		}
 		// add the newly registered resolutions to the database.
 		uuid := types.NewUUIDV5([]byte(name))
-		vs.logger.Info("Creating resolution type", "name", name)
 		_, err := tx.Execute(ctx, createResolutionType, uuid[:], name)
 		if err != nil {
 			return nil, err

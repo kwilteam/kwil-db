@@ -276,7 +276,7 @@ type TestCase struct {
 	Name string `json:"name"`
 	// Namespace is the name of the database schema to execute the
 	// action/procedure against.
-	Namespace string `json:"database"`
+	Namespace string `json:"namespace"`
 	// Action is the name of the action/procedure.
 	Action string `json:"action"`
 	// Args are the inputs to the action/procedure.

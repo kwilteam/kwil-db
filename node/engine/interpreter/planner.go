@@ -1324,7 +1324,7 @@ func (i *interpreterPlanner) VisitGrantOrRevokeStatement(p0 *parse.GrantOrRevoke
 		}
 
 		if p0.GrantRole == defaultRole {
-			return fmt.Errorf("cannot grant or revoke the default role")
+			return fmt.Errorf("%w: cannot grant or revoke the default role", engine.ErrBuiltInRole)
 		}
 		if p0.GrantRole == ownerRole {
 			return fmt.Errorf("cannot grant or revoke the owner role, use TRANSFER OWNERSHIP instead")
