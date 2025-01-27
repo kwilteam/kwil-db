@@ -318,7 +318,7 @@ func loadGenesisAndPrivateKey(rootDir string, autogen bool, dbOwner string) (pri
 		}
 		// If the genesis file exists and --autogen was used, disallow a genesis
 		// file with either multiple validators or a different leader the self.
-		if autogen && (len(genCfg.Validators) > 0 || !genCfg.Leader.PublicKey.Equals(privKey.Public())) {
+		if autogen && (len(genCfg.Validators) > 1 || !genCfg.Leader.PublicKey.Equals(privKey.Public())) {
 			return nil, nil, errors.New("cannot use --autogen with genesis config for a multi-node network")
 		}
 		return privKey, genCfg, nil

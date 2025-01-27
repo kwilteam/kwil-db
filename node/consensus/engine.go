@@ -717,7 +717,6 @@ func (ce *ConsensusEngine) rebroadcastBlkProposal(ctx context.Context) {
 
 func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 	// status check, nodes halt here if the migration is completed
-	ce.log.Info("No consensus messages received recently, initiating network catchup.")
 	params := ce.blockProcessor.ConsensusParams()
 	if params.MigrationStatus == ktypes.MigrationCompleted {
 		ce.log.Info("Network halted due to migration, no more blocks will be produced")
@@ -728,12 +727,14 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 		return nil
 	}
 
+	ce.log.Info("No consensus messages received recently, initiating network catchup.")
+
 	startHeight := ce.lastCommitHeight()
 	t0 := time.Now()
 
 	if err := ce.processCurrentBlock(ctx); err != nil {
 		if errors.Is(err, types.ErrBlkNotFound) {
-			return nil // retry again
+			return nil // retry again next tick
 		}
 		ce.log.Error("error during block processing in catchup", "height", startHeight+1, "error", err)
 		return err
@@ -751,50 +752,60 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 }
 
 func (ce *ConsensusEngine) processCurrentBlock(ctx context.Context) error {
+	if ce.role.Load() != types.RoleValidator {
+		return nil
+	}
+
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
-	if ce.role.Load() == types.RoleValidator {
-		// If validator is in the middle of processing a block, finish it first
-		if ce.state.blkProp != nil && ce.state.blockRes != nil { // Waiting for the commit message
-			blkHash, rawBlk, ci, err := ce.getBlock(ctx, ce.state.blkProp.height) // retries it
-			if err != nil {
-				ce.log.Debug("Error requesting block from network", "height", ce.state.blkProp.height, "error", err)
-				return err
-			}
+	if ce.state.blkProp == nil || ce.state.blockRes == nil {
+		return nil // not processing any block, or not ready to commit
+	} // else waiting for the commit message
 
-			if blkHash != ce.state.blkProp.blkHash { // processed incorrect block
-				if err := ce.rollbackState(ctx); err != nil {
-					return fmt.Errorf("error aborting incorrect block execution: height: %d, blkID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
-				}
-
-				blk, err := ktypes.DecodeBlock(rawBlk)
-				if err != nil {
-					return fmt.Errorf("failed to decode the block, blkHeight: %d, blkID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
-				}
-
-				if err := ce.processAndCommit(ctx, blk, ci); err != nil {
-					return fmt.Errorf("failed to replay the block: blkHeight: %d, blkID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
-				}
-				// continue to replay blocks from network
-			} else if ci.AppHash == ce.state.blockRes.appHash {
-				// commit the block
-				if err := ce.acceptCommitInfo(ci, blkHash); err != nil {
-					return fmt.Errorf("failed to validate the commit info: height: %d, error: %w", ce.state.blkProp.height, err)
-				}
-
-				if err := ce.commit(ctx); err != nil {
-					return fmt.Errorf("failed to commit the block: height: %d, error: %w", ce.state.blkProp.height, err)
-				}
-
-				ce.nextState()
-			} else {
-				// halt the network
-				haltR := fmt.Sprintf("Incorrect AppHash, received: %v, have: %v", ci.AppHash, ce.state.blockRes.appHash)
-				ce.haltChan <- haltR
-			}
-		}
+	// Fetch the block at this height and commit it, if it's the right one,
+	// otherwise rollback.
+	blkHash, rawBlk, ci, err := ce.getBlock(ctx, ce.state.blkProp.height)
+	if err != nil {
+		ce.log.Debug("Error requesting block from network", "height", ce.state.blkProp.height, "error", err)
+		return err
 	}
+
+	if blkHash != ce.state.blkProp.blkHash { // processed incorrect block
+		if err := ce.rollbackState(ctx); err != nil {
+			return fmt.Errorf("error aborting incorrect block execution: height: %d, blkID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
+		}
+
+		blk, err := ktypes.DecodeBlock(rawBlk)
+		if err != nil {
+			return fmt.Errorf("failed to decode the block, blkHeight: %d, blkID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
+		}
+
+		if err := ce.processAndCommit(ctx, blk, ci); err != nil {
+			return fmt.Errorf("failed to replay the block: blkHeight: %d, blkID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
+		}
+		// recovered to the correct block -> continue to replay blocks from network
+		return nil
+	}
+
+	if ci.AppHash != ce.state.blockRes.appHash {
+		// halt the node
+		haltR := fmt.Sprintf("Incorrect AppHash, received: %v, have: %v", ci.AppHash, ce.state.blockRes.appHash)
+		ce.haltChan <- haltR
+		return nil // or an error?
+	}
+
+	// All correct! Commit the block.
+	if err := ce.acceptCommitInfo(ci, blkHash); err != nil {
+		return fmt.Errorf("failed to validate the commit info: height: %d, error: %w", ce.state.blkProp.height, err)
+	}
+
+	if err := ce.commit(ctx); err != nil {
+		return fmt.Errorf("failed to commit the block: height: %d, error: %w", ce.state.blkProp.height, err)
+	}
+
+	ce.nextState()
+
 	return nil
 }
 
