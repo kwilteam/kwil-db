@@ -23,7 +23,7 @@ func TestCreateCallMessage(t *testing.T) {
 		require.NotNil(t, msg.Body)
 		require.NotEmpty(t, msg.Body.Payload)
 		require.Empty(t, msg.Body.Challenge)
-		require.Empty(t, msg.Signature)
+		require.Empty(t, msg.SignatureData)
 		require.Empty(t, msg.AuthType)
 		require.Empty(t, msg.Sender)
 	})
@@ -45,7 +45,7 @@ func TestCreateCallMessage(t *testing.T) {
 		require.NotNil(t, msg)
 		require.Equal(t, mockSigner.authType, msg.AuthType)
 		require.Equal(t, mockSigner.identity, []byte(msg.Sender))
-		require.Empty(t, msg.Signature)
+		require.Empty(t, msg.SignatureData)
 	})
 
 	t.Run("create call message with invalid action call", func(t *testing.T) {
@@ -77,7 +77,7 @@ func TestCreateCallMessage(t *testing.T) {
 		require.NoError(t, err)
 		require.NotNil(t, msg)
 		require.Equal(t, challenge, msg.Body.Challenge)
-		require.NotNil(t, msg.Signature)
+		require.NotNil(t, msg.SignatureData)
 		require.Equal(t, mockSigner.authType, msg.AuthType)
 		require.Equal(t, mockSigner.identity, []byte(msg.Sender))
 	})

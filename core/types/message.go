@@ -36,10 +36,13 @@ type CallMessage struct {
 	// Sender is the public key of the sender
 	Sender HexBytes `json:"sender"`
 
-	// Signature is the sender's signature of the serialized call body. This is
-	// only set when using authenticated call RPCs, in which case the Challenge
-	// field of the call body is also set.
-	Signature *auth.Signature `json:"signature"`
+	// SignatureData is the content of is the sender's signature of the
+	// serialized call body. This is only set when using authenticated call
+	// RPCs, in which case the Challenge field of the call body is also set.
+	// Note that this was historically called Signature, which was an
+	// *auth.Signature struct, but it is now a []byte that represents just the
+	// signature data since the type is already in the AuthType field above.
+	SignatureData []byte `json:"signature"`
 }
 
 const callMsgToSignTmplV0 = `Kwil view call.
@@ -99,7 +102,7 @@ func CreateCallMessage(ac *ActionCall, challenge []byte, signer auth.Signer) (*C
 			return nil, err
 		}
 
-		msg.Signature = sig
+		msg.SignatureData = sig.Data
 	}
 
 	return msg, nil

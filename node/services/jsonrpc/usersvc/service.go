@@ -14,6 +14,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	userjson "github.com/kwilteam/kwil-db/core/rpc/json/user"
@@ -709,7 +710,7 @@ func (r *rowReader) read(row *common.Row) error {
 func (svc *Service) txCtx(ctx context.Context, msg *types.CallMessage) (*common.TxContext, *jsonrpc.Error) {
 	signer := msg.Sender
 	caller := "" // string representation of sender, if signed.  Otherwise, empty string
-	if signer != nil && msg.AuthType != "" {
+	if len(signer) > 0 && msg.AuthType != "" {
 		var err error
 		caller, err = authExt.GetIdentifier(msg.AuthType, signer)
 		if err != nil {
@@ -752,22 +753,20 @@ func (svc *Service) authenticate(msg *types.CallMessage, sigTxt string) *jsonrpc
 	// the signature on the serialized call message that include the challenge.
 
 	// The message must have a sig, sender, and challenge.
-	if msg.Signature == nil || len(msg.Sender) == 0 {
+	if len(msg.SignatureData) == 0 || len(msg.Sender) == 0 {
 		return jsonrpc.NewError(jsonrpc.ErrorCallChallengeNotFound, "signed call message with challenge required", nil)
 	}
 	if len(msg.Body.Challenge) != 32 {
 		return jsonrpc.NewError(jsonrpc.ErrorInvalidCallChallenge, "incorrect challenge data length", nil)
 	}
-	// The call message sender must be interpreted consistently with
-	// signature verification, so ensure the auth types match.
-	if msg.AuthType != msg.Signature.Type {
-		return jsonrpc.NewError(jsonrpc.ErrorMismatchCallAuthType, "different authentication schemes in signature and caller", nil)
-	}
 	// Ensure we issued the message's challenge.
 	if err := svc.verifyCallChallenge([32]byte(msg.Body.Challenge)); err != nil {
 		return err
 	}
-	err := authExt.VerifySignature(msg.Sender, []byte(sigTxt), msg.Signature)
+	err := authExt.VerifySignature(msg.Sender, []byte(sigTxt), &auth.Signature{
+		Data: msg.SignatureData,
+		Type: msg.AuthType,
+	})
 	if err != nil {
 		return jsonrpc.NewError(jsonrpc.ErrorInvalidCallSignature, "invalid signature on call message", nil)
 	}
