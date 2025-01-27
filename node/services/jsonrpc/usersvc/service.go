@@ -39,6 +39,7 @@ type EngineReader interface {
 type BlockchainTransactor interface {
 	Status(ctx context.Context) (*adminTypes.Status, error)
 	Peers(context.Context) ([]*adminTypes.PeerInfo, error)
+	ConsensusParams() *types.NetworkParameters
 	BroadcastTx(ctx context.Context, tx *types.Transaction, sync uint8) (*types.ResultBroadcastTx, error)
 	TxQuery(ctx context.Context, hash types.Hash, prove bool) (*types.TxQueryResponse, error)
 }
@@ -397,10 +398,12 @@ func (svc *Service) ChainInfo(ctx context.Context, req *userjson.ChainInfoReques
 		svc.log.Error("chain status error", "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "status failure", nil)
 	}
+	gasEnabled := !svc.chainClient.ConsensusParams().DisabledGasCosts
 	return &userjson.ChainInfoResponse{
 		ChainID:     status.Node.ChainID,
 		BlockHeight: uint64(status.Sync.BestBlockHeight),
 		BlockHash:   status.Sync.BestBlockHash,
+		Gas:         gasEnabled,
 	}, nil
 }
 

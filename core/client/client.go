@@ -87,6 +87,9 @@ func NewClient(ctx context.Context, target string, options *clientType.Options) 
 	if options != nil && options.Logger != nil {
 		jsonrpcClientOpts = append(jsonrpcClientOpts, rpcclient.WithLogger(options.Logger))
 	}
+	if options != nil && options.Conn != nil {
+		jsonrpcClientOpts = append(jsonrpcClientOpts, rpcclient.WithHTTPClient(options.Conn))
+	}
 	client := userClient.NewClient(parsedURL, jsonrpcClientOpts...)
 
 	clt, err := WrapClient(ctx, client, options)
