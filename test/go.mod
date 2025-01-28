@@ -17,6 +17,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go v0.34.0
 	github.com/testcontainers/testcontainers-go/modules/compose v0.34.0
+	github.com/kwilteam/openzeppelin-merkle-tree-go v0.0.0-20250128165555-a816764eeccb
 )
 
 require (
