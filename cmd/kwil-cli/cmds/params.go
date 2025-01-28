@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"strings"
+	"unicode"
 
 	"github.com/kwilteam/kwil-db/core/types"
 )
@@ -285,26 +286,22 @@ func splitByCommas(input string) ([]*string, error) {
 
 	for i, char := range input {
 		if escaped {
-			// We saw a backslash, so *this* character is literal.
 			currentToken = append(currentToken, char)
 			escaped = false
 			justClosedQuote = false
 			continue
 		}
 
-		// If we had just closed a quote, anything other than a comma is an error.
-		// e.g. "a,'b'c" => error
+		// If we had just closed a quote, anything other than a comma is an error
 		if justClosedQuote && char != ',' {
 			return nil, fmt.Errorf("invalid partial quote usage near index %d (char '%c')", i, char)
 		}
 
 		switch char {
 		case '\\':
-			// Next character is escaped; do not add backslash to token.
 			escaped = true
 
 		case '\'':
-			// Toggle single-quote if not in double-quote
 			if !inDoubleQuote {
 				inSingleQuote = !inSingleQuote
 				if inSingleQuote {
@@ -314,13 +311,12 @@ func splitByCommas(input string) ([]*string, error) {
 					justClosedQuote = true
 				}
 			} else {
-				// If we're in double-quote context, it's literal
+				// literal if in double quotes
 				currentToken = append(currentToken, char)
 				justClosedQuote = false
 			}
 
 		case '"':
-			// Toggle double-quote if not in single-quote
 			if !inSingleQuote {
 				inDoubleQuote = !inDoubleQuote
 				if inDoubleQuote {
@@ -330,22 +326,27 @@ func splitByCommas(input string) ([]*string, error) {
 					justClosedQuote = true
 				}
 			} else {
-				// If we're in single-quote context, it's literal
+				// literal if in single quotes
 				currentToken = append(currentToken, char)
 				justClosedQuote = false
 			}
 
 		case ',':
-			// If in quotes, comma is literal
 			if inSingleQuote || inDoubleQuote {
+				// literal comma
 				currentToken = append(currentToken, char)
 				justClosedQuote = false
 			} else {
-				// delimiter => finalize token
+				// finalize token
 				finalizeToken()
 			}
 
 		default:
+			// >>> FIX HERE: Skip leading whitespace if we are not in quotes and currentToken is empty.
+			if !inSingleQuote && !inDoubleQuote && unicode.IsSpace(char) && len(currentToken) == 0 {
+				// Skip leading spaces outside of quotes
+				continue
+			}
 			currentToken = append(currentToken, char)
 			justClosedQuote = false
 		}

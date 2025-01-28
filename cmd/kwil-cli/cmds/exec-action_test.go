@@ -188,6 +188,13 @@ func Test_NamedParameter(t *testing.T) {
 			in:  []string{"id:int=1"},
 			out: []any{ptr(int64(1))},
 		},
+		{
+			params: []NamedParameter{
+				np("arr", "text[]"),
+			},
+			in:  []string{"arr:text[]=['hello', 'world']"},
+			out: []any{ptr(ptrArr[string]("hello", "world"))},
+		},
 	}
 
 	for i, tt := range tests {

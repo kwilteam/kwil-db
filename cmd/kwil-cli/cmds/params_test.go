@@ -39,6 +39,7 @@ func Test_ParseInputs(t *testing.T) {
 
 		// arrays
 		{"names:text[]='satoshi'", "names", ptrArr[string]("satoshi"), false},
+		{"names:text[]='satoshi', 'nakamoto'", "names", ptrArr[string]("satoshi", "nakamoto"), false},
 		{"ages:int8[]=25,26", "ages", ptrArr[int64](int64(25), int64(26)), false},
 		{"ages:int8[]=25,", "ages", ptrArr[int64](int64(25), nil), false},
 		{"ages:int8[]=null", "ages", nil, false},
@@ -125,6 +126,7 @@ func Test_Split(t *testing.T) {
 		{"a", []string{"a"}, false},
 		{"a,b", []string{"a", "b"}, false},
 		{"a, b", []string{"a", "b"}, false},
+		{"'a', 'b'", []string{"a", "b"}, false},
 		{"a,,b", []string{"a", NullLiteral, "b"}, false},
 		{"a,'',b", []string{"a", "", "b"}, false},
 		{"'a','b'", []string{"a", "b"}, false},
@@ -186,7 +188,7 @@ func Test_Split(t *testing.T) {
 					t.Fatalf("got %v, want %v", *g, wantPtr[i])
 				}
 
-				assert.Equal(t, *g, *wantPtr[i])
+				assert.Equal(t, *wantPtr[i], *g)
 			}
 		})
 	}
