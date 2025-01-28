@@ -88,6 +88,11 @@ func (l *KeyHexBytes) MarshalJSON() ([]byte, error) {
 type GenesisConfig struct {
 	ChainID       string `json:"chain_id"`
 	InitialHeight int64  `json:"initial_height"`
+
+	// DBOwner is the owner of the database.
+	// This should be either a public key or address.
+	DBOwner string `json:"db_owner"`
+
 	// Validators is the list of genesis validators (including the leader).
 	Validators []*types.Validator `json:"validators"`
 
@@ -233,12 +238,12 @@ func DefaultGenesisConfig() *GenesisConfig {
 	return &GenesisConfig{
 		ChainID:       "kwil-test-chain",
 		InitialHeight: 0,
+		DBOwner:       "",
 		Validators:    []*types.Validator{},
 		StateHash:     nil,
 		Migration:     MigrationParams{},
 		NetworkParameters: types.NetworkParameters{
 			Leader:           types.PublicKey{},
-			DBOwner:          "",
 			MaxBlockSize:     6 * 1024 * 1024,
 			JoinExpiry:       types.Duration(86400 * time.Second),
 			DisabledGasCosts: true,

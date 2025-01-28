@@ -93,10 +93,6 @@ type NetworkParameters struct {
 	// Validators set is logically also network parameters that evolve, but they
 	// are tracked separately.
 
-	// DBOwner is the owner of the database.
-	// This should be either a public key or address.
-	DBOwner string `json:"db_owner"`
-
 	// MaxBlockSize is the maximum size of a block in bytes.
 	MaxBlockSize int64 `json:"max_block_size"`
 
@@ -131,7 +127,6 @@ type ParamName = string
 // The ParamName values correspond to the fields of the NetworkParameters struct.
 var (
 	ParamNameLeader           ParamName
-	ParamNameDBOwner          ParamName
 	ParamNameMaxBlockSize     ParamName
 	ParamNameJoinExpiry       ParamName
 	ParamNameDisabledGasCosts ParamName
@@ -139,7 +134,7 @@ var (
 	ParamNameMigrationStatus  ParamName
 )
 
-const numParams = 7
+const numParams = 6
 
 // setParamNames sets the ParamName constants based on the json tags of a struct
 // (intended for NetworkParameters, but any for unit testing). This looks crazy,
@@ -160,8 +155,6 @@ func setParamNames(np any) {
 		switch fieldName {
 		case "Leader":
 			ParamNameLeader = fieldTag
-		case "DBOwner":
-			ParamNameDBOwner = fieldTag
 		case "MaxBlockSize":
 			ParamNameMaxBlockSize = fieldTag
 		case "JoinExpiry":
@@ -203,8 +196,6 @@ func MergeUpdates(np *NetworkParameters, updates ParamUpdates) (err error) {
 			default:
 				return fmt.Errorf("invalid type for leader: %T", update)
 			}
-		case ParamNameDBOwner:
-			np.DBOwner = update.(string)
 		case ParamNameMaxBlockSize:
 			np.MaxBlockSize = update.(int64)
 		case ParamNameJoinExpiry:
@@ -318,17 +309,6 @@ func (pu ParamUpdates) MarshalBinary() ([]byte, error) {
 			if _, err := buf.Write(bts); err != nil {
 				return nil, err
 			}
-		case ParamNameDBOwner:
-			if val, ok := value.(string); ok {
-				if err := binary.Write(buf, binary.LittleEndian, uint16(len(val))); err != nil {
-					return nil, err
-				}
-				if _, err := buf.Write([]byte(val)); err != nil {
-					return nil, err
-				}
-			} else {
-				return nil, fmt.Errorf("invalid type for %s", key)
-			}
 		case ParamNameDisabledGasCosts:
 			if val, ok := value.(bool); ok {
 				var boolInt uint8
@@ -427,16 +407,6 @@ func (pu *ParamUpdates) UnmarshalBinary(data []byte) error {
 				return err
 			}
 			updates[paramName] = PublicKey{pubkey}
-		case ParamNameDBOwner:
-			var length uint16
-			if err := binary.Read(buf, binary.LittleEndian, &length); err != nil {
-				return err
-			}
-			val := make([]byte, length)
-			if _, err := buf.Read(val); err != nil {
-				return err
-			}
-			updates[paramName] = string(val)
 		case ParamNameJoinExpiry:
 			var expiry Duration
 			if err := binary.Read(buf, binary.LittleEndian, &expiry); err != nil {
@@ -479,7 +449,6 @@ func (np NetworkParameters) ToMap() map[ParamName]any {
 	// Create a map using ParamNames as keys.
 	return map[ParamName]any{
 		ParamNameLeader:           np.Leader,
-		ParamNameDBOwner:          np.DBOwner,
 		ParamNameMaxBlockSize:     np.MaxBlockSize,
 		ParamNameJoinExpiry:       np.JoinExpiry,
 		ParamNameDisabledGasCosts: np.DisabledGasCosts,
@@ -515,7 +484,6 @@ func (np *NetworkParameters) Equals(other *NetworkParameters) bool {
 		sameLeader = np.Leader.Equals(other.Leader)
 	}
 	return sameLeader &&
-		np.DBOwner == other.DBOwner &&
 		np.MaxBlockSize == other.MaxBlockSize &&
 		np.JoinExpiry == other.JoinExpiry &&
 		np.DisabledGasCosts == other.DisabledGasCosts &&
@@ -527,10 +495,6 @@ func (np *NetworkParameters) SanityChecks() error {
 	// Leader shouldn't be empty
 	if np.Leader.PublicKey == nil || len(np.Leader.Bytes()) == 0 {
 		return errors.New("leader should not be empty")
-	}
-	// DBOwner shouldn't be empty
-	if len(np.DBOwner) == 0 {
-		return errors.New("db owner should not be empty")
 	}
 
 	// MaxVotesPerTx shouldn't be 0
@@ -558,12 +522,11 @@ func (np *NetworkParameters) SanityChecks() error {
 func (np NetworkParameters) String() string {
 	return fmt.Sprintf(`Network Parameters:
 	Leader: %s
-	DB Owner: %s
 	Max Block Size: %d
 	Join Expiry: %d
 	Disabled Gas Costs: %t
 	Max Votes Per Tx: %d
 	Migration Status: %s`,
-		&np.Leader, np.DBOwner, np.MaxBlockSize, np.JoinExpiry,
+		&np.Leader, np.MaxBlockSize, np.JoinExpiry,
 		np.DisabledGasCosts, np.MaxVotesPerTx, np.MigrationStatus)
 }
