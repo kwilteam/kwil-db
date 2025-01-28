@@ -16,8 +16,6 @@ import (
 )
 
 func init() {
-	fmt.Println("Enable erc20_rewards_meta extension...")
-
 	// erc20rw_rewards_meta will be available to be used in the Kuneiform schema
 	// It's supposed to be used by other reward extensions.
 	err := pc.RegisterInitializer("erc20_rewards_meta",
@@ -181,13 +179,6 @@ func (h *Erc20RewardMeta) register(ctx *kcommon.EngineContext, app *kcommon.App,
 	err := app.Engine.Execute(ctx, app.DB, sqlCreateRewardContract+createSignerSql, combinedParams, nil)
 	if err != nil {
 		return err
-	}
-
-	if resultFn != nil {
-		err = resultFn([]any{contractID})
-		if err != nil {
-			return err
-		}
 	}
 
 	return nil

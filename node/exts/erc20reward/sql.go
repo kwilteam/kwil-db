@@ -305,9 +305,8 @@ func (fr *FinalizedReward) UnpackTypes(decimalType *types.DataType) []pc.Precomp
 	}
 }
 
-func GenPendingRewardID(recipient string, amount string, height int64) *types.UUID {
-	// TODO: seems not unique, because we might have same recipient receive same amount multiple times in same height
-	return types.NewUUIDV5([]byte(fmt.Sprintf("erc20rw_pending_rewards_%v_%v_%v", recipient, amount, height)))
+func GenPendingRewardID(recipient string, amount string, txID string, idx int) *types.UUID {
+	return types.NewUUIDV5([]byte(fmt.Sprintf("erc20rw_pending_rewards_%v_%v_%v_%v", recipient, amount, txID, idx)))
 }
 
 func GenBatchRewardID(endHeight int64, signHash []byte) *types.UUID {

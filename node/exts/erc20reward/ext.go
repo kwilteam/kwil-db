@@ -34,12 +34,11 @@ import (
 
 const (
 	uint256Precision = 78
+
+	txIssueRewardCounterKey = "issue_reward_counter"
 )
 
 func init() {
-	fmt.Println("Enable erc20_rewards extension...")
-	// erc20_rewards will be available to be used in the Kuneiform schema
-
 	err := pc.RegisterInitializer("erc20_rewards",
 		func(ctx context.Context, service *kcommon.Service, db sql.DB, alias string, metadata map[string]any) (p pc.Precompile, err error) {
 			chainID, contractAddr, contractNonce, signers, threshold, safeAddr, safeNonce, decimals, err := getMetadata(metadata)
@@ -66,7 +65,7 @@ func init() {
 			}
 
 			return pc.Precompile{
-				Methods: []pc.Method{
+				Methods: []pc.Method{ // NOTE: engine ensures 'resultFn' in Handler is always non-nil
 					{
 						// Supposed to be called by App
 						Name:            "issue_reward",
@@ -249,7 +248,8 @@ func init() {
 					return nil
 				},
 				OnUse: func(ctx *kcommon.EngineContext, app *kcommon.App) error {
-					fmt.Println("OnUse is called .......")
+					app.Service.Logger.Info("Register a new erc20_rewards contract",
+						"chainID", ext.ChainID, "contractAddr", ext.ContractAddr, "alias", ext.alias)
 					initRewardMeta := "USE IF NOT EXISTS erc20_rewards_meta as " + meta.ExtAlias + ";"
 					err := app.Engine.Execute(ctx, app.DB, initRewardMeta, nil, nil)
 					if err != nil {
@@ -511,10 +511,6 @@ func scaleDownUint256(amount *types.Decimal, decimals uint16) (*types.Decimal, e
 }
 
 func (h *Erc20RewardExt) issueReward(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
-	if len(inputs) != 2 {
-		return fmt.Errorf("invalid number of inputs")
-	}
-
 	wallet, ok := inputs[0].(string)
 	if !ok {
 		return fmt.Errorf("invalid wallet address")
@@ -544,8 +540,19 @@ func (h *Erc20RewardExt) issueReward(ctx *kcommon.EngineContext, app *kcommon.Ap
 		return err
 	}
 
+	counter := 0
+	c, exist := ctx.TxContext.Value(txIssueRewardCounterKey)
+	if exist {
+		counter = c.(int)
+	}
+
+	// not matter if db operations success, increase the counter
+	defer func() {
+		ctx.TxContext.SetValue(txIssueRewardCounterKey, counter+1)
+	}()
+
 	if err := IssueReward(ctx, app.Engine, app.DB, h.alias, &PendingReward{
-		ID:         GenPendingRewardID(wallet, uint256Amount.String(), ctx.TxContext.BlockContext.Height),
+		ID:         GenPendingRewardID(wallet, uint256Amount.String(), ctx.TxContext.TxID, counter),
 		Recipient:  wallet,
 		Amount:     uint256Amount,
 		CreatedAt:  ctx.TxContext.BlockContext.Height,
@@ -554,19 +561,11 @@ func (h *Erc20RewardExt) issueReward(ctx *kcommon.EngineContext, app *kcommon.Ap
 		return err
 	}
 
-	if resultFn != nil {
-		return resultFn([]any{})
-	}
-
 	return nil
 }
 
 // listPendingRewards returns all pending rewards from last epoch till current height.
 func (h *Erc20RewardExt) listPendingRewards(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
-	if len(inputs) != 2 {
-		return fmt.Errorf("invalid number of inputs")
-	}
-
 	startHeight, ok := inputs[0].(int64)
 	if !ok {
 		return fmt.Errorf("invalid start height")
@@ -599,12 +598,10 @@ func (h *Erc20RewardExt) listPendingRewards(ctx *kcommon.EngineContext, app *kco
 		return err
 	}
 
-	if resultFn != nil {
-		for _, r := range rewards {
-			err := resultFn(r.UnpackValues())
-			if err != nil {
-				return err
-			}
+	for _, r := range rewards {
+		err := resultFn(r.UnpackValues())
+		if err != nil {
+			return err
 		}
 	}
 
@@ -622,10 +619,6 @@ func (h *Erc20RewardExt) listPendingRewards(ctx *kcommon.EngineContext, app *kco
 // For simplicity, we just use safeNonce tracked by extension.
 // NOTE: well, do we need to check permission? e.g., check the caller??
 func (h *Erc20RewardExt) proposeEpoch(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
-	if len(inputs) != 0 {
-		return fmt.Errorf("invalid number of inputs")
-	}
-
 	endHeight := ctx.TxContext.BlockContext.Height
 	blockHash := ctx.TxContext.BlockContext.Hash
 
@@ -715,11 +708,6 @@ func (h *Erc20RewardExt) proposeEpoch(ctx *kcommon.EngineContext, app *kcommon.A
 // listEpochs returns reward epochs starting from a given height.
 // inputs[0] is the starting height, inputs[1] is the return size and default to 10.
 func (h *Erc20RewardExt) listEpochs(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
-	// TODO: we don't need some validation logic since we have parameters declaration
-	if len(inputs) != 2 {
-		return fmt.Errorf("invalid number of inputs")
-	}
-
 	afterHeight, ok := inputs[0].(int64)
 	if !ok {
 		return fmt.Errorf("invalid after height")
@@ -750,12 +738,10 @@ func (h *Erc20RewardExt) listEpochs(ctx *kcommon.EngineContext, app *kcommon.App
 		return err
 	}
 
-	if resultFn != nil {
-		for _, r := range rewards {
-			err := resultFn(r.UnpackValues())
-			if err != nil {
-				return err
-			}
+	for _, r := range rewards {
+		err := resultFn(r.UnpackValues())
+		if err != nil {
+			return err
 		}
 	}
 
@@ -766,11 +752,7 @@ func (h *Erc20RewardExt) listEpochs(ctx *kcommon.EngineContext, app *kcommon.App
 // inputs[0] is the data digest, inputs[1] is the signature.
 // This is supposed to be called by Signer service.
 func (h *Erc20RewardExt) voteEpochReward(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
-	if len(inputs) != 2 {
-		return fmt.Errorf("internal bug: expect 2 parameters, got %d", len(inputs))
-	}
-
-	// verify it's signers allowed
+	// verify the caller is signer
 	_voter, err := meta.GetSigner(ctx, app.Engine, app.DB, ctx.TxContext.Caller, h.contractID)
 	if err != nil {
 		return fmt.Errorf("check signer: %w", err)
@@ -843,9 +825,6 @@ func (h *Erc20RewardExt) voteEpochReward(ctx *kcommon.EngineContext, app *kcommo
 		h.SafeNonce += 1
 	}
 
-	if resultFn != nil {
-		return resultFn([]any{})
-	}
 	return nil
 }
 
@@ -853,10 +832,6 @@ func (h *Erc20RewardExt) voteEpochReward(ctx *kcommon.EngineContext, app *kcommo
 // inputs[0] is the starting height, inputs[1] is the batch size and default to 10.
 // This is supposed to be called by Poster service.
 func (h *Erc20RewardExt) listFinalized(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
-	if len(inputs) != 2 {
-		return fmt.Errorf("invalid number of inputs")
-	}
-
 	afterHeight, ok := inputs[0].(int64)
 	if !ok {
 		return fmt.Errorf("invalid after height")
@@ -887,12 +862,10 @@ func (h *Erc20RewardExt) listFinalized(ctx *kcommon.EngineContext, app *kcommon.
 		return err
 	}
 
-	if resultFn != nil {
-		for _, r := range rewards {
-			err := resultFn(r.UnpackValues())
-			if err != nil {
-				return err
-			}
+	for _, r := range rewards {
+		err := resultFn(r.UnpackValues())
+		if err != nil {
+			return err
 		}
 	}
 
@@ -925,12 +898,10 @@ func (h *Erc20RewardExt) latestFinalized(ctx *kcommon.EngineContext, app *kcommo
 		return err
 	}
 
-	if resultFn != nil {
-		for _, r := range rewards {
-			err := resultFn(r.UnpackValues())
-			if err != nil {
-				return err
-			}
+	for _, r := range rewards {
+		err := resultFn(r.UnpackValues())
+		if err != nil {
+			return err
 		}
 	}
 
@@ -980,14 +951,10 @@ func (h *Erc20RewardExt) getClaimParam(ctx *kcommon.EngineContext, app *kcommon.
 		return err
 	}
 
-	if resultFn != nil {
-		return resultFn([]any{
-			walletAddr.String(),
-			uint256Amt,
-			toBytes32Str(bh),
-			toBytes32Str(treeRoot),
-			meta.Map(proofs, toBytes32Str)})
-	}
-
-	return nil
+	return resultFn([]any{
+		walletAddr.String(),
+		uint256Amt,
+		toBytes32Str(bh),
+		toBytes32Str(treeRoot),
+		meta.Map(proofs, toBytes32Str)})
 }
