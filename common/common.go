@@ -75,6 +75,8 @@ type TxContext struct {
 	values map[string]any
 }
 
+// SetValue sets a value in the transaction context that can
+// be retrieved later.
 func (t *TxContext) SetValue(s string, v any) {
 	if t.values == nil {
 		t.values = make(map[string]any)
@@ -82,6 +84,8 @@ func (t *TxContext) SetValue(s string, v any) {
 	t.values[s] = v
 }
 
+// Value retrieves a value from the transaction context.
+// If it does not exist, the second return value will be false.
 func (t *TxContext) Value(s string) (any, bool) {
 	if t.values == nil {
 		return nil, false
