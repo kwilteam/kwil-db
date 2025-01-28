@@ -44,7 +44,6 @@ func TestParamUpdatesDeclaration_MarshalBinary(t *testing.T) {
 				Description: "test update",
 				ParamUpdates: types.ParamUpdates{
 					types.ParamNameLeader:           types.PublicKey{PublicKey: pubkey},
-					types.ParamNameDBOwner:          "0x1234567890123456789012345678901234567890",
 					types.ParamNameDisabledGasCosts: false,
 					types.ParamNameJoinExpiry:       types.Duration(10 * time.Second),
 					types.ParamNameMigrationStatus:  types.MigrationCompleted,
@@ -57,7 +56,6 @@ func TestParamUpdatesDeclaration_MarshalBinary(t *testing.T) {
 				Description: "test update",
 				ParamUpdates: types.ParamUpdates{
 					types.ParamNameLeader:           types.PublicKey{PublicKey: pubkey},
-					types.ParamNameDBOwner:          "0x1234567890123456789012345678901234567890",
 					types.ParamNameDisabledGasCosts: false,
 					types.ParamNameJoinExpiry:       int64(10),
 					types.ParamNameMigrationStatus:  types.MigrationCompleted,

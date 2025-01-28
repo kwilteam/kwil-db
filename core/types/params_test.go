@@ -37,8 +37,7 @@ func TestSetParamNames(t *testing.T) {
 		{
 			name: "unset params (partial fields)",
 			input: struct {
-				Leader  string `json:"leader"`
-				DBOwner string `json:"db_owner"`
+				Leader string `json:"leader"`
 			}{},
 			wantPanic: true,
 		},
@@ -64,9 +63,6 @@ func TestSetParamNames(t *testing.T) {
 				// Verify the parameter names were set correctly
 				if ParamNameLeader != "leader" {
 					t.Errorf("ParamNameLeader = %v, want %v", ParamNameLeader, "leader")
-				}
-				if ParamNameDBOwner != "db_owner" {
-					t.Errorf("ParamNameDBOwner = %v, want %v", ParamNameDBOwner, "db_owner")
 				}
 				if ParamNameMaxBlockSize != "max_block_size" {
 					t.Errorf("ParamNameMaxBlockSize = %v, want %v", ParamNameMaxBlockSize, "max_block_size")
@@ -115,7 +111,6 @@ func TestParamUpdatesMarshalBinary(t *testing.T) {
 			name: "all parameter types",
 			updates: ParamUpdates{
 				ParamNameLeader:           PublicKey{pub},
-				ParamNameDBOwner:          "test_owner",
 				ParamNameMaxBlockSize:     int64(1000),
 				ParamNameJoinExpiry:       Duration(10 * time.Second),
 				ParamNameDisabledGasCosts: true,
@@ -128,13 +123,6 @@ func TestParamUpdatesMarshalBinary(t *testing.T) {
 			name: "invalid leader type",
 			updates: ParamUpdates{
 				ParamNameLeader: "invalid",
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid db owner type",
-			updates: ParamUpdates{
-				ParamNameDBOwner: []byte("invalid"),
 			},
 			wantErr: true,
 		},
@@ -426,9 +414,7 @@ func TestParamUpdatesMerge(t *testing.T) {
 		},
 		{
 			name: "invalid updates",
-			base: ParamUpdates{
-				ParamNameDBOwner: "owner1",
-			},
+			base: ParamUpdates{},
 			other: ParamUpdates{
 				ParamNameMaxVotesPerTx:    "bad",
 				ParamNameDisabledGasCosts: 1.21,
