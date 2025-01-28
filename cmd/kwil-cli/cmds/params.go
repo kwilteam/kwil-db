@@ -342,7 +342,6 @@ func splitByCommas(input string) ([]*string, error) {
 			}
 
 		default:
-			// >>> FIX HERE: Skip leading whitespace if we are not in quotes and currentToken is empty.
 			if !inSingleQuote && !inDoubleQuote && unicode.IsSpace(char) && len(currentToken) == 0 {
 				// Skip leading spaces outside of quotes
 				continue
