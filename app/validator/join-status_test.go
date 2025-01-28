@@ -82,7 +82,7 @@ func Test_respValJoinStatus_MarshalText(t *testing.T) {
 					Approved: []bool{true, true, true},
 				},
 			},
-			want: "Candidate: AccountID{identifier = 1234, keyType = secp256k1}\nRequested Power: 1000\nExpiration Timestamp: " + nowStr + "\n3 Approvals Received (2 needed):\nValidator AccountID{identifier = abcd, keyType = secp256k1}, approved\nValidator AccountID{identifier = ef12, keyType = secp256k1}, approved\nValidator AccountID{identifier = 5678, keyType = secp256k1}, approved\n",
+			want: "Candidate: 1234#secp256k1\nRequested Power: 1000\nExpiration Timestamp: " + nowStr + "\n3 Approvals Received From Existing Validators (2 needed):\n  abcd#secp256k1: ✅ approved\n  ef12#secp256k1: ✅ approved\n  5678#secp256k1: ✅ approved\n",
 		},
 		{
 			name: "mixed approvals",
@@ -98,7 +98,7 @@ func Test_respValJoinStatus_MarshalText(t *testing.T) {
 					Approved: []bool{true, false},
 				},
 			},
-			want: "Candidate: AccountID{identifier = ff, keyType = secp256k1}\nRequested Power: 500\nExpiration Timestamp: " + nowStr + "\n1 Approvals Received (2 needed):\nValidator AccountID{identifier = 1122, keyType = secp256k1}, approved\nValidator AccountID{identifier = 3344, keyType = secp256k1}, not approved\n",
+			want: "Candidate: ff#secp256k1\nRequested Power: 500\nExpiration Timestamp: " + nowStr + "\n1 Approvals Received From Existing Validators (2 needed):\n  1122#secp256k1: ✅ approved\n  3344#secp256k1: ❌ not approved\n",
 		},
 	}
 
