@@ -2671,9 +2671,11 @@ func Test_SetCurrentNamespace(t *testing.T) {
 	CREATE TABLE test_table (id INT PRIMARY KEY);
 	CREATE NAMESPACE other_ns;
 	{other_ns}CREATE TABLE other_table (id INT PRIMARY KEY);
+	CREATE TABLE test_table2 (id INT PRIMARY KEY);
 	`, nil, nil)
 	require.NoError(t, err)
 	hasTable(t, interp, tx, "test_ns", "test_table")
+	hasTable(t, interp, tx, "test_ns", "test_table2")
 	hasTable(t, interp, tx, "main", "main_table")
 	hasTable(t, interp, tx, "other_ns", "other_table")
 }
