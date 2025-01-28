@@ -69,7 +69,7 @@ func newTestHost(t *testing.T, mn mock.Mocknet) ([]byte, host.Host) {
 	return pkBytes, host
 }
 
-func makeTestHosts(t *testing.T, nNodes, nExtraHosts int, blockInterval time.Duration) ([]*Node, []host.Host, mock.Mocknet) {
+func makeTestHosts(t *testing.T, nNodes, nExtraHosts int, blockInterval time.Duration) ([]*Node, []host.Host, []*P2PService, mock.Mocknet) {
 	mn := mock.New()
 	t.Cleanup(func() {
 		mn.Close()
@@ -80,6 +80,7 @@ func makeTestHosts(t *testing.T, nNodes, nExtraHosts int, blockInterval time.Dur
 
 	var nodes []*Node
 	var hosts []host.Host
+	var p2p []*P2PService
 	// var privKeys []*crypto.Secp256k1PrivateKey
 
 	for range nNodes {
@@ -114,13 +115,30 @@ func makeTestHosts(t *testing.T, nNodes, nExtraHosts int, blockInterval time.Dur
 			Consensus:   ce,
 			BlockProc:   &dummyBP{},
 		}
-		node, err := NewNode(cfg, WithHost(h))
+
+		psCfg := &P2PServiceConfig{
+			PrivKey: priv,
+			RootDir: rootDir,
+			ChainID: "test",
+			KwilCfg: defaultConfigSet,
+			Logger:  log.DiscardLogger,
+		}
+
+		ps, err := NewP2PService(psCfg, h)
+		if err != nil {
+			t.Fatalf("Failed to create P2PService: %v", err)
+		}
+		cfg.P2PService = ps
+		p2p = append(p2p, ps)
+
+		node, err := NewNode(cfg)
 		if err != nil {
 			t.Fatalf("Failed to create Node 1: %v", err)
 		}
 
 		// privKeys = append(privKeys, priv)
 		nodes = append(nodes, node)
+
 	}
 
 	for range nExtraHosts {
@@ -131,7 +149,7 @@ func makeTestHosts(t *testing.T, nNodes, nExtraHosts int, blockInterval time.Dur
 
 	time.Sleep(50 * time.Millisecond)
 
-	return nodes, hosts, mn
+	return nodes, hosts, p2p, mn
 }
 
 func linkAll(t *testing.T, mn mock.Mocknet) {
@@ -212,6 +230,7 @@ func newGenesis(t *testing.T, nodekeys [][]byte) ([]crypto.PrivateKey, *config.G
 	}
 
 	genCfg := config.GenesisConfig{
+		ChainID:    "test",
 		Validators: []*ktypes.Validator{},
 		NetworkParameters: ktypes.NetworkParameters{
 			Leader: ktypes.PublicKey{PublicKey: privKeys[0].Public()},
@@ -412,7 +431,7 @@ func (f *faker) SetResetStateHandler(resetStateHandler func(height int64, txIDs 
 }
 
 func TestStreamsBlockFetch(t *testing.T) {
-	nodes, extraHosts, mn := makeTestHosts(t, 1, 1, 5*time.Hour)
+	nodes, extraHosts, _, mn := makeTestHosts(t, 1, 1, 5*time.Hour)
 	linkAll(t, mn)
 
 	n1 := nodes[0]

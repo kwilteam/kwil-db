@@ -237,7 +237,7 @@ func TestKwildBlockSync(t *testing.T) {
 					nc.Validator = false
 				}),
 			},
-			DBOwner: "0xabc",
+			DBOwner: OwnerAddress,
 		},
 		InitialServices: []string{"node0", "node1", "node2", "pg0", "pg1", "pg2"}, // should bringup only node 0,1,2
 	})
@@ -643,11 +643,13 @@ func TestKwildPrivateNetworks(t *testing.T) {
 	specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0})
 	specifications.ListPeersSpecification(ctx, t, n2Admin, []string{})
 
-	time.Sleep(5 * time.Second) // wait for the nodes to discover each other and blocksync
+	time.Sleep(30 * time.Second) // wait for the nodes to discover each other and blocksync
+	// pex discovers new peers for every 20 secs
 	// TODO: does add peer actively connect to the peer?
 
-	// Now ensure that the n1 sees the data that was created by n0
+	// Now ensure that the n1 sees the data that was created by n0 but not n2
 	specifications.ListUsersSpecification(ctx, t, n1Clt, false, 1)
+	specifications.ListUsersSpecification(ctx, t, n2Clt, true, 0)
 
 	// connect n0 and n2
 	specifications.AddPeerSpecification(ctx, t, n0Admin, nID2)
@@ -658,13 +660,13 @@ func TestKwildPrivateNetworks(t *testing.T) {
 	specifications.ListPeersSpecification(ctx, t, n2Admin, []string{nID0})
 	specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0})
 
-	time.Sleep(5 * time.Second) // wait for the nodes to discover each other
-
 	// check peer connectivity
 	// specifications.PeerConnectivitySpecification(ctx, t, n2Admin, nID1, false)
 	// specifications.PeerConnectivitySpecification(ctx, t, n2Admin, nID0, true)
 	// specifications.PeerConnectivitySpecification(ctx, t, n0Admin, nID2, true)
 	// specifications.PeerConnectivitySpecification(ctx, t, n1Admin, nID2, false)
+
+	time.Sleep(30 * time.Second) // wait for the nodes to discover each other and blocksync
 
 	specifications.ListUsersSpecification(ctx, t, n2Clt, false, 1)
 

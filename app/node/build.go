@@ -50,14 +50,28 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	}
 	d.closers = closers
 
+	// BlockStore
+	bs := buildBlockStore(d, closers)
+
+	// Initialize and start P2P service
+	p2pSvc := initializeP2PService(d, closers)
+
+	if err := p2pSvc.Start(ctx, d.cfg.P2P.BootNodes...); err != nil {
+		failBuild(err, "failed to start p2p service")
+	}
+
+	// SnapshotStore
+	snapshotStore := buildSnapshotStore(d, bs)
+	snapshotStore.RegisterSnapshotStreamHandlers(ctx, p2pSvc.Host(), p2pSvc.Discovery())
+
+	// Statesync module
+	ss := initializeStatesyncService(ctx, d, p2pSvc, snapshotStore, bs, *closers)
+
 	// Initialize DB
-	db := buildDB(ctx, d, closers)
+	db := buildDB(ctx, d, ss, closers)
 
 	// metastore
 	buildMetaStore(ctx, db)
-
-	// BlockStore
-	bs := buildBlockStore(d, closers)
 
 	// accounts
 	accounts := buildAccountStore(ctx, d, db)
@@ -66,7 +80,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	es, vs := buildVoteStore(ctx, d, closers) // ev, vs
 
 	// engine
-	e := buildEngine(d, db, accounts, vs, d.namespaceManager)
+	e := buildEngine(d, ctx, db, accounts, vs, d.namespaceManager)
 	d.namespaceManager.Ready()
 
 	// Mempool
@@ -75,20 +89,17 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	// TxAPP
 	txApp := buildTxApp(ctx, d, db, accounts, vs, e)
 
-	// Snapshot Store
-	ss := buildSnapshotStore(d)
-
 	// Migrator
-	migrator := buildMigrator(d, db, accounts, vs)
+	migrator := buildMigrator(d, ctx, db, accounts, vs)
 
 	// BlockProcessor
-	bp := buildBlockProcessor(ctx, d, db, txApp, accounts, vs, ss, es, migrator, bs)
+	bp := buildBlockProcessor(ctx, d, db, txApp, accounts, vs, snapshotStore, es, migrator, bs)
 
 	// Consensus
 	ce := buildConsensusEngine(ctx, d, db, mp, bs, bp)
 
 	// Node
-	node := buildNode(d, mp, bs, ce, ss, db, bp)
+	node := buildNode(d, mp, bs, ce, snapshotStore, db, bp, p2pSvc)
 
 	// listeners
 	lm := buildListenerManager(d, es, bp, node)
@@ -151,11 +162,58 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	return s
 }
 
-func buildDB(ctx context.Context, d *coreDependencies, closers *closeFuncs) *pg.DB {
+func initializeP2PService(d *coreDependencies, closers *closeFuncs) *node.P2PService {
+	p2pCfg := &node.P2PServiceConfig{
+		PrivKey: d.privKey,
+		RootDir: d.rootDir,
+		ChainID: d.genesisCfg.ChainID,
+		KwilCfg: d.cfg,
+		Logger:  d.logger.New("P2P"),
+	}
+
+	p2pSvc, err := node.NewP2PService(p2pCfg, nil)
+	if err != nil {
+		failBuild(err, "failed to create p2p service")
+	}
+
+	closers.addCloser(p2pSvc.Close, "Closing P2P service")
+	return p2pSvc
+}
+
+// initializeStatesyncService initializes the statesync service if enabled.
+// and discovers the snapshots from the trusted peers.
+func initializeStatesyncService(ctx context.Context, d *coreDependencies, p2p *node.P2PService, snapshotter *snapshotter.SnapshotStore, bs *store.BlockStore, closers closeFuncs) *node.StateSyncService {
+	if !d.cfg.StateSync.Enable {
+		return nil
+	}
+	poolDB, err := d.poolOpener(ctx, d.cfg.DB.DBName, 3)
+	if err != nil {
+		failBuild(err, "failed to open kwild postgres database for eventstore")
+	}
+	closers.addCloser(poolDB.Close, "Closing Eventstore DB")
+
+	rcvdSnapsDir := filepath.Join(d.rootDir, "rcvd_snaps")
+	ssCfg := &node.StatesyncConfig{
+		RcvdSnapsDir:  rcvdSnapsDir,
+		StateSyncCfg:  &d.cfg.StateSync,
+		DBConfig:      d.cfg.DB,
+		Logger:        d.logger.New("STATESYNC"),
+		SnapshotStore: snapshotter,
+		BlockStore:    bs,
+		P2PService:    p2p,
+		DB:            poolDB,
+	}
+	ss, err := node.NewStateSyncService(ctx, ssCfg)
+	if err != nil {
+		failBuild(err, "failed to create statesync service")
+	}
+	return ss
+}
+
+func buildDB(ctx context.Context, d *coreDependencies, ss *node.StateSyncService, closers *closeFuncs) *pg.DB {
 	pg.UseLogger(d.logger.New("PG"))
 
-	// TODO: restore from snapshots
-	fromSnapshot := restoreDB(d)
+	fromSnapshot := restoreDB(d, ctx, ss)
 
 	db, err := d.dbOpener(ctx, d.cfg.DB.DBName, d.cfg.DB.MaxConns)
 	if err != nil {
@@ -173,12 +231,12 @@ func buildDB(ctx context.Context, d *coreDependencies, closers *closeFuncs) *pg.
 		// 	adjustExpiration = true
 		// }
 
-		err = migrations.CleanupResolutionsAfterMigration(d.ctx, db)
+		err = migrations.CleanupResolutionsAfterMigration(ctx, db)
 		if err != nil {
 			failBuild(err, "failed to cleanup resolutions after snapshot restore")
 		}
 
-		if err = db.EnsureFullReplicaIdentityDatasets(d.ctx); err != nil {
+		if err = db.EnsureFullReplicaIdentityDatasets(ctx); err != nil {
 			failBuild(err, "failed enable full replica identity on user datasets")
 		}
 	}
@@ -196,8 +254,28 @@ func buildDB(ctx context.Context, d *coreDependencies, closers *closeFuncs) *pg.
 //     to the network state using statesync snapshots.
 //
 // returns true if the DB was restored from snapshot, false otherwise.
-func restoreDB(d *coreDependencies) bool {
-	if d.cfg.StateSync.Enable || len(d.genesisCfg.StateHash) == 0 || isDbInitialized(d) {
+func restoreDB(d *coreDependencies, ctx context.Context, ss *node.StateSyncService) bool {
+	if isDbInitialized(ctx, d) {
+		return false
+	}
+
+	if d.cfg.StateSync.Enable {
+		// discover and restore from snapshot using statesync service
+		success, err := ss.DoStatesync(ctx)
+		if err != nil {
+			failBuild(err, "failed to do statesync")
+		}
+
+		if success {
+			d.logger.Info("DB restored from statesync snapshot")
+			return true
+		}
+
+		// If statesync is not successful, restore from the genesis snapshot if available
+	}
+
+	// offline migration -> restore from the genesis snapshot
+	if len(d.genesisCfg.StateHash) == 0 {
 		return false
 	}
 
@@ -233,7 +311,7 @@ func restoreDB(d *coreDependencies) bool {
 	}
 
 	// Restore DB from the snapshot if snapshot matches.
-	err = node.RestoreDB(d.ctx, reader, &appCfg.DB, genCfg.StateHash, d.logger)
+	err = node.RestoreDB(ctx, reader, appCfg.DB, genCfg.StateHash, d.logger)
 	if err != nil {
 		failBuild(err, "failed to restore DB from snapshot")
 	}
@@ -241,15 +319,15 @@ func restoreDB(d *coreDependencies) bool {
 }
 
 // isDbInitialized checks if the database is already initialized.
-func isDbInitialized(d *coreDependencies) bool {
-	db, err := d.poolOpener(d.ctx, d.cfg.DB.DBName, 3)
+func isDbInitialized(ctx context.Context, d *coreDependencies) bool {
+	db, err := d.poolOpener(ctx, d.cfg.DB.DBName, 3)
 	if err != nil {
 		failBuild(err, "kwild database open failed")
 	}
 	defer db.Close()
 
 	// Check if the kwild_voting schema exists
-	exists, err := schemaExists(d.ctx, db, "kwild_voting")
+	exists, err := schemaExists(ctx, db, "kwild_voting")
 	if err != nil {
 		failBuild(err, "failed to check if schema exists")
 	}
@@ -356,7 +434,7 @@ func buildBlockProcessor(ctx context.Context, d *coreDependencies, db *pg.DB, tx
 	return bp
 }
 
-func buildMigrator(d *coreDependencies, db *pg.DB, accounts *accounts.Accounts, vs *voting.VoteStore) *migrations.Migrator {
+func buildMigrator(d *coreDependencies, ctx context.Context, db *pg.DB, accounts *accounts.Accounts, vs *voting.VoteStore) *migrations.Migrator {
 	migrationsDir := config.MigrationDir(d.rootDir)
 
 	err := os.MkdirAll(migrations.ChangesetsDir(migrationsDir), 0755)
@@ -376,12 +454,12 @@ func buildMigrator(d *coreDependencies, db *pg.DB, accounts *accounts.Accounts, 
 		RecurringHeight: d.cfg.Snapshots.RecurringHeight,
 		Enable:          d.cfg.Snapshots.Enable,
 		DBConfig:        &d.cfg.DB,
-	}, d.namespaceManager, d.logger.New("SNAP"))
+	}, nil, d.namespaceManager, d.logger.New("SNAP"))
 	if err != nil {
 		failBuild(err, "failed to create migration's snapshot store")
 	}
 
-	migrator, err := migrations.SetupMigrator(d.ctx, db, ss, accounts, migrationsDir, d.genesisCfg.Migration, vs, d.logger.New(`MIGRATOR`))
+	migrator, err := migrations.SetupMigrator(ctx, db, ss, accounts, migrationsDir, d.genesisCfg.Migration, vs, d.logger.New(`MIGRATOR`))
 	if err != nil {
 		failBuild(err, "failed to create migrator")
 	}
@@ -417,7 +495,7 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB,
 
 func buildNode(d *coreDependencies, mp *mempool.Mempool, bs *store.BlockStore,
 	ce *consensus.ConsensusEngine, ss *snapshotter.SnapshotStore, db *pg.DB,
-	bp *blockprocessor.BlockProcessor) *node.Node {
+	bp *blockprocessor.BlockProcessor, p2p *node.P2PService) *node.Node {
 	logger := d.logger.New("NODE")
 	nc := &node.Config{
 		ChainID:     d.genesisCfg.ChainID,
@@ -433,6 +511,7 @@ func buildNode(d *coreDependencies, mp *mempool.Mempool, bs *store.BlockStore,
 		BlockProc:   bp,
 		Logger:      logger,
 		DBConfig:    &d.cfg.DB,
+		P2PService:  p2p,
 	}
 
 	node, err := node.NewNode(nc)
@@ -458,24 +537,24 @@ func failBuild(err error, msg string) {
 	})
 }
 
-func buildEngine(d *coreDependencies, db *pg.DB, accounts common.Accounts, validators common.Validators, namespaceManager engine.NamespaceRegister) *interpreter.ThreadSafeInterpreter {
+func buildEngine(d *coreDependencies, ctx context.Context, db *pg.DB, accounts common.Accounts, validators common.Validators, namespaceManager engine.NamespaceRegister) *interpreter.ThreadSafeInterpreter {
 	extensions := precompiles.RegisteredPrecompiles()
 	for name := range extensions {
 		d.logger.Info("registered extension", "name", name)
 	}
 
-	tx, err := db.BeginTx(d.ctx)
+	tx, err := db.BeginTx(ctx)
 	if err != nil {
 		failBuild(err, "failed to start transaction")
 	}
-	defer tx.Rollback(d.ctx)
+	defer tx.Rollback(ctx)
 
-	interp, err := interpreter.NewInterpreter(d.ctx, tx, d.service("engine"), accounts, validators, namespaceManager)
+	interp, err := interpreter.NewInterpreter(ctx, tx, d.service("engine"), accounts, validators, namespaceManager)
 	if err != nil {
 		failBuild(err, "failed to initialize engine")
 	}
 
-	err = tx.Commit(d.ctx)
+	err = tx.Commit(ctx)
 	if err != nil {
 		failBuild(err, "failed to commit engine init db txn")
 	}
@@ -483,7 +562,7 @@ func buildEngine(d *coreDependencies, db *pg.DB, accounts common.Accounts, valid
 	return interp
 }
 
-func buildSnapshotStore(d *coreDependencies) *snapshotter.SnapshotStore {
+func buildSnapshotStore(d *coreDependencies, bs *store.BlockStore) *snapshotter.SnapshotStore {
 	snapshotDir := filepath.Join(d.rootDir, "snapshots")
 	cfg := &snapshotter.SnapshotConfig{
 		SnapshotDir:     snapshotDir,
@@ -497,7 +576,7 @@ func buildSnapshotStore(d *coreDependencies) *snapshotter.SnapshotStore {
 		failBuild(err, "failed to create snapshot directory")
 	}
 
-	ss, err := snapshotter.NewSnapshotStore(cfg, d.namespaceManager, d.logger.New("SNAP"))
+	ss, err := snapshotter.NewSnapshotStore(cfg, bs, d.namespaceManager, d.logger.New("SNAP"))
 	if err != nil {
 		failBuild(err, "failed to create snapshot store")
 	}

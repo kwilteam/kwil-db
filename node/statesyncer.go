@@ -23,6 +23,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/node/meta"
 	"github.com/kwilteam/kwil-db/node/peers"
+	"github.com/kwilteam/kwil-db/node/snapshotter"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/peerstore"
 )
@@ -67,31 +68,29 @@ func (s *StateSyncService) DiscoverSnapshots(ctx context.Context) (int64, error)
 		case <-ctx.Done():
 			return -1, ctx.Err()
 		case <-time.After(time.Duration(s.cfg.DiscoveryTimeout)):
-			s.log.Info("Selecting the best snapshot...")
-		}
-
-		synced, snap, err := s.downloadSnapshot(ctx)
-		if err != nil {
-			return -1, err
-		}
-
-		if synced {
-			// RestoreDB from the snapshot
-			if err := s.restoreDB(ctx, snap); err != nil {
-				s.log.Warn("failed to restore DB from snapshot", "error", err)
-				return -1, err
-			}
-
-			// ensure that the apphash matches
-			err := s.verifyState(ctx, snap)
+			synced, snap, err := s.downloadSnapshot(ctx)
 			if err != nil {
-				s.log.Warn("failed to verify state after DB restore", "error", err)
 				return -1, err
 			}
 
-			return int64(snap.Height), nil
+			if synced {
+				// RestoreDB from the snapshot
+				if err := s.restoreDB(ctx, snap); err != nil {
+					s.log.Warn("failed to restore DB from snapshot", "error", err)
+					return -1, err
+				}
+
+				// ensure that the apphash matches
+				err := s.verifyState(ctx, snap)
+				if err != nil {
+					s.log.Warn("failed to verify state after DB restore", "error", err)
+					return -1, err
+				}
+
+				return int64(snap.Height), nil
+			}
+			retry++
 		}
-		retry++
 	}
 }
 
@@ -191,7 +190,7 @@ func (s *StateSyncService) chunkFetcher(ctx context.Context, snapshot *snapshotM
 // The chunk is written to <chunk-idx.sql.gz> file in the snapshot directory.
 // This also ensures that the hash of the received chunk matches the expected hash
 func (s *StateSyncService) requestSnapshotChunk(ctx context.Context, snap *snapshotMetadata, provider peer.AddrInfo, index uint32) error {
-	stream, err := s.host.NewStream(ctx, provider.ID, ProtocolIDSnapshotChunk)
+	stream, err := s.host.NewStream(ctx, provider.ID, snapshotter.ProtocolIDSnapshotChunk)
 	if err != nil {
 		s.log.Warn("failed to create stream to provider", "provider", provider.ID.String(),
 			"error", peers.CompressDialError(err))
@@ -250,7 +249,7 @@ func (s *StateSyncService) requestSnapshotChunk(ctx context.Context, snap *snaps
 func (s *StateSyncService) requestSnapshotCatalogs(ctx context.Context, peer peer.AddrInfo) error {
 	// request snapshot catalogs from the discovered peer
 	s.host.Peerstore().AddAddrs(peer.ID, peer.Addrs, peerstore.PermanentAddrTTL)
-	stream, err := s.host.NewStream(ctx, peer.ID, ProtocolIDSnapshotCatalog)
+	stream, err := s.host.NewStream(ctx, peer.ID, snapshotter.ProtocolIDSnapshotCatalog)
 	if err != nil {
 		return peers.CompressDialError(err)
 	}
@@ -334,7 +333,7 @@ func (s *StateSyncService) restoreDB(ctx context.Context, snapshot *snapshotMeta
 	return RestoreDB(ctx, reader, s.dbConfig, snapshot.Hash, s.log)
 }
 
-func RestoreDB(ctx context.Context, reader io.Reader, db *config.DBConfig, snapshotHash []byte, logger log.Logger) error {
+func RestoreDB(ctx context.Context, reader io.Reader, db config.DBConfig, snapshotHash []byte, logger log.Logger) error {
 
 	// unzip and stream the sql dump to psql
 	cmd := exec.CommandContext(ctx,

@@ -793,10 +793,10 @@ func (pm *PeerMan) Disallow(p peer.ID) {
 	pm.wlMtx.Lock()
 	delete(pm.persistentWhitelist, p)
 	pm.wlMtx.Unlock()
-	pm.cg.Disallow(p)
-
-	// Disconnect the peer if it is connected
-	pm.removePeer(p)
+	if pm.cg.Disallow(p) {
+		// Disconnect the peer if it is connected
+		pm.removePeer(p)
+	}
 }
 
 func (pm *PeerMan) IsAllowed(p peer.ID) bool {
@@ -909,7 +909,7 @@ func (pm *PeerMan) Connected(net network.Network, conn network.Conn) {
 		} else { // normal host
 			for _, protoID := range pm.requiredProtocols {
 				if !slices.Contains(supportedProtos, protoID) {
-					pm.log.Warnf("Peer %v does not support required protocol: %v", peerIDStringer(peerID), err)
+					pm.log.Warnf("Peer %v does not support required protocol: %v", peerIDStringer(peerID), protoID)
 					pm.h.ConnManager().TagPeer(peerID, "lame", -1) // prune first
 					pm.ps.ClearAddrs(peerID)                       // don't advertise them to others
 					break

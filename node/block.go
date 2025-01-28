@@ -8,8 +8,10 @@ import (
 	"io"
 	"time"
 
+	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
+	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 )
@@ -289,54 +291,60 @@ func (n *Node) getBlk(ctx context.Context, blkHash types.Hash) (int64, []byte, *
 }
 
 func (n *Node) getBlkHeight(ctx context.Context, height int64) (types.Hash, []byte, *types.CommitInfo, error) {
-	for _, peer := range n.peers() {
-		n.log.Infof("requesting block number %d from %v", height, peer)
+	return getBlkHeight(ctx, height, n.host, n.log)
+}
+
+func getBlkHeight(ctx context.Context, height int64, host host.Host, log log.Logger) (types.Hash, []byte, *types.CommitInfo, error) {
+	peers := peerHosts(host)
+
+	for _, peer := range peers {
+		log.Infof("requesting block number %d from %v", height, peer)
 		t0 := time.Now()
 		resID, _ := blockHeightReq{Height: height}.MarshalBinary()
-		resp, err := requestFrom(ctx, n.host, peer, resID, ProtocolIDBlockHeight, blkReadLimit)
+		resp, err := requestFrom(ctx, host, peer, resID, ProtocolIDBlockHeight, blkReadLimit)
 		if errors.Is(err, ErrNotFound) {
-			n.log.Warnf("block not available on %v", peer)
+			log.Warnf("block not available on %v", peer)
 			continue
 		}
 		if errors.Is(err, ErrNoResponse) {
-			n.log.Warnf("no response to block request to %v", peer)
+			log.Warnf("no response to block request to %v", peer)
 			continue
 		}
 		if err != nil {
-			n.log.Warnf("unexpected error from %v: %v", peer, err)
+			log.Warnf("unexpected error from %v: %v", peer, err)
 			continue
 		}
 
 		if len(resp) < types.HashLen+1 {
-			n.log.Warnf("block response too short")
+			log.Warnf("block response too short")
 			continue
 		}
 
-		n.log.Info("obtained block contents", "height", height, "elapsed", time.Since(t0))
+		log.Info("obtained block contents", "height", height, "elapsed", time.Since(t0))
 
 		rd := bytes.NewReader(resp)
 		var hash types.Hash
 
 		if _, err := io.ReadFull(rd, hash[:]); err != nil {
-			n.log.Warn("failed to read block hash in the block response", "error", err)
+			log.Warn("failed to read block hash in the block response", "error", err)
 			continue
 		}
 
 		ciBts, err := ktypes.ReadBytes(rd)
 		if err != nil {
-			n.log.Info("failed to read commit info in the block response", "error", err)
+			log.Info("failed to read commit info in the block response", "error", err)
 			continue
 		}
 
 		var ci types.CommitInfo
 		if err = ci.UnmarshalBinary(ciBts); err != nil {
-			n.log.Warn("failed to unmarshal commit info", "error", err)
+			log.Warn("failed to unmarshal commit info", "error", err)
 			continue
 		}
 
 		rawBlk, err := ktypes.ReadBytes(rd)
 		if err != nil {
-			n.log.Warn("failed to read block in the block response", "error", err)
+			log.Warn("failed to read block in the block response", "error", err)
 		}
 
 		return hash, rawBlk, &ci, nil

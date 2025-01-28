@@ -50,14 +50,20 @@ func (mp *Mempool) remove(txid types.Hash) {
 	delete(mp.txns, txid)
 }
 
-func (mp *Mempool) Store(txid types.Hash, tx *ktypes.Transaction) {
+// Store adds a transaction to the mempool. If the transaction is already in the
+// mempool, it returns true indicating that the transaction is already in the mempool.
+func (mp *Mempool) Store(txid types.Hash, tx *ktypes.Transaction) (found bool) {
 	mp.mtx.Lock()
 	defer mp.mtx.Unlock()
 	delete(mp.fetching, txid)
 
 	if tx == nil { // legacy semantics for removal
 		mp.remove(txid)
-		return
+		return false
+	}
+
+	if _, ok := mp.txns[txid]; ok {
+		return true // already have it
 	}
 
 	mp.txns[txid] = tx
@@ -65,6 +71,7 @@ func (mp *Mempool) Store(txid types.Hash, tx *ktypes.Transaction) {
 		Hash: txid,
 		Tx:   tx,
 	})
+	return false
 }
 
 func (mp *Mempool) PreFetch(txid types.Hash) bool { // probably make node business

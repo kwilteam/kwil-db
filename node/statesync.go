@@ -3,7 +3,6 @@ package node
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -15,6 +14,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/peers"
+	"github.com/kwilteam/kwil-db/node/snapshotter"
 	"github.com/kwilteam/kwil-db/node/types"
 	"github.com/libp2p/go-libp2p/core/discovery"
 	"github.com/libp2p/go-libp2p/core/host"
@@ -33,18 +33,24 @@ const (
 	discoverSnapshotsMsg = "discover_snapshots"
 )
 
+type snapshotKey = snapshotter.SnapshotKey
+type snapshotMetadata = snapshotter.SnapshotMetadata
+type snapshotReq = snapshotter.SnapshotReq
+type snapshotChunkReq = snapshotter.SnapshotChunkReq
+
 type blockStore interface {
 	GetByHeight(height int64) (types.Hash, *ktypes.Block, *types.CommitInfo, error)
+	Best() (height int64, blkHash, appHash types.Hash, stamp time.Time)
+	Store(*ktypes.Block, *types.CommitInfo) error
 }
 
-type statesyncConfig struct {
+type StatesyncConfig struct {
 	StateSyncCfg *config.StateSyncConfig
-	DBConfig     *config.DBConfig
+	DBConfig     config.DBConfig
 	RcvdSnapsDir string
+	P2PService   *P2PService
 
 	DB            DB
-	Host          host.Host
-	Discoverer    discovery.Discovery
 	SnapshotStore SnapshotStore
 	BlockStore    blockStore
 	Logger        log.Logger
@@ -53,7 +59,7 @@ type statesyncConfig struct {
 type StateSyncService struct {
 	// Config
 	cfg              *config.StateSyncConfig
-	dbConfig         *config.DBConfig
+	dbConfig         config.DBConfig
 	snapshotDir      string
 	trustedProviders []*peer.AddrInfo // trusted providers
 
@@ -73,7 +79,7 @@ type StateSyncService struct {
 	log log.Logger
 }
 
-func NewStateSyncService(ctx context.Context, cfg *statesyncConfig) (*StateSyncService, error) {
+func NewStateSyncService(ctx context.Context, cfg *StatesyncConfig) (*StateSyncService, error) {
 	if cfg.StateSyncCfg.Enable && cfg.StateSyncCfg.TrustedProviders == nil {
 		return nil, fmt.Errorf("at least one trusted provider is required for state sync")
 	}
@@ -83,8 +89,8 @@ func NewStateSyncService(ctx context.Context, cfg *statesyncConfig) (*StateSyncS
 		dbConfig:      cfg.DBConfig,
 		snapshotDir:   cfg.RcvdSnapsDir,
 		db:            cfg.DB,
-		host:          cfg.Host,
-		discoverer:    cfg.Discoverer,
+		host:          cfg.P2PService.host,
+		discoverer:    cfg.P2PService.discovery,
 		snapshotStore: cfg.SnapshotStore,
 		log:           cfg.Logger,
 		blockStore:    cfg.BlockStore,
@@ -104,9 +110,10 @@ func NewStateSyncService(ctx context.Context, cfg *statesyncConfig) (*StateSyncS
 	}
 
 	// provide stream handler for snapshot catalogs requests and chunk requests
-	ss.host.SetStreamHandler(ProtocolIDSnapshotCatalog, ss.snapshotCatalogRequestHandler)
-	ss.host.SetStreamHandler(ProtocolIDSnapshotChunk, ss.snapshotChunkRequestHandler)
-	ss.host.SetStreamHandler(ProtocolIDSnapshotMeta, ss.snapshotMetadataRequestHandler)
+	ss.host.SetStreamHandler(ProtocolIDBlockHeight, ss.blkGetHeightRequestHandler)
+	if err := ss.Bootstrap(ctx); err != nil {
+		return nil, err
+	}
 
 	return ss, nil
 }
@@ -129,148 +136,74 @@ func (s *StateSyncService) Bootstrap(ctx context.Context) error {
 	return nil
 }
 
-// snapshotCatalogRequestHandler handles the incoming snapshot catalog requests.
-// It sends the list of metadata of all the snapshots that are available with the node.
-func (s *StateSyncService) snapshotCatalogRequestHandler(stream network.Stream) {
-	// read request
-	// send snapshot catalogs
-	defer stream.Close()
+// DoStatesync attempts to perform statesync if the db is uninitialized.
+// It also initializes the blockstore with the initial block data at the
+// height of the discovered snapshot.
+func (ss *StateSyncService) DoStatesync(ctx context.Context) (bool, error) {
+	// If statesync is enabled and the db is uninitialized, discover snapshots
+	if !ss.cfg.Enable {
+		return false, nil
+	}
 
-	stream.SetReadDeadline(time.Now().Add(time.Second))
+	// Check if the Block store and DB are initialized
+	h, _, _, _ := ss.blockStore.Best()
+	if h != 0 {
+		return false, nil
+	}
 
-	req := make([]byte, len(discoverSnapshotsMsg))
-	n, err := stream.Read(req)
+	// check if the db is uninitialized
+	height, err := ss.DiscoverSnapshots(ctx)
 	if err != nil {
-		s.log.Warn("failed to read discover snapshots request", "error", err)
-		return
+		return false, fmt.Errorf("failed to attempt statesync: %w", err)
 	}
 
-	if n == 0 {
-		// no request, hung up
-		return
+	if height <= 0 { // no snapshots found, or statesync failed
+		return false, nil
 	}
 
-	if string(req) != discoverSnapshotsMsg {
-		s.log.Warn("invalid discover snapshots request")
-		return
+	// request and commit the block to the blockstore
+	_, rawBlk, ci, err := getBlkHeight(ctx, height, ss.host, ss.log)
+	if err != nil {
+		return false, fmt.Errorf("failed to get statesync block %d: %w", height, err)
 	}
-
-	snapshots := s.snapshotStore.ListSnapshots()
-	if snapshots == nil {
-		// nothing to send
-		stream.SetWriteDeadline(time.Now().Add(reqRWTimeout))
-		stream.Write(noData)
-		return
+	blk, err := ktypes.DecodeBlock(rawBlk)
+	if err != nil {
+		return false, fmt.Errorf("failed to decode statesync block %d: %w", height, err)
 	}
-
-	// send the snapshot catalogs
-	catalogs := make([]*snapshotMetadata, len(snapshots))
-	for i, snap := range snapshots {
-		catalogs[i] = &snapshotMetadata{
-			Height:      snap.Height,
-			Format:      snap.Format,
-			Chunks:      snap.ChunkCount,
-			Hash:        snap.SnapshotHash,
-			ChunkHashes: make([][32]byte, snap.ChunkCount),
-		}
-
-		for j, chunk := range snap.ChunkHashes {
-			copy(catalogs[i].ChunkHashes[j][:], chunk[:])
-		}
+	// store block
+	if err := ss.blockStore.Store(blk, ci); err != nil {
+		return false, fmt.Errorf("failed to store statesync block to the blockstore %d: %w", height, err)
 	}
-
-	encoder := json.NewEncoder(stream)
-	stream.SetWriteDeadline(time.Now().Add(catalogSendTimeout))
-	if err := encoder.Encode(catalogs); err != nil {
-		s.log.Warn("failed to send snapshot catalogs", "error", err)
-		return
-	}
-
-	s.log.Info("sent snapshot catalogs to remote peer", "peer", stream.Conn().RemotePeer(), "num_snapshots", len(catalogs))
+	return true, nil
 }
 
-// snapshotChunkRequestHandler handles the incoming snapshot chunk requests.
-func (s *StateSyncService) snapshotChunkRequestHandler(stream network.Stream) {
-	// read request
-	// send snapshot chunk
+// blkGetHeightRequestHandler handles the incoming block requests for a given height.
+func (ss *StateSyncService) blkGetHeightRequestHandler(stream network.Stream) {
 	defer stream.Close()
 
-	stream.SetReadDeadline(time.Now().Add(chunkGetTimeout))
-	var req snapshotChunkReq
+	stream.SetReadDeadline(time.Now().Add(reqRWTimeout))
+
+	var req blockHeightReq
 	if _, err := req.ReadFrom(stream); err != nil {
-		s.log.Warn("failed to read snapshot chunk request", "error", err)
+		ss.log.Warn("Bad get block (height) request", "error", err) // Debug when we ship
 		return
 	}
+	ss.log.Debug("Peer requested block", "height", req.Height)
 
-	// read the snapshot chunk from the store
-	chunk, err := s.snapshotStore.LoadSnapshotChunk(req.Height, req.Format, req.Index)
-	if err != nil {
-		stream.SetWriteDeadline(time.Now().Add(reqRWTimeout))
-		stream.Write(noData)
-		return
-	}
-
-	// send the snapshot chunk
-	stream.SetWriteDeadline(time.Now().Add(chunkSendTimeout))
-	stream.Write(chunk)
-
-	s.log.Info("sent snapshot chunk to remote peer", "peer", stream.Conn().RemotePeer(), "height", req.Height, "index", req.Index)
-}
-
-// snapshotMetadataRequestHandler handles the incoming snapshot metadata request and
-// sends the snapshot metadata at the requested height.
-func (s *StateSyncService) snapshotMetadataRequestHandler(stream network.Stream) {
-	// read request
-	// send snapshot chunk
-	defer stream.Close()
-
-	stream.SetReadDeadline(time.Now().Add(chunkGetTimeout))
-	var req snapshotReq
-	if _, err := req.ReadFrom(stream); err != nil {
-		s.log.Warn("failed to read snapshot request", "error", err)
-		return
-	}
-
-	// read the snapshot chunk from the store
-	snap := s.snapshotStore.GetSnapshot(req.Height, req.Format)
-	if snap == nil {
-		stream.SetWriteDeadline(time.Now().Add(reqRWTimeout))
-		stream.Write(noData)
-		return
-	}
-
-	meta := &snapshotMetadata{
-		Height:      snap.Height,
-		Format:      snap.Format,
-		Chunks:      snap.ChunkCount,
-		Hash:        snap.SnapshotHash,
-		ChunkHashes: make([][32]byte, snap.ChunkCount),
-		Size:        snap.SnapshotSize,
-	}
-	for i, chunk := range snap.ChunkHashes {
-		copy(meta.ChunkHashes[i][:], chunk[:])
-	}
-
-	// get the app hash from the db
-	_, _, ci, err := s.blockStore.GetByHeight(int64(snap.Height))
+	hash, blk, ci, err := ss.blockStore.GetByHeight(req.Height)
 	if err != nil || ci == nil {
-		s.log.Warn("failed to get app hash", "height", snap.Height, "error", err)
 		stream.SetWriteDeadline(time.Now().Add(reqRWTimeout))
-		stream.Write(noData)
-		return
+		stream.Write(noData) // don't have it
+	} else {
+		rawBlk := ktypes.EncodeBlock(blk) // blkHash := blk.Hash()
+		ciBytes, _ := ci.MarshalBinary()
+		// maybe we remove hash from the protocol, was thinking receiver could
+		// hang up earlier depending...
+		stream.SetWriteDeadline(time.Now().Add(blkSendTimeout))
+		stream.Write(hash[:])
+		ktypes.WriteBytes(stream, ciBytes)
+		ktypes.WriteBytes(stream, rawBlk)
 	}
-	meta.AppHash = ci.AppHash[:]
-
-	// send the snapshot data
-	encoder := json.NewEncoder(stream)
-
-	stream.SetWriteDeadline(time.Now().Add(chunkSendTimeout))
-	if err := encoder.Encode(meta); err != nil {
-		s.log.Warn("failed to send snapshot metadata", "error", err)
-		return
-	}
-
-	s.log.Info("sent snapshot metadata to remote peer", "peer", stream.Conn().RemotePeer(), "height", req.Height, "format", req.Format, "appHash", ci.AppHash.String())
 }
 
 // verifySnapshot verifies the snapshot with the trusted provider and returns the app hash if the snapshot is valid.
@@ -278,7 +211,7 @@ func (ss *StateSyncService) VerifySnapshot(ctx context.Context, snap *snapshotMe
 	// verify the snapshot
 	for _, provider := range ss.trustedProviders {
 		// request the snapshot from the provider and verify the contents of the snapshot
-		stream, err := ss.host.NewStream(ctx, provider.ID, ProtocolIDSnapshotMeta)
+		stream, err := ss.host.NewStream(ctx, provider.ID, snapshotter.ProtocolIDSnapshotMeta)
 		if err != nil {
 			ss.log.Warn("failed to request snapshot meta", "provider", provider.ID.String(),
 				"error", peers.CompressDialError(err))
@@ -333,42 +266,6 @@ func (ss *StateSyncService) VerifySnapshot(ctx context.Context, snap *snapshotMe
 		return true, meta.AppHash
 	}
 	return false, nil
-}
-
-type snapshotMetadata struct {
-	Height      uint64     `json:"height"`
-	Format      uint32     `json:"format"`
-	Chunks      uint32     `json:"chunks"`
-	Hash        []byte     `json:"hash"`
-	Size        uint64     `json:"size"`
-	ChunkHashes [][32]byte `json:"chunk_hashes"`
-
-	AppHash []byte `json:"app_hash"`
-}
-
-func (sm *snapshotMetadata) String() string {
-	return fmt.Sprintf("SnapshotMetadata{Height: %d, Format: %d, Chunks: %d, Hash: %x, Size: %d, AppHash: %x}", sm.Height, sm.Format, sm.Chunks, sm.Hash, sm.Size, sm.AppHash)
-}
-
-// snapshotKey is a snapshot key used for lookups.
-type snapshotKey [sha256.Size]byte
-
-// Key generates a snapshot key, used for lookups. It takes into account not only the height and
-// format, but also the chunks, snapshot hash and chunk hashes in case peers have generated snapshots in a
-// non-deterministic manner. All fields must be equal for the snapshot to be considered the same.
-func (s *snapshotMetadata) Key() snapshotKey {
-	// Hash.Write() never returns an error.
-	hasher := sha256.New()
-	hasher.Write([]byte(fmt.Sprintf("%v:%v:%v", s.Height, s.Format, s.Chunks)))
-	hasher.Write(s.Hash)
-
-	for _, chunkHash := range s.ChunkHashes {
-		hasher.Write(chunkHash[:])
-	}
-
-	var key snapshotKey
-	copy(key[:], hasher.Sum(nil))
-	return key
 }
 
 // snapshotPool keeps track of snapshots that have been discovered from the snapshot providers.

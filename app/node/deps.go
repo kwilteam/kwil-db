@@ -37,9 +37,9 @@ func newDBOpener(host, port, user, pass string, filterSchemas func(string) bool)
 }
 
 // poolOpener opens a basic database connection pool.
-type poolOpener func(ctx context.Context, dbName string, maxConns uint32) (*pg.Pool, error)
+type PoolOpener func(ctx context.Context, dbName string, maxConns uint32) (*pg.Pool, error)
 
-func newPoolBOpener(host, port, user, pass string) poolOpener {
+func newPoolBOpener(host, port, user, pass string) PoolOpener {
 	return func(ctx context.Context, dbName string, maxConns uint32) (*pg.Pool, error) {
 		cfg := &pg.PoolConfig{
 			ConnConfig: pg.ConnConfig{
@@ -56,7 +56,6 @@ func newPoolBOpener(host, port, user, pass string) poolOpener {
 }
 
 type coreDependencies struct {
-	ctx        context.Context
 	rootDir    string
 	cfg        *config.Config
 	genesisCfg *config.GenesisConfig
@@ -69,7 +68,7 @@ type coreDependencies struct {
 	logger           log.Logger
 	dbOpener         dbOpener
 	namespaceManager *namespaceManager
-	poolOpener       poolOpener
+	poolOpener       PoolOpener
 }
 
 // closeFuncs holds a list of closers

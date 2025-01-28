@@ -65,7 +65,7 @@ type MemPool interface {
 	ReapN(int) []NamedTx
 	Get(Hash) *types.Transaction
 	Remove(Hash)
-	Store(Hash, *types.Transaction)
+	Store(Hash, *types.Transaction) bool
 	PeekN(n int) []NamedTx
 	// Check([]byte)
 	PreFetch(txid Hash) bool // should be app level instead

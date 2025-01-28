@@ -237,7 +237,7 @@ tasks:
     desc: Run integration tests ('short' mode)
     deps:
       - task: build:cli
-      - task: build:admin
+      - task: build:kwild
       - task: build:docker
     cmds:
       - task: test:it:nb
