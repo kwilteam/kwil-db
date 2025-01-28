@@ -122,7 +122,7 @@ func WrapClient(ctx context.Context, client RPCClient, options *clientType.Optio
 			remoteChainID = health.ChainID
 
 			// NOTE: since original health check only log, why not ?
-			if health.Healthy {
+			if !health.Healthy {
 				c.logger.Warnf("node reports that it is not healthy: %v", health)
 			}
 		} else {
@@ -140,7 +140,7 @@ func WrapClient(ctx context.Context, client RPCClient, options *clientType.Optio
 			return nil, fmt.Errorf("failed to retrieve the node's health: %w", err)
 		}
 
-		if health.Healthy {
+		if !health.Healthy {
 			c.logger.Warnf("node reports that it is not healthy: %v", health)
 		}
 

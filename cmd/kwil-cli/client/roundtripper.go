@@ -53,7 +53,7 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 	needPrivateKey := flags&WithoutPrivateKey == 0
 	authCalls := flags&AuthenticatedCalls != 0
 
-	clientConfig := clientType.Options{}
+	clientConfig := clientType.DefaultOptions()
 	if conf.PrivateKey != nil {
 		clientConfig.Signer = &auth.EthPersonalSigner{Key: *conf.PrivateKey}
 		if needPrivateKey { // only check chain ID if signing something
@@ -67,7 +67,7 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 
 	// if not using the gateway, then we can simply create a regular client and return
 	if flags&UsingGateway == 0 {
-		client, err := client.NewClient(ctx, conf.Provider, &clientConfig)
+		client, err := client.NewClient(ctx, conf.Provider, clientConfig)
 		if err != nil {
 			return err
 		}
@@ -90,7 +90,7 @@ func DialClient(ctx context.Context, cmd *cobra.Command, flags uint8, fn RoundTr
 
 	// Assumption that the nodes behind the gateway are not in the private mode.
 	client, err := gatewayclient.NewClient(ctx, conf.Provider, &gatewayclient.GatewayOptions{
-		Options: clientConfig,
+		Options: *clientConfig,
 		AuthSignFunc: func(message string, signer auth.Signer) (*auth.Signature, error) {
 			assumeYes, err := helpers.GetAssumeYesFlag(cmd)
 			if err != nil {
