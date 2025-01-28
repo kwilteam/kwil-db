@@ -19,7 +19,7 @@ require (
 	github.com/knadh/koanf/providers/structs v0.1.0
 	github.com/knadh/koanf/v2 v2.1.2
 	github.com/kwilteam/kwil-db/core v0.3.1-0.20241212163115-7353f2761884
-	github.com/kwilteam/openzeppelin-merkle-tree-go v0.0.0-20250128172821-3e443a2aee9d // tmp hacky fix branch
+	github.com/kwilteam/openzeppelin-merkle-tree-go v0.0.0-20250128210530-6c29061dd35f // tmp hacky fix branch
 	github.com/libp2p/go-libp2p v0.37.2
 	github.com/libp2p/go-libp2p-kad-dht v0.28.1
 	github.com/libp2p/go-libp2p-pubsub v0.12.0
