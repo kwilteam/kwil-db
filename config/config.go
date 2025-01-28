@@ -30,7 +30,8 @@ const (
 	GenesisFileName = "genesis.json"
 
 	DefaultAdminRPCAddr = "/tmp/kwild.socket"
-	AdminCertName       = "admin.cert"
+	AdminServerKeyName  = "admin.key"
+	AdminServerCertName = "admin.cert"
 
 	MinProposeTimeout = types.Duration(500 * time.Millisecond)
 )
@@ -241,11 +242,11 @@ func DefaultGenesisConfig() *GenesisConfig {
 		ChainID:       "kwil-test-chain",
 		InitialHeight: 0,
 		DBOwner:       "",
-		Validators:    []*types.Validator{},
+		Validators:    nil,
 		StateHash:     nil,
 		Migration:     MigrationParams{},
 		NetworkParameters: types.NetworkParameters{
-			Leader:           types.PublicKey{},
+			Leader:           types.PublicKey{ /* nil crypto.PublicKey */ },
 			MaxBlockSize:     6 * 1024 * 1024,
 			JoinExpiry:       types.Duration(7 * 24 * time.Hour), // 1 week
 			DisabledGasCosts: true,
@@ -296,8 +297,8 @@ func DefaultConfig() *Config {
 			ListenAddress: DefaultAdminRPCAddr,
 			Pass:          "",
 			NoTLS:         false,
-			TLSCertFile:   AdminCertName,
-			TLSKeyFile:    "admin.key",
+			// TLSCertFile:   AdminCertName,
+			// TLSKeyFile:    "admin.key",
 		},
 		Snapshots: SnapshotConfig{
 			Enable:          false,
@@ -398,8 +399,8 @@ type AdminConfig struct {
 	ListenAddress string `toml:"listen" comment:"address in host:port format or UNIX socket path on which the admin RPC server will listen"`
 	Pass          string `toml:"pass" comment:"optional password for the admin service"`
 	NoTLS         bool   `toml:"notls" comment:"disable TLS when the listen address is not a loopback IP or UNIX socket"`
-	TLSCertFile   string `toml:"cert" comment:"TLS certificate for use with a non-loopback listen address when notls is not true"`
-	TLSKeyFile    string `toml:"key" comment:"TLS key for use with a non-loopback listen address when notls is not true"`
+	// TLSCertFile   string `toml:"cert" comment:"TLS certificate for use with a non-loopback listen address when notls is not true"`
+	// TLSKeyFile    string `toml:"key" comment:"TLS key for use with a non-loopback listen address when notls is not true"`
 }
 
 type SnapshotConfig struct {

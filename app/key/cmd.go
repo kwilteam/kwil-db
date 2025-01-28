@@ -9,6 +9,8 @@ import (
 
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	authExt "github.com/kwilteam/kwil-db/extensions/auth"
 )
 
 func KeyCmd() *cobra.Command {
@@ -35,12 +37,20 @@ func privKeyInfo(priv crypto.PrivateKey) *PrivateKeyInfo {
 		keyText = hex.EncodeToString(priv.Bytes())
 		keyFmt = "hex"
 	}
+	var address string
+	if priv.Type() == crypto.KeyTypeSecp256k1 {
+		if s := auth.GetUserSigner(priv); s != nil {
+			address, _ = authExt.GetIdentifierFromSigner(s)
+		}
+
+	}
 	return &PrivateKeyInfo{
 		KeyType:        priv.Type().String(),
 		PrivateKeyText: keyText,
 		privKeyFmt:     keyFmt,
 		PublicKeyHex:   hex.EncodeToString(priv.Public().Bytes()),
 		NodeID:         hex.EncodeToString(priv.Public().Bytes()) + "#" + priv.Type().String(),
+		Address:        address,
 	}
 }
 
@@ -50,6 +60,9 @@ type PrivateKeyInfo struct {
 	privKeyFmt     string `json:"-"`
 	PublicKeyHex   string `json:"public_key_hex"`
 	NodeID         string `json:"node_id,omitempty"`
+	// Address is an optional field that may be set for certain key types that
+	// can generate an address depending on the signature (auth) type used.
+	Address string `json:"user_address,omitempty"`
 }
 
 func (p *PrivateKeyInfo) MarshalJSON() ([]byte, error) {
@@ -58,6 +71,18 @@ func (p *PrivateKeyInfo) MarshalJSON() ([]byte, error) {
 }
 
 func (p *PrivateKeyInfo) MarshalText() ([]byte, error) {
+	if p.Address != "" {
+		return []byte(fmt.Sprintf(`Key type: %s
+Private key (%s): %s
+Public key (plain hex): %v
+Equivalent User Address: %s`,
+			p.KeyType,
+			p.privKeyFmt,
+			p.PrivateKeyText,
+			p.PublicKeyHex,
+			p.Address,
+		)), nil
+	}
 	return []byte(fmt.Sprintf(`Key type: %s
 Private key (%s): %s
 Public key (plain hex): %v`,

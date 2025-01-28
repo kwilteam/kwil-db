@@ -171,6 +171,32 @@ func GetUserSigner(key crypto.PrivateKey) Signer {
 	}
 }
 
+func GetUserIdentifier(pub crypto.PublicKey) (string, error) {
+	switch pub := pub.(type) {
+	case *crypto.Secp256k1PublicKey:
+		compactID := ethSecp256k1CompactID(pub)
+		return EthSecp256k1Authenticator{}.Identifier(compactID)
+	case *crypto.Ed25519PublicKey:
+		compactID := ed25519CompactID(pub)
+		return Ed25519Authenticator{}.Identifier(compactID)
+	default:
+		return "", errors.New("unsupported public key type")
+	}
+}
+
+func GetNodeIdentifier(pub crypto.PublicKey) (string, error) {
+	switch pub := pub.(type) {
+	case *crypto.Secp256k1PublicKey:
+		compactID := secp256k1CompactID(pub) // NOT EthSecp256k1CompactID!
+		return EthSecp256k1Authenticator{}.Identifier(compactID)
+	case *crypto.Ed25519PublicKey:
+		compactID := ed25519CompactID(pub)
+		return Ed25519Authenticator{}.Identifier(compactID)
+	default:
+		return "", errors.New("unsupported public key type")
+	}
+}
+
 type Secp256k1Signer struct {
 	crypto.Secp256k1PrivateKey
 }
@@ -192,6 +218,14 @@ func (s *Secp256k1Signer) Sign(msg []byte) (*Signature, error) {
 
 func (s *Secp256k1Signer) PubKey() crypto.PublicKey {
 	return s.Secp256k1PrivateKey.Public()
+}
+
+func ethSecp256k1CompactID(pub *crypto.Secp256k1PublicKey) []byte {
+	return crypto.EthereumAddressFromPubKey(pub)
+}
+
+func secp256k1CompactID(pub *crypto.Secp256k1PublicKey) []byte {
+	return pub.Bytes()
 }
 
 // CompactID returns the identity of the signer (public key for this signer).
@@ -282,9 +316,13 @@ func (e *Ed25519Signer) PubKey() crypto.PublicKey {
 	return e.Ed25519PrivateKey.Public()
 }
 
+func ed25519CompactID(pub *crypto.Ed25519PublicKey) []byte {
+	return pub.Bytes()
+}
+
 // CompactID returns the identity of the signer (public key for this signer).
 func (e *Ed25519Signer) CompactID() []byte {
-	return e.Ed25519PrivateKey.Public().Bytes()
+	return ed25519CompactID(e.Ed25519PrivateKey.Public().(*crypto.Ed25519PublicKey))
 }
 
 func (e *Ed25519Signer) AuthType() string {

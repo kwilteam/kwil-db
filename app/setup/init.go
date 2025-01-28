@@ -1,9 +1,12 @@
 package setup
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -156,18 +159,12 @@ func InitCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("failed to create genesis file: %w", err))
 				}
 
-				if !cmd.Flags().Changed(leaderFlag) {
+				if genCfg.Leader.PublicKey == nil {
 					genCfg.Leader = types.PublicKey{PublicKey: privKey.Public()}
 				}
 
-				if len(genCfg.Validators) == 0 {
-					genCfg.Validators = append(genCfg.Validators, &types.Validator{
-						AccountID: types.AccountID{
-							Identifier: privKey.Public().Bytes(),
-							KeyType:    privKey.Type(),
-						},
-						Power: 1,
-					})
+				if !ensureLeaderInValidators(genCfg) {
+					return display.PrintErr(cmd, errors.New("leader must be in validators"))
 				}
 
 				// If DB owner is not set, set it to the node's public key
@@ -216,4 +213,24 @@ func InitCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&genesisPath, "genesis", "g", "", "path to genesis file")
 
 	return cmd
+}
+
+func ensureLeaderInValidators(genCfg *config.GenesisConfig) bool {
+	if len(genCfg.Validators) == 0 {
+		genCfg.Validators = []*types.Validator{
+			{
+				AccountID: types.AccountID{
+					Identifier: genCfg.Leader.PublicKey.Bytes(),
+					KeyType:    genCfg.Leader.Type(),
+				},
+				Power: 1,
+			},
+		}
+		return true
+	}
+
+	return slices.ContainsFunc(genCfg.Validators, func(v *types.Validator) bool {
+		return bytes.Equal(v.AccountID.Identifier, genCfg.Leader.PublicKey.Bytes()) &&
+			v.AccountID.KeyType == genCfg.Leader.PublicKey.Type()
+	})
 }

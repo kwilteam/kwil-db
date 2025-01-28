@@ -18,6 +18,7 @@ import (
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/rpc/transport"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/node"
 	"github.com/kwilteam/kwil-db/node/accounts"
@@ -596,7 +597,7 @@ func buildJRPCAdminServer(d *coreDependencies) *rpcserver.Server {
 	if err != nil {
 		if strings.Contains(err.Error(), "missing port in address") {
 			host = addr
-			port = "8484"
+			port = "8584"
 		} else if strings.Contains(err.Error(), "too many colons in address") {
 			u, err := url.Parse(addr)
 			if err != nil {
@@ -638,8 +639,8 @@ func buildJRPCAdminServer(d *coreDependencies) *rpcserver.Server {
 				d.logger.Warn("disabling TLS on non-loopback admin service listen address",
 					"addr", addr, "with_password", adminPass != "")
 			} else {
-				withClientAuth := adminPass == "" // no basic http auth => use transport layer auth
-				opts = append(opts, rpcserver.WithTLS(tlsConfig(d, withClientAuth)))
+				withTransportClientAuth := adminPass == "" // no basic http auth => use transport layer auth
+				opts = append(opts, rpcserver.WithTLS(tlsConfig(d, withTransportClientAuth)))
 			}
 		}
 	}
@@ -685,13 +686,14 @@ func loadTLSCertificate(keyFile, certFile, hostname string) (*tls.Certificate, e
 }
 
 // tlsConfig returns a tls.Config to be used with the admin RPC service. If
-// withClientAuth is true, the config will require client authentication (mutual
-// TLS), otherwise it is standard TLS for encryption and server authentication.
-func tlsConfig(d *coreDependencies, withClientAuth bool) *tls.Config {
+// withTransportClientAuth is true, the config will require client
+// authentication (mutual TLS), otherwise it is standard TLS for encryption and
+// server authentication.
+func tlsConfig(d *coreDependencies, withTransportClientAuth bool) *tls.Config {
 	if d.adminKey == nil {
 		return nil
 	}
-	if !withClientAuth {
+	if !withTransportClientAuth {
 		// TLS only for encryption and authentication of server to client.
 		return &tls.Config{
 			Certificates: []tls.Certificate{*d.adminKey},
@@ -707,24 +709,24 @@ func tlsConfig(d *coreDependencies, withClientAuth bool) *tls.Config {
 		if err != nil {
 			failBuild(err, "failed to load client CAs file")
 		}
-	} else /*else if d.autogen {
-		clientCredsFileBase := filepath.Join(d.rootDir, "auth")
+		d.logger.Infoln("loaded client CAs from", clientsFile)
+	} else if d.autogen {
+		clientCredsFileBase := filepath.Join(d.rootDir, "adminclient")
 		clientCertFile, clientKeyFile := clientCredsFileBase+".cert", clientCredsFileBase+".key"
 		err = transport.GenTLSKeyPair(clientCertFile, clientKeyFile, "local kwild CA", nil)
 		if err != nil {
 			failBuild(err, "failed to generate admin client credentials")
 		}
-		d.logger.Info("generated admin service client key pair", log.String("cert", clientCertFile), log.String("key", clientKeyFile))
+		d.logger.Info("generated admin service client key pair", "cert", clientCertFile, "key", clientKeyFile)
 		if clientsCerts, err = os.ReadFile(clientCertFile); err != nil {
 			failBuild(err, "failed to read auto-generate client certificate")
 		}
 		if err = os.WriteFile(clientsFile, clientsCerts, 0644); err != nil {
 			failBuild(err, "failed to write client CAs file")
 		}
-		d.logger.Info("generated admin service client CAs file", log.String("file", clientsFile))
-	} */
-	{
-		d.logger.Info("No admin client CAs file. Use kwild's admin gen-auth-key command to generate")
+		d.logger.Info("generated admin service client CAs file", "file", clientsFile)
+	} else {
+		d.logger.Info("No admin client CAs file. Use 'kwild admin gen-auth-key' to generate.")
 	}
 
 	if len(clientsCerts) > 0 && !caCertPool.AppendCertsFromPEM(clientsCerts) {

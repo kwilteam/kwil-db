@@ -37,7 +37,7 @@ func TestnetCmd() *cobra.Command {
 
 		Use:   "testnet",
 		Short: "Generate configuration for a new test network with multiple nodes",
-		Long: "The `testnet` command generates a configuration for a new test network with multiple nodes. " +
+		Long: "The `testnet` command generates a configuration for a new test network with multiple nodes.\n\n" +
 			"For a configuration set that can be run on the same host, use the `--unique-ports` flag.",
 		// Override the root command's PersistentPreRunE, so that we don't
 		// try to read the config from a ~/.kwild directory

@@ -46,7 +46,6 @@ func RootCmd() *cobra.Command {
 			DisableDefaultCmd: true,
 		},
 		Version: version.KwilVersion,
-		Example: custom.BinaryConfig.NodeCmd + " -r ~/.kwild",
 		// PersistentPreRunE so k has all the settings in all (sub)command's RunE funcs
 		PersistentPreRunE: bind.ChainPreRuns(bind.MaybeEnableCLIDebug, conf.PreRunBindConfigFileStrict[config.Config],
 			conf.PreRunBindFlags, conf.PreRunBindEnvMatching, conf.PreRunPrintEffectiveConfig),

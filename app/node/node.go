@@ -98,17 +98,15 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config, autogen bo
 
 	logger.Infof("Node public key: %x (%s)", privKey.Public().Bytes(), privKey.Public().Type())
 
+	logger.Info("loading TLS key pair for the admin server if TLS enabled",
+		"key_file", config.AdminServerKeyName, "cert_file", config.AdminServerCertName)
+	customHostname := "" // cfg TODO
+	keyFile := rootedPath(config.AdminServerKeyName, rootDir)
+	certFile := rootedPath(config.AdminServerCertName, rootDir)
 	var tlsKeyPair *tls.Certificate
-	logger.Info("loading TLS key pair for the admin server", "key_file", cfg.Admin.TLSKeyFile,
-		"cert_file", cfg.Admin.TLSKeyFile)
-	if cfg.Admin.TLSKeyFile != "" || cfg.Admin.TLSCertFile != "" {
-		customHostname := "" // cfg TODO
-		keyFile := rootedPath(cfg.Admin.TLSKeyFile, rootDir)
-		certFile := rootedPath(cfg.Admin.TLSCertFile, rootDir)
-		tlsKeyPair, err = loadTLSCertificate(keyFile, certFile, customHostname)
-		if err != nil {
-			return err
-		}
+	tlsKeyPair, err = loadTLSCertificate(keyFile, certFile, customHostname)
+	if err != nil {
+		return err
 	}
 
 	host, port, user, pass := cfg.DB.Host, cfg.DB.Port, cfg.DB.User, cfg.DB.Pass
@@ -162,6 +160,7 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config, autogen bo
 		genesisCfg:       genConfig,
 		privKey:          privKey,
 		logger:           logger,
+		autogen:          autogen,
 		dbOpener:         newDBOpener(host, port, user, pass, nsmgr.Filter),
 		namespaceManager: nsmgr,
 		poolOpener:       newPoolBOpener(host, port, user, pass),

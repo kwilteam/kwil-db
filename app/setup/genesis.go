@@ -2,6 +2,7 @@ package setup
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node"
 )
@@ -23,10 +25,7 @@ var (
 
 Validators and balance allocations should have the format "pubkey:power", "address:balance" respectively.`
 
-	genesisExample = `# Create a new genesis.json file in the current directory
-kwild setup genesis
-
-# Create a new genesis.json file in a specific directory with a specific chain ID and a validator with 1 power
+	genesisExample = `# Create a new genesis.json file in a specific directory with a specific chain ID and a validator with 1 power
 kwild setup genesis --out /path/to/directory --chain-id mychainid --validator 890fe7ae9cb1fa6177555d5651e1b8451b4a9c64021c876236c700bc2690ff1d:1
 
 # Create a new genesis.json with the specified allocation
@@ -75,56 +74,34 @@ func GenesisCmd() *cobra.Command {
 				return display.PrintErr(cmd, fmt.Errorf("failed to create output directory: %w", err))
 			}
 
-			genesisFile := config.GenesisFilePath(outDir)
-
 			conf := config.DefaultGenesisConfig()
 			conf, err = mergeGenesisFlags(conf, cmd, &flagCfg)
 			if err != nil {
 				return display.PrintErr(cmd, fmt.Errorf("failed to create genesis file: %w", err))
 			}
 
-			// if no validators are set, error
-			if len(conf.Validators) == 0 {
-				return display.PrintErr(cmd, fmt.Errorf("at least one validator is required"))
+			// Leader must be explicitly specified.
+			if conf.Leader.PublicKey == nil {
+				return display.PrintErr(cmd, errors.New("leader must be specified"))
 			}
 
-			// if a leader is set, make sure it is a validator
-			if cmd.Flags().Changed(leaderFlag) {
-				found := false
-				for _, v := range conf.Validators {
-					if v.AccountID.String() == conf.Leader.String() {
-						found = true
-						break
-					}
-				}
-				if !found {
-					return display.PrintErr(cmd, fmt.Errorf("leader must be a validator"))
-				}
+			// Ensure leader is in validators. If validators are unset, make
+			// leader the one validator; if validators are set, ensure leader is
+			// in the set or error.
+			if !ensureLeaderInValidators(conf) {
+				return display.PrintErr(cmd, errors.New("leader must be in validators"))
 			}
 
-			// if no leader is set,
-			if !cmd.Flags().Changed(leaderFlag) {
-				display.Log(cmd, "WARNING: Leader is not set. Defaulting to the first validator.")
-				// we don't need to check that there is at least one validator because we already checked that above
-				ktDef, ok := crypto.KeyTypeDefinition(conf.Validators[0].KeyType)
-				if !ok {
-					return display.PrintErr(cmd, fmt.Errorf("unknown key type for validator: %s", conf.Validators[0].KeyType))
-				}
-
-				pubKey, err := ktDef.UnmarshalPublicKey(conf.Validators[0].AccountID.Identifier)
-				if err != nil {
-					return display.PrintErr(cmd, fmt.Errorf("failed to unmarshal public key: %w", err))
-				}
-
-				conf.Leader = types.PublicKey{PublicKey: pubKey}
+			if conf.DBOwner == "" {
+				// Get the leader's equivalent "user" identifier string, which for
+				// secp256k1 may be the corresponding Ethereum address. This allows
+				// the leader's private key to be used with kwil-cli transactions
+				// that result in a Kwil engine @caller that is an Ethereum address.
+				// This is almost certainly only appropriate for testing!
+				conf.DBOwner, _ = auth.GetUserIdentifier(conf.Leader.PublicKey)
 			}
 
-			if !cmd.Flags().Changed(dbOwnerFlag) {
-				// we don't need to check that there is at least one validator because we already checked that above
-				display.Log(cmd, "WARNING: DB Owner is not set. Defaulting to the first validator.")
-				conf.DBOwner = conf.Validators[0].AccountID.Identifier.String()
-			}
-
+			genesisFile := config.GenesisFilePath(outDir)
 			existingFile, err := os.Stat(genesisFile)
 			if err == nil && existingFile.IsDir() {
 				return display.PrintErr(cmd, fmt.Errorf("a directory already exists at %s, please remove it first", genesisFile))
@@ -150,7 +127,7 @@ func GenesisCmd() *cobra.Command {
 // bindGenesisFlags binds the genesis configuration flags to the given command.
 func bindGenesisFlags(cmd *cobra.Command, cfg *genesisFlagConfig) {
 	cmd.Flags().StringVar(&cfg.chainID, chainIDFlag, "", "chainID for the genesis.json file")
-	cmd.Flags().StringSliceVar(&cfg.validators, validatorsFlag, nil, "public key, keyType and power of initial validator(s)") // accept: [hexpubkey1#keyType1:power1]
+	cmd.Flags().StringSliceVar(&cfg.validators, validatorsFlag, nil, "public key, keyType and power of initial validator(s), may be specified multiple times") // accept: [hexpubkey1#keyType1:power1]
 	cmd.Flags().StringSliceVar(&cfg.allocs, allocsFlag, nil, "address and initial balance allocation(s) in the format id#keyType:amount")
 	cmd.Flags().BoolVar(&cfg.withGas, withGasFlag, false, "include gas costs in the genesis.json file")
 	cmd.Flags().StringVar(&cfg.leader, leaderFlag, "", "public key of the block proposer")
