@@ -1,11 +1,9 @@
 package setup
 
 import (
-	"errors"
 	"fmt"
 	"math/big"
 	"os"
-	"path/filepath"
 
 	"github.com/spf13/cobra"
 
@@ -68,21 +66,15 @@ func InitCmd() *cobra.Command {
 		PersistentPreRunE: bind.ChainPreRuns(bind.MaybeEnableCLIDebug,
 			conf.PreRunBindFlags, conf.PreRunBindEnvMatching, conf.PreRunPrintEffectiveConfig),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			genSnapshotFlag := cmd.Flag("genesis-snapshot").Changed
-			genStateFlag := cmd.Flag("genesis-state").Changed
-			if genSnapshotFlag && genStateFlag {
-				return display.PrintErr(cmd, errors.New("cannot use both --genesis-snapshot and --genesis-state, use just genesis-snapshot flag instead"))
-			}
-
 			rootDir, err := bind.RootDir(cmd)
 			if err != nil {
-				return err
+				return display.PrintErr(cmd, err)
 			}
 
 			// Ensure the root directory exists
 			outDir, err := node.ExpandPath(rootDir)
 			if err != nil {
-				return err
+				return display.PrintErr(cmd, err)
 			}
 
 			// Ensure the output directory does not already exist...
@@ -92,7 +84,7 @@ func InitCmd() *cobra.Command {
 
 			// create the output directory
 			if err := os.MkdirAll(outDir, nodeDirPerm); err != nil {
-				return err
+				return display.PrintErr(cmd, err)
 			}
 
 			cfg := conf.ActiveConfig()
@@ -105,7 +97,7 @@ func InitCmd() *cobra.Command {
 				return string(rawToml)
 			}))
 
-			if cmd.Flags().Changed("genesis-snapshot") {
+			if cmd.Flags().Changed(genesisSnapshotFlag) {
 				genesisState = genFlags.genesisState
 				genesisState, err = node.ExpandPath(genesisState)
 				if err != nil {
@@ -123,14 +115,14 @@ func InitCmd() *cobra.Command {
 			// Generate and save the node key to the root directory
 			privKey, err := crypto.GeneratePrivateKey(crypto.KeyTypeSecp256k1)
 			if err != nil {
-				return err
+				return display.PrintErr(cmd, err)
 			}
 
 			if err := key.SaveNodeKey(config.NodeKeyFilePath(rootDir), privKey); err != nil {
-				return err
+				return display.PrintErr(cmd, err)
 			}
 
-			genFile := filepath.Join(outDir, "genesis.json")
+			genFile := config.GenesisFilePath(outDir)
 			if genesisPath != "" { // Init for the node to join an existing network
 				if genesisPath, err = node.ExpandPath(genesisPath); err != nil {
 					return display.PrintErr(cmd, err)
@@ -152,7 +144,7 @@ func InitCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("failed to create genesis file: %w", err))
 				}
 
-				if !cmd.Flags().Changed("leader") {
+				if !cmd.Flags().Changed(leaderFlag) {
 					genCfg.Leader = types.PublicKey{PublicKey: privKey.Public()}
 				}
 
@@ -197,12 +189,10 @@ func InitCmd() *cobra.Command {
 
 			// Save the config to the root directory
 			if err := cfg.SaveAs(config.ConfigFilePath(rootDir)); err != nil {
-				return err
+				return display.PrintErr(cmd, err)
 			}
 
-			fmt.Println("Kwil node configuration generated successfully at: ", outDir)
-
-			return nil
+			return display.PrintCmd(cmd, display.RespString(fmt.Sprintf("Kwil node configuration generated at %s", outDir)))
 		},
 	}
 

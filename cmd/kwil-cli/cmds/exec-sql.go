@@ -106,7 +106,7 @@ func execSQLCmd() *cobra.Command {
 
 	cmd.Flags().StringVarP(&sqlStmt, "stmt", "s", "", "the SQL statement to execute")
 	cmd.Flags().StringVarP(&sqlFilepath, "file", "f", "", "the file containing the SQL statement(s) to execute")
-	cmd.Flags().StringArrayVarP(&params, "param", "p", nil, `the parameters to pass to the SQL statement. format: "key:type=value"`)
+	cmd.Flags().StringSliceVarP(&params, "param", "p", nil, `the parameters to pass to the SQL statement. format: "key:type=value"`)
 	common.BindTxFlags(cmd)
 	return cmd
 }

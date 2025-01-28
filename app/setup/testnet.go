@@ -15,11 +15,11 @@ import (
 	"github.com/kwilteam/kwil-db/app/custom"
 	"github.com/kwilteam/kwil-db/app/key"
 	"github.com/kwilteam/kwil-db/app/shared/bind"
+	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/types"
-	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/utils"
 	authExt "github.com/kwilteam/kwil-db/extensions/auth"
 	"github.com/kwilteam/kwil-db/node"
@@ -43,7 +43,7 @@ func TestnetCmd() *cobra.Command {
 		// try to read the config from a ~/.kwild directory
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error { return nil },
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return GenerateTestnetConfigs(&TestnetConfig{
+			err := GenerateTestnetConfigs(&TestnetConfig{
 				RootDir:      outDir,
 				NumVals:      numVals,
 				NumNVals:     numNVals,
@@ -54,6 +54,11 @@ func TestnetCmd() *cobra.Command {
 				UniquePorts: uniquePorts,
 				DnsHost:     false,
 			})
+			if err != nil {
+				return display.PrintErr(cmd, err)
+			}
+
+			return display.PrintCmd(cmd, display.RespString(fmt.Sprintf("Generated testnet configuration in %s", outDir)))
 		},
 	}
 
@@ -159,7 +164,7 @@ func GenerateTestnetConfigs(cfg *TestnetConfig, opts *ConfigOpts) error {
 	genConfig := config.DefaultGenesisConfig()
 	genConfig.ChainID = chainID
 	genConfig.Leader = types.PublicKey{PublicKey: leaderPub}
-	genConfig.Validators = make([]*ktypes.Validator, cfg.NumVals)
+	genConfig.Validators = make([]*types.Validator, cfg.NumVals)
 	genConfig.DBOwner = cfg.Owner
 	if genConfig.DBOwner == "" {
 		signer := auth.GetUserSigner(keys[0])
@@ -171,7 +176,7 @@ func GenerateTestnetConfigs(cfg *TestnetConfig, opts *ConfigOpts) error {
 	}
 
 	for i := range cfg.NumVals {
-		genConfig.Validators[i] = &ktypes.Validator{
+		genConfig.Validators[i] = &types.Validator{
 			AccountID: types.AccountID{
 				Identifier: keys[i].Public().Bytes(),
 				KeyType:    keys[i].Type(),

@@ -57,11 +57,6 @@ func callActionCmd() *cobra.Command {
 				return display.PrintErr(cmd, fmt.Errorf("no action provided"))
 			}
 
-			tblConf, err := getTableConfig(cmd)
-			if err != nil {
-				return display.PrintErr(cmd, err)
-			}
-
 			// positional parameters
 			var params []any
 			for _, p := range args[1:] {
@@ -116,17 +111,17 @@ func callActionCmd() *cobra.Command {
 					return display.PrintErr(cmd, err)
 				}
 
-				return display.PrintCmd(cmd, &respCall{Data: res, PrintLogs: logs, tableConf: tblConf})
+				return display.PrintCmd(cmd, &respCall{Data: res, PrintLogs: logs, cmd: cmd})
 			})
 		},
 	}
 
 	cmd.Flags().StringVarP(&namespace, "namespace", "n", "", "namespace to execute the action in")
-	cmd.Flags().StringArrayVarP(&namedParams, "param", "p", nil, `named parameters that will override any positional parameters., format: "key:type=value"`)
+	cmd.Flags().StringSliceVarP(&namedParams, "param", "p", nil, `named parameters that will override any positional parameters., format: "key:type=value"`)
 	cmd.Flags().BoolVar(&rpcAuth, "rpc-auth", false, "signals that the call is being made to a kwil node and should be authenticated with the private key")
 	cmd.Flags().BoolVar(&gwAuth, "gateway-auth", false, "signals that the call is being made to a gateway and should be authenticated with the private key")
 	cmd.Flags().BoolVar(&logs, "logs", false, "result will include logs from notices raised during the call")
-	bindTableOutputFlags(cmd)
+	display.BindTableFlags(cmd)
 
 	return cmd
 }
@@ -134,7 +129,7 @@ func callActionCmd() *cobra.Command {
 type respCall struct {
 	Data      *types.CallResult
 	PrintLogs bool
-	tableConf *tableConfig
+	cmd       *cobra.Command
 }
 
 func (r *respCall) MarshalJSON() ([]byte, error) {
@@ -165,10 +160,13 @@ func getStringRows(v [][]any) [][]string {
 
 func (r *respCall) MarshalText() (text []byte, err error) {
 	if !r.PrintLogs {
-		return recordsToTable(r.Data.QueryResult.ColumnNames, getStringRows(r.Data.QueryResult.Values), r.tableConf), nil
+		return display.FormatTable(r.cmd, r.Data.QueryResult.ColumnNames, getStringRows(r.Data.QueryResult.Values))
 	}
 
-	bts := recordsToTable(r.Data.QueryResult.ColumnNames, getStringRows(r.Data.QueryResult.Values), r.tableConf)
+	bts, err := display.FormatTable(r.cmd, r.Data.QueryResult.ColumnNames, getStringRows(r.Data.QueryResult.Values))
+	if err != nil {
+		return nil, err
+	}
 
 	if len(r.Data.Logs) > 0 {
 		bts = append(bts, []byte("\n\nLogs:")...)

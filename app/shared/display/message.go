@@ -160,13 +160,16 @@ func heightStatus(res *types.TxQueryResponse) string {
 func (r *RespTxQuery) MarshalText() ([]byte, error) {
 	msg := fmt.Sprintf(`Transaction ID: %s
 Status: %s
-Height: %d
-Log: %s`,
+Height: %d`,
 		r.Msg.Hash.String(),
 		heightStatus(r.Msg),
 		r.Msg.Height,
-		r.Msg.Result.Log,
 	)
+
+	// result can be nil if it is still pending
+	if r.Msg.Result != nil {
+		msg += fmt.Sprintf("\nLog: %s", r.Msg.Result.Log)
+	}
 
 	// Always try to serialize to verify hash, but only show raw if requested.
 	if r.Msg.Tx == nil {

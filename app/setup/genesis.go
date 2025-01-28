@@ -83,6 +83,48 @@ func GenesisCmd() *cobra.Command {
 				return display.PrintErr(cmd, fmt.Errorf("failed to create genesis file: %w", err))
 			}
 
+			// if no validators are set, error
+			if len(conf.Validators) == 0 {
+				return display.PrintErr(cmd, fmt.Errorf("at least one validator is required"))
+			}
+
+			// if a leader is set, make sure it is a validator
+			if cmd.Flags().Changed(leaderFlag) {
+				found := false
+				for _, v := range conf.Validators {
+					if v.AccountID.String() == conf.Leader.String() {
+						found = true
+						break
+					}
+				}
+				if !found {
+					return display.PrintErr(cmd, fmt.Errorf("leader must be a validator"))
+				}
+			}
+
+			// if no leader is set,
+			if !cmd.Flags().Changed(leaderFlag) {
+				display.Log(cmd, "WARNING: Leader is not set. Defaulting to the first validator.")
+				// we don't need to check that there is at least one validator because we already checked that above
+				ktDef, ok := crypto.KeyTypeDefinition(conf.Validators[0].KeyType)
+				if !ok {
+					return display.PrintErr(cmd, fmt.Errorf("unknown key type for validator: %s", conf.Validators[0].KeyType))
+				}
+
+				pubKey, err := ktDef.UnmarshalPublicKey(conf.Validators[0].AccountID.Identifier)
+				if err != nil {
+					return display.PrintErr(cmd, fmt.Errorf("failed to unmarshal public key: %w", err))
+				}
+
+				conf.Leader = types.PublicKey{PublicKey: pubKey}
+			}
+
+			if !cmd.Flags().Changed(dbOwnerFlag) {
+				// we don't need to check that there is at least one validator because we already checked that above
+				display.Log(cmd, "WARNING: DB Owner is not set. Defaulting to the first validator.")
+				conf.DBOwner = conf.Validators[0].AccountID.Identifier.String()
+			}
+
 			existingFile, err := os.Stat(genesisFile)
 			if err == nil && existingFile.IsDir() {
 				return display.PrintErr(cmd, fmt.Errorf("a directory already exists at %s, please remove it first", genesisFile))
@@ -100,32 +142,45 @@ func GenesisCmd() *cobra.Command {
 	}
 
 	bindGenesisFlags(cmd, &flagCfg)
-	cmd.Flags().StringVar(&output, "out", "", "Output directory for the genesis.json file")
+	cmd.Flags().StringVar(&output, "out", "", "Output directory for the genesis.json file. The file will be named `genesis.json`.")
 
 	return cmd
 }
 
 // bindGenesisFlags binds the genesis configuration flags to the given command.
 func bindGenesisFlags(cmd *cobra.Command, cfg *genesisFlagConfig) {
-	cmd.Flags().StringVar(&cfg.chainID, "chain-id", "", "chainID for the genesis.json file")
-	cmd.Flags().StringSliceVar(&cfg.validators, "validators", nil, "public key, keyType and power of initial validator(s)") // accept: [hexpubkey1#keyType1:power1]
-	cmd.Flags().StringSliceVar(&cfg.allocs, "allocs", nil, "address and initial balance allocation(s) in the format id#keyType:amount")
-	cmd.Flags().BoolVar(&cfg.withGas, "with-gas", false, "include gas costs in the genesis.json file")
-	cmd.Flags().StringVar(&cfg.leader, "leader", "", "public key of the block proposer")
-	cmd.Flags().StringVar(&cfg.dbOwner, "db-owner", "", "owner of the database")
-	cmd.Flags().Int64Var(&cfg.maxBlockSize, "max-block-size", 0, "maximum block size")
-	cmd.Flags().DurationVar(&cfg.joinExpiry, "join-expiry", 0, "Number of blocks before a join proposal expires")
-	cmd.Flags().Int64Var(&cfg.maxVotesPerTx, "max-votes-per-tx", 0, "Maximum votes per transaction")
-	cmd.Flags().StringVar(&cfg.genesisState, "genesis-snapshot", "", "path to genesis state snapshot file")
+	cmd.Flags().StringVar(&cfg.chainID, chainIDFlag, "", "chainID for the genesis.json file")
+	cmd.Flags().StringSliceVar(&cfg.validators, validatorsFlag, nil, "public key, keyType and power of initial validator(s)") // accept: [hexpubkey1#keyType1:power1]
+	cmd.Flags().StringSliceVar(&cfg.allocs, allocsFlag, nil, "address and initial balance allocation(s) in the format id#keyType:amount")
+	cmd.Flags().BoolVar(&cfg.withGas, withGasFlag, false, "include gas costs in the genesis.json file")
+	cmd.Flags().StringVar(&cfg.leader, leaderFlag, "", "public key of the block proposer")
+	cmd.Flags().StringVar(&cfg.dbOwner, dbOwnerFlag, "", "owner of the database")
+	cmd.Flags().Int64Var(&cfg.maxBlockSize, maxBlockSizeFlag, 0, "maximum block size")
+	cmd.Flags().DurationVar(&cfg.joinExpiry, joinExpiryFlag, 0, "Number of blocks before a join proposal expires")
+	cmd.Flags().Int64Var(&cfg.maxVotesPerTx, maxVotesPerTxFlag, 0, "Maximum votes per transaction")
+	cmd.Flags().StringVar(&cfg.genesisState, genesisSnapshotFlag, "", "path to genesis state snapshot file")
 }
+
+const (
+	chainIDFlag         = "chain-id"
+	validatorsFlag      = "validator"
+	allocsFlag          = "alloc"
+	withGasFlag         = "with-gas"
+	leaderFlag          = "leader"
+	dbOwnerFlag         = "db-owner"
+	maxBlockSizeFlag    = "max-block-size"
+	joinExpiryFlag      = "join-expiry"
+	maxVotesPerTxFlag   = "max-votes-per-tx"
+	genesisSnapshotFlag = "genesis-snapshot"
+)
 
 // mergeGenesisFlags merges the genesis configuration flags with the given configuration.
 func mergeGenesisFlags(conf *config.GenesisConfig, cmd *cobra.Command, flagCfg *genesisFlagConfig) (*config.GenesisConfig, error) {
-	if cmd.Flags().Changed("chain-id") {
+	if cmd.Flags().Changed(chainIDFlag) {
 		conf.ChainID = flagCfg.chainID
 	}
 
-	if cmd.Flags().Changed("validators") {
+	if cmd.Flags().Changed(validatorsFlag) {
 		conf.Validators = nil
 		for _, v := range flagCfg.validators {
 			parts := strings.Split(v, ":")
@@ -159,7 +214,7 @@ func mergeGenesisFlags(conf *config.GenesisConfig, cmd *cobra.Command, flagCfg *
 		}
 	}
 
-	if cmd.Flags().Changed("allocs") {
+	if cmd.Flags().Changed(allocsFlag) {
 		conf.Allocs = nil
 		for _, a := range flagCfg.allocs {
 			parts := strings.Split(a, ":")
@@ -211,11 +266,11 @@ func mergeGenesisFlags(conf *config.GenesisConfig, cmd *cobra.Command, flagCfg *
 		}
 	}
 
-	if cmd.Flags().Changed("with-gas") {
+	if cmd.Flags().Changed(withGasFlag) {
 		conf.DisabledGasCosts = !flagCfg.withGas
 	}
 
-	if cmd.Flags().Changed("leader") {
+	if cmd.Flags().Changed(leaderFlag) {
 		pubkeyBts, keyType, err := config.DecodePubKeyAndType(flagCfg.leader)
 		if err != nil {
 			return nil, err
@@ -227,23 +282,23 @@ func mergeGenesisFlags(conf *config.GenesisConfig, cmd *cobra.Command, flagCfg *
 		conf.Leader = types.PublicKey{PublicKey: pubkey}
 	}
 
-	if cmd.Flags().Changed("db-owner") {
+	if cmd.Flags().Changed(dbOwnerFlag) {
 		conf.DBOwner = flagCfg.dbOwner
 	}
 
-	if cmd.Flags().Changed("max-block-size") {
+	if cmd.Flags().Changed(maxBlockSizeFlag) {
 		conf.MaxBlockSize = flagCfg.maxBlockSize
 	}
 
-	if cmd.Flags().Changed("join-expiry") {
+	if cmd.Flags().Changed(joinExpiryFlag) {
 		conf.JoinExpiry = types.Duration(flagCfg.joinExpiry)
 	}
 
-	if cmd.Flags().Changed("max-votes-per-tx") {
+	if cmd.Flags().Changed(maxVotesPerTxFlag) {
 		conf.MaxVotesPerTx = flagCfg.maxVotesPerTx
 	}
 
-	if cmd.Flags().Changed("genesis-state") {
+	if cmd.Flags().Changed(genesisSnapshotFlag) {
 		hash, err := appHashFromSnapshotFile(flagCfg.genesisState)
 		if err != nil {
 			return nil, err

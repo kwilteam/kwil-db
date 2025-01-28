@@ -1,13 +1,36 @@
-package cmds
+package display
 
 import (
 	"bytes"
+	"fmt"
 
 	"github.com/olekukonko/tablewriter"
 	"github.com/spf13/cobra"
 )
 
-func bindTableOutputFlags(cmd *cobra.Command) {
+// FormatTable prints the table with the given columns and rows.
+// It is meant to be used in a MarshalText method.
+func FormatTable(cmd *cobra.Command, columns []string, rows [][]string) ([]byte, error) {
+	outputFmt, err := getOutputFormat(cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	if outputFmt == outputFormatJSON {
+		// this means that we called FormatTable in MarshalJSON
+		return nil, fmt.Errorf("json output is not supported for tables. this is a CLI bug")
+	}
+
+	c, err := getTableConfig(cmd)
+	if err != nil {
+		return nil, err
+	}
+
+	return recordsToTable(columns, rows, c), nil
+}
+
+// BindTableFlags binds the flags to the table config
+func BindTableFlags(cmd *cobra.Command) {
 	cmd.Flags().IntP("width", "w", 0, "Set the width of the table columns. Text beyond this width will be wrapped.")
 	cmd.Flags().Bool("row-border", false, "Show border lines between rows.")
 	cmd.Flags().Int("max-row-width", 0, "Set the maximum width of the row. Text beyond this width will be truncated.")
