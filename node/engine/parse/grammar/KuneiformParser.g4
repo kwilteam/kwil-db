@@ -34,6 +34,7 @@ statement:
         | unuse_extension_statement
         | create_namespace_statement
         | drop_namespace_statement
+        | set_current_namespace_statement
     )
 ;
 
@@ -95,6 +96,7 @@ allowed_identifier:
     | ACTION
     | TRANSFER
     | OWNERSHIP
+    | CURRENT
 ;
 
 identifier_list:
@@ -274,6 +276,10 @@ create_namespace_statement:
 
 drop_namespace_statement:
     DROP NAMESPACE (IF EXISTS)? identifier
+;
+
+set_current_namespace_statement:
+    SET CURRENT NAMESPACE TO identifier
 ;
 
 select_statement:

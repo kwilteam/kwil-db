@@ -211,6 +211,10 @@ func (v *BaseKuneiformParserVisitor) VisitDrop_namespace_statement(ctx *Drop_nam
 	return v.VisitChildren(ctx)
 }
 
+func (v *BaseKuneiformParserVisitor) VisitSet_current_namespace_statement(ctx *Set_current_namespace_statementContext) interface{} {
+	return v.VisitChildren(ctx)
+}
+
 func (v *BaseKuneiformParserVisitor) VisitSelect_statement(ctx *Select_statementContext) interface{} {
 	return v.VisitChildren(ctx)
 }

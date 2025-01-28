@@ -2053,6 +2053,22 @@ func (i *interpreterPlanner) VisitDropNamespaceStatement(p0 *parse.DropNamespace
 	})
 }
 
+func (i *interpreterPlanner) VisitSetCurrentNamespaceStatement(p0 *parse.SetCurrentNamespaceStatement) any {
+	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
+		if err := exec.checkPrivilege(UsePrivilege); err != nil {
+			return err
+		}
+
+		if _, exists := exec.interpreter.namespaces[p0.Namespace]; !exists {
+			return fmt.Errorf(`%w: namespace "%s" does not exist`, engine.ErrNamespaceNotFound, p0.Namespace)
+		}
+
+		exec.scope.namespace = p0.Namespace
+
+		return nil
+	})
+}
+
 // below are the alter table statements
 
 func (i *interpreterPlanner) VisitAddColumn(p0 *parse.AddColumn) any {

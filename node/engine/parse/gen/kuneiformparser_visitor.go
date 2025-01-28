@@ -160,6 +160,9 @@ type KuneiformParserVisitor interface {
 	// Visit a parse tree produced by KuneiformParser#drop_namespace_statement.
 	VisitDrop_namespace_statement(ctx *Drop_namespace_statementContext) interface{}
 
+	// Visit a parse tree produced by KuneiformParser#set_current_namespace_statement.
+	VisitSet_current_namespace_statement(ctx *Set_current_namespace_statementContext) interface{}
+
 	// Visit a parse tree produced by KuneiformParser#select_statement.
 	VisitSelect_statement(ctx *Select_statementContext) interface{}
 
