@@ -627,7 +627,7 @@ func TestValidatorStateMachine(t *testing.T) {
 						val.blkRequester = func(ctx context.Context, height int64) (types.Hash, []byte, *types.CommitInfo, error) {
 							defer func() { cnt += 1 }()
 
-							if cnt <= 1 {
+							if cnt < 1 {
 								return zeroHash, nil, nil, types.ErrBlkNotFound
 							}
 							return blkProp2.blkHash, rawBlk, ci, nil

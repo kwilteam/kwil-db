@@ -23,7 +23,7 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 	ce.stateInfo.mtx.RLock()
 	defer ce.stateInfo.mtx.RUnlock()
 
-	ce.log.Info("Accept proposal?", "height", height, "blkID", blkID, "prevHash", prevBlockID)
+	ce.log.Info("Accept proposal?", "height", height, "blockID", blkID, "prevHash", prevBlockID)
 
 	if height != ce.stateInfo.height+1 {
 		ce.log.Debug("Block proposal is not for the next height", "blkPropHeight", height, "expected", ce.stateInfo.height+1)
@@ -51,7 +51,7 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 			// go ce.sendResetMsg(ce.stateInfo.height)
 			return true
 		}
-		ce.log.Debug("Already processing the block proposal", "height", height, "blkID", blkID)
+		ce.log.Debug("Already processing the block proposal", "height", height, "blockID", blkID)
 		return false
 	}
 
@@ -157,13 +157,13 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 		}
 
 		if ce.state.blkProp.blk.Header.Timestamp.After(blkPropMsg.blk.Header.Timestamp) {
-			ce.log.Info("Received stale block proposal, Ignore", "height", blkPropMsg.height, "blkHash", blkPropMsg.blkHash)
+			ce.log.Info("Received stale block proposal, Ignore", "height", blkPropMsg.height, "blockID", blkPropMsg.blkHash)
 			return nil
 		}
 
-		ce.log.Info("Aborting execution of stale block proposal", "height", blkPropMsg.height, "blkHash", ce.state.blkProp.blkHash)
+		ce.log.Info("Aborting execution of stale block proposal", "height", blkPropMsg.height, "blockID", ce.state.blkProp.blkHash)
 		if err := ce.rollbackState(ctx); err != nil {
-			ce.log.Error("Error aborting execution of block", "height", blkPropMsg.height, "blkID", ce.state.blkProp.blkHash, "error", err)
+			ce.log.Error("Error aborting execution of block", "height", blkPropMsg.height, "blockID", ce.state.blkProp.blkHash, "error", err)
 			return err
 		}
 	}
@@ -261,7 +261,7 @@ func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, c
 
 	if ce.state.blkProp.blkHash != blk.Header.Hash() {
 		if err := ce.rollbackState(ctx); err != nil {
-			ce.log.Error("error aborting execution of incorrect block proposal", "height", blk.Header.Height, "blkID", blk.Header.Hash(), "error", err)
+			ce.log.Error("error aborting execution of incorrect block proposal", "height", blk.Header.Height, "blockID", blk.Header.Hash(), "error", err)
 		}
 		return ce.processAndCommit(ctx, blk, ci)
 	}
@@ -306,7 +306,7 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Blo
 		return fmt.Errorf("commitInfo is nil")
 	}
 
-	ce.log.Info("Processing committed block", "height", blk.Header.Height, "hash", blkID, "appHash", ci.AppHash)
+	ce.log.Info("Processing committed block", "height", blk.Header.Height, "blockID", blkID, "appHash", ci.AppHash)
 	if err := ce.validateBlock(blk); err != nil {
 		return err
 	}

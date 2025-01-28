@@ -68,20 +68,20 @@ func (c *jsonrpcGoDriver) TxSuccess(ctx context.Context, txHash types.Hash) erro
 		return fmt.Errorf("failed to query: %w", err)
 	}
 
-	if resp.Result.Code != uint32(types.CodeOk) {
-		return fmt.Errorf("transaction not ok: %s", resp.Result.Log)
-	}
-
 	// NOTE: THIS should not be considered a failure, should retry
 	if resp.Height < 0 {
 		return ErrTxNotConfirmed
 	}
 
+	if resp.Result.Code != uint32(types.CodeOk) {
+		return fmt.Errorf("transaction not ok: %s", resp.Result.Log)
+	}
+
 	return nil
 }
 
-func (j *jsonrpcGoDriver) Identifier() string {
-	ident, err := auth.Secp25k1Authenticator{}.Identifier(j.privateKey.Public().Bytes())
+func (c *jsonrpcGoDriver) Identifier() string {
+	ident, err := auth.Secp25k1Authenticator{}.Identifier(c.privateKey.Public().Bytes())
 	if err != nil {
 		panic(err)
 	}

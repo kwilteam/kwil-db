@@ -232,8 +232,10 @@ func GenerateNodeRoot(ncfg *NodeGenConfig) error {
 	}
 	cfg.P2P.ListenAddress = net.JoinHostPort(host, strconv.FormatUint(port, 10))
 	cfg.P2P.Pex = !ncfg.NoPEX
-
 	cfg.P2P.BootNodes = ncfg.BootNodes
+
+	// Consensus
+	cfg.Consensus.EmptyBlockTimeout = cfg.Consensus.ProposeTimeout
 
 	// DB
 	dbPort := ncfg.DBPort

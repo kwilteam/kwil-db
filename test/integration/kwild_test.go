@@ -45,117 +45,125 @@ func TestKwildDatabaseIntegration(t *testing.T) {
 	ident, err := authExt.GetIdentifierFromSigner(signer)
 	require.NoError(t, err)
 
-	p := setup.SetupTests(t, &setup.TestConfig{
-		ClientDriver: setup.CLI,
-		Network: &setup.NetworkConfig{
-			Nodes: []*setup.NodeConfig{
-				setup.DefaultNodeConfig(),
-				setup.DefaultNodeConfig(),
-				setup.DefaultNodeConfig(),
-			},
-			DBOwner: ident,
-		},
-	})
+	for _, driver := range setup.AllDrivers {
+		t.Run(driver.String()+"_driver", func(t *testing.T) {
+			p := setup.SetupTests(t, &setup.TestConfig{
+				ClientDriver: driver,
+				Network: &setup.NetworkConfig{
+					Nodes: []*setup.NodeConfig{
+						setup.DefaultNodeConfig(),
+						setup.DefaultNodeConfig(),
+						setup.DefaultNodeConfig(),
+					},
+					DBOwner: ident,
+				},
+			})
 
-	ctx := context.Background()
+			ctx := context.Background()
 
-	clt := p.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
-		PrivateKey: userPrivKey,
-	})
+			clt := p.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
+				PrivateKey: userPrivKey,
+			})
 
-	ping, err := clt.Ping(ctx)
-	require.NoError(t, err)
+			ping, err := clt.Ping(ctx)
+			require.NoError(t, err)
 
-	require.Equal(t, "pong", ping)
+			require.Equal(t, "pong", ping)
 
-	specifications.CreateNamespaceSpecification(ctx, t, clt, false)
-	specifications.CreateSchemaSpecification(ctx, t, clt)
+			specifications.CreateNamespaceSpecification(ctx, t, clt, false)
+			specifications.CreateSchemaSpecification(ctx, t, clt)
 
-	user := &specifications.User{Id: 1, Name: "Alice", Age: 25}
-	specifications.AddUserSpecification(ctx, t, clt, user)
-	specifications.ListUsersSpecification(ctx, t, clt, false, 1)
+			user := &specifications.User{Id: 1, Name: "Alice", Age: 25}
+			specifications.AddUserSpecification(ctx, t, clt, user)
+			specifications.ListUsersSpecification(ctx, t, clt, false, 1)
+		})
+	}
 }
 
 // TestKwildValidatorUpdates is to test the functionality of
 // validators joining and leaving the network.
 func TestKwildValidatorUpdates(t *testing.T) {
-	p := setup.SetupTests(t, &setup.TestConfig{
-		ClientDriver: setup.CLI,
-		Network: &setup.NetworkConfig{
-			Nodes: []*setup.NodeConfig{
-				setup.DefaultNodeConfig(),
-				setup.DefaultNodeConfig(),
-				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
-					nc.Validator = false
-				}),
-				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
-					nc.Validator = false
-				}),
-			},
-			// ConfigureGenesis: func(genDoc *config.GenesisConfig) {
-			// 	genDoc.JoinExpiry = 5 // 5 sec at 1block/sec
-			// },
-			DBOwner: "0xabc",
-		},
-	})
+	for _, driver := range setup.AllDrivers {
+		t.Run(driver.String()+"_driver", func(t *testing.T) {
+			p := setup.SetupTests(t, &setup.TestConfig{
+				ClientDriver: setup.CLI,
+				Network: &setup.NetworkConfig{
+					Nodes: []*setup.NodeConfig{
+						setup.DefaultNodeConfig(),
+						setup.DefaultNodeConfig(),
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.Validator = false
+						}),
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.Validator = false
+						}),
+					},
+					// ConfigureGenesis: func(genDoc *config.GenesisConfig) {
+					// 	genDoc.JoinExpiry = 5 // 5 sec at 1block/sec
+					// },
+					DBOwner: "0xabc",
+				},
+			})
 
-	ctx := context.Background()
+			ctx := context.Background()
 
-	// wait for all the nodes to discover each other
-	time.Sleep(2 * time.Second)
+			// wait for all the nodes to discover each other
+			time.Sleep(2 * time.Second)
 
-	n0Admin := p.Nodes[0].AdminClient(t, ctx)
-	n1Admin := p.Nodes[1].AdminClient(t, ctx)
-	n2Admin := p.Nodes[2].AdminClient(t, ctx)
-	n3Admin := p.Nodes[3].AdminClient(t, ctx)
+			n0Admin := p.Nodes[0].AdminClient(t, ctx)
+			n1Admin := p.Nodes[1].AdminClient(t, ctx)
+			n2Admin := p.Nodes[2].AdminClient(t, ctx)
+			n3Admin := p.Nodes[3].AdminClient(t, ctx)
 
-	// Ensure that the network has 2 validators
-	specifications.CurrentValidatorsSpecification(ctx, t, n0Admin, 2)
+			// Ensure that the network has 2 validators
+			specifications.CurrentValidatorsSpecification(ctx, t, n0Admin, 2)
 
-	// Reject join requests from an existing validator
-	specifications.JoinExistingValidatorSpecification(ctx, t, n0Admin, p.Nodes[1].PrivateKey())
+			// Reject join requests from an existing validator
+			specifications.JoinExistingValidatorSpecification(ctx, t, n0Admin, p.Nodes[1].PrivateKey())
 
-	// Reject leave requests from a non-validator
-	specifications.NonValidatorLeaveSpecification(ctx, t, n3Admin)
+			// Reject leave requests from a non-validator
+			specifications.NonValidatorLeaveSpecification(ctx, t, n3Admin)
 
-	// Reject leave requests from the leader
-	specifications.InvalidLeaveSpecification(ctx, t, n0Admin)
+			// Reject leave requests from the leader
+			specifications.InvalidLeaveSpecification(ctx, t, n0Admin)
 
-	time.Sleep(2 * time.Second)
+			time.Sleep(2 * time.Second)
 
-	// Node0 and 1 are Validators and Node2 will issue a join request and requires approval from both validators
-	specifications.ValidatorNodeJoinSpecification(ctx, t, n2Admin, p.Nodes[2].PrivateKey(), 2)
+			// Node0 and 1 are Validators and Node2 will issue a join request and requires approval from both validators
+			specifications.ValidatorNodeJoinSpecification(ctx, t, n2Admin, p.Nodes[2].PrivateKey(), 2)
 
-	// Nodes can't self approve join requests
-	specifications.NodeApprovalFailSpecification(ctx, t, n2Admin, p.Nodes[2].PrivateKey())
+			// Nodes can't self approve join requests
+			specifications.NodeApprovalFailSpecification(ctx, t, n2Admin, p.Nodes[2].PrivateKey())
 
-	// Non validators can't approve join requests
-	specifications.NodeApprovalFailSpecification(ctx, t, n3Admin, p.Nodes[2].PrivateKey())
+			// Non validators can't approve join requests
+			specifications.NodeApprovalFailSpecification(ctx, t, n3Admin, p.Nodes[2].PrivateKey())
 
-	// node0 approves the join request
-	specifications.ValidatorNodeApproveSpecification(ctx, t, n0Admin, p.Nodes[2].PrivateKey(), 2, 2, false)
+			// node0 approves the join request
+			specifications.ValidatorNodeApproveSpecification(ctx, t, n0Admin, p.Nodes[2].PrivateKey(), 2, 2, false)
 
-	// node1 approves the join request and the node2 becomes a validator
-	specifications.ValidatorNodeApproveSpecification(ctx, t, n1Admin, p.Nodes[2].PrivateKey(), 2, 3, true)
+			// node1 approves the join request and the node2 becomes a validator
+			specifications.ValidatorNodeApproveSpecification(ctx, t, n1Admin, p.Nodes[2].PrivateKey(), 2, 3, true)
 
-	// Ensure that the network has 3 validators
-	specifications.CurrentValidatorsSpecification(ctx, t, n0Admin, 3)
-	specifications.CurrentValidatorsSpecification(ctx, t, n3Admin, 3)
+			// Ensure that the network has 3 validators
+			specifications.CurrentValidatorsSpecification(ctx, t, n0Admin, 3)
+			specifications.CurrentValidatorsSpecification(ctx, t, n3Admin, 3)
 
-	/*
-		Leave Process:
-		- node2 issues a leave request -> removes it from the validator list
-		- Validator set count should be reduced by 1
-	*/
-	specifications.ValidatorNodeLeaveSpecification(ctx, t, n2Admin)
+			/*
+				Leave Process:
+				- node2 issues a leave request -> removes it from the validator list
+				- Validator set count should be reduced by 1
+			*/
+			specifications.ValidatorNodeLeaveSpecification(ctx, t, n2Admin)
 
-	// Node should be able to rejoin the network
-	specifications.ValidatorNodeJoinSpecification(ctx, t, n2Admin, p.Nodes[2].PrivateKey(), 2)
-	time.Sleep(2 * time.Second)
-	specifications.ValidatorNodeApproveSpecification(ctx, t, n0Admin, p.Nodes[2].PrivateKey(), 2, 2, false)
-	specifications.ValidatorNodeApproveSpecification(ctx, t, n1Admin, p.Nodes[2].PrivateKey(), 2, 3, true)
-	time.Sleep(2 * time.Second)
-	specifications.CurrentValidatorsSpecification(ctx, t, n3Admin, 3)
+			// Node should be able to rejoin the network
+			specifications.ValidatorNodeJoinSpecification(ctx, t, n2Admin, p.Nodes[2].PrivateKey(), 2)
+			time.Sleep(2 * time.Second)
+			specifications.ValidatorNodeApproveSpecification(ctx, t, n0Admin, p.Nodes[2].PrivateKey(), 2, 2, false)
+			specifications.ValidatorNodeApproveSpecification(ctx, t, n1Admin, p.Nodes[2].PrivateKey(), 2, 3, true)
+			time.Sleep(2 * time.Second)
+			specifications.CurrentValidatorsSpecification(ctx, t, n3Admin, 3)
+		})
+	}
 }
 
 func TestValidatorJoinExpirySpecification(t *testing.T) {
@@ -191,84 +199,90 @@ func TestValidatorJoinExpirySpecification(t *testing.T) {
 }
 
 func TestKwildValidatorRemoveSpecification(t *testing.T) {
-	p := setup.SetupTests(t, &setup.TestConfig{
-		ClientDriver: setup.CLI,
-		Network: &setup.NetworkConfig{
-			Nodes: []*setup.NodeConfig{
-				setup.DefaultNodeConfig(),
-				setup.DefaultNodeConfig(),
-				setup.DefaultNodeConfig(),
-				setup.DefaultNodeConfig(),
-			},
-			DBOwner: "0xabc",
-		},
-	})
+	for _, driver := range setup.AllDrivers {
+		t.Run(driver.String()+"_driver", func(t *testing.T) {
+			p := setup.SetupTests(t, &setup.TestConfig{
+				ClientDriver: driver,
+				Network: &setup.NetworkConfig{
+					Nodes: []*setup.NodeConfig{
+						setup.DefaultNodeConfig(),
+						setup.DefaultNodeConfig(),
+						setup.DefaultNodeConfig(),
+						setup.DefaultNodeConfig(),
+					},
+					DBOwner: "0xabc",
+				},
+			})
 
-	ctx := context.Background()
+			ctx := context.Background()
 
-	// wait for all the nodes to discover each other
-	time.Sleep(2 * time.Second)
+			// wait for all the nodes to discover each other
+			time.Sleep(2 * time.Second)
 
-	n0Admin := p.Nodes[0].AdminClient(t, ctx)
-	n1Admin := p.Nodes[1].AdminClient(t, ctx)
-	n2Admin := p.Nodes[2].AdminClient(t, ctx)
+			n0Admin := p.Nodes[0].AdminClient(t, ctx)
+			n1Admin := p.Nodes[1].AdminClient(t, ctx)
+			n2Admin := p.Nodes[2].AdminClient(t, ctx)
 
-	// 4 validators, remove one validator, requires approval from 2 validators
-	specifications.ValidatorNodeRemoveSpecificationV4R1(ctx, t, n0Admin, n1Admin, n2Admin, p.Nodes[3].PrivateKey())
+			// 4 validators, remove one validator, requires approval from 2 validators
+			specifications.ValidatorNodeRemoveSpecificationV4R1(ctx, t, n0Admin, n1Admin, n2Admin, p.Nodes[3].PrivateKey())
 
-	// Node3 is no longer a validator
-	specifications.CurrentValidatorsSpecification(ctx, t, n0Admin, 3)
+			// Node3 is no longer a validator
+			specifications.CurrentValidatorsSpecification(ctx, t, n0Admin, 3)
 
-	// leader can't be removed from the validator set
-	specifications.InvalidRemovalSpecification(ctx, t, n1Admin, p.Nodes[0].PrivateKey())
+			// leader can't be removed from the validator set
+			specifications.InvalidRemovalSpecification(ctx, t, n1Admin, p.Nodes[0].PrivateKey())
+		})
+	}
 }
 
 func TestKwildBlockSync(t *testing.T) {
-	p := setup.SetupTests(t, &setup.TestConfig{
-		ClientDriver: setup.CLI,
-		Network: &setup.NetworkConfig{
-			Nodes: []*setup.NodeConfig{
-				setup.DefaultNodeConfig(),
-				setup.DefaultNodeConfig(),
-				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
-					nc.Validator = false
-				}),
-				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
-					nc.Validator = false
-				}),
-			},
-			DBOwner: OwnerAddress,
-		},
-		InitialServices: []string{"node0", "node1", "node2", "pg0", "pg1", "pg2"}, // should bringup only node 0,1,2
-	})
-	ctx := context.Background()
-	// wait for all the nodes to discover each other
-	time.Sleep(2 * time.Second)
+	for _, driver := range setup.AllDrivers {
+		t.Run(driver.String()+"_driver", func(t *testing.T) {
+			p := setup.SetupTests(t, &setup.TestConfig{
+				ClientDriver: driver,
+				Network: &setup.NetworkConfig{
+					Nodes: []*setup.NodeConfig{
+						setup.DefaultNodeConfig(),
+						setup.DefaultNodeConfig(),
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.Validator = false
+						}),
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.Validator = false
+						}),
+					},
+					DBOwner: OwnerAddress,
+				},
+				InitialServices: []string{"node0", "node1", "node2", "pg0", "pg1", "pg2"}, // should bringup only node 0,1,2
+			})
+			ctx := context.Background()
+			// wait for all the nodes to discover each other
+			time.Sleep(2 * time.Second)
 
-	// bring up node3, pg3 and ensure that it does blocksync correctly
-	p.RunServices(t, ctx, []*setup.ServiceDefinition{
-		setup.KwildServiceDefinition("node3"),
-		setup.PostgresServiceDefinition("pg3"),
-	}, defaultContainerTimeout)
+			clt := p.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{PrivateKey: UserPrivkey1})
 
-	// time for node to blocksync and catch up
-	time.Sleep(4 * time.Second)
+			// Deploy some tables and insert some data
+			specifications.CreateNamespaceSpecification(ctx, t, clt, false)
+			specifications.CreateSchemaSpecification(ctx, t, clt)
+			user := &specifications.User{Id: 1, Name: "Alice", Age: 25}
+			specifications.AddUserSpecification(ctx, t, clt, user)
+			specifications.ListUsersSpecification(ctx, t, clt, false, 1)
 
-	clt := p.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{PrivateKey: UserPrivkey1})
+			// bring up node3, pg3 and ensure that it does blocksync correctly
+			p.RunServices(t, ctx, []*setup.ServiceDefinition{
+				setup.KwildServiceDefinition("node3"),
+				setup.PostgresServiceDefinition("pg3"),
+			}, defaultContainerTimeout)
 
-	// Deploy some tables and insert some data
-	specifications.CreateNamespaceSpecification(ctx, t, clt, false)
-	specifications.CreateSchemaSpecification(ctx, t, clt)
-	user := &specifications.User{Id: 1, Name: "Alice", Age: 25}
-	specifications.AddUserSpecification(ctx, t, clt, user)
-	specifications.ListUsersSpecification(ctx, t, clt, false, 1)
+			// time for node to blocksync and catch up
+			time.Sleep(4 * time.Second)
 
-	// ensure that all nodes are in sync
-	info, err := p.Nodes[3].JSONRPCClient(t, ctx, nil).ChainInfo(ctx)
-	require.NoError(t, err)
-	require.Greater(t, info.BlockHeight, uint64(0))
+			clt3 := p.Nodes[3].JSONRPCClient(t, ctx, &setup.ClientOptions{PrivateKey: UserPrivkey1})
 
-	// TODO: Add some kind of data verification here
+			// ensure that the node is in sync with the network
+			specifications.ListUsersEventuallySpecification(ctx, t, clt3, false, 1)
+		})
+	}
 }
 
 func TestStatesync(t *testing.T) {
@@ -277,283 +291,295 @@ func TestStatesync(t *testing.T) {
 		Node 4 tries to sync with the network, with statesync enabled.
 		Node4 should be able to sync with the network and catch up with the latest state (maybe check for the existence of some kind of data)
 	*/
-	p := setup.SetupTests(t, &setup.TestConfig{
-		ClientDriver: setup.CLI,
-		Network: &setup.NetworkConfig{
-			Nodes: []*setup.NodeConfig{
-				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
-					nc.Configure = func(conf *config.Config) {
-						conf.Snapshots.Enable = true
-						conf.Snapshots.RecurringHeight = 50
-					}
-				}),
-				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
-					nc.Configure = func(conf *config.Config) {
-						conf.Snapshots.Enable = true
-						conf.Snapshots.RecurringHeight = 50
-					}
-				}),
-				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
-					nc.Validator = false
-				}),
-				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
-					nc.Validator = false
-					nc.Configure = func(conf *config.Config) {
-						conf.StateSync.Enable = true
-						// conf.StateSync.TrustedProviders = conf.P2P.BootNodes
-					}
-				}),
-			},
-			DBOwner: OwnerAddress,
-		},
-		InitialServices: []string{"node0", "node1", "node2", "pg0", "pg1", "pg2"}, // should bringup only node 0,1,2
-	})
-	ctx := context.Background()
+	for _, driver := range setup.AllDrivers {
+		t.Run(driver.String()+"_driver", func(t *testing.T) {
+			p := setup.SetupTests(t, &setup.TestConfig{
+				ClientDriver: driver,
+				Network: &setup.NetworkConfig{
+					Nodes: []*setup.NodeConfig{
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.Configure = func(conf *config.Config) {
+								conf.Snapshots.Enable = true
+								conf.Snapshots.RecurringHeight = 50
+							}
+						}),
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.Configure = func(conf *config.Config) {
+								conf.Snapshots.Enable = true
+								conf.Snapshots.RecurringHeight = 50
+							}
+						}),
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.Validator = false
+						}),
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.Validator = false
+							nc.Configure = func(conf *config.Config) {
+								conf.StateSync.Enable = true
+								// conf.StateSync.TrustedProviders = conf.P2P.BootNodes
+							}
+						}),
+					},
+					DBOwner: OwnerAddress,
+				},
+				InitialServices: []string{"node0", "node1", "node2", "pg0", "pg1", "pg2"}, // should bringup only node 0,1,2
+			})
+			ctx := context.Background()
 
-	// wait for all the nodes to discover each other and to produce snapshots
-	time.Sleep(50 * time.Second)
+			// wait for all the nodes to discover each other and to produce snapshots
+			time.Sleep(50 * time.Second)
 
-	clt := p.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
-		PrivateKey: UserPrivkey1,
-	})
+			clt := p.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
+				PrivateKey: UserPrivkey1,
+			})
 
-	specifications.CreateNamespaceSpecification(ctx, t, clt, false)
-	specifications.CreateSchemaSpecification(ctx, t, clt)
+			specifications.CreateNamespaceSpecification(ctx, t, clt, false)
+			specifications.CreateSchemaSpecification(ctx, t, clt)
 
-	user := &specifications.User{Id: 1, Name: "Alice", Age: 25}
-	specifications.AddUserSpecification(ctx, t, clt, user)
-	specifications.ListUsersSpecification(ctx, t, clt, false, 1)
+			user := &specifications.User{Id: 1, Name: "Alice", Age: 25}
+			specifications.AddUserSpecification(ctx, t, clt, user)
+			specifications.ListUsersSpecification(ctx, t, clt, false, 1)
 
-	// bring up node3, pg3 and ensure that it does blocksync correctly
-	p.RunServices(t, ctx, []*setup.ServiceDefinition{
-		setup.KwildServiceDefinition("node3"),
-		setup.PostgresServiceDefinition("pg3"),
-	}, 2*time.Minute)
+			// bring up node3, pg3 and ensure that it does blocksync correctly
+			p.RunServices(t, ctx, []*setup.ServiceDefinition{
+				setup.KwildServiceDefinition("node3"),
+				setup.PostgresServiceDefinition("pg3"),
+			}, 2*time.Minute)
 
-	// time for node to blocksync and catch up
-	time.Sleep(4 * time.Second)
+			// time for node to blocksync and catch up
+			time.Sleep(4 * time.Second)
 
-	// ensure that all nodes are in sync
-	info, err := p.Nodes[3].JSONRPCClient(t, ctx, nil).ChainInfo(ctx)
-	require.NoError(t, err)
-	require.Greater(t, info.BlockHeight, uint64(50))
+			// ensure that all nodes are in sync
+			info, err := p.Nodes[3].JSONRPCClient(t, ctx, nil).ChainInfo(ctx)
+			require.NoError(t, err)
+			require.Greater(t, info.BlockHeight, uint64(50))
 
-	clt3 := p.Nodes[3].JSONRPCClient(t, ctx, &setup.ClientOptions{
-		PrivateKey: UserPrivkey1,
-	})
-	specifications.ListUsersSpecification(ctx, t, clt3, false, 1)
+			clt3 := p.Nodes[3].JSONRPCClient(t, ctx, &setup.ClientOptions{
+				PrivateKey: UserPrivkey1,
+			})
+			specifications.ListUsersSpecification(ctx, t, clt3, false, 1)
+		})
+	}
 }
 
 func TestOfflineMigrations(t *testing.T) {
-	net1 := setup.SetupTests(t, &setup.TestConfig{
-		ClientDriver: setup.CLI,
-		Network: &setup.NetworkConfig{
-			Nodes: []*setup.NodeConfig{
-				setup.DefaultNodeConfig(),
-				setup.DefaultNodeConfig(),
-				setup.DefaultNodeConfig(),
-				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
-					nc.Validator = false
-				}),
-			},
-			DBOwner: OwnerAddress,
-		},
-	})
+	for _, driver := range setup.AllDrivers {
+		t.Run(driver.String()+"_driver", func(t *testing.T) {
+			net1 := setup.SetupTests(t, &setup.TestConfig{
+				ClientDriver: driver,
+				Network: &setup.NetworkConfig{
+					Nodes: []*setup.NodeConfig{
+						setup.DefaultNodeConfig(),
+						setup.DefaultNodeConfig(),
+						setup.DefaultNodeConfig(),
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.Validator = false
+						}),
+					},
+					DBOwner: OwnerAddress,
+				},
+			})
 
-	ctx := context.Background()
-	time.Sleep(2 * time.Second)
+			ctx := context.Background()
+			time.Sleep(2 * time.Second)
 
-	clt := net1.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
-		PrivateKey: UserPrivkey1,
-	})
+			clt := net1.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
+				PrivateKey: UserPrivkey1,
+			})
 
-	specifications.CreateNamespaceSpecification(ctx, t, clt, false)
-	specifications.CreateSchemaSpecification(ctx, t, clt)
+			specifications.CreateNamespaceSpecification(ctx, t, clt, false)
+			specifications.CreateSchemaSpecification(ctx, t, clt)
 
-	user := &specifications.User{Id: 1, Name: "Alice", Age: 25}
-	specifications.AddUserSpecification(ctx, t, clt, user)
-	specifications.ListUsersSpecification(ctx, t, clt, false, 1)
+			user := &specifications.User{Id: 1, Name: "Alice", Age: 25}
+			specifications.AddUserSpecification(ctx, t, clt, user)
+			specifications.ListUsersSpecification(ctx, t, clt, false, 1)
 
-	_, hostname, err := net1.Nodes[0].PostgresEndpoint(t, ctx, "pg0")
-	require.NoError(t, err)
-	parts := strings.Split(hostname, ":")
-	require.Len(t, parts, 3)
-	host := strings.Trim(parts[1], "/")
+			_, hostname, err := net1.Nodes[0].PostgresEndpoint(t, ctx, "pg0")
+			require.NoError(t, err)
+			parts := strings.Split(hostname, ":")
+			require.Len(t, parts, 3)
+			host := strings.Trim(parts[1], "/")
 
-	// Create a network snapshot
-	n0Admin := net1.Nodes[0].AdminClient(t, ctx)
-	_, hash, err := n0Admin.CreateSnapshot(ctx, host, parts[2], "kwild", "kwild", "/app/kwil/gensnaps")
-	require.NoError(t, err)
+			// Create a network snapshot
+			n0Admin := net1.Nodes[0].AdminClient(t, ctx)
+			_, hash, err := n0Admin.CreateSnapshot(ctx, host, parts[2], "kwild", "kwild", "/app/kwil/gensnaps")
+			require.NoError(t, err)
 
-	// Create second network with this snapshot
-	net2 := setup.SetupTests(t, &setup.TestConfig{
-		ClientDriver: setup.CLI,
-		Network: &setup.NetworkConfig{
-			Nodes: []*setup.NodeConfig{
-				setup.DefaultNodeConfig(),
-				setup.DefaultNodeConfig(),
-			},
-			DBOwner: OwnerAddress,
-			ConfigureGenesis: func(genDoc *config.GenesisConfig) {
-				genDoc.ChainID = "kwil-test-chain2"
-				genDoc.StateHash = hash
-			},
-			GenesisSnapshot: filepath.Join(net1.TestDir(), "node0", "gensnaps", "snapshot.sql.gz"),
-		},
-		PortOffset:     100,
-		ServicesPrefix: "new-",
-	})
+			// Create second network with this snapshot
+			net2 := setup.SetupTests(t, &setup.TestConfig{
+				ClientDriver: setup.CLI,
+				Network: &setup.NetworkConfig{
+					Nodes: []*setup.NodeConfig{
+						setup.DefaultNodeConfig(),
+						setup.DefaultNodeConfig(),
+					},
+					DBOwner: OwnerAddress,
+					ConfigureGenesis: func(genDoc *config.GenesisConfig) {
+						genDoc.ChainID = "kwil-test-chain2"
+						genDoc.StateHash = hash
+					},
+					GenesisSnapshot: filepath.Join(net1.TestDir(), "node0", "gensnaps", "snapshot.sql.gz"),
+				},
+				PortOffset:     100,
+				ServicesPrefix: "new-",
+			})
 
-	time.Sleep(5 * time.Second)
+			time.Sleep(5 * time.Second)
 
-	// Verify the existence of some data
-	clt = net2.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
-		PrivateKey: UserPrivkey1,
-	})
-	specifications.ListUsersSpecification(ctx, t, clt, false, 1)
+			// Verify the existence of some data
+			clt = net2.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
+				PrivateKey: UserPrivkey1,
+			})
+			specifications.ListUsersSpecification(ctx, t, clt, false, 1)
+		})
+	}
 }
 
 func TestLongRunningNetworkMigrations(t *testing.T) {
-	net1 := setup.SetupTests(t, &setup.TestConfig{
-		ClientDriver: setup.CLI,
-		Network: &setup.NetworkConfig{
-			Nodes: []*setup.NodeConfig{
-				setup.DefaultNodeConfig(),
-				setup.DefaultNodeConfig(),
-				setup.DefaultNodeConfig(),
-				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
-					nc.Validator = false
-				}),
-			},
-			DBOwner: OwnerAddress,
-		},
-	})
+	for _, driver := range setup.AllDrivers {
+		t.Run(driver.String()+"_driver", func(t *testing.T) {
+			net1 := setup.SetupTests(t, &setup.TestConfig{
+				ClientDriver: driver,
+				Network: &setup.NetworkConfig{
+					Nodes: []*setup.NodeConfig{
+						setup.DefaultNodeConfig(),
+						setup.DefaultNodeConfig(),
+						setup.DefaultNodeConfig(),
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.Validator = false
+						}),
+					},
+					DBOwner: OwnerAddress,
+				},
+			})
 
-	ctx := context.Background()
-	time.Sleep(2 * time.Second)
+			ctx := context.Background()
+			time.Sleep(2 * time.Second)
 
-	// Trigger a network migration request
-	var listenAddresses []string
-	for _, node := range net1.Nodes {
-		_, addr, err := node.JSONRPCEndpoint(t, ctx)
-		require.NoError(t, err)
-		listenAddresses = append(listenAddresses, addr)
+			// Trigger a network migration request
+			var listenAddresses []string
+			for _, node := range net1.Nodes {
+				_, addr, err := node.JSONRPCEndpoint(t, ctx)
+				require.NoError(t, err)
+				listenAddresses = append(listenAddresses, addr)
+			}
+
+			n0Admin := net1.Nodes[0].AdminClient(t, ctx)
+			n1Admin := net1.Nodes[1].AdminClient(t, ctx)
+			// n2Admin := net1.Nodes[2].AdminClient(t, ctx)
+			n3Admin := net1.Nodes[3].AdminClient(t, ctx)
+
+			clt := net1.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
+				PrivateKey: UserPrivkey1,
+			})
+
+			// Deploy some tables and insert some data
+			specifications.CreateNamespaceSpecification(ctx, t, clt, false)
+			specifications.CreateSchemaSpecification(ctx, t, clt)
+			user := &specifications.User{Id: 1, Name: "Alice", Age: 25}
+			specifications.AddUserSpecification(ctx, t, clt, user)
+			specifications.ListUsersSpecification(ctx, t, clt, false, 1)
+
+			specifications.SubmitMigrationProposal(ctx, t, n0Admin)
+
+			// node1 approves the migration again and verifies that the migration is still pending
+			specifications.ApproveMigration(ctx, t, n0Admin, true)
+
+			// non validator can't approve the migration
+			specifications.NonValidatorApproveMigration(ctx, t, n3Admin)
+
+			// node1 approves the migration and verifies that the migration is no longer pending
+			specifications.ApproveMigration(ctx, t, n1Admin, false)
+
+			// Setup a new network with the same keys and enter the activation phase
+			net2 := setup.SetupTests(t, &setup.TestConfig{
+				ClientDriver: driver,
+				Network: &setup.NetworkConfig{
+					Nodes: []*setup.NodeConfig{
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.PrivateKey = net1.Nodes[0].PrivateKey()
+							nc.Configure = func(conf *config.Config) {
+								conf.Migrations.Enable = true
+								conf.Migrations.MigrateFrom = listenAddresses[0]
+
+								conf.Snapshots.Enable = true
+								conf.Snapshots.RecurringHeight = 25
+							}
+						}),
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.PrivateKey = net1.Nodes[1].PrivateKey()
+							nc.Configure = func(conf *config.Config) {
+								conf.Migrations.Enable = true
+								conf.Migrations.MigrateFrom = listenAddresses[1]
+
+								conf.Snapshots.Enable = true
+								conf.Snapshots.RecurringHeight = 25
+							}
+						}),
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.PrivateKey = net1.Nodes[2].PrivateKey()
+							nc.Configure = func(conf *config.Config) {
+								conf.Migrations.Enable = true
+								conf.Migrations.MigrateFrom = listenAddresses[2]
+							}
+							nc.Validator = false
+						}),
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.PrivateKey = net1.Nodes[3].PrivateKey()
+							nc.Configure = func(conf *config.Config) {
+								conf.Migrations.Enable = true
+								conf.Migrations.MigrateFrom = listenAddresses[3]
+
+								conf.StateSync.Enable = true
+								conf.StateSync.DiscoveryTimeout = types.Duration(5 * time.Second)
+							}
+							nc.Validator = false
+						}),
+					},
+					// DBOwner: OwnerAddress,
+					ConfigureGenesis: func(genDoc *config.GenesisConfig) {
+						genDoc.ChainID = "kwil-test-chain2"
+					},
+				},
+				ContainerStartTimeout: 2 * time.Minute,
+				InitialServices:       []string{"new-node0", "new-node1", "new-node2", "new-pg0", "new-pg1", "new-pg2"}, // should bringup only node 0,1,2
+				ServicesPrefix:        "new-",
+				PortOffset:            100,
+				DockerNetwork:         net1.NetworkName(),
+			})
+
+			user2 := &specifications.User{Id: 2, Name: "Bob", Age: 30}
+			specifications.AddUserActionSpecification(ctx, t, clt, user2)
+			specifications.ListUsersSpecification(ctx, t, clt, false, 2)
+
+			// time for node to do statesync and catchup
+			net2.RunServices(t, ctx, []*setup.ServiceDefinition{
+				setup.KwildServiceDefinition("new-node3"),
+				setup.PostgresServiceDefinition("new-pg3"),
+			}, 5*time.Minute)
+
+			// time for node to blocksync and catch up
+			time.Sleep(4 * time.Second)
+
+			// ensure that all nodes are in sync
+			clt2 := net2.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
+				PrivateKey: UserPrivkey1,
+				ChainID:    "kwil-test-chain2",
+			})
+			// Verify that the genesis state and the changesets are correctly applied
+			// on the new chain and the data is in sync with the old network
+			specifications.ListUsersSpecification(ctx, t, clt2, false, 2)
+
+			clt3 := net2.Nodes[2].JSONRPCClient(t, ctx, &setup.ClientOptions{
+				PrivateKey: UserPrivkey1,
+				ChainID:    "kwil-test-chain2",
+			})
+
+			// Test that the statesync node is able to sync with the network
+			// and the database state is in sync
+			specifications.ListUsersSpecification(ctx, t, clt3, false, 2)
+		})
 	}
-
-	n0Admin := net1.Nodes[0].AdminClient(t, ctx)
-	n1Admin := net1.Nodes[1].AdminClient(t, ctx)
-	// n2Admin := net1.Nodes[2].AdminClient(t, ctx)
-	n3Admin := net1.Nodes[3].AdminClient(t, ctx)
-
-	clt := net1.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
-		PrivateKey: UserPrivkey1,
-	})
-
-	// Deploy some tables and insert some data
-	specifications.CreateNamespaceSpecification(ctx, t, clt, false)
-	specifications.CreateSchemaSpecification(ctx, t, clt)
-	user := &specifications.User{Id: 1, Name: "Alice", Age: 25}
-	specifications.AddUserSpecification(ctx, t, clt, user)
-	specifications.ListUsersSpecification(ctx, t, clt, false, 1)
-
-	specifications.SubmitMigrationProposal(ctx, t, n0Admin)
-
-	// node1 approves the migration again and verifies that the migration is still pending
-	specifications.ApproveMigration(ctx, t, n0Admin, true)
-
-	// non validator can't approve the migration
-	specifications.NonValidatorApproveMigration(ctx, t, n3Admin)
-
-	// node1 approves the migration and verifies that the migration is no longer pending
-	specifications.ApproveMigration(ctx, t, n1Admin, false)
-
-	// Setup a new network with the same keys and enter the activation phase
-	net2 := setup.SetupTests(t, &setup.TestConfig{
-		ClientDriver: setup.CLI,
-		Network: &setup.NetworkConfig{
-			Nodes: []*setup.NodeConfig{
-				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
-					nc.PrivateKey = net1.Nodes[0].PrivateKey()
-					nc.Configure = func(conf *config.Config) {
-						conf.Migrations.Enable = true
-						conf.Migrations.MigrateFrom = listenAddresses[0]
-
-						conf.Snapshots.Enable = true
-						conf.Snapshots.RecurringHeight = 25
-					}
-				}),
-				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
-					nc.PrivateKey = net1.Nodes[1].PrivateKey()
-					nc.Configure = func(conf *config.Config) {
-						conf.Migrations.Enable = true
-						conf.Migrations.MigrateFrom = listenAddresses[1]
-
-						conf.Snapshots.Enable = true
-						conf.Snapshots.RecurringHeight = 25
-					}
-				}),
-				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
-					nc.PrivateKey = net1.Nodes[2].PrivateKey()
-					nc.Configure = func(conf *config.Config) {
-						conf.Migrations.Enable = true
-						conf.Migrations.MigrateFrom = listenAddresses[2]
-					}
-					nc.Validator = false
-				}),
-				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
-					nc.PrivateKey = net1.Nodes[3].PrivateKey()
-					nc.Configure = func(conf *config.Config) {
-						conf.Migrations.Enable = true
-						conf.Migrations.MigrateFrom = listenAddresses[3]
-
-						conf.StateSync.Enable = true
-						conf.StateSync.DiscoveryTimeout = types.Duration(5 * time.Second)
-					}
-					nc.Validator = false
-				}),
-			},
-			// DBOwner: OwnerAddress,
-			ConfigureGenesis: func(genDoc *config.GenesisConfig) {
-				genDoc.ChainID = "kwil-test-chain2"
-			},
-		},
-		ContainerStartTimeout: 2 * time.Minute,
-		InitialServices:       []string{"new-node0", "new-node1", "new-node2", "new-pg0", "new-pg1", "new-pg2"}, // should bringup only node 0,1,2
-		ServicesPrefix:        "new-",
-		PortOffset:            100,
-		DockerNetwork:         net1.NetworkName(),
-	})
-
-	user2 := &specifications.User{Id: 2, Name: "Bob", Age: 30}
-	specifications.AddUserActionSpecification(ctx, t, clt, user2)
-	specifications.ListUsersSpecification(ctx, t, clt, false, 2)
-
-	// time for node to do statesync and catchup
-	net2.RunServices(t, ctx, []*setup.ServiceDefinition{
-		setup.KwildServiceDefinition("new-node3"),
-		setup.PostgresServiceDefinition("new-pg3"),
-	}, 5*time.Minute)
-
-	// time for node to blocksync and catch up
-	time.Sleep(4 * time.Second)
-
-	// ensure that all nodes are in sync
-	clt2 := net2.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
-		PrivateKey: UserPrivkey1,
-		ChainID:    "kwil-test-chain2",
-	})
-	// Verify that the genesis state and the changesets are correctly applied
-	// on the new chain and the data is in sync with the old network
-	specifications.ListUsersSpecification(ctx, t, clt2, false, 2)
-
-	clt3 := net2.Nodes[2].JSONRPCClient(t, ctx, &setup.ClientOptions{
-		PrivateKey: UserPrivkey1,
-		ChainID:    "kwil-test-chain2",
-	})
-
-	// Test that the statesync node is able to sync with the network
-	// and the database state is in sync
-	specifications.ListUsersSpecification(ctx, t, clt3, false, 2)
 }
 
 func TestKwildPrivateNetworks(t *testing.T) {
@@ -565,436 +591,451 @@ func TestKwildPrivateNetworks(t *testing.T) {
 	require.NoError(t, err)
 
 	// 1 validators and 2 non-validator in a private network
-	p := setup.SetupTests(t, &setup.TestConfig{
-		ClientDriver: setup.CLI,
-		Network: &setup.NetworkConfig{
-			Nodes: []*setup.NodeConfig{
-				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
-					nc.Configure = func(conf *config.Config) {
-						conf.P2P.PrivateMode = true
-					}
-				}),
-				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
-					nc.Configure = func(conf *config.Config) {
-						conf.P2P.PrivateMode = true
-					}
-					nc.Validator = false
-				}),
-				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
-					nc.Configure = func(conf *config.Config) {
-						conf.P2P.PrivateMode = true
-					}
-					nc.Validator = false
-				}),
-			},
-			DBOwner: ident,
-			ConfigureGenesis: func(genDoc *config.GenesisConfig) {
-				genDoc.JoinExpiry = types.Duration(20 * time.Second)
-			},
-		},
-		InitialServices: []string{"node0", "pg0"},
-	})
 
-	// bringup node1 and node2
-	msgStr := "Block sync completed"
-	p.RunServices(t, context.Background(), []*setup.ServiceDefinition{
-		{Name: "node1", WaitMsg: &msgStr},
-		{Name: "node2", WaitMsg: &msgStr},
-		setup.PostgresServiceDefinition("pg1"),
-		setup.PostgresServiceDefinition("pg2"),
-	}, defaultContainerTimeout)
+	for _, driver := range setup.AllDrivers {
+		t.Run(driver.String()+"_driver", func(t *testing.T) {
+			p := setup.SetupTests(t, &setup.TestConfig{
+				ClientDriver: driver,
+				Network: &setup.NetworkConfig{
+					Nodes: []*setup.NodeConfig{
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.Configure = func(conf *config.Config) {
+								conf.P2P.PrivateMode = true
+							}
+						}),
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.Configure = func(conf *config.Config) {
+								conf.P2P.PrivateMode = true
+							}
+							nc.Validator = false
+						}),
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.Configure = func(conf *config.Config) {
+								conf.P2P.PrivateMode = true
+							}
+							nc.Validator = false
+						}),
+					},
+					DBOwner: ident,
+					ConfigureGenesis: func(genDoc *config.GenesisConfig) {
+						genDoc.JoinExpiry = types.Duration(20 * time.Second)
+					},
+				},
+				InitialServices: []string{"node0", "pg0"},
+			})
 
-	ctx := context.Background()
+			// bringup node1 and node2
+			msgStr := "Block sync completed"
+			p.RunServices(t, context.Background(), []*setup.ServiceDefinition{
+				{Name: "node1", WaitMsg: &msgStr},
+				{Name: "node2", WaitMsg: &msgStr},
+				setup.PostgresServiceDefinition("pg1"),
+				setup.PostgresServiceDefinition("pg2"),
+			}, defaultContainerTimeout)
 
-	// wait for all the nodes to discover each other
-	time.Sleep(2 * time.Second)
+			ctx := context.Background()
 
-	// adminClient for the nodes
-	n0Admin := p.Nodes[0].AdminClient(t, ctx)
-	n1Admin := p.Nodes[1].AdminClient(t, ctx)
-	n2Admin := p.Nodes[2].AdminClient(t, ctx)
+			// wait for all the nodes to discover each other
+			time.Sleep(2 * time.Second)
 
-	nID0, nID1, nID2 := p.Nodes[0].PeerID(), p.Nodes[1].PeerID(), p.Nodes[2].PeerID()
+			// adminClient for the nodes
+			n0Admin := p.Nodes[0].AdminClient(t, ctx)
+			n1Admin := p.Nodes[1].AdminClient(t, ctx)
+			n2Admin := p.Nodes[2].AdminClient(t, ctx)
 
-	// Ensure that the whitelisted peers information is correct and
-	// the nodes are not connected to any other nodes
-	specifications.ListPeersSpecification(ctx, t, n0Admin, []string{})
-	specifications.ListPeersSpecification(ctx, t, n1Admin, []string{})
-	specifications.ListPeersSpecification(ctx, t, n2Admin, []string{})
+			nID0, nID1, nID2 := p.Nodes[0].PeerID(), p.Nodes[1].PeerID(), p.Nodes[2].PeerID()
 
-	// Create a namespace and n0 verifies that the users created but not by n1 or n2
-	n0Clt := p.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{PrivateKey: userPrivKey})
-	n1Clt := p.Nodes[1].JSONRPCClient(t, ctx, &setup.ClientOptions{PrivateKey: userPrivKey})
-	n2Clt := p.Nodes[2].JSONRPCClient(t, ctx, &setup.ClientOptions{PrivateKey: userPrivKey})
-	specifications.CreateNamespaceSpecification(ctx, t, n0Clt, false)
-	specifications.CreateSchemaSpecification(ctx, t, n0Clt)
+			// Ensure that the whitelisted peers information is correct and
+			// the nodes are not connected to any other nodes
+			specifications.ListPeersSpecification(ctx, t, n0Admin, []string{})
+			specifications.ListPeersSpecification(ctx, t, n1Admin, []string{})
+			specifications.ListPeersSpecification(ctx, t, n2Admin, []string{})
 
-	user := &specifications.User{Id: 1, Name: "Alice", Age: 25}
-	specifications.AddUserSpecification(ctx, t, n0Clt, user)
-	specifications.ListUsersSpecification(ctx, t, n0Clt, false, 1)
-	specifications.ListUsersSpecification(ctx, t, n1Clt, true, 0)
+			// Create a namespace and n0 verifies that the users created but not by n1 or n2
+			n0Clt := p.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{PrivateKey: userPrivKey})
+			n1Clt := p.Nodes[1].JSONRPCClient(t, ctx, &setup.ClientOptions{PrivateKey: userPrivKey})
+			n2Clt := p.Nodes[2].JSONRPCClient(t, ctx, &setup.ClientOptions{PrivateKey: userPrivKey})
+			specifications.CreateNamespaceSpecification(ctx, t, n0Clt, false)
+			specifications.CreateSchemaSpecification(ctx, t, n0Clt)
 
-	// connect n0 and n1
-	specifications.AddPeerSpecification(ctx, t, n0Admin, nID1)
-	specifications.AddPeerSpecification(ctx, t, n1Admin, nID0)
+			user := &specifications.User{Id: 1, Name: "Alice", Age: 25}
+			specifications.AddUserSpecification(ctx, t, n0Clt, user)
+			specifications.ListUsersSpecification(ctx, t, n0Clt, false, 1)
+			specifications.ListUsersSpecification(ctx, t, n1Clt, true, 0)
 
-	// verify peers
-	specifications.ListPeersSpecification(ctx, t, n0Admin, []string{nID1})
-	specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0})
-	specifications.ListPeersSpecification(ctx, t, n2Admin, []string{})
+			// connect n0 and n1
+			specifications.AddPeerSpecification(ctx, t, n0Admin, nID1)
+			specifications.AddPeerSpecification(ctx, t, n1Admin, nID0)
 
-	time.Sleep(30 * time.Second) // wait for the nodes to discover each other and blocksync
-	// pex discovers new peers for every 20 secs
-	// TODO: does add peer actively connect to the peer?
+			// verify peers
+			specifications.ListPeersSpecification(ctx, t, n0Admin, []string{nID1})
+			specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0})
+			specifications.ListPeersSpecification(ctx, t, n2Admin, []string{})
 
-	// Now ensure that the n1 sees the data that was created by n0 but not n2
-	specifications.ListUsersSpecification(ctx, t, n1Clt, false, 1)
-	specifications.ListUsersSpecification(ctx, t, n2Clt, true, 0)
+			time.Sleep(30 * time.Second) // wait for the nodes to discover each other and blocksync
+			// pex discovers new peers for every 20 secs
 
-	// connect n0 and n2
-	specifications.AddPeerSpecification(ctx, t, n0Admin, nID2)
-	specifications.AddPeerSpecification(ctx, t, n2Admin, nID0)
+			// Now ensure that the n1 sees the data that was created by n0 but not n2
+			specifications.ListUsersSpecification(ctx, t, n1Clt, false, 1)
+			specifications.ListUsersSpecification(ctx, t, n2Clt, true, 0)
 
-	// verify peers
-	specifications.ListPeersSpecification(ctx, t, n0Admin, []string{nID1, nID2})
-	specifications.ListPeersSpecification(ctx, t, n2Admin, []string{nID0})
-	specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0})
+			// connect n0 and n2
+			specifications.AddPeerSpecification(ctx, t, n0Admin, nID2)
+			specifications.AddPeerSpecification(ctx, t, n2Admin, nID0)
 
-	// check peer connectivity
-	// specifications.PeerConnectivitySpecification(ctx, t, n2Admin, nID1, false)
-	// specifications.PeerConnectivitySpecification(ctx, t, n2Admin, nID0, true)
-	// specifications.PeerConnectivitySpecification(ctx, t, n0Admin, nID2, true)
-	// specifications.PeerConnectivitySpecification(ctx, t, n1Admin, nID2, false)
+			// verify peers
+			specifications.ListPeersSpecification(ctx, t, n0Admin, []string{nID1, nID2})
+			specifications.ListPeersSpecification(ctx, t, n2Admin, []string{nID0})
+			specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0})
 
-	time.Sleep(30 * time.Second) // wait for the nodes to discover each other and blocksync
+			// check peer connectivity
+			// specifications.PeerConnectivitySpecification(ctx, t, n2Admin, nID1, false)
+			// specifications.PeerConnectivitySpecification(ctx, t, n2Admin, nID0, true)
+			// specifications.PeerConnectivitySpecification(ctx, t, n0Admin, nID2, true)
+			// specifications.PeerConnectivitySpecification(ctx, t, n1Admin, nID2, false)
 
-	specifications.ListUsersSpecification(ctx, t, n2Clt, false, 1)
+			time.Sleep(30 * time.Second) // wait for the nodes to discover each other and blocksync
 
-	// allow n1 to accept connections from n2 and not the other way around
-	specifications.AddPeerSpecification(ctx, t, n1Admin, nID2)
-	specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0, nID2})
-	specifications.ListPeersSpecification(ctx, t, n2Admin, []string{nID0})
+			specifications.ListUsersSpecification(ctx, t, n2Clt, false, 1)
 
-	// check that the peers are not connected
-	// specifications.PeerConnectivitySpecification(ctx, t, n2Admin, nID1, false)
-	// specifications.PeerConnectivitySpecification(ctx, t, n1Admin, nID2, false)
+			// allow n1 to accept connections from n2 and not the other way around
+			specifications.AddPeerSpecification(ctx, t, n1Admin, nID2)
+			specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0, nID2})
+			specifications.ListPeersSpecification(ctx, t, n2Admin, []string{nID0})
 
-	// now make n1 a validator, this should make n2 trust n1
-	specifications.ValidatorNodeJoinSpecification(ctx, t, n1Admin, p.Nodes[1].PrivateKey(), 1)
-	specifications.ValidatorNodeApproveSpecification(ctx, t, n0Admin, p.Nodes[1].PrivateKey(), 1, 2, true)
-	time.Sleep(5 * time.Second)
+			// check that the peers are not connected
+			// specifications.PeerConnectivitySpecification(ctx, t, n2Admin, nID1, false)
+			// specifications.PeerConnectivitySpecification(ctx, t, n1Admin, nID2, false)
 
-	specifications.CurrentValidatorsSpecification(ctx, t, n0Admin, 2)
-	specifications.CurrentValidatorsSpecification(ctx, t, n2Admin, 2)
+			// now make n1 a validator, this should make n2 trust n1
+			specifications.ValidatorNodeJoinSpecification(ctx, t, n1Admin, p.Nodes[1].PrivateKey(), 1)
+			specifications.ValidatorNodeApproveSpecification(ctx, t, n0Admin, p.Nodes[1].PrivateKey(), 1, 2, true)
+			time.Sleep(5 * time.Second)
 
-	// check that n1 is a trusted peer of n2
-	specifications.ListPeersSpecification(ctx, t, n2Admin, []string{nID0, nID1})
-	specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0, nID2})
+			specifications.CurrentValidatorsSpecification(ctx, t, n0Admin, 2)
+			specifications.CurrentValidatorsSpecification(ctx, t, n2Admin, 2)
 
-	// n1 removes n2 as a peer
-	specifications.RemovePeerSpecification(ctx, t, n1Admin, nID2)
-	specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0})
-	specifications.ListPeersSpecification(ctx, t, n2Admin, []string{nID0, nID1})
+			// check that n1 is a trusted peer of n2
+			specifications.ListPeersSpecification(ctx, t, n2Admin, []string{nID0, nID1})
+			specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0, nID2})
 
-	// n2 sends a join request and expires leaving n2 untrusted
-	specifications.ValidatorNodeJoinSpecification(ctx, t, n2Admin, p.Nodes[2].PrivateKey(), 2)
-	specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0}) // n2 is still not a trusted peer
+			// n1 removes n2 as a peer
+			specifications.RemovePeerSpecification(ctx, t, n1Admin, nID2)
+			specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0})
+			specifications.ListPeersSpecification(ctx, t, n2Admin, []string{nID0, nID1})
 
-	// n2 approves the join request of n1 and adds it as a trusted peer
-	specifications.ValidatorNodeApproveSpecification(ctx, t, n1Admin, p.Nodes[2].PrivateKey(), 2, 2, false)
-	specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0, nID2})
+			// n2 sends a join request and expires leaving n2 untrusted
+			specifications.ValidatorNodeJoinSpecification(ctx, t, n2Admin, p.Nodes[2].PrivateKey(), 2)
+			specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0}) // n2 is still not a trusted peer
 
-	time.Sleep(30 * time.Second) // let the join request expire
-	specifications.CurrentValidatorsSpecification(ctx, t, n0Admin, 2)
+			// n2 approves the join request of n1 and adds it as a trusted peer
+			specifications.ValidatorNodeApproveSpecification(ctx, t, n1Admin, p.Nodes[2].PrivateKey(), 2, 2, false)
+			specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0, nID2})
 
-	// n1 should remove n2 as a peer when the join request expires
-	specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0})
+			time.Sleep(30 * time.Second) // let the join request expire
+			specifications.CurrentValidatorsSpecification(ctx, t, n0Admin, 2)
+
+			// n1 should remove n2 as a peer when the join request expires
+			specifications.ListPeersSpecification(ctx, t, n1Admin, []string{nID0})
+		})
+	}
 }
 
 func TestSingleNodeKwildEthDepositsOracleIntegration(t *testing.T) {
-	ctx := context.Background()
+	for _, driver := range setup.AllDrivers {
+		t.Run(driver.String()+"_driver", func(t *testing.T) {
+			ctx := context.Background()
 
-	dockerNetwork, err := setup.CreateDockerNetwork(ctx, t)
-	require.NoError(t, err)
+			dockerNetwork, err := setup.CreateDockerNetwork(ctx, t)
+			require.NoError(t, err)
 
-	// deploy the hardhat service
-	// I couldn't easily integrate it into Setup tests, as we need to first run the
-	// eth node and deploy contracts and use these contracts to configure and run the
-	// kwild nodes. So, I am keeping the deployment separate for now.
-	ethNode := setup.DeployETHNode(t, ctx, dockerNetwork.Name, UserPrivkey1.(*crypto.Secp256k1PrivateKey))
-	require.NotNil(t, ethNode)
+			// deploy the hardhat service
+			// I couldn't easily integrate it into Setup tests, as we need to first run the
+			// eth node and deploy contracts and use these contracts to configure and run the
+			// kwild nodes. So, I am keeping the deployment separate for now.
+			ethNode := setup.DeployETHNode(t, ctx, dockerNetwork.Name, UserPrivkey1.(*crypto.Secp256k1PrivateKey))
+			require.NotNil(t, ethNode)
 
-	// ensure that both the contracts are deployed
-	require.Equal(t, 2, len(ethNode.Deployers))
-	deployer := ethNode.Deployers[0]
+			// ensure that both the contracts are deployed
+			require.Equal(t, 2, len(ethNode.Deployers))
+			deployer := ethNode.Deployers[0]
 
-	// start mining
-	deployerCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	err = deployer.KeepMining(deployerCtx)
-	require.NoError(t, err)
+			// start mining
+			deployerCtx, cancel := context.WithCancel(ctx)
+			defer cancel()
+			err = deployer.KeepMining(deployerCtx)
+			require.NoError(t, err)
 
-	privk, err := secp256k1.GeneratePrivateKeyFromRand(rand.Reader)
-	require.NoError(t, err)
-	privKey := (*crypto.Secp256k1PrivateKey)(privk)
-	signer := &auth.Secp256k1Signer{
-		Secp256k1PrivateKey: *privKey,
-	}
-	addr := signer.CompactID()
+			privk, err := secp256k1.GeneratePrivateKeyFromRand(rand.Reader)
+			require.NoError(t, err)
+			privKey := (*crypto.Secp256k1PrivateKey)(privk)
+			signer := &auth.Secp256k1Signer{
+				Secp256k1PrivateKey: *privKey,
+			}
+			addr := signer.CompactID()
 
-	// Configure Kwil nodes to use the deployed contracts
-	p := setup.SetupTests(t, &setup.TestConfig{
-		ClientDriver: setup.CLI,
-		Network: &setup.NetworkConfig{
-			Nodes: []*setup.NodeConfig{
-				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
-					nc.Configure = func(conf *config.Config) {
-						conf.Extensions = make(map[string]map[string]string)
-						cfg := ethdeposits.EthDepositConfig{
-							RPCProvider:          ethNode.UnexposedChainRPC,
-							ContractAddress:      deployer.EscrowAddress(),
-							StartingHeight:       0,
-							ReconnectionInterval: 30,
-							MaxRetries:           20,
-							BlockSyncChunkSize:   1000,
+			// Configure Kwil nodes to use the deployed contracts
+			p := setup.SetupTests(t, &setup.TestConfig{
+				ClientDriver: driver,
+				Network: &setup.NetworkConfig{
+					Nodes: []*setup.NodeConfig{
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.Configure = func(conf *config.Config) {
+								conf.Extensions = make(map[string]map[string]string)
+								cfg := ethdeposits.EthDepositConfig{
+									RPCProvider:          ethNode.UnexposedChainRPC,
+									ContractAddress:      deployer.EscrowAddress(),
+									StartingHeight:       0,
+									ReconnectionInterval: 30,
+									MaxRetries:           20,
+									BlockSyncChunkSize:   1000,
+								}
+								conf.Extensions["eth_deposits"] = cfg.Map()
+							}
+							nc.PrivateKey = privKey
+						}),
+					},
+					DBOwner: OwnerAddress,
+					ConfigureGenesis: func(genDoc *config.GenesisConfig) {
+						genDoc.DisabledGasCosts = false
+						alloc := config.GenesisAlloc{
+							ID:      config.KeyHexBytes{HexBytes: addr},
+							KeyType: "secp256k1",
+							Amount:  big.NewInt(100000000000000),
 						}
-						conf.Extensions["eth_deposits"] = cfg.Map()
-					}
-					nc.PrivateKey = privKey
-				}),
-			},
-			DBOwner: OwnerAddress,
-			ConfigureGenesis: func(genDoc *config.GenesisConfig) {
-				genDoc.DisabledGasCosts = false
-				alloc := config.GenesisAlloc{
-					ID:      config.KeyHexBytes{HexBytes: addr},
-					KeyType: "secp256k1",
-					Amount:  big.NewInt(100000000000000),
-				}
-				genDoc.Allocs = append(genDoc.Allocs, alloc)
-			},
-		},
-		DockerNetwork: dockerNetwork.Name,
-	})
+						genDoc.Allocs = append(genDoc.Allocs, alloc)
+					},
+				},
+				DockerNetwork: dockerNetwork.Name,
+			})
 
-	// Deposit the amount to the escrow
-	specifications.ApproveSpecification(ctx, t, deployer)
-	amount := big.NewInt(10)
-	rpcClient := p.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
-		PrivateKey: UserPrivkey1,
-	})
+			// Deposit the amount to the escrow
+			specifications.ApproveSpecification(ctx, t, deployer)
+			amount := big.NewInt(10)
+			rpcClient := p.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
+				PrivateKey: UserPrivkey1,
+			})
 
-	// execute sql statement without enough balance
-	specifications.DeployDbInsufficientFundsSpecification(ctx, t, deployer, rpcClient)
+			// execute sql statement without enough balance
+			specifications.DeployDbInsufficientFundsSpecification(ctx, t, deployer, rpcClient)
 
-	specifications.DepositSuccessSpecification(ctx, t, deployer, rpcClient, amount)
-
+			specifications.DepositSuccessSpecification(ctx, t, deployer, rpcClient, amount)
+		})
+	}
 }
 
 // TestKwildEthDepositFundTransfer tests out the ways in which the validator accounts can be funded
 // One way is during network bootstrapping using allocs in the genesis file
 // Other, is through transfer from one kwil account to another
 func TestKwildEthDepositFundTransfer(t *testing.T) {
-	ctx := context.Background()
+	for _, driver := range setup.AllDrivers {
+		t.Run(driver.String()+"_driver", func(t *testing.T) {
+			ctx := context.Background()
 
-	dockerNetwork, err := setup.CreateDockerNetwork(ctx, t)
-	require.NoError(t, err)
+			dockerNetwork, err := setup.CreateDockerNetwork(ctx, t)
+			require.NoError(t, err)
 
-	// deploy the hardhat service
-	// I couldn't easily integrate it into Setup tests, as we need to first run the
-	// eth node and deploy contracts and use these contracts to configure and run the
-	// kwild nodes. So, I am keeping the deployment separate for now.
-	ethNode := setup.DeployETHNode(t, ctx, dockerNetwork.Name, UserPrivkey1.(*crypto.Secp256k1PrivateKey))
-	require.NotNil(t, ethNode)
+			// deploy the hardhat service
+			// I couldn't easily integrate it into Setup tests, as we need to first run the
+			// eth node and deploy contracts and use these contracts to configure and run the
+			// kwild nodes. So, I am keeping the deployment separate for now.
+			ethNode := setup.DeployETHNode(t, ctx, dockerNetwork.Name, UserPrivkey1.(*crypto.Secp256k1PrivateKey))
+			require.NotNil(t, ethNode)
 
-	// ensure that both the contracts are deployed
-	require.Equal(t, 2, len(ethNode.Deployers))
-	deployer := ethNode.Deployers[0]
+			// ensure that both the contracts are deployed
+			require.Equal(t, 2, len(ethNode.Deployers))
+			deployer := ethNode.Deployers[0]
 
-	// start mining
-	deployerCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	err = deployer.KeepMining(deployerCtx)
-	require.NoError(t, err)
+			// start mining
+			deployerCtx, cancel := context.WithCancel(ctx)
+			defer cancel()
+			err = deployer.KeepMining(deployerCtx)
+			require.NoError(t, err)
 
-	privk, err := secp256k1.GeneratePrivateKeyFromRand(rand.Reader)
-	require.NoError(t, err)
-	privKey := (*crypto.Secp256k1PrivateKey)(privk)
-	signer := &auth.Secp256k1Signer{
-		Secp256k1PrivateKey: *privKey,
-	}
-	addr := signer.CompactID()
+			privk, err := secp256k1.GeneratePrivateKeyFromRand(rand.Reader)
+			require.NoError(t, err)
+			privKey := (*crypto.Secp256k1PrivateKey)(privk)
+			signer := &auth.Secp256k1Signer{
+				Secp256k1PrivateKey: *privKey,
+			}
+			addr := signer.CompactID()
 
-	// Configure Kwil nodes to use the deployed contracts
-	p := setup.SetupTests(t, &setup.TestConfig{
-		ClientDriver: setup.CLI,
-		Network: &setup.NetworkConfig{
-			Nodes: []*setup.NodeConfig{
-				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
-					nc.Configure = func(conf *config.Config) {
-						conf.Extensions = make(map[string]map[string]string)
-						cfg := ethdeposits.EthDepositConfig{
-							RPCProvider:          ethNode.UnexposedChainRPC,
-							ContractAddress:      deployer.EscrowAddress(),
-							StartingHeight:       0,
-							ReconnectionInterval: 30,
-							MaxRetries:           20,
-							BlockSyncChunkSize:   1000,
-						}
-						conf.Extensions["eth_deposits"] = cfg.Map()
-					}
-					nc.PrivateKey = privKey
-				}),
-			},
-			DBOwner: OwnerAddress,
-			ConfigureGenesis: func(genDoc *config.GenesisConfig) {
-				genDoc.DisabledGasCosts = false
-				alloc := config.GenesisAlloc{
-					ID: config.KeyHexBytes{
-						HexBytes: addr,
+			// Configure Kwil nodes to use the deployed contracts
+			p := setup.SetupTests(t, &setup.TestConfig{
+				ClientDriver: driver,
+				Network: &setup.NetworkConfig{
+					Nodes: []*setup.NodeConfig{
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.Configure = func(conf *config.Config) {
+								conf.Extensions = make(map[string]map[string]string)
+								cfg := ethdeposits.EthDepositConfig{
+									RPCProvider:          ethNode.UnexposedChainRPC,
+									ContractAddress:      deployer.EscrowAddress(),
+									StartingHeight:       0,
+									ReconnectionInterval: 30,
+									MaxRetries:           20,
+									BlockSyncChunkSize:   1000,
+								}
+								conf.Extensions["eth_deposits"] = cfg.Map()
+							}
+							nc.PrivateKey = privKey
+						}),
 					},
-					KeyType: "secp256k1",
-					Amount:  big.NewInt(100000000000000),
-				}
-				genDoc.Allocs = append(genDoc.Allocs, alloc)
-			},
-		},
-		DockerNetwork: dockerNetwork.Name,
-	})
+					DBOwner: OwnerAddress,
+					ConfigureGenesis: func(genDoc *config.GenesisConfig) {
+						genDoc.DisabledGasCosts = false
+						alloc := config.GenesisAlloc{
+							ID: config.KeyHexBytes{
+								HexBytes: addr,
+							},
+							KeyType: "secp256k1",
+							Amount:  big.NewInt(100000000000000),
+						}
+						genDoc.Allocs = append(genDoc.Allocs, alloc)
+					},
+				},
+				DockerNetwork: dockerNetwork.Name,
+			})
 
-	clt := p.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
-		PrivateKey: UserPrivkey1,
-	})
+			clt := p.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
+				PrivateKey: UserPrivkey1,
+			})
 
-	specifications.FundValidatorSpecification(ctx, t, deployer, clt, privKey)
+			specifications.FundValidatorSpecification(ctx, t, deployer, clt, privKey)
+		})
+	}
 }
 
 func TestKwildEthDepositOracleValidatorUpdates(t *testing.T) {
-	ctx := context.Background()
+	for _, driver := range setup.AllDrivers {
+		t.Run(driver.String()+"_driver", func(t *testing.T) {
+			ctx := context.Background()
 
-	dockerNetwork, err := setup.CreateDockerNetwork(ctx, t)
-	require.NoError(t, err)
+			dockerNetwork, err := setup.CreateDockerNetwork(ctx, t)
+			require.NoError(t, err)
 
-	// deploy the hardhat service
-	// I couldn't easily integrate it into Setup tests, as we need to first run the
-	// eth node and deploy contracts and use these contracts to configure and run the
-	// kwild nodes. So, I am keeping the deployment separate for now.
-	ethNode := setup.DeployETHNode(t, ctx, dockerNetwork.Name, UserPrivkey1.(*crypto.Secp256k1PrivateKey))
-	require.NotNil(t, ethNode)
+			// deploy the hardhat service
+			// I couldn't easily integrate it into Setup tests, as we need to first run the
+			// eth node and deploy contracts and use these contracts to configure and run the
+			// kwild nodes. So, I am keeping the deployment separate for now.
+			ethNode := setup.DeployETHNode(t, ctx, dockerNetwork.Name, UserPrivkey1.(*crypto.Secp256k1PrivateKey))
+			require.NotNil(t, ethNode)
 
-	// ensure that both the contracts are deployed
-	require.Equal(t, 2, len(ethNode.Deployers))
-	deployer := ethNode.Deployers[0]
+			// ensure that both the contracts are deployed
+			require.Equal(t, 2, len(ethNode.Deployers))
+			deployer := ethNode.Deployers[0]
 
-	// start mining
-	deployerCtx, cancel := context.WithCancel(ctx)
-	defer cancel()
-	err = deployer.KeepMining(deployerCtx)
-	require.NoError(t, err)
+			// start mining
+			deployerCtx, cancel := context.WithCancel(ctx)
+			defer cancel()
+			err = deployer.KeepMining(deployerCtx)
+			require.NoError(t, err)
 
-	var validators []*crypto.Secp256k1PrivateKey
-	for range 3 {
-		privk, err := secp256k1.GeneratePrivateKeyFromRand(rand.Reader)
-		require.NoError(t, err)
-		privKey := (*crypto.Secp256k1PrivateKey)(privk)
-		validators = append(validators, privKey)
-	}
+			var validators []*crypto.Secp256k1PrivateKey
+			for range 3 {
+				privk, err := secp256k1.GeneratePrivateKeyFromRand(rand.Reader)
+				require.NoError(t, err)
+				privKey := (*crypto.Secp256k1PrivateKey)(privk)
+				validators = append(validators, privKey)
+			}
 
-	ethConfig := ethdeposits.EthDepositConfig{
-		RPCProvider:          ethNode.UnexposedChainRPC,
-		ContractAddress:      deployer.EscrowAddress(),
-		StartingHeight:       0,
-		ReconnectionInterval: 30,
-		MaxRetries:           20,
-		BlockSyncChunkSize:   1000,
-	}
+			ethConfig := ethdeposits.EthDepositConfig{
+				RPCProvider:          ethNode.UnexposedChainRPC,
+				ContractAddress:      deployer.EscrowAddress(),
+				StartingHeight:       0,
+				ReconnectionInterval: 30,
+				MaxRetries:           20,
+				BlockSyncChunkSize:   1000,
+			}
 
-	extFn := func(conf *config.Config) {
-		conf.Extensions = make(map[string]map[string]string)
-		cfg := ethConfig
-		conf.Extensions["eth_deposits"] = cfg.Map()
-	}
+			extFn := func(conf *config.Config) {
+				conf.Extensions = make(map[string]map[string]string)
+				cfg := ethConfig
+				conf.Extensions["eth_deposits"] = cfg.Map()
+			}
 
-	byzFn := func(conf *config.Config) {
-		conf.Extensions = make(map[string]map[string]string)
-		cfg := ethConfig
-		cfg.ContractAddress = ethNode.Deployers[1].EscrowAddress()
-		conf.Extensions["eth_deposits"] = cfg.Map()
-	}
+			byzFn := func(conf *config.Config) {
+				conf.Extensions = make(map[string]map[string]string)
+				cfg := ethConfig
+				cfg.ContractAddress = ethNode.Deployers[1].EscrowAddress()
+				conf.Extensions["eth_deposits"] = cfg.Map()
+			}
 
-	// Configure Kwil nodes to use the deployed contracts
-	p := setup.SetupTests(t, &setup.TestConfig{
-		ClientDriver: setup.CLI,
-		Network: &setup.NetworkConfig{
-			Nodes: []*setup.NodeConfig{
-				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
-					nc.Configure = extFn
-					nc.PrivateKey = validators[0]
-				}),
-				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
-					nc.Configure = byzFn
-					nc.PrivateKey = validators[1]
-				}),
-				setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
-					nc.Configure = extFn
-					nc.PrivateKey = validators[2]
-				}),
-			},
-			DBOwner: OwnerAddress,
-			ConfigureGenesis: func(genDoc *config.GenesisConfig) {
-				genDoc.DisabledGasCosts = true
-			},
-		},
-		DockerNetwork: dockerNetwork.Name,
-	})
+			// Configure Kwil nodes to use the deployed contracts
+			p := setup.SetupTests(t, &setup.TestConfig{
+				ClientDriver: driver,
+				Network: &setup.NetworkConfig{
+					Nodes: []*setup.NodeConfig{
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.Configure = extFn
+							nc.PrivateKey = validators[0]
+						}),
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.Configure = byzFn
+							nc.PrivateKey = validators[1]
+						}),
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.Configure = extFn
+							nc.PrivateKey = validators[2]
+						}),
+					},
+					DBOwner: OwnerAddress,
+					ConfigureGenesis: func(genDoc *config.GenesisConfig) {
+						genDoc.DisabledGasCosts = true
+					},
+				},
+				DockerNetwork: dockerNetwork.Name,
+			})
 
-	rpcClients := make([]setup.JSONRPCClient, 3)
-	adminClients := make([]*setup.AdminClient, 3)
-	for i := range 3 {
-		rpcClients[i] = p.Nodes[i].JSONRPCClient(t, ctx, &setup.ClientOptions{
-			PrivateKey: UserPrivkey1,
+			rpcClients := make([]setup.JSONRPCClient, 3)
+			adminClients := make([]*setup.AdminClient, 3)
+			for i := range 3 {
+				rpcClients[i] = p.Nodes[i].JSONRPCClient(t, ctx, &setup.ClientOptions{
+					PrivateKey: UserPrivkey1,
+				})
+				adminClients[i] = p.Nodes[i].AdminClient(t, ctx)
+			}
+
+			// Deposit the amount to the escrow and verify the balance
+			amount := big.NewInt(10)
+			specifications.EthDepositSpecification(ctx, t, deployer, rpcClients[0], amount, false)
+
+			// Node2 leaves it's validator role
+			specifications.ValidatorNodeLeaveSpecification(ctx, t, adminClients[2])
+
+			// verify that the validator set has been updated
+			specifications.CurrentValidatorsSpecification(ctx, t, adminClients[0], 2)
+
+			// make a deposit to the escrow, it should not be successful
+			specifications.EthDepositSpecification(ctx, t, deployer, rpcClients[0], amount, true)
+
+			// Node2 rejoins the network as a validator
+			// And catches up with all the events it missed and votes for the observed events
+			// The last deposit should now get approved and credited to the account
+			specifications.ValidatorNodeJoinSpecification(ctx, t, adminClients[2], validators[2], 2)
+
+			// 2 validators should approve the join request
+			specifications.ValidatorNodeApproveSpecification(ctx, t, adminClients[0], validators[2], 2, 2, false)
+
+			// get the balance of the account
+			sender, err := specifications.SenderAccountID(t)
+			require.NoError(t, err)
+
+			acct1, err := rpcClients[0].GetAccount(ctx, sender, 0)
+			require.NoError(t, err)
+
+			// second approval
+			specifications.ValidatorNodeApproveSpecification(ctx, t, adminClients[1], validators[2], 2, 3, true)
+			specifications.CurrentValidatorsSpecification(ctx, t, adminClients[0], 3)
+
+			// ensure that the balance has been updated
+			require.Eventually(t, func() bool {
+				acct2, err := rpcClients[0].GetAccount(ctx, sender, 0)
+				require.NoError(t, err)
+				return acct2.Balance.Cmp(acct1.Balance) == 1
+			}, 60*time.Second, 3*time.Second)
 		})
-		adminClients[i] = p.Nodes[i].AdminClient(t, ctx)
 	}
-
-	// Deposit the amount to the escrow and verify the balance
-	amount := big.NewInt(10)
-	specifications.EthDepositSpecification(ctx, t, deployer, rpcClients[0], amount, false)
-
-	// Node2 leaves it's validator role
-	specifications.ValidatorNodeLeaveSpecification(ctx, t, adminClients[2])
-
-	// verify that the validator set has been updated
-	specifications.CurrentValidatorsSpecification(ctx, t, adminClients[0], 2)
-
-	// make a deposit to the escrow, it should not be successful
-	specifications.EthDepositSpecification(ctx, t, deployer, rpcClients[0], amount, true)
-
-	// Node2 rejoins the network as a validator
-	// And catches up with all the events it missed and votes for the observed events
-	// The last deposit should now get approved and credited to the account
-	specifications.ValidatorNodeJoinSpecification(ctx, t, adminClients[2], validators[2], 2)
-
-	// 2 validators should approve the join request
-	specifications.ValidatorNodeApproveSpecification(ctx, t, adminClients[0], validators[2], 2, 2, false)
-
-	// get the balance of the account
-	sender, err := specifications.SenderAccountID(t)
-	require.NoError(t, err)
-
-	acct1, err := rpcClients[0].GetAccount(ctx, sender, 0)
-	require.NoError(t, err)
-
-	// second approval
-	specifications.ValidatorNodeApproveSpecification(ctx, t, adminClients[1], validators[2], 2, 3, true)
-	specifications.CurrentValidatorsSpecification(ctx, t, adminClients[0], 3)
-
-	// ensure that the balance has been updated
-	require.Eventually(t, func() bool {
-		acct2, err := rpcClients[0].GetAccount(ctx, sender, 0)
-		require.NoError(t, err)
-		return acct2.Balance.Cmp(acct1.Balance) == 1
-	}, 60*time.Second, 3*time.Second)
 }
 
 // TODO: There is no straightforward way to test the oracle expiry and refund
