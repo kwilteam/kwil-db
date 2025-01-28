@@ -183,7 +183,7 @@ type actionParamInfo struct {
 func actionParamInfoMap(p []NamedParameter) map[string]*actionParamInfo {
 	m := make(map[string]*actionParamInfo)
 	for i, p := range p {
-		m[p.Name] = &actionParamInfo{
+		m[strings.TrimPrefix(p.Name, "$")] = &actionParamInfo{
 			datatype: p.Type,
 			pos:      i,
 		}

@@ -21,7 +21,7 @@ func parseParams(args []string) (map[string]any, error) {
 		// split the arg into name and value.  only split on the first '='
 		split := strings.SplitN(arg, "=", 2)
 		if len(split) != 2 {
-			return nil, fmt.Errorf("invalid argument: %s.  argument must be in the form of name=value, received", arg)
+			return nil, fmt.Errorf("invalid argument: %s.  argument must be in the form of name:type=value, received", arg)
 		}
 
 		// it is now split into name:type and value

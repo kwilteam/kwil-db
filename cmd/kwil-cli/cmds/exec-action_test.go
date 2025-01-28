@@ -1,6 +1,7 @@
 package cmds
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 
@@ -161,6 +162,57 @@ func Test_ParseTypedParam(t *testing.T) {
 			assert.EqualValues(t, tt.outType, outType)
 			assert.EqualValues(t, tt.out, outVal)
 		})
+	}
+}
+
+func Test_NamedParameter(t *testing.T) {
+	type testcase struct {
+		params []NamedParameter
+		in     []string
+		out    []any
+		err    bool
+	}
+
+	tests := []testcase{
+		{
+			params: []NamedParameter{
+				np("$id", "int"),
+			},
+			in:  []string{"id:int=1"},
+			out: []any{ptr(int64(1))},
+		},
+		{
+			params: []NamedParameter{
+				np("id", "int"),
+			},
+			in:  []string{"id:int=1"},
+			out: []any{ptr(int64(1))},
+		},
+	}
+
+	for i, tt := range tests {
+		t.Run(fmt.Sprintf("%d_%v", i, tt.in), func(t *testing.T) {
+			_, out, _, err := getNamedParams(tt.params, tt.in)
+			if tt.err {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			assert.EqualValues(t, tt.out, out)
+		})
+	}
+}
+
+func np(name, dt string) NamedParameter {
+	dt2, err := types.ParseDataType(dt)
+	if err != nil {
+		panic(err)
+	}
+
+	return NamedParameter{
+		Name: name,
+		Type: dt2,
 	}
 }
 
