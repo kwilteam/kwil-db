@@ -2680,7 +2680,7 @@ func Test_SetCurrentNamespace(t *testing.T) {
 	hasTable(t, interp, tx, "other_ns", "other_table")
 }
 
-func hasTable(t *testing.T, i *interpreter.ThreadSafeInterpreter, tx sql.DB, namespace, table string) bool {
+func hasTable(t *testing.T, i *interpreter.ThreadSafeInterpreter, tx sql.DB, namespace, table string) {
 	count := 0
 	err := i.ExecuteWithoutEngineCtx(context.Background(), tx, "SELECT * FROM info.tables WHERE name = $tbl AND namespace = $ns;", map[string]any{
 		"tbl": table,
@@ -2693,12 +2693,11 @@ func hasTable(t *testing.T, i *interpreter.ThreadSafeInterpreter, tx sql.DB, nam
 
 	switch count {
 	case 0:
-		return false
+		assert.Fail(t, "table not found")
 	case 1:
-		return true
+		return
 	default:
 		t.Fatalf("expected 0 or 1 rows, got %d", count)
-		return false
 	}
 }
 
