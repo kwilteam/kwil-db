@@ -36,6 +36,7 @@ import (
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
 
+	_ "github.com/kwilteam/kwil-db/node/exts/erc20reward"
 	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/node/services/jsonrpc/adminsvc"
 	"github.com/kwilteam/kwil-db/node/services/jsonrpc/chainsvc"
