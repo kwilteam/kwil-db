@@ -2633,6 +2633,74 @@ func Test_ExtensionTypeChecks(t *testing.T) {
 	require.ErrorIs(t, err, engine.ErrExtensionInvocation)
 }
 
+// This tests that SET CURRENT NAMESPACE works as expected
+func Test_SetCurrentNamespace(t *testing.T) {
+	db, err := newTestDB()
+	require.NoError(t, err)
+	defer db.Close()
+
+	ctx := context.Background()
+	tx, err := db.BeginTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx) // always rollback
+
+	interp := newTestInterp(t, tx, nil, false)
+
+	// setting current namespace to non-existent namespace should fail
+	err = interp.Execute(newEngineCtx(defaultCaller), tx, `SET CURRENT NAMESPACE TO non_existent;`, nil, nil)
+	require.ErrorIs(t, err, engine.ErrNamespaceNotFound)
+
+	err = interp.Execute(newEngineCtx(defaultCaller), tx, `CREATE NAMESPACE test_ns;`, nil, nil)
+	require.NoError(t, err)
+
+	// since SET CURRENT NAMESPACE only exists for the lifetime of a transaction, setting it and calling
+	// a new function should not do anything
+	err = interp.Execute(newEngineCtx(defaultCaller), tx, `SET CURRENT NAMESPACE TO test_ns;`, nil, nil)
+	require.NoError(t, err)
+
+	// should be created in main since it is not the same call as SET CURRENT NAMESPACE
+	err = interp.Execute(newEngineCtx(defaultCaller), tx, `CREATE TABLE test_table (id INT PRIMARY KEY);`, nil, nil)
+	require.NoError(t, err)
+
+	hasTable(t, interp, tx, "main", "test_table")
+
+	// should be created in test_ns since it is the same call as SET CURRENT NAMESPACE
+	err = interp.Execute(newEngineCtx(defaultCaller), tx, `
+	CREATE TABLE main_table (id INT PRIMARY KEY);
+	SET CURRENT NAMESPACE TO test_ns;
+	CREATE TABLE test_table (id INT PRIMARY KEY);
+	CREATE NAMESPACE other_ns;
+	{other_ns}CREATE TABLE other_table (id INT PRIMARY KEY);
+	CREATE TABLE test_table2 (id INT PRIMARY KEY);
+	`, nil, nil)
+	require.NoError(t, err)
+	hasTable(t, interp, tx, "test_ns", "test_table")
+	hasTable(t, interp, tx, "test_ns", "test_table2")
+	hasTable(t, interp, tx, "main", "main_table")
+	hasTable(t, interp, tx, "other_ns", "other_table")
+}
+
+func hasTable(t *testing.T, i *interpreter.ThreadSafeInterpreter, tx sql.DB, namespace, table string) {
+	count := 0
+	err := i.ExecuteWithoutEngineCtx(context.Background(), tx, "SELECT * FROM info.tables WHERE name = $tbl AND namespace = $ns;", map[string]any{
+		"tbl": table,
+		"ns":  namespace,
+	}, func(r *common.Row) error {
+		count++
+		return nil
+	})
+	require.NoError(t, err)
+
+	switch count {
+	case 0:
+		assert.Fail(t, "table not found")
+	case 1:
+		return
+	default:
+		t.Fatalf("expected 0 or 1 rows, got %d", count)
+	}
+}
+
 // exact is a helper function that verifies that a result is called exactly once, and that the result is equal to the expected value.
 func exact(val any) func(*common.Row) error {
 	called := false

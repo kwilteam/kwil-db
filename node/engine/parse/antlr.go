@@ -97,6 +97,8 @@ func (s *schemaVisitor) VisitStatement(ctx *gen.StatementContext) any {
 		s2 = ctx.Use_extension_statement().Accept(s).(TopLevelStatement)
 	case ctx.Unuse_extension_statement() != nil:
 		s2 = ctx.Unuse_extension_statement().Accept(s).(TopLevelStatement)
+	case ctx.Set_current_namespace_statement() != nil:
+		s2 = ctx.Set_current_namespace_statement().Accept(s).(TopLevelStatement)
 	default:
 		panic(fmt.Sprintf("unknown parser entry: %s", ctx.GetText()))
 	}
@@ -201,6 +203,15 @@ func (s *schemaVisitor) VisitDrop_namespace_statement(ctx *gen.Drop_namespace_st
 
 	dns.Set(ctx)
 	return dns
+}
+
+func (s *schemaVisitor) VisitSet_current_namespace_statement(ctx *gen.Set_current_namespace_statementContext) any {
+	sns := &SetCurrentNamespaceStatement{
+		Namespace: s.getIdent(ctx.Identifier()),
+	}
+
+	sns.Set(ctx)
+	return sns
 }
 
 // unknownExpression creates a new literal with an unknown type and null value.

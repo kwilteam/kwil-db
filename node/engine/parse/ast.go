@@ -1226,6 +1226,17 @@ func (d *DropNamespaceStatement) Accept(v Visitor) any {
 	return v.VisitDropNamespaceStatement(d)
 }
 
+type SetCurrentNamespaceStatement struct {
+	Position
+	Namespace string
+}
+
+func (s *SetCurrentNamespaceStatement) topLevelStatement() {}
+
+func (s *SetCurrentNamespaceStatement) Accept(v Visitor) any {
+	return v.VisitSetCurrentNamespaceStatement(s)
+}
+
 // SelectStatement is a SELECT statement.
 type SelectStatement struct {
 	Position
@@ -1699,6 +1710,7 @@ type DDLVisitor interface {
 	VisitUnuseExtensionStatement(*UnuseExtensionStatement) any
 	VisitCreateNamespaceStatement(*CreateNamespaceStatement) any
 	VisitDropNamespaceStatement(*DropNamespaceStatement) any
+	VisitSetCurrentNamespaceStatement(*SetCurrentNamespaceStatement) any
 	VisitCreateActionStatement(*CreateActionStatement) any
 	VisitDropActionStatement(*DropActionStatement) any
 	// Constraints
