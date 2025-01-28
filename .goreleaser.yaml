@@ -58,30 +58,6 @@ builds:
     env:
       - CGO_ENABLED=0
 
-  - id: kwil-admin
-    binary: kwil-admin
-    main: ./cmd/kwil-admin
-    goos:
-      - linux
-      - darwin
-    goarch:
-      - amd64
-      - arm64
-    goarm:
-      - 6
-      - 7
-    ignore:
-    flags:
-      - -trimpath
-    ldflags:
-      - -s -w
-      - -X 'github.com/kwilteam/kwil-db/internal/version.KwilVersion={{ index .Env "KWIL_VERSION"  }}'
-    tags:
-      - osusergo
-      - netgo
-    env:
-      - CGO_ENABLED=0
-
 checksum:
   name_template: 'checksums.txt'
 

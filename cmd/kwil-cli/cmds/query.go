@@ -93,7 +93,9 @@ func queryCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&stmt, "stmt", "s", "", "the SELECT statement to execute")
-	cmd.Flags().StringSliceVarP(&namedParams, "param", "p", nil, `named parameters that will be used in the query. format: "key:type=value"`)
+	// this has to be StringArrayVar because if the user is passing an array, it will contain a comma, but it itself is a single parameter.
+	// If we use StringSliceVar, it will split the array into multiple parameters.
+	cmd.Flags().StringArrayVarP(&namedParams, "param", "p", nil, `named parameters that will be used in the query. format: "key:type=value"`)
 	cmd.Flags().BoolVar(&rpcAuth, "rpc-auth", false, "signals that the call is being made to a kwil node and should be authenticated with the private key")
 	cmd.Flags().BoolVar(&gwAuth, "gateway-auth", false, "signals that the call is being made to a gateway and should be authenticated with the private key")
 	display.BindTableFlags(cmd)

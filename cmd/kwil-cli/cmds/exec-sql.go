@@ -106,7 +106,9 @@ func execSQLCmd() *cobra.Command {
 
 	cmd.Flags().StringVarP(&sqlStmt, "stmt", "s", "", "the SQL statement to execute")
 	cmd.Flags().StringVarP(&sqlFilepath, "file", "f", "", "the file containing the SQL statement(s) to execute")
-	cmd.Flags().StringSliceVarP(&params, "param", "p", nil, `the parameters to pass to the SQL statement. format: "key:type=value"`)
+	// this has to be StringArrayVar because if the user is passing an array, it will contain a comma, but it itself is a single parameter.
+	// If we use StringSliceVar, it will split the array into multiple parameters.
+	cmd.Flags().StringArrayVarP(&params, "param", "p", nil, `the parameters to pass to the SQL statement. format: "key:type=value"`)
 	common.BindTxFlags(cmd)
 	return cmd
 }

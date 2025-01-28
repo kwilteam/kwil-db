@@ -43,7 +43,7 @@ To *run* Kwil, PostgreSQL is also required. See the [documentation](<https://doc
 
 #### Build
 
-The `build` [task](https://taskfile.dev/) will compile `kwild`, `kwil-cli`, and `kwil-admin` binaries. They will be generated in `.build/`:
+The `build` [task](https://taskfile.dev/) will compile `kwild` and `kwil-cli` binaries. They will be generated in `.build/`:
 
 ```shell
 task build
