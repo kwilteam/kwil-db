@@ -151,7 +151,7 @@ func (h *Erc20RewardMeta) register(ctx *kcommon.EngineContext, app *kcommon.App,
 
 	contractID := GenRewardContractID(chainID, contractAddress)
 
-	// initialy, this is the params for  sqlCreateRewardContract
+	// initially, this is the params for  sqlCreateRewardContract
 	combinedParams := map[string]any{
 		//"$contract_id":  contractID[:], seems QueryPlanner enforces the type check on uuid, so we cannot use [:]
 		"$contract_id":  contractID,

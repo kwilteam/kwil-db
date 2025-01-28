@@ -1,14 +1,11 @@
 package erc20reward
 
 import (
-	"context"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 
-	kcommon "github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/node/pg"
 )
 
 func Test_scaleUpUint256(t *testing.T) {
@@ -63,35 +60,35 @@ func Test_scaleDownUint256(t *testing.T) {
 	})
 }
 
-func openDB(ctx context.Context) (*pg.DB, error) {
-	cfg := &pg.DBConfig{
-		PoolConfig: pg.PoolConfig{
-			ConnConfig: pg.ConnConfig{
-				Host:   "localhost",
-				Port:   "5432",
-				User:   "kwild",
-				Pass:   "kwild",
-				DBName: "kwild",
-			},
-			MaxConns: 50,
-		},
-	}
-	return pg.NewDB(ctx, cfg)
-}
-
-func withTx(t *testing.T, ctx context.Context, db *pg.DB, fn func(app *kcommon.App)) {
-	tx, err := db.BeginTx(ctx)
-	require.NoError(t, err)
-
-	kApp := &kcommon.App{
-		DB: tx,
-	}
-
-	fn(kApp)
-
-	err = tx.Commit(ctx)
-	require.NoError(t, err)
-}
+//func openDB(ctx context.Context) (*pg.DB, error) {
+//	cfg := &pg.DBConfig{
+//		PoolConfig: pg.PoolConfig{
+//			ConnConfig: pg.ConnConfig{
+//				Host:   "localhost",
+//				Port:   "5432",
+//				User:   "kwild",
+//				Pass:   "kwild",
+//				DBName: "kwild",
+//			},
+//			MaxConns: 50,
+//		},
+//	}
+//	return pg.NewDB(ctx, cfg)
+//}
+//
+//func withTx(t *testing.T, ctx context.Context, db *pg.DB, fn func(app *kcommon.App)) {
+//	tx, err := db.BeginTx(ctx)
+//	require.NoError(t, err)
+//
+//	kApp := &kcommon.App{
+//		DB: tx,
+//	}
+//
+//	fn(kApp)
+//
+//	err = tx.Commit(ctx)
+//	require.NoError(t, err)
+//}
 
 //func TestExt(t *testing.T) {
 //	ctx := context.Background()

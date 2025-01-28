@@ -44,7 +44,6 @@ var (
 );`, ExtAlias, ExtAlias)
 
 	sqlGetRewardContractByAddress = fmt.Sprintf(`SELECT * FROM %s.erc20rw_meta_contracts WHERE chain_id = $chain_id AND address = $address`, ExtAlias)
-	sqlGetThreshold               = fmt.Sprintf(`SELECT threshold FROM %s.erc20rw_meta_contracts WHERE id = $id`, ExtAlias)
 
 	sqlIncrementSafeNonce = fmt.Sprintf(`{%s}UPDATE erc20rw_meta_contracts SET safe_nonce = safe_nonce + 1 WHERE id = $contract_id`, ExtAlias)
 
@@ -201,7 +200,7 @@ func rowToSigner(row []any) (*RewardSigner, error) {
 	if !ok {
 		return nil, fmt.Errorf("failed to convert address to string")
 	}
-	if ethCommon.IsHexAddress(address) == false { // todo on other queries
+	if !ethCommon.IsHexAddress(address) { // todo on other queries
 		return nil, fmt.Errorf("internal bug: invalid address: %s", address)
 	}
 

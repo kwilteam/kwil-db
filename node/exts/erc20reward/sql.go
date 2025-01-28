@@ -72,14 +72,8 @@ var (
 	sqlNewEpochReward = `{%s}INSERT INTO erc20rw_epoch_rewards
 (id, start_height, end_height, total_rewards, mtree_json, reward_root, safe_nonce, sign_hash, contract_id, block_hash, created_at)
 VALUES ($id, $start_height, $end_height, $total_rewards, $mtree_json, $reward_root, $safe_nonce, $sign_hash, $contract_id, $block_hash, $created_at)`
-	sqlGetEpochMtreeBySignhash        = `SELECT mtree_json FROM %s.erc20rw_epoch_rewards WHERE sign_hash = $sign_hash`
-	sqlGetEpochBySignhash             = `SELECT * FROM %s.erc20rw_epoch_rewards WHERE sign_hash = $sign_hash`
-	sqlListEpochRewardsWithRecipients = `select er.*, array_agg(pr.recipient) as recipients, array_agg(pr.amount) as amounts
-from %s.erc20rw_epoch_rewards as er
-join %s.erc20rw_pending_rewards as pr on pr.created_at between er.start_height and er.end_height
-WHERE er.end_height > $after_height
-group by er.id, er.start_height, er.end_height, er.total_rewards, er.mtree_json, er.reward_root, er.safe_nonce, er.sign_hash, er.contract_id, er.block_hash, er.created_at
-ORDER BY er.end_height ASC limit $limit`
+	sqlGetEpochMtreeBySignhash    = `SELECT mtree_json FROM %s.erc20rw_epoch_rewards WHERE sign_hash = $sign_hash`
+	sqlGetEpochBySignhash         = `SELECT * FROM %s.erc20rw_epoch_rewards WHERE sign_hash = $sign_hash`
 	sqlListEpochRewardsWithVoters = `select er.*, array_agg(s.address) as voters
 from %s.erc20rw_epoch_rewards as er
 left join %s.erc20rw_pending_signatures as ps on er.id = ps.epoch_id
@@ -121,12 +115,6 @@ WHERE er.sign_hash = $sign_hash`
 type EngineExecutor interface {
 	Execute(ctx *kcommon.EngineContext, db sql.DB, statement string, params map[string]any, fn func(*kcommon.Row) error) error
 	ExecuteWithoutEngineCtx(ctx context.Context, db sql.DB, statement string, params map[string]any, fn func(*kcommon.Row) error) error
-}
-
-type valueUnpack interface {
-	UnpackColumns() []string
-	UnpackValues() []any
-	UnpackTypes(decimalType *types.DataType) []pc.PrecompileValue
 }
 
 // PendingReward is the data model of table erc20rw_pending_rewards.
@@ -709,7 +697,7 @@ func rowToFinalizedReward(row []any, decimals uint16) (*FinalizedReward, error) 
 	}
 
 	safeNonce, ok := row[9].(int64)
-	if err != nil {
+	if !ok {
 		return nil, fmt.Errorf("failed to convert safe_nonce to int64")
 	}
 

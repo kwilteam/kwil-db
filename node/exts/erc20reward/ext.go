@@ -447,24 +447,6 @@ func getMetadata(metadata map[string]any) (chainID int64, contractAddr string,
 	return
 }
 
-// syncInstance loads DB state into Erc20RewardExt, so it overwrites the initial parameter of the extension.
-// This should be called everytime if an ext method needs the latest DB state.
-// Now since we assume all TX are made through this extension, we don't need this
-// really.
-func (h *Erc20RewardExt) syncInstance(ctx *kcommon.EngineContext, app *kcommon.App) error {
-	contract, err := meta.GetRewardContract(ctx, app.Engine, app.DB, h.ChainID, h.ContractAddr)
-	if err != nil {
-		return err
-	}
-
-	h.Signers = contract.Signers
-	h.Threshold = contract.Threshold
-	h.ContractNonce = contract.Nonce
-	h.SafeNonce = contract.SafeNonce
-
-	return nil
-}
-
 // scaleUpUint256 turns a decimal into uint256, i.e. (11.22, 4) -> 112200
 func scaleUpUint256(amount *types.Decimal, decimals uint16) (*types.Decimal, error) {
 	unit, err := types.ParseDecimal("1" + strings.Repeat("0", int(decimals)))
