@@ -46,7 +46,8 @@ func joinStatusCmd() *cobra.Command {
 			data, err := clt.JoinStatus(ctx, pubkeyBts, pubKeyType)
 			if err != nil {
 				if errors.Is(err, client.ErrNotFound) {
-					return display.PrintErr(cmd, errors.New("no active join request for that validator"))
+					//lint:ignore ST1005 this error message is read from the CLI and reads better with capitalization and punctuation
+					return display.PrintErr(cmd, errors.New("No active join request for that validator. Have they already been approved?"))
 				}
 				return display.PrintErr(cmd, err)
 			}
@@ -99,20 +100,20 @@ func (r *respValJoinStatus) MarshalText() ([]byte, error) {
 	needed := int(math.Ceil(float64(len(r.Data.Board)) * 2 / 3))
 
 	var msg bytes.Buffer
-	msg.WriteString(fmt.Sprintf("Candidate: %s\n", r.Data.Candidate.String()))
+	msg.WriteString(fmt.Sprintf("Candidate: %s\n", r.Data.Candidate.PrettyString()))
 	msg.WriteString(fmt.Sprintf("Requested Power: %d\n", r.Data.Power))
 	msg.WriteString(fmt.Sprintf("Expiration Timestamp: %s\n", r.Data.ExpiresAt.String()))
 
-	msg.WriteString(fmt.Sprintf("%d Approvals Received (%d needed):\n", approved, needed))
+	msg.WriteString(fmt.Sprintf("%d Approvals Received From Existing Validators (%d needed):\n", approved, needed))
 
 	for i := range r.Data.Board {
-		approvedTerm := "approved"
+		approvedTerm := "✅ approved"
 		if !r.Data.Approved[i] {
-			approvedTerm = "not approved"
+			approvedTerm = "❌ not approved"
 		}
 
-		msg.WriteString(fmt.Sprintf("Validator %s, %s\n",
-			r.Data.Board[i].String(), approvedTerm))
+		msg.WriteString(fmt.Sprintf("  %s: %s\n",
+			r.Data.Board[i].PrettyString(), approvedTerm))
 	}
 
 	return msg.Bytes(), nil

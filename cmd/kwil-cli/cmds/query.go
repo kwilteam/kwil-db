@@ -57,11 +57,6 @@ func queryCmd() *cobra.Command {
 				return display.PrintErr(cmd, fmt.Errorf("unexpected error"))
 			}
 
-			tblConf, err := getTableConfig(cmd)
-			if err != nil {
-				return display.PrintErr(cmd, err)
-			}
-
 			var dialFlags uint8
 			if gwAuth {
 				// if calling kgw, then not only do we need a private key, but we also need to authenticate
@@ -92,16 +87,16 @@ func queryCmd() *cobra.Command {
 					return display.PrintErr(cmd, err)
 				}
 
-				return display.PrintCmd(cmd, &respRelations{Data: res, conf: tblConf})
+				return display.PrintCmd(cmd, &respRelations{Data: res, cmd: cmd})
 			})
 		},
 	}
 
 	cmd.Flags().StringVarP(&stmt, "stmt", "s", "", "the SELECT statement to execute")
-	cmd.Flags().StringArrayVarP(&namedParams, "param", "p", nil, `named parameters that will be used in the query. format: "key:type=value"`)
+	cmd.Flags().StringSliceVarP(&namedParams, "param", "p", nil, `named parameters that will be used in the query. format: "key:type=value"`)
 	cmd.Flags().BoolVar(&rpcAuth, "rpc-auth", false, "signals that the call is being made to a kwil node and should be authenticated with the private key")
 	cmd.Flags().BoolVar(&gwAuth, "gateway-auth", false, "signals that the call is being made to a gateway and should be authenticated with the private key")
-	bindTableOutputFlags(cmd)
+	display.BindTableFlags(cmd)
 	return cmd
 }
 
@@ -111,7 +106,7 @@ type respRelations struct {
 	// to avoid recursive call of MarshalJSON
 	Data *types.QueryResult
 	// conf for table formatting
-	conf *tableConfig
+	cmd *cobra.Command
 }
 
 func (r *respRelations) MarshalJSON() ([]byte, error) {
@@ -119,5 +114,5 @@ func (r *respRelations) MarshalJSON() ([]byte, error) {
 }
 
 func (r *respRelations) MarshalText() ([]byte, error) {
-	return recordsToTable(r.Data.ColumnNames, getStringRows(r.Data.Values), r.conf), nil
+	return display.FormatTable(r.cmd, r.Data.ColumnNames, getStringRows(r.Data.Values))
 }

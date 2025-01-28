@@ -35,6 +35,11 @@ func (a AccountID) String() string {
 	return fmt.Sprintf("AccountID{identifier = %x, keyType = %s}", a.Identifier, a.KeyType)
 }
 
+// PrettyString returns a human-readable representation of the AccountID.
+func (a AccountID) PrettyString() string {
+	return fmt.Sprintf("%x#%s", a.Identifier, a.KeyType)
+}
+
 func (id AccountID) Bytes() []byte {
 	bts, _ := id.MarshalBinary() // does not error
 	return bts

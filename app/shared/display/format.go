@@ -205,6 +205,13 @@ func PrintErr(cmd *cobra.Command, err error) error {
 	}, outputFormat, cmd.OutOrStdout(), cmd.OutOrStderr())
 }
 
+// Log prints the message to stdout if the silence flag is not set.
+func Log(cmd *cobra.Command, msg string) {
+	if !ShouldSilence(cmd) {
+		fmt.Fprintln(cmd.OutOrStdout(), msg)
+	}
+}
+
 func getOutputFormat(cmd *cobra.Command) (OutputFormat, error) {
 	format, err := cmd.Flags().GetString("output")
 	if err != nil || format == "" {

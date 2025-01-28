@@ -1,10 +1,9 @@
 package validator
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
+	"strconv"
 
 	"github.com/spf13/cobra"
 
@@ -41,16 +40,18 @@ func listCmd() *cobra.Command {
 				return display.PrintErr(cmd, err)
 			}
 
-			return display.PrintCmd(cmd, &respValSets{Data: data})
+			return display.PrintCmd(cmd, &respValSets{Data: data, cmd: cmd})
 		},
 	}
 
+	display.BindTableFlags(cmd)
 	return cmd
 }
 
 // respValSets represent current validator set in cli
 type respValSets struct {
 	Data []*types.Validator
+	cmd  *cobra.Command
 }
 
 type valInfo struct {
@@ -73,14 +74,14 @@ func (r *respValSets) MarshalJSON() ([]byte, error) {
 }
 
 func (r *respValSets) MarshalText() ([]byte, error) {
-	var msg bytes.Buffer
-	msg.WriteString("Current validator set:\n")
-	for i, v := range r.Data {
-		msg.WriteString(fmt.Sprintf("% 3d. %s", i, v))
-		if i != len(r.Data)-1 {
-			msg.WriteString("\n")
+	var rows [][]string
+	for _, v := range r.Data {
+		row := []string{
+			v.PrettyString(),
+			strconv.FormatInt(v.Power, 10),
 		}
+		rows = append(rows, row)
 	}
 
-	return msg.Bytes(), nil
+	return display.FormatTable(r.cmd, []string{"Identifier", "Power"}, rows)
 }

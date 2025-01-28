@@ -168,9 +168,9 @@ func execActionCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&namespace, "namespace", "n", "", "namespace to execute the action in")
-	cmd.Flags().StringArrayVarP(&namedParams, "param", "p", nil, `named parameters that will override any positional or CSV parameters. format: "name:type=value"`)
+	cmd.Flags().StringSliceVarP(&namedParams, "param", "p", nil, `named parameters that will override any positional or CSV parameters. format: "name:type=value"`)
 	cmd.Flags().StringVar(&csvFile, "csv", "", "CSV file containing the parameters to pass to the action")
-	cmd.Flags().StringArrayVarP(&csvParams, "csv-mapping", "m", nil, `mapping of CSV columns to action parameters. format: "csv_column:action_param_name" OR "csv_column:action_param_position"`)
+	cmd.Flags().StringSliceVarP(&csvParams, "csv-mapping", "m", nil, `mapping of CSV columns to action parameters. format: "csv_column:action_param_name" OR "csv_column:action_param_position"`)
 	common.BindTxFlags(cmd)
 	return cmd
 }

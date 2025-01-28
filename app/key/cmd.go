@@ -40,6 +40,7 @@ func privKeyInfo(priv crypto.PrivateKey) *PrivateKeyInfo {
 		PrivateKeyText: keyText,
 		privKeyFmt:     keyFmt,
 		PublicKeyHex:   hex.EncodeToString(priv.Public().Bytes()),
+		NodeID:         hex.EncodeToString(priv.Public().Bytes()) + "#" + priv.Type().String(),
 	}
 }
 
@@ -48,6 +49,7 @@ type PrivateKeyInfo struct {
 	PrivateKeyText string `json:"private_key_text"`
 	privKeyFmt     string `json:"-"`
 	PublicKeyHex   string `json:"public_key_hex"`
+	NodeID         string `json:"node_id,omitempty"`
 }
 
 func (p *PrivateKeyInfo) MarshalJSON() ([]byte, error) {
