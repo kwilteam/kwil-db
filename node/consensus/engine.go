@@ -525,7 +525,7 @@ func (ce *ConsensusEngine) initializeState(ctx context.Context) (int64, int64, e
 	defer readTx.Rollback(ctx)
 
 	// retrieve the last committed block info from the blockstore
-	storeHeight, blkHash, storeAppHash, _ /* timestamp */ := ce.blockStore.Best()
+	storeHeight, _, storeAppHash, _ /* timestamp */ := ce.blockStore.Best()
 
 	// retrieve the app state from the meta table
 	appHeight, appHash, dirty, err := meta.GetChainState(ctx, readTx)
@@ -552,7 +552,7 @@ func (ce *ConsensusEngine) initializeState(ctx context.Context) (int64, int64, e
 			return -1, -1, fmt.Errorf("error initializing the chain: %w", err)
 		}
 
-		ce.setLastCommitInfo(appHeight, nil, appHash)
+		ce.setLastCommitInfo(appHeight, appHash, nil, nil)
 
 	} else if appHeight > 0 {
 		// restart or statesync init or zdt init
@@ -560,7 +560,14 @@ func (ce *ConsensusEngine) initializeState(ctx context.Context) (int64, int64, e
 			// This is not possible, PG mismatches with the Blockstore return error
 			return -1, -1, fmt.Errorf("AppHash mismatch, appHash: %x, storeAppHash: %v", appHash, storeAppHash)
 		}
-		ce.setLastCommitInfo(appHeight, blkHash[:], appHash)
+
+		// retrieve the commit info from the blockstore
+		_, blk, ci, err := ce.blockStore.GetByHeight(appHeight)
+		if err != nil {
+			return -1, -1, fmt.Errorf("error fetching the block from the blockstore: %w", err)
+		}
+
+		ce.setLastCommitInfo(appHeight, appHash, blk, ci)
 	}
 
 	// Set the role and validator set based on the initial state of the voters before starting the replay
@@ -633,17 +640,28 @@ func (ce *ConsensusEngine) updateValidatorSetAndRole() {
 	}
 }
 
-func (ce *ConsensusEngine) setLastCommitInfo(height int64, blkHash []byte, appHash []byte) {
+func (ce *ConsensusEngine) setLastCommitInfo(height int64, appHash []byte, blk *ktypes.Block, ci *types.CommitInfo) {
+	var blkHash types.Hash
+	if blk != nil {
+		blkHash = blk.Header.Hash()
+	}
+
 	ce.state.lc.height = height
+	ce.state.lc.blkHash = blkHash
 	copy(ce.state.lc.appHash[:], appHash)
-	copy(ce.state.lc.blkHash[:], blkHash)
-	//
-	// ce.state.lc.blk ?
-	// ce.state.lc.commitInfo set in acceptCommitInfo (from commitBlock or processAndCommit)
+	ce.state.lc.blk = blk
+	ce.state.lc.commitInfo = ci
 
 	ce.stateInfo.height = height
 	ce.stateInfo.status = Committed
 	ce.stateInfo.blkProp = nil
+	ce.stateInfo.lastCommit = lastCommit{
+		height:     height,
+		blk:        blk,
+		commitInfo: ci,
+		blkHash:    blkHash,
+	}
+	copy(ce.stateInfo.lastCommit.blkHash[:], appHash)
 }
 
 // replayBlocks replays all the blocks from the blockstore if the app hasn't played all the blocks yet.
