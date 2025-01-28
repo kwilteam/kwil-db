@@ -71,6 +71,23 @@ type TxContext struct {
 	Caller string
 	// Authenticator is the authenticator used to sign the transaction.
 	Authenticator string
+	// values is a map of values that can be set and retrieved by extensions.
+	values map[string]any
+}
+
+func (t *TxContext) SetValue(s string, v any) {
+	if t.values == nil {
+		t.values = make(map[string]any)
+	}
+	t.values[s] = v
+}
+
+func (t *TxContext) Value(s string) (any, bool) {
+	if t.values == nil {
+		return nil, false
+	}
+	v, ok := t.values[s]
+	return v, ok
 }
 
 // EngineContext is a context that is passed to the engine when executing
