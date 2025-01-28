@@ -93,7 +93,7 @@ type serviceCfg struct {
 	privateMode        bool
 	challengeExpiry    time.Duration
 	challengeRateLimit float64 // challenge requests/sec, sustained
-	blockAgeThresh     int64   // milliseconds
+	blockAgeThresh     time.Duration
 }
 
 // Opt is a Service option.
@@ -127,7 +127,7 @@ func WithChallengeRateLimit(limit float64) Opt {
 
 func WithBlockAgeHealth(ageThresh time.Duration) Opt {
 	return func(cfg *serviceCfg) {
-		cfg.blockAgeThresh = ageThresh.Milliseconds()
+		cfg.blockAgeThresh = ageThresh
 	}
 }
 
@@ -135,7 +135,7 @@ const (
 	defaultReadTxTimeout      = 5 * time.Second
 	defaultChallengeExpiry    = 10 * time.Second // TODO: or maybe more?
 	defaultChallengeRateLimit = 10.0
-	defaultAgeThreshMilli     = 129_000 // two minutes
+	defaultAgeThreshMilli     = 6 * time.Minute
 )
 
 // NewService creates a new instance of the user RPC service.
@@ -145,6 +145,7 @@ func NewService(db DB, engine EngineReader, chainClient BlockchainTransactor,
 		readTxTimeout:      defaultReadTxTimeout,
 		challengeExpiry:    defaultChallengeExpiry,
 		challengeRateLimit: defaultChallengeRateLimit,
+		blockAgeThresh:     defaultAgeThreshMilli,
 	}
 	for _, opt := range opts {
 		opt(cfg)
@@ -153,6 +154,7 @@ func NewService(db DB, engine EngineReader, chainClient BlockchainTransactor,
 	svc := &Service{
 		log:              logger,
 		readTxTimeout:    cfg.readTxTimeout,
+		blockAgeThresh:   cfg.blockAgeThresh,
 		engine:           engine,
 		nodeApp:          nodeApp,
 		chainClient:      chainClient,
@@ -252,7 +254,7 @@ func (svc *Service) HealthMethod(ctx context.Context, _ *userjson.HealthRequest)
 	}
 
 	// For heath checks, apply the criterion:
-	happy := !status.Sync.Syncing && blockAge > svc.blockAgeThresh
+	happy := !status.Sync.Syncing && blockAge < svc.blockAgeThresh
 	// although, in any sensible deployment:
 	// && (statusResp.PeerCount > 0 || (isValidator && numValidators == 1)
 	// isValidator := status.Validator.Power > 0

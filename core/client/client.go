@@ -92,14 +92,7 @@ func NewClient(ctx context.Context, target string, options *clientType.Options) 
 	}
 	client := userClient.NewClient(parsedURL, jsonrpcClientOpts...)
 
-	clt, err := WrapClient(ctx, client, options)
-	if err != nil {
-		return nil, fmt.Errorf("wrap client: %w", err)
-	}
-
-	clt.logger = clt.logger.New("client")
-
-	return clt, nil
+	return WrapClient(ctx, client, options)
 }
 
 // WrapClient wraps a TxSvcClient with a Kwil client.

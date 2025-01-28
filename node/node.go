@@ -473,7 +473,10 @@ func (n *Node) Status(ctx context.Context) (*adminTypes.Status, error) {
 		appHash = ceStatus.CommitInfo.AppHash
 	}
 
-	// height, blkHash, appHash, stamp := n.bki.Best()
+	if stamp.IsZero() || blkHash.IsZero() || height == 0 {
+		height, blkHash, appHash, stamp = n.bki.Best()
+	}
+
 	var addr string
 	if addrs := n.Addrs(); len(addrs) > 0 {
 		addr = addrs[0]
