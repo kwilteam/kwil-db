@@ -168,7 +168,9 @@ func execActionCmd() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&namespace, "namespace", "n", "", "namespace to execute the action in")
-	cmd.Flags().StringSliceVarP(&namedParams, "param", "p", nil, `named parameters that will override any positional or CSV parameters. format: "name:type=value"`)
+	// this has to be StringArrayVar because if the user is passing an array, it will contain a comma, but it itself is a single parameter.
+	// If we use StringSliceVar, it will split the array into multiple parameters.
+	cmd.Flags().StringArrayVarP(&namedParams, "param", "p", nil, `named parameters that will override any positional or CSV parameters. format: "name:type=value"`)
 	cmd.Flags().StringVar(&csvFile, "csv", "", "CSV file containing the parameters to pass to the action")
 	cmd.Flags().StringSliceVarP(&csvParams, "csv-mapping", "m", nil, `mapping of CSV columns to action parameters. format: "csv_column:action_param_name" OR "csv_column:action_param_position"`)
 	common.BindTxFlags(cmd)
