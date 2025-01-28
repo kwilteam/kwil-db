@@ -103,10 +103,12 @@ func (r *respChainInfo) MarshalText() ([]byte, error) {
 	msg := fmt.Sprintf(`Chain ID: %s
 Height: %d
 Hash: %s
+Gas: %v
 `,
 		r.Info.ChainID,
 		r.Info.BlockHeight,
 		r.Info.BlockHash,
+		r.Info.Gas,
 	)
 
 	return []byte(msg), nil

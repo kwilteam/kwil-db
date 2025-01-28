@@ -21,12 +21,14 @@ func Example_respChainInfo_text() {
 			ChainID:     "kwil-chain",
 			BlockHeight: 100,
 			BlockHash:   mustUnmarshalHash("0000beefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeef"),
+			Gas:         true,
 		},
 	}, nil, "text")
 	// Output:
 	// Chain ID: kwil-chain
 	// Height: 100
 	// Hash: 0000beefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeef
+	// Gas: true
 }
 
 func Example_respChainInfo_json() {
@@ -35,6 +37,7 @@ func Example_respChainInfo_json() {
 			ChainID:     "kwil-chain",
 			BlockHeight: 100,
 			BlockHash:   mustUnmarshalHash("0000beefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeef"),
+			Gas:         true,
 		},
 	}, nil, "json")
 	// Output:
@@ -42,7 +45,8 @@ func Example_respChainInfo_json() {
 	//   "result": {
 	//     "chain_id": "kwil-chain",
 	//     "block_height": 100,
-	//     "block_hash": "0000beefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeef"
+	//     "block_hash": "0000beefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeefbeef",
+	//     "gas": true
 	//   },
 	//   "error": ""
 	// }

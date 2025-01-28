@@ -60,8 +60,12 @@ func NewJSONRPCClient(url *url.URL, opts ...RPCClientOpts) *JSONRPCClient {
 	url = url.JoinPath("/rpc/v1")
 
 	clientOpts := &clientOptions{
-		client: &http.Client{},
-		log:    log.DiscardLogger, // log.NewStdOut(log.InfoLevel),
+		client: &http.Client{
+			Transport: &http.Transport{
+				Proxy: http.ProxyFromEnvironment,
+			},
+		},
+		log: log.DiscardLogger, // log.NewStdOut(log.InfoLevel),
 	}
 	for _, opt := range opts {
 		opt(clientOpts)

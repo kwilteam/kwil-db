@@ -21,10 +21,7 @@ functions on the command line. Go applications may use the package directly.
 The `client` package is part of the `core` Go sub-module of the `kwil-db` repository. To use the package in your Go application, add it as a `require` in your project's `go.mod`:
 
 ```sh
-$ go get github.com/kwilteam/kwil-db/core
-go: downloading github.com/kwilteam/kwil-db/core v0.1.2
-go: downloading github.com/kwilteam/kwil-db v0.7.2
-go: added github.com/kwilteam/kwil-db/core v0.1.2
+go get github.com/kwilteam/kwil-db/core
 ```
 
 If you did not already have a `go.mod` for your project, create one with `go mod init mykwilapp`, replacing `mykwilapp` with the module name for your project, which is typically a remote git repository location.
@@ -39,7 +36,7 @@ module mykwilapp
 go 1.22
 
 require (
-    github.com/kwilteam/kwil-db/core v0.1.2
+    github.com/kwilteam/kwil-db/core v0.4.0
 )
 ```
 
@@ -110,8 +107,8 @@ import (
 )
 
 func genKey() *crypto.Secp256k1PrivateKey {
-	key, _ := crypto.GenerateSecp256k1Key()
-	return key // fmt.Println(key.Hex())
+	key, _, _ := crypto.GenerateSecp256k1Key(nil)
+	return key.(*crypto.Secp256k1PrivateKey)
 }
 
 func makeSigner(keyHex string) auth.Signer {
