@@ -11,6 +11,10 @@ import (
 	"github.com/kwilteam/kwil-db/version"
 )
 
+const (
+	emptyBlockTimeoutFlag = "consensus.empty-block-timeout"
+)
+
 func StartCmd() *cobra.Command {
 	var autogen bool
 	var dbOwner string
@@ -48,6 +52,12 @@ func StartCmd() *cobra.Command {
 				return err
 			}
 			defer stopProfiler()
+
+			// Set the empty block timeout to the propose timeout if not set
+			// if the node is running in autogen mode
+			if !cmd.Flags().Changed(emptyBlockTimeoutFlag) && autogen {
+				cfg.Consensus.EmptyBlockTimeout = cfg.Consensus.ProposeTimeout
+			}
 
 			return runNode(cmd.Context(), rootDir, cfg, autogen, dbOwner)
 		},

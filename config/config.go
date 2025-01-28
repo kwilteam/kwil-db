@@ -31,6 +31,8 @@ const (
 
 	DefaultAdminRPCAddr = "/tmp/kwild.socket"
 	AdminCertName       = "admin.cert"
+
+	MinProposeTimeout = types.Duration(500 * time.Millisecond)
 )
 
 type GenesisAlloc struct {
@@ -360,7 +362,7 @@ type DBConfig struct {
 }
 
 type ConsensusConfig struct {
-	ProposeTimeout types.Duration `toml:"propose_timeout" comment:"minimum duration to wait before proposing a block with transactions (applies to leader). This value can't be zero, if set to 0, default of 1 sec will be used for block production."`
+	ProposeTimeout types.Duration `toml:"propose_timeout" comment:"minimum duration to wait before proposing a block with transactions (applies to leader). This value should be greater than 500ms."`
 
 	EmptyBlockTimeout types.Duration `toml:"empty_block_timeout" comment:"timeout for proposing an empty block. If set to 0, disables empty blocks, leader will wait indefinitely until transactions are available to produce a block."`
 

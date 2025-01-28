@@ -84,6 +84,11 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config, autogen bo
 
 	logger.Infof("Starting kwild version %v", version.KwilVersion)
 
+	// sanity checks on config
+	if cfg.Consensus.ProposeTimeout < config.MinProposeTimeout {
+		return fmt.Errorf("propose timeout should be at least %s", config.MinProposeTimeout.String())
+	}
+
 	genFile := config.GenesisFilePath(rootDir)
 
 	logger.Infof("Loading the genesis configuration from %s", genFile)

@@ -525,7 +525,7 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 	}
 
 	// The CE will log the same thing, so this is a Debug message.
-	bp.log.Debug("Executed Block", "height", req.Height, "blkID", req.BlockID, "appHash", nextHash, "numTxs", req.Block.Header.NumTxns)
+	bp.log.Debug("Executed Block", "height", req.Height, "blockID", req.BlockID, "appHash", nextHash, "numTxs", req.Block.Header.NumTxns)
 	if len(bp.chainCtx.NetworkUpdates) != 0 {
 		bp.log.Info("Consensus updates", "hash", paramUpdatesHash, "updates", bp.chainCtx.NetworkUpdates)
 	}

@@ -331,7 +331,8 @@ func (ce *ConsensusEngine) Start(ctx context.Context, fns BroadcastFns, peerFns 
 	ce.txAnnouncer = fns.TxAnnouncer
 
 	ce.blockProcessor.SetCallbackFns(fns.TxBroadcaster, peerFns.AddPeer, peerFns.RemovePeer)
-	ce.catchupTimeout = min(5*time.Second, ce.emptyBlockTimeout+ce.blkProposalInterval)
+	// Catchup timeout should be atleast greater than the emptyBlockTimeout
+	ce.catchupTimeout = max(5*time.Second, ce.emptyBlockTimeout+ce.blkProposalInterval)
 	ce.catchupTicker = time.NewTicker(ce.catchupTimeout)
 
 	ce.log.Info("Starting the consensus engine")
@@ -773,16 +774,16 @@ func (ce *ConsensusEngine) processCurrentBlock(ctx context.Context) error {
 
 	if blkHash != ce.state.blkProp.blkHash { // processed incorrect block
 		if err := ce.rollbackState(ctx); err != nil {
-			return fmt.Errorf("error aborting incorrect block execution: height: %d, blkID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
+			return fmt.Errorf("error aborting incorrect block execution: height: %d, blockID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
 		}
 
 		blk, err := ktypes.DecodeBlock(rawBlk)
 		if err != nil {
-			return fmt.Errorf("failed to decode the block, blkHeight: %d, blkID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
+			return fmt.Errorf("failed to decode the block, blkHeight: %d, blockID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
 		}
 
 		if err := ce.processAndCommit(ctx, blk, ci); err != nil {
-			return fmt.Errorf("failed to replay the block: blkHeight: %d, blkID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
+			return fmt.Errorf("failed to replay the block: blkHeight: %d, blockID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
 		}
 		// recovered to the correct block -> continue to replay blocks from network
 		return nil
@@ -857,7 +858,7 @@ func (ce *ConsensusEngine) resetBlockProp(ctx context.Context, height int64, txI
 	if rollback {
 		// rollback the state
 		if err := ce.rollbackState(ctx); err != nil {
-			ce.log.Error("Error aborting execution of block", "height", ce.state.blkProp.height, "blkID", ce.state.blkProp.blkHash, "error", err)
+			ce.log.Error("Error aborting execution of block", "height", ce.state.blkProp.height, "blockID", ce.state.blkProp.blkHash, "error", err)
 			return
 		}
 	}

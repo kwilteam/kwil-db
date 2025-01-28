@@ -315,6 +315,6 @@ func ValidatorJoinExpirySpecification(ctx context.Context, t *testing.T, netops 
 	// join request should be expired and removed
 	joinStatus, err = netops.ValidatorJoinStatus(ctx, joiner, keyType)
 	assert.NotNil(t, err)
-	assert.Equal(t, err.Error(), "no active join request for that validator")
+	assert.Equal(t, err.Error(), "No active join request for that validator. Have they already been approved?")
 	assert.Nil(t, joinStatus)
 }

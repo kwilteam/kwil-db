@@ -100,7 +100,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 		n.log.Warn("invalid height in blk ann request", "height", height)
 		return
 	}
-	n.log.Debug("blk announcement received", "hash", blkid, "height", height)
+	n.log.Debug("blk announcement received", "blockID", blkid, "height", height)
 
 	// If we are a validator and this is the commit ann for a proposed block
 	// that we already started executing, consensus engine will handle it.
@@ -118,7 +118,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 		return // we have or are currently fetching it, do nothing, assuming we have already re-announced
 	}
 
-	n.log.Debug("retrieving new block", "hash", blkid)
+	n.log.Debug("retrieving new block", "blockID", blkid)
 	t0 := time.Now()
 
 	// First try to get from this stream.

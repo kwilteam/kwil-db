@@ -366,10 +366,6 @@ type respAccount struct {
 func (j *jsonRPCCLIDriver) GetAccount(ctx context.Context, acct *types.AccountID, status types.AccountStatus) (*types.Account, error) {
 	r := &respAccount{}
 
-	// keyType, err := crypto.ParseKeyType(acct.KeyType.String()) // validate?
-	// if err != nil {
-	// 	return nil, fmt.Errorf("bad key type %s (%w)", acct.KeyType, err)
-	// }
 	args := []string{"account", "balance", hex.EncodeToString(acct.Identifier), "--keytype", acct.KeyType.String()}
 	if status == types.AccountStatusPending {
 		args = append(args, "--pending")
@@ -451,18 +447,4 @@ func (j *jsonRPCCLIDriver) WaitTx(ctx context.Context, txHash types.Hash, interv
 
 func (j *jsonRPCCLIDriver) Transfer(ctx context.Context, to *types.AccountID, amount *big.Int, opts ...client.TxOpt) (types.Hash, error) {
 	return j.exec(ctx, []string{"account", "transfer", to.Identifier.String(), amount.String(), "--keytype", to.KeyType.String()}, opts...)
-}
-
-func (j *jsonRPCCLIDriver) AccountBalance(ctx context.Context, identifier string) (*big.Int, error) {
-	r := &respAccount{}
-	err := cmd(j, ctx, r, "account", "balance", identifier)
-	if err != nil {
-		return nil, err
-	}
-
-	bal, ok := big.NewInt(0).SetString(r.Balance, 10)
-	if !ok {
-		return nil, errors.New("invalid decimal string balance")
-	}
-	return bal, nil
 }

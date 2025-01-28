@@ -22,7 +22,8 @@ import (
 )
 
 const (
-	nodeDirPerm = 0755
+	nodeDirPerm           = 0755
+	emptyBlockTimeoutFlag = "consensus.empty-block-timeout"
 )
 
 var (
@@ -96,6 +97,17 @@ func InitCmd() *cobra.Command {
 				}
 				return string(rawToml)
 			}))
+
+			if cfg.Consensus.ProposeTimeout < config.MinProposeTimeout {
+				return display.PrintErr(cmd, fmt.Errorf("propose timeout must be at least %s", config.MinProposeTimeout.String()))
+			}
+
+			if !cmd.Flags().Changed(emptyBlockTimeoutFlag) {
+				// Set the empty block timeout to the propose timeout if not set
+				// So that the blocks mine at the same rate as the propose timeout
+				// irrespective of the availability of transactions.
+				cfg.Consensus.EmptyBlockTimeout = cfg.Consensus.ProposeTimeout
+			}
 
 			if cmd.Flags().Changed(genesisSnapshotFlag) {
 				genesisState = genFlags.genesisState
