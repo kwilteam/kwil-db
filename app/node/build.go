@@ -214,7 +214,7 @@ func initializeStatesyncService(ctx context.Context, d *coreDependencies, p2p *n
 func buildDB(ctx context.Context, d *coreDependencies, ss *node.StateSyncService, closers *closeFuncs) *pg.DB {
 	pg.UseLogger(d.logger.New("PG"))
 
-	fromSnapshot := restoreDB(d, ctx, ss)
+	fromGenesisSnapshot := restoreDB(d, ctx, ss)
 
 	db, err := d.dbOpener(ctx, d.cfg.DB.DBName, d.cfg.DB.MaxConns)
 	if err != nil {
@@ -222,8 +222,7 @@ func buildDB(ctx context.Context, d *coreDependencies, ss *node.StateSyncService
 	}
 	closers.addCloser(db.Close, "Closing application DB")
 
-	if fromSnapshot {
-		d.logger.Info("DB restored from snapshot", "snapshot", d.cfg.GenesisState)
+	if fromGenesisSnapshot {
 		// readjust the expiry heights of all the pending resolutions after snapshot restore for Zero-downtime migrations
 		// snapshot tool handles the migration expiry height readjustment for offline migrations
 		// adjustExpiration := false
@@ -254,7 +253,7 @@ func buildDB(ctx context.Context, d *coreDependencies, ss *node.StateSyncService
 //   - If statesync is enabled. Statesync will take care of syncing the database
 //     to the network state using statesync snapshots.
 //
-// returns true if the DB was restored from snapshot, false otherwise.
+// returns true if the DB was restored from genesis snapshot, false otherwise.
 func restoreDB(d *coreDependencies, ctx context.Context, ss *node.StateSyncService) bool {
 	if isDbInitialized(ctx, d) {
 		return false
@@ -269,7 +268,7 @@ func restoreDB(d *coreDependencies, ctx context.Context, ss *node.StateSyncServi
 
 		if success {
 			d.logger.Info("DB restored from statesync snapshot")
-			return true
+			return false
 		}
 
 		// If statesync is not successful, restore from the genesis snapshot if available
@@ -316,6 +315,8 @@ func restoreDB(d *coreDependencies, ctx context.Context, ss *node.StateSyncServi
 	if err != nil {
 		failBuild(err, "failed to restore DB from snapshot")
 	}
+
+	d.logger.Info("DB restored from snapshot", "snapshot", d.cfg.GenesisState)
 	return true
 }
 

@@ -111,7 +111,7 @@ func makeTestHosts(t *testing.T, nNodes, nExtraHosts int, blockInterval time.Dur
 			Statesync:   &defaultConfigSet.StateSync,
 			Mempool:     mempool.New(),
 			BlockStore:  bs,
-			Snapshotter: newSnapshotStore(),
+			Snapshotter: newSnapshotStore(bs),
 			Consensus:   ce,
 			BlockProc:   &dummyBP{},
 		}

@@ -44,6 +44,16 @@ func ValidatorNodeJoinSpecification(ctx context.Context, t *testing.T, netops Va
 	assert.NoError(t, err)
 	assert.Equal(t, valCount, len(vals))
 }
+func ValidatorJoinStatusSpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl, joinerKey crypto.PrivateKey, valCount int) {
+	t.Log("Executing network node join status specification")
+
+	// Get Request status, #approvals = 0, #board = valCount
+	joiner := joinerKey.Public().Bytes()
+	joinStatus, err := netops.ValidatorJoinStatus(ctx, joiner, joinerKey.Type())
+	require.NoError(t, err)
+	assert.Equal(t, valCount, len(joinStatus.Board))
+	assert.Equal(t, 0, approvalCount(joinStatus))
+}
 
 func JoinExistingValidatorSpecification(ctx context.Context, t *testing.T, netops ValidatorOpsDsl, joinerKey crypto.PrivateKey) {
 	t.Log("Executing existing validator join specification")

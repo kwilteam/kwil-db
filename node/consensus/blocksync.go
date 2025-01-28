@@ -157,7 +157,7 @@ func (ce *ConsensusEngine) syncBlocksUntilHeight(ctx context.Context, startHeigh
 func (ce *ConsensusEngine) syncBlockWithRetry(ctx context.Context, height int64) error {
 	_, rawblk, ci, err := ce.getBlock(ctx, height)
 	if err != nil { // all kinds of errors?
-		return fmt.Errorf("error requesting block from network: height : %d, error: %w", height, err)
+		return err
 	}
 
 	return ce.applyBlock(ctx, rawblk, ci)
@@ -167,7 +167,7 @@ func (ce *ConsensusEngine) syncBlockWithRetry(ctx context.Context, height int64)
 func (ce *ConsensusEngine) syncBlock(ctx context.Context, height int64) error {
 	_, rawblk, ci, err := ce.blkRequester(ctx, height)
 	if err != nil { // all kinds of errors?
-		return fmt.Errorf("error requesting block from network: height : %d, error: %w", height, err)
+		return err
 	}
 
 	return ce.applyBlock(ctx, rawblk, ci)

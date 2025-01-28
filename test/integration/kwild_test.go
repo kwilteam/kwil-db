@@ -362,6 +362,115 @@ func TestStatesync(t *testing.T) {
 	}
 }
 
+// TestStatesyncWithValidatorUpdates verifies that nodes using statesync
+// correctly reflect changes to the validator set and maintain the
+// correct resolution state in the Votestore.
+func TestStatesyncWithValidatorUpdates(t *testing.T) {
+	for _, driver := range setup.AllDrivers {
+		t.Run(driver.String()+"_driver", func(t *testing.T) {
+			p := setup.SetupTests(t, &setup.TestConfig{
+				ClientDriver: driver,
+				Network: &setup.NetworkConfig{
+					Nodes: []*setup.NodeConfig{
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.Configure = func(conf *config.Config) {
+								conf.Snapshots.Enable = true
+								conf.Snapshots.RecurringHeight = 50
+							}
+						}),
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.Validator = false
+							nc.Configure = func(conf *config.Config) {
+								conf.Snapshots.Enable = true
+								conf.Snapshots.RecurringHeight = 50
+							}
+						}),
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.Validator = false
+							nc.Configure = func(conf *config.Config) {
+								conf.StateSync.Enable = true
+							}
+						}),
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
+							nc.Validator = false
+							nc.Configure = func(conf *config.Config) {
+								conf.StateSync.Enable = true
+							}
+						}),
+					},
+					DBOwner: OwnerAddress,
+				},
+				InitialServices: []string{"node0", "node1", "pg0", "pg1"}, // should bringup only node 0,1
+			})
+			ctx := context.Background()
+
+			// wait for all the nodes to discover each other and to produce snapshots
+			clt := p.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
+				PrivateKey: UserPrivkey1,
+			})
+
+			specifications.CreateNamespaceSpecification(ctx, t, clt, false)
+			specifications.CreateSchemaSpecification(ctx, t, clt)
+
+			user := &specifications.User{Id: 1, Name: "Alice", Age: 25}
+			specifications.AddUserSpecification(ctx, t, clt, user)
+			specifications.ListUsersSpecification(ctx, t, clt, false, 1)
+
+			// node1 issues a join request to become a validator and before node0 approves the request
+			// node2 joins the network and should see the join request from node1
+			n1Admin := p.Nodes[1].AdminClient(t, ctx)
+			specifications.ValidatorNodeJoinSpecification(ctx, t, n1Admin, p.Nodes[1].PrivateKey(), 1)
+
+			time.Sleep(45 * time.Second) // wait for the node0 to produce a snapshot
+
+			// bring up node2, pg2 and ensure that it does blocksync correctly
+			p.RunServices(t, ctx, []*setup.ServiceDefinition{
+				setup.KwildServiceDefinition("node2"),
+				setup.PostgresServiceDefinition("pg2"),
+			}, 2*time.Minute)
+
+			// time for node to blocksync and catch up
+			time.Sleep(4 * time.Second)
+
+			// ensure that all nodes are in sync
+			info, err := p.Nodes[2].JSONRPCClient(t, ctx, nil).ChainInfo(ctx)
+			require.NoError(t, err)
+			require.Greater(t, info.BlockHeight, uint64(50))
+
+			clt2 := p.Nodes[2].JSONRPCClient(t, ctx, &setup.ClientOptions{
+				PrivateKey: UserPrivkey1,
+			})
+			specifications.ListUsersSpecification(ctx, t, clt2, false, 1)
+
+			// node2 should see the join request from node1
+			n2Admin := p.Nodes[2].AdminClient(t, ctx)
+			specifications.ValidatorJoinStatusSpecification(ctx, t, n2Admin, p.Nodes[1].PrivateKey(), 1)
+
+			// node0 approves the join request
+			n0Admin := p.Nodes[0].AdminClient(t, ctx)
+			specifications.ValidatorNodeApproveSpecification(ctx, t, n0Admin, p.Nodes[1].PrivateKey(), 1, 2, true)
+
+			time.Sleep(50 * time.Second) // wait for the node0,1 to produce a snapshot
+
+			p.RunServices(t, ctx, []*setup.ServiceDefinition{
+				setup.KwildServiceDefinition("node3"),
+				setup.PostgresServiceDefinition("pg3"),
+			}, 2*time.Minute)
+
+			time.Sleep(4 * time.Second)
+
+			// node3 should see the updated validator set
+			n3Admin := p.Nodes[3].AdminClient(t, ctx)
+			specifications.CurrentValidatorsSpecification(ctx, t, n3Admin, 2)
+
+			clt3 := p.Nodes[3].JSONRPCClient(t, ctx, &setup.ClientOptions{
+				PrivateKey: UserPrivkey1,
+			})
+			specifications.ListUsersSpecification(ctx, t, clt3, false, 1)
+		})
+	}
+}
+
 func TestOfflineMigrations(t *testing.T) {
 	for _, driver := range setup.AllDrivers {
 		t.Run(driver.String()+"_driver", func(t *testing.T) {
