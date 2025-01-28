@@ -305,6 +305,8 @@ func (fr *FinalizedReward) UnpackTypes(decimalType *types.DataType) []pc.Precomp
 	}
 }
 
+// GenPendingRewardID generates a unique UUID for a reward. We need special handling
+// here because there could be multiple rewards to the same user with the same amount.
 func GenPendingRewardID(recipient string, amount string, txID string, idx int) *types.UUID {
 	return types.NewUUIDV5([]byte(fmt.Sprintf("erc20rw_pending_rewards_%v_%v_%v_%v", recipient, amount, txID, idx)))
 }
