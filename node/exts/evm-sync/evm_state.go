@@ -92,6 +92,7 @@ type EVMPollFunc func(ctx context.Context, service *common.Service, eventstore l
 // not be called again. The resolveFunc is responsible for resolving the
 // state data into the local database. It will be called once for
 // each time the EventStore is written to, similar to a normal listener.
+// This function should be called in an OnStart function.
 func (s *statePoller) RegisterPoll(cfg PollConfig) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -101,6 +102,21 @@ func (s *statePoller) RegisterPoll(cfg PollConfig) error {
 	}
 
 	s.pollers[cfg.UniqueName] = &cfg
+
+	return nil
+}
+
+// UnregisterPoll unregisters a poller by name.
+// This function should be called in an OnUnuse function.
+func (s *statePoller) UnregisterPoll(uniqueName string) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if _, ok := s.pollers[uniqueName]; !ok {
+		return fmt.Errorf("poller with name %s not found", uniqueName)
+	}
+
+	delete(s.pollers, uniqueName)
 
 	return nil
 }
@@ -117,7 +133,10 @@ func (s *statePoller) resolve(ctx context.Context, app *common.App, resolution *
 
 	cfg, ok := s.pollers[p.UniqueName]
 	if !ok {
-		return fmt.Errorf("poller with name %s not registered", p.UniqueName)
+		// if the poller is not registered, it may have simply been unregistered,
+		// so we should not return an error
+		app.Service.Logger.Warnf("poller %s not found when resolving EVM poll", p.UniqueName)
+		return nil
 	}
 
 	return cfg.ResolveFunc(ctx, app, resolution, block)
