@@ -21,10 +21,33 @@ import (
 )
 
 func init() {
-	err := listeners.RegisterListener("evm_sync", func(ctx context.Context, service *common.Service, eventstore listeners.EventStore) error {})
+	err := listeners.RegisterListener("evm_sync", func(ctx context.Context, service *common.Service, eventstore listeners.EventStore) error {
+		syncConf, err := getSyncConfig(service.LocalConfig.Extensions)
+		if err != nil {
+			return fmt.Errorf("failed to get sync config: %w", err)
+		}
+
+		return EventSyncer.listen(ctx, service, eventstore, syncConf)
+	})
 	if err != nil {
 		panic(err)
 	}
+}
+
+func getSyncConfig(m map[string]map[string]string) (*syncConfig, error) {
+	syncConf, ok := m["sync"]
+	if !ok {
+		// if not found, all syncConfig variables will be set to default
+		syncConf = make(map[string]string)
+	}
+
+	conf := &syncConfig{}
+	err := conf.load(syncConf)
+	if err != nil {
+		return nil, err
+	}
+
+	return conf, nil
 }
 
 // syncConfig is a config that is shared by all listeners.
@@ -76,6 +99,35 @@ func (c *syncConfig) load(m map[string]string) error {
 	}
 
 	return nil
+}
+
+// getChainConf gets the chain config from the node's local configuration.
+func getChainConf(m map[string]map[string]string, chain chains.Chain) (*chainConfig, error) {
+	var m2 map[string]string
+	var ok bool
+	switch chain {
+	case chains.Ethereum:
+		m2, ok = m["ethereum_sync"]
+		if !ok {
+			return nil, errors.New("local configuration does not have an ethereum_sync config")
+		}
+	case chains.Sepolia:
+		m2, ok = m["sepolia_sync"]
+		if !ok {
+			return nil, errors.New("local configuration does not have a sepolia_sync config")
+		}
+	default:
+		// suggests an internal bug where we have not added a case for a new chain
+		return nil, fmt.Errorf("unknown chain %s", chain)
+	}
+
+	conf := &chainConfig{}
+	err := conf.load(m2)
+	if err != nil {
+		return nil, err
+	}
+
+	return conf, nil
 }
 
 // chainConfig is a config that is specific to a single chain.
@@ -130,26 +182,8 @@ type individualListener struct {
 	orderedSyncTopic string
 }
 
-func newIndividualListener(ctx context.Context, chain chains.ChainInfo, syncConf *syncConfig, chainConf *chainConfig,
-	orderedSyncTopic string, contracts []string, topics []string, logger log.Logger) (*individualListener, error) {
-	client, err := newEthClient(ctx, chainConf.Provider, syncConf.MaxRetries, contracts, topics, logger)
-	if err != nil {
-		return nil, err
-	}
-
-	return &individualListener{
-		chain:            chain,
-		syncConf:         syncConf,
-		chainConf:        chainConf,
-		client:           client,
-		orderedSyncTopic: orderedSyncTopic,
-	}, nil
-}
-
 // listen listens for new blocks from the Ethereum chain and broadcasts them to the network.
-func (i *individualListener) listen(ctx context.Context, service *common.Service, eventstore listeners.EventStore) error {
-	logger := service.Logger.New(i.orderedSyncTopic + "." + string(i.chain.Name))
-
+func (i *individualListener) listen(ctx context.Context, eventstore listeners.EventStore, logger log.Logger) error {
 	startBlock, err := getLastSeenHeight(ctx, eventstore, i.orderedSyncTopic)
 	if err != nil {
 		return fmt.Errorf("failed to get last seen height: %w", err)

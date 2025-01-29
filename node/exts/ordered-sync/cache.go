@@ -158,7 +158,7 @@ func (c *cachedSync) resolve(ctx context.Context, app *common.App, block *common
 
 // storeDataPoint stores a data point in the engine.
 // It ensures that the point and previous point are not less than the previous point in time.
-func (c *cachedSync) storeDataPoint(ctx context.Context, db sql.DB, eng common.Engine, dp *ResolutionMessage) error {
+func (c *cachedSync) storeDataPoint(ctx context.Context, app *common.App, dp *ResolutionMessage) error {
 	if dp.PreviousPointInTime != nil {
 		if dp.PointInTime <= *dp.PreviousPointInTime {
 			return fmt.Errorf("point in time must be greater than previous point in time")
@@ -167,9 +167,18 @@ func (c *cachedSync) storeDataPoint(ctx context.Context, db sql.DB, eng common.E
 
 	topic, ok := c.topics[dp.Topic]
 	if !ok {
-		return fmt.Errorf("topic %s not registered", dp.Topic)
+		// if topic is not registered, we should not store the data point.
+		// This is not always an error: there may be an extension that was
+		// dropped and the data points are still being processed.
+		// In this case, we just ignore the data point.
+		logger := app.Service.Logger.New("orderedsync")
+		logger.Warn("topic not registered", "topic", dp.Topic)
+		return nil
 	}
 
+	// TODO: should we return errors here? These suggest that a majority of nodes synced some sort of incorrect data or
+	// have a bug in their listener. I think we should return an error (which will stop the node), since the alternative
+	// is an event goes unprocessed (which might lead to unexpected loss of data and/or funds), but I'm not sure.
 	switch {
 	case topic.lastProcessedPoint == nil && dp.PreviousPointInTime != nil:
 		return fmt.Errorf("non-nil previous point in time received, expected nil because no previous point in time is known")
@@ -186,5 +195,5 @@ func (c *cachedSync) storeDataPoint(ctx context.Context, db sql.DB, eng common.E
 		return fmt.Errorf("unexpected state in storeDataPoint")
 	}
 
-	return storeDataPoint(ctx, db, eng, dp)
+	return storeDataPoint(ctx, app.DB, app.Engine, dp)
 }

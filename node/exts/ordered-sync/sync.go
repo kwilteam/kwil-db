@@ -55,7 +55,7 @@ func init() {
 				return err
 			}
 
-			return Synchronizer.storeDataPoint(ctx, app.DB, app.Engine, res)
+			return Synchronizer.storeDataPoint(ctx, app, res)
 		},
 	})
 	if err != nil {

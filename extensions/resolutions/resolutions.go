@@ -115,8 +115,12 @@ type ResolutionConfig struct {
 	// been confirmed. All nodes will call this function as a part of
 	// block execution. It is therefore expected that the function is
 	// deterministic, regardless of a node's local configuration.
-	ResolveFunc func(ctx context.Context, app *common.App, resolution *Resolution, block *common.BlockContext) error
+	ResolveFunc ResolveFunc
 }
+
+// ResolveFunc is a function that is called once a resolution has
+// received a required number of votes.
+type ResolveFunc func(ctx context.Context, app *common.App, resolution *Resolution, block *common.BlockContext) error
 
 // Resolution contains information for a resolution that can be voted
 // on.

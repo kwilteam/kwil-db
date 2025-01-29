@@ -27,10 +27,11 @@ type ethClient struct {
 	maxRetries    int64
 	logger        log.Logger
 	client        *ethclient.Client
+	done          <-chan struct{}
 }
 
 // newEthClient creates a new ethereum client
-func newEthClient(ctx context.Context, rpcurl string, maxRetries int64, targetAddresses []string, topics []string, logger log.Logger) (*ethClient, error) {
+func newEthClient(ctx context.Context, rpcurl string, maxRetries int64, targetAddresses []string, topics []string, done <-chan struct{}, logger log.Logger) (*ethClient, error) {
 	var client *ethclient.Client
 
 	addresses := make([]ethcommon.Address, len(targetAddresses))
@@ -77,6 +78,7 @@ func newEthClient(ctx context.Context, rpcurl string, maxRetries int64, targetAd
 		maxRetries:    maxRetries,
 		logger:        logger,
 		client:        client,
+		done:          done,
 	}, nil
 }
 
@@ -149,6 +151,9 @@ func (ec *ethClient) ListenToBlocks(ctx context.Context, reconnectInterval time.
 		select {
 		case <-ctx.Done():
 			ec.logger.Debug("Context cancelled, stopping ethereum client")
+			return nil
+		case <-ec.done:
+			ec.logger.Debug("Done channel closed, stopping ethereum client")
 			return nil
 		case header := <-headers:
 			ec.logger.Debug("New block", "height", header.Number.Int64())

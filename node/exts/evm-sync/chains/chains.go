@@ -3,7 +3,6 @@ package chains
 
 import (
 	"fmt"
-	"strings"
 )
 
 // ChainInfo is the information about a chain.
@@ -76,8 +75,8 @@ func registerChain(chains ...ChainInfo) error {
 	return nil
 }
 
-func GetChain(name string) (ChainInfo, bool) {
-	name = strings.ToLower(name)
-	chain, ok := registeredChains[Chain(name)]
+// GetChainInfo returns the chain information for the given chain.
+func GetChainInfo(name Chain) (ChainInfo, bool) {
+	chain, ok := registeredChains[name]
 	return chain, ok
 }
