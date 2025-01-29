@@ -10,6 +10,7 @@ import (
 	// concerned with activation heights, it could need to use new functionality
 	// introduced by the consensus extensions.
 
+	"github.com/kwilteam/kwil-db/app/shared"
 	root "github.com/kwilteam/kwil-db/cmd/kwil-cli/cmds"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/config"
 )
@@ -20,5 +21,13 @@ func main() {
 		config.PreRunPrintEffectiveConfig(root, nil) // only when --debug is set
 		os.Exit(-1)
 	}
+
+	// For a command / application error, which handle the output themselves, we
+	// detect those case where display.PrintErr() is called so that we can
+	// return a non-zero exit code, which is important for scripting etc.
+	if err := shared.CmdCtxErr(root); err != nil {
+		os.Exit(-1)
+	}
+
 	os.Exit(0)
 }

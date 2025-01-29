@@ -8,6 +8,7 @@ import (
 	"syscall"
 
 	"github.com/kwilteam/kwil-db/app"
+	"github.com/kwilteam/kwil-db/app/shared"
 )
 
 func main() {
@@ -22,15 +23,16 @@ func main() {
 
 	rootCmd := app.RootCmd()
 
-	// Run "start" as the default command if none is given.
-	// cmd, _, err := rootCmd.Traverse(os.Args[1:])
-	// if err == nil && cmd.Use == rootCmd.Use && cmd.Flags().Parse(os.Args[1:]) != pflag.ErrHelp {
-	// 	// rewrite from "kwild <whatever...>" to "kwild start <whatever...>"
-	// 	args := append([]string{"start"}, os.Args[1:]...)
-	// 	rootCmd.SetArgs(args)
-	// }
-
-	if err := rootCmd.ExecuteContext(ctx); err != nil {
+	if err := rootCmd.ExecuteContext(ctx); err != nil { // command syntax error
 		os.Exit(-1)
 	}
+
+	// For a command / application error, which handle the output themselves, we
+	// detect those case where display.PrintErr() is called so that we can
+	// return a non-zero exit code, which is important for scripting etc.
+	if err := shared.CmdCtxErr(rootCmd); err != nil {
+		os.Exit(-1)
+	}
+
+	os.Exit(0)
 }

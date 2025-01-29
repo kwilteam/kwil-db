@@ -46,6 +46,15 @@ func NewRootCmd() *cobra.Command {
 		},
 	}
 
+	// Pass any errors from the child command's context back to the root
+	// command's context. main or whatever can pull it out with
+	// shared.CmdCtxErr. Alternatively, this function could set the value in a
+	// *error that is returned with the Command, but that's more confusing.
+	rootCmd.PersistentPostRunE = func(child *cobra.Command, args []string) error {
+		shared.SetCmdCtxErr(rootCmd, shared.CmdCtxErr(child)) // more specific than cmd.SetContext(child.Context())
+		return nil
+	}
+
 	// Define the --debug enabled CLI debug mode (shared.Debugf output)
 	bind.BindDebugFlag(rootCmd)
 

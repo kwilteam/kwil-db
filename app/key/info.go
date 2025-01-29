@@ -68,6 +68,11 @@ func InfoCmd() *cobra.Command {
 			cmd.Usage()
 			return errors.New("must provide with the private key file or hex string")
 		},
+		// PostRunE: func(cmd *cobra.Command, args []string) error {
+		// 	cmdP := cmd.Parent()
+		// 	cmdP.SetContext(cmd.Context())
+		// 	return nil
+		// },
 	}
 
 	cmd.Flags().StringVarP(&privkeyFile, "key-file", "o", "", "file containing the private key to display")
