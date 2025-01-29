@@ -342,6 +342,7 @@ type PeerConfig struct {
 	PrivateMode       bool     `toml:"private" comment:"operate in private mode using a node ID whitelist"`
 	Whitelist         []string `toml:"whitelist" comment:"allowed node IDs when in private mode"`
 	TargetConnections int      `toml:"target_connections" comment:"target number of connections to maintain"`
+	ExternalAddress   string   `toml:"external_address" comment:"external address in host:port format to advertise to the network"`
 }
 
 type DBConfig struct {

@@ -226,7 +226,7 @@ func GenerateNodeRoot(ncfg *NodeGenConfig) error {
 
 	// P2P
 	port := uint64(ncfg.PortOffset + 6600)
-	host := "127.0.0.1"
+	host := "0.0.0.0"
 	if ncfg.IP != "" {
 		host = ncfg.IP
 	}

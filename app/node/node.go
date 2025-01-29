@@ -3,7 +3,6 @@ package node
 import (
 	"context"
 	"crypto/tls"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -98,8 +97,7 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config, autogen bo
 		return fmt.Errorf("failed to load genesis and private key: %w", err)
 	}
 
-	pubKey := privKey.Public().Bytes()
-	logger.Infoln("Node public key:", hex.EncodeToString(pubKey))
+	logger.Infof("Node public key: %x (%s)", privKey.Public().Bytes(), privKey.Public().Type())
 
 	var tlsKeyPair *tls.Certificate
 	logger.Info("loading TLS key pair for the admin server", "key_file", cfg.Admin.TLSKeyFile,
