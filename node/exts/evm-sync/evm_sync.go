@@ -8,12 +8,21 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/extensions/listeners"
+	"github.com/kwilteam/kwil-db/extensions/resolutions"
+	"github.com/kwilteam/kwil-db/node/exts/evm-sync/chains"
 )
 
 var (
 	//go:embed schema.sql
 	schema []byte
 )
+
+func init() {
+	listeners.RegisterListener()
+
+	resolutions.RegisterResolution()
+}
 
 // EVMListener listens for events from an EVM chain.
 // It allows you to configure which contract addresses and event signatures to listen to,
@@ -39,9 +48,8 @@ type EVMListener struct {
 	// ConfigName is the name of the configuration for the listener.
 	// It is optional and defaults to "eth_listener".
 	ConfigName string
-	// RequiredConfirmations is the number of confirmations required before an event is considered final.
-	// It is optional and defaults to 12.
-	RequiredConfirmations int64
+	// Chain is the chain that the listener is listening to.
+	Chain chains.Chain
 	// RefundThreshold is the required vote percentage threshold for
 	// all voters on a resolution to be refunded the gas costs
 	// associated with voting. This allows for resolutions that have

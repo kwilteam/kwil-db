@@ -376,7 +376,6 @@ func Test_Metadata(t *testing.T) {
 
 	interp, err := NewInterpreter(ctx, tx, &common.Service{}, nil, nil, nil)
 	require.NoError(t, err)
-	_ = interp
 
 	// set owner
 	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `TRANSFER OWNERSHIP TO '0xUser';`, nil, nil)
