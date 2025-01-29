@@ -98,7 +98,36 @@ func ListEndBlockHooks() []struct {
 	return hooks
 }
 
+// EngineReadyHook is a hook that is called on startup after the engine (and all of its extensions)
+// have been initialized. It is meant to be used to perform any setup tasks that require the engine
+// to be fully initialized.
+type EngineReadyHook func(ctx context.Context, app *common.App) error
+
+var engineReadyHooks map[string]EngineReadyHook // map to guarantee uniqueness and order
+
+// RegisterEngineReadyHook registers an EngineReadyHook to be run on startup after the engine is ready.
+func RegisterEngineReadyHook(name string, hook EngineReadyHook) error {
+	_, ok := engineReadyHooks[name]
+	if ok {
+		return fmt.Errorf("engine ready hook with name %s already exists", name)
+	}
+
+	engineReadyHooks[name] = hook
+	return nil
+}
+
+// ListEngineReadyHooks returns a list of all registered EngineReadyHooks.
+func ListEngineReadyHooks() []EngineReadyHook {
+	var hooks []EngineReadyHook
+	for _, hook := range order.OrderMap(engineReadyHooks) {
+		hooks = append(hooks, hook.Value)
+	}
+
+	return hooks
+}
+
 func init() {
 	genesisHooks = make(map[string]GenesisHook)
 	endBlockHooks = make(map[string]EndBlockHook)
+	engineReadyHooks = make(map[string]EngineReadyHook)
 }

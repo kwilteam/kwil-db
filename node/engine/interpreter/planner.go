@@ -1996,6 +1996,17 @@ func (i *interpreterPlanner) VisitCreateNamespaceStatement(p0 *parse.CreateNames
 			return err
 		}
 
+		// if the namespace used our reserved prefix and it is being created by a user
+		// (as opposed to some sort of internal system extension), we should error.
+		if strings.HasPrefix(p0.Namespace, engine.ReservedKwilNamespacePrefix) && !exec.engineCtx.OverrideAuthz {
+			// only extensions can use kwil_ prefix
+			return fmt.Errorf(`%w: cannot use namespace with a reserved prefix "%s"`, engine.ErrReservedNamespacePrefix, p0.Namespace)
+		}
+		if strings.HasPrefix(p0.Namespace, engine.ReservedPGNamespacePrefix) {
+			// not even extensions can use pg_ prefix
+			return fmt.Errorf(`%w: cannot use namespace with a reserved prefix "%s"`, engine.ErrReservedNamespacePrefix, p0.Namespace)
+		}
+
 		if _, exists := exec.interpreter.namespaces[p0.Namespace]; exists {
 			if p0.IfNotExists {
 				return nil

@@ -13,6 +13,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/validation"
 	"github.com/kwilteam/kwil-db/core/utils/order"
+	"github.com/kwilteam/kwil-db/extensions/hooks"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/engine/parse"
@@ -318,20 +319,30 @@ func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service, acc
 	}
 
 	threadSafe := &ThreadSafeInterpreter{i: interpreter}
+
+	app := &common.App{
+		Service:    service,
+		DB:         db,
+		Engine:     threadSafe,
+		Accounts:   accounts,
+		Validators: validators,
+	}
+
 	for _, inst := range instances {
-		err = inst.OnStart(ctx, &common.App{
-			Service:    service,
-			DB:         db,
-			Engine:     threadSafe,
-			Accounts:   accounts,
-			Validators: validators,
-		})
+		err = inst.OnStart(ctx, app)
 		if err != nil {
 			return nil, err
 		}
 	}
 
 	interpreter.syncNamespaceManager()
+
+	for _, hook := range hooks.ListEngineReadyHooks() {
+		err = hook(ctx, app)
+		if err != nil {
+			return nil, err
+		}
+	}
 
 	return threadSafe, nil
 }

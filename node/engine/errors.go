@@ -1,6 +1,15 @@
 package engine
 
-import "errors"
+import (
+	"errors"
+)
+
+const (
+	// ReservedKwilNamespacePrefix is the prefix that is reserved for namespaces that are not part of the engine
+	// directly, but are built in by Kwil via extensions.
+	ReservedKwilNamespacePrefix = "kwil_"
+	ReservedPGNamespacePrefix   = "pg_"
+)
 
 var (
 	// Errors that suggest a bug in a user's executing code. These are type errors,
@@ -38,6 +47,7 @@ var (
 	ErrCannotDropBuiltinNamespace = errors.New("cannot drop a built-in namespace")
 	ErrBuiltInRole                = errors.New("invalid operation on built-in role")
 	ErrInvalidTxCtx               = errors.New("invalid transaction context")
+	ErrReservedNamespacePrefix    = errors.New("namespace prefix is reserved")
 
 	// Errors that are the result of not having proper permissions or failing to meet a condition
 	// that was programmed by the user.

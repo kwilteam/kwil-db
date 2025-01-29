@@ -668,6 +668,11 @@ func Test_SQL(t *testing.T) {
 				"$a": []any{nil, nil},
 			},
 		},
+		{
+			name:    "cannot use reserved namespace prefix",
+			execSQL: `CREATE NAMESPACE kwil_hello;`,
+			err:     engine.ErrReservedNamespacePrefix,
+		},
 	}
 
 	db, err := newTestDB()
