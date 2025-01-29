@@ -2,11 +2,13 @@ package orderedsync
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/utils/order"
+	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )
 
@@ -82,7 +84,7 @@ func (c *cachedSync) readTopicInfoOnStartup(ctx context.Context, app *common.App
 	}
 	c.initialized = true
 
-	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
+	err := app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
 	SELECT name, last_processed_point FROM topics
 	`, nil, func(r *common.Row) error {
 		if len(r.Values) != 2 {
@@ -113,6 +115,11 @@ func (c *cachedSync) readTopicInfoOnStartup(ctx context.Context, app *common.App
 		info.lastProcessedPoint = &point
 		return nil
 	})
+	if errors.Is(err, engine.ErrUnknownTable) {
+		// if unknown table, this is our first run, so we just skip
+		return nil
+	}
+	return err
 }
 
 // resolve gets all finalized data points from the engine and calls the registered callback.
@@ -196,4 +203,14 @@ func (c *cachedSync) storeDataPoint(ctx context.Context, app *common.App, dp *Re
 	}
 
 	return storeDataPoint(ctx, app.DB, app.Engine, dp)
+}
+
+// reset resets the cache.
+// THIS SHOULD ONLY BE USED IN TESTS.
+func (c *cachedSync) reset() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	c.topics = make(map[string]*topicInfo)
+	c.initialized = false
 }

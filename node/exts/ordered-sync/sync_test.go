@@ -278,6 +278,7 @@ func Test_Finalization(t *testing.T) {
 
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
+			defer Synchronizer.reset()
 			tx, err := db.BeginTx(ctx)
 			require.NoError(t, err)
 			defer tx.Rollback(ctx) // always rollback to avoid cleanup
