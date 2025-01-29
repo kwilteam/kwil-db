@@ -92,14 +92,7 @@ func NewClient(ctx context.Context, target string, options *clientType.Options) 
 	}
 	client := userClient.NewClient(parsedURL, jsonrpcClientOpts...)
 
-	clt, err := WrapClient(ctx, client, options)
-	if err != nil {
-		return nil, fmt.Errorf("wrap client: %w", err)
-	}
-
-	clt.logger = clt.logger.New("client")
-
-	return clt, nil
+	return WrapClient(ctx, client, options)
 }
 
 // WrapClient wraps a TxSvcClient with a Kwil client.
@@ -129,7 +122,7 @@ func WrapClient(ctx context.Context, client RPCClient, options *clientType.Optio
 			remoteChainID = health.ChainID
 
 			// NOTE: since original health check only log, why not ?
-			if health.Healthy {
+			if !health.Healthy {
 				c.logger.Warnf("node reports that it is not healthy: %v", health)
 			}
 		} else {
@@ -147,7 +140,7 @@ func WrapClient(ctx context.Context, client RPCClient, options *clientType.Optio
 			return nil, fmt.Errorf("failed to retrieve the node's health: %w", err)
 		}
 
-		if health.Healthy {
+		if !health.Healthy {
 			c.logger.Warnf("node reports that it is not healthy: %v", health)
 		}
 

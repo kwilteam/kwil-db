@@ -473,7 +473,13 @@ func (n *Node) Status(ctx context.Context) (*adminTypes.Status, error) {
 		appHash = ceStatus.CommitInfo.AppHash
 	}
 
-	// height, blkHash, appHash, stamp := n.bki.Best()
+	// If CE is initialized, we should not have to use the block store. In
+	// addition, the blockstore may be ahead of the CE, such as during replay
+	// from blockstore if the app (postgres DBs) has been reset.
+	//	 if stamp.IsZero() || blkHash.IsZero() || height == 0 {
+	//	 	height, blkHash, appHash, stamp = n.bki.Best()
+	//	 }
+
 	var addr string
 	if addrs := n.Addrs(); len(addrs) > 0 {
 		addr = addrs[0]

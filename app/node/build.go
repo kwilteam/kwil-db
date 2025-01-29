@@ -112,7 +112,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 		usersvc.WithPrivateMode(d.cfg.RPC.Private),
 		usersvc.WithChallengeExpiry(time.Duration(d.cfg.RPC.ChallengeExpiry)),
 		usersvc.WithChallengeRateLimit(d.cfg.RPC.ChallengeRateLimit),
-		// usersvc.WithBlockAgeHealth(6*totalConsensusTimeouts.Dur()),
+		usersvc.WithBlockAgeHealth(6*time.Duration(max(d.cfg.Consensus.ProposeTimeout, d.cfg.Consensus.EmptyBlockTimeout))),
 	)
 
 	rpcServerLogger := d.logger.New("RPC")
