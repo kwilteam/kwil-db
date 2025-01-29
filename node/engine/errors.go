@@ -2,7 +2,6 @@ package engine
 
 import (
 	"errors"
-	"strings"
 )
 
 const (
@@ -11,18 +10,6 @@ const (
 	ReservedKwilNamespacePrefix = "kwil_"
 	ReservedPGNamespacePrefix   = "pg_"
 )
-
-// HasReservedNamespacePrefix returns true if the namespace has a reserved prefix.
-func HasReservedNamespacePrefix(namespace string) bool {
-	if strings.HasPrefix(namespace, ReservedKwilNamespacePrefix) {
-		return true
-	}
-	if strings.HasPrefix(namespace, ReservedPGNamespacePrefix) {
-		return true
-	}
-
-	return false
-}
 
 var (
 	// Errors that suggest a bug in a user's executing code. These are type errors,
