@@ -913,7 +913,7 @@ func mockBlkRequester(ctx context.Context, height int64) (types.Hash, []byte, *t
 
 func mockBlockPropBroadcaster(_ context.Context, blk *ktypes.Block) {}
 
-func mockVoteBroadcaster(ack bool, height int64, blkID types.Hash, appHash *types.Hash, sig []byte) error {
+func mockVoteBroadcaster(msg *types.AckRes) error {
 	return nil
 }
 

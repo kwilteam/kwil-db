@@ -269,18 +269,12 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 // sendACK is a callback for the result of validator block execution/precommit.
 // After then consensus engine executes the block, this is used to gossip the
 // result back to the leader.
-func (n *Node) sendACK(ack bool, height int64, blkID types.Hash, appHash *types.Hash, signature []byte) error {
-	// n.log.Debugln("sending ACK", height, ack, blkID, appHash)
-	n.ackChan <- types.AckRes{
-		ACK:     ack,
-		AppHash: appHash,
-		BlkHash: blkID,
-		Height:  height,
-
-		Signature:  signature,
-		PubKeyType: n.pubkey.Type(),
-		PubKey:     n.pubkey.Bytes(),
+func (n *Node) sendACK(msg *AckRes) error {
+	if msg == nil {
+		return errors.New("nil ACK response")
 	}
+	// n.log.Debugln("sending ACK", height, ack, blkID, appHash)
+	n.ackChan <- *msg
 	return nil // actually gossip the nack
 }
 

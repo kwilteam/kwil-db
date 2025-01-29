@@ -304,6 +304,10 @@ func DefaultConfig() *Config {
 			MaxRetries:       3,
 		},
 		Extensions: make(map[string]map[string]string),
+		Checkpoint: Checkpoint{
+			Height: 0,
+			Hash:   types.Hash{},
+		},
 	}
 }
 
@@ -326,6 +330,7 @@ type Config struct {
 	Extensions   map[string]map[string]string `toml:"extensions" comment:"extension configuration"`
 	GenesisState string                       `toml:"genesis_state" comment:"path to the genesis state file, relative to the root directory"`
 	Migrations   MigrationConfig              `toml:"migrations" comment:"zero downtime migration configuration"`
+	Checkpoint   Checkpoint                   `toml:"checkpoint" comment:"checkpoint info for the leader to sync to before proposing a new block"`
 }
 
 // PeerConfig corresponds to the [p2p] section of the config.
@@ -413,6 +418,12 @@ type StateSyncConfig struct {
 type MigrationConfig struct {
 	Enable      bool   `toml:"enable" comment:"enable zero downtime migrations"`
 	MigrateFrom string `toml:"migrate_from" comment:"JSON-RPC listening address of the node to replicate the state from"`
+}
+
+type Checkpoint struct {
+	// Height 0 indicates no checkpoint is set. The leader will attempt regular block sync.
+	Height int64      `toml:"height" comment:"checkpoint height for the leader. If the leader is behind this height, it will sync to this height before attempting to propose a new block."`
+	Hash   types.Hash `toml:"hash" comment:"checkpoint block hash."`
 }
 
 // ToTOML marshals the config to TOML. The `toml` struct field tag

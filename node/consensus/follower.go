@@ -9,12 +9,15 @@ import (
 	"github.com/kwilteam/kwil-db/node/types"
 )
 
-// AcceptProposal checks if the node should download the block corresponding to the proposal.
-// This should not be processed by the leader and the sentry nodes.
-// Validator should only accept the proposal if it is not already processing a block and
-// the proposal is for the next block to be processed.
-// If we receive a new proposal for the same height, abort the execution of the current proposal and
-// start processing the new proposal.
+// AcceptProposal determines if the node should download the block for the given proposal.
+// This function should not be executed by the leader or sentry nodes.
+// Validators should only accept the proposal if they are not currently processing
+// another block and the proposal is for the next block to be processed.
+// If a new proposal for the same height is received, the current proposal execution
+// should be aborted and the new proposal should be processed.
+// If the leader proposes a new block for already committed heights, the validator should
+// send a Nack to the leader with an OutOfSyncProof, indicating that the leader should
+// sync to the correct height before proposing new blocks.
 func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types.Hash, leaderSig []byte, timestamp int64) bool {
 	if ce.role.Load() != types.RoleValidator {
 		return false
@@ -25,9 +28,59 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 
 	ce.log.Info("Accept proposal?", "height", height, "blockID", blkID, "prevHash", prevBlockID)
 
+	// Check if the block is for an already committed height, but the blkID is different and newer.
+	if height <= ce.stateInfo.lastCommit.height {
+		// proposal is for an already committed height
+		bHash, blk, _, err := ce.blockStore.GetByHeight(height)
+		if err != nil {
+			ce.log.Error("Error fetching block from store", "height", height, "error", err)
+			return false
+		}
+
+		if bHash == blkID { // already committed the proposed block, ignore the proposal
+			return false
+		}
+
+		// TODO: is this check needed? can we always enforce this upon a node and how do we handle scenarios
+		// where a node operator resets/updates the time settings on the leader?
+		if blk.Header.Timestamp.UnixMilli() > timestamp {
+			// stale proposal, ignore
+			return false
+		}
+
+		// send a nack to the leader
+		status := types.NackStatusOutOfSync
+		sig, err := types.SignVote(blkID, false, nil, ce.privKey)
+		if err != nil {
+			ce.log.Error("Error signing the voteInfo", "error", err)
+			return false
+		}
+
+		// Get the best block for the OutOfSyncProof
+		bestH, _, _, _ := ce.blockStore.Best()
+		_, bestBlk, _, err := ce.blockStore.GetByHeight(bestH)
+		if err != nil {
+			ce.log.Error("Error fetching best block from store", "height", bestH, "error", err)
+			return false
+		}
+
+		ackRes := &types.AckRes{
+			ACK:        false,
+			NackStatus: &status,
+			BlkHash:    blkID,
+			Height:     height,
+			OutOfSyncProof: &types.OutOfSyncProof{
+				Header:    bestBlk.Header,
+				Signature: bestBlk.Signature,
+			},
+			Signature: sig,
+		}
+		go ce.ackBroadcaster(ackRes)
+		return false
+	}
+
 	if height != ce.stateInfo.height+1 {
 		ce.log.Debug("Block proposal is not for the next height", "blkPropHeight", height, "expected", ce.stateInfo.height+1)
-		// but we already did ce.updateNetworkHeight... (?)
 		return false
 	}
 
@@ -176,7 +229,20 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 
 	if err := ce.validateBlock(blkPropMsg.blk); err != nil {
 		ce.log.Error("Error validating block, sending NACK", "error", err)
-		go ce.ackBroadcaster(false, blkPropMsg.height, blkPropMsg.blkHash, nil, nil)
+		sig, err := types.SignVote(blkPropMsg.blkHash, false, nil, ce.privKey)
+		if err != nil {
+			ce.log.Error("Error signing the voteInfo", "error", err)
+		}
+		// go ce.ackBroadcaster(false, blkPropMsg.height, blkPropMsg.blkHash, nil, nil)
+		status := types.NackStatusInvalidBlock
+		go ce.ackBroadcaster(&types.AckRes{
+			ACK:        false,
+			NackStatus: &status,
+			BlkHash:    blkPropMsg.blkHash,
+			Height:     blkPropMsg.height,
+			Signature:  sig,
+		})
+
 		return err
 	}
 	ce.state.blkProp = blkPropMsg
@@ -203,8 +269,6 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 			ce.log.Info("Block execution cancelled", "height", blkPropMsg.height)
 			return nil
 		}
-
-		// go ce.ackBroadcaster(false, blkPropMsg.height, blkPropMsg.blkHash, nil)
 		return err
 	}
 
@@ -214,7 +278,8 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 
 	signature, err := types.SignVote(blkPropMsg.blkHash, true, &ce.state.blockRes.appHash, ce.privKey)
 	if err != nil {
-		return fmt.Errorf("error signing the voteInfo: %w", err)
+		ce.log.Error("Error signing the voteInfo", "error", err)
+		return err
 	}
 	voteInfo := &vote{
 		ack:       true,
@@ -225,7 +290,7 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 	}
 	ce.state.blockRes.vote = voteInfo
 
-	go ce.ackBroadcaster(true, blkPropMsg.height, blkPropMsg.blkHash, &ce.state.blockRes.appHash, signature.Data)
+	go ce.ackBroadcaster(voteInfo.ToAckRes())
 
 	return nil
 }

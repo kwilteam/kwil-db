@@ -239,6 +239,50 @@ func (ce *ConsensusEngine) addVote(ctx context.Context, vote *vote, sender strin
 		return nil
 	}
 
+	// check if the vote is a Nack vote and the leader is out of sync
+	if !vote.ack && vote.nackStatus != nil && *vote.nackStatus == types.NackStatusOutOfSync && vote.outOfSyncProof != nil {
+		// verify the proof
+		if vote.outOfSyncProof.Header == nil {
+			ce.log.Warn("Invalid vote: missing block header in out-of-sync proof")
+		}
+		hash := vote.outOfSyncProof.Header.Hash()
+		valid, err := ce.pubKey.Verify(hash[:], vote.outOfSyncProof.Signature)
+		if err != nil {
+			ce.log.Errorf("Error verifying the out-of-sync proof: %v", err)
+			return nil
+		}
+		if !valid {
+			ce.log.Warn("Invalid vote: out-of-sync proof verification failed")
+			return nil
+		}
+
+		// received a valid out-of-sync proof
+		ce.log.Warn("Received out-of-sync proof from the validator, resetting the state and initiating the catchup mode", "from", vote.height, "to", vote.outOfSyncProof.Header.Height)
+
+		// rollback current block execution
+		if err := ce.rollbackState(ctx); err != nil {
+			return fmt.Errorf("error resetting the state: %v", err)
+		}
+
+		// trigger block sync to catch up with the network till the height specified in the out-of-sync proof
+		go func() {
+			if err := ce.syncBlocksUntilHeight(ctx, ce.state.lc.height+1, vote.outOfSyncProof.Header.Height); err != nil {
+				if err != types.ErrBlkNotFound {
+					haltReason := fmt.Sprintf("Error syncing blocks: %v", err)
+					ce.haltChan <- haltReason
+					return
+				}
+
+				// if the block is not found, maybe retry>? or just move on to the next round
+				// and let the leader propose a new block, and the validator can refute it
+				// until it catches up.
+			}
+			ce.newRound <- struct{}{} // signal ce to start a new round
+		}()
+
+		return nil
+	}
+
 	// Check if the vote is from a validator
 	if _, ok := ce.validatorSet[sender]; !ok {
 		return fmt.Errorf("vote received from an unknown validator %s", sender)

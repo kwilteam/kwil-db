@@ -390,9 +390,9 @@ func (f *faker) Propose(ctx context.Context, blk *ktypes.Block) {
 	f.proposerBroadcaster(ctx, blk)
 }
 
-func (f *faker) ACK(ack bool, height int64, blkID types.Hash, appHash *types.Hash, sig []byte) error {
-	return f.ackBroadcaster(ack, height, blkID, appHash, sig)
-}
+// func (f *faker) ACK(ack bool, height int64, blkID types.Hash, appHash *types.Hash, sig []byte) error {
+// 	return f.ackBroadcaster()
+// }
 
 func (f *faker) ResetState(height int64, txIDs []types.Hash) {
 	f.stateResetter(height, txIDs)

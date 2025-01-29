@@ -49,12 +49,13 @@ func (bpm *blockProposal) String() string {
 }
 
 type vote struct {
-	ack     bool
-	blkHash types.Hash
-	appHash *types.Hash
-	height  int64
-
-	signature *types.Signature
+	ack            bool
+	nackStatus     *types.NackStatus
+	blkHash        types.Hash
+	appHash        *types.Hash
+	height         int64
+	outOfSyncProof *types.OutOfSyncProof
+	signature      *types.Signature
 }
 
 func (vm *vote) Type() consensusMsgType {
@@ -144,15 +145,13 @@ func (ce *ConsensusEngine) NotifyACK(validatorPK []byte, ack types.AckRes) {
 	}
 
 	voteMsg := &vote{
-		ack:     ack.ACK,
-		appHash: ack.AppHash,
-		blkHash: ack.BlkHash,
-		height:  ack.Height,
-		signature: &types.Signature{
-			PubKey:     ack.PubKey,
-			PubKeyType: ack.PubKeyType,
-			Data:       ack.Signature,
-		},
+		ack:            ack.ACK,
+		appHash:        ack.AppHash,
+		blkHash:        ack.BlkHash,
+		height:         ack.Height,
+		nackStatus:     ack.NackStatus,
+		outOfSyncProof: ack.OutOfSyncProof,
+		signature:      ack.Signature,
 	}
 
 	ce.sendConsensusMessage(&consensusMessage{
@@ -162,6 +161,18 @@ func (ce *ConsensusEngine) NotifyACK(validatorPK []byte, ack types.AckRes) {
 	})
 }
 
+func (v *vote) ToAckRes() *types.AckRes {
+	return &types.AckRes{
+		ACK:            v.ack,
+		AppHash:        v.appHash,
+		BlkHash:        v.blkHash,
+		Height:         v.height,
+		NackStatus:     v.nackStatus,
+		OutOfSyncProof: v.outOfSyncProof,
+		Signature:      v.signature,
+	}
+}
+
 type resetMsg struct {
 	height int64
 	txIDs  []types.Hash
@@ -169,7 +180,6 @@ type resetMsg struct {
 
 // NotifyResetState is used by the p2p stream handler to notify the consensus engine to reset the state to the specified height.
 // Only a validator should receive this message to abort the current block execution.
-// TODO: take sender and verify the validity of the message
 func (ce *ConsensusEngine) NotifyResetState(height int64, txIDs []types.Hash, leaderPubKey []byte) {
 	if ce.role.Load() != types.RoleValidator {
 		return

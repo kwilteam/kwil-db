@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
+	"github.com/kwilteam/kwil-db/core/types"
 )
 
 func TestConsensusReset_MarshalUnmarshal(t *testing.T) {
@@ -134,62 +135,112 @@ func TestConsensusReset_Bytes(t *testing.T) {
 }
 
 func TestAckRes_MarshalUnmarshal(t *testing.T) {
+	invalidBlock := NackStatusInvalidBlock
+	OutOfSyncStatus := NackStatusOutOfSync
+	signature := Signature{
+		Data:       []byte{4, 5, 6},
+		PubKeyType: crypto.KeyTypeSecp256k1,
+		PubKey:     []byte{1, 2, 3},
+	}
+
 	tests := []struct {
 		name    string
 		ar      AckRes
 		wantErr bool
 	}{
 		{
-			name: "valid ACK with all fields",
+			name: "missing signature",
 			ar: AckRes{
 				ACK:     true,
 				Height:  123,
 				BlkHash: Hash{1, 2, 3},
 				AppHash: &Hash{4, 5, 6},
-
-				PubKeyType: crypto.KeyTypeSecp256k1,
-				PubKey:     []byte{1, 2, 3},
-				Signature:  []byte{4, 5, 6},
+			},
+			wantErr: true,
+		},
+		{
+			name: "valid ACK with all fields",
+			ar: AckRes{
+				ACK:       true,
+				Height:    123,
+				BlkHash:   Hash{1, 2, 3},
+				AppHash:   &Hash{4, 5, 6},
+				Signature: &signature,
 			},
 			wantErr: false,
 		},
 		{
 			name: "valid nACK",
 			ar: AckRes{
-				ACK:     false,
-				Height:  0,
-				BlkHash: Hash{},
-				AppHash: nil,
+				ACK:        false,
+				NackStatus: &invalidBlock,
+				Height:     0,
+				BlkHash:    Hash{},
+				AppHash:    nil,
+				Signature:  &signature,
 			},
 			wantErr: false,
 		},
 		{
+			name: "valid nACK with OutOfSync status",
+			ar: AckRes{
+				ACK:        false,
+				NackStatus: &OutOfSyncStatus,
+				OutOfSyncProof: &OutOfSyncProof{
+					Header: &types.BlockHeader{
+						Version: 1,
+					},
+					Signature: []byte{1, 2, 3},
+				},
+				Height:    0,
+				BlkHash:   Hash{},
+				AppHash:   nil,
+				Signature: &signature,
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid nACK with OutOfSync status",
+			ar: AckRes{
+				ACK:            false,
+				NackStatus:     &OutOfSyncStatus,
+				OutOfSyncProof: nil,
+				Height:         0,
+				BlkHash:        Hash{},
+				AppHash:        nil,
+			},
+			wantErr: true,
+		},
+		{
 			name: "invalid ACK missing AppHash",
 			ar: AckRes{
-				ACK:     true,
-				Height:  100,
-				BlkHash: Hash{1, 2, 3},
-				AppHash: nil,
+				ACK:       true,
+				Height:    100,
+				BlkHash:   Hash{1, 2, 3},
+				AppHash:   nil,
+				Signature: &signature,
 			},
 			wantErr: true,
 		},
 		{
 			name: "max height value",
 			ar: AckRes{
-				ACK:     true,
-				Height:  1<<63 - 1,
-				BlkHash: Hash{1},
-				AppHash: &Hash{2},
+				ACK:       true,
+				Height:    1<<63 - 1,
+				BlkHash:   Hash{1},
+				AppHash:   &Hash{2},
+				Signature: &signature,
 			},
 			wantErr: false,
 		},
 		{
 			name: "invalid nACK with AppHash",
 			ar: AckRes{
-				ACK:     false,
-				Height:  0,
-				BlkHash: Hash{},
-				AppHash: &Hash{1, 2, 3},
+				ACK:       false,
+				Height:    0,
+				BlkHash:   Hash{},
+				AppHash:   &Hash{1, 2, 3},
+				Signature: &signature,
 			},
 			wantErr: true,
 		},
@@ -227,14 +278,16 @@ func TestAckRes_MarshalUnmarshal(t *testing.T) {
 					t.Errorf("AppHash mismatch: got %v, want %v", decoded.AppHash, tt.ar.AppHash)
 				}
 			}
-			if decoded.PubKeyType != tt.ar.PubKeyType {
-				t.Errorf("PubKeyType mismatch: got %v, want %v", decoded.PubKeyType, tt.ar.PubKeyType)
+			if decoded.Signature.PubKeyType != tt.ar.Signature.PubKeyType {
+				t.Errorf("Signature pubkey mismatch: got %v, want %v", decoded.Signature.PubKeyType, tt.ar.Signature.PubKeyType)
 			}
-			if !bytes.Equal(decoded.PubKey, tt.ar.PubKey) {
-				t.Errorf("PubKey mismatch: got %v, want %v", decoded.PubKey, tt.ar.PubKey)
+
+			if !bytes.Equal(decoded.Signature.Data, tt.ar.Signature.Data) {
+				t.Errorf("Signature data mismatch: got %v, want %v", decoded.Signature.Data, tt.ar.Signature.Data)
 			}
-			if !bytes.Equal(decoded.Signature, tt.ar.Signature) {
-				t.Errorf("Signature mismatch: got %v, want %v", decoded.Signature, tt.ar.Signature)
+
+			if !bytes.Equal(decoded.Signature.PubKey, tt.ar.Signature.PubKey) {
+				t.Errorf("Signature pubkey mismatch: got %v, want %v", decoded.Signature.PubKey, tt.ar.Signature.PubKey)
 			}
 		})
 	}

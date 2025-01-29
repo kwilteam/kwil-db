@@ -217,12 +217,7 @@ func (bp *BlockProcessor) loadNetworkParams(ctx context.Context, readTx sql.Tx) 
 	if err != nil {
 		return nil, fmt.Errorf("failed to load the network parameters: %w", err)
 	}
-	// networkParamsParsed, err := types.ImportNetParams(networkParams)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("failed to import the network parameters: %w", err)
-	// }
 
-	// bp.chainCtx.NetworkParameters = networkParamsParsed
 	return networkParams, nil
 }
 

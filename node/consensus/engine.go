@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
@@ -62,6 +63,9 @@ type ConsensusEngine struct {
 
 	// broadcastTxTimeout specifies the time duration to wait for a transaction to be included in the block.
 	broadcastTxTimeout time.Duration
+
+	// checkpoint is the initial checkpoint for the leader to sync to the network.
+	checkpoint config.Checkpoint
 
 	genesisHeight int64                       // height of the genesis block
 	leader        crypto.PublicKey            // TODO: update with network param updates touching it
@@ -147,6 +151,9 @@ type Config struct {
 	// CatchUpInterval  time.Duration
 	BroadcastTxTimeout time.Duration
 
+	// Checkpoint is the initial checkpoint for the leader to sync to.
+	Checkpoint config.Checkpoint
+
 	// Interfaces
 	DB             *pg.DB
 	Mempool        Mempool
@@ -183,7 +190,8 @@ type BlkAnnouncer func(ctx context.Context, blk *ktypes.Block, ci *types.CommitI
 type TxAnnouncer func(ctx context.Context, txHash types.Hash, rawTx []byte)
 
 // AckBroadcaster gossips the ack/nack messages to the network
-type AckBroadcaster func(ack bool, height int64, blkID types.Hash, appHash *types.Hash, Signature []byte) error
+// type AckBroadcaster func(ack bool, height int64, blkID types.Hash, appHash *types.Hash, Signature []byte) error
+type AckBroadcaster func(msg *types.AckRes) error
 
 // BlkRequester requests the block from the network based on the height
 type BlkRequester func(ctx context.Context, height int64) (types.Hash, []byte, *types.CommitInfo, error)
@@ -275,6 +283,7 @@ func New(cfg *Config) *ConsensusEngine {
 		blkProposalInterval: cfg.BlockProposalInterval,
 		blkAnnInterval:      cfg.BlockAnnInterval,
 		broadcastTxTimeout:  cfg.BroadcastTxTimeout,
+		checkpoint:          cfg.Checkpoint,
 		db:                  cfg.DB,
 		state: state{
 			blkProp:  nil,
@@ -674,7 +683,7 @@ func (ce *ConsensusEngine) setLastCommitInfo(height int64, appHash []byte, blk *
 		commitInfo: ci,
 		blkHash:    blkHash,
 	}
-	copy(ce.stateInfo.lastCommit.blkHash[:], appHash)
+	copy(ce.stateInfo.lastCommit.appHash[:], appHash)
 }
 
 // replayBlocks replays all the blocks from the blockstore if the app hasn't played all the blocks yet.
@@ -731,7 +740,7 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 			!ce.state.blockRes.appHash.IsZero() {
 			ce.log.Info("Reannouncing ACK", "ack", ce.state.blockRes.ack, "height", ce.state.blkProp.height, "hash", ce.state.blkProp.blkHash)
 			vote := ce.state.blockRes.vote
-			go ce.ackBroadcaster(vote.ack, vote.height, vote.blkHash, vote.appHash, vote.signature.Data)
+			go ce.ackBroadcaster(vote.ToAckRes())
 		}
 	}
 }
@@ -909,10 +918,10 @@ func (ce *ConsensusEngine) hasMajorityCeil(cnt int) bool {
 	return cnt >= threshold
 }
 
-func (ce *ConsensusEngine) hasMajorityFloor(cnt int) bool {
-	threshold := len(ce.validatorSet) / 2
-	return cnt >= threshold
-}
+// func (ce *ConsensusEngine) hasMajorityFloor(cnt int) bool {
+// 	threshold := len(ce.validatorSet) / 2
+// 	return cnt >= threshold
+// }
 
 func (ce *ConsensusEngine) InCatchup() bool {
 	return ce.inSync.Load()

@@ -344,7 +344,6 @@ func (n *Node) Start(ctx context.Context) error {
 		whitelistFns := consensus.WhitelistFns{
 			AddPeer:    n.Whitelister().AddPeer,
 			RemovePeer: n.Whitelister().RemovePeer,
-			// ListPeers:  n.Whitelister().List,
 		}
 
 		nodeErr = n.ce.Start(ctx, broadcastFns, whitelistFns)
@@ -363,7 +362,6 @@ func (n *Node) Start(ctx context.Context) error {
 	n.log.Info("Node started.")
 
 	<-ctx.Done()
-	// n.log.Info("Stopping Node protocol handlers...")
 	n.wg.Wait()
 
 	n.log.Info("Node stopped.")
