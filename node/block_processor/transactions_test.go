@@ -719,6 +719,10 @@ func (m *mockTxApp) Price(ctx context.Context, db sql.DB, tx *types.Transaction,
 
 type mockDB struct{}
 
+func (m *mockDB) BeginDelayedReadTx() sql.OuterReadTx {
+	return &mockTx{}
+}
+
 func (m *mockDB) BeginPreparedTx(ctx context.Context) (sql.PreparedTx, error) {
 	return &mockTx{}, nil
 }

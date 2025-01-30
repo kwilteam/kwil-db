@@ -98,7 +98,11 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, ci *type
 		// check if this is the first time we are hearing about this block and not already downloaded it.
 		blk, _, err := ce.blockStore.Get(blkID)
 		if err != nil {
-			return true
+			if errors.Is(err, types.ErrNotFound) || errors.Is(err, types.ErrBlkNotFound) {
+				return true // we want it
+			}
+			ce.log.Error("Unexpected error getting block from blockstore", "error", err)
+			return false
 		}
 
 		blkCommit.blk = blk
@@ -107,7 +111,7 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, ci *type
 			Msg:     blkCommit,
 			Sender:  ce.leader.Bytes(),
 		})
-		return false
+		return false // already have it, just committed it...
 	}
 
 	// We are currently processing a block proposal, ensure that it's the correct block proposal.
@@ -210,7 +214,7 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 
 	signature, err := types.SignVote(blkPropMsg.blkHash, true, &ce.state.blockRes.appHash, ce.privKey)
 	if err != nil {
-		ce.log.Error("Error signing the voteInfo", "error", err)
+		return fmt.Errorf("error signing the voteInfo: %w", err)
 	}
 	voteInfo := &vote{
 		ack:       true,
@@ -262,6 +266,8 @@ func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, c
 	if ce.state.blkProp.blkHash != blk.Header.Hash() {
 		if err := ce.rollbackState(ctx); err != nil {
 			ce.log.Error("error aborting execution of incorrect block proposal", "height", blk.Header.Height, "blockID", blk.Header.Hash(), "error", err)
+			// that's ok???
+			return fmt.Errorf("error aborting execution of incorrect block proposal: %w", err)
 		}
 		return ce.processAndCommit(ctx, blk, ci)
 	}
@@ -324,7 +330,7 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Blo
 	ce.stateInfo.mtx.Unlock()
 
 	if err := ce.executeBlock(ctx, ce.state.blkProp); err != nil {
-		return fmt.Errorf("error executing block: %v", err)
+		return fmt.Errorf("error executing block: %w", err)
 	}
 
 	if !ce.state.blockRes.paramUpdates.Equals(ci.ParamUpdates) { // this is absorbed in apphash anyway, but helps diagnostics
@@ -340,11 +346,11 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Blo
 
 	// Commit the block if the appHash and commitInfo is valid
 	if err := ce.acceptCommitInfo(ci, blkID); err != nil {
-		return fmt.Errorf("error validating commitInfo: %v", err)
+		return fmt.Errorf("error validating commitInfo: %w", err)
 	}
 
 	if err := ce.commit(ctx); err != nil {
-		return fmt.Errorf("error committing block: %v", err)
+		return fmt.Errorf("error committing block: %w", err)
 	}
 
 	ce.nextState()
@@ -361,7 +367,7 @@ func (ce *ConsensusEngine) acceptCommitInfo(ci *types.CommitInfo, blkID ktypes.H
 	for _, vote := range ci.Votes {
 		err := vote.Verify(blkID, ci.AppHash)
 		if err != nil {
-			return fmt.Errorf("error verifying vote: %v", err)
+			return fmt.Errorf("error verifying vote: %w", err)
 		}
 
 		if vote.AckStatus == types.AckStatusAgree {
@@ -370,7 +376,7 @@ func (ce *ConsensusEngine) acceptCommitInfo(ci *types.CommitInfo, blkID ktypes.H
 	}
 
 	if err := ktypes.ValidateUpdates(ci.ParamUpdates); err != nil {
-		return fmt.Errorf("paramUpdates failed validation: %v", err)
+		return fmt.Errorf("paramUpdates failed validation: %w", err)
 	}
 
 	if !ce.hasMajorityCeil(acks) {

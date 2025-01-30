@@ -256,12 +256,12 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 	for _, resolutionType := range r.resTypes {
 		cfg, err := resolutions.GetResolution(resolutionType)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error getting resolution config: %w", err)
 		}
 
 		finalized, err := getResolutionsByThresholdAndType(ctx, db, cfg.ConfirmationThreshold, resolutionType, totalPower)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error getting resolutions: %w", err)
 		}
 
 		for _, resolution := range finalized {
@@ -289,7 +289,7 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 
 		tx, err := db.BeginTx(ctx)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error starting resolution transaction: %w", err)
 		}
 
 		err = resolveFunc.ResolveFunc(ctx, &common.App{
@@ -300,27 +300,28 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 			Validators: r.Validators,
 		}, resolveFunc.Resolution, block) // block context include chain context, and thus network params and param updates
 		if err != nil {
-			err2 := tx.Rollback(ctx)
-			if err2 != nil {
-				return nil, fmt.Errorf("error rolling back transaction: %s, error: %s", err.Error(), err2.Error())
+			r.service.Logger.Warn("error resolving resolution", "type", resolveFunc.Resolution.Type, "id", resolveFunc.Resolution.ID.String(), "error", err)
+
+			if err2 := tx.Rollback(ctx); err2 != nil {
+				r.service.Logger.Warn("error rolling back nested resolution transaction", "error", err2)
+				return nil, fmt.Errorf("error rolling back transaction: %w", err2)
 			}
 
-			// if the resolveFunc fails, we should still continue on, since it simply means
-			// some business logic failed in a deployed schema.
-			r.service.Logger.Warn("error resolving resolution", "type", resolveFunc.Resolution.Type, "id", resolveFunc.Resolution.ID.String(), "error", err)
+			// If a resolveFunc fails, we should still continue on, since it
+			// simply means some business logic failed in a deployed schema.
 			continue
 		}
 
 		err = tx.Commit(ctx)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("error committing resolution transaction: %w", err)
 		}
 	}
 
 	// now we will expire resolutions
 	expired, err := getExpired(ctx, db, block.Timestamp)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error getting expired resolutions: %w", err)
 	}
 
 	expiredIDs := make([]*types.UUID, 0, len(expired))
@@ -349,7 +350,7 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 		if !ok {
 			cfg, err := resolutions.GetResolution(resolution.Type)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("error getting resolution config: %w", err)
 			}
 
 			// we need to use each configured resolutions refund threshold
@@ -367,12 +368,12 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 	allIDs := append(finalizedIDs, expiredIDs...)
 	err = deleteResolutions(ctx, db, allIDs...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error deleting resolutions: %w", err)
 	}
 
 	err = markProcessed(ctx, db, markProcessedIDs...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error marking resolutions as processed: %w", err)
 	}
 
 	// This is to ensure that the nodes that never get to vote on this event due to limitation
@@ -380,7 +381,7 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 	// So this is handled instead when the nodes are approved.
 	err = deleteEvents(ctx, db, markProcessedIDs...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error deleting events: %w", err)
 	}
 
 	// now we will apply credits if gas is enabled.
@@ -409,7 +410,7 @@ func (r *TxApp) processVotes(ctx context.Context, db sql.DB, block *common.Block
 
 			err = r.Accounts.Credit(ctx, db, acct, kv.Value)
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("error crediting account: %w", err)
 			}
 		}
 	}

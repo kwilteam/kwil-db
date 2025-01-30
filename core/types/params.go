@@ -83,8 +83,9 @@ func (pk *PublicKey) UnmarshalJSON(b []byte) error {
 	return nil
 }
 
-// NetworkParameters are network level configurations that can be
-// evolved over the lifetime of a network.
+// NetworkParameters are network level configurations that can be evolved over
+// the lifetime of a network. Fields that should not (un)marshal as part of the
+// genesis.json file should contain the `json:"-"` tag.
 type NetworkParameters struct {
 	// Leader is the leader's public key. The leader must be in the current
 	// validator set.
@@ -106,7 +107,11 @@ type NetworkParameters struct {
 	// MaxVotesPerTx is the maximum number of votes allowed in a single transaction.
 	MaxVotesPerTx int64 `json:"max_votes_per_tx"`
 
-	MigrationStatus MigrationStatus `json:"migration_status"`
+	// MigrationStatus is the status of the migration to the new network. This
+	// is not configurable, but is mutable and used to track the status of the
+	// migration on nodes of the old network. The "param" tag is used since json
+	// is explicitly omitted via the "json:"-" tag.
+	MigrationStatus MigrationStatus `json:"-" param:"migration_status"`
 }
 
 // ParamUpdates is the mechanism by which changes to network parameters are
@@ -151,6 +156,9 @@ func setParamNames(np any) {
 		fieldTag := field.Tag.Get("json")
 		if fieldTag == "" {
 			panic(fmt.Sprintf("field %v lacks a json tag", field.Name))
+		}
+		if fieldTag == "-" {
+			fieldTag = field.Tag.Get("param")
 		}
 		switch fieldName {
 		case "Leader":

@@ -118,8 +118,14 @@ func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context, requester
 
 	for {
 		if err := requester(ctx, height); err != nil {
-			ce.log.Info("block request from the network failed", "height", height, "error", err)
-			break
+			if errors.Is(err, context.Canceled) {
+				return err
+			}
+			if errors.Is(err, types.ErrBlkNotFound) || errors.Is(err, types.ErrNotFound) {
+				break // no peers have this block, assume block sync is complete, continue with consensus
+			}
+			ce.log.Warn("unexpected error requesting block from the network", "height", height, "error", err)
+			return err
 		}
 		height++
 	}

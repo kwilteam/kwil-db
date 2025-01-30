@@ -7,6 +7,7 @@ import (
 	"errors"
 	"strings"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgconn"
 )
 
@@ -18,6 +19,9 @@ var (
 
 func IsFatalDBError(err error) bool {
 	if errors.Is(err, ErrDBFailure) {
+		return true
+	}
+	if errors.Is(err, pgx.ErrTxClosed) || errors.Is(err, pgx.ErrTxCommitRollback) {
 		return true
 	}
 	// In case it wasn't already joined with ErrDBFailure, catch a fatal PgError by code.

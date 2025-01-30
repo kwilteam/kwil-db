@@ -374,13 +374,6 @@ func (bp *BlockProcessor) BroadcastVoteIDTx(ctx context.Context, db sql.DB) erro
 }
 
 func (bp *BlockProcessor) PrepareValidatorVoteIDTx(ctx context.Context, db sql.DB) (*types.Transaction, []*types.UUID, error) {
-	readTx, err := bp.db.BeginReadTx(ctx)
-	if err != nil {
-		bp.log.Error("Failed to begin read transaction while preparing voteID Tx", "error", err)
-		return nil, nil, err
-	}
-	defer readTx.Rollback(ctx)
-
 	// Only validators can issue voteID transactions not the leader or sentry nodes
 	myPubKey := bp.signer.PubKey()
 
@@ -409,7 +402,7 @@ func (bp *BlockProcessor) PrepareValidatorVoteIDTx(ctx context.Context, db sql.D
 	// ids are the resolution ids that the validator witnessed the events for and can vote on.
 	ids, err := bp.events.GetUnbroadcastedEvents(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to get unbroadcasted events: %w", err)
 	}
 
 	if len(ids) == 0 {
@@ -427,9 +420,9 @@ func (bp *BlockProcessor) PrepareValidatorVoteIDTx(ctx context.Context, db sql.D
 		return nil, nil, fmt.Errorf("failed to get signer account: %w", err)
 	}
 
-	bal, nonce, err := bp.AccountInfo(ctx, readTx, acctID, true)
+	bal, nonce, err := bp.AccountInfo(ctx, db, acctID, true)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to get account info: %w", err)
 	}
 
 	tx, err := types.CreateTransaction(&types.ValidatorVoteIDs{ResolutionIDs: ids}, bp.chainCtx.ChainID, uint64(nonce)+1)
@@ -438,9 +431,9 @@ func (bp *BlockProcessor) PrepareValidatorVoteIDTx(ctx context.Context, db sql.D
 	}
 
 	// Fee estimation
-	fee, err := bp.Price(ctx, readTx, tx)
+	fee, err := bp.Price(ctx, db, tx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to estimate fee: %w", err)
 	}
 	tx.Body.Fee = fee
 
@@ -451,7 +444,7 @@ func (bp *BlockProcessor) PrepareValidatorVoteIDTx(ctx context.Context, db sql.D
 	}
 
 	if err = tx.Sign(bp.signer); err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to sign transaction: %w", err)
 	}
 
 	return tx, ids, nil

@@ -221,7 +221,7 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 		<-db.repl.done      // wait for capture goroutine to end (broadcast channel)
 		cancel(db.repl.err) // set the cause
 
-		db.pool.Close()
+		// db.pool.Close()
 
 		// If the DB has shut down, there will be no more notices, which may be
 		// needed to unblock a receiver e.g. FinalizeBlock, so we close the
@@ -279,7 +279,7 @@ func (db *DB) Close() error {
 		// With PREPARE TRANSACTION already done, rollback the prepared transaction.
 		sqlRollback := fmt.Sprintf(`ROLLBACK PREPARED '%s'`, db.txid)
 		if _, err := db.tx.Exec(context.Background(), sqlRollback); err != nil {
-			return fmt.Errorf("ROLLBACK PREPARED failed: %v", err)
+			return fmt.Errorf("ROLLBACK PREPARED failed: %w", err)
 		}
 		// We don't use Rollback, which normally releases automatically.
 		if rel, ok := db.tx.(releaser); ok {
@@ -526,8 +526,9 @@ func (db *DB) beginWriterTx(ctx context.Context, sequenced bool) (pgx.Tx, error)
 	// from it includes the expected seq value.
 	seq, err := incrementSeq(ctx, tx)
 	if err != nil {
-		defer writer.Release()
+		// writeTxWrapper.Rollback will release the connection
 		if err2 := db.tx.Rollback(context.Background()); err2 != nil {
+			db.tx = nil // clear the tx regardless of error
 			return nil, fmt.Errorf("failed to rollback: %w", errors.Join(err, err2))
 		}
 		db.tx = nil
@@ -620,7 +621,7 @@ func (db *DB) commit(ctx context.Context) error {
 
 	sqlCommit := fmt.Sprintf(`COMMIT PREPARED '%s'`, db.txid)
 	if _, err := db.tx.Exec(ctx, sqlCommit); err != nil {
-		return fmt.Errorf("COMMIT PREPARED failed: %v", err)
+		return fmt.Errorf("COMMIT PREPARED failed: %w", err)
 	}
 
 	// Success, the defer should not try to rollback, and we should forget about
@@ -651,7 +652,14 @@ func (db *DB) rollback(ctx context.Context) error {
 
 	// If precommit not yet done, do a regular rollback.
 	if db.txid == "" {
-		return db.tx.Rollback(ctx)
+		err := db.tx.Rollback(ctx)
+		if err == nil {
+			return nil
+		}
+		if errors.Is(err, pgx.ErrTxClosed) || strings.Contains(err.Error(), "conn closed") {
+			return nil
+		}
+		return err
 	}
 
 	defer func() {
@@ -666,7 +674,10 @@ func (db *DB) rollback(ctx context.Context) error {
 	// notice: "WARNING:  there is no transaction in progress".
 	sqlRollback := fmt.Sprintf(`ROLLBACK PREPARED '%s'`, db.txid)
 	if _, err := db.tx.Exec(ctx, sqlRollback); err != nil {
-		return fmt.Errorf("ROLLBACK PREPARED failed: %v", err)
+		if errors.Is(err, pgx.ErrTxClosed) || strings.Contains(err.Error(), "conn closed") {
+			return nil
+		}
+		return fmt.Errorf("ROLLBACK PREPARED failed: %w", err)
 	}
 
 	return nil

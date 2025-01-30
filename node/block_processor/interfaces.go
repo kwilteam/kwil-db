@@ -23,6 +23,7 @@ type DB interface {
 	sql.PreparedTxMaker
 	sql.ReadTxMaker
 	sql.SnapshotTxMaker
+	sql.DelayedReadTxMaker
 }
 
 type Accounts interface {

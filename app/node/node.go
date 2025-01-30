@@ -31,9 +31,8 @@ type server struct {
 	cfg *config.Config // KwildConfig
 	log log.Logger
 
-	cancelCtxFunc context.CancelFunc
-	closers       *closeFuncs
-	dbCtx         interface {
+	closers *closeFuncs
+	dbCtx   interface {
 		Done() <-chan struct{}
 		Err() error
 	}
@@ -183,7 +182,8 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config, autogen bo
 		}
 	}()
 
-	server := buildServer(ctx, d)
+	// ctxBuild, cancelBuild := context.WithCancel()
+	server := buildServer(context.Background(), d)
 
 	return server.Start(ctx)
 }
@@ -204,16 +204,14 @@ func (s *server) Start(ctx context.Context) error {
 
 	s.log.Info("Starting the server")
 
-	cancelCtx, done := context.WithCancel(ctx)
-	s.cancelCtxFunc = done
-
-	group, groupCtx := errgroup.WithContext(cancelCtx)
+	group, groupCtx := errgroup.WithContext(ctx)
 
 	group.Go(func() error {
 		// If the DB dies unexpectedly, stop the entire error group.
 		select {
 		case <-s.dbCtx.Done(): // DB died
-			return s.dbCtx.Err() // shutdown the server
+			s.log.Error("DB died unexpectedly, shutting down server.")
+			return s.dbCtx.Err() // shutdown the server (this return cancels groupCtx)
 		case <-groupCtx.Done(): // something else died or was shut down
 			return nil
 		}
@@ -235,8 +233,11 @@ func (s *server) Start(ctx context.Context) error {
 	// start node (p2p)
 	group.Go(func() error {
 		if err := s.node.Start(groupCtx, s.cfg.P2P.BootNodes...); err != nil {
-			s.log.Error("failed to start node", "error", err)
-			s.cancelCtxFunc() // Ensure all services are stopped
+			if errors.Is(err, context.Canceled) {
+				s.log.Infof("Shutdown signaled. Cancellation details: [%v]", err)
+			} else {
+				s.log.Error("failed to start node", "error", err)
+			}
 			return err
 		}
 		return nil
@@ -257,7 +258,6 @@ func (s *server) Start(ctx context.Context) error {
 	// Start the consensus engine
 
 	err := group.Wait()
-
 	if err != nil {
 		if errors.Is(err, context.Canceled) {
 			s.log.Info("server context is canceled")
@@ -265,7 +265,6 @@ func (s *server) Start(ctx context.Context) error {
 		}
 
 		s.log.Error("server error", "error", err)
-		s.cancelCtxFunc()
 		return err
 	}
 

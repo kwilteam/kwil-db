@@ -145,8 +145,10 @@ func (ce *ConsensusEngine) executeBlock(ctx context.Context, blkProp *blockPropo
 	}
 	results, err := ce.blockProcessor.ExecuteBlock(ctx, req)
 	if err != nil {
-		ce.log.Warn("Error executing block", "height", blkProp.height, "hash", blkProp.blkHash, "error", err)
-		return errors.Join(fmt.Errorf("Error executing block: height %d, hash: %s", blkProp.height, blkProp.blkHash.String()), err)
+		if !errors.Is(err, context.Canceled) { // unexpected error
+			ce.log.Error("Error executing block", "height", blkProp.height, "hash", blkProp.blkHash, "error", err)
+		} // else caller thinks this is a regular shutdown, with error including details
+		return fmt.Errorf("Error executing block %s at height %d: %w", blkProp.blkHash, blkProp.height, err)
 	}
 
 	ce.state.blockRes = &blockResult{
@@ -169,6 +171,10 @@ func (ce *ConsensusEngine) executeBlock(ctx context.Context, blkProp *blockPropo
 func (ce *ConsensusEngine) commit(ctx context.Context) error {
 	ce.mempoolMtx.Lock()
 	defer ce.mempoolMtx.Unlock()
+
+	if ce.state.blockRes == nil {
+		return errors.New("no block results to commit")
+	}
 
 	blkProp := ce.state.blkProp
 	height, appHash := ce.state.blkProp.height, ce.state.blockRes.appHash
@@ -214,7 +220,7 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 
 	ce.log.Info("Committed Block", "height", height, "hash", blkProp.blkHash.String(),
 		"appHash", appHash.String(), "updates", ce.state.blockRes.paramUpdates)
-	return nil
+	return ctx.Err()
 }
 
 // nextState sets the lastCommit in state.lc from the current block proposal
