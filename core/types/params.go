@@ -465,12 +465,32 @@ func (np NetworkParameters) ToMap() map[ParamName]any {
 	}
 }
 
+type fullMarshalledNetParams struct {
+	*NetworkParameters
+	MigrationStatus MigrationStatus `json:"migration_status"` // ignored in NetworkParameters
+}
+
 func (np NetworkParameters) MarshalBinary() ([]byte, error) {
-	return json.Marshal(np)
+	full := fullMarshalledNetParams{
+		NetworkParameters: &np,
+		MigrationStatus:   np.MigrationStatus,
+	}
+	return json.Marshal(full)
 }
 
 func (np *NetworkParameters) UnmarshalBinary(data []byte) error {
-	return json.Unmarshal(data, np)
+	full := fullMarshalledNetParams{
+		NetworkParameters: np,
+		MigrationStatus:   np.MigrationStatus,
+	}
+	err := json.Unmarshal(data, &full)
+	if err != nil {
+		return err
+	}
+
+	np.MigrationStatus = full.MigrationStatus
+
+	return nil
 }
 
 func (np *NetworkParameters) Clone() *NetworkParameters {
