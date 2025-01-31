@@ -521,16 +521,16 @@ func unassignRole(ctx context.Context, db sql.DB, roleName, user string) error {
 }
 
 var privilegeNames = map[privilege]struct{}{
-	CallPrivilege:   {},
-	SelectPrivilege: {},
-	InsertPrivilege: {},
-	UpdatePrivilege: {},
-	DeletePrivilege: {},
-	CreatePrivilege: {},
-	DropPrivilege:   {},
-	AlterPrivilege:  {},
-	RolesPrivilege:  {},
-	UsePrivilege:    {},
+	_CALL_PRIVILEGE:   {},
+	_SELECT_PRIVILEGE: {},
+	_INSERT_PRIVILEGE: {},
+	_UPDATE_PRIVILEGE: {},
+	_DELETE_PRIVILEGE: {},
+	_CREATE_PRIVILEGE: {},
+	_DROP_PRIVILEGE:   {},
+	_ALTER_PRIVILEGE:  {},
+	_ROLES_PRIVILEGE:  {},
+	_USE_PRIVILEGE:    {},
 }
 
 type privilege string
@@ -539,28 +539,29 @@ func (p privilege) String() string {
 	return string(p)
 }
 
+// the following constants all start with _ to unexport them.
 const (
 	// Can execute actions
-	CallPrivilege privilege = "CALL"
+	_CALL_PRIVILEGE privilege = "CALL"
 	// can execute ad-hoc select queries
-	SelectPrivilege privilege = "SELECT"
+	_SELECT_PRIVILEGE privilege = "SELECT"
 	// can insert data
-	InsertPrivilege privilege = "INSERT"
+	_INSERT_PRIVILEGE privilege = "INSERT"
 	// can update data
-	UpdatePrivilege privilege = "UPDATE"
+	_UPDATE_PRIVILEGE privilege = "UPDATE"
 	// can delete data
-	DeletePrivilege privilege = "DELETE"
+	_DELETE_PRIVILEGE privilege = "DELETE"
 	// can create new objects
-	CreatePrivilege privilege = "CREATE"
+	_CREATE_PRIVILEGE privilege = "CREATE"
 	// can drop objects
-	DropPrivilege privilege = "DROP"
+	_DROP_PRIVILEGE privilege = "DROP"
 	// use can use extensions
-	UsePrivilege privilege = "USE"
+	_USE_PRIVILEGE privilege = "USE"
 	// can alter objects
-	AlterPrivilege privilege = "ALTER"
+	_ALTER_PRIVILEGE privilege = "ALTER"
 	// can manage roles.
 	// roles are global, and are not tied to a specific namespace or object.
-	RolesPrivilege privilege = "ROLES"
+	_ROLES_PRIVILEGE privilege = "ROLES"
 )
 
 // perms is a struct that holds the permissions for a role.
@@ -652,7 +653,7 @@ func (p *perms) revoke(namespace *string, privs ...privilege) {
 func canBeNamespaced(ps ...privilege) error {
 	for _, p := range ps {
 		switch p {
-		case RolesPrivilege, UsePrivilege:
+		case _ROLES_PRIVILEGE, _USE_PRIVILEGE:
 			return fmt.Errorf(`%w: %s`, engine.ErrCannotBeNamespaced, p)
 		}
 	}

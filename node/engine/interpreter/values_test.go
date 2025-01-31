@@ -109,7 +109,7 @@ func Test_Arithmetic(t *testing.T) {
 			a := makeVal(tt.a)
 			b := makeVal(tt.b)
 
-			isErrOrResult := func(a, b scalarValue, op engine.ArithmeticOp, want any) {
+			isErrOrResult := func(a, b scalarValue, op arithmeticOp, want any) {
 				res, err := a.Arithmetic(b, op)
 				if wantErr, ok := want.(error); ok {
 					require.Error(t, err)
@@ -133,13 +133,13 @@ func Test_Arithmetic(t *testing.T) {
 				require.Nil(t, res.RawValue())
 			}
 
-			isErrOrResult(a, b, engine.ADD, tt.add)
-			isErrOrResult(a, b, engine.SUB, tt.sub)
-			isErrOrResult(a, b, engine.MUL, tt.mul)
-			isErrOrResult(a, b, engine.DIV, tt.div)
-			isErrOrResult(a, b, engine.MOD, tt.mod)
-			isErrOrResult(a, b, engine.EXP, tt.exp)
-			isErrOrResult(a, b, engine.CONCAT, tt.concat)
+			isErrOrResult(a, b, _ADD, tt.add)
+			isErrOrResult(a, b, _SUB, tt.sub)
+			isErrOrResult(a, b, _MUL, tt.mul)
+			isErrOrResult(a, b, _DIV, tt.div)
+			isErrOrResult(a, b, _MOD, tt.mod)
+			isErrOrResult(a, b, _EXP, tt.exp)
+			isErrOrResult(a, b, _CONCAT, tt.concat)
 
 			// test rountripping strings
 			testRoundTripParse(t, a)
@@ -381,7 +381,7 @@ func Test_Comparison(t *testing.T) {
 			a := makeVal(tt.a)
 			b := makeVal(tt.b)
 
-			isErrOrResult := func(a, b value, op engine.ComparisonOp, want any) {
+			isErrOrResult := func(a, b value, op comparisonOp, want any) {
 				t.Log(op.String())
 				res, err := a.Compare(b, op)
 				if wantErr, ok := want.(error); ok {
@@ -404,11 +404,11 @@ func Test_Comparison(t *testing.T) {
 				}
 			}
 
-			isErrOrResult(a, b, engine.LESS_THAN, tt.lt)
-			isErrOrResult(a, b, engine.GREATER_THAN, tt.gt)
-			isErrOrResult(a, b, engine.EQUAL, tt.eq)
-			isErrOrResult(a, b, engine.IS, tt.is)
-			isErrOrResult(a, b, engine.IS_DISTINCT_FROM, tt.distinctFrom)
+			isErrOrResult(a, b, _LESS_THAN, tt.lt)
+			isErrOrResult(a, b, _GREATER_THAN, tt.gt)
+			isErrOrResult(a, b, _EQUAL, tt.eq)
+			isErrOrResult(a, b, _IS, tt.is)
+			isErrOrResult(a, b, _IS_DISTINCT_FROM, tt.distinctFrom)
 
 			// test rountripping strings
 			testRoundTripParse(t, a)
@@ -699,7 +699,7 @@ func Test_Unary(t *testing.T) {
 			scal, ok := val.(scalarValue)
 			require.True(t, ok)
 
-			check := func(op engine.UnaryOp, want any) {
+			check := func(op unaryOp, want any) {
 				if want == nil {
 					want = engine.ErrUnary
 				}
@@ -716,9 +716,9 @@ func Test_Unary(t *testing.T) {
 				eq(t, want, res.RawValue())
 			}
 
-			check(engine.POS, tt.pos)
-			check(engine.NEG, tt.neg)
-			check(engine.NOT, tt.not)
+			check(_POS, tt.pos)
+			check(_NEG, tt.neg)
+			check(_NOT, tt.not)
 
 			// test rountripping strings
 			testRoundTripParse(t, val)
@@ -897,7 +897,7 @@ func testRoundTripParse(t *testing.T, v value) {
 	val2, err := parseValue(str, v.Type())
 	require.NoError(t, err)
 
-	equal, err := v.Compare(val2, engine.EQUAL)
+	equal, err := v.Compare(val2, _EQUAL)
 	require.NoError(t, err)
 
 	if !equal.RawValue().(bool) {

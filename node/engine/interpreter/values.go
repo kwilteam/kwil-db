@@ -288,7 +288,7 @@ type value interface {
 	Null() bool
 	// Compare compares the variable with another variable using the given comparison operator.
 	// It will return a boolean value or null, depending on the comparison and the values.
-	Compare(v value, op engine.ComparisonOp) (*boolValue, error)
+	Compare(v value, op comparisonOp) (*boolValue, error)
 	// Cast casts the variable to the given type.
 	// It is meant to mirror Postgres's type casting behavior.
 	Cast(t *types.DataType) (value, error)
@@ -298,9 +298,9 @@ type value interface {
 type scalarValue interface {
 	value
 	// Arithmetic performs an arithmetic operation on the variable with another variable.
-	Arithmetic(v scalarValue, op engine.ArithmeticOp) (scalarValue, error)
+	Arithmetic(v scalarValue, op arithmeticOp) (scalarValue, error)
 	// Unary applies a unary operation to the variable.
-	Unary(op engine.UnaryOp) (scalarValue, error)
+	Unary(op unaryOp) (scalarValue, error)
 }
 
 // arrayValue is an array value that can be compared and have unary operations applied to it.
@@ -591,7 +591,7 @@ func (i *int8Value) Null() bool {
 	return !i.Valid
 }
 
-func (v *int8Value) Compare(v2 value, op engine.ComparisonOp) (*boolValue, error) {
+func (v *int8Value) Compare(v2 value, op comparisonOp) (*boolValue, error) {
 	if res, early := nullCmp(v, v2, op); early {
 		return res, nil
 	}
@@ -603,13 +603,13 @@ func (v *int8Value) Compare(v2 value, op engine.ComparisonOp) (*boolValue, error
 
 	var b bool
 	switch op {
-	case engine.EQUAL:
+	case _EQUAL:
 		b = v.Int64 == val2.Int64
-	case engine.LESS_THAN:
+	case _LESS_THAN:
 		b = v.Int64 < val2.Int64
-	case engine.GREATER_THAN:
+	case _GREATER_THAN:
 		b = v.Int64 > val2.Int64
-	case engine.IS_DISTINCT_FROM:
+	case _IS_DISTINCT_FROM:
 		b = v.Int64 != val2.Int64
 	default:
 		return nil, fmt.Errorf("%w: cannot compare int with operator %s", engine.ErrComparison, op)
@@ -624,11 +624,11 @@ func (v *int8Value) Compare(v2 value, op engine.ComparisonOp) (*boolValue, error
 // based on the comparison of the two values.
 // If the operator is any other operator and either of the values is null,
 // it will return a null value.
-func nullCmp(a, b value, op engine.ComparisonOp) (*boolValue, bool) {
+func nullCmp(a, b value, op comparisonOp) (*boolValue, bool) {
 	// if it is is_DISTINCT_FROM or is, we should handle nulls
 	// Otherwise, if either is a null, we return early because we cannot compare
 	// a null value with a non-null value.
-	if op == engine.IS_DISTINCT_FROM {
+	if op == _IS_DISTINCT_FROM {
 		if a.Null() && b.Null() {
 			return makeBool(false), true
 		}
@@ -639,7 +639,7 @@ func nullCmp(a, b value, op engine.ComparisonOp) (*boolValue, bool) {
 		// otherwise, we let equality handle it
 	}
 
-	if op == engine.IS {
+	if op == _IS {
 		if a.Null() && b.Null() {
 			return makeBool(true), true
 		}
@@ -675,7 +675,7 @@ func checkScalarNulls(v ...scalarValue) (scalarValue, bool) {
 	return nil, false
 }
 
-func (i *int8Value) Arithmetic(v scalarValue, op engine.ArithmeticOp) (scalarValue, error) {
+func (i *int8Value) Arithmetic(v scalarValue, op arithmeticOp) (scalarValue, error) {
 	if res, early := checkScalarNulls(i, v); early {
 		return res, nil
 	}
@@ -688,23 +688,23 @@ func (i *int8Value) Arithmetic(v scalarValue, op engine.ArithmeticOp) (scalarVal
 	var r int64
 
 	switch op {
-	case engine.ADD:
+	case _ADD:
 		r = i.Int64 + val2.Int64
-	case engine.SUB:
+	case _SUB:
 		r = i.Int64 - val2.Int64
-	case engine.MUL:
+	case _MUL:
 		r = i.Int64 * val2.Int64
-	case engine.DIV:
+	case _DIV:
 		if val2.Int64 == 0 {
 			return nil, fmt.Errorf("%w: cannot divide by zero", engine.ErrArithmetic)
 		}
 		r = i.Int64 / val2.Int64
-	case engine.MOD:
+	case _MOD:
 		if val2.Int64 == 0 {
 			return nil, fmt.Errorf("%w: cannot modulo by zero", engine.ErrArithmetic)
 		}
 		r = i.Int64 % val2.Int64
-	case engine.EXP:
+	case _EXP:
 		p := math.Pow(float64(i.Int64), float64(val2.Int64))
 		if p > math.MaxInt64 {
 			return nil, fmt.Errorf("%w: result of exponentiation is too large", engine.ErrArithmetic)
@@ -722,17 +722,17 @@ func (i *int8Value) Arithmetic(v scalarValue, op engine.ArithmeticOp) (scalarVal
 	}, nil
 }
 
-func (i *int8Value) Unary(op engine.UnaryOp) (scalarValue, error) {
+func (i *int8Value) Unary(op unaryOp) (scalarValue, error) {
 	if i.Null() {
 		return i, nil
 	}
 
 	switch op {
-	case engine.NEG:
+	case _NEG:
 		return &int8Value{Int8: pgtype.Int8{Int64: -i.Int64, Valid: true}}, nil
-	case engine.NOT:
+	case _NOT:
 		return nil, fmt.Errorf("%w: cannot apply logical NOT to an integer", engine.ErrUnary)
-	case engine.POS:
+	case _POS:
 		return i, nil
 	default:
 		return nil, fmt.Errorf("%w: unknown unary operator: %s", engine.ErrUnary, op)
@@ -831,7 +831,7 @@ func (t *textValue) Null() bool {
 	return !t.Valid
 }
 
-func (s *textValue) Compare(v value, op engine.ComparisonOp) (*boolValue, error) {
+func (s *textValue) Compare(v value, op comparisonOp) (*boolValue, error) {
 	if res, early := nullCmp(s, v, op); early {
 		return res, nil
 	}
@@ -843,13 +843,13 @@ func (s *textValue) Compare(v value, op engine.ComparisonOp) (*boolValue, error)
 
 	var b bool
 	switch op {
-	case engine.EQUAL:
+	case _EQUAL:
 		b = s.String == val2.String
-	case engine.LESS_THAN:
+	case _LESS_THAN:
 		b = s.String < val2.String
-	case engine.GREATER_THAN:
+	case _GREATER_THAN:
 		b = s.String > val2.String
-	case engine.IS_DISTINCT_FROM:
+	case _IS_DISTINCT_FROM:
 		b = s.String != val2.String
 	default:
 		return nil, fmt.Errorf("%w: cannot use comparison operator %s with type %s", engine.ErrComparison, s.Type(), op)
@@ -858,7 +858,7 @@ func (s *textValue) Compare(v value, op engine.ComparisonOp) (*boolValue, error)
 	return makeBool(b), nil
 }
 
-func (s *textValue) Arithmetic(v scalarValue, op engine.ArithmeticOp) (scalarValue, error) {
+func (s *textValue) Arithmetic(v scalarValue, op arithmeticOp) (scalarValue, error) {
 	if res, early := checkScalarNulls(s, v); early {
 		return res, nil
 	}
@@ -868,14 +868,14 @@ func (s *textValue) Arithmetic(v scalarValue, op engine.ArithmeticOp) (scalarVal
 		return nil, makeTypeErr(s, v)
 	}
 
-	if op == engine.CONCAT {
+	if op == _CONCAT {
 		return makeText(s.String + val2.String), nil
 	}
 
 	return nil, fmt.Errorf("%w: cannot perform arithmetic operation %s on type string", engine.ErrArithmetic, op)
 }
 
-func (s *textValue) Unary(op engine.UnaryOp) (scalarValue, error) {
+func (s *textValue) Unary(op unaryOp) (scalarValue, error) {
 	return nil, fmt.Errorf("%w: cannot perform unary operation on string", engine.ErrUnary)
 }
 
@@ -957,7 +957,7 @@ func (b *boolValue) Null() bool {
 	return !b.Valid
 }
 
-func (b *boolValue) Compare(v value, op engine.ComparisonOp) (*boolValue, error) {
+func (b *boolValue) Compare(v value, op comparisonOp) (*boolValue, error) {
 	if res, early := nullCmp(b, v, op); early {
 		return res, nil
 	}
@@ -969,15 +969,15 @@ func (b *boolValue) Compare(v value, op engine.ComparisonOp) (*boolValue, error)
 
 	var b2 bool
 	switch op {
-	case engine.EQUAL:
+	case _EQUAL:
 		b2 = b.Bool.Bool == val2.Bool.Bool
-	case engine.IS_DISTINCT_FROM:
+	case _IS_DISTINCT_FROM:
 		b2 = b.Bool.Bool != val2.Bool.Bool
-	case engine.LESS_THAN:
+	case _LESS_THAN:
 		b2 = !b.Bool.Bool && val2.Bool.Bool
-	case engine.GREATER_THAN:
+	case _GREATER_THAN:
 		b2 = b.Bool.Bool && !val2.Bool.Bool
-	case engine.IS:
+	case _IS:
 		b2 = b.Bool.Bool == val2.Bool.Bool
 	default:
 		return nil, fmt.Errorf("%w: cannot use comparison operator %s with type %s", engine.ErrComparison, b.Type(), op)
@@ -986,19 +986,19 @@ func (b *boolValue) Compare(v value, op engine.ComparisonOp) (*boolValue, error)
 	return makeBool(b2), nil
 }
 
-func (b *boolValue) Arithmetic(v scalarValue, op engine.ArithmeticOp) (scalarValue, error) {
+func (b *boolValue) Arithmetic(v scalarValue, op arithmeticOp) (scalarValue, error) {
 	return nil, fmt.Errorf("%w: cannot perform arithmetic operation on bool", engine.ErrArithmetic)
 }
 
-func (b *boolValue) Unary(op engine.UnaryOp) (scalarValue, error) {
+func (b *boolValue) Unary(op unaryOp) (scalarValue, error) {
 	if b.Null() {
 		return b, nil
 	}
 
 	switch op {
-	case engine.NOT:
+	case _NOT:
 		return makeBool(!b.Bool.Bool), nil
-	case engine.NEG, engine.POS:
+	case _NEG, _POS:
 		return nil, fmt.Errorf("%w: cannot perform unary operation %s on bool", engine.ErrUnary, op)
 	default:
 		return nil, fmt.Errorf("%w: unexpected operator id %s for bool", engine.ErrUnary, op)
@@ -1052,7 +1052,7 @@ func (b *blobValue) Null() bool {
 	return b.bts == nil
 }
 
-func (b *blobValue) Compare(v value, op engine.ComparisonOp) (*boolValue, error) {
+func (b *blobValue) Compare(v value, op comparisonOp) (*boolValue, error) {
 	if res, early := nullCmp(b, v, op); early {
 		return res, nil
 	}
@@ -1064,9 +1064,9 @@ func (b *blobValue) Compare(v value, op engine.ComparisonOp) (*boolValue, error)
 
 	var b2 bool
 	switch op {
-	case engine.EQUAL:
+	case _EQUAL:
 		b2 = string(*b.bts) == string(*val2.bts)
-	case engine.IS_DISTINCT_FROM:
+	case _IS_DISTINCT_FROM:
 		b2 = string(*b.bts) != string(*val2.bts)
 	default:
 		return nil, fmt.Errorf("%w: cannot use comparison operator %s with type %s", engine.ErrComparison, b.Type(), op)
@@ -1075,7 +1075,7 @@ func (b *blobValue) Compare(v value, op engine.ComparisonOp) (*boolValue, error)
 	return makeBool(b2), nil
 }
 
-func (b *blobValue) Arithmetic(v scalarValue, op engine.ArithmeticOp) (scalarValue, error) {
+func (b *blobValue) Arithmetic(v scalarValue, op arithmeticOp) (scalarValue, error) {
 	if res, early := checkScalarNulls(b, v); early {
 		return res, nil
 	}
@@ -1085,14 +1085,14 @@ func (b *blobValue) Arithmetic(v scalarValue, op engine.ArithmeticOp) (scalarVal
 		return nil, makeTypeErr(b, v)
 	}
 
-	if op == engine.CONCAT {
+	if op == _CONCAT {
 		return makeBlob(append(*b.bts, *val2.bts...)), nil
 	}
 
 	return nil, fmt.Errorf("%w: cannot perform arithmetic operation %s on blob", engine.ErrArithmetic, op)
 }
 
-func (b *blobValue) Unary(op engine.UnaryOp) (scalarValue, error) {
+func (b *blobValue) Unary(op unaryOp) (scalarValue, error) {
 	return nil, fmt.Errorf("%w: cannot perform unary operation on blob", engine.ErrUnary)
 }
 
@@ -1193,7 +1193,7 @@ func (u *uuidValue) Null() bool {
 	return !u.Valid
 }
 
-func (u *uuidValue) Compare(v value, op engine.ComparisonOp) (*boolValue, error) {
+func (u *uuidValue) Compare(v value, op comparisonOp) (*boolValue, error) {
 	if res, early := nullCmp(u, v, op); early {
 		return res, nil
 	}
@@ -1205,9 +1205,9 @@ func (u *uuidValue) Compare(v value, op engine.ComparisonOp) (*boolValue, error)
 
 	var b bool
 	switch op {
-	case engine.EQUAL:
+	case _EQUAL:
 		b = u.Bytes == val2.Bytes
-	case engine.IS_DISTINCT_FROM:
+	case _IS_DISTINCT_FROM:
 		b = u.Bytes != val2.Bytes
 	default:
 		return nil, fmt.Errorf("%w: cannot use comparison operator %s with type %s", engine.ErrComparison, u.Type(), op)
@@ -1216,11 +1216,11 @@ func (u *uuidValue) Compare(v value, op engine.ComparisonOp) (*boolValue, error)
 	return makeBool(b), nil
 }
 
-func (u *uuidValue) Arithmetic(v scalarValue, op engine.ArithmeticOp) (scalarValue, error) {
+func (u *uuidValue) Arithmetic(v scalarValue, op arithmeticOp) (scalarValue, error) {
 	return nil, fmt.Errorf("%w: cannot perform arithmetic operation on uuid", engine.ErrArithmetic)
 }
 
-func (u *uuidValue) Unary(op engine.UnaryOp) (scalarValue, error) {
+func (u *uuidValue) Unary(op unaryOp) (scalarValue, error) {
 	return nil, fmt.Errorf("%w: cannot perform unary operation on uuid", engine.ErrUnary)
 }
 
@@ -1360,7 +1360,7 @@ func (d *decimalValue) dec() (*types.Decimal, error) {
 	return d2, nil
 }
 
-func (d *decimalValue) Compare(v value, op engine.ComparisonOp) (*boolValue, error) {
+func (d *decimalValue) Compare(v value, op comparisonOp) (*boolValue, error) {
 	if res, early := nullCmp(d, v, op); early {
 		return res, nil
 	}
@@ -1388,7 +1388,7 @@ func (d *decimalValue) Compare(v value, op engine.ComparisonOp) (*boolValue, err
 	return cmpIntegers(res, 0, op)
 }
 
-func (d *decimalValue) Arithmetic(v scalarValue, op engine.ArithmeticOp) (scalarValue, error) {
+func (d *decimalValue) Arithmetic(v scalarValue, op arithmeticOp) (scalarValue, error) {
 	if res, early := checkScalarNulls(d, v); early {
 		return res, nil
 	}
@@ -1416,17 +1416,17 @@ func (d *decimalValue) Arithmetic(v scalarValue, op engine.ArithmeticOp) (scalar
 
 	var d2 *types.Decimal
 	switch op {
-	case engine.ADD:
+	case _ADD:
 		d2, err = types.DecimalAdd(dec1, dec2)
-	case engine.SUB:
+	case _SUB:
 		d2, err = types.DecimalSub(dec1, dec2)
-	case engine.MUL:
+	case _MUL:
 		d2, err = types.DecimalMul(dec1, dec2)
-	case engine.DIV:
+	case _DIV:
 		d2, err = types.DecimalDiv(dec1, dec2)
-	case engine.EXP:
+	case _EXP:
 		d2, err = types.DecimalPow(dec1, dec2)
-	case engine.MOD:
+	case _MOD:
 		d2, err = types.DecimalMod(dec1, dec2)
 	default:
 		return nil, fmt.Errorf("%w: unexpected operator id %d for decimal", engine.ErrArithmetic, op)
@@ -1443,13 +1443,13 @@ func (d *decimalValue) Arithmetic(v scalarValue, op engine.ArithmeticOp) (scalar
 	return makeDecimal(d2), nil
 }
 
-func (d *decimalValue) Unary(op engine.UnaryOp) (scalarValue, error) {
+func (d *decimalValue) Unary(op unaryOp) (scalarValue, error) {
 	if d.Null() {
 		return d, nil
 	}
 
 	switch op {
-	case engine.NEG:
+	case _NEG:
 		dec, err := d.dec()
 		if err != nil {
 			return nil, err
@@ -1461,7 +1461,7 @@ func (d *decimalValue) Unary(op engine.UnaryOp) (scalarValue, error) {
 		}
 
 		return makeDecimal(dec), nil
-	case engine.POS:
+	case _POS:
 		return d, nil
 	default:
 		return nil, fmt.Errorf("%w: unexpected operator id %s for decimal", engine.ErrUnary, op)
@@ -1678,7 +1678,12 @@ func setArr[T, B any](arr internalArray[T], i int32, v scalarValue, fn func(B) T
 		return nil
 	}
 
-	// if the value is not null, we will cast it to the scalar type of the array
+	// if the value is not null, we will cast it to the scalar type of the array.
+	// This matches Postgres:
+	// postgres=# select array[1, '2'];
+	//  array
+	//  -------
+	//   {1,2}
 	scalar, err := v.Cast(dtScalar)
 	if err != nil {
 		return err
@@ -1701,7 +1706,7 @@ func (a *int8ArrayValue) Null() bool {
 	return !a.Valid
 }
 
-func (a *int8ArrayValue) Compare(v value, op engine.ComparisonOp) (*boolValue, error) {
+func (a *int8ArrayValue) Compare(v value, op comparisonOp) (*boolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
@@ -1792,7 +1797,7 @@ func (a *textArrayValue) Null() bool {
 	return !a.Valid
 }
 
-func (a *textArrayValue) Compare(v value, op engine.ComparisonOp) (*boolValue, error) {
+func (a *textArrayValue) Compare(v value, op comparisonOp) (*boolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
@@ -1935,7 +1940,7 @@ func (a *boolArrayValue) Null() bool {
 	return !a.Valid
 }
 
-func (a *boolArrayValue) Compare(v value, op engine.ComparisonOp) (*boolValue, error) {
+func (a *boolArrayValue) Compare(v value, op comparisonOp) (*boolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
@@ -2054,12 +2059,12 @@ func (a *decimalArrayValue) Null() bool {
 	return !a.Valid
 }
 
-func (a *decimalArrayValue) Compare(v value, op engine.ComparisonOp) (*boolValue, error) {
+func (a *decimalArrayValue) Compare(v value, op comparisonOp) (*boolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
 // cmpArrs compares two Kwil array types.
-func cmpArrs[M arrayValue](a M, b value, op engine.ComparisonOp) (*boolValue, error) {
+func cmpArrs[M arrayValue](a M, b value, op comparisonOp) (*boolValue, error) {
 	if res, early := nullCmp(a, b, op); early {
 		return res, nil
 	}
@@ -2093,7 +2098,7 @@ func cmpArrs[M arrayValue](a M, b value, op engine.ComparisonOp) (*boolValue, er
 				return false, nil
 			}
 
-			res, err := v1.Compare(v2, engine.EQUAL)
+			res, err := v1.Compare(v2, _EQUAL)
 			if err != nil {
 				return false, err
 			}
@@ -2112,9 +2117,9 @@ func cmpArrs[M arrayValue](a M, b value, op engine.ComparisonOp) (*boolValue, er
 	}
 
 	switch op {
-	case engine.EQUAL:
+	case _EQUAL:
 		return makeBool(eq), nil
-	case engine.IS_DISTINCT_FROM:
+	case _IS_DISTINCT_FROM:
 		return makeBool(!eq), nil
 	default:
 		return nil, fmt.Errorf("%w: only =, IS DISTINCT FROM are supported for array comparison", engine.ErrComparison)
@@ -2274,7 +2279,7 @@ func (a *blobArrayValue) Value() (driver.Value, error) {
 	return btss, nil
 }
 
-func (a *blobArrayValue) Compare(v value, op engine.ComparisonOp) (*boolValue, error) {
+func (a *blobArrayValue) Compare(v value, op comparisonOp) (*boolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
@@ -2353,7 +2358,7 @@ func (a *uuidArrayValue) Null() bool {
 	return !a.Valid
 }
 
-func (a *uuidArrayValue) Compare(v value, op engine.ComparisonOp) (*boolValue, error) {
+func (a *uuidArrayValue) Compare(v value, op comparisonOp) (*boolValue, error) {
 	return cmpArrs(a, v, op)
 }
 
@@ -2440,7 +2445,7 @@ func (r *recordValue) AddValue(k string, v value) error {
 	return nil
 }
 
-func (o *recordValue) Compare(v value, op engine.ComparisonOp) (*boolValue, error) {
+func (o *recordValue) Compare(v value, op comparisonOp) (*boolValue, error) {
 	if res, early := nullCmp(o, v, op); early {
 		return res, nil
 	}
@@ -2463,7 +2468,7 @@ func (o *recordValue) Compare(v value, op engine.ComparisonOp) (*boolValue, erro
 				break
 			}
 
-			eq, err := o.Fields[field].Compare(v2, engine.EQUAL)
+			eq, err := o.Fields[field].Compare(v2, _EQUAL)
 			if err != nil {
 				return nil, err
 			}
@@ -2482,7 +2487,7 @@ func (o *recordValue) Compare(v value, op engine.ComparisonOp) (*boolValue, erro
 	}
 
 	switch op {
-	case engine.EQUAL:
+	case _EQUAL:
 		return makeBool(isSame), nil
 	default:
 		return nil, fmt.Errorf("%w: cannot use comparison operator %s with record type", engine.ErrComparison, op)
@@ -2522,14 +2527,14 @@ func (n *nullValue) Null() bool {
 
 // since NullValue is a special value that can be used anywhere, it will always return null
 // unless the comparison operator is IS or IS DISTINCT FROM
-func (n *nullValue) Compare(v value, op engine.ComparisonOp) (*boolValue, error) {
+func (n *nullValue) Compare(v value, op comparisonOp) (*boolValue, error) {
 	switch op {
-	case engine.IS:
+	case _IS:
 		if v.Null() {
 			return makeBool(true), nil
 		}
 		return makeBool(false), nil
-	case engine.IS_DISTINCT_FROM:
+	case _IS_DISTINCT_FROM:
 		if v.Null() {
 			return makeBool(false), nil
 		}
@@ -2566,11 +2571,11 @@ func (n *nullValue) Cast(t *types.DataType) (value, error) {
 	return makeNull(t)
 }
 
-func (n *nullValue) Arithmetic(v scalarValue, op engine.ArithmeticOp) (scalarValue, error) {
+func (n *nullValue) Arithmetic(v scalarValue, op arithmeticOp) (scalarValue, error) {
 	return n, nil
 }
 
-func (n *nullValue) Unary(op engine.UnaryOp) (scalarValue, error) {
+func (n *nullValue) Unary(op unaryOp) (scalarValue, error) {
 	return n, nil
 }
 
@@ -2645,7 +2650,7 @@ func (n *arrayOfNulls) Null() bool {
 	return false
 }
 
-func (n *arrayOfNulls) Compare(v value, op engine.ComparisonOp) (*boolValue, error) {
+func (n *arrayOfNulls) Compare(v value, op comparisonOp) (*boolValue, error) {
 	return cmpArrs(n, v, op)
 }
 
@@ -2673,15 +2678,15 @@ func (n *arrayOfNulls) Cast(t *types.DataType) (value, error) {
 	}
 }
 
-func cmpIntegers(a, b int, op engine.ComparisonOp) (*boolValue, error) {
+func cmpIntegers(a, b int, op comparisonOp) (*boolValue, error) {
 	switch op {
-	case engine.EQUAL:
+	case _EQUAL:
 		return makeBool(a == b), nil
-	case engine.LESS_THAN:
+	case _LESS_THAN:
 		return makeBool(a < b), nil
-	case engine.GREATER_THAN:
+	case _GREATER_THAN:
 		return makeBool(a > b), nil
-	case engine.IS_DISTINCT_FROM:
+	case _IS_DISTINCT_FROM:
 		return makeBool(a != b), nil
 	default:
 		return nil, fmt.Errorf("%w: cannot use comparison operator %s with numeric types", engine.ErrComparison, op)
