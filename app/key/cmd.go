@@ -75,20 +75,24 @@ func (p *PrivateKeyInfo) MarshalText() ([]byte, error) {
 		return []byte(fmt.Sprintf(`Key type: %s
 Private key (%s): %s
 Public key (plain hex): %v
+Node ID: %s
 Equivalent User Address: %s`,
 			p.KeyType,
 			p.privKeyFmt,
 			p.PrivateKeyText,
 			p.PublicKeyHex,
+			p.NodeID,
 			p.Address,
 		)), nil
 	}
 	return []byte(fmt.Sprintf(`Key type: %s
 Private key (%s): %s
-Public key (plain hex): %v`,
+Public key (plain hex): %v
+Node ID: %s`,
 		p.KeyType,
 		p.privKeyFmt,
 		p.PrivateKeyText,
 		p.PublicKeyHex,
+		p.NodeID,
 	)), nil
 }
