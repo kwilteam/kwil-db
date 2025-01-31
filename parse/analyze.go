@@ -1422,13 +1422,13 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 			}
 		} else if p0.SelectCores[0].Distinct {
 			// if distinct, order by all columns returned
-			for _, attr := range rel1 {
+			for i := range rel1 {
 				p0.Ordering = append(p0.Ordering, &OrderingTerm{
 					Position: unknownPosition(),
-					Expression: &ExpressionColumn{
+					Expression: &ExpressionLiteral{
 						Position: unknownPosition(),
-						Table:    "",
-						Column:   attr.Name,
+						Type:     types.IntType.Copy(),
+						Value:    i + 1,
 					},
 				})
 			}
@@ -1458,14 +1458,14 @@ func (s *sqlAnalyzer) VisitSelectStatement(p0 *SelectStatement) any {
 					continue
 				}
 
-				// if not a table, order by all columns
-				for _, attr := range rel.Attributes {
+				// if not a table, order by all result columns
+				for i := range rel.Attributes {
 					p0.Ordering = append(p0.Ordering, &OrderingTerm{
 						Position: unknownPosition(),
-						Expression: &ExpressionColumn{
+						Expression: &ExpressionLiteral{
 							Position: unknownPosition(),
-							Table:    rel.Name,
-							Column:   attr.Name,
+							Type:     types.IntType.Copy(),
+							Value:    i + 1, // 1-indexed
 						},
 					})
 				}
