@@ -359,7 +359,7 @@ func (ce *ConsensusEngine) Start(ctx context.Context, fns BroadcastFns, peerFns 
 		defer ce.wg.Done()
 		defer cancel() // stop CE in case event loop terminated early e.g. halt
 
-		ce.runConsensusEventLoop(ctx) // error return not needed?
+		ce.runConsensusEventLoop(ctx)
 		ce.log.Info("Consensus event loop stopped...")
 	}()
 
@@ -420,7 +420,7 @@ func (ce *ConsensusEngine) Status() *types.NodeStatus {
 //
 // Apart from the above events, the node also periodically checks if it needs to
 // catchup with the network and reannounce the messages.
-func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
+func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) {
 	ce.log.Info("Starting the consensus event loop...")
 	reannounceTicker := time.NewTicker(ce.blkAnnInterval)   // 3 secs (default)
 	blkPropTicker := time.NewTicker(ce.blkProposalInterval) // 1 sec (default)
@@ -431,14 +431,21 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 	// The catchupticker resets with each processed consensus message that successfully advances the node's state
 
 	for {
+		select { // ignore other ready signals if we're shutting down
+		case <-ctx.Done():
+			ce.log.Info("Shutting down the consensus engine")
+			return
+		default:
+		}
+
 		select {
 		case <-ctx.Done():
 			ce.log.Info("Shutting down the consensus engine")
-			return nil
+			return
 
 		case halt := <-ce.haltChan:
 			ce.log.Error("Received halt signal, stopping the consensus engine", "reason", halt)
-			return nil
+			return
 
 		case <-ce.newRound:
 			go ce.newBlockRound(ctx)
@@ -451,13 +458,14 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 
 			if err := ce.proposeBlock(ctx); err != nil {
 				ce.log.Error("Error starting a new round", "error", err)
-				return err
+				return
 			}
 
 		case <-ce.catchupTicker.C:
 			err := ce.doCatchup(ctx)
 			if err != nil {
-				return err
+				ce.log.Error("Failed during network catch-up", "error", err)
+				return
 			}
 
 		case <-reannounceTicker.C:
@@ -491,7 +499,10 @@ func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg cons
 
 	switch v := msg.Msg.(type) {
 	case *blockProposal:
-		ce.processBlockProposal(ctx, v)
+		if err := ce.processBlockProposal(ctx, v); err != nil {
+			ce.log.Error("Error processing block proposal", "error", err)
+			return
+		}
 
 	case *vote:
 		if ce.role.Load() != types.RoleLeader {
@@ -504,7 +515,7 @@ func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg cons
 
 	case *blockAnnounce:
 		if err := ce.commitBlock(ctx, v.blk, v.ci); err != nil {
-			ce.log.Error("Error processing committed block", "error", err)
+			ce.log.Error("Error processing committed block announcement", "error", err)
 			return
 		}
 
@@ -752,7 +763,7 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 	t0 := time.Now()
 
 	if err := ce.processCurrentBlock(ctx); err != nil {
-		if errors.Is(err, types.ErrBlkNotFound) {
+		if errors.Is(err, types.ErrBlkNotFound) || errors.Is(err, types.ErrNotFound) {
 			return nil // retry again next tick
 		}
 		ce.log.Error("error during block processing in catchup", "height", startHeight+1, "error", err)
@@ -825,7 +836,7 @@ func (ce *ConsensusEngine) processCurrentBlock(ctx context.Context) error {
 
 	ce.nextState()
 
-	return nil
+	return ctx.Err()
 }
 
 func (ce *ConsensusEngine) cancelBlock(height int64) bool {

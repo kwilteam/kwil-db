@@ -138,7 +138,7 @@ func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 
 			if err := ce.rollbackState(ctx); err != nil {
 				ce.log.Errorf("Error resetting the state: %v", err)
-				return fmt.Errorf("error resetting the state: %v", err)
+				return fmt.Errorf("error resetting the state: %w", err)
 			}
 
 			// Recheck the transactions in the mempool
@@ -275,7 +275,7 @@ func (ce *ConsensusEngine) addVote(ctx context.Context, vote *vote, sender strin
 		// verify signature
 		if err := voteInfo.Verify(vote.blkHash, ce.state.blockRes.appHash); err != nil {
 			ce.log.Errorf("Error verifying the vote signature: %v", err)
-			return fmt.Errorf("error verifying the vote signature: %v", err)
+			return fmt.Errorf("error verifying the vote signature: %w", err)
 		}
 
 		ce.state.votes[sender] = voteInfo

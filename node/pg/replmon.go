@@ -80,7 +80,7 @@ func newReplMon(ctx context.Context, host, port, user, pass, dbName string, sche
 	var slotName = publicationName + random.String(8) // arbitrary, so just avoid collisions
 	commitChan, errChan, quit, err := startRepl(ctx, conn, publicationName, slotName, schemaFilter, cs)
 	if err != nil {
-		conn.Close(ctx)
+		conn.Close(context.Background())
 		return nil, err
 	}
 

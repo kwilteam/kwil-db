@@ -66,7 +66,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	snapshotStore.RegisterSnapshotStreamHandlers(ctx, p2pSvc.Host(), p2pSvc.Discovery())
 
 	// Statesync module
-	ss := initializeStatesyncService(ctx, d, p2pSvc, snapshotStore, bs, *closers)
+	ss := initializeStatesyncService(ctx, d, p2pSvc, snapshotStore, bs, closers)
 
 	// Initialize DB
 	db := buildDB(ctx, d, ss, closers)
@@ -183,7 +183,7 @@ func initializeP2PService(d *coreDependencies, closers *closeFuncs) *node.P2PSer
 
 // initializeStatesyncService initializes the statesync service if enabled.
 // and discovers the snapshots from the trusted peers.
-func initializeStatesyncService(ctx context.Context, d *coreDependencies, p2p *node.P2PService, snapshotter *snapshotter.SnapshotStore, bs *store.BlockStore, closers closeFuncs) *node.StateSyncService {
+func initializeStatesyncService(ctx context.Context, d *coreDependencies, p2p *node.P2PService, snapshotter *snapshotter.SnapshotStore, bs *store.BlockStore, closers *closeFuncs) *node.StateSyncService {
 	if !d.cfg.StateSync.Enable {
 		return nil
 	}

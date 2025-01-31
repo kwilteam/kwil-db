@@ -168,7 +168,7 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64, comm
 
 	for {
 		if ctx.Err() != nil {
-			return ctx.Err()
+			return fmt.Errorf("captureRepl: %w", ctx.Err())
 		}
 		if time.Now().After(nextStandbyMessageDeadline) {
 			err := pglogrepl.SendStandbyStatusUpdate(ctx, conn, pglogrepl.StandbyStatusUpdate{WALWritePosition: clientXLogPos})

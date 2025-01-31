@@ -401,7 +401,7 @@ func GetResolutionsByThresholdAndType(ctx context.Context, db sql.TxMaker, thres
 	// create a transaction here in case a query here fails we don't break abci.
 	tx, err := db.BeginTx(ctx)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to make tx: %w", err)
 	}
 	defer tx.Rollback(ctx) // we can always rollback, since we are only reading
 

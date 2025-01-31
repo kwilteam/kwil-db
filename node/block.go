@@ -302,13 +302,16 @@ func getBlkHeight(ctx context.Context, height int64, host host.Host, log log.Log
 		t0 := time.Now()
 		resID, _ := blockHeightReq{Height: height}.MarshalBinary()
 		resp, err := requestFrom(ctx, host, peer, resID, ProtocolIDBlockHeight, blkReadLimit)
-		if errors.Is(err, ErrNotFound) {
+		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrBlkNotFound) {
 			log.Warnf("block not available on %v", peer)
 			continue
 		}
 		if errors.Is(err, ErrNoResponse) {
 			log.Warnf("no response to block request to %v", peer)
 			continue
+		}
+		if errors.Is(err, context.Canceled) {
+			return types.Hash{}, nil, nil, err
 		}
 		if err != nil {
 			log.Warnf("unexpected error from %v: %v", peer, err)

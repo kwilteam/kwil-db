@@ -251,10 +251,7 @@ func (bp *BlockProcessor) CheckTx(ctx context.Context, tx *ktypes.Transaction, h
 		}
 	}
 
-	readTx, err := bp.db.BeginReadTx(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to begin read transaction: %w", err)
-	}
+	readTx := bp.db.BeginDelayedReadTx()
 	defer readTx.Rollback(ctx)
 
 	ident, err := authExt.GetIdentifier(tx.Signature.Type, tx.Sender)
@@ -344,11 +341,21 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 		return nil, fmt.Errorf("failed to begin the block execution: %w", err)
 	}
 
-	bp.consensusTx, err = bp.db.BeginPreparedTx(ctx)
+	tx, err := bp.db.BeginPreparedTx(ctx)
 	if err != nil {
-		bp.consensusTx = nil // safety measure
 		return nil, fmt.Errorf("failed to begin the consensus transaction: %w", err)
 	}
+	bp.consensusTx = tx
+
+	var success bool
+	defer func() {
+		if !success {
+			if err := bp.consensusTx.Rollback(context.Background()); err != nil {
+				bp.log.Warn("Failed to rollback the consensus transaction", "err", err)
+			}
+			bp.consensusTx = nil
+		}
+	}()
 
 	inMigration := bp.chainCtx.NetworkParameters.MigrationStatus == ktypes.MigrationInProgress
 	haltNetwork := bp.chainCtx.NetworkParameters.MigrationStatus == ktypes.MigrationCompleted
@@ -524,6 +531,8 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 		}
 	}
 
+	success = true
+
 	// The CE will log the same thing, so this is a Debug message.
 	bp.log.Debug("Executed Block", "height", req.Height, "blockID", req.BlockID, "appHash", nextHash, "numTxs", req.Block.Header.NumTxns)
 	if len(bp.chainCtx.NetworkUpdates) != 0 {
@@ -599,6 +608,7 @@ func (bp *BlockProcessor) Commit(ctx context.Context, req *ktypes.CommitRequest)
 
 	// Commit the Postgres Consensus transaction
 	if err := bp.consensusTx.Commit(ctx); err != nil {
+		// maybe attempt rollback and set nil
 		return err
 	}
 	bp.consensusTx = nil
@@ -659,7 +669,12 @@ func (bp *BlockProcessor) Commit(ctx context.Context, req *ktypes.CommitRequest)
 	bp.announceValidators() // can be in goroutine? no, because the modules state need to be updated by the next consensus round?
 
 	bp.log.Debug("Committed Block", "height", req.Height, "appHash", req.AppHash.String())
-	return nil
+
+	// NOTE: return ctx.Err() is NOT a normal thing to do, but there's a lot
+	// going on in some of these methods that doesn't even bother with the
+	// context, and all up the call stack there can be a ton of progress long
+	// after the context is cancelled.
+	return ctx.Err()
 }
 
 // This function enforces proper nonce ordering, validates transactions, and ensures
