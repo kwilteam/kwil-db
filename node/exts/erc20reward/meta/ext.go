@@ -189,6 +189,7 @@ func (h *Erc20RewardMeta) unregister(ctx *kcommon.EngineContext, app *kcommon.Ap
 }
 
 // Map turns a []T1 to a []T2 using a mapping function.
+// TODO: maybe move to internal utils pkg
 func Map[T1, T2 any](s []T1, f func(T1) T2) []T2 {
 	r := make([]T2, len(s))
 	for i, v := range s {

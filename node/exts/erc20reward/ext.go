@@ -92,8 +92,8 @@ func init() {
 						},
 						Returns: &pc.MethodReturn{
 							IsTable:    true,
-							Fields:     (&EpochReward{}).UnpackTypes(rewardAmtDecimal),
-							FieldNames: (&EpochReward{}).UnpackColumns(),
+							Fields:     (&Epoch{}).UnpackTypes(rewardAmtDecimal),
+							FieldNames: (&Epoch{}).UnpackColumns(),
 						},
 					},
 					{
@@ -104,7 +104,7 @@ func init() {
 						Name:            "search_rewards", // maybe not useful for Signer Service.
 						AccessModifiers: []pc.Modifier{pc.PUBLIC, pc.VIEW},
 						Handler: func(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
-							return ext.listPendingRewards(ctx, app, inputs, resultFn)
+							return ext.searchRewards(ctx, app, inputs, resultFn)
 						},
 						Parameters: []pc.PrecompileValue{
 							{Type: types.IntType, Nullable: false}, // start height
@@ -112,8 +112,8 @@ func init() {
 						},
 						Returns: &pc.MethodReturn{
 							IsTable:    true,
-							Fields:     (&PendingReward{}).UnpackTypes(rewardAmtDecimal),
-							FieldNames: (&PendingReward{}).UnpackColumns(),
+							Fields:     (&Reward{}).UnpackTypes(rewardAmtDecimal),
+							FieldNames: (&Reward{}).UnpackColumns(),
 						},
 					},
 					{
@@ -287,17 +287,17 @@ func initTables(ctx *kcommon.EngineContext, app *kcommon.App, ns string) error {
 	ctx.OverrideAuthz = true
 	defer func() { ctx.OverrideAuthz = false }()
 
-	err := app.Engine.Execute(ctx, app.DB, fmt.Sprintf(sqlInitTableErc20rwPendingRewards, ns, meta.ExtAlias), nil, nil)
+	err := app.Engine.Execute(ctx, app.DB, fmt.Sprintf(sqlInitTableErc20rwRewards, ns, meta.ExtAlias), nil, nil)
 	if err != nil {
 		return err
 	}
 
-	err = app.Engine.Execute(ctx, app.DB, fmt.Sprintf(sqlInitTableErc20rwEpochRewards, ns, meta.ExtAlias), nil, nil)
+	err = app.Engine.Execute(ctx, app.DB, fmt.Sprintf(sqlInitTableErc20rwEpochs, ns, meta.ExtAlias), nil, nil)
 	if err != nil {
 		return err
 	}
 
-	err = app.Engine.Execute(ctx, app.DB, fmt.Sprintf(sqlInitTableErc20rwPendingSignatures, ns, ns, meta.ExtAlias), nil, nil)
+	err = app.Engine.Execute(ctx, app.DB, fmt.Sprintf(sqlInitTableErc20rwEpochVotes, ns, ns, meta.ExtAlias), nil, nil)
 	if err != nil {
 		return err
 	}
@@ -533,8 +533,8 @@ func (h *Erc20RewardExt) issueReward(ctx *kcommon.EngineContext, app *kcommon.Ap
 		ctx.TxContext.SetValue(txIssueRewardCounterKey, counter+1)
 	}()
 
-	if err := IssueReward(ctx, app.Engine, app.DB, h.alias, &PendingReward{
-		ID:         GenPendingRewardID(wallet, uint256Amount.String(), ctx.TxContext.TxID, counter),
+	if err := IssueReward(ctx, app.Engine, app.DB, h.alias, &Reward{
+		ID:         GenRewardID(wallet, uint256Amount.String(), ctx.TxContext.TxID, counter),
 		Recipient:  wallet,
 		Amount:     uint256Amount,
 		CreatedAt:  ctx.TxContext.BlockContext.Height,
@@ -546,8 +546,8 @@ func (h *Erc20RewardExt) issueReward(ctx *kcommon.EngineContext, app *kcommon.Ap
 	return nil
 }
 
-// listPendingRewards returns all pending rewards from last epoch till current height.
-func (h *Erc20RewardExt) listPendingRewards(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+// searchRewards returns rewards between a starting height and ending height.
+func (h *Erc20RewardExt) searchRewards(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
 	startHeight, ok := inputs[0].(int64)
 	if !ok {
 		return fmt.Errorf("invalid start height")
@@ -574,8 +574,7 @@ func (h *Erc20RewardExt) listPendingRewards(ctx *kcommon.EngineContext, app *kco
 		return fmt.Errorf("search range too large")
 	}
 
-	// get all pending rewards from last epoch till current height.
-	rewards, err := ListPendingRewards(ctx, app.Engine, app.DB, h.alias, h.decimals, startHeight, endHeight)
+	rewards, err := SearchRewards(ctx, app.Engine, app.DB, h.alias, h.decimals, startHeight, endHeight)
 	if err != nil {
 		return err
 	}
@@ -615,35 +614,35 @@ func (h *Erc20RewardExt) proposeEpoch(ctx *kcommon.EngineContext, app *kcommon.A
 	}
 
 	epochStartHeight := lastEpochEndHeight + 1
-	// get all pending rewards from last batch till current height.
-	pendingRewards, err := ListPendingRewards(ctx, app.Engine, app.DB, h.alias, h.decimals, epochStartHeight, endHeight)
+	rewards, err := SearchRewards(ctx, app.Engine, app.DB, h.alias, h.decimals, epochStartHeight, endHeight)
 	if err != nil {
 		return err
 	}
 
-	if len(pendingRewards) == 0 {
-		return fmt.Errorf("no pending rewards")
+	if len(rewards) == 0 {
+		return fmt.Errorf("no rewards")
 	}
 
-	recipients := make([]string, len(pendingRewards))
-	bigIntAmounts := make([]*big.Int, len(pendingRewards))
+	recipients := make([]string, len(rewards))
+	bigIntAmounts := make([]*big.Int, len(rewards))
 	var totalAmount *types.Decimal // nil
-	for i, pendingReward := range pendingRewards {
-		recipients[i] = pendingReward.Recipient
-		//amounts[i] = pendingReward.Amount
+	for i, r := range rewards {
+		recipients[i] = r.Recipient
 
 		if totalAmount == nil {
-			totalAmount = pendingReward.Amount
+			totalAmount = r.Amount
 		} else {
-			totalAmount, err = types.DecimalAdd(totalAmount, pendingReward.Amount)
+			totalAmount, err = types.DecimalAdd(totalAmount, r.Amount)
 			if err != nil {
 				return err
 			}
 		}
-		bigIntAmounts[i] = pendingReward.Amount.BigInt()
+		bigIntAmounts[i] = r.Amount.BigInt()
 	}
 
-	jsonMtree, rootHash, err := reward.GenRewardMerkleTree2(recipients, bigIntAmounts, h.ContractAddr, blockHash)
+	// NOTE: since we don't have a limit on how many leafs(recipients) a tree can
+	// have, this could be big
+	jsonMtree, rootHash, err := reward.GenRewardMerkleTree(recipients, bigIntAmounts, h.ContractAddr, blockHash)
 	if err != nil {
 		return err
 	}
@@ -672,7 +671,7 @@ func (h *Erc20RewardExt) proposeEpoch(ctx *kcommon.EngineContext, app *kcommon.A
 		return err
 	}
 
-	return app.Engine.Execute(ctx, app.DB, fmt.Sprintf(sqlNewEpochReward, h.alias), map[string]any{
+	return app.Engine.Execute(ctx, app.DB, fmt.Sprintf(sqlNewEpoch, h.alias), map[string]any{
 		"$id":            GenBatchRewardID(endHeight, signHash),
 		"$start_height":  epochStartHeight,
 		"$end_height":    endHeight,
