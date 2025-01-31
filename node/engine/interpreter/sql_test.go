@@ -35,7 +35,7 @@ func Test_built_in_sql(t *testing.T) {
 				actions, err := listActionsInBuiltInNamespace(ctx, db, "main")
 				require.NoError(t, err)
 
-				actMap := map[string]*Action{}
+				actMap := map[string]*action{}
 				for _, act := range actions {
 					actMap[act.Name] = act
 				}
@@ -329,7 +329,7 @@ func Test_built_in_sql(t *testing.T) {
 	}
 }
 
-func namedTypesEq(t *testing.T, a, b []*NamedType) {
+func namedTypesEq(t *testing.T, a, b []*namedType) {
 	require.Equal(t, len(a), len(b))
 	for i, at := range a {
 		require.Equal(t, at.Name, b[i].Name)
@@ -1007,8 +1007,8 @@ func Test_Metadata(t *testing.T) {
 	hasRole("default", &perms{
 		namespacePrivileges: defaultNamespacePrivileges,
 		globalPrivileges: map[privilege]struct{}{
-			CallPrivilege:   {},
-			SelectPrivilege: {},
+			_CALL_PRIVILEGE:   {},
+			_SELECT_PRIVILEGE: {},
 		},
 	})
 	hasRole("no_perms", &perms{
@@ -1018,27 +1018,27 @@ func Test_Metadata(t *testing.T) {
 	hasRole("owner", &perms{
 		namespacePrivileges: defaultNamespacePrivileges,
 		globalPrivileges: map[privilege]struct{}{
-			AlterPrivilege:  {},
-			CallPrivilege:   {},
-			CreatePrivilege: {},
-			DeletePrivilege: {},
-			DropPrivilege:   {},
-			InsertPrivilege: {},
-			RolesPrivilege:  {},
-			SelectPrivilege: {},
-			UpdatePrivilege: {},
-			UsePrivilege:    {},
+			_ALTER_PRIVILEGE:  {},
+			_CALL_PRIVILEGE:   {},
+			_CREATE_PRIVILEGE: {},
+			_DELETE_PRIVILEGE: {},
+			_DROP_PRIVILEGE:   {},
+			_INSERT_PRIVILEGE: {},
+			_ROLES_PRIVILEGE:  {},
+			_SELECT_PRIVILEGE: {},
+			_UPDATE_PRIVILEGE: {},
+			_USE_PRIVILEGE:    {},
 		},
 	})
 
 	somePermsNamespacePrivileges := maps.Clone(defaultNamespacePrivileges)
 	somePermsNamespacePrivileges["info"] = map[privilege]struct{}{
-		SelectPrivilege: {},
+		_SELECT_PRIVILEGE: {},
 	}
 	hasRole("some_perms", &perms{
 		namespacePrivileges: somePermsNamespacePrivileges,
 		globalPrivileges: map[privilege]struct{}{
-			InsertPrivilege: {},
+			_INSERT_PRIVILEGE: {},
 		},
 	})
 

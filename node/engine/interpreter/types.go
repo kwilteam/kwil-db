@@ -9,13 +9,13 @@ import (
 	"github.com/kwilteam/kwil-db/node/engine/parse"
 )
 
-type Action struct {
+type action struct {
 	// Name is the name of the action.
 	// It should always be lower case.
 	Name string `json:"name"`
 
 	// Parameters are the input parameters of the action.
-	Parameters []*NamedType `json:"parameters"`
+	Parameters []*namedType `json:"parameters"`
 	// Modifiers modify the access to the action.
 	Modifiers []precompiles.Modifier `json:"modifiers"`
 
@@ -26,15 +26,15 @@ type Action struct {
 	RawStatement string `json:"raw_statement"`
 
 	// Returns specifies the return types of the action.
-	Returns *ActionReturn `json:"return_types"`
+	Returns *actionReturn `json:"return_types"`
 }
 
-func (a *Action) GetName() string {
+func (a *action) GetName() string {
 	return a.Name
 }
 
 // FromAST sets the fields of the action from an AST node.
-func (a *Action) FromAST(ast *parse.CreateActionStatement) error {
+func (a *action) FromAST(ast *parse.CreateActionStatement) error {
 	a.Name = ast.Name
 	a.RawStatement = ast.Raw
 	a.Body = ast.Statements
@@ -42,7 +42,7 @@ func (a *Action) FromAST(ast *parse.CreateActionStatement) error {
 	a.Parameters = convertNamedTypes(ast.Parameters)
 
 	if ast.Returns != nil {
-		a.Returns = &ActionReturn{
+		a.Returns = &actionReturn{
 			IsTable: ast.Returns.IsTable,
 			Fields:  convertNamedTypes(ast.Returns.Fields),
 		}
@@ -79,10 +79,10 @@ func (a *Action) FromAST(ast *parse.CreateActionStatement) error {
 }
 
 // convertNamedTypes converts a list of named types from the AST to the internal representation.
-func convertNamedTypes(params []*parse.NamedType) []*NamedType {
-	namedTypes := make([]*NamedType, len(params))
+func convertNamedTypes(params []*parse.NamedType) []*namedType {
+	namedTypes := make([]*namedType, len(params))
 	for i, p := range params {
-		namedTypes[i] = &NamedType{
+		namedTypes[i] = &namedType{
 			Name: p.Name,
 			Type: p.Type,
 		}
@@ -90,8 +90,8 @@ func convertNamedTypes(params []*parse.NamedType) []*NamedType {
 	return namedTypes
 }
 
-// NamedType is a parameter in a procedure.
-type NamedType struct {
+// namedType is a parameter in a procedure.
+type namedType struct {
 	// Name is the name of the parameter.
 	// It should always be lower case.
 	// If it is a procedure parameter, it should begin
@@ -101,11 +101,11 @@ type NamedType struct {
 	Type *types.DataType `json:"type"`
 }
 
-// ActionReturn holds the return type of a procedure.
+// actionReturn holds the return type of a procedure.
 // EITHER the Type field is set, OR the Table field is set.
-type ActionReturn struct {
+type actionReturn struct {
 	IsTable bool         `json:"is_table"`
-	Fields  []*NamedType `json:"fields"`
+	Fields  []*namedType `json:"fields"`
 }
 
 func stringToMod(s string) (precompiles.Modifier, error) {

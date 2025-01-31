@@ -16,7 +16,7 @@ import (
 )
 
 // makeActionToExecutable creates an executable from an action
-func makeActionToExecutable(namespace string, act *Action) *executable {
+func makeActionToExecutable(namespace string, act *action) *executable {
 	planner := &interpreterPlanner{}
 	stmtFns := make([]stmtFunc, len(act.Body))
 	for j, stmt := range act.Body {
@@ -1162,7 +1162,7 @@ func (i *interpreterPlanner) VisitExpressionParenthesized(p0 *parse.ExpressionPa
 }
 
 func (i *interpreterPlanner) VisitExpressionComparison(p0 *parse.ExpressionComparison) any {
-	cmpOps, negate := engine.ConvertComparisonOps(p0.Operator)
+	cmpOps, negate := convertComparisonOps(p0.Operator)
 
 	left := p0.Left.Accept(i).(exprFunc)
 	right := p0.Right.Accept(i).(exprFunc)
@@ -1174,14 +1174,14 @@ func (i *interpreterPlanner) VisitExpressionComparison(p0 *parse.ExpressionCompa
 	}
 
 	if negate {
-		return makeUnaryFunc(retFn, engine.NOT)
+		return makeUnaryFunc(retFn, _NOT)
 	}
 
 	return retFn
 }
 
 // makeComparisonFunc returns a function that compares two values.
-func makeComparisonFunc(left, right exprFunc, cmpOps engine.ComparisonOp) exprFunc {
+func makeComparisonFunc(left, right exprFunc, cmpOps comparisonOp) exprFunc {
 	return func(exec *executionContext) (value, error) {
 		leftVal, err := left(exec)
 		if err != nil {
@@ -1240,7 +1240,7 @@ func makeLogicalFunc(left, right exprFunc, and bool) exprFunc {
 }
 
 func (i *interpreterPlanner) VisitExpressionArithmetic(p0 *parse.ExpressionArithmetic) any {
-	op := engine.ConvertArithmeticOp(p0.Operator)
+	op := convertArithmeticOp(p0.Operator)
 
 	leftFn := p0.Left.Accept(i).(exprFunc)
 	rightFn := p0.Right.Accept(i).(exprFunc)
@@ -1270,13 +1270,13 @@ func (i *interpreterPlanner) VisitExpressionArithmetic(p0 *parse.ExpressionArith
 }
 
 func (i *interpreterPlanner) VisitExpressionUnary(p0 *parse.ExpressionUnary) any {
-	op := engine.ConvertUnaryOp(p0.Operator)
+	op := convertUnaryOp(p0.Operator)
 	val := p0.Expression.Accept(i).(exprFunc)
 	return makeUnaryFunc(val, op)
 }
 
 // makeUnaryFunc returns a function that performs a unary operation.
-func makeUnaryFunc(val exprFunc, op engine.UnaryOp) exprFunc {
+func makeUnaryFunc(val exprFunc, op unaryOp) exprFunc {
 	return exprFunc(func(exec *executionContext) (value, error) {
 		v, err := val(exec)
 		if err != nil {
@@ -1296,15 +1296,15 @@ func (i *interpreterPlanner) VisitExpressionIs(p0 *parse.ExpressionIs) any {
 	left := p0.Left.Accept(i).(exprFunc)
 	right := p0.Right.Accept(i).(exprFunc)
 
-	op := engine.IS
+	op := _IS
 	if p0.Distinct {
-		op = engine.IS_DISTINCT_FROM
+		op = _IS_DISTINCT_FROM
 	}
 
 	retFn := makeComparisonFunc(left, right, op)
 
 	if p0.Not {
-		return makeUnaryFunc(retFn, engine.NOT)
+		return makeUnaryFunc(retFn, _NOT)
 	}
 
 	return retFn
@@ -1319,7 +1319,7 @@ func (i *interpreterPlanner) VisitGrantOrRevokeStatement(p0 *parse.GrantOrRevoke
 		varExprFn = p0.ToVariable.Accept(i).(exprFunc)
 	}
 	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
-		if err := exec.checkPrivilege(RolesPrivilege); err != nil {
+		if err := exec.checkPrivilege(_ROLES_PRIVILEGE); err != nil {
 			return err
 		}
 
@@ -1405,7 +1405,7 @@ func (i *interpreterPlanner) VisitTransferOwnershipStatement(p0 *parse.TransferO
 
 	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
 		if !exec.engineCtx.OverrideAuthz {
-			if err := exec.checkPrivilege(RolesPrivilege); err != nil {
+			if err := exec.checkPrivilege(_ROLES_PRIVILEGE); err != nil {
 				return err
 			}
 
@@ -1455,7 +1455,7 @@ func (i *interpreterPlanner) VisitTransferOwnershipStatement(p0 *parse.TransferO
 
 func (i *interpreterPlanner) VisitCreateRoleStatement(p0 *parse.CreateRoleStatement) any {
 	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
-		if err := exec.checkPrivilege(RolesPrivilege); err != nil {
+		if err := exec.checkPrivilege(_ROLES_PRIVILEGE); err != nil {
 			return err
 		}
 
@@ -1471,7 +1471,7 @@ func (i *interpreterPlanner) VisitCreateRoleStatement(p0 *parse.CreateRoleStatem
 
 func (i *interpreterPlanner) VisitDropRoleStatement(p0 *parse.DropRoleStatement) any {
 	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
-		if err := exec.checkPrivilege(RolesPrivilege); err != nil {
+		if err := exec.checkPrivilege(_ROLES_PRIVILEGE); err != nil {
 			return err
 		}
 
@@ -1518,13 +1518,13 @@ func (i *interpreterPlanner) VisitSQLStatement(p0 *parse.SQLStatement) any {
 	var privilege privilege
 	switch p0.SQL.(type) {
 	case *parse.InsertStatement:
-		privilege = InsertPrivilege
+		privilege = _INSERT_PRIVILEGE
 	case *parse.UpdateStatement:
-		privilege = UpdatePrivilege
+		privilege = _UPDATE_PRIVILEGE
 	case *parse.DeleteStatement:
-		privilege = DeletePrivilege
+		privilege = _DELETE_PRIVILEGE
 	case *parse.SelectStatement:
-		privilege = SelectPrivilege
+		privilege = _SELECT_PRIVILEGE
 		mutatesState = false
 	default:
 		panic(fmt.Errorf("unexpected SQL statement type: %T", p0.SQL))
@@ -1585,7 +1585,7 @@ func (i *interpreterPlanner) VisitAlterTableStatement(p0 *parse.AlterTableStatem
 		}
 
 		// ensure that the caller has the necessary privileges
-		if err := exec.checkPrivilege(AlterPrivilege); err != nil {
+		if err := exec.checkPrivilege(_ALTER_PRIVILEGE); err != nil {
 			return err
 		}
 
@@ -1621,7 +1621,7 @@ func (i *interpreterPlanner) VisitCreateTableStatement(p0 *parse.CreateTableStat
 		}
 
 		// ensure that the caller has the necessary privileges
-		if err := exec.checkPrivilege(CreatePrivilege); err != nil {
+		if err := exec.checkPrivilege(_CREATE_PRIVILEGE); err != nil {
 			return err
 		}
 
@@ -1660,7 +1660,7 @@ func (i *interpreterPlanner) VisitDropTableStatement(p0 *parse.DropTableStatemen
 		}
 
 		// ensure that the caller has the necessary privileges
-		if err := exec.checkPrivilege(DropPrivilege); err != nil {
+		if err := exec.checkPrivilege(_DROP_PRIVILEGE); err != nil {
 			return err
 		}
 
@@ -1701,7 +1701,7 @@ func (i *interpreterPlanner) VisitCreateIndexStatement(p0 *parse.CreateIndexStat
 		}
 
 		// ensure that the caller has the necessary privileges
-		if err := exec.checkPrivilege(CreatePrivilege); err != nil {
+		if err := exec.checkPrivilege(_CREATE_PRIVILEGE); err != nil {
 			return err
 		}
 
@@ -1745,7 +1745,7 @@ func (i *interpreterPlanner) VisitDropIndexStatement(p0 *parse.DropIndexStatemen
 		}
 
 		// ensure that the caller has the necessary privileges
-		if err := exec.checkPrivilege(DropPrivilege); err != nil {
+		if err := exec.checkPrivilege(_DROP_PRIVILEGE); err != nil {
 			return err
 		}
 
@@ -1766,7 +1766,7 @@ func (i *interpreterPlanner) VisitUseExtensionStatement(p0 *parse.UseExtensionSt
 
 	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
 		// ensure that the caller has the necessary privileges
-		if err := exec.checkPrivilege(UsePrivilege); err != nil {
+		if err := exec.checkPrivilege(_USE_PRIVILEGE); err != nil {
 			return err
 		}
 
@@ -1835,7 +1835,7 @@ func (i *interpreterPlanner) VisitUseExtensionStatement(p0 *parse.UseExtensionSt
 func (i *interpreterPlanner) VisitUnuseExtensionStatement(p0 *parse.UnuseExtensionStatement) any {
 	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
 		// ensure that the caller has the necessary privileges
-		if err := exec.checkPrivilege(UsePrivilege); err != nil {
+		if err := exec.checkPrivilege(_USE_PRIVILEGE); err != nil {
 			return err
 		}
 
@@ -1881,7 +1881,7 @@ func (i *interpreterPlanner) VisitCreateActionStatement(p0 *parse.CreateActionSt
 			return err
 		}
 
-		if err := exec.checkPrivilege(CreatePrivilege); err != nil {
+		if err := exec.checkPrivilege(_CREATE_PRIVILEGE); err != nil {
 			return err
 		}
 		namespace := exec.interpreter.namespaces[exec.scope.namespace]
@@ -1907,7 +1907,7 @@ func (i *interpreterPlanner) VisitCreateActionStatement(p0 *parse.CreateActionSt
 			}
 		}
 
-		act := Action{}
+		act := action{}
 		if err := act.FromAST(p0); err != nil {
 			return err
 		}
@@ -1936,7 +1936,7 @@ func (i *interpreterPlanner) VisitDropActionStatement(p0 *parse.DropActionStatem
 			return err
 		}
 
-		if err := exec.checkPrivilege(DropPrivilege); err != nil {
+		if err := exec.checkPrivilege(_DROP_PRIVILEGE); err != nil {
 			return err
 		}
 
@@ -1992,7 +1992,7 @@ func (i *interpreterPlanner) VisitDropActionStatement(p0 *parse.DropActionStatem
 
 func (i *interpreterPlanner) VisitCreateNamespaceStatement(p0 *parse.CreateNamespaceStatement) any {
 	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
-		if err := exec.checkPrivilege(CreatePrivilege); err != nil {
+		if err := exec.checkPrivilege(_CREATE_PRIVILEGE); err != nil {
 			return err
 		}
 
@@ -2033,7 +2033,7 @@ func (i *interpreterPlanner) VisitCreateNamespaceStatement(p0 *parse.CreateNames
 
 func (i *interpreterPlanner) VisitDropNamespaceStatement(p0 *parse.DropNamespaceStatement) any {
 	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
-		if err := exec.checkPrivilege(DropPrivilege); err != nil {
+		if err := exec.checkPrivilege(_DROP_PRIVILEGE); err != nil {
 			return err
 		}
 
@@ -2066,7 +2066,7 @@ func (i *interpreterPlanner) VisitDropNamespaceStatement(p0 *parse.DropNamespace
 
 func (i *interpreterPlanner) VisitSetCurrentNamespaceStatement(p0 *parse.SetCurrentNamespaceStatement) any {
 	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
-		if err := exec.checkPrivilege(UsePrivilege); err != nil {
+		if err := exec.checkPrivilege(_USE_PRIVILEGE); err != nil {
 			return err
 		}
 

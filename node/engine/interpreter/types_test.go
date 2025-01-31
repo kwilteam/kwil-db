@@ -7,13 +7,13 @@ import (
 )
 
 // mustParse is a helper function to parse an action and panic on error.
-func mustParse(s string) *Action {
+func mustParse(s string) *action {
 	res, err := parse.Parse(s)
 	if err != nil {
 		panic(err)
 	}
 
-	act := Action{}
+	act := action{}
 	err = act.FromAST(res[0].(*parse.CreateActionStatement))
 	if err != nil {
 		panic(err)
@@ -24,7 +24,7 @@ func mustParse(s string) *Action {
 
 // actions
 var (
-	all_test_actions = []*Action{
+	all_test_actions = []*action{
 		action_create_user,
 		action_list_users,
 		action_get_user_by_name,

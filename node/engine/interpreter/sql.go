@@ -64,7 +64,7 @@ func dropNamespace(ctx context.Context, db sql.DB, name string) error {
 
 // storeAction stores an action in the database.
 // It should always be called within a transaction.
-func storeAction(ctx context.Context, db sql.DB, namespace string, action *Action, builtin bool) error {
+func storeAction(ctx context.Context, db sql.DB, namespace string, action *action, builtin bool) error {
 	returnsTable := false
 	if action.Returns != nil {
 		returnsTable = action.Returns.IsTable
@@ -326,8 +326,8 @@ func listTablesInNamespace(ctx context.Context, db sql.DB, namespace string) ([]
 
 // listActionsInBuiltInNamespace lists all actions in a namespace.
 // If the namespace is an extension, it wont return any actions.
-func listActionsInBuiltInNamespace(ctx context.Context, db sql.DB, namespace string) ([]*Action, error) {
-	var actions []*Action
+func listActionsInBuiltInNamespace(ctx context.Context, db sql.DB, namespace string) ([]*action, error) {
+	var actions []*action
 	var rawStmt string
 	scans := []any{
 		&rawStmt,
@@ -355,7 +355,7 @@ func listActionsInBuiltInNamespace(ctx context.Context, db sql.DB, namespace str
 				return fmt.Errorf("expected CreateActionStatement, got %T", res[0])
 			}
 
-			act := &Action{}
+			act := &action{}
 			err = act.FromAST(createActionStmt)
 			if err != nil {
 				return err
@@ -504,21 +504,21 @@ func ensureMethodsRegistered(ctx context.Context, db sql.DB, alias string, metho
 			return nil
 		}
 
-		params := make([]*NamedType, len(method.Parameters))
+		params := make([]*namedType, len(method.Parameters))
 		for i, p := range method.Parameters {
-			params[i] = &NamedType{
+			params[i] = &namedType{
 				Name: "$param_" + strconv.Itoa(i+1),
 				Type: p.Type,
 			}
 		}
 
-		var returns *ActionReturn
+		var returns *actionReturn
 		if method.Returns != nil {
-			returns = &ActionReturn{
+			returns = &actionReturn{
 				IsTable: method.Returns.IsTable,
 			}
 
-			fields := make([]*NamedType, len(method.Returns.Fields))
+			fields := make([]*namedType, len(method.Returns.Fields))
 			for i, f := range method.Returns.Fields {
 				var fieldName string
 				if len(method.Returns.FieldNames) == 0 {
@@ -527,7 +527,7 @@ func ensureMethodsRegistered(ctx context.Context, db sql.DB, alias string, metho
 					fieldName = method.Returns.FieldNames[i]
 				}
 
-				fields[i] = &NamedType{
+				fields[i] = &namedType{
 					Name: fieldName,
 					Type: f.Type,
 				}
@@ -536,7 +536,7 @@ func ensureMethodsRegistered(ctx context.Context, db sql.DB, alias string, metho
 			returns.Fields = fields
 		}
 
-		if err := storeAction(ctx, db, alias, &Action{
+		if err := storeAction(ctx, db, alias, &action{
 			Name:       method.Name,
 			Parameters: params,
 			Modifiers:  method.AccessModifiers,
