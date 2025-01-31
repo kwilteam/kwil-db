@@ -652,7 +652,18 @@ func NewKey(r io.Reader) *crypto.Secp256k1PrivateKey {
 	return pk
 }
 
-func newHost(ip string, port uint64, chainID string, privKey crypto.PrivateKey, wl connmgr.ConnectionGater, logger log.Logger) (host.Host, error) {
+type hostConfig struct {
+	ip              string
+	port            uint64
+	privKey         crypto.PrivateKey
+	chainID         string
+	connGater       connmgr.ConnectionGater
+	logger          log.Logger
+	externalAddress string // host:port
+}
+
+func newHost(cfg *hostConfig) (host.Host, error) {
+	privKey := cfg.privKey
 	// convert to the libp2p crypto key type
 	var privKeyP2P p2pcrypto.PrivKey
 	var err error
@@ -668,14 +679,26 @@ func newHost(ip string, port uint64, chainID string, privKey crypto.PrivateKey, 
 		return nil, err
 	}
 
-	ip, ipv, err := peers.ResolveHost(ip)
+	ip, ipv, err := peers.ResolveHost(cfg.ip)
 	if err != nil {
 		return nil, fmt.Errorf("unable to resolve %v: %w", ip, err)
 	}
 
-	sourceMultiAddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/%s/%s/tcp/%d", ipv, ip, port))
+	sourceMultiAddr, err := multiaddr.NewMultiaddr(fmt.Sprintf("/%s/%s/tcp/%d", ipv, ip, cfg.port))
 	if err != nil {
-		return nil, fmt.Errorf("unable to create multiaddr: %w", err)
+		return nil, fmt.Errorf("invalid listen address: %w", err)
+	}
+
+	var externalMultiAddr multiaddr.Multiaddr
+	if cfg.externalAddress != "" {
+		ip, ipv, err := peers.ResolveHost(cfg.ip)
+		if err != nil {
+			return nil, fmt.Errorf("unable to resolve %v: %w", ip, err)
+		}
+		externalMultiAddr, err = multiaddr.NewMultiaddr(fmt.Sprintf("/%s/%s/tcp/%d", ipv, ip, cfg.port))
+		if err != nil {
+			return nil, fmt.Errorf("invalid external address: %w", err)
+		}
 	}
 
 	// listenAddrs := libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0", "/ip4/0.0.0.0/tcp/0/ws")
@@ -690,23 +713,30 @@ func newHost(ip string, port uint64, chainID string, privKey crypto.PrivateKey, 
 	// 	return nil, nil, err
 	// }
 
-	// libp2p.New is fine with a nil interface (not an non-nil interface to a
-	// nil concrete instance).
-	var cg connmgr.ConnectionGater
-	if wl != nil {
-		cg = wl
-	}
-
-	sec, secID := sec.NewScopedNoiseTransport(chainID, logger.New("SEC")) // noise.New plus chain ID check in handshake
+	sec, secID := sec.NewScopedNoiseTransport(cfg.chainID, cfg.logger.New("SEC")) // noise.New plus chain ID check in handshake
 
 	h, err := libp2p.New(
+		libp2p.AddrsFactory(func(m []multiaddr.Multiaddr) []multiaddr.Multiaddr {
+			if externalMultiAddr != nil {
+				// Perhaps we should return *only* the external address if it is set?
+				// This could break peers on a local network...
+				// return []multiaddr.Multiaddr{externalMultiAddr}
+
+				// For now, just add the specified address to the list of
+				// advertised addresses, and peers will eventually get to it.
+				m = append(m, externalMultiAddr)
+			}
+			return m
+			// If we add a "disallow private addresses" setting then we
+			// return multiaddr.FilterAddrs(m, manet.IsPublicAddr)
+		}),
 		libp2p.Transport(tcp.NewTCPTransport),
 		libp2p.Security(noise.ID, noise.New), // modified TLS based on node-ID
 		libp2p.Security(secID, sec),
 		libp2p.ListenAddrs(sourceMultiAddr),
 		// listenAddrs,
 		libp2p.Identity(privKeyP2P),
-		libp2p.ConnectionGater(cg),
+		libp2p.ConnectionGater(cfg.connGater),
 		// libp2p.ConnectionManager(cm),
 	) // libp2p.RandomIdentity, in-mem peer store, ...
 	if err != nil {

@@ -74,7 +74,17 @@ func NewP2PService(cfg *P2PServiceConfig, host host.Host) (*P2PService, error) {
 			return nil, fmt.Errorf("invalid P2P listen port: %s, %w", portStr, err)
 		}
 
-		host, err = newHost(ip, port, cfg.ChainID, cfg.PrivKey, cg, logger)
+		hostCfg := &hostConfig{
+			ip:              ip,
+			port:            port,
+			privKey:         cfg.PrivKey,
+			chainID:         cfg.ChainID,
+			connGater:       cg,
+			logger:          logger,
+			externalAddress: cfg.KwilCfg.P2P.ExternalAddress,
+		}
+
+		host, err = newHost(hostCfg)
 		if err != nil {
 			return nil, fmt.Errorf("cannot create host: %w", err)
 		}
@@ -134,6 +144,11 @@ func (p *P2PService) Start(ctx context.Context, bootpeers ...string) error {
 		peerInfo, err := makePeerAddrInfo(peer)
 		if err != nil {
 			p.log.Warnf("invalid bootnode address %v from setting %v", peer, bootpeers[i])
+			continue
+		}
+
+		// Don't dial ourself.
+		if peerInfo.ID == p.host.ID() {
 			continue
 		}
 
