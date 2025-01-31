@@ -4,11 +4,13 @@ package erc20reward
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	kcommon "github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
 	pc "github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/node/exts/erc20reward/meta"
+	"github.com/kwilteam/kwil-db/node/exts/erc20reward/reward"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )
 
@@ -66,6 +68,14 @@ var (
     created_at INT8 NOT NULL
 );`
 
+	sqlInitTableRecipientReward = `
+-- erc20rw_recipient_reward holds the epochs that recipients are in.
+{%s}CREATE TABLE IF NOT EXISTS erc20rw_recipient_reward (
+	recipient TEXT NOT NULL,
+	finalized_id UUID NOT NULL REFERENCES %s.erc20rw_finalized_rewards(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    PRIMARY KEY (recipient, finalized_id)
+);`
+
 	sqlNewReward = `{%s}INSERT INTO erc20rw_rewards (id, recipient, amount, contract_id, created_at) VALUES ($id, $recipient, $amount, $contract_id, $created_at);`
 
 	sqlSearchRewards = `SELECT * FROM %s.erc20rw_rewards WHERE created_at >= $start_height and created_at <= $end_height ORDER BY created_at ASC`
@@ -111,6 +121,17 @@ ORDER by end_height DESC LIMIT $limit`
 FROM %s.erc20rw_finalized_rewards as fr
 join %s.erc20rw_epochs as er on er.id = fr.epoch_id
 WHERE er.sign_hash = $sign_hash`
+	sqlGetEpochMtreeByFinalizedID = `SELECT e.mtree_json FROM %s.erc20rw_epochs as e
+JOIN %s.erc20rw_finalized_rewards as fr on fr.epoch_id = e.id
+WHERE fr.id = $id`
+
+	sqlGetWalletRewards = `SELECT e.mtree_json, mc.chain_id, mc.address, fr.created_at
+from %s.erc20rw_recipient_reward as re
+join %s.erc20rw_finalized_rewards as fr on fr.id = re.finalized_id
+join %s.erc20rw_epochs as e on e.id = fr.epoch_id
+join %s.erc20rw_meta_contracts as mc on mc.id = e.contract_id
+where re.recipient = $recipient
+order by fr.created_at desc`
 )
 
 type EngineExecutor interface {
@@ -292,6 +313,81 @@ func (fr *FinalizedReward) UnpackTypes(decimalType *types.DataType) []pc.Precomp
 		{Type: types.UUIDType, Nullable: false},
 		{Type: types.ByteaType, Nullable: false},
 	}
+}
+
+// WalletReward is the combination of the reward info and claim info, of a wallet.
+type WalletReward struct {
+	// some id?
+
+	Chain    string `json:"chain,omitempty"`
+	ChainID  string `json:"chain_id,omitempty"`
+	Contract string `json:"contract,omitempty"`
+	// EtherScan is the etherscan url to the smartcontract page.
+	EtherScan string `json:"etherscan,omitempty"`
+	CreatedAt int64  `json:"created_at,omitempty"`
+
+	// we cannot return nested structure for the return value;
+	ParamRecipient string   `json:"param_recipient,omitempty"`
+	ParamAmount    string   `json:"param_amount,omitempty"`
+	ParamBlockHash string   `json:"param_block_hash,omitempty"`
+	ParamRoot      string   `json:"param_root,omitempty"`
+	ParamProofs    []string `json:"param_proofs,omitempty"`
+
+	// we won't return this through API
+	MTreeJSON string `json:"mtree_json,omitempty"`
+}
+
+func (wr *WalletReward) UnpackColumns() []string {
+	return []string{
+		"chain",
+		"chain_id",
+		"contract",
+		"etherscan",
+		"created_at",
+		"param_recipient",
+		"param_amount",
+		"param_block_hash",
+		"param_root",
+		"param_proofs",
+	}
+}
+
+func (wr *WalletReward) UnpackValues() []any {
+	return []any{
+		wr.Chain,
+		wr.ChainID,
+		wr.Contract,
+		wr.EtherScan,
+		wr.CreatedAt,
+		wr.ParamRecipient,
+		wr.ParamAmount,
+		wr.ParamBlockHash,
+		wr.ParamRoot,
+		wr.ParamProofs,
+	}
+}
+
+func (wr *WalletReward) UnpackTypes() []pc.PrecompileValue {
+	return []pc.PrecompileValue{
+		{Type: types.TextType, Nullable: false},
+		{Type: types.TextType, Nullable: false},
+		{Type: types.TextType, Nullable: false},
+		{Type: types.TextType, Nullable: false},
+		{Type: types.IntType, Nullable: false},
+		{Type: types.TextType, Nullable: false},
+		{Type: types.TextType, Nullable: false},
+		{Type: types.TextType, Nullable: false},
+		{Type: types.TextType, Nullable: false},
+		{Type: types.TextArrayType, Nullable: false},
+	}
+}
+
+// partialWalletReward holds the query result from sqlGetWalletRewards query.
+type partialWalletReward struct {
+	mTreeJSON string
+	createdAt int64
+	chainID   string
+	contract  string
 }
 
 // GenRewardID generates a unique UUID for a reward. We need special handling
@@ -503,10 +599,29 @@ func rowToEpoch(row []any, decimals uint16) (*Epoch, error) {
 	}, nil
 }
 
-func GetEpochRewardMTreeBySignhash(ctx *kcommon.EngineContext, engine EngineExecutor, db sql.DB, ns string, signHash []byte) ([]byte, error) {
+func GetEpochMTreeBySignhash(ctx *kcommon.EngineContext, engine EngineExecutor, db sql.DB, ns string, signHash []byte) ([]byte, error) {
 	var mtreeJson []byte
 	err := engine.Execute(ctx, db, fmt.Sprintf(sqlGetEpochMtreeBySignhash, ns),
 		map[string]any{"$sign_hash": signHash},
+		func(row *kcommon.Row) error {
+			var ok bool
+			mtreeJson, ok = row.Values[0].([]byte)
+			if !ok {
+				return fmt.Errorf("failed to convert mtree_json to []byte")
+			}
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	return mtreeJson, nil
+}
+
+func GetEpochMTreeByFinalizedID(ctx *kcommon.EngineContext, engine EngineExecutor, db sql.DB, ns string, id *types.UUID) ([]byte, error) {
+	var mtreeJson []byte
+	err := engine.Execute(ctx, db, fmt.Sprintf(sqlGetEpochMtreeByFinalizedID, ns, ns),
+		map[string]any{"$id": id},
 		func(row *kcommon.Row) error {
 			var ok bool
 			mtreeJson, ok = row.Values[0].([]byte)
@@ -576,14 +691,46 @@ func TryFinalizeEpochReward(ctx *kcommon.EngineContext, engine EngineExecutor, d
 	}
 
 	// create finalized reward
+	rid := GenFinalizedRewardID(contractID, digest)
 	err = engine.Execute(ctx, db, fmt.Sprintf(sqlCreateFinalizedReward, ns, ns, ns, meta.ExtAlias),
 		map[string]any{
-			"$rid":        GenFinalizedRewardID(contractID, digest),
+			"$rid":        rid,
 			"$sign_hash":  digest,
 			"$created_at": height,
 		}, nil)
 	if err != nil {
 		return false, err
+	}
+
+	{ // insert recipient finalized relations
+		mTreeJson, err := GetEpochMTreeByFinalizedID(ctx, engine, db, ns, rid)
+		if err != nil {
+			return false, err
+		}
+
+		if mTreeJson == nil {
+			return false, fmt.Errorf("internal bug: mTreeJson is empty")
+		}
+
+		addrs, err := reward.GetLeafAddresses(string(mTreeJson))
+		if err != nil {
+			return false, err
+		}
+
+		params := map[string]any{"$fid": rid}
+		createRecipientRewardSql := fmt.Sprintf(`{%s}INSERT INTO erc20rw_recipient_reward (recipient, finalized_id) VALUES `, ns)
+		for i, addr := range addrs {
+			if i > 0 {
+				createRecipientRewardSql += ","
+			}
+			createRecipientRewardSql += fmt.Sprintf(`($recipient%d, $fid)`, i)
+			params[fmt.Sprintf("$recipient%d", i)] = addr
+		}
+		createRecipientRewardSql += ";"
+		err = engine.Execute(ctx, db, createRecipientRewardSql, params, nil)
+		if err != nil {
+			return false, err
+		}
 	}
 
 	// NOTE: should call through engine.Call???
@@ -743,5 +890,57 @@ func rowToFinalizedReward(row []any, decimals uint16) (*FinalizedReward, error) 
 		SignHash:     signHash,
 		ContractID:   contactID,
 		BlockHash:    blockHash,
+	}, nil
+}
+
+func GetWalletRewards(ctx *kcommon.EngineContext, engine EngineExecutor, db sql.DB, ns string, wallet string) ([]*partialWalletReward, error) {
+	var wrs []*partialWalletReward
+	err := engine.Execute(ctx, db, fmt.Sprintf(sqlGetWalletRewards, ns, ns, ns, meta.ExtAlias),
+		map[string]any{"$recipient": wallet},
+		func(row *kcommon.Row) error {
+			wr, err := rowToWalletReward(row.Values)
+			if err != nil {
+				return err
+			}
+			wrs = append(wrs, wr)
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	return wrs, nil
+}
+
+func rowToWalletReward(row []any) (*partialWalletReward, error) {
+	if len(row) != 4 {
+		return nil, fmt.Errorf("internal bug, expected 4 columns from wallet rewards, got %d", len(row))
+	}
+
+	mtreeJson, ok := row[0].([]byte)
+	if !ok {
+		return nil, fmt.Errorf("failed to convert mtree_json to []byte")
+	}
+
+	chainID, ok := row[1].(int64) // TODO: use Text in DB
+	if !ok {
+		return nil, fmt.Errorf("failed to convert chain_id to string")
+	}
+
+	contractAddr, ok := row[2].(string)
+	if !ok {
+		return nil, fmt.Errorf("failed to convert contract_addr to string")
+	}
+
+	createdAt, ok := row[3].(int64)
+	if !ok {
+		return nil, fmt.Errorf("failed to convert created_at to int64")
+	}
+
+	return &partialWalletReward{
+		createdAt: createdAt,
+		mTreeJSON: string(mtreeJson),
+		chainID:   strconv.FormatInt(chainID, 10),
+		contract:  contractAddr,
 	}, nil
 }

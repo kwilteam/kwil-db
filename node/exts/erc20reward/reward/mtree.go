@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	smt "github.com/kwilteam/openzeppelin-merkle-tree-go/standard_merkle_tree"
 )
 
@@ -73,4 +74,24 @@ func GetMTreeProof(mtreeJson string, addr string) (root []byte, proof [][]byte, 
 	}
 
 	return nil, nil, nil, nil, "", fmt.Errorf("get proof error: %w", err)
+}
+
+func GetLeafAddresses(mtreeJson string) ([]string, error) {
+	t, err := smt.Load([]byte(mtreeJson))
+	if err != nil {
+		return nil, fmt.Errorf("load mtree error: %w", err)
+	}
+
+	addresses := make([]string, len(t.Entries()))
+
+	for i, v := range t.Entries() {
+		addr, ok := v.Value[0].(common.Address)
+		if !ok {
+			return nil, fmt.Errorf("internal bug: get leaf address error: %w", err)
+		}
+
+		addresses[i] = addr.String()
+	}
+
+	return addresses, nil
 }

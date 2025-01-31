@@ -38,6 +38,26 @@ const (
 	txIssueRewardCounterKey = "issue_reward_counter"
 )
 
+type chainInfo struct {
+	Name      string
+	Etherscan string
+}
+
+func (c chainInfo) GetEtherscanAddr(contract string) string {
+	return c.Etherscan + contract + "#writeContract"
+}
+
+var chainConvMap = map[string]chainInfo{
+	"1": {
+		Name:      "Ethereum",
+		Etherscan: "https://etherscan.io/address/",
+	},
+	"11155111": {
+		Name:      "Sepolia",
+		Etherscan: "https://sepolia.etherscan.io/address/",
+	},
+}
+
 func init() {
 	err := pc.RegisterInitializer("erc20_rewards",
 		func(ctx context.Context, service *kcommon.Service, db sql.DB, alias string, metadata map[string]any) (p pc.Precompile, err error) {
@@ -192,7 +212,23 @@ func init() {
 					//	},
 					//},
 					{
-						// Supposed to be called by User
+						// Supposed to be called by App/User
+						Name:            "list_wallet_rewards",
+						AccessModifiers: []pc.Modifier{pc.PUBLIC, pc.VIEW},
+						Parameters: []pc.PrecompileValue{
+							{Type: types.TextType, Nullable: false}, // wallet address
+						},
+						Returns: &pc.MethodReturn{
+							IsTable:    true,
+							Fields:     (&WalletReward{}).UnpackTypes(),
+							FieldNames: (&WalletReward{}).UnpackColumns(),
+						},
+						Handler: func(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+							return ext.listWalletRewards(ctx, app, inputs, resultFn)
+						},
+					},
+					{
+						// Supposed to be called by App/User
 						Name:            "claim_param",
 						AccessModifiers: []pc.Modifier{pc.PUBLIC, pc.VIEW},
 						Handler: func(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
@@ -303,6 +339,11 @@ func initTables(ctx *kcommon.EngineContext, app *kcommon.App, ns string) error {
 	}
 
 	err = app.Engine.Execute(ctx, app.DB, fmt.Sprintf(sqlInitTableErc20rwFinalizedRewards, ns, ns), nil, nil)
+	if err != nil {
+		return err
+	}
+
+	err = app.Engine.Execute(ctx, app.DB, fmt.Sprintf(sqlInitTableRecipientReward, ns, ns), nil, nil)
 	if err != nil {
 		return err
 	}
@@ -889,6 +930,60 @@ func (h *Erc20RewardExt) latestFinalized(ctx *kcommon.EngineContext, app *kcommo
 	return nil
 }
 
+func (h *Erc20RewardExt) listWalletRewards(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+	wallet, ok := inputs[0].(string)
+	if !ok {
+		return fmt.Errorf("invalid wallet address")
+	}
+
+	if !ethCommon.IsHexAddress(wallet) {
+		return fmt.Errorf("invalid wallet address")
+	}
+
+	walletAddr := ethCommon.HexToAddress(wallet)
+
+	partialWrs, err := GetWalletRewards(ctx, app.Engine, app.DB, h.alias, walletAddr.String())
+	if err != nil {
+		return err
+	}
+
+	wrs := make([]*WalletReward, len(partialWrs))
+
+	for i, pwr := range partialWrs {
+		treeRoot, proofs, _, bh, uint256AmtStr, err := reward.GetMTreeProof(pwr.mTreeJSON, walletAddr.String())
+		if err != nil {
+			return err
+		}
+
+		info, ok := chainConvMap[pwr.chainID]
+		if !ok {
+			return fmt.Errorf("internal bug: unknown chain id")
+		}
+
+		wrs[i] = &WalletReward{
+			Chain:          info.Name,
+			ChainID:        pwr.chainID,
+			Contract:       pwr.contract,
+			EtherScan:      info.GetEtherscanAddr(pwr.contract),
+			CreatedAt:      pwr.createdAt,
+			ParamRecipient: walletAddr.String(),
+			ParamAmount:    uint256AmtStr,
+			ParamBlockHash: toBytes32Str(bh),
+			ParamRoot:      toBytes32Str(treeRoot),
+			ParamProofs:    meta.Map(proofs, toBytes32Str),
+		}
+	}
+
+	for _, r := range wrs {
+		err := resultFn(r.UnpackValues())
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func toBytes32Str(bs []byte) string {
 	return "0x" + hex.EncodeToString(bs)
 }
@@ -918,7 +1013,7 @@ func (h *Erc20RewardExt) getClaimParam(ctx *kcommon.EngineContext, app *kcommon.
 
 	walletAddr := ethCommon.HexToAddress(wallet)
 
-	mTreeJson, err := GetEpochRewardMTreeBySignhash(ctx, app.Engine, app.DB, h.alias, signHash)
+	mTreeJson, err := GetEpochMTreeBySignhash(ctx, app.Engine, app.DB, h.alias, signHash)
 	if err != nil {
 		return err
 	}
