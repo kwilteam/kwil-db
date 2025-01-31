@@ -18,10 +18,10 @@ RUN chmod +x /app/dist/kwild /app/dist/kwil-cli
 
 FROM ubuntu:24.04
 WORKDIR /app
-RUN mkdir -p /var/run/kwil && chmod 777 /var/run/kwil 
+RUN mkdir -p /var/run/kwil && chmod 777 /var/run/kwil
 RUN apt update &&  apt install -y postgresql-client curl
 COPY --from=build /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/
 COPY --from=build /app/dist/kwild ./kwild
 COPY --from=build /app/dist/kwil-cli ./kwil-cli
 EXPOSE 8484 6600
-ENTRYPOINT ["/app/kwild", "start"]
+ENTRYPOINT ["/app/kwild"]

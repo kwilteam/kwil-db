@@ -22,6 +22,7 @@ services:
       pg0:
         condition: service_healthy
     command: |
+      start
       --root=/app/kwil
       --log-format=plain
       --log-level=${LOG_LEVEL:-info}
@@ -74,6 +75,7 @@ services:
       pg1:
         condition: service_healthy
     command: |
+      start
       --root=/app/kwil
       --log-format=plain
       --log-level=${LOG_LEVEL:-info}
@@ -126,6 +128,7 @@ services:
       pg2:
         condition: service_healthy
     command: |
+      start
       --root=/app/kwil
       --log-format=plain
       --log-level=${LOG_LEVEL:-info}
@@ -162,7 +165,7 @@ services:
 
   # This node is used to test the scenario where new node join the network & sync the blocks
   # Removing the ext dependency as test-container docker compose creates a new project everytime we run
-  
+
   # docker compose, and the ext is defined in a seperate project, so service lookup is hard.
   node3:
     image: {{ .DockerImage }}
@@ -182,6 +185,7 @@ services:
       pg3:
         condition: service_healthy
     command: |
+      start
       --root=/app/kwil
       --log-format=plain
       --log-level=${LOG_LEVEL:-info}
@@ -234,6 +238,7 @@ services:
       pg4:
         condition: service_healthy
     command: |
+      start
       --root=/app/kwil
       --log-format=plain
       --log-level=${LOG_LEVEL:-info}
@@ -286,6 +291,7 @@ services:
         pg5:
           condition: service_healthy
     command: |
+      start
       --root=/app/kwil
       --log-format=plain
       --log-level=${LOG_LEVEL:-info}
