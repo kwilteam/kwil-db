@@ -47,8 +47,12 @@ func RootCmd() *cobra.Command {
 		},
 		Version: version.KwilVersion,
 		// PersistentPreRunE so k has all the settings in all (sub)command's RunE funcs
-		PersistentPreRunE: bind.ChainPreRuns(bind.MaybeEnableCLIDebug, conf.PreRunBindConfigFileStrict[config.Config],
-			conf.PreRunBindFlags, conf.PreRunBindEnvMatching, conf.PreRunPrintEffectiveConfig),
+		PersistentPreRunE: bind.ChainPreRuns(bind.MaybeEnableCLIDebug,
+			conf.PreRunBindEarlyRootDirEnv, conf.PreRunBindEarlyRootDirFlag, // bind root from env and flag first
+			conf.PreRunBindConfigFileStrict[config.Config], // then config file
+			conf.PreRunBindFlags,                           // then flags
+			conf.PreRunBindEnvMatching,                     // then env vars
+			conf.PreRunPrintEffectiveConfig),
 	}
 
 	bind.BindDebugFlag(cmd) // --debug enabled CLI debug mode (shared.Debugf output)

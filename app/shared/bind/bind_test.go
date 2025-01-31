@@ -59,15 +59,15 @@ func TestPreRunBindEnvMatchingTo(t *testing.T) {
 	k.Set("nested.section.long-value", "default-nested-long-value")
 
 	// Set test environment variables
-	os.Setenv("KWIL_TEST_VALUE", "env-test")
-	os.Setenv("KWIL_NESTED_SECTION_VALUE", "nested-value")
-	os.Setenv("KWIL_NESTED_SECTION_LONG_VALUE", "nested-long-value")
-	defer os.Unsetenv("KWIL_TEST_VALUE")
-	defer os.Unsetenv("KWIL_NESTED_SECTION_VALUE")
-	defer os.Unsetenv("KWIL_NESTED_SECTION_LONG_VALUE")
+	os.Setenv("KWILD_TEST_VALUE", "env-test")
+	os.Setenv("KWILD_NESTED_SECTION_VALUE", "nested-value")
+	os.Setenv("KWILD_NESTED_SECTION_LONG_VALUE", "nested-long-value")
+	defer os.Unsetenv("KWILD_TEST_VALUE")
+	defer os.Unsetenv("KWILD_NESTED_SECTION_VALUE")
+	defer os.Unsetenv("KWILD_NESTED_SECTION_LONG_VALUE")
 
 	cmd := &cobra.Command{Use: "test"}
-	err := PreRunBindEnvMatchingTo(cmd, []string{}, "KWIL_", k)
+	err := PreRunBindEnvMatchingTo(cmd, []string{}, "KWILD_", k)
 	assert.NoError(t, err)
 
 	// k.Print()

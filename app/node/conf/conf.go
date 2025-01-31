@@ -127,7 +127,35 @@ func PreRunBindFlags(cmd *cobra.Command, args []string) error {
 // preceded env, they are loaded assuming every "_" is a section delimiter,
 // which may be incorrect for multi-word keys like KWIL_SECTION_SOME_KEY.
 func PreRunBindEnvMatching(cmd *cobra.Command, args []string) error {
-	return bind.PreRunBindEnvMatchingTo(cmd, args, "KWIL_", k)
+	return bind.PreRunBindEnvMatchingTo(cmd, args, "KWILD_", k)
+}
+
+// PreRunBindEarlyRootDirEnv updates the active config's root directory from
+// KWILD_ROOT. This allows downstream sources, such as config file loading, to
+// use the root directory.
+func PreRunBindEarlyRootDirEnv(cmd *cobra.Command, args []string) error {
+	const rootEnvVar = "KWILD_ROOT"
+	return k.Load(env.ProviderWithValue(rootEnvVar, ".", func(s, v string) (string, any) {
+		if len(s) != len(rootEnvVar) { // KWILD_ROOT_OTHER
+			return "", nil // ignore this variable
+		}
+		bind.Debugf("root env var changed: %s", v)
+		return bind.RootFlagName, v // "root" = value_of_var
+	}), nil)
+}
+
+func PreRunBindEarlyRootDirFlag(cmd *cobra.Command, args []string) error {
+	rootFlag := cmd.Flag(bind.RootFlagName)
+	if rootFlag == nil {
+		return fmt.Errorf("root flag not found: %s", bind.RootFlagName)
+	}
+	if !rootFlag.Changed {
+		return nil
+	}
+	bind.Debugf("root flag changed: %v", rootFlag.Value.String())
+	rootDir := rootFlag.Value.String()
+	k.Set(bind.RootFlagName, rootDir)
+	return nil
 }
 
 // PreRunBindEnvAllSections treats all underscores as section delimiters. With
@@ -141,24 +169,18 @@ func PreRunBindEnvMatching(cmd *cobra.Command, args []string) error {
 // To merge all, k.Load from each source should merge by standardizing the key
 // names into "twowords", AND the `koanf` tag should match.
 func PreRunBindEnvAllSections(cmd *cobra.Command, args []string) error {
-	k.Load(env.Provider("KWIL_", ".", func(s string) string {
+	k.Load(env.Provider("KWILD_", ".", func(s string) string {
 		// The following , not the above goal.
 		// KWIL_SECTION_SUBSECTION_SOMEVALUE => section.subsection.somevalue
 		// Values cannot have underscores in this convention!
-		s, _ = strings.CutPrefix(s, "KWIL_")
+		s, _ = strings.CutPrefix(s, "KWILD_")
 		return strings.ReplaceAll(strings.ToLower(s), "_", ".")
 	}), nil)
 	return nil
 }
 
 func preRunBindConfigFile(cmd *cobra.Command, args []string, parser koanf.Parser) error {
-	// Grab the root directory like other commands that will access it via
-	// persistent flags from the root command.
-	rootDir, err := bind.RootDir(cmd)
-	if err != nil {
-		return err // a parent command needs to have a persistent flag named "root"
-	}
-	// rootDir := RootDir() // from k, requires BindDefaultsWithRootDir or a root field of the config struct
+	rootDir := RootDir() // from k, requires and "early" bind
 
 	// If we want to instead have space placeholders removed (to match
 	// PreRunBindEnvAllSections) rather than having them be standardized to
@@ -175,7 +197,7 @@ func preRunBindConfigFile(cmd *cobra.Command, args []string, parser koanf.Parser
 
 	if err := k.Load(file.Provider(confPath), parser /*, mergeFn*/); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
-			return fmt.Errorf("error loading config: %v", err)
+			return fmt.Errorf("error loading config from %s: %v", confPath, err)
 		}
 		// Not an error, just no config file present.
 		bind.Debugf("No config file present at %v", confPath)
