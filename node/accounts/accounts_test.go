@@ -11,6 +11,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 
+	"github.com/decred/dcrd/container/lru"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -186,7 +187,7 @@ var acctsTestCases = []acctsTestCase{
 			verifyDBAccessCount(t, c, 1, skip)
 
 			key := acctMapKey(account1)
-			_, ok := a.records[key]
+			_, ok := a.records.Get(key)
 			require.False(t, ok)
 
 			acct, ok := a.updates[key]
@@ -411,7 +412,7 @@ func Test_Accounts(t *testing.T) {
 			tx, _ := db.BeginTx(ctx)
 
 			accounts := &Accounts{
-				records: make(map[string]*types.Account),
+				records: lru.NewMap[string, *types.Account](100),
 				updates: make(map[string]*types.Account),
 				log:     log.DiscardLogger,
 			}
