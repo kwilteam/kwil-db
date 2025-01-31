@@ -337,9 +337,10 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) {
 
 	// Set the commit info for the accepted block
 	ce.state.commitInfo = &types.CommitInfo{
-		AppHash:      blkRes.appHash,
-		Votes:        votes,
-		ParamUpdates: blkRes.paramUpdates,
+		AppHash:          blkRes.appHash,
+		Votes:            votes,
+		ParamUpdates:     blkRes.paramUpdates,
+		ValidatorUpdates: blkRes.valUpdates,
 	}
 
 	// Commit the block and broadcast the blockAnn message

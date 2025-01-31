@@ -128,6 +128,45 @@ func (v *Validator) String() string {
 	return fmt.Sprintf("Validator{pubkey = %x, keyType = %s, power = %d}", v.Identifier, v.KeyType, v.Power)
 }
 
+func (v *Validator) MarshalBinary() ([]byte, error) {
+	buf := new(bytes.Buffer)
+	if err := WriteBytes(buf, v.Identifier[:]); err != nil {
+		return nil, fmt.Errorf("failed to write account identifier: %w", err)
+	}
+
+	if err := WriteString(buf, v.KeyType.String()); err != nil {
+		return nil, fmt.Errorf("failed to write key type: %w", err)
+	}
+
+	if err := binary.Write(buf, SerializationByteOrder, v.Power); err != nil {
+		return nil, fmt.Errorf("failed to write power: %w", err)
+	}
+
+	return buf.Bytes(), nil
+}
+
+func (v *Validator) UnmarshalBinary(b []byte) error {
+	rd := bytes.NewReader(b)
+
+	ident, err := ReadBytes(rd)
+	if err != nil {
+		return fmt.Errorf("failed to read account identifier: %w", err)
+	}
+	v.Identifier = ident
+
+	kt, err := ReadString(rd)
+	if err != nil {
+		return fmt.Errorf("failed to read key type: %w", err)
+	}
+	v.KeyType = crypto.KeyType(kt)
+
+	if err := binary.Read(rd, SerializationByteOrder, &v.Power); err != nil {
+		return fmt.Errorf("failed to read power: %w", err)
+	}
+
+	return nil
+}
+
 type validatorJSON struct {
 	PubKey string `json:"pubkey"`
 	Type   string `json:"type"`
@@ -157,13 +196,7 @@ func (v *Validator) UnmarshalJSON(b []byte) error {
 		return err
 	}
 	v.Identifier = pk
-
-	// kt, err := crypto.ParseKeyType(vj.Type)
-	// if err != nil {
-	// 	return err
-	// }
 	v.KeyType = crypto.KeyType(vj.Type) // kt
-
 	v.Power = vj.Power
 	return nil
 }

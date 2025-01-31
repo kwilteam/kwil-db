@@ -125,6 +125,13 @@ func (gc *GenesisConfig) SanityChecks() error {
 		return errors.New("no validators provided")
 	}
 
+	// Validators power should not be zero
+	for _, val := range gc.Validators {
+		if val.Power <= 0 {
+			return fmt.Errorf("Genesis validators should have non-zero power")
+		}
+	}
+
 	if gc.InitialHeight < 0 {
 		return errors.New("initial height must be greater than or equal to 0")
 	}
@@ -152,20 +159,6 @@ func (gc *GenesisConfig) SanityChecks() error {
 
 	return nil
 }
-
-/*func DecodeLeader(leader string) (crypto.PublicKey, error) {
-	pubKeyBts, pubKeyType, err := DecodePubKeyAndType(leader)
-	if err != nil {
-		return nil, err
-	}
-
-	pubKey, err := crypto.UnmarshalPublicKey(pubKeyBts, pubKeyType)
-	if err != nil {
-		return nil, fmt.Errorf("error unmarshalling leader public key: %s of type %s error: %s", hex.EncodeToString(pubKeyBts), pubKeyType.String(), err)
-	}
-
-	return pubKey, nil
-}*/
 
 func DecodePubKeyAndType(encodedPubKey string) ([]byte, crypto.KeyType, error) {
 	parts := strings.Split(encodedPubKey, "#")

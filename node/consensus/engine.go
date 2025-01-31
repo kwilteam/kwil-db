@@ -240,6 +240,7 @@ type blockResult struct {
 	txResults    []ktypes.TxResult
 	vote         *vote
 	paramUpdates ktypes.ParamUpdates
+	valUpdates   []*ktypes.Validator
 }
 
 type lastCommit struct {
