@@ -256,7 +256,7 @@ type ConsensusParamUpdateProposal struct {
 type MigrationStatus string
 
 func (ms MigrationStatus) NoneActive() bool {
-	return ms == NoActiveMigration || ms == ""
+	return ms == NoActiveMigration
 }
 
 func (ms MigrationStatus) Active() bool {
