@@ -21,6 +21,7 @@ services:
       pg0:
         condition: service_healthy
     command: |
+      start
       --root=/app/kwil
       --log-format=plain
       --log-level=${LOG_LEVEL:-info}
@@ -71,6 +72,7 @@ services:
       pg1:
         condition: service_healthy
     command: |
+      start
       --root=/app/kwil
       --log-format=plain
       --log-level=${LOG_LEVEL:-info}
@@ -123,6 +125,7 @@ services:
       pg2:
         condition: service_healthy
     command: |
+      start
       --root=/app/kwil
       --log-level=${LOG_LEVEL:-info}
       --log-format=plain
@@ -177,6 +180,7 @@ services:
       pg3:
         condition: service_healthy
     command: |
+      start
       --root=/app/kwil
       --log-format=plain
       --log-level=${LOG_LEVEL:-info}
@@ -228,6 +232,7 @@ services:
       pg4:
         condition: service_healthy
     command: |
+      start
       --root=/app/kwil
       --log-format=plain
       --log-level=${LOG_LEVEL:-info}
@@ -279,6 +284,7 @@ services:
         pg4:
           condition: service_healthy
     command: |
+      start
       --root=/app/kwil
       --log-format=plain
       --log-level=${LOG_LEVEL:-info}

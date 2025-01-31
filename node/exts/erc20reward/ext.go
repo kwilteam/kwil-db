@@ -38,6 +38,26 @@ const (
 	txIssueRewardCounterKey = "issue_reward_counter"
 )
 
+type chainInfo struct {
+	Name      string
+	Etherscan string
+}
+
+func (c chainInfo) GetEtherscanAddr(contract string) string {
+	return c.Etherscan + contract + "#writeContract"
+}
+
+var chainConvMap = map[string]chainInfo{
+	"1": {
+		Name:      "Ethereum",
+		Etherscan: "https://etherscan.io/address/",
+	},
+	"11155111": {
+		Name:      "Sepolia",
+		Etherscan: "https://sepolia.etherscan.io/address/",
+	},
+}
+
 func init() {
 	err := pc.RegisterInitializer("erc20_rewards",
 		func(ctx context.Context, service *kcommon.Service, db sql.DB, alias string, metadata map[string]any) (p pc.Precompile, err error) {
@@ -92,8 +112,8 @@ func init() {
 						},
 						Returns: &pc.MethodReturn{
 							IsTable:    true,
-							Fields:     (&EpochReward{}).UnpackTypes(rewardAmtDecimal),
-							FieldNames: (&EpochReward{}).UnpackColumns(),
+							Fields:     (&Epoch{}).UnpackTypes(rewardAmtDecimal),
+							FieldNames: (&Epoch{}).UnpackColumns(),
 						},
 					},
 					{
@@ -104,7 +124,7 @@ func init() {
 						Name:            "search_rewards", // maybe not useful for Signer Service.
 						AccessModifiers: []pc.Modifier{pc.PUBLIC, pc.VIEW},
 						Handler: func(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
-							return ext.listPendingRewards(ctx, app, inputs, resultFn)
+							return ext.searchRewards(ctx, app, inputs, resultFn)
 						},
 						Parameters: []pc.PrecompileValue{
 							{Type: types.IntType, Nullable: false}, // start height
@@ -112,8 +132,8 @@ func init() {
 						},
 						Returns: &pc.MethodReturn{
 							IsTable:    true,
-							Fields:     (&PendingReward{}).UnpackTypes(rewardAmtDecimal),
-							FieldNames: (&PendingReward{}).UnpackColumns(),
+							Fields:     (&Reward{}).UnpackTypes(rewardAmtDecimal),
+							FieldNames: (&Reward{}).UnpackColumns(),
 						},
 					},
 					{
@@ -192,7 +212,23 @@ func init() {
 					//	},
 					//},
 					{
-						// Supposed to be called by User
+						// Supposed to be called by App/User
+						Name:            "list_wallet_rewards",
+						AccessModifiers: []pc.Modifier{pc.PUBLIC, pc.VIEW},
+						Parameters: []pc.PrecompileValue{
+							{Type: types.TextType, Nullable: false}, // wallet address
+						},
+						Returns: &pc.MethodReturn{
+							IsTable:    true,
+							Fields:     (&WalletReward{}).UnpackTypes(),
+							FieldNames: (&WalletReward{}).UnpackColumns(),
+						},
+						Handler: func(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+							return ext.listWalletRewards(ctx, app, inputs, resultFn)
+						},
+					},
+					{
+						// Supposed to be called by App/User
 						Name:            "claim_param",
 						AccessModifiers: []pc.Modifier{pc.PUBLIC, pc.VIEW},
 						Handler: func(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
@@ -287,22 +323,27 @@ func initTables(ctx *kcommon.EngineContext, app *kcommon.App, ns string) error {
 	ctx.OverrideAuthz = true
 	defer func() { ctx.OverrideAuthz = false }()
 
-	err := app.Engine.Execute(ctx, app.DB, fmt.Sprintf(sqlInitTableErc20rwPendingRewards, ns, meta.ExtAlias), nil, nil)
+	err := app.Engine.Execute(ctx, app.DB, fmt.Sprintf(sqlInitTableErc20rwRewards, ns, meta.ExtAlias), nil, nil)
 	if err != nil {
 		return err
 	}
 
-	err = app.Engine.Execute(ctx, app.DB, fmt.Sprintf(sqlInitTableErc20rwEpochRewards, ns, meta.ExtAlias), nil, nil)
+	err = app.Engine.Execute(ctx, app.DB, fmt.Sprintf(sqlInitTableErc20rwEpochs, ns, meta.ExtAlias), nil, nil)
 	if err != nil {
 		return err
 	}
 
-	err = app.Engine.Execute(ctx, app.DB, fmt.Sprintf(sqlInitTableErc20rwPendingSignatures, ns, ns, meta.ExtAlias), nil, nil)
+	err = app.Engine.Execute(ctx, app.DB, fmt.Sprintf(sqlInitTableErc20rwEpochVotes, ns, ns, meta.ExtAlias), nil, nil)
 	if err != nil {
 		return err
 	}
 
 	err = app.Engine.Execute(ctx, app.DB, fmt.Sprintf(sqlInitTableErc20rwFinalizedRewards, ns, ns), nil, nil)
+	if err != nil {
+		return err
+	}
+
+	err = app.Engine.Execute(ctx, app.DB, fmt.Sprintf(sqlInitTableRecipientReward, ns, ns), nil, nil)
 	if err != nil {
 		return err
 	}
@@ -533,8 +574,8 @@ func (h *Erc20RewardExt) issueReward(ctx *kcommon.EngineContext, app *kcommon.Ap
 		ctx.TxContext.SetValue(txIssueRewardCounterKey, counter+1)
 	}()
 
-	if err := IssueReward(ctx, app.Engine, app.DB, h.alias, &PendingReward{
-		ID:         GenPendingRewardID(wallet, uint256Amount.String(), ctx.TxContext.TxID, counter),
+	if err := IssueReward(ctx, app.Engine, app.DB, h.alias, &Reward{
+		ID:         GenRewardID(wallet, uint256Amount.String(), ctx.TxContext.TxID, counter),
 		Recipient:  wallet,
 		Amount:     uint256Amount,
 		CreatedAt:  ctx.TxContext.BlockContext.Height,
@@ -546,8 +587,8 @@ func (h *Erc20RewardExt) issueReward(ctx *kcommon.EngineContext, app *kcommon.Ap
 	return nil
 }
 
-// listPendingRewards returns all pending rewards from last epoch till current height.
-func (h *Erc20RewardExt) listPendingRewards(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+// searchRewards returns rewards between a starting height and ending height.
+func (h *Erc20RewardExt) searchRewards(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
 	startHeight, ok := inputs[0].(int64)
 	if !ok {
 		return fmt.Errorf("invalid start height")
@@ -574,8 +615,7 @@ func (h *Erc20RewardExt) listPendingRewards(ctx *kcommon.EngineContext, app *kco
 		return fmt.Errorf("search range too large")
 	}
 
-	// get all pending rewards from last epoch till current height.
-	rewards, err := ListPendingRewards(ctx, app.Engine, app.DB, h.alias, h.decimals, startHeight, endHeight)
+	rewards, err := SearchRewards(ctx, app.Engine, app.DB, h.alias, h.decimals, startHeight, endHeight)
 	if err != nil {
 		return err
 	}
@@ -615,35 +655,35 @@ func (h *Erc20RewardExt) proposeEpoch(ctx *kcommon.EngineContext, app *kcommon.A
 	}
 
 	epochStartHeight := lastEpochEndHeight + 1
-	// get all pending rewards from last batch till current height.
-	pendingRewards, err := ListPendingRewards(ctx, app.Engine, app.DB, h.alias, h.decimals, epochStartHeight, endHeight)
+	rewards, err := SearchRewards(ctx, app.Engine, app.DB, h.alias, h.decimals, epochStartHeight, endHeight)
 	if err != nil {
 		return err
 	}
 
-	if len(pendingRewards) == 0 {
-		return fmt.Errorf("no pending rewards")
+	if len(rewards) == 0 {
+		return fmt.Errorf("no rewards")
 	}
 
-	recipients := make([]string, len(pendingRewards))
-	bigIntAmounts := make([]*big.Int, len(pendingRewards))
+	recipients := make([]string, len(rewards))
+	bigIntAmounts := make([]*big.Int, len(rewards))
 	var totalAmount *types.Decimal // nil
-	for i, pendingReward := range pendingRewards {
-		recipients[i] = pendingReward.Recipient
-		//amounts[i] = pendingReward.Amount
+	for i, r := range rewards {
+		recipients[i] = r.Recipient
 
 		if totalAmount == nil {
-			totalAmount = pendingReward.Amount
+			totalAmount = r.Amount
 		} else {
-			totalAmount, err = types.DecimalAdd(totalAmount, pendingReward.Amount)
+			totalAmount, err = types.DecimalAdd(totalAmount, r.Amount)
 			if err != nil {
 				return err
 			}
 		}
-		bigIntAmounts[i] = pendingReward.Amount.BigInt()
+		bigIntAmounts[i] = r.Amount.BigInt()
 	}
 
-	jsonMtree, rootHash, err := reward.GenRewardMerkleTree2(recipients, bigIntAmounts, h.ContractAddr, blockHash)
+	// NOTE: since we don't have a limit on how many leafs(recipients) a tree can
+	// have, this could be big
+	jsonMtree, rootHash, err := reward.GenRewardMerkleTree(recipients, bigIntAmounts, h.ContractAddr, blockHash)
 	if err != nil {
 		return err
 	}
@@ -672,7 +712,7 @@ func (h *Erc20RewardExt) proposeEpoch(ctx *kcommon.EngineContext, app *kcommon.A
 		return err
 	}
 
-	return app.Engine.Execute(ctx, app.DB, fmt.Sprintf(sqlNewEpochReward, h.alias), map[string]any{
+	return app.Engine.Execute(ctx, app.DB, fmt.Sprintf(sqlNewEpoch, h.alias), map[string]any{
 		"$id":            GenBatchRewardID(endHeight, signHash),
 		"$start_height":  epochStartHeight,
 		"$end_height":    endHeight,
@@ -890,6 +930,60 @@ func (h *Erc20RewardExt) latestFinalized(ctx *kcommon.EngineContext, app *kcommo
 	return nil
 }
 
+func (h *Erc20RewardExt) listWalletRewards(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+	wallet, ok := inputs[0].(string)
+	if !ok {
+		return fmt.Errorf("invalid wallet address")
+	}
+
+	if !ethCommon.IsHexAddress(wallet) {
+		return fmt.Errorf("invalid wallet address")
+	}
+
+	walletAddr := ethCommon.HexToAddress(wallet)
+
+	partialWrs, err := GetWalletRewards(ctx, app.Engine, app.DB, h.alias, walletAddr.String())
+	if err != nil {
+		return err
+	}
+
+	wrs := make([]*WalletReward, len(partialWrs))
+
+	for i, pwr := range partialWrs {
+		treeRoot, proofs, _, bh, uint256AmtStr, err := reward.GetMTreeProof(pwr.mTreeJSON, walletAddr.String())
+		if err != nil {
+			return err
+		}
+
+		info, ok := chainConvMap[pwr.chainID]
+		if !ok {
+			return fmt.Errorf("internal bug: unknown chain id")
+		}
+
+		wrs[i] = &WalletReward{
+			Chain:          info.Name,
+			ChainID:        pwr.chainID,
+			Contract:       pwr.contract,
+			EtherScan:      info.GetEtherscanAddr(pwr.contract),
+			CreatedAt:      pwr.createdAt,
+			ParamRecipient: walletAddr.String(),
+			ParamAmount:    uint256AmtStr,
+			ParamBlockHash: toBytes32Str(bh),
+			ParamRoot:      toBytes32Str(treeRoot),
+			ParamProofs:    meta.Map(proofs, toBytes32Str),
+		}
+	}
+
+	for _, r := range wrs {
+		err := resultFn(r.UnpackValues())
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
 func toBytes32Str(bs []byte) string {
 	return "0x" + hex.EncodeToString(bs)
 }
@@ -919,7 +1013,7 @@ func (h *Erc20RewardExt) getClaimParam(ctx *kcommon.EngineContext, app *kcommon.
 
 	walletAddr := ethCommon.HexToAddress(wallet)
 
-	mTreeJson, err := GetEpochRewardMTreeBySignhash(ctx, app.Engine, app.DB, h.alias, signHash)
+	mTreeJson, err := GetEpochMTreeBySignhash(ctx, app.Engine, app.DB, h.alias, signHash)
 	if err != nil {
 		return err
 	}

@@ -6,9 +6,18 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	smt "github.com/kwilteam/openzeppelin-merkle-tree-go/standard_merkle_tree"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func Map[T1, T2 any](s []T1, f func(T1) T2) []T2 {
+	r := make([]T2, len(s))
+	for i, v := range s {
+		r[i] = f(v)
+	}
+	return r
+}
 
 func TestMerkleTree(t *testing.T) {
 	//networkOwner := "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266"
@@ -25,12 +34,15 @@ func TestMerkleTree(t *testing.T) {
 
 	kwilBlockHash := strings.Repeat("1", 64)
 	kwilBlockHashBytes, _ := hex.DecodeString(kwilBlockHash)
+	var b32Hash [32]byte
+	copy(b32Hash[:], kwilBlockHashBytes)
 
 	t.Run("genMerkleTree with 3 leafs", func(t *testing.T) {
 		expectRoot := "e36a471baa3e0c7b7d0cd9760fcb034a1e407e871ba2c7b5b0e893599726a1ce"
-		mt, root, err := GenRewardMerkleTree([]string{user1, user2, user3}, []string{"100", "200", "100"}, contract, kwilBlockHash)
+		mt, root, err := GenRewardMerkleTree([]string{user1, user2, user3},
+			Map([]string{"100", "200", "100"}, smt.SolNumber), contract, b32Hash)
 		require.NoError(t, err)
-		require.Equal(t, expectRoot, root)
+		require.Equal(t, expectRoot, hex.EncodeToString(root))
 		assert.JSONEq(t, treeLeafs3, mt)
 		mtRoot, mtProof, mtLeaf, bh, amt, err := GetMTreeProof(mt, user2)
 		require.NoError(t, err)
@@ -45,9 +57,10 @@ func TestMerkleTree(t *testing.T) {
 
 	t.Run("genMerkleTree with 4 leafs", func(t *testing.T) {
 		expectRoot := "4b3a147975c7ab8323d6d0f9f53676da6aedda99cedec4cf65591523d4ef2375"
-		mt, root, err := GenRewardMerkleTree([]string{user1, user2, user3, user4}, []string{"100", "200", "100", "200"}, contract, kwilBlockHash)
+		mt, root, err := GenRewardMerkleTree([]string{user1, user2, user3, user4},
+			Map([]string{"100", "200", "100", "200"}, smt.SolNumber), contract, b32Hash)
 		require.NoError(t, err)
-		require.Equal(t, expectRoot, root)
+		require.Equal(t, expectRoot, hex.EncodeToString(root))
 		assert.JSONEq(t, treeLeafs4, mt)
 		mtRoot, mtProof, mtLeaf, bh, amt, err := GetMTreeProof(mt, user2)
 		require.NoError(t, err)
@@ -62,9 +75,10 @@ func TestMerkleTree(t *testing.T) {
 
 	t.Run("genMerkleTree with 5 leafs", func(t *testing.T) {
 		expectRoot := "c77e670bf878bdab7c70ad0709f8ad63db53e96ec3d12043ca93ea2b5991b76d"
-		mt, root, err := GenRewardMerkleTree([]string{user1, user2, user3, user4, user5}, []string{"100", "200", "100", "200", "100"}, contract, kwilBlockHash)
+		mt, root, err := GenRewardMerkleTree([]string{user1, user2, user3, user4, user5},
+			Map([]string{"100", "200", "100", "200", "100"}, smt.SolNumber), contract, b32Hash)
 		require.NoError(t, err)
-		require.Equal(t, expectRoot, root)
+		require.Equal(t, expectRoot, hex.EncodeToString(root))
 		assert.JSONEq(t, treeLeafs5, mt)
 		mtRoot, mtProof, mtLeaf, bh, amt, err := GetMTreeProof(mt, user2)
 		require.NoError(t, err)
@@ -79,15 +93,16 @@ func TestMerkleTree(t *testing.T) {
 	})
 
 	t.Run("genMerkleTree with 1 leaf", func(t *testing.T) {
-		mt, root, err := GenRewardMerkleTree([]string{user1}, []string{"100"}, contract, kwilBlockHash)
+		expectRoot := "644f999664d65d1d2a3feefade54d643dc2b9696971e9070c36f0ec788e55f5b"
+		mt, root, err := GenRewardMerkleTree([]string{user1}, Map([]string{"100"}, smt.SolNumber), contract, b32Hash)
 		require.NoError(t, err)
-		require.Equal(t, "644f999664d65d1d2a3feefade54d643dc2b9696971e9070c36f0ec788e55f5b", root)
+		require.Equal(t, expectRoot, hex.EncodeToString(root))
 		mtRoot, mtProof, mtLeaf, bh, amt, err := GetMTreeProof(mt, user1)
 		require.NoError(t, err)
-		require.Equal(t, root, hex.EncodeToString(mtRoot))
+		require.Equal(t, root, mtRoot)
 		require.Equal(t, "100", amt)
 		require.EqualValues(t, kwilBlockHashBytes, bh)
-		require.Len(t, mtProof, 0)                        // no proofs
-		assert.Equal(t, root, hex.EncodeToString(mtLeaf)) // the leaf is the root
+		require.Len(t, mtProof, 0)    // no proofs
+		assert.Equal(t, root, mtLeaf) // the leaf is the root
 	})
 }

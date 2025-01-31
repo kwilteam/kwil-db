@@ -175,26 +175,26 @@ func Test_scaleDownUint256(t *testing.T) {
 //	})
 //
 //	// Vote reward batch. need to get original pending reward, then calculate root
-//	var latestBatch *EpochReward
-//	var pendingReward *PendingReward
+//	var latestBatch *Epoch
+//	var reward *Reward
 //	withTx(t, ctx, db, func(kApp *kcommon.App) {
 //		result, err := ext.Call(callCtx, kApp, "list_batches", []any{int64(100), int64(1)})
 //		require.NoError(t, err)
 //		assert.Len(t, result, 1)
-//		batches := result[0].([]*EpochReward)
+//		batches := result[0].([]*Epoch)
 //		assert.Len(t, batches, 1)
 //		latestBatch = batches[0]
 //		result, err = ext.Call(callCtx, kApp, "list_rewards", []any{latestBatch.StartHeight, latestBatch.EndHeight})
 //		assert.NoError(t, err)
 //		assert.Len(t, result, 1)
-//		pendingRewards := result[0].([]*PendingReward)
-//		assert.Len(t, pendingRewards, 1) // only one, since list_pending will aggregate
-//		pendingReward = pendingRewards[0]
-//		assert.Equal(t, "22", pendingReward.Amount.String())
+//		rewards := result[0].([]*Reward)
+//		assert.Len(t, rewards, 1) // only one, since list_pending will aggregate
+//		reward = rewards[0]
+//		assert.Equal(t, "22", reward.Amount.String())
 //	})
 //
-//	jsonMtree, rootHash, err := reward.GenRewardMerkleTree([]string{pendingReward.Recipient},
-//		[]string{pendingReward.Amount.String()}, rewardAddress, fmt.Sprintf("%d", latestBatch.EndHeight))
+//	jsonMtree, rootHash, err := reward.GenRewardMerkleTree([]string{reward.Recipient},
+//		[]string{reward.Amount.String()}, rewardAddress, fmt.Sprintf("%d", latestBatch.EndHeight))
 //	require.NoError(t, err)
 //	fmt.Println("jsonMtree:", jsonMtree)
 //	fmt.Printf("rootHash: %s, %d\n", rootHash, latestBatch.TotalRewards.BigInt())

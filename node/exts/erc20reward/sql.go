@@ -4,19 +4,21 @@ package erc20reward
 import (
 	"context"
 	"fmt"
+	"strconv"
 
 	kcommon "github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
 	pc "github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/node/exts/erc20reward/meta"
+	"github.com/kwilteam/kwil-db/node/exts/erc20reward/reward"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )
 
 var (
-	sqlInitTableErc20rwPendingRewards = `
--- erc20rw_pending_rewards holds pending rewards that have not yet been finalized.
+	sqlInitTableErc20rwRewards = `
+-- rewards holds rewards that have been issued to users.
 -- The id is generated based on the recipient_amount_contractID.
-{%s}CREATE TABLE IF NOT EXISTS erc20rw_pending_rewards (
+{%s}CREATE TABLE IF NOT EXISTS rewards (
 	id UUID PRIMARY KEY,
 	recipient TEXT NOT NULL,
 	amount NUMERIC(78,0) NOT NULL, -- allows uint256
@@ -25,15 +27,16 @@ var (
 );`
 
 	// TODO: maybe add safeTxHash? it'll give us a way to find the related EVM tx.
-	sqlInitTableErc20rwEpochRewards = `
--- erc20rw_epoch_rewards holds the finalized rewards for a batch of rewards.
--- If no one votes for a batch, it's fine, since each batch using a unique safe_nonce, e.g., even
--- the batch got votes later for some reason, it won't succeed. BUT seems a trouble for Poster service
-{%s}CREATE TABLE IF NOT EXISTS erc20rw_epoch_rewards (
+	sqlInitTableErc20rwEpochs = `
+-- epochs holds the epoch information.
+-- An epoch is a group of rewards that are issued in a given time/block range.
+-- If no one votes for a epoch, it's fine, since each epoch using a unique safe_nonce, e.g., even
+-- the epoch got votes later for some reason, it won't succeed. BUT seems a trouble for Poster service
+{%s}CREATE TABLE IF NOT EXISTS epochs (
 	id UUID PRIMARY KEY,
-    start_height int8 NOT NULL, -- the height of the first reward in this batch. we need this in case a proposed batch is wrong and no one votes for it.
-	end_height INT8 NOT NULL, -- the height of the last reward in this batch.
-	total_rewards NUMERIC(78,0) NOT NULL, -- the total rewards issued in this batch, calculated automatically. Allow uint256.
+    start_height int8 NOT NULL, -- the height of the first reward in this epoch. we need this in case a proposed epoch is wrong and no one votes for it.
+	end_height INT8 NOT NULL, -- the height of the last reward in this epoch.
+	total_rewards NUMERIC(78,0) NOT NULL, -- the total rewards issued in this epoch, calculated automatically. Allow uint256.
     mtree_json BYTEA NOT NULL, -- the merkle tree of rewards, serialized as JSON. so later we can generate proof for user.
 	reward_root BYTEA UNIQUE NOT NULL, -- the root of the merkle tree of rewards, it's unique per contract
     safe_nonce INT8 NOT NULL, -- the nonce of the Gnosis Safe wallet; used to generate the sign_hash
@@ -43,11 +46,11 @@ var (
 	created_at INT8 NOT NULL -- kwil block height
 );`
 
-	sqlInitTableErc20rwPendingSignatures = `
--- erc20rw_pending_signatures holds signatures for a reward epoch that has
+	sqlInitTableErc20rwEpochVotes = `
+-- epoch_votes holds signatures for a reward epoch that has
 -- not yet received enough signatures.
-{%s}CREATE TABLE IF NOT EXISTS erc20rw_pending_signatures (
-	epoch_id UUID NOT NULL REFERENCES %s.erc20rw_epoch_rewards(id) ON UPDATE CASCADE ON DELETE CASCADE,
+{%s}CREATE TABLE IF NOT EXISTS epoch_votes (
+	epoch_id UUID NOT NULL REFERENCES %s.epochs(id) ON UPDATE CASCADE ON DELETE CASCADE,
 	signer_id UUID NOT NULL REFERENCES %s.erc20rw_meta_signers(id) ON UPDATE CASCADE ON DELETE CASCADE,
 	signature BYTEA NOT NULL,
 	created_at INT8 NOT NULL, -- kwil block height
@@ -55,61 +58,80 @@ var (
 );`
 
 	sqlInitTableErc20rwFinalizedRewards = `
--- erc20rw_finalized_rewards holds finalized rewards that have been finalized.
+-- finalized_rewards holds finalized rewards that have been finalized.
 -- A finalized reward is considered finalized on chain.
-{%s}CREATE TABLE IF NOT EXISTS erc20rw_finalized_rewards (
+{%s}CREATE TABLE IF NOT EXISTS finalized_rewards (
     id UUID PRIMARY KEY,
     voters TEXT[] NOT NULL, -- snapshot of the voters of the epoch
 	signatures BYTEA[] NOT NULL, -- snapshot of the signatures of the epoch
-    epoch_id UUID NOT NULL REFERENCES %s.erc20rw_epoch_rewards(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    epoch_id UUID NOT NULL REFERENCES %s.epochs(id) ON UPDATE CASCADE ON DELETE CASCADE,
     created_at INT8 NOT NULL
 );`
 
-	sqlNewPendingReward = `{%s}INSERT INTO erc20rw_pending_rewards (id, recipient, amount, contract_id, created_at) VALUES ($id, $recipient, $amount, $contract_id, $created_at);`
+	sqlInitTableRecipientReward = `
+-- recipient_reward holds the epochs that recipients are in.
+{%s}CREATE TABLE IF NOT EXISTS recipient_reward (
+	recipient TEXT NOT NULL,
+	finalized_id UUID NOT NULL REFERENCES %s.finalized_rewards(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    PRIMARY KEY (recipient, finalized_id)
+);`
 
-	sqlListRangePendingRewards = `SELECT * FROM %s.erc20rw_pending_rewards WHERE created_at >= $start_height and created_at <= $end_height ORDER BY created_at ASC`
+	sqlNewReward = `{%s}INSERT INTO rewards (id, recipient, amount, contract_id, created_at) VALUES ($id, $recipient, $amount, $contract_id, $created_at);`
 
-	sqlNewEpochReward = `{%s}INSERT INTO erc20rw_epoch_rewards
+	sqlSearchRewards = `SELECT * FROM %s.rewards WHERE created_at >= $start_height and created_at <= $end_height ORDER BY created_at ASC`
+
+	sqlNewEpoch = `{%s}INSERT INTO epochs
 (id, start_height, end_height, total_rewards, mtree_json, reward_root, safe_nonce, sign_hash, contract_id, block_hash, created_at)
 VALUES ($id, $start_height, $end_height, $total_rewards, $mtree_json, $reward_root, $safe_nonce, $sign_hash, $contract_id, $block_hash, $created_at)`
-	sqlGetEpochMtreeBySignhash    = `SELECT mtree_json FROM %s.erc20rw_epoch_rewards WHERE sign_hash = $sign_hash`
-	sqlGetEpochBySignhash         = `SELECT * FROM %s.erc20rw_epoch_rewards WHERE sign_hash = $sign_hash`
-	sqlListEpochRewardsWithVoters = `select er.*, array_agg(s.address) as voters
-from %s.erc20rw_epoch_rewards as er
-left join %s.erc20rw_pending_signatures as ps on er.id = ps.epoch_id
+	sqlGetEpochMtreeBySignhash = `SELECT mtree_json FROM %s.epochs WHERE sign_hash = $sign_hash`
+	sqlGetEpochBySignhash      = `SELECT * FROM %s.epochs WHERE sign_hash = $sign_hash`
+	sqlListEpochWithVoters     = `select er.*, array_agg(s.address) as voters
+from %s.epochs as er
+left join %s.epoch_votes as ps on er.id = ps.epoch_id
 left join %s.erc20rw_meta_signers as s on ps.signer_id = s.id
 WHERE er.end_height > $after_height
 group by er.id, er.start_height, er.end_height, er.total_rewards, er.mtree_json, er.reward_root, er.safe_nonce, er.sign_hash, er.contract_id, er.block_hash, er.created_at
 ORDER BY er.end_height ASC limit $limit`
 
-	sqlVoteEpochBySignHash = `{%s}INSERT INTO erc20rw_pending_signatures (epoch_id, signer_id, signature, created_at)
-VALUES ((SELECT id FROM %s.erc20rw_epoch_rewards WHERE sign_hash = $sign_hash),
+	sqlVoteEpochBySignHash = `{%s}INSERT INTO epoch_votes (epoch_id, signer_id, signature, created_at)
+VALUES ((SELECT id FROM %s.epochs WHERE sign_hash = $sign_hash),
         (SELECT id FROM %s.erc20rw_meta_signers WHERE address = $signer_address and contract_id = $contract_id),
         $signature, $created_at)`
-	sqlCountSignatures   = `SELECT COUNT(*) FROM %s.erc20rw_pending_signatures WHERE epoch_id = (select id from %s.erc20rw_epoch_rewards WHERE sign_hash = $sign_hash)`
-	sqlGetVoteBySignHash = `SELECT * from %s.erc20rw_pending_signatures where
-    epoch_id = (SELECT id FROM %s.erc20rw_epoch_rewards WHERE sign_hash = $sign_hash)
-    and signer_id = (SELECT id FROM %s.erc20rw_meta_signers WHERE address = $signer_address and contract_id = $contract_id)`
+	sqlCountEpochVotes   = `SELECT COUNT(*) FROM %s.epoch_votes WHERE epoch_id = (select id from %s.epochs WHERE sign_hash = $sign_hash)`
+	sqlGetVoteBySignHash = `SELECT * from %s.epoch_votes where
+epoch_id = (SELECT id FROM %s.epochs WHERE sign_hash = $sign_hash)
+and signer_id = (SELECT id FROM %s.erc20rw_meta_signers WHERE address = $signer_address and contract_id = $contract_id)`
 
 	sqlCreateFinalizedReward = `{%s}WITH
-epoch AS (SELECT * FROM %s.erc20rw_epoch_rewards WHERE sign_hash = $sign_hash),
-votes as (SELECT * FROM %s.erc20rw_pending_signatures WHERE epoch_id = (select id from epoch)),
+epoch AS (SELECT * FROM %s.epochs WHERE sign_hash = $sign_hash),
+votes as (SELECT * FROM %s.epoch_votes WHERE epoch_id = (select id from epoch)),
 sigs AS (SELECT ARRAY_AGG(signature) as signatures FROM votes),
 voters As (SELECT ARRAY_AGG(s.address) as voters FROM votes as vs join %s.erc20rw_meta_signers as s on vs.signer_id = s.id)
-INSERT INTO erc20rw_finalized_rewards (id, voters, signatures, epoch_id, created_at)
+INSERT INTO finalized_rewards (id, voters, signatures, epoch_id, created_at)
 VALUES ($rid,(SELECT voters from voters),(SELECT signatures from sigs),(select id from epoch), $created_at)`
 	sqlListFinalizedRewards = `SELECT fr.*, er.start_height, er.end_height, er.total_rewards, er.reward_root, er.safe_nonce, er.sign_hash, er.contract_id, er.block_hash
-FROM %s.erc20rw_finalized_rewards as fr
-join %s.erc20rw_epoch_rewards as er on er.id = fr.epoch_id
+FROM %s.finalized_rewards as fr
+join %s.epochs as er on er.id = fr.epoch_id
 WHERE end_height > $after_height ORDER BY end_height ASC limit $limit`
 	sqlListLatestFinalizedRewards = `SELECT fr.*, er.start_height, er.end_height, er.total_rewards, er.reward_root, er.safe_nonce, er.sign_hash, er.contract_id, er.block_hash
-FROM %s.erc20rw_finalized_rewards as fr
-join %s.erc20rw_epoch_rewards as er on er.id = fr.epoch_id
+FROM %s.finalized_rewards as fr
+join %s.epochs as er on er.id = fr.epoch_id
 ORDER by end_height DESC LIMIT $limit`
 	sqlGetFinalizedRewardByHash = `SELECT fr.*, er.start_height, er.end_height, er.total_rewards, er.reward_root, er.safe_nonce, er.sign_hash, er.contract_id, er.block_hash
-FROM %s.erc20rw_finalized_rewards as fr
-join %s.erc20rw_epoch_rewards as er on er.id = fr.epoch_id
+FROM %s.finalized_rewards as fr
+join %s.epochs as er on er.id = fr.epoch_id
 WHERE er.sign_hash = $sign_hash`
+	sqlGetEpochMtreeByFinalizedID = `SELECT e.mtree_json FROM %s.epochs as e
+JOIN %s.finalized_rewards as fr on fr.epoch_id = e.id
+WHERE fr.id = $id`
+
+	sqlGetWalletRewards = `SELECT e.mtree_json, mc.chain_id, mc.address, fr.created_at
+from %s.recipient_reward as re
+join %s.finalized_rewards as fr on fr.id = re.finalized_id
+join %s.epochs as e on e.id = fr.epoch_id
+join %s.erc20rw_meta_contracts as mc on mc.id = e.contract_id
+where re.recipient = $recipient
+order by fr.created_at desc`
 )
 
 type EngineExecutor interface {
@@ -117,8 +139,8 @@ type EngineExecutor interface {
 	ExecuteWithoutEngineCtx(ctx context.Context, db sql.DB, statement string, params map[string]any, fn func(*kcommon.Row) error) error
 }
 
-// PendingReward is the data model of table erc20rw_pending_rewards.
-type PendingReward struct {
+// Reward is the data model of table rewards.
+type Reward struct {
 	ID         *types.UUID
 	Recipient  string
 	Amount     *types.Decimal
@@ -126,7 +148,7 @@ type PendingReward struct {
 	CreatedAt  int64
 }
 
-func (pr *PendingReward) UnpackColumns() []string {
+func (pr *Reward) UnpackColumns() []string {
 	return []string{
 		"id",
 		"recipient",
@@ -136,7 +158,7 @@ func (pr *PendingReward) UnpackColumns() []string {
 	}
 }
 
-func (pr *PendingReward) UnpackValues() []any {
+func (pr *Reward) UnpackValues() []any {
 	return []any{
 		pr.ID,
 		pr.Recipient,
@@ -146,7 +168,7 @@ func (pr *PendingReward) UnpackValues() []any {
 	}
 }
 
-func (pr *PendingReward) UnpackTypes(decimalType *types.DataType) []pc.PrecompileValue {
+func (pr *Reward) UnpackTypes(decimalType *types.DataType) []pc.PrecompileValue {
 	return []pc.PrecompileValue{
 		{Type: types.UUIDType, Nullable: false},
 		{Type: types.TextType, Nullable: false},
@@ -156,8 +178,8 @@ func (pr *PendingReward) UnpackTypes(decimalType *types.DataType) []pc.Precompil
 	}
 }
 
-// EpochReward is the data model of table erc20rw_epoch_rewards.
-type EpochReward struct {
+// Epoch is the data model of table epochs.
+type Epoch struct {
 	ID           *types.UUID
 	StartHeight  int64
 	EndHeight    int64
@@ -172,7 +194,7 @@ type EpochReward struct {
 	Voters       []string //
 }
 
-func (br *EpochReward) UnpackColumns() []string {
+func (br *Epoch) UnpackColumns() []string {
 	return []string{
 		"id",
 		"start_height",
@@ -189,7 +211,7 @@ func (br *EpochReward) UnpackColumns() []string {
 	}
 }
 
-func (br *EpochReward) UnpackValues() []any {
+func (br *Epoch) UnpackValues() []any {
 	return []any{
 		br.ID,
 		br.StartHeight,
@@ -205,7 +227,7 @@ func (br *EpochReward) UnpackValues() []any {
 	}
 }
 
-func (br *EpochReward) UnpackTypes(decimalType *types.DataType) []pc.PrecompileValue {
+func (br *Epoch) UnpackTypes(decimalType *types.DataType) []pc.PrecompileValue {
 	return []pc.PrecompileValue{
 		{Type: types.UUIDType, Nullable: false},
 		{Type: types.IntType, Nullable: false},
@@ -221,7 +243,7 @@ func (br *EpochReward) UnpackTypes(decimalType *types.DataType) []pc.PrecompileV
 	}
 }
 
-// FinalizedReward is the data model of table erc20rw_finalized_rewards.
+// FinalizedReward is the data model of table finalized_rewards.
 type FinalizedReward struct {
 	ID         *types.UUID
 	Voters     []string
@@ -293,26 +315,101 @@ func (fr *FinalizedReward) UnpackTypes(decimalType *types.DataType) []pc.Precomp
 	}
 }
 
-// GenPendingRewardID generates a unique UUID for a reward. We need special handling
+// WalletReward is the combination of the reward info and claim info, of a wallet.
+type WalletReward struct {
+	// some id?
+
+	Chain    string `json:"chain,omitempty"`
+	ChainID  string `json:"chain_id,omitempty"`
+	Contract string `json:"contract,omitempty"`
+	// EtherScan is the etherscan url to the smartcontract page.
+	EtherScan string `json:"etherscan,omitempty"`
+	CreatedAt int64  `json:"created_at,omitempty"`
+
+	// we cannot return nested structure for the return value;
+	ParamRecipient string   `json:"param_recipient,omitempty"`
+	ParamAmount    string   `json:"param_amount,omitempty"`
+	ParamBlockHash string   `json:"param_block_hash,omitempty"`
+	ParamRoot      string   `json:"param_root,omitempty"`
+	ParamProofs    []string `json:"param_proofs,omitempty"`
+
+	// we won't return this through API
+	MTreeJSON string `json:"mtree_json,omitempty"`
+}
+
+func (wr *WalletReward) UnpackColumns() []string {
+	return []string{
+		"chain",
+		"chain_id",
+		"contract",
+		"etherscan",
+		"created_at",
+		"param_recipient",
+		"param_amount",
+		"param_block_hash",
+		"param_root",
+		"param_proofs",
+	}
+}
+
+func (wr *WalletReward) UnpackValues() []any {
+	return []any{
+		wr.Chain,
+		wr.ChainID,
+		wr.Contract,
+		wr.EtherScan,
+		wr.CreatedAt,
+		wr.ParamRecipient,
+		wr.ParamAmount,
+		wr.ParamBlockHash,
+		wr.ParamRoot,
+		wr.ParamProofs,
+	}
+}
+
+func (wr *WalletReward) UnpackTypes() []pc.PrecompileValue {
+	return []pc.PrecompileValue{
+		{Type: types.TextType, Nullable: false},
+		{Type: types.TextType, Nullable: false},
+		{Type: types.TextType, Nullable: false},
+		{Type: types.TextType, Nullable: false},
+		{Type: types.IntType, Nullable: false},
+		{Type: types.TextType, Nullable: false},
+		{Type: types.TextType, Nullable: false},
+		{Type: types.TextType, Nullable: false},
+		{Type: types.TextType, Nullable: false},
+		{Type: types.TextArrayType, Nullable: false},
+	}
+}
+
+// partialWalletReward holds the query result from sqlGetWalletRewards query.
+type partialWalletReward struct {
+	mTreeJSON string
+	createdAt int64
+	chainID   string
+	contract  string
+}
+
+// GenRewardID generates a unique UUID for a reward. We need special handling
 // here because there could be multiple rewards to the same user with the same amount.
-func GenPendingRewardID(recipient string, amount string, txID string, idx int) *types.UUID {
-	return types.NewUUIDV5([]byte(fmt.Sprintf("erc20rw_pending_rewards_%v_%v_%v_%v", recipient, amount, txID, idx)))
+func GenRewardID(recipient string, amount string, txID string, idx int) *types.UUID {
+	return types.NewUUIDV5([]byte(fmt.Sprintf("rewards_%v_%v_%v_%v", recipient, amount, txID, idx)))
 }
 
 func GenBatchRewardID(endHeight int64, signHash []byte) *types.UUID {
-	return types.NewUUIDV5([]byte(fmt.Sprintf("erc20rw_epoch_rewards_%v_%x", endHeight, signHash)))
+	return types.NewUUIDV5([]byte(fmt.Sprintf("epoch_%v_%x", endHeight, signHash)))
 }
 
 func GenFinalizedRewardID(contractID *types.UUID, digest []byte) *types.UUID {
-	return types.NewUUIDV5([]byte(fmt.Sprintf("erc20rw_finalized_rewards_%v_%x", contractID.String(), digest)))
+	return types.NewUUIDV5([]byte(fmt.Sprintf("finalized_rewards_%v_%x", contractID.String(), digest)))
 }
 
-func IssueReward(ctx *kcommon.EngineContext, engine EngineExecutor, db sql.DB, ns string, pr *PendingReward) error {
+func IssueReward(ctx *kcommon.EngineContext, engine EngineExecutor, db sql.DB, ns string, pr *Reward) error {
 	ctx.OverrideAuthz = true
 	defer func() { ctx.OverrideAuthz = false }()
 
 	// Need access to block height.
-	query := fmt.Sprintf(sqlNewPendingReward, ns)
+	query := fmt.Sprintf(sqlNewReward, ns)
 	return engine.Execute(ctx, db, query, map[string]any{
 		"$id":          pr.ID,
 		"$recipient":   pr.Recipient,
@@ -322,12 +419,12 @@ func IssueReward(ctx *kcommon.EngineContext, engine EngineExecutor, db sql.DB, n
 	}, nil)
 }
 
-// ListPendingRewards returns all pending rewards from the last batch till given height.
-func ListPendingRewards(ctx *kcommon.EngineContext, engine EngineExecutor, db sql.DB, ns string,
-	rewardDecimals uint16, startHeight int64, endHeight int64) ([]*PendingReward, error) {
-	query := fmt.Sprintf(sqlListRangePendingRewards, ns)
+// SearchRewards returns rewards issued in given height range.
+func SearchRewards(ctx *kcommon.EngineContext, engine EngineExecutor, db sql.DB, ns string,
+	rewardDecimals uint16, startHeight int64, endHeight int64) ([]*Reward, error) {
+	query := fmt.Sprintf(sqlSearchRewards, ns)
 
-	var rewards []*PendingReward
+	var rewards []*Reward
 	idx := 0
 	// if same recipient get issued multiple times, we need to aggregate it
 	seenRecipients := make(map[string]int) // recipient to idx
@@ -361,9 +458,9 @@ func ListPendingRewards(ctx *kcommon.EngineContext, engine EngineExecutor, db sq
 	return rewards, nil
 }
 
-func rowToPendingReward(row []any, decimals uint16) (*PendingReward, error) {
+func rowToPendingReward(row []any, decimals uint16) (*Reward, error) {
 	if len(row) != 5 {
-		return nil, fmt.Errorf("internal bug, expected 5 columns from pending rewards, got %d", len(row))
+		return nil, fmt.Errorf("internal bug, expected 5 columns from rewards, got %d", len(row))
 	}
 
 	id, ok := row[0].(*types.UUID)
@@ -393,7 +490,7 @@ func rowToPendingReward(row []any, decimals uint16) (*PendingReward, error) {
 	if !ok {
 		return nil, fmt.Errorf("failed to convert created_at to int64")
 	}
-	return &PendingReward{
+	return &Reward{
 		ID:         id,
 		Recipient:  recipient,
 		Amount:     amount,
@@ -403,31 +500,31 @@ func rowToPendingReward(row []any, decimals uint16) (*PendingReward, error) {
 }
 
 func ListEpochs(ctx *kcommon.EngineContext, engine EngineExecutor, db sql.DB, ns string,
-	rewardDecimals uint16, afterBlockHeight, limit int64) ([]*EpochReward, error) {
-	query := fmt.Sprintf(sqlListEpochRewardsWithVoters, ns, ns, meta.ExtAlias)
+	rewardDecimals uint16, afterBlockHeight, limit int64) ([]*Epoch, error) {
+	query := fmt.Sprintf(sqlListEpochWithVoters, ns, ns, meta.ExtAlias)
 
-	var epochRewards []*EpochReward
+	var epoches []*Epoch
 	err := engine.Execute(ctx, db, query, map[string]any{
 		"$after_height": afterBlockHeight,
 		"$limit":        limit,
 	}, func(row *kcommon.Row) error {
-		er, err := rowToEpochReward(row.Values, rewardDecimals)
+		er, err := rowToEpoch(row.Values, rewardDecimals)
 		if err != nil {
 			return err
 		}
-		epochRewards = append(epochRewards, er)
+		epoches = append(epoches, er)
 		return nil
 	})
 	if err != nil {
 		return nil, err
 	}
 
-	return epochRewards, nil
+	return epoches, nil
 }
 
-func rowToEpochReward(row []any, decimals uint16) (*EpochReward, error) {
+func rowToEpoch(row []any, decimals uint16) (*Epoch, error) {
 	if len(row) != 12 {
-		return nil, fmt.Errorf("internal bug, expected 12 columns from epoch rewards, got %d", len(row))
+		return nil, fmt.Errorf("internal bug, expected 12 columns from epoch, got %d", len(row))
 	}
 
 	id, ok := row[0].(*types.UUID)
@@ -480,7 +577,7 @@ func rowToEpochReward(row []any, decimals uint16) (*EpochReward, error) {
 		return nil, fmt.Errorf("failed to convert voters to []*string")
 	}
 
-	return &EpochReward{
+	return &Epoch{
 		ID:           id,
 		StartHeight:  startHeight,
 		EndHeight:    endHeight,
@@ -502,7 +599,7 @@ func rowToEpochReward(row []any, decimals uint16) (*EpochReward, error) {
 	}, nil
 }
 
-func GetEpochRewardMTreeBySignhash(ctx *kcommon.EngineContext, engine EngineExecutor, db sql.DB, ns string, signHash []byte) ([]byte, error) {
+func GetEpochMTreeBySignhash(ctx *kcommon.EngineContext, engine EngineExecutor, db sql.DB, ns string, signHash []byte) ([]byte, error) {
 	var mtreeJson []byte
 	err := engine.Execute(ctx, db, fmt.Sprintf(sqlGetEpochMtreeBySignhash, ns),
 		map[string]any{"$sign_hash": signHash},
@@ -521,13 +618,32 @@ func GetEpochRewardMTreeBySignhash(ctx *kcommon.EngineContext, engine EngineExec
 	return mtreeJson, nil
 }
 
-func GetEpochRewardBySignhash(ctx *kcommon.EngineContext, engine EngineExecutor, db sql.DB, ns string, signHash []byte, rewardDecimals uint16) (*EpochReward, error) {
-	var er *EpochReward
+func GetEpochMTreeByFinalizedID(ctx *kcommon.EngineContext, engine EngineExecutor, db sql.DB, ns string, id *types.UUID) ([]byte, error) {
+	var mtreeJson []byte
+	err := engine.Execute(ctx, db, fmt.Sprintf(sqlGetEpochMtreeByFinalizedID, ns, ns),
+		map[string]any{"$id": id},
+		func(row *kcommon.Row) error {
+			var ok bool
+			mtreeJson, ok = row.Values[0].([]byte)
+			if !ok {
+				return fmt.Errorf("failed to convert mtree_json to []byte")
+			}
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	return mtreeJson, nil
+}
+
+func GetEpochRewardBySignhash(ctx *kcommon.EngineContext, engine EngineExecutor, db sql.DB, ns string, signHash []byte, rewardDecimals uint16) (*Epoch, error) {
+	var er *Epoch
 	err := engine.Execute(ctx, db, fmt.Sprintf(sqlGetEpochBySignhash, ns),
 		map[string]any{"$sign_hash": signHash},
 		func(row *kcommon.Row) error {
 			var err error
-			er, err = rowToEpochReward(row.Values, rewardDecimals)
+			er, err = rowToEpoch(row.Values, rewardDecimals)
 			return err
 		})
 	if err != nil {
@@ -542,7 +658,7 @@ func TryFinalizeEpochReward(ctx *kcommon.EngineContext, engine EngineExecutor, d
 	// TODO: might be able to implement the following using only SQL or Procedure, less round-trip
 
 	voteCount := int64(0)
-	err := engine.Execute(ctx, db, fmt.Sprintf(sqlCountSignatures, ns, ns),
+	err := engine.Execute(ctx, db, fmt.Sprintf(sqlCountEpochVotes, ns, ns),
 		map[string]any{"$sign_hash": digest},
 		func(row *kcommon.Row) error {
 			var ok bool
@@ -575,14 +691,46 @@ func TryFinalizeEpochReward(ctx *kcommon.EngineContext, engine EngineExecutor, d
 	}
 
 	// create finalized reward
+	rid := GenFinalizedRewardID(contractID, digest)
 	err = engine.Execute(ctx, db, fmt.Sprintf(sqlCreateFinalizedReward, ns, ns, ns, meta.ExtAlias),
 		map[string]any{
-			"$rid":        GenFinalizedRewardID(contractID, digest),
+			"$rid":        rid,
 			"$sign_hash":  digest,
 			"$created_at": height,
 		}, nil)
 	if err != nil {
 		return false, err
+	}
+
+	{ // insert recipient finalized relations
+		mTreeJson, err := GetEpochMTreeByFinalizedID(ctx, engine, db, ns, rid)
+		if err != nil {
+			return false, err
+		}
+
+		if mTreeJson == nil {
+			return false, fmt.Errorf("internal bug: mTreeJson is empty")
+		}
+
+		addrs, err := reward.GetLeafAddresses(string(mTreeJson))
+		if err != nil {
+			return false, err
+		}
+
+		params := map[string]any{"$fid": rid}
+		createRecipientRewardSql := fmt.Sprintf(`{%s}INSERT INTO recipient_reward (recipient, finalized_id) VALUES `, ns)
+		for i, addr := range addrs {
+			if i > 0 {
+				createRecipientRewardSql += ","
+			}
+			createRecipientRewardSql += fmt.Sprintf(`($recipient%d, $fid)`, i)
+			params[fmt.Sprintf("$recipient%d", i)] = addr
+		}
+		createRecipientRewardSql += ";"
+		err = engine.Execute(ctx, db, createRecipientRewardSql, params, nil)
+		if err != nil {
+			return false, err
+		}
 	}
 
 	// NOTE: should call through engine.Call???
@@ -742,5 +890,57 @@ func rowToFinalizedReward(row []any, decimals uint16) (*FinalizedReward, error) 
 		SignHash:     signHash,
 		ContractID:   contactID,
 		BlockHash:    blockHash,
+	}, nil
+}
+
+func GetWalletRewards(ctx *kcommon.EngineContext, engine EngineExecutor, db sql.DB, ns string, wallet string) ([]*partialWalletReward, error) {
+	var wrs []*partialWalletReward
+	err := engine.Execute(ctx, db, fmt.Sprintf(sqlGetWalletRewards, ns, ns, ns, meta.ExtAlias),
+		map[string]any{"$recipient": wallet},
+		func(row *kcommon.Row) error {
+			wr, err := rowToWalletReward(row.Values)
+			if err != nil {
+				return err
+			}
+			wrs = append(wrs, wr)
+			return nil
+		})
+	if err != nil {
+		return nil, err
+	}
+
+	return wrs, nil
+}
+
+func rowToWalletReward(row []any) (*partialWalletReward, error) {
+	if len(row) != 4 {
+		return nil, fmt.Errorf("internal bug, expected 4 columns from wallet rewards, got %d", len(row))
+	}
+
+	mtreeJson, ok := row[0].([]byte)
+	if !ok {
+		return nil, fmt.Errorf("failed to convert mtree_json to []byte")
+	}
+
+	chainID, ok := row[1].(int64) // TODO: use Text in DB
+	if !ok {
+		return nil, fmt.Errorf("failed to convert chain_id to string")
+	}
+
+	contractAddr, ok := row[2].(string)
+	if !ok {
+		return nil, fmt.Errorf("failed to convert contract_addr to string")
+	}
+
+	createdAt, ok := row[3].(int64)
+	if !ok {
+		return nil, fmt.Errorf("failed to convert created_at to int64")
+	}
+
+	return &partialWalletReward{
+		createdAt: createdAt,
+		mTreeJSON: string(mtreeJson),
+		chainID:   strconv.FormatInt(chainID, 10),
+		contract:  contractAddr,
 	}, nil
 }

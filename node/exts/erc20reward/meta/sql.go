@@ -25,7 +25,7 @@ var (
 -- NOTE: We might need to store GnosisSafe address here as well.
 {%s}CREATE TABLE IF NOT EXISTS erc20rw_meta_contracts (
 	id UUID PRIMARY KEY,
-    chain_id INT8 NOT NULL, -- the chain ID of the contract.
+    chain_id INT8 NOT NULL, -- the chain ID of the contract. -- TODO: use Text for bigint
 	address TEXT NOT NULL, -- the reward escrow contract address.
 	nonce INT8 NOT NULL, -- the last known nonce of the contract
 	threshold INT8 NOT NULL,

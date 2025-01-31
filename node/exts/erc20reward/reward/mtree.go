@@ -1,10 +1,10 @@
 package reward
 
 import (
-	"encoding/hex"
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/common"
 	smt "github.com/kwilteam/openzeppelin-merkle-tree-go/standard_merkle_tree"
 )
 
@@ -15,40 +15,7 @@ var (
 	MerkleLeafEncoding = []string{smt.SOL_ADDRESS, smt.SOL_UINT256, smt.SOL_ADDRESS, smt.SOL_BYTES32}
 )
 
-func GenRewardMerkleTree(users []string, amounts []string, contractAddress string, kwilBlockHash string) (string, string, error) {
-	if len(users) != len(amounts) {
-		return "", "", fmt.Errorf("users and amounts length not equal")
-	}
-
-	blockHash, _ := hex.DecodeString(kwilBlockHash)
-	var b32Hash [32]byte
-	copy(b32Hash[:], blockHash)
-
-	values := [][]interface{}{}
-	for i, v := range users {
-		values = append(values,
-			[]interface{}{
-				smt.SolAddress(v),
-				smt.SolNumber(amounts[i]),
-				smt.SolAddress(contractAddress),
-				b32Hash, // TODO: use bytes32
-			})
-	}
-
-	rewardTree, err := smt.Of(values, MerkleLeafEncoding)
-	if err != nil {
-		return "", "", fmt.Errorf("create reward tree error: %w", err)
-	}
-
-	dump, err := rewardTree.TreeMarshal()
-	if err != nil {
-		return "", "", fmt.Errorf("reward tree marshal error: %w", err)
-	}
-
-	return string(dump), hex.EncodeToString(rewardTree.GetRoot()), nil
-}
-
-func GenRewardMerkleTree2(users []string, amounts []*big.Int, contractAddress string, kwilBlockHash [32]byte) (string, []byte, error) {
+func GenRewardMerkleTree(users []string, amounts []*big.Int, contractAddress string, kwilBlockHash [32]byte) (string, []byte, error) {
 	if len(users) != len(amounts) {
 		return "", nil, fmt.Errorf("users and amounts length not equal")
 	}
@@ -107,4 +74,24 @@ func GetMTreeProof(mtreeJson string, addr string) (root []byte, proof [][]byte, 
 	}
 
 	return nil, nil, nil, nil, "", fmt.Errorf("get proof error: %w", err)
+}
+
+func GetLeafAddresses(mtreeJson string) ([]string, error) {
+	t, err := smt.Load([]byte(mtreeJson))
+	if err != nil {
+		return nil, fmt.Errorf("load mtree error: %w", err)
+	}
+
+	addresses := make([]string, len(t.Entries()))
+
+	for i, v := range t.Entries() {
+		addr, ok := v.Value[0].(common.Address)
+		if !ok {
+			return nil, fmt.Errorf("internal bug: get leaf address error: %w", err)
+		}
+
+		addresses[i] = addr.String()
+	}
+
+	return addresses, nil
 }
