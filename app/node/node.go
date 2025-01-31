@@ -122,6 +122,13 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config, autogen bo
 		}
 	}
 
+	// migration status defaults
+	if genConfig.Migration.IsMigration() {
+		genConfig.MigrationStatus = types.GenesisMigration
+	} else {
+		genConfig.MigrationStatus = types.NoActiveMigration
+	}
+
 	if err := genConfig.SanityChecks(); err != nil {
 		return fmt.Errorf("genesis configuration failed sanity checks: %w", err)
 	}

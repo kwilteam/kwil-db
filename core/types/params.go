@@ -540,10 +540,6 @@ func (np *NetworkParameters) SanityChecks() error {
 		return errors.New("max bytes should be greater than 0")
 	}
 
-	if !np.MigrationStatus.Valid() {
-		return fmt.Errorf("migration status is invalid: %q", np.MigrationStatus)
-	}
-
 	return nil
 }
 

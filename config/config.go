@@ -247,7 +247,7 @@ func DefaultGenesisConfig() *GenesisConfig {
 		NetworkParameters: types.NetworkParameters{
 			Leader:           types.PublicKey{},
 			MaxBlockSize:     6 * 1024 * 1024,
-			JoinExpiry:       types.Duration(86400 * time.Second),
+			JoinExpiry:       types.Duration(7 * 24 * time.Hour), // 1 week
 			DisabledGasCosts: true,
 			MaxVotesPerTx:    200,
 			MigrationStatus:  types.NoActiveMigration,
