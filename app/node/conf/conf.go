@@ -132,7 +132,8 @@ func PreRunBindEnvMatching(cmd *cobra.Command, args []string) error {
 
 // PreRunBindEarlyRootDirEnv updates the active config's root directory from
 // KWILD_ROOT. This allows downstream sources, such as config file loading, to
-// use the root directory.
+// use the root directory, while having the other environment variables override
+// config file values.
 func PreRunBindEarlyRootDirEnv(cmd *cobra.Command, args []string) error {
 	const rootEnvVar = "KWILD_ROOT"
 	return k.Load(env.ProviderWithValue(rootEnvVar, ".", func(s, v string) (string, any) {
@@ -144,6 +145,9 @@ func PreRunBindEarlyRootDirEnv(cmd *cobra.Command, args []string) error {
 	}), nil)
 }
 
+// PreRunBindEarlyRootDirFlag is like PreRunBindEarlyRootDirEnv, but for the
+// root flag. These two "early" preruns are separate from each other as well as
+// from the other preruns such as PreRunBindConfigFile.
 func PreRunBindEarlyRootDirFlag(cmd *cobra.Command, args []string) error {
 	rootFlag := cmd.Flag(bind.RootFlagName)
 	if rootFlag == nil {
@@ -152,9 +156,11 @@ func PreRunBindEarlyRootDirFlag(cmd *cobra.Command, args []string) error {
 	if !rootFlag.Changed {
 		return nil
 	}
-	bind.Debugf("root flag changed: %v", rootFlag.Value.String())
+
 	rootDir := rootFlag.Value.String()
+	bind.Debugf("root flag changed: %v", rootDir)
 	k.Set(bind.RootFlagName, rootDir)
+
 	return nil
 }
 
@@ -181,6 +187,15 @@ func PreRunBindEnvAllSections(cmd *cobra.Command, args []string) error {
 
 func preRunBindConfigFile(cmd *cobra.Command, args []string, parser koanf.Parser) error {
 	rootDir := RootDir() // from k, requires and "early" bind
+	if rootDir == "" {
+		// The command did not configure a root dir prerun, so we'll take the
+		// liberty of assuming we can try to import it from pflags.
+		var err error
+		rootDir, err = bind.RootDir(cmd)
+		if err != nil {
+			return err // a parent command needs to have a persistent flag named "root"
+		}
+	}
 
 	// If we want to instead have space placeholders removed (to match
 	// PreRunBindEnvAllSections) rather than having them be standardized to
