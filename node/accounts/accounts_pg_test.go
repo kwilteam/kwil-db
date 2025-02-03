@@ -7,7 +7,9 @@ import (
 	"math/big"
 	"testing"
 
+	"github.com/decred/dcrd/container/lru"
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/pg"
 
 	"github.com/stretchr/testify/require"
@@ -50,6 +52,7 @@ func Test_AccountsLive(t *testing.T) {
 
 			accounts, err := InitializeAccountStore(ctx, tx, log.DiscardLogger)
 			require.NoError(t, err)
+			accounts.records = lru.NewMap[string, *types.Account](2)
 
 			tc.fn(t, tx, accounts, nil, true)
 		})
@@ -70,6 +73,8 @@ func TestGetAccount(t *testing.T) {
 
 	accounts, err := InitializeAccountStore(ctx, tx1, log.DiscardLogger)
 	require.NoError(t, err)
+	// set the size to 2
+	accounts.records = lru.NewMap[string, *types.Account](2)
 	tx1.Commit(ctx)
 
 	// Credit an account

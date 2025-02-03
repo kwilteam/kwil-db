@@ -15,6 +15,12 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/versioning"
+
+	"github.com/decred/dcrd/container/lru"
+)
+
+const (
+	AccountsLRUCacheSize = 1000
 )
 
 // Accounts represents an in-memory cache of accounts stored in a PostgreSQL database.
@@ -22,20 +28,17 @@ import (
 type Accounts struct {
 	// protects records and updates fields
 	mtx sync.RWMutex
-	// records is an in-memory cache of account records. Any available record in this cache
-	// is always upto date with the database.
-	records map[string]*types.Account
+	// records is an in-memory cache of account records. Any available record
+	// in this cache is always upto date with the database.
+	records *lru.Map[string, *types.Account]
+
 	// updates is a map of account identifiers (hex-encoded) used to record
 	// account updates made by the transactions within a block.(spends, credits, transfers, etc.)
 	// These updates are applied to the records at the end of the block.
 	// Instead of using the repl stream to capture the updates, we use this in-memory cache.
 	// These updates are also used in Zero Downtime Migration to capture the spends in a block.
 	updates map[string]*types.Account
-
-	log log.Logger
-	// TODO: use lru cache of a capacity
-	// lru "github.com/hashicorp/golang-lru/v2"
-	// cache   *lru.Cache[string, *types.Account]
+	log     log.Logger
 
 	// spends is a list of spends that occurred in the block, used to track spends during migration.
 	// Updates are different from spends, as they capture the effects of the spends rather than spends itself.
@@ -115,7 +118,7 @@ func InitializeAccountStore(ctx context.Context, db sql.DB, logger log.Logger) (
 	}
 
 	return &Accounts{
-		records: make(map[string]*types.Account),
+		records: lru.NewMap[string, *types.Account](AccountsLRUCacheSize),
 		updates: make(map[string]*types.Account),
 		log:     logger,
 	}, nil
@@ -161,7 +164,7 @@ func (a *Accounts) getAccount(ctx context.Context, tx sql.Executor, account *typ
 	}
 
 	// Check in the records to see if the account has been read before
-	acct, ok = a.records[mapKey]
+	acct, ok = a.records.Get(mapKey)
 	if ok {
 		return &types.Account{
 			ID:      account,
@@ -176,10 +179,13 @@ func (a *Accounts) getAccount(ctx context.Context, tx sql.Executor, account *typ
 	}
 
 	// Add the account to the in-memory cache
-	a.records[mapKey] = &types.Account{
+	evicted := a.records.Put(mapKey, &types.Account{
 		ID:      account,
 		Balance: big.NewInt(0).Set(acct.Balance),
 		Nonce:   acct.Nonce,
+	})
+	if evicted > 0 {
+		a.log.Debugf("Evicted %d accounts from cache", evicted)
 	}
 
 	return acct, nil
@@ -354,10 +360,13 @@ func (a *Accounts) Commit() error {
 	defer a.mtx.Unlock()
 
 	for k, v := range a.updates {
-		a.records[k] = &types.Account{
+		evicted := a.records.Put(k, &types.Account{
 			ID:      v.ID,
 			Balance: v.Balance,
 			Nonce:   v.Nonce,
+		})
+		if evicted > 0 {
+			a.log.Debugf("Evicted %d accounts from cache", evicted)
 		}
 	}
 
