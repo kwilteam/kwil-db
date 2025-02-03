@@ -290,9 +290,10 @@ func TestCommitInfo(t *testing.T) {
 
 	t.Run("Zero Votes With Valid AppHash", func(t *testing.T) {
 		commit := &CommitInfo{
-			AppHash:      appHash,
-			Votes:        make([]*VoteInfo, 0),
-			ParamUpdates: types.ParamUpdates{},
+			AppHash:          appHash,
+			Votes:            make([]*VoteInfo, 0),
+			ParamUpdates:     types.ParamUpdates{},
+			ValidatorUpdates: make([]*types.Validator, 0),
 		}
 		data, err := commit.MarshalBinary()
 		require.NoError(t, err)
@@ -305,8 +306,9 @@ func TestCommitInfo(t *testing.T) {
 
 	t.Run("Zero Votes Without AppHash", func(t *testing.T) {
 		commit := &CommitInfo{
-			Votes:        make([]*VoteInfo, 0),
-			ParamUpdates: types.ParamUpdates{},
+			Votes:            make([]*VoteInfo, 0),
+			ParamUpdates:     types.ParamUpdates{},
+			ValidatorUpdates: make([]*types.Validator, 0),
 		}
 		data, err := commit.MarshalBinary()
 		require.NoError(t, err)
@@ -327,9 +329,10 @@ func TestCommitInfo(t *testing.T) {
 		}
 
 		commitInfo := &CommitInfo{
-			AppHash:      appHash,
-			Votes:        make([]*VoteInfo, 0),
-			ParamUpdates: types.ParamUpdates{},
+			AppHash:          appHash,
+			Votes:            make([]*VoteInfo, 0),
+			ParamUpdates:     types.ParamUpdates{},
+			ValidatorUpdates: make([]*types.Validator, 0),
 		}
 		commitInfo.Votes = append(commitInfo.Votes, vote)
 
@@ -360,9 +363,10 @@ func TestCommitInfo(t *testing.T) {
 		}
 
 		commitInfo := &CommitInfo{
-			AppHash:      appHash,
-			Votes:        make([]*VoteInfo, 0),
-			ParamUpdates: types.ParamUpdates{},
+			AppHash:          appHash,
+			Votes:            make([]*VoteInfo, 0),
+			ParamUpdates:     types.ParamUpdates{},
+			ValidatorUpdates: make([]*types.Validator, 0),
 		}
 		commitInfo.Votes = append(commitInfo.Votes, vote1, vote2)
 
@@ -373,5 +377,37 @@ func TestCommitInfo(t *testing.T) {
 		err = unmarshaled.UnmarshalBinary(data)
 		require.NoError(t, err)
 		require.Equal(t, *commitInfo, unmarshaled)
+	})
+
+	t.Run("WithValidatorUpdates", func(t *testing.T) {
+		commit := &CommitInfo{
+			AppHash:      appHash,
+			Votes:        make([]*VoteInfo, 0),
+			ParamUpdates: types.ParamUpdates{},
+			ValidatorUpdates: []*types.Validator{
+				{
+					AccountID: types.AccountID{
+						Identifier: []byte("validator-1"),
+						KeyType:    crypto.KeyTypeEd25519,
+					},
+					Power: 200,
+				},
+				{
+					AccountID: types.AccountID{
+						Identifier: []byte("validator-1"),
+						KeyType:    crypto.KeyTypeEd25519,
+					},
+					Power: 300,
+				},
+			},
+		}
+		data, err := commit.MarshalBinary()
+		require.NoError(t, err)
+
+		var unmarshaled CommitInfo
+		err = unmarshaled.UnmarshalBinary(data)
+		require.NoError(t, err)
+
+		require.Equal(t, *commit, unmarshaled)
 	})
 }

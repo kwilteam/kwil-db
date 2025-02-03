@@ -629,15 +629,17 @@ func (bp *BlockProcessor) Commit(ctx context.Context, req *ktypes.CommitRequest)
 	// We need to re-open a new transaction just to write the apphash
 	// TODO: it would be great to have a way to commit the apphash without
 	// opening a new transaction. This could leave us in a state where data is
-	// committed but the apphash is not, which would essentially nuke the chain.
-	ctxS := context.Background()
-	tx, err := bp.db.BeginTx(ctxS) // badly timed shutdown MUST NOT cancel now, we need consistency with consensus tx commit
+	// committed but the apphash is not if there is a badly timed shutdown. This
+	// is fixed upon restart in the blockProcessor constructor, where if it sees that
+	// the dirty flag is set, it updates the appHash and height from the blockstore
+	// restoring the state to the last committed state.
+	tx, err := bp.db.BeginTx(ctx)
 	if err != nil {
 		return err
 	}
 
-	if err := meta.SetChainState(ctxS, tx, req.Height, req.AppHash[:], false); err != nil {
-		err2 := tx.Rollback(ctxS)
+	if err := meta.SetChainState(ctx, tx, req.Height, req.AppHash[:], false); err != nil {
+		err2 := tx.Rollback(ctx)
 		if err2 != nil {
 			bp.log.Error("Failed to rollback the transaction", "err", err2)
 			return err2
@@ -645,8 +647,8 @@ func (bp *BlockProcessor) Commit(ctx context.Context, req *ktypes.CommitRequest)
 		return err
 	}
 
-	if err := bp.migrator.PersistLastChangesetHeight(ctxS, tx, req.Height); err != nil {
-		err2 := tx.Rollback(ctxS)
+	if err := bp.migrator.PersistLastChangesetHeight(ctx, tx, req.Height); err != nil {
+		err2 := tx.Rollback(ctx)
 		if err2 != nil {
 			bp.log.Error("Failed to rollback the transaction", "err", err2)
 			return err2
@@ -654,7 +656,7 @@ func (bp *BlockProcessor) Commit(ctx context.Context, req *ktypes.CommitRequest)
 		return err
 	}
 
-	if err := tx.Commit(ctxS); err != nil {
+	if err := tx.Commit(ctx); err != nil {
 		return err
 	}
 

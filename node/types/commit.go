@@ -12,12 +12,17 @@ import (
 	"github.com/kwilteam/kwil-db/core/utils"
 )
 
+var (
+	SerializationByteOrder = types.SerializationByteOrder
+)
+
 // CommitInfo includes the information about the commit of the block.
 // Such as the signatures of the validators aggreeing to the block.
 type CommitInfo struct {
-	AppHash      Hash
-	Votes        []*VoteInfo
-	ParamUpdates types.ParamUpdates
+	AppHash          Hash
+	Votes            []*VoteInfo
+	ParamUpdates     types.ParamUpdates
+	ValidatorUpdates []*types.Validator
 }
 
 type NodeStatus struct {
@@ -233,7 +238,7 @@ func (ci *CommitInfo) MarshalBinary() ([]byte, error) {
 		return nil, fmt.Errorf("failed to write app hash: %w", err)
 	}
 
-	if err := binary.Write(&buf, binary.LittleEndian, int32(len(ci.Votes))); err != nil {
+	if err := binary.Write(&buf, SerializationByteOrder, int32(len(ci.Votes))); err != nil {
 		return nil, fmt.Errorf("failed to write vote count: %w", err)
 	}
 
@@ -248,12 +253,27 @@ func (ci *CommitInfo) MarshalBinary() ([]byte, error) {
 		}
 	}
 
+	// Param Updates
 	puBts, err := ci.ParamUpdates.MarshalBinary()
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal param updates: %w", err)
 	}
 	if err := types.WriteBytes(&buf, puBts); err != nil {
 		return nil, fmt.Errorf("failed to write param updates: %w", err)
+	}
+
+	// Validator Updates
+	if err := binary.Write(&buf, SerializationByteOrder, int32(len(ci.ValidatorUpdates))); err != nil {
+		return nil, fmt.Errorf("failed to write validator update count: %w", err)
+	}
+	for _, val := range ci.ValidatorUpdates {
+		valBts, err := val.MarshalBinary()
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal validator: %w", err)
+		}
+		if err := types.WriteBytes(&buf, valBts); err != nil {
+			return nil, fmt.Errorf("failed to write validator: %w", err)
+		}
 	}
 
 	return buf.Bytes(), nil
@@ -292,6 +312,25 @@ func (ci *CommitInfo) UnmarshalBinary(data []byte) error {
 	}
 	if err := ci.ParamUpdates.UnmarshalBinary(puBts); err != nil {
 		return fmt.Errorf("failed to unmarshal param updates: %w", err)
+	}
+
+	var valCount int32
+	if err := binary.Read(rd, binary.LittleEndian, &valCount); err != nil {
+		return fmt.Errorf("failed to read validator update count: %w", err)
+	}
+	ci.ValidatorUpdates = make([]*types.Validator, valCount)
+	for i := range ci.ValidatorUpdates {
+		valBts, err := types.ReadBytes(rd)
+		if err != nil {
+			return fmt.Errorf("failed to read validator: %w", err)
+		}
+
+		val := &types.Validator{}
+		if err := val.UnmarshalBinary(valBts); err != nil {
+			return fmt.Errorf("failed to unmarshal validator: %w", err)
+		}
+
+		ci.ValidatorUpdates[i] = val
 	}
 
 	return nil
