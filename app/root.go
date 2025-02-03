@@ -41,7 +41,8 @@ func RootCmd() *cobra.Command {
 		Short:             custom.BinaryConfig.ProjectName + " daemon",
 		Long:              custom.BinaryConfig.ProjectName + " node and utilities",
 		DisableAutoGenTag: true,
-		SilenceUsage:      true,
+		// SilenceErrors hides command syntax errors too, which is not desired.
+		SilenceUsage: true,
 		CompletionOptions: cobra.CompletionOptions{
 			DisableDefaultCmd: true,
 		},
@@ -53,6 +54,15 @@ func RootCmd() *cobra.Command {
 			conf.PreRunBindFlags,                           // then flags
 			conf.PreRunBindEnvMatching,                     // then env vars
 			conf.PreRunPrintEffectiveConfig),
+	}
+
+	// Pass any errors from the child command's context back to the root
+	// command's context. main or whatever can pull it out with
+	// shared.CmdCtxErr. Alternatively, this function could set the value in a
+	// *error that is returned with the Command, but that's more confusing.
+	cmd.PersistentPostRunE = func(child *cobra.Command, args []string) error {
+		shared.SetCmdCtxErr(cmd, shared.CmdCtxErr(child)) // more specific than cmd.SetContext(child.Context())
+		return nil
 	}
 
 	bind.BindDebugFlag(cmd) // --debug enabled CLI debug mode (shared.Debugf output)

@@ -1,10 +1,42 @@
 package shared
 
 import (
+	"context"
+	"errors"
 	"strings"
 
 	"github.com/spf13/cobra"
 )
+
+type CmdCtxKey string
+
+var (
+	CmdCtxKeyCmdErr CmdCtxKey = "cmdErr"
+)
+
+// SetCmdCtxErr records the error in the command's context. Use CmdCtxErr to
+// extract the error.
+func SetCmdCtxErr(cmd *cobra.Command, err error) {
+	ctx := cmd.Context()
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	if ctxErr, _ := ctx.Value(CmdCtxKeyCmdErr).(error); ctxErr != nil {
+		err = errors.Join(err, ctxErr)
+	}
+	ctx = context.WithValue(ctx, CmdCtxKeyCmdErr, err)
+	cmd.SetContext(ctx)
+}
+
+// CmdCtxErr returns the error stored in the command's context with SetCmdCtxErr.
+func CmdCtxErr(cmd *cobra.Command) error {
+	ctx := cmd.Context()
+	if ctx == nil {
+		return nil
+	}
+	ctxErr, _ := ctx.Value(CmdCtxKeyCmdErr).(error)
+	return ctxErr
+}
 
 func removeBackticks(s string) string {
 	return strings.ReplaceAll(s, "`", "'")

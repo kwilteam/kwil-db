@@ -96,7 +96,8 @@ func (n *NetworkConfig) ensureDefaults(t *testing.T) {
 type NodeConfig struct {
 	// OPTIONAL: DockerImage is the docker image to use
 	// By default, it is "kwild:latest"
-	DockerImage string
+	DockerImage   string
+	NoHealthCheck bool
 
 	// OPTIONAL: Validator is true if the node is a validator
 	// By default, it is true.

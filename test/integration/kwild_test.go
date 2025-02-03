@@ -711,17 +711,20 @@ func TestKwildPrivateNetworks(t *testing.T) {
 							nc.Configure = func(conf *config.Config) {
 								conf.P2P.PrivateMode = true
 							}
+							nc.NoHealthCheck = true
 						}),
 						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
 							nc.Configure = func(conf *config.Config) {
 								conf.P2P.PrivateMode = true
 							}
+							nc.NoHealthCheck = true
 							nc.Validator = false
 						}),
 						setup.CustomNodeConfig(func(nc *setup.NodeConfig) {
 							nc.Configure = func(conf *config.Config) {
 								conf.P2P.PrivateMode = true
 							}
+							nc.NoHealthCheck = true
 							nc.Validator = false
 						}),
 					},

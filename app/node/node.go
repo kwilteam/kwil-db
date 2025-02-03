@@ -188,8 +188,7 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config, autogen bo
 		}
 	}()
 
-	// ctxBuild, cancelBuild := context.WithCancel()
-	server := buildServer(context.Background(), d)
+	server := buildServer(ctx, d)
 
 	return server.Start(ctx)
 }

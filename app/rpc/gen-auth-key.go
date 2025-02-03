@@ -63,7 +63,7 @@ func genAuthKeyCmd() *cobra.Command {
 			if err != nil {
 				return display.PrintErr(cmd, fmt.Errorf("failed to read cert file: %v", err))
 			}
-			return appendToFile(filepath.Join(rootDir, "clients.pem"), certText)
+			return display.PrintErr(cmd, appendToFile(filepath.Join(rootDir, "clients.pem"), certText))
 		},
 	}
 

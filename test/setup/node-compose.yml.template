@@ -28,7 +28,7 @@
       --db.user=kwild
       --db.pass=kwild
     healthcheck:
-      test: ["CMD", "curl", "--fail-with-body", "-s", "http://127.0.0.1:8484/api/v1/health/user"]
+      test: {{ if .NoHealthCheck }}"true"{{ else }}["CMD", "curl", "--fail-with-body", "-s", "http://127.0.0.1:8484/api/v1/health/user"]{{ end}}
       interval: 2s
       timeout: 6s
       retries: 10

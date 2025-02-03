@@ -70,7 +70,7 @@ func cmd[T any](j *jsonRPCCLIDriver, ctx context.Context, res T, args ...string)
 		return fmt.Errorf("no output from command")
 	}
 
-	j.logFunc("Running Command ", `/app/kwil-cli `+strings.Join(args, " "), " with output ", buf.String())
+	j.logFunc("Running Command /app/kwil-cli " + strings.Join(args, " ") + " with output " + buf.String())
 
 	d := display.MessageReader[T]{
 		Result: res,

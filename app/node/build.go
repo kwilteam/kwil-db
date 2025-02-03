@@ -56,11 +56,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	bs := buildBlockStore(d, closers)
 
 	// Initialize and start P2P service
-	p2pSvc := initializeP2PService(d, closers)
-
-	if err := p2pSvc.Start(ctx, d.cfg.P2P.BootNodes...); err != nil {
-		failBuild(err, "failed to start p2p service")
-	}
+	p2pSvc := initializeP2PService(ctx, d, closers)
 
 	// SnapshotStore
 	snapshotStore := buildSnapshotStore(d, bs)
@@ -164,7 +160,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	return s
 }
 
-func initializeP2PService(d *coreDependencies, closers *closeFuncs) *node.P2PService {
+func initializeP2PService(ctx context.Context, d *coreDependencies, closers *closeFuncs) *node.P2PService {
 	p2pCfg := &node.P2PServiceConfig{
 		PrivKey: d.privKey,
 		RootDir: d.rootDir,
@@ -173,12 +169,22 @@ func initializeP2PService(d *coreDependencies, closers *closeFuncs) *node.P2PSer
 		Logger:  d.logger.New("P2P"),
 	}
 
-	p2pSvc, err := node.NewP2PService(p2pCfg, nil)
+	// There's a separate constructor and start method presently, but the
+	// constructor start things, and Start is non-blocking. Perhaps we change
+	// this up, maybe merge them, maybe move some things between the two...
+
+	p2pSvc, err := node.NewP2PService(ctx, p2pCfg, nil)
 	if err != nil {
 		failBuild(err, "failed to create p2p service")
 	}
 
+	if err := p2pSvc.Start(ctx, d.cfg.P2P.BootNodes...); err != nil {
+		p2pSvc.Close() // the stuff started in NewP2PService...
+		failBuild(err, "failed to start p2p service")
+	}
+
 	closers.addCloser(p2pSvc.Close, "Closing P2P service")
+
 	return p2pSvc
 }
 

@@ -144,7 +144,7 @@ func TestSingleNodeMocknet(t *testing.T) {
 		KwilCfg: defaultConfigSet,
 		Logger:  log.New(log.WithName("P2P"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
 	}
-	ps, err := NewP2PService(psCfg, h1)
+	ps, err := NewP2PService(ctx, psCfg, h1)
 	require.NoError(t, err)
 
 	log1 := log.New(log.WithName("NODE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
@@ -296,7 +296,7 @@ func TestDualNodeMocknet(t *testing.T) {
 		KwilCfg: defaultConfigSet,
 		Logger:  log.New(log.WithName("P2P1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
 	}
-	ps1, err := NewP2PService(psCfg1, h1)
+	ps1, err := NewP2PService(ctx, psCfg1, h1)
 	require.NoError(t, err)
 	err = ps1.Start(ctx)
 	require.NoError(t, err, "failed to start p2p service")
@@ -379,7 +379,7 @@ func TestDualNodeMocknet(t *testing.T) {
 		KwilCfg: defaultConfigSet,
 		Logger:  log.New(log.WithName("P2P2"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured)),
 	}
-	ps2, err := NewP2PService(psCfg2, h2)
+	ps2, err := NewP2PService(ctx, psCfg2, h2)
 	require.NoError(t, err)
 	err = ps2.Start(ctx)
 	require.NoError(t, err, "failed to start p2p service")
