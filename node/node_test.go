@@ -124,7 +124,7 @@ func makeTestHosts(t *testing.T, nNodes, nExtraHosts int, blockInterval time.Dur
 			Logger:  log.DiscardLogger,
 		}
 
-		ps, err := NewP2PService(psCfg, h)
+		ps, err := NewP2PService(context.Background(), psCfg, h)
 		if err != nil {
 			t.Fatalf("Failed to create P2PService: %v", err)
 		}

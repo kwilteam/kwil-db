@@ -39,7 +39,7 @@ type P2PServiceConfig struct {
 	Logger log.Logger
 }
 
-func NewP2PService(cfg *P2PServiceConfig, host host.Host) (*P2PService, error) {
+func NewP2PService(ctx context.Context, cfg *P2PServiceConfig, host host.Host) (*P2PService, error) {
 	// This connection gater is logically be part of PeerMan, but the libp2p
 	// Host constructor needs it, and PeerMan needs Host for its peerstore
 	// and connect method. For now we create it here and give it to both.
@@ -120,7 +120,6 @@ func NewP2PService(cfg *P2PServiceConfig, host host.Host) (*P2PService, error) {
 	host.SetStreamHandler(pubsub.GossipSubID_v12, dummyStreamHandler)
 
 	mode := dht.ModeServer
-	ctx := context.Background()
 	dht, err := makeDHT(ctx, host, nil, mode)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create DHT: %w", err)
@@ -176,6 +175,9 @@ func (p *P2PService) Start(ctx context.Context, bootpeers ...string) error {
 		err = p.pm.Connect(ctx, peers.AddrInfo(*peerInfo))
 		if err != nil {
 			p.log.Errorf("failed to connect to %v: %v", bootpeers[i], peers.CompressDialError(err))
+			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+				return err
+			}
 			// Add it to the peer store anyway since this was specified as a
 			// bootnode, which is supposed to be persistent, so we should try to
 			// connect again later.
