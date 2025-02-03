@@ -33,6 +33,7 @@ type nodeTemplate struct {
 	// the docker network. It will be appended with the NodeNumber to create the
 	// full hostname
 	NodeServicePrefix string
+	NoHealthCheck     bool
 	// PGServicePrefix is the name of the postgres service
 	PGServicePrefix string
 	// TestnetDir is the directory to use for the testnet
@@ -85,6 +86,7 @@ func generateCompose(dockerNetwork string, testnetDir string, nodeConfs []*NodeC
 			Network:            dockerNetwork,
 			NodeNumber:         i,
 			NodeServicePrefix:  nodePrefix,
+			NoHealthCheck:      nodeConf.NoHealthCheck,
 			PGServicePrefix:    pgPrefix,
 			TestnetDir:         testnetDir,
 			ExposedJSONRPCPort: 8484 + i + portsOffset,
