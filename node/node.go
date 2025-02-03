@@ -234,7 +234,7 @@ func (n *Node) ID() string {
 
 // Start begins tx and block gossip, connects to any bootstrap peers, and begins
 // peer discovery.
-func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
+func (n *Node) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -245,9 +245,9 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 
 	// Check protocol support for connected peers, which were established
 	// earlier during P2PService startup.
-	for i, peer := range n.peers() {
+	for _, peer := range n.peers() {
 		if err = n.checkPeerProtos(ctx, peer); err != nil {
-			n.log.Warnf("WARNING: peer does not support required protocols %v: %v", bootpeers[i], err)
+			n.log.Warnf("WARNING: peer does not support required protocols %v: %v", peer, err)
 			if err = n.host.Network().ClosePeer(peer); err != nil {
 				n.log.Errorf("failed to disconnect from %v: %v", peer, err)
 			}
