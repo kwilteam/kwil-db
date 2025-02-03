@@ -238,7 +238,7 @@ func (s *server) Start(ctx context.Context) error {
 
 	// start node (p2p)
 	group.Go(func() error {
-		if err := s.node.Start(groupCtx, s.cfg.P2P.BootNodes...); err != nil {
+		if err := s.node.Start(groupCtx); err != nil {
 			if errors.Is(err, context.Canceled) {
 				s.log.Infof("Shutdown signaled. Cancellation details: [%v]", err)
 			} else {

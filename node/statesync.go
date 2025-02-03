@@ -109,7 +109,8 @@ func NewStateSyncService(ctx context.Context, cfg *StatesyncConfig) (*StateSyncS
 		return nil, err
 	}
 
-	// provide stream handler for snapshot catalogs requests and chunk requests
+	// provide stream handler for snapshot catalogs requests and chunk requests.
+	// This is replaced by the Node's handler when it comes up.
 	ss.host.SetStreamHandler(ProtocolIDBlockHeight, ss.blkGetHeightRequestHandler)
 	if err := ss.Bootstrap(ctx); err != nil {
 		return nil, err

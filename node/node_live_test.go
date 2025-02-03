@@ -163,7 +163,7 @@ func TestSingleNodeMocknet(t *testing.T) {
 		BlockProc:   &dummyBP{vals: valSetList},
 		P2PService:  ps,
 	}
-	node1, err := NewNode(cfg1, WithHost(h1))
+	node1, err := NewNode(cfg1)
 	if err != nil {
 		t.Fatalf("Failed to create Node 1: %v", err)
 	}
@@ -316,7 +316,7 @@ func TestDualNodeMocknet(t *testing.T) {
 		BlockProc:   &dummyBP{vals: valSetList},
 		P2PService:  ps1,
 	}
-	node1, err := NewNode(cfg1, WithHost(h1))
+	node1, err := NewNode(cfg1)
 	if err != nil {
 		t.Fatalf("Failed to create Node 1: %v", err)
 	}
@@ -399,7 +399,7 @@ func TestDualNodeMocknet(t *testing.T) {
 		BlockProc:   &dummyBP{vals: valSetList},
 		P2PService:  ps2,
 	}
-	node2, err := NewNode(cfg2, WithHost(h2))
+	node2, err := NewNode(cfg2)
 	if err != nil {
 		t.Fatalf("Failed to create Node 2: %v", err)
 	}
@@ -423,6 +423,18 @@ func TestDualNodeMocknet(t *testing.T) {
 		stat, err := node1.Status(ctx)
 		require.NoError(t, err)
 		assert.GreaterOrEqual(c, stat.Sync.BestBlockHeight, reachHeight)
+	}, 30*time.Second, 250*time.Millisecond)
+
+	// Now disconnect and reconnect them to test the reconnect logic
+
+	mn.DisconnectPeers(ps1.Host().ID(), ps2.Host().ID())
+	time.Sleep(time.Second)
+	// mn.ConnectPeers(ps1.Host().ID(), ps2.Host().ID())
+
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		connectedPeers, err := node1.Peers(ctx)
+		require.NoError(c, err)
+		assert.Equal(c, len(connectedPeers), 1)
 	}, 30*time.Second, 250*time.Millisecond)
 
 	cancel()

@@ -234,7 +234,7 @@ func (n *Node) ID() string {
 
 // Start begins tx and block gossip, connects to any bootstrap peers, and begins
 // peer discovery.
-func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
+func (n *Node) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
@@ -243,31 +243,17 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 		return err
 	}
 
-	bootpeersMA, err := peers.ConvertPeersToMultiAddr(bootpeers)
-	if err != nil {
-		return err
-	}
-
-	// connect to bootstrap peers, if any.
-	//
-	// NOTE: it may be preferable to simply add to Host's peer store here and
-	// let PeerMan manage connections.
-	for i, peer := range bootpeersMA {
-		peerInfo, err := makePeerAddrInfo(peer)
-		if err != nil {
-			n.log.Warnf("invalid bootnode address %v from setting %v", peer, bootpeers[i])
-			continue
-		}
-		if err = n.checkPeerProtos(ctx, peerInfo.ID); err != nil {
-			n.log.Warnf("WARNING: peer does not support required protocols %v: %v", bootpeers[i], err)
-			if err = n.host.Network().ClosePeer(peerInfo.ID); err != nil {
+	// Check protocol support for connected peers, which were established
+	// earlier during P2PService startup.
+	for _, peer := range n.peers() {
+		if err = n.checkPeerProtos(ctx, peer); err != nil {
+			n.log.Warnf("WARNING: peer does not support required protocols %v: %v", peer, err)
+			if err = n.host.Network().ClosePeer(peer); err != nil {
 				n.log.Errorf("failed to disconnect from %v: %v", peer, err)
 			}
 			// n.host.Peerstore().RemovePeer()
 			continue
 		}
-		n.log.Infof("Connected to bootstrap peer %v", bootpeers[i])
-		// n.host.ConnManager().TagPeer(peerID, "validatorish", 1)
 	} // else would use persistent peer store (address book)
 
 	for _, val := range n.bp.GetValidators() {
@@ -308,12 +294,6 @@ func (n *Node) Start(ctx context.Context, bootpeers ...string) error {
 			}
 		}
 	}()
-
-	// // Attempt statesync if enabled
-	// if err := n.doStatesync(ctx); err != nil {
-	// 	cancel()
-	// 	return err
-	// }
 
 	if err := n.startAckGossip(ctx, ps); err != nil {
 		cancel()
@@ -796,7 +776,7 @@ func connectPeer(ctx context.Context, addr string, host host.Host) (*peer.AddrIn
 	// This will be used during connection and stream creation by libp2p.
 	// host.Peerstore().AddAddrs(info.ID, info.Addrs, peerstore.PermanentAddrTTL)
 
-	return info, host.Connect(ctx, *info)
+	return info, peers.CompressDialError(host.Connect(ctx, *info))
 }
 
 // TODO: this is WRONG considering paths like ~user. We should rewrite this
