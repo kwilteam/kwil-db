@@ -89,10 +89,15 @@ func (ns NackStatus) String() string {
 	return string(ns)
 }
 
+// OutOfSyncProof is the evidence that the validator provides to the leader
+// in the NACK vote to inform leader that it is out of sync with the network.
 type OutOfSyncProof struct {
-	Header    *types.BlockHeader
+	// Header is the block header corresponding to the best height the node is at.
+	Header *types.BlockHeader
+	// Signature is the signature of the block header provided by the leader.
 	Signature []byte
 }
+
 type AckRes struct {
 	ACK bool
 	// only required if ACK is false
@@ -122,20 +127,47 @@ func (ar AckRes) String() string {
 	return ar.ack()
 }
 
-func (ar AckRes) MarshalBinary() ([]byte, error) {
+func (ar *AckRes) Valid() error {
 	if ar.ACK && ar.AppHash == nil {
-		return nil, errors.New("app hash is required for ACK")
-	} else if !ar.ACK {
+		return errors.New("app hash is required for ACK")
+	}
+
+	if !ar.ACK {
 		if ar.AppHash != nil {
-			return nil, errors.New("app hash is not allowed for nACK")
-		} else if ar.NackStatus == nil {
-			return nil, errors.New("nack status is required for nACK")
-		} else if *ar.NackStatus == NackStatusOutOfSync && ar.OutOfSyncProof == nil {
-			return nil, errors.New("proof is required for out of sync nack")
+			return errors.New("app hash is not allowed for nACK")
+		}
+		if ar.NackStatus == nil {
+			return errors.New("nack status is required for nACK")
+		}
+		if *ar.NackStatus == NackStatusOutOfSync && ar.OutOfSyncProof == nil {
+			return errors.New("proof is required for out of sync nack")
 		}
 	}
+
 	if ar.Signature == nil {
-		return nil, errors.New("signature is required in the AckRes")
+		return errors.New("signature is required in the AckRes")
+	}
+
+	return nil
+}
+
+func (ar *AckRes) OutOfSync() (*OutOfSyncProof, bool) {
+	if ar.ACK || ar.NackStatus == nil || *ar.NackStatus != NackStatusOutOfSync {
+		return nil, false
+	}
+
+	// if the vote is a Nack with status NackOutOfSync, then it should contain the out-of-sync proof
+	if ar.OutOfSyncProof == nil {
+		return nil, false
+	}
+	return ar.OutOfSyncProof, true
+}
+
+func (ar AckRes) MarshalBinary() ([]byte, error) {
+	// check if the AckRes is valid before marshalling
+	// to ensure that we have all the required fields
+	if err := ar.Valid(); err != nil {
+		return nil, err
 	}
 
 	var buf bytes.Buffer
@@ -175,23 +207,10 @@ func (ar AckRes) MarshalBinary() ([]byte, error) {
 		}
 	}
 
-	sigBts := EncodeSignature(ar.Signature)
+	sigBts := ar.Signature.Bytes()
 	if err := types.WriteBytes(&buf, sigBts); err != nil {
 		return nil, fmt.Errorf("failed to write signature in AckRes: %v", err)
 	}
-
-	// if err := types.WriteString(&buf, string(ar.PubKeyType)); err != nil {
-	// 	return nil, fmt.Errorf("failed to write key type in AckRes: %v", err)
-	// }
-
-	// if err := types.WriteBytes(&buf, ar.PubKey); err != nil {
-	// 	return nil, fmt.Errorf("failed to write key in AckRes: %v", err)
-	// }
-
-	// if err := types.WriteBytes(&buf, ar.Signature); err != nil {
-	// 	return nil, fmt.Errorf("failed to write signature in AckRes: %v", err)
-	// }
-
 	return buf.Bytes(), nil
 }
 

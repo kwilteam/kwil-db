@@ -108,13 +108,13 @@ type ConsensusEngine struct {
 	mempoolMtx sync.Mutex
 
 	// Broadcasters
-	proposalBroadcaster     ProposalBroadcaster
-	blkAnnouncer            BlkAnnouncer
-	ackBroadcaster          AckBroadcaster
-	blkRequester            BlkRequester
-	rstStateBroadcaster     ResetStateBroadcaster
-	discoveryReqBroadcaster DiscoveryReqBroadcaster
-	txAnnouncer             TxAnnouncer
+	proposalBroadcaster ProposalBroadcaster
+	blkAnnouncer        BlkAnnouncer
+	ackBroadcaster      AckBroadcaster
+	blkRequester        BlkRequester
+	rstStateBroadcaster ResetStateBroadcaster
+	// discoveryReqBroadcaster DiscoveryReqBroadcaster
+	txAnnouncer TxAnnouncer
 
 	// TxSubscriber
 	subMtx        sync.Mutex // protects access to txSubscribers
@@ -163,14 +163,14 @@ type Config struct {
 }
 
 type BroadcastFns struct {
-	ProposalBroadcaster     ProposalBroadcaster
-	TxAnnouncer             TxAnnouncer
-	BlkAnnouncer            BlkAnnouncer
-	AckBroadcaster          AckBroadcaster
-	BlkRequester            BlkRequester
-	RstStateBroadcaster     ResetStateBroadcaster
-	DiscoveryReqBroadcaster DiscoveryReqBroadcaster
-	TxBroadcaster           blockprocessor.BroadcastTxFn
+	ProposalBroadcaster ProposalBroadcaster
+	TxAnnouncer         TxAnnouncer
+	BlkAnnouncer        BlkAnnouncer
+	AckBroadcaster      AckBroadcaster
+	BlkRequester        BlkRequester
+	RstStateBroadcaster ResetStateBroadcaster
+	// DiscoveryReqBroadcaster DiscoveryReqBroadcaster
+	TxBroadcaster blockprocessor.BroadcastTxFn
 }
 
 type WhitelistFns struct {
@@ -337,7 +337,7 @@ func (ce *ConsensusEngine) Start(ctx context.Context, fns BroadcastFns, peerFns 
 	ce.ackBroadcaster = fns.AckBroadcaster
 	ce.blkRequester = fns.BlkRequester
 	ce.rstStateBroadcaster = fns.RstStateBroadcaster
-	ce.discoveryReqBroadcaster = fns.DiscoveryReqBroadcaster
+	// ce.discoveryReqBroadcaster = fns.DiscoveryReqBroadcaster
 	ce.txAnnouncer = fns.TxAnnouncer
 
 	ce.blockProcessor.SetCallbackFns(fns.TxBroadcaster, peerFns.AddPeer, peerFns.RemovePeer)
@@ -576,7 +576,7 @@ func (ce *ConsensusEngine) initializeState(ctx context.Context) (int64, int64, e
 
 		ce.setLastCommitInfo(appHeight, appHash, nil, nil)
 
-	} else if appHeight > 0 {
+	} else {
 		// restart or statesync init or zdt init
 		if appHeight == storeHeight && !bytes.Equal(appHash, storeAppHash[:]) {
 			// This is not possible, PG mismatches with the Blockstore return error
@@ -740,7 +740,7 @@ func (ce *ConsensusEngine) reannounceMsgs(ctx context.Context) {
 			!ce.state.blockRes.appHash.IsZero() {
 			ce.log.Info("Reannouncing ACK", "ack", ce.state.blockRes.ack, "height", ce.state.blkProp.height, "hash", ce.state.blkProp.blkHash)
 			vote := ce.state.blockRes.vote
-			go ce.ackBroadcaster(vote.ToAckRes())
+			go ce.ackBroadcaster(vote.msg)
 		}
 	}
 }

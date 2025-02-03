@@ -64,7 +64,7 @@ func TestVoteInfo(t *testing.T) {
 				PubKey:     []byte("public-key"),
 				PubKeyType: crypto.KeyTypeSecp256k1,
 			},
-			AckStatus: AckStatusDisagree,
+			AckStatus: Rejected,
 		}
 
 		data, err := vote.MarshalBinary()
@@ -90,7 +90,7 @@ func TestVoteInfo(t *testing.T) {
 				PubKey:     []byte("public-key"),
 				PubKeyType: crypto.KeyTypeSecp256k1,
 			},
-			AckStatus: AckStatusDisagree,
+			AckStatus: Rejected,
 		}
 		data, err := vote.MarshalBinary()
 		require.NoError(t, err)
@@ -107,7 +107,7 @@ func TestVoteInfo(t *testing.T) {
 				PubKey:     []byte("public-key"),
 				PubKeyType: crypto.KeyTypeSecp256k1,
 			},
-			AckStatus: AckStatusDisagree,
+			AckStatus: Rejected,
 		}
 
 		data, err := vote.MarshalBinary()
@@ -128,7 +128,7 @@ func TestVoteInfo(t *testing.T) {
 				PubKey:     []byte("public-key"),
 				PubKeyType: crypto.KeyTypeSecp256k1,
 			},
-			AckStatus: AckStatusAgree,
+			AckStatus: Agreed,
 		}
 
 		data, err := vote.MarshalBinary()
@@ -148,7 +148,7 @@ func TestVoteInfo(t *testing.T) {
 				PubKey:     []byte("public-key"),
 				PubKeyType: crypto.KeyTypeSecp256k1,
 			},
-			AckStatus: AckStatusDiverge,
+			AckStatus: Forked,
 			AppHash:   &hash,
 		}
 
@@ -168,7 +168,7 @@ func TestVoteInfo(t *testing.T) {
 				PubKey:     []byte("public-key"),
 				PubKeyType: crypto.KeyTypeSecp256k1,
 			},
-			AckStatus: AckStatusDiverge,
+			AckStatus: Forked,
 		}
 
 		_, err := vote.MarshalBinary()
@@ -192,7 +192,7 @@ func TestSignAndVerifyVote(t *testing.T) {
 
 		vote := &VoteInfo{
 			Signature: *sig,
-			AckStatus: AckStatusAgree,
+			AckStatus: Agreed,
 		}
 		valid := vote.Verify(blkID, appHash)
 		require.NoError(t, valid)
@@ -214,7 +214,7 @@ func TestSignAndVerifyVote(t *testing.T) {
 
 		vote := &VoteInfo{
 			Signature: *sig,
-			AckStatus: AckStatusDiverge,
+			AckStatus: Forked,
 		}
 		// Vote is missing AppHash
 		valid := vote.Verify(blkID, appHash)
@@ -227,7 +227,7 @@ func TestSignAndVerifyVote(t *testing.T) {
 
 		vote := &VoteInfo{
 			Signature: *sig,
-			AckStatus: AckStatusDisagree, // Disagreed vote should be signed with Ack = false and without AppHash
+			AckStatus: Rejected, // Disagreed vote should be signed with Ack = false and without AppHash
 		}
 
 		valid := vote.Verify(blkID, appHash)
@@ -240,7 +240,7 @@ func TestSignAndVerifyVote(t *testing.T) {
 
 		vote := &VoteInfo{
 			Signature: *sig,
-			AckStatus: AckStatusDisagree,
+			AckStatus: Rejected,
 		}
 		// Vote is missing AppHash
 		valid := vote.Verify(blkID, appHash)
@@ -253,7 +253,7 @@ func TestSignAndVerifyVote(t *testing.T) {
 
 		vote := &VoteInfo{
 			Signature: *sig,
-			AckStatus: AckStatusDisagree,
+			AckStatus: Rejected,
 		}
 		// Vote is missing AppHash
 		valid := vote.Verify(blkID, appHash)
@@ -267,7 +267,7 @@ func TestSignAndVerifyVote(t *testing.T) {
 
 		vote := &VoteInfo{
 			Signature: *sig,
-			AckStatus: AckStatusAgree,
+			AckStatus: Rejected,
 		}
 
 		// Verify with different key
@@ -325,7 +325,7 @@ func TestCommitInfo(t *testing.T) {
 
 		vote := &VoteInfo{
 			Signature: *sig,
-			AckStatus: AckStatusAgree,
+			AckStatus: Agreed,
 		}
 
 		commitInfo := &CommitInfo{
@@ -354,12 +354,12 @@ func TestCommitInfo(t *testing.T) {
 
 		vote1 := &VoteInfo{
 			Signature: *sig1,
-			AckStatus: AckStatusAgree,
+			AckStatus: Agreed,
 		}
 
 		vote2 := &VoteInfo{
 			Signature: *sig2,
-			AckStatus: AckStatusDisagree,
+			AckStatus: Rejected,
 		}
 
 		commitInfo := &CommitInfo{

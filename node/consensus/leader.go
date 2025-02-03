@@ -166,7 +166,7 @@ func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 
 	ce.state.votes[string(ce.pubKey.Bytes())] = &types.VoteInfo{
 		AppHash:   &ce.state.blockRes.appHash,
-		AckStatus: types.AckStatusAgree,
+		AckStatus: types.Agreed,
 		Signature: *sig,
 	}
 
@@ -217,7 +217,9 @@ func (ce *ConsensusEngine) createBlockProposal(ctx context.Context) (*blockPropo
 }
 
 // addVote registers the vote received from the validator if it is for the current block.
-func (ce *ConsensusEngine) addVote(ctx context.Context, vote *vote, sender string) error {
+// This method will only error in scenarios where the vote is applied incorrectly to the leader's state.
+// If the peers have sent an invalid vote, the leader will ignore the vote.
+func (ce *ConsensusEngine) addVote(ctx context.Context, voteMsg *vote, sender string) error {
 	// ce.log.Debugln("Adding vote", vote, sender)
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
@@ -228,45 +230,61 @@ func (ce *ConsensusEngine) addVote(ctx context.Context, vote *vote, sender strin
 	}
 
 	// check if the vote is for the current height
-	if ce.state.blkProp.height != vote.height {
-		ce.log.Debug("Error adding vote: Vote received for a different block height, ignore it", "height", vote.height)
+	vote := voteMsg.msg
+	if ce.state.blkProp.height != vote.Height {
+		ce.log.Debug("Error adding vote: Vote received for a different block height, ignore it", "height", vote.Height)
 		return nil
 	}
 
 	// check if the vote is for the current block and from a validator
-	if ce.state.blkProp.blkHash != vote.blkHash {
-		ce.log.Warn("Error adding vote: Vote received for a different block", "height", vote.height, "blkHash", vote.blkHash)
+	if ce.state.blkProp.blkHash != vote.BlkHash {
+		ce.log.Warn("Error adding vote: Vote received for a different block", "height", vote.Height, "blkHash", vote.BlkHash)
 		return nil
 	}
 
+	// Check if the vote is from a validator
+	if _, ok := ce.validatorSet[sender]; !ok {
+		return fmt.Errorf("vote received from an unknown validator %s", sender)
+	}
+
+	if vote.ACK && vote.AppHash == nil {
+		return errors.New("missing appHash in the vote")
+	}
+
+	if vote.Signature == nil {
+		return errors.New("missing signature in the vote")
+	}
+
 	// check if the vote is a Nack vote and the leader is out of sync
-	if !vote.ack && vote.nackStatus != nil && *vote.nackStatus == types.NackStatusOutOfSync && vote.outOfSyncProof != nil {
+	proof, ok := vote.OutOfSync()
+	if ok {
 		// verify the proof
-		if vote.outOfSyncProof.Header == nil {
-			ce.log.Warn("Invalid vote: missing block header in out-of-sync proof")
+		if proof.Header == nil {
+			ce.log.Warnf("Invalid vote from peer %s: missing block header in the out-of-sync proof", sender)
+			return nil // ignore, not a leader failure
 		}
-		hash := vote.outOfSyncProof.Header.Hash()
-		valid, err := ce.pubKey.Verify(hash[:], vote.outOfSyncProof.Signature)
+		hash := proof.Header.Hash()
+		valid, err := ce.pubKey.Verify(hash[:], proof.Signature)
 		if err != nil {
-			ce.log.Errorf("Error verifying the out-of-sync proof: %v", err)
-			return nil
+			ce.log.Warnf("Error verifying the out-of-sync proof: %w", err)
+			return nil // ignore, not a leader failure
 		}
 		if !valid {
 			ce.log.Warn("Invalid vote: out-of-sync proof verification failed")
-			return nil
+			return nil // ignore, not a leader failure
 		}
 
 		// received a valid out-of-sync proof
-		ce.log.Warn("Received out-of-sync proof from the validator, resetting the state and initiating the catchup mode", "from", vote.height, "to", vote.outOfSyncProof.Header.Height)
+		ce.log.Warn("Received out-of-sync proof from the validator, resetting the state and initiating the catchup mode", "from", vote.Height, "to", proof.Header.Height)
 
 		// rollback current block execution
 		if err := ce.rollbackState(ctx); err != nil {
-			return fmt.Errorf("error resetting the state: %v", err)
+			return fmt.Errorf("error resetting the state: %w", err)
 		}
 
 		// trigger block sync to catch up with the network till the height specified in the out-of-sync proof
 		go func() {
-			if err := ce.syncBlocksUntilHeight(ctx, ce.state.lc.height+1, vote.outOfSyncProof.Header.Height); err != nil {
+			if err := ce.syncBlocksUntilHeight(ctx, ce.state.lc.height+1, proof.Header.Height); err != nil {
 				if err != types.ErrBlkNotFound {
 					haltReason := fmt.Sprintf("Error syncing blocks: %v", err)
 					ce.haltChan <- haltReason
@@ -283,41 +301,28 @@ func (ce *ConsensusEngine) addVote(ctx context.Context, vote *vote, sender strin
 		return nil
 	}
 
-	// Check if the vote is from a validator
-	if _, ok := ce.validatorSet[sender]; !ok {
-		return fmt.Errorf("vote received from an unknown validator %s", sender)
-	}
-
-	if vote.ack && vote.appHash == nil {
-		return errors.New("missing appHash in the vote")
-	}
-
-	if vote.signature == nil {
-		return errors.New("missing signature in the vote")
-	}
-
-	ce.log.Info("Adding vote", "height", vote.height, "blkHash", vote.blkHash, "appHash", vote.appHash, "sender", sender)
+	ce.log.Info("Adding vote", "height", vote.Height, "blkHash", vote.BlkHash, "appHash", vote.AppHash, "sender", sender)
 	if _, ok := ce.state.votes[sender]; !ok {
 		// verify the vote signature, before accepting the vote from the validator if ack is true
 		var ackStatus types.AckStatus
 		var appHash *types.Hash
 
-		if vote.ack {
-			ackStatus = types.AckStatusAgree
-			if *vote.appHash != ce.state.blockRes.appHash {
-				ackStatus = types.AckStatusDiverge
-				appHash = vote.appHash
+		if vote.ACK {
+			ackStatus = types.Agreed
+			if *vote.AppHash != ce.state.blockRes.appHash {
+				ackStatus = types.Forked
+				appHash = vote.AppHash
 			}
 		}
 
 		voteInfo := &types.VoteInfo{
-			Signature: *vote.signature,
+			Signature: *vote.Signature,
 			AckStatus: ackStatus,
 			AppHash:   appHash,
 		}
 
 		// verify signature
-		if err := voteInfo.Verify(vote.blkHash, ce.state.blockRes.appHash); err != nil {
+		if err := voteInfo.Verify(vote.BlkHash, ce.state.blockRes.appHash); err != nil {
 			ce.log.Errorf("Error verifying the vote signature: %v", err)
 			return fmt.Errorf("error verifying the vote signature: %w", err)
 		}
@@ -346,7 +351,7 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) {
 	// Count the votes
 	var acks, nacks int
 	for _, vote := range ce.state.votes {
-		if vote.AckStatus == types.AckStatusAgree {
+		if vote.AckStatus == types.Agreed {
 			acks++
 		} else {
 			nacks++

@@ -49,13 +49,7 @@ func (bpm *blockProposal) String() string {
 }
 
 type vote struct {
-	ack            bool
-	nackStatus     *types.NackStatus
-	blkHash        types.Hash
-	appHash        *types.Hash
-	height         int64
-	outOfSyncProof *types.OutOfSyncProof
-	signature      *types.Signature
+	msg *types.AckRes
 }
 
 func (vm *vote) Type() consensusMsgType {
@@ -63,11 +57,15 @@ func (vm *vote) Type() consensusMsgType {
 }
 
 func (vm *vote) String() string {
-	if vm.ack {
+	if vm.msg.ACK {
 		return fmt.Sprintf("Vote {ack: %t, height: %d, blkHash: %s, appHash: %s}",
-			vm.ack, vm.height, vm.blkHash, vm.appHash)
+			vm.msg.ACK, vm.msg.Height, vm.msg.BlkHash.String(), vm.msg.AppHash.String())
 	}
-	return fmt.Sprintf("Vote {ack: %t, height: %d, blkHash: %s}", vm.ack, vm.height, vm.blkHash)
+	return fmt.Sprintf("Vote {ack: %t, height: %d, blkHash: %s}", vm.msg.ACK, vm.msg.Height, vm.msg.BlkHash.String())
+}
+
+func (vm *vote) OutOfSync() (*types.OutOfSyncProof, bool) {
+	return vm.msg.OutOfSync()
 }
 
 // BlockAnnounce is a message that is sent to the consensus engine to notify
@@ -145,13 +143,7 @@ func (ce *ConsensusEngine) NotifyACK(validatorPK []byte, ack types.AckRes) {
 	}
 
 	voteMsg := &vote{
-		ack:            ack.ACK,
-		appHash:        ack.AppHash,
-		blkHash:        ack.BlkHash,
-		height:         ack.Height,
-		nackStatus:     ack.NackStatus,
-		outOfSyncProof: ack.OutOfSyncProof,
-		signature:      ack.Signature,
+		msg: &ack,
 	}
 
 	ce.sendConsensusMessage(&consensusMessage{
@@ -159,18 +151,6 @@ func (ce *ConsensusEngine) NotifyACK(validatorPK []byte, ack types.AckRes) {
 		Msg:     voteMsg,
 		Sender:  validatorPK,
 	})
-}
-
-func (v *vote) ToAckRes() *types.AckRes {
-	return &types.AckRes{
-		ACK:            v.ack,
-		AppHash:        v.appHash,
-		BlkHash:        v.blkHash,
-		Height:         v.height,
-		NackStatus:     v.nackStatus,
-		OutOfSyncProof: v.outOfSyncProof,
-		Signature:      v.signature,
-	}
 }
 
 type resetMsg struct {

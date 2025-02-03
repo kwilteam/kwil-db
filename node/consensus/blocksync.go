@@ -57,9 +57,15 @@ func (ce *ConsensusEngine) VerifyCheckpoint() error {
 	defer ce.stateInfo.mtx.RUnlock()
 
 	height, hash := ce.stateInfo.lastCommit.height, ce.stateInfo.lastCommit.blkHash
-	if height != ce.checkpoint.Height || hash != ce.checkpoint.Hash {
-		return fmt.Errorf("checkpoint verification failed: height: [expected: %d, current: %d] hash: [expected: %s, curr: %s]", ce.checkpoint.Height, height, ce.checkpoint.Hash, hash)
+
+	if height < ce.checkpoint.Height {
+		return fmt.Errorf("checkpoint verification failed: height: %d [expected: %d]", height, ce.checkpoint.Height)
 	}
+
+	if height == ce.checkpoint.Height && hash != ce.checkpoint.Hash {
+		return fmt.Errorf("checkpoint verification failed: height: %d hash: [expected: %s, curr: %s]", ce.checkpoint.Height, ce.checkpoint.Hash, hash)
+	}
+
 	return nil
 }
 
@@ -126,7 +132,7 @@ func (ce *ConsensusEngine) syncBlocksUntilHeight(ctx context.Context, startHeigh
 func (ce *ConsensusEngine) syncBlockWithRetry(ctx context.Context, height int64) error {
 	_, rawblk, ci, err := ce.getBlock(ctx, height)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get block from the network: %w", err)
 	}
 
 	return ce.applyBlock(ctx, rawblk, ci)
@@ -136,7 +142,7 @@ func (ce *ConsensusEngine) syncBlockWithRetry(ctx context.Context, height int64)
 func (ce *ConsensusEngine) syncBlock(ctx context.Context, height int64) error {
 	_, rawblk, ci, err := ce.blkRequester(ctx, height)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get block from the network: %w", err)
 	}
 
 	return ce.applyBlock(ctx, rawblk, ci)
@@ -152,7 +158,7 @@ func (ce *ConsensusEngine) applyBlock(ctx context.Context, rawBlk []byte, ci *ty
 	}
 
 	if err := ce.processAndCommit(ctx, blk, ci); err != nil {
-		return err
+		return fmt.Errorf("failed to apply block: %w", err)
 	}
 
 	return nil

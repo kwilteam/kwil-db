@@ -10,14 +10,14 @@ import (
 )
 
 // AcceptProposal determines if the node should download the block for the given proposal.
-// This function should not be executed by the leader or sentry nodes.
+// This should not be processed by the leader and the sentry nodes and must return false.
 // Validators should only accept the proposal if they are not currently processing
 // another block and the proposal is for the next block to be processed.
 // If a new proposal for the same height is received, the current proposal execution
 // should be aborted and the new proposal should be processed.
 // If the leader proposes a new block for already committed heights, the validator should
-// send a Nack to the leader with an OutOfSyncProof, indicating that the leader should
-// sync to the correct height before proposing new blocks.
+// send a Nack to the leader with an OutOfSyncProof, indicating the leader to
+// catchup to the correct height before proposing new blocks.
 func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types.Hash, leaderSig []byte, timestamp int64) bool {
 	if ce.role.Load() != types.RoleValidator {
 		return false
@@ -228,10 +228,9 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 	ce.log.Info("Processing block proposal", "height", blkPropMsg.blk.Header.Height, "header", blkPropMsg.blk.Header)
 
 	if err := ce.validateBlock(blkPropMsg.blk); err != nil {
-		ce.log.Error("Error validating block, sending NACK", "error", err)
 		sig, err := types.SignVote(blkPropMsg.blkHash, false, nil, ce.privKey)
 		if err != nil {
-			ce.log.Error("Error signing the voteInfo", "error", err)
+			return fmt.Errorf("error signing the voteInfo: %w", err)
 		}
 		// go ce.ackBroadcaster(false, blkPropMsg.height, blkPropMsg.blkHash, nil, nil)
 		status := types.NackStatusInvalidBlock
@@ -243,7 +242,7 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 			Signature:  sig,
 		})
 
-		return err
+		return fmt.Errorf("error validating block: %w", err)
 	}
 	ce.state.blkProp = blkPropMsg
 	ce.state.blockRes = nil
@@ -282,15 +281,17 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 		return err
 	}
 	voteInfo := &vote{
-		ack:       true,
-		blkHash:   blkPropMsg.blkHash,
-		height:    blkPropMsg.height,
-		appHash:   &ce.state.blockRes.appHash,
-		signature: signature,
+		msg: &types.AckRes{
+			ACK:       true,
+			BlkHash:   blkPropMsg.blkHash,
+			Height:    blkPropMsg.height,
+			AppHash:   &ce.state.blockRes.appHash,
+			Signature: signature,
+		},
 	}
 	ce.state.blockRes.vote = voteInfo
 
-	go ce.ackBroadcaster(voteInfo.ToAckRes())
+	go ce.ackBroadcaster(voteInfo.msg)
 
 	return nil
 }
@@ -435,7 +436,7 @@ func (ce *ConsensusEngine) acceptCommitInfo(ci *types.CommitInfo, blkID ktypes.H
 			return fmt.Errorf("error verifying vote: %w", err)
 		}
 
-		if vote.AckStatus == types.AckStatusAgree {
+		if vote.AckStatus == types.Agreed {
 			acks++
 		}
 	}
