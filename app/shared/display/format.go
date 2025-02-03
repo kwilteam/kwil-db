@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/app/shared"
+
 	"github.com/spf13/cobra"
 )
 
@@ -257,11 +258,6 @@ func PrintErr(cmd *cobra.Command, err error) error {
 	// context that we can check for in main. If Cobra did not prefix the error,
 	// we would not have to do this to achieve non-zero exit codes to the OS.
 	shared.SetCmdCtxErr(cmd, err)
-	// ctx := cmd.Context()
-	// if ctxErr, _ := ctx.Value(shared.CtxKeyCmdErr).(error); ctxErr != nil {
-	// 	ctx = context.WithValue(ctx, shared.CtxKeyCmdErr, errors.Join(err, ctxErr))
-	// 	cmd.SetContext(ctx)
-	// }
 
 	outputFormat, err2 := getOutputFormat(cmd)
 	if err2 != nil {
