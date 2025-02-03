@@ -179,11 +179,14 @@ func (a *Accounts) getAccount(ctx context.Context, tx sql.Executor, account *typ
 	}
 
 	// Add the account to the in-memory cache
-	a.records.Put(mapKey, &types.Account{
+	evicted := a.records.Put(mapKey, &types.Account{
 		ID:      account,
 		Balance: big.NewInt(0).Set(acct.Balance),
 		Nonce:   acct.Nonce,
 	})
+	if evicted > 0 {
+		a.log.Debugf("Evicted %d accounts from cache", evicted)
+	}
 
 	return acct, nil
 }
@@ -357,11 +360,14 @@ func (a *Accounts) Commit() error {
 	defer a.mtx.Unlock()
 
 	for k, v := range a.updates {
-		a.records.Put(k, &types.Account{
+		evicted := a.records.Put(k, &types.Account{
 			ID:      v.ID,
 			Balance: v.Balance,
 			Nonce:   v.Nonce,
 		})
+		if evicted > 0 {
+			a.log.Debugf("Evicted %d accounts from cache", evicted)
+		}
 	}
 
 	a.updates = make(map[string]*types.Account)

@@ -154,6 +154,10 @@ var (
 		Identifier: []byte("account2"),
 		KeyType:    crypto.KeyTypeSecp256k1,
 	}
+	account3 = &types.AccountID{
+		Identifier: []byte("account3"),
+		KeyType:    crypto.KeyTypeSecp256k1,
+	}
 )
 
 type acctsTestCase struct {
@@ -402,6 +406,69 @@ var acctsTestCases = []acctsTestCase{
 			verifyDBAccessCount(t, c, 1, skip)
 		},
 	},
+	{
+		name: "Account Cache test",
+		fn: func(t *testing.T, db sql.DB, a *Accounts, c counter, skip bool) {
+			ctx := context.Background()
+
+			mapKey := acctMapKey(account1)
+			_, ok := a.records.Get(mapKey)
+			require.False(t, ok)
+
+			err := a.Spend(ctx, db, account1, big.NewInt(0), 1)
+			require.NoError(t, err)
+			verifyDBAccessCount(t, c, 1, skip)
+
+			require.Equal(t, uint32(0), a.records.Len())
+
+			// commit, for the update to be reflected in the cache
+			err = a.Commit()
+			require.NoError(t, err)
+
+			// len of the cache = 1
+			require.Equal(t, uint32(1), a.records.Len())
+			_, ok = a.records.Get(mapKey)
+			require.True(t, ok)
+
+			// retrieve the account again
+			_, err = a.GetAccount(ctx, db, account1)
+			require.NoError(t, err)
+			verifyDBAccessCount(t, c, 1, skip) // cache hit, no new db accesses
+
+			// access new account
+			err = a.Credit(ctx, db, account2, big.NewInt(100))
+			require.NoError(t, err)
+			verifyDBAccessCount(t, c, 2, skip) // cache miss, new db access
+			require.Equal(t, uint32(1), a.records.Len())
+
+			err = a.Commit()
+			require.NoError(t, err)
+			require.Equal(t, uint32(2), a.records.Len())
+
+			// access account1 again
+			_, err = a.GetAccount(ctx, db, account1)
+			require.NoError(t, err)
+			verifyDBAccessCount(t, c, 2, skip) // cache hit, no new db accesses
+
+			// access new account
+			err = a.Credit(ctx, db, account3, big.NewInt(100))
+			require.NoError(t, err)
+			verifyDBAccessCount(t, c, 3, skip) // cache miss, new db access
+			require.Equal(t, uint32(2), a.records.Len())
+
+			err = a.Commit()
+			require.NoError(t, err)
+			require.Equal(t, uint32(2), a.records.Len())
+
+			// this access should have evicted account2 rather than account1
+			// as account1 was accessed more recently
+			require.Equal(t, uint32(2), a.records.Len())
+			_, ok = a.records.Get(acctMapKey(account1))
+			require.True(t, ok)
+			_, ok = a.records.Get(acctMapKey(account2))
+			require.False(t, ok)
+		},
+	},
 }
 
 func Test_Accounts(t *testing.T) {
@@ -412,7 +479,7 @@ func Test_Accounts(t *testing.T) {
 			tx, _ := db.BeginTx(ctx)
 
 			accounts := &Accounts{
-				records: lru.NewMap[string, *types.Account](100),
+				records: lru.NewMap[string, *types.Account](2),
 				updates: make(map[string]*types.Account),
 				log:     log.DiscardLogger,
 			}
