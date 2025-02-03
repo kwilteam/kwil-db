@@ -135,10 +135,6 @@ func WireEncodeKey(key Key) []byte {
 	}
 	b := binary.LittleEndian.AppendUint32(nil, kd.EncodeFlag())
 	return append(b, key.Bytes()...)
-	// buf := &bytes.Buffer{}
-	// types.WriteString(buf, string(key.Type()))
-	// buf.Write(key.Bytes())
-	// return buf.Bytes()
 }
 
 func WireDecodePubKey(b []byte) (PublicKey, error) {

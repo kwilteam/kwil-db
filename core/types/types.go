@@ -24,6 +24,8 @@ type AccountID struct {
 	KeyType    crypto.KeyType `json:"key_type"`
 }
 
+const AccountIDVersion = 0
+
 func (a *AccountID) Equals(other *AccountID) bool {
 	if a == nil || other == nil {
 		return false
@@ -49,11 +51,21 @@ func (id AccountID) Bytes() []byte {
 // bytes.Buffer writer internally.
 func (id AccountID) MarshalBinary() ([]byte, error) {
 	buf := new(bytes.Buffer)
+
+	// version uint16
+	if err := binary.Write(buf, SerializationByteOrder, uint16(AccountIDVersion)); err != nil {
+		return nil, err
+	}
+
 	if err := WriteBytes(buf, id.Identifier[:]); err != nil {
 		return nil, fmt.Errorf("failed to write account identifier: %w", err)
 	}
 
-	if err := WriteString(buf, id.KeyType.String()); err != nil {
+	kd, ok := crypto.KeyTypeDefinition(id.KeyType)
+	if !ok {
+		return nil, fmt.Errorf("invalid key type: %s", id.KeyType.String())
+	}
+	if err := binary.Write(buf, SerializationByteOrder, kd.EncodeFlag()); err != nil {
 		return nil, fmt.Errorf("failed to write key type: %w", err)
 	}
 
@@ -63,17 +75,28 @@ func (id AccountID) MarshalBinary() ([]byte, error) {
 func (id *AccountID) UnmarshalBinary(b []byte) error {
 	rd := bytes.NewReader(b)
 
+	var version uint16
+	if err := binary.Read(rd, SerializationByteOrder, &version); err != nil {
+		return fmt.Errorf("failed to read version: %w", err)
+	}
+	if version != AccountIDVersion {
+		return fmt.Errorf("invalid version: %d", version)
+	}
+
 	ident, err := ReadBytes(rd)
 	if err != nil {
 		return fmt.Errorf("failed to read account identifier: %w", err)
 	}
 	id.Identifier = ident
 
-	kt, err := ReadString(rd)
-	if err != nil {
-		return err
+	var keyEncoding uint32
+	if err := binary.Read(rd, SerializationByteOrder, &keyEncoding); err != nil {
+		return fmt.Errorf("failed to read key type: %w", err)
 	}
-	id.KeyType = crypto.KeyType(kt)
+	id.KeyType, err = crypto.ParseKeyTypeID(keyEncoding)
+	if err != nil {
+		return fmt.Errorf("failed to parse key type: %w", err)
+	}
 
 	return nil
 }
@@ -124,18 +147,25 @@ type Validator struct {
 	Power int64 `json:"power"`
 }
 
+const ValidatorVersion = 0
+
 func (v *Validator) String() string {
 	return fmt.Sprintf("Validator{pubkey = %x, keyType = %s, power = %d}", v.Identifier, v.KeyType, v.Power)
 }
 
 func (v *Validator) MarshalBinary() ([]byte, error) {
 	buf := new(bytes.Buffer)
-	if err := WriteBytes(buf, v.Identifier[:]); err != nil {
-		return nil, fmt.Errorf("failed to write account identifier: %w", err)
+
+	if err := binary.Write(buf, SerializationByteOrder, uint16(ValidatorVersion)); err != nil {
+		return nil, fmt.Errorf("failed to write version: %w", err)
 	}
 
-	if err := WriteString(buf, v.KeyType.String()); err != nil {
-		return nil, fmt.Errorf("failed to write key type: %w", err)
+	acctBts, err := v.AccountID.MarshalBinary()
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal account ID: %w", err)
+	}
+	if err := WriteBytes(buf, acctBts); err != nil {
+		return nil, fmt.Errorf("failed to write account ID: %w", err)
 	}
 
 	if err := binary.Write(buf, SerializationByteOrder, v.Power); err != nil {
@@ -148,17 +178,21 @@ func (v *Validator) MarshalBinary() ([]byte, error) {
 func (v *Validator) UnmarshalBinary(b []byte) error {
 	rd := bytes.NewReader(b)
 
-	ident, err := ReadBytes(rd)
-	if err != nil {
-		return fmt.Errorf("failed to read account identifier: %w", err)
+	var version uint16
+	if err := binary.Read(rd, SerializationByteOrder, &version); err != nil {
+		return fmt.Errorf("failed to read version: %w", err)
 	}
-	v.Identifier = ident
+	if version != ValidatorVersion {
+		return fmt.Errorf("invalid version: %d", version)
+	}
 
-	kt, err := ReadString(rd)
+	acctBts, err := ReadBytes(rd)
 	if err != nil {
-		return fmt.Errorf("failed to read key type: %w", err)
+		return fmt.Errorf("failed to read account ID: %w", err)
 	}
-	v.KeyType = crypto.KeyType(kt)
+	if err := v.AccountID.UnmarshalBinary(acctBts); err != nil {
+		return fmt.Errorf("failed to unmarshal account ID: %w", err)
+	}
 
 	if err := binary.Read(rd, SerializationByteOrder, &v.Power); err != nil {
 		return fmt.Errorf("failed to read power: %w", err)
