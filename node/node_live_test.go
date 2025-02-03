@@ -80,7 +80,7 @@ func TestSingleNodeMocknet(t *testing.T) {
 		valSetList = append(valSetList, &v)
 	}
 
-	ss := newSnapshotStore()
+	ss := newSnapshotStore(bs1)
 
 	_, vsReal, err := voting.NewResolutionStore(ctx, db1)
 	require.NoError(t, err)
@@ -103,7 +103,7 @@ func TestSingleNodeMocknet(t *testing.T) {
 	accounts, err := accounts.InitializeAccountStore(ctx, db1, log.DiscardLogger)
 	require.NoError(t, err)
 
-	migrator, err := migrations.SetupMigrator(ctx, db1, newSnapshotStore(), accounts, filepath.Join(root1, "migrations"), mparams, vsReal, log.New(log.WithName("MIGRATOR")))
+	migrator, err := migrations.SetupMigrator(ctx, db1, newSnapshotStore(bs1), accounts, filepath.Join(root1, "migrations"), mparams, vsReal, log.New(log.WithName("MIGRATOR")))
 	require.NoError(t, err)
 
 	signer := auth.GetNodeSigner(privKeys[0])
@@ -238,7 +238,7 @@ func TestDualNodeMocknet(t *testing.T) {
 	for _, v := range valSet {
 		valSetList = append(valSetList, &v)
 	}
-	ss := newSnapshotStore()
+	ss := newSnapshotStore(bs1)
 
 	genCfg := config.DefaultGenesisConfig()
 	genCfg.Leader = ktypes.PublicKey{PublicKey: privKeys[0].Public()}
@@ -264,7 +264,7 @@ func TestDualNodeMocknet(t *testing.T) {
 	}, accounts1, vstore1)
 	require.NoError(t, err)
 
-	migrator, err := migrations.SetupMigrator(ctx, db1, newSnapshotStore(), accounts1, filepath.Join(root1, "migrations"), mparams, vstore1, log.New(log.WithName("MIGRATOR")))
+	migrator, err := migrations.SetupMigrator(ctx, db1, newSnapshotStore(bs1), accounts1, filepath.Join(root1, "migrations"), mparams, vstore1, log.New(log.WithName("MIGRATOR")))
 	require.NoError(t, err)
 
 	bpl1 := log.New(log.WithName("BP1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
@@ -338,7 +338,7 @@ func TestDualNodeMocknet(t *testing.T) {
 	_, vstore2, err := voting.NewResolutionStore(ctx, db2)
 	require.NoError(t, err)
 
-	migrator2, err := migrations.SetupMigrator(ctx, db2, newSnapshotStore(), accounts2, filepath.Join(root2, "migrations"), mparams, vstore2, log.New(log.WithName("MIGRATOR")))
+	migrator2, err := migrations.SetupMigrator(ctx, db2, newSnapshotStore(bs2), accounts2, filepath.Join(root2, "migrations"), mparams, vstore2, log.New(log.WithName("MIGRATOR")))
 	require.NoError(t, err)
 
 	signer2 := auth.GetNodeSigner(privKeys[1])

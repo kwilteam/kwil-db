@@ -797,7 +797,6 @@ func (ce *ConsensusEngine) processCurrentBlock(ctx context.Context) error {
 	// otherwise rollback.
 	blkHash, rawBlk, ci, err := ce.getBlock(ctx, ce.state.blkProp.height)
 	if err != nil {
-		ce.log.Debug("Error requesting block from network", "height", ce.state.blkProp.height, "error", err)
 		return err
 	}
 

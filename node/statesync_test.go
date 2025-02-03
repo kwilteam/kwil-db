@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -20,6 +21,7 @@ import (
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	"github.com/libp2p/go-libp2p/core/discovery"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	mock "github.com/libp2p/go-libp2p/p2p/net/mock"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -47,97 +49,6 @@ var (
 	}
 )
 
-type mockBS struct {
-}
-
-func (m *mockBS) GetByHeight(height int64) (types.Hash, *ktypes.Block, *types.CommitInfo, error) {
-	return types.Hash{}, nil, &types.CommitInfo{AppHash: types.Hash{}}, nil
-}
-
-func (m *mockBS) Store(*ktypes.Block, *types.CommitInfo) error {
-	return nil
-}
-
-func (m *mockBS) Best() (int64, types.Hash, types.Hash, time.Time) {
-	return 0, types.Hash{}, types.Hash{}, time.Time{}
-}
-
-type snapshotStore struct {
-	snapshots map[uint64]*snapshotMetadata
-}
-
-func newSnapshotStore() *snapshotStore {
-	return &snapshotStore{
-		snapshots: make(map[uint64]*snapshotMetadata),
-	}
-}
-
-func (s *snapshotStore) addSnapshot(snapshot *snapshotMetadata) {
-	s.snapshots[snapshot.Height] = snapshot
-}
-
-func (s *snapshotStore) ListSnapshots() []*snapshotter.Snapshot {
-	snapshots := make([]*snapshotter.Snapshot, 0, len(s.snapshots))
-	for _, snapshot := range s.snapshots {
-		snap := &snapshotter.Snapshot{
-			Height:       snapshot.Height,
-			Format:       snapshot.Format,
-			ChunkCount:   snapshot.Chunks,
-			SnapshotSize: snapshot.Size,
-			SnapshotHash: snapshot.Hash,
-			ChunkHashes:  make([][32]byte, len(snapshot.ChunkHashes)),
-		}
-
-		for j, hash := range snapshot.ChunkHashes {
-			copy(snap.ChunkHashes[j][:], hash[:])
-		}
-
-		snapshots = append(snapshots, snap)
-	}
-	return snapshots
-}
-
-func (s *snapshotStore) LoadSnapshotChunk(height uint64, format uint32, index uint32) ([]byte, error) {
-	snapshot, ok := s.snapshots[height]
-	if !ok {
-		return nil, errors.New("snapshot not found")
-	}
-
-	if index >= snapshot.Chunks {
-		return nil, errors.New("chunk not found")
-	}
-
-	return []byte("snapshot"), nil
-}
-
-func (s *snapshotStore) GetSnapshot(height uint64, format uint32) *snapshotter.Snapshot {
-	snapshot, ok := s.snapshots[height]
-	if !ok {
-		return nil
-	}
-
-	return &snapshotter.Snapshot{
-		Height:       snapshot.Height,
-		Format:       snapshot.Format,
-		ChunkCount:   snapshot.Chunks,
-		SnapshotSize: snapshot.Size,
-		SnapshotHash: snapshot.Hash,
-		ChunkHashes:  snapshot.ChunkHashes,
-	}
-}
-
-func (s *snapshotStore) Enabled() bool {
-	return true
-}
-
-func (s *snapshotStore) IsSnapshotDue(height uint64) bool {
-	return false
-}
-
-func (s *snapshotStore) CreateSnapshot(ctx context.Context, height uint64, snapshotID string, schemas, excludedTables []string, excludeTableData []string) error {
-	return nil
-}
-
 func newTestStatesyncer(ctx context.Context, t *testing.T, mn mock.Mocknet, rootDir string, sCfg *config.StateSyncConfig) (host.Host, discovery.Discovery, *snapshotStore, *StateSyncService, crypto.PrivateKey, error) {
 	pkBts, h := newTestHost(t, mn)
 	pk, err := crypto.UnmarshalSecp256k1PrivateKey(pkBts)
@@ -155,7 +66,7 @@ func newTestStatesyncer(ctx context.Context, t *testing.T, mn mock.Mocknet, root
 	os.MkdirAll(rootDir, os.ModePerm)
 
 	bs := &mockBS{}
-	st := newSnapshotStore()
+	st := newSnapshotStore(bs)
 	cfg := &StatesyncConfig{
 		StateSyncCfg: sCfg,
 		RcvdSnapsDir: rootDir,
@@ -171,6 +82,10 @@ func newTestStatesyncer(ctx context.Context, t *testing.T, mn mock.Mocknet, root
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
 	}
+
+	h.SetStreamHandler(snapshotter.ProtocolIDSnapshotCatalog, st.snapshotCatalogRequestHandler)
+	h.SetStreamHandler(snapshotter.ProtocolIDSnapshotChunk, st.snapshotChunkRequestHandler)
+	h.SetStreamHandler(snapshotter.ProtocolIDSnapshotMeta, st.snapshotMetadataRequestHandler)
 
 	return h, discover, st, ss, pk, nil
 }
@@ -240,43 +155,237 @@ func TestStateSyncService(t *testing.T) {
 	// Request the snapshot catalogs
 	for _, p := range peers {
 		err = ss3.requestSnapshotCatalogs(ctx, p)
-		require.Error(t, err)
+		require.NoError(t, err)
 	}
 
 	// should receive the snapshot catalog: snap1 from h2
 	snaps := ss3.snapshotPool.listSnapshots()
-	require.Len(t, snaps, 0)
+	require.Len(t, snaps, 1)
 
 	// best snapshot should be snap1
 	bestSnap, err := ss3.bestSnapshot()
-	if err == nil {
-		assert.Equal(t, snap1.Height, bestSnap.Height)
-		assert.Equal(t, snap1.Hash, bestSnap.Hash)
+	require.NoError(t, err)
+	assert.Equal(t, snap1.Height, bestSnap.Height)
+	assert.Equal(t, snap1.Hash, bestSnap.Hash)
 
-		// Validate the snapshot should fail as the trusted provider does not have the snapshot
-		valid, _ := ss3.VerifySnapshot(ctx, snap1)
-		assert.False(t, valid)
+	// Validate the snapshot should fail as the trusted provider does not have the snapshot
+	valid, _ := ss3.VerifySnapshot(ctx, snap1)
+	assert.False(t, valid)
 
-		// add snap1 to the trusted provider
-		st1.addSnapshot(snap1)
+	// add snap1 to the trusted provider
+	st1.addSnapshot(snap1)
 
-		valid, _ = ss3.VerifySnapshot(ctx, snap1)
-		assert.True(t, valid)
+	valid, _ = ss3.VerifySnapshot(ctx, snap1)
+	assert.True(t, valid)
 
-		// add snap2 to the trusted provider
-		st1.addSnapshot(snap2)
+	// add snap2 to the trusted provider
+	st1.addSnapshot(snap2)
 
-		// best snapshot should be snap2
-		for _, p := range peers {
-			err = ss3.requestSnapshotCatalogs(ctx, p)
-			require.NoError(t, err)
+	// best snapshot should be snap2
+	for _, p := range peers {
+		err = ss3.requestSnapshotCatalogs(ctx, p)
+		require.NoError(t, err)
+	}
+
+	bestSnap, err = ss3.bestSnapshot()
+	require.NoError(t, err)
+	assert.Equal(t, snap2.Height, bestSnap.Height)
+
+	valid, _ = ss3.VerifySnapshot(ctx, bestSnap)
+	assert.True(t, valid)
+}
+
+type mockBS struct {
+}
+
+func (m *mockBS) GetByHeight(height int64) (types.Hash, *ktypes.Block, *types.CommitInfo, error) {
+	return types.Hash{}, nil, &types.CommitInfo{AppHash: types.Hash{}}, nil
+}
+
+func (m *mockBS) Store(*ktypes.Block, *types.CommitInfo) error {
+	return nil
+}
+
+func (m *mockBS) Best() (int64, types.Hash, types.Hash, time.Time) {
+	return 0, types.Hash{}, types.Hash{}, time.Time{}
+}
+
+type snapshotStore struct {
+	snapshots map[uint64]*snapshotMetadata
+	bs        blockStore
+}
+
+func newSnapshotStore(bs blockStore) *snapshotStore {
+	return &snapshotStore{
+		snapshots: make(map[uint64]*snapshotMetadata),
+		bs:        bs,
+	}
+}
+
+func (s *snapshotStore) addSnapshot(snapshot *snapshotMetadata) {
+	s.snapshots[snapshot.Height] = snapshot
+}
+
+func (s *snapshotStore) ListSnapshots() []*snapshotter.Snapshot {
+	snapshots := make([]*snapshotter.Snapshot, 0, len(s.snapshots))
+	for _, snapshot := range s.snapshots {
+		snap := &snapshotter.Snapshot{
+			Height:       snapshot.Height,
+			Format:       snapshot.Format,
+			ChunkCount:   snapshot.Chunks,
+			SnapshotSize: snapshot.Size,
+			SnapshotHash: snapshot.Hash,
+			ChunkHashes:  make([][32]byte, len(snapshot.ChunkHashes)),
 		}
 
-		bestSnap, err = ss3.bestSnapshot()
-		require.NoError(t, err)
-		assert.Equal(t, snap2.Height, bestSnap.Height)
+		for j, hash := range snapshot.ChunkHashes {
+			copy(snap.ChunkHashes[j][:], hash[:])
+		}
 
-		valid, _ = ss3.VerifySnapshot(ctx, bestSnap)
-		assert.True(t, valid)
+		snapshots = append(snapshots, snap)
 	}
+	return snapshots
+}
+
+func (s *snapshotStore) LoadSnapshotChunk(height uint64, format uint32, index uint32) ([]byte, error) {
+	snapshot, ok := s.snapshots[height]
+	if !ok {
+		return nil, errors.New("snapshot not found")
+	}
+
+	if index >= snapshot.Chunks {
+		return nil, errors.New("chunk not found")
+	}
+
+	return []byte("snapshot"), nil
+}
+
+func (s *snapshotStore) GetSnapshot(height uint64, format uint32) *snapshotter.Snapshot {
+	snapshot, ok := s.snapshots[height]
+	if !ok {
+		return nil
+	}
+
+	return &snapshotter.Snapshot{
+		Height:       snapshot.Height,
+		Format:       snapshot.Format,
+		ChunkCount:   snapshot.Chunks,
+		SnapshotSize: snapshot.Size,
+		SnapshotHash: snapshot.Hash,
+		ChunkHashes:  snapshot.ChunkHashes,
+	}
+}
+
+func (s *snapshotStore) Enabled() bool {
+	return true
+}
+
+func (s *snapshotStore) IsSnapshotDue(height uint64) bool {
+	return false
+}
+
+func (s *snapshotStore) CreateSnapshot(ctx context.Context, height uint64, snapshotID string, schemas, excludedTables []string, excludeTableData []string) error {
+	return nil
+}
+
+func (s *snapshotStore) snapshotCatalogRequestHandler(stream network.Stream) {
+	defer stream.Close()
+	stream.SetReadDeadline(time.Now().Add(time.Second))
+
+	req := make([]byte, len(snapshotter.DiscoverSnapshotsMsg))
+	n, err := stream.Read(req)
+	if err != nil {
+		return
+	}
+
+	if n == 0 { // no request, hung up
+		return
+	}
+
+	snapshots := s.ListSnapshots()
+	if snapshots == nil { // nothing to send
+		stream.SetWriteDeadline(time.Now().Add(reqRWTimeout))
+		stream.Write(noData)
+		return
+	}
+
+	// send the snapshot catalogs
+	catalogs := make([]*snapshotter.SnapshotMetadata, len(snapshots))
+	for i, snap := range snapshots {
+		catalogs[i] = snapshotToMetadata(snap)
+	}
+
+	encoder := json.NewEncoder(stream)
+	stream.SetWriteDeadline(time.Now().Add(catalogSendTimeout))
+	if err := encoder.Encode(catalogs); err != nil {
+		return
+	}
+}
+
+func (s *snapshotStore) snapshotChunkRequestHandler(stream network.Stream) {
+	defer stream.Close()
+	stream.SetReadDeadline(time.Now().Add(chunkGetTimeout))
+	var req snapshotter.SnapshotChunkReq
+	if _, err := req.ReadFrom(stream); err != nil {
+		return
+	}
+	chunk, err := s.LoadSnapshotChunk(req.Height, req.Format, req.Index)
+	if err != nil {
+		stream.SetWriteDeadline(time.Now().Add(reqRWTimeout))
+		stream.Write(noData)
+		return
+	}
+	stream.SetWriteDeadline(time.Now().Add(chunkSendTimeout))
+	stream.Write(chunk)
+}
+
+func (s *snapshotStore) snapshotMetadataRequestHandler(stream network.Stream) {
+	defer stream.Close()
+	stream.SetReadDeadline(time.Now().Add(chunkGetTimeout))
+	var req snapshotter.SnapshotReq
+	if _, err := req.ReadFrom(stream); err != nil {
+		return
+	}
+	snap := s.GetSnapshot(req.Height, req.Format)
+	if snap == nil {
+		stream.SetWriteDeadline(time.Now().Add(reqRWTimeout))
+		stream.Write(noData)
+		return
+	}
+
+	meta := snapshotToMetadata(snap)
+
+	// get the app hash from the db
+	_, _, ci, err := s.bs.GetByHeight(int64(snap.Height))
+	if err != nil || ci == nil {
+		stream.SetWriteDeadline(time.Now().Add(reqRWTimeout))
+		stream.Write(noData)
+		return
+	}
+	meta.AppHash = ci.AppHash[:]
+
+	// send the snapshot data
+	encoder := json.NewEncoder(stream)
+
+	stream.SetWriteDeadline(time.Now().Add(chunkSendTimeout))
+	if err := encoder.Encode(meta); err != nil {
+		return
+	}
+}
+
+func snapshotToMetadata(s *snapshotter.Snapshot) *snapshotter.SnapshotMetadata {
+	meta := &snapshotter.SnapshotMetadata{
+		Height:      s.Height,
+		Format:      s.Format,
+		Chunks:      s.ChunkCount,
+		Hash:        s.SnapshotHash,
+		Size:        s.SnapshotSize,
+		ChunkHashes: make([][32]byte, s.ChunkCount),
+	}
+
+	for i, chunk := range s.ChunkHashes {
+		copy(meta.ChunkHashes[i][:], chunk[:])
+	}
+
+	return meta
 }
