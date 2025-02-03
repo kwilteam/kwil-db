@@ -67,7 +67,9 @@ func createCmd() *cobra.Command {
 		Args:    cobra.NoArgs,
 		// Override the root's PersistentPreRunE to bind only the config file,
 		// not the full node flag set.
-		PersistentPreRunE: bind.ChainPreRuns(conf.PreRunBindConfigFileStrict[config.Config]), // but not the flags
+		PersistentPreRunE: bind.ChainPreRuns(conf.PreRunBindEarlyRootDirEnv,
+			conf.PreRunBindEarlyRootDirFlag,
+			conf.PreRunBindConfigFileStrict[config.Config]), // but not the flags
 		RunE: func(cmd *cobra.Command, args []string) error {
 			snapshotDir, err := node.ExpandPath(snapshotDir)
 			if err != nil {

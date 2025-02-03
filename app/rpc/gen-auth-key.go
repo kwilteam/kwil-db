@@ -14,10 +14,10 @@ import (
 var (
 	genAuthKeyLong = `The ` + "`gen-auth-key`" + `command generates a new key pair for use with an authenticated admin RPC service.
 	
-The key pair is generated and stored in the node's configuration directory, in the files ` + "`auth.key`" + ` and ` + "`auth.cert`" + `. The key pair is used to authenticate the admin tool to the node.`
+The key pair is generated and stored in the node's configuration directory, in the files ` + "`adminclient.key`" + ` and ` + "`adminclient.cert`" + `. The key pair is used to authenticate the admin tool to the node.`
 	genAuthKeyExample = `# Generate a new TLS key pair to talk to the node
 kwild admin gen-auth-key
-# kwild admin commands uses auth.{key,cert}, while kwild uses clients.pem`
+# kwild admin commands uses adminclient.{key,cert}, while kwild uses clients.pem`
 )
 
 func genAuthKeyCmd() *cobra.Command {
@@ -56,7 +56,10 @@ func genAuthKeyCmd() *cobra.Command {
 			if err != nil {
 				return display.PrintErr(cmd, fmt.Errorf("failed to generate TLS key pair: %v", err))
 			}
-			certText, err := os.ReadFile(certFile)
+
+			display.PrintCmd(cmd, display.RespString(fmt.Sprintf("TLS key pair generated in %v and %v\n", keyFile, certFile)))
+
+			certText, err := os.ReadFile(certFile + "x")
 			if err != nil {
 				return display.PrintErr(cmd, fmt.Errorf("failed to read cert file: %v", err))
 			}
@@ -64,8 +67,8 @@ func genAuthKeyCmd() *cobra.Command {
 		},
 	}
 
-	cmd.Flags().StringVar(&keyFile, "tlskey", "auth.key", "output path for the new client key file")
-	cmd.Flags().StringVar(&certFile, "tlscert", "auth.cert", "output path for the new client certificate")
+	cmd.Flags().StringVar(&keyFile, "tlskey", "adminclient.key", "output path for the new client key file")
+	cmd.Flags().StringVar(&certFile, "tlscert", "adminclient.cert", "output path for the new client certificate")
 
 	return cmd
 }

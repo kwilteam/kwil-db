@@ -28,8 +28,8 @@ func BindRPCFlags(cmd *cobra.Command) {
 
 	cmd.PersistentFlags().String("authrpc-cert", "", "kwild's TLS server certificate, required for HTTPS server")
 	cmd.PersistentFlags().String("pass", "", "admin server password (alternative to mTLS with tlskey/tlscert)")
-	cmd.PersistentFlags().String("tlskey", "auth.key", "kwild's TLS client key file to establish a mTLS (authenticated) connection")
-	cmd.PersistentFlags().String("tlscert", "auth.cert", "kwild's TLS client certificate file for server to authenticate us")
+	cmd.PersistentFlags().String("tlskey", "auth.key", "TLS client key file to establish a mTLS (authenticated) connection")
+	cmd.PersistentFlags().String("tlscert", "auth.cert", "TLS client certificate file for server to authenticate us")
 }
 
 // GetRPCServerFlag returns the RPC flag from the given command.
@@ -127,7 +127,7 @@ func (nc *nodeCert) tlsFiles(rootDir string) (nodeCert, ourKey, ourCert string, 
 	if nodeCert != "" {
 		nodeCert = fullPath(nodeCert, rootDir)
 	} else {
-		nodeCert = fullPath(config.AdminCertName, rootDir) // ~/.kwild/admin.cert
+		nodeCert = fullPath(config.AdminServerCertName, rootDir) // ~/.kwild/admin.cert
 	}
 	if nodeCert == "" || !fileExists(nodeCert) {
 		err = fmt.Errorf("kwild cert file not found, checked %v", nodeCert)

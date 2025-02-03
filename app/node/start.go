@@ -31,10 +31,7 @@ func StartCmd() *cobra.Command {
 		Version: version.KwilVersion,
 		Example: custom.BinaryConfig.NodeCmd + " start -r .testnet",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			rootDir, err := bind.RootDir(cmd)
-			if err != nil {
-				return err // the parent command needs to set a persistent flag named "root"
-			}
+			rootDir := conf.RootDir()
 
 			cfg := conf.ActiveConfig()
 

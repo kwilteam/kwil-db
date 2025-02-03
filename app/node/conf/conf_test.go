@@ -33,6 +33,8 @@ string_value = "nested-string"
 	// Create test command with root flag
 	cmd := &cobra.Command{Use: "test"}
 	cmd.Flags().String("root", tmpDir, "root directory")
+	rootFlag := cmd.Flag("root")
+	rootFlag.Changed = true
 
 	err = PreRunBindConfigFile(cmd, []string{})
 	assert.NoError(t, err)

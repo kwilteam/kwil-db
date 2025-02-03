@@ -16,9 +16,8 @@ func PrintConfigCmd() *cobra.Command {
 		Short: "Print the node configuration",
 		Long:  `The print-config command shows the parsed node configuration based on the combination of the default configuration, configuration file, flags,and environment variables. The configuration is printed to stdout in TOML format. All flags available to the start command are recognized by this command.`,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			_, err := bind.RootDir(cmd)
-			if err != nil {
-				return err // the parent command needs to set a persistent flag named "root"
+			if conf.RootDir() == "" {
+				return fmt.Errorf("root directory not set") // bug, parent command did not set default
 			}
 
 			cfg := conf.ActiveConfig()

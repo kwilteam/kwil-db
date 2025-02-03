@@ -1,9 +1,12 @@
 package setup
 
 import (
+	"bytes"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
+	"slices"
 
 	"github.com/spf13/cobra"
 
@@ -48,7 +51,7 @@ kwild setup init --allocs "0xc89D42189f0450C2b2c3c61f58Ec5d628176A1E7:1000000000
 )
 
 func InitCmd() *cobra.Command {
-	var genesisPath, genesisState string
+	var genesisPath, keyFile string
 	var genFlags genesisFlagConfig
 
 	cmd := &cobra.Command{
@@ -110,7 +113,7 @@ func InitCmd() *cobra.Command {
 			}
 
 			if cmd.Flags().Changed(genesisSnapshotFlag) {
-				genesisState = genFlags.genesisState
+				genesisState := genFlags.genesisState
 				genesisState, err = node.ExpandPath(genesisState)
 				if err != nil {
 					return display.PrintErr(cmd, err)
@@ -124,14 +127,29 @@ func InitCmd() *cobra.Command {
 				cfg.GenesisState = stateFile
 			}
 
-			// Generate and save the node key to the root directory
-			privKey, err := crypto.GeneratePrivateKey(crypto.KeyTypeSecp256k1)
-			if err != nil {
-				return display.PrintErr(cmd, err)
-			}
+			var privKey crypto.PrivateKey
+			if cmd.Flags().Changed("key-file") {
+				if keyFile, err = node.ExpandPath(keyFile); err != nil {
+					return display.PrintErr(cmd, err)
+				}
+				privKey, err = key.LoadNodeKey(keyFile)
+				if err != nil {
+					return display.PrintErr(cmd, err)
+				}
+				err = utils.CopyFile(keyFile, config.NodeKeyFilePath(outDir))
+				if err != nil {
+					return display.PrintErr(cmd, err)
+				}
+			} else {
+				// Generate and save the node key to the root directory
+				privKey, err = crypto.GeneratePrivateKey(crypto.KeyTypeSecp256k1)
+				if err != nil {
+					return display.PrintErr(cmd, err)
+				}
 
-			if err := key.SaveNodeKey(config.NodeKeyFilePath(rootDir), privKey); err != nil {
-				return display.PrintErr(cmd, err)
+				if err := key.SaveNodeKey(config.NodeKeyFilePath(rootDir), privKey); err != nil {
+					return display.PrintErr(cmd, err)
+				}
 			}
 
 			genFile := config.GenesisFilePath(outDir)
@@ -156,18 +174,12 @@ func InitCmd() *cobra.Command {
 					return display.PrintErr(cmd, fmt.Errorf("failed to create genesis file: %w", err))
 				}
 
-				if !cmd.Flags().Changed(leaderFlag) {
+				if genCfg.Leader.PublicKey == nil {
 					genCfg.Leader = types.PublicKey{PublicKey: privKey.Public()}
 				}
 
-				if len(genCfg.Validators) == 0 {
-					genCfg.Validators = append(genCfg.Validators, &types.Validator{
-						AccountID: types.AccountID{
-							Identifier: privKey.Public().Bytes(),
-							KeyType:    privKey.Type(),
-						},
-						Power: 1,
-					})
+				if !ensureLeaderInValidators(genCfg) {
+					return display.PrintErr(cmd, errors.New("leader must be in validators"))
 				}
 
 				// If DB owner is not set, set it to the node's public key
@@ -215,5 +227,27 @@ func InitCmd() *cobra.Command {
 	// genesis config flags
 	cmd.Flags().StringVarP(&genesisPath, "genesis", "g", "", "path to genesis file")
 
+	cmd.Flags().StringVarP(&keyFile, "key-file", "k", "", "path to node key file")
+
 	return cmd
+}
+
+func ensureLeaderInValidators(genCfg *config.GenesisConfig) bool {
+	if len(genCfg.Validators) == 0 {
+		genCfg.Validators = []*types.Validator{
+			{
+				AccountID: types.AccountID{
+					Identifier: genCfg.Leader.PublicKey.Bytes(),
+					KeyType:    genCfg.Leader.Type(),
+				},
+				Power: 1,
+			},
+		}
+		return true
+	}
+
+	return slices.ContainsFunc(genCfg.Validators, func(v *types.Validator) bool {
+		return bytes.Equal(v.AccountID.Identifier, genCfg.Leader.PublicKey.Bytes()) &&
+			v.AccountID.KeyType == genCfg.Leader.PublicKey.Type()
+	})
 }

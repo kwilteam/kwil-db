@@ -18,7 +18,7 @@ var (
 The private key can either be passed as a key file path, or as a hex-encoded string.`
 
 	infoExample = `# Using a key file
-kwild key info --key-file ~/.kwild/private_key
+kwild key info --key-file ~/.kwild/nodekey.json
 
 # Using a hex-encoded string
 kwild key info 381d28cf348c9efbf7d26ea54b647e2cb646d3b98cdeec0f1053a5ff599a036a0aa381bd4aad1670a39977d5416bfac7bd060765adc58a4bb16bbbafeefbae34`
