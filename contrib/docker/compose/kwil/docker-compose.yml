@@ -21,7 +21,7 @@ services:
       - pgkwil:/var/lib/postgresql/data
     networks:
       kwilnet0:
-        ipv4_address: 172.5.100.3
+        ipv4_address: 172.5.200.3
     healthcheck:
       test: ["CMD-SHELL", "pg_isready"]
       interval: 2s
@@ -32,8 +32,8 @@ services:
     container_name: kwild-single
     image: kwild:latest
     build:
-      context: ../../../../../
-      dockerfile: ../../kwild.dockerfile
+      context: ../../../../
+      dockerfile: contrib/docker/kwild.dockerfile
     ports:
       - "8484:8484"
       - "6600:6600"
@@ -46,8 +46,9 @@ services:
         condition: service_healthy
     networks:
       kwilnet0:
-        ipv4_address: 172.5.100.2
+        ipv4_address: 172.5.200.2
     command: |
+      start
       --autogen
       --root=/app/.kwild
       --log-format=plain
@@ -55,9 +56,9 @@ services:
       --admin.listen=/tmp/kwild.socket
       --rpc.listen=0.0.0.0:8484
       --p2p.listen=0.0.0.0:6600
-      --consensus.propose-timeout=200ms
-      --consensus.empty-block-timeout=6s
-      --db.host=172.5.100.3
+      --consensus.propose-timeout=1s
+      --consensus.empty-block-timeout=1s
+      --db.host=172.5.200.3
       --db.port=5432
       --db.user=kwild
       --db.pass=kwild
@@ -73,4 +74,4 @@ networks:
     ipam:
       driver: default
       config:
-        - subnet: 172.5.100.0/23
+        - subnet: 172.5.200.0/23

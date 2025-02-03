@@ -129,7 +129,7 @@ configuration changes. Start it by running the following from the
 `deployments/compose/kwil` folder in the repository:
 
 ```sh
-cd deployments/compose/kwil
+cd contrib/docker/compose/kwil
 docker compose up --build -d
 ```
 
