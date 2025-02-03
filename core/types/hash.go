@@ -86,6 +86,21 @@ func (h *Hash) UnmarshalJSON(data []byte) error {
 	return nil
 }
 
+// wrappers for go-toml
+func (h Hash) MarshalText() ([]byte, error) {
+	return []byte(h.String()), nil
+}
+
+func (h *Hash) UnmarshalText(text []byte) error {
+	parsed, err := NewHashFromString(string(text))
+	if err != nil {
+		return err
+	}
+
+	*h = parsed
+	return nil
+}
+
 // NewHashFromString parses a hexadecimal string into a Hash.
 func NewHashFromString(s string) (Hash, error) {
 	var h Hash

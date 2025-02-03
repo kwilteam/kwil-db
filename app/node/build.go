@@ -486,6 +486,7 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB,
 		BlockAnnInterval:      time.Duration(d.cfg.Consensus.BlockAnnInterval),
 		BroadcastTxTimeout:    time.Duration(d.cfg.RPC.BroadcastTxTimeout),
 		GenesisHeight:         d.genesisCfg.InitialHeight,
+		Checkpoint:            d.cfg.Checkpoint,
 	}
 
 	ce := consensus.New(ceCfg)

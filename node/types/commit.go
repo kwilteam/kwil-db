@@ -16,6 +16,14 @@ var (
 	SerializationByteOrder = types.SerializationByteOrder
 )
 
+type NodeStatus struct {
+	Role            string                   `json:"role"`
+	CatchingUp      bool                     `json:"catching_up"`
+	CommittedHeader *types.BlockHeader       `json:"committed_header"`
+	CommitInfo      *CommitInfo              `json:"commit_info"`
+	Params          *types.NetworkParameters `json:"params"`
+}
+
 // CommitInfo includes the information about the commit of the block.
 // Such as the signatures of the validators aggreeing to the block.
 type CommitInfo struct {
@@ -25,35 +33,54 @@ type CommitInfo struct {
 	ValidatorUpdates []*types.Validator
 }
 
-type NodeStatus struct {
-	Role            string                   `json:"role"`
-	CatchingUp      bool                     `json:"catching_up"`
-	CommittedHeader *types.BlockHeader       `json:"committed_header"`
-	CommitInfo      *CommitInfo              `json:"commit_info"`
-	Params          *types.NetworkParameters `json:"params"`
-}
-
 type AckStatus int
 
+// This is how leader interprets the vote(AckRes) into the VoteInfo.
+// Nack                    -- Rejected
+// Ack + same AppHash      -- Agreed
+// Ack + different AppHash -- Forked
+
 const (
-	AckStatusDisagree AckStatus = iota
-	AckStatusAgree
-	AckStatusDiverge
+	// Rejected means the validator did not accept the proposed block and
+	// responded with a NACK. This can occur due to issues like apphash mismatch,
+	// validator set mismatch, consensus params mismatch, merkle root mismatch, etc.
+	Rejected AckStatus = iota
+	// Agreed means the validator accepted the proposed block and
+	// computed the same AppHash as the leader after processing the block.
+	Agreed
+	// Forked means the validator accepted the proposed block and
+	// successfully processed it, but diverged after processing the block.
+	// The leader identifies this from the app hash mismatch in the vote.
+	Forked
 )
 
 func (ack *AckStatus) String() string {
 	switch *ack {
-	case AckStatusDisagree:
-		return "disagree"
-	case AckStatusAgree:
-		return "agree"
-	case AckStatusDiverge:
-		return "diverge"
+	case Rejected:
+		return "rejected"
+	case Agreed:
+		return "agreed"
+	case Forked:
+		return "forked"
 	default:
 		return "unknown"
 	}
 }
 
+func (ack AckStatus) WasAck() bool {
+	switch ack {
+	case Agreed, Forked:
+		return true
+	default: // Rejected
+		return false
+	}
+}
+
+// VoteInfo represents the leader's interpretation of the AckRes vote received from the validator.
+// This only includes the votes that influenced the commit decision of the block. It does not include
+// the feedback votes for an already committed block such as OutOfSync Vote etc.
+// Validators and sentry nodes use this information from the CommitInfo to verify that the
+// committed block state was agreed upon by the majority of the validators from the validator set.
 type VoteInfo struct {
 	// VoteSignature is the signature of the blkHash + nack | blkHash + ack + appHash
 	Signature Signature
@@ -72,6 +99,20 @@ type Signature struct {
 	PubKey     []byte // public key of the validator
 
 	Data []byte
+}
+
+func (sig *Signature) Bytes() []byte {
+	var buf bytes.Buffer
+	sig.WriteTo(&buf)
+	return buf.Bytes()
+}
+
+func DecodeSignature(data []byte) (*Signature, error) {
+	sig := &Signature{}
+	if _, err := sig.ReadFrom(bytes.NewReader(data)); err != nil {
+		return nil, err
+	}
+	return sig, nil
 }
 
 func (s *Signature) WriteTo(w io.Writer) (int64, error) {
@@ -131,7 +172,7 @@ func (v *VoteInfo) MarshalBinary() ([]byte, error) {
 		return nil, fmt.Errorf("failed to write ack status: %w", err)
 	}
 
-	if v.AckStatus == AckStatusDiverge {
+	if v.AckStatus == Forked {
 		if v.AppHash == nil {
 			return nil, errors.New("missing app hash for diverged vote")
 		}
@@ -158,7 +199,7 @@ func (v *VoteInfo) UnmarshalBinary(data []byte) error {
 	}
 	v.AckStatus = AckStatus(status)
 
-	if v.AckStatus == AckStatusDiverge {
+	if v.AckStatus == Forked {
 		var appHash Hash
 		if _, err := io.ReadFull(rd, appHash[:]); err != nil {
 			return fmt.Errorf("failed to read app hash: %w", err)
@@ -179,16 +220,16 @@ func (v *VoteInfo) Verify(blkID Hash, appHash Hash) error {
 	buf.Write(blkID[:])
 
 	switch v.AckStatus {
-	case AckStatusDiverge:
+	case Forked:
 		if v.AppHash == nil {
 			return errors.New("missing app hash for diverged vote")
 		}
 		binary.Write(&buf, binary.LittleEndian, true)
 		buf.Write((*v.AppHash)[:])
-	case AckStatusAgree:
+	case Agreed:
 		binary.Write(&buf, binary.LittleEndian, true)
 		buf.Write(appHash[:])
-	case AckStatusDisagree:
+	case Rejected:
 		binary.Write(&buf, binary.LittleEndian, false)
 	}
 

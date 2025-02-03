@@ -43,14 +43,14 @@ import (
 
 var (
 	broadcastFns = BroadcastFns{
-		ProposalBroadcaster:     mockBlockPropBroadcaster,
-		TxAnnouncer:             mockTxAnnouncer,
-		BlkAnnouncer:            mockBlkAnnouncer,
-		BlkRequester:            mockBlkRequester,
-		AckBroadcaster:          mockVoteBroadcaster,
-		RstStateBroadcaster:     mockResetStateBroadcaster,
-		DiscoveryReqBroadcaster: mockDiscoveryBroadcaster,
-		TxBroadcaster:           nil,
+		ProposalBroadcaster: mockBlockPropBroadcaster,
+		TxAnnouncer:         mockTxAnnouncer,
+		BlkAnnouncer:        mockBlkAnnouncer,
+		BlkRequester:        mockBlkRequester,
+		AckBroadcaster:      mockVoteBroadcaster,
+		RstStateBroadcaster: mockResetStateBroadcaster,
+		// DiscoveryReqBroadcaster: mockDiscoveryBroadcaster,
+		TxBroadcaster: nil,
 	}
 
 	peerFns = WhitelistFns{
@@ -237,7 +237,7 @@ func addVotes(t *testing.T, blkHash, appHash ktypes.Hash, n1, n2 *ConsensusEngin
 
 	ci.Votes = append(ci.Votes, &types.VoteInfo{
 		Signature: *sig1,
-		AckStatus: types.AckStatusAgree,
+		AckStatus: types.Agreed,
 	})
 
 	sig2, err := types.SignVote(blkHash, true, &appHash, n2.privKey)
@@ -245,7 +245,7 @@ func addVotes(t *testing.T, blkHash, appHash ktypes.Hash, n1, n2 *ConsensusEngin
 
 	ci.Votes = append(ci.Votes, &types.VoteInfo{
 		Signature: *sig2,
-		AckStatus: types.AckStatusAgree,
+		AckStatus: types.Agreed,
 	})
 
 	return ci
@@ -816,11 +816,13 @@ func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
 	assert.NoError(t, err)
 
 	vote := &vote{
-		height:    1,
-		ack:       true,
-		blkHash:   blProp.blkHash,
-		appHash:   &blockAppHash,
-		signature: sig,
+		msg: &types.AckRes{
+			Height:    1,
+			ACK:       true,
+			BlkHash:   blProp.blkHash,
+			AppHash:   &blockAppHash,
+			Signature: sig,
+		},
 	}
 
 	// Invalid sender
@@ -882,11 +884,13 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 
 	// node2 should send a vote to node1
 	vote := &vote{
-		height:    1,
-		ack:       true,
-		blkHash:   b.blkHash,
-		appHash:   &nextAppHash,
-		signature: sig1,
+		msg: &types.AckRes{
+			Height:    1,
+			ACK:       true,
+			BlkHash:   b.blkHash,
+			AppHash:   &nextAppHash,
+			Signature: sig1,
+		},
 	}
 
 	// Invalid sender -> vote ignored
@@ -897,7 +901,7 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 	err = n1.addVote(ctx, vote, hex.EncodeToString(ceConfigs[1].PrivateKey.Public().Bytes()))
 	assert.NoError(t, err)
 
-	vote.signature = sig2
+	vote.msg.Signature = sig2
 	err = n1.addVote(ctx, vote, hex.EncodeToString(ceConfigs[2].PrivateKey.Public().Bytes()))
 	assert.NoError(t, err)
 
@@ -913,7 +917,7 @@ func mockBlkRequester(ctx context.Context, height int64) (types.Hash, []byte, *t
 
 func mockBlockPropBroadcaster(_ context.Context, blk *ktypes.Block) {}
 
-func mockVoteBroadcaster(ack bool, height int64, blkID types.Hash, appHash *types.Hash, sig []byte) error {
+func mockVoteBroadcaster(msg *types.AckRes) error {
 	return nil
 }
 
@@ -924,8 +928,6 @@ func mockTxAnnouncer(ctx context.Context, txHash types.Hash, rawTx []byte) {}
 func mockResetStateBroadcaster(_ int64, _ []ktypes.Hash) error {
 	return nil
 }
-
-func mockDiscoveryBroadcaster() {}
 
 func nextAppHash(prevHash types.Hash) types.Hash {
 	hasher := sha256.New()

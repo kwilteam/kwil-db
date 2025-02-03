@@ -49,12 +49,7 @@ func (bpm *blockProposal) String() string {
 }
 
 type vote struct {
-	ack     bool
-	blkHash types.Hash
-	appHash *types.Hash
-	height  int64
-
-	signature *types.Signature
+	msg *types.AckRes
 }
 
 func (vm *vote) Type() consensusMsgType {
@@ -62,11 +57,15 @@ func (vm *vote) Type() consensusMsgType {
 }
 
 func (vm *vote) String() string {
-	if vm.ack {
+	if vm.msg.ACK {
 		return fmt.Sprintf("Vote {ack: %t, height: %d, blkHash: %s, appHash: %s}",
-			vm.ack, vm.height, vm.blkHash, vm.appHash)
+			vm.msg.ACK, vm.msg.Height, vm.msg.BlkHash.String(), vm.msg.AppHash.String())
 	}
-	return fmt.Sprintf("Vote {ack: %t, height: %d, blkHash: %s}", vm.ack, vm.height, vm.blkHash)
+	return fmt.Sprintf("Vote {ack: %t, height: %d, blkHash: %s}", vm.msg.ACK, vm.msg.Height, vm.msg.BlkHash.String())
+}
+
+func (vm *vote) OutOfSync() (*types.OutOfSyncProof, bool) {
+	return vm.msg.OutOfSync()
 }
 
 // BlockAnnounce is a message that is sent to the consensus engine to notify
@@ -144,15 +143,7 @@ func (ce *ConsensusEngine) NotifyACK(validatorPK []byte, ack types.AckRes) {
 	}
 
 	voteMsg := &vote{
-		ack:     ack.ACK,
-		appHash: ack.AppHash,
-		blkHash: ack.BlkHash,
-		height:  ack.Height,
-		signature: &types.Signature{
-			PubKey:     ack.PubKey,
-			PubKeyType: ack.PubKeyType,
-			Data:       ack.Signature,
-		},
+		msg: &ack,
 	}
 
 	ce.sendConsensusMessage(&consensusMessage{
@@ -169,7 +160,6 @@ type resetMsg struct {
 
 // NotifyResetState is used by the p2p stream handler to notify the consensus engine to reset the state to the specified height.
 // Only a validator should receive this message to abort the current block execution.
-// TODO: take sender and verify the validity of the message
 func (ce *ConsensusEngine) NotifyResetState(height int64, txIDs []types.Hash, leaderPubKey []byte) {
 	if ce.role.Load() != types.RoleValidator {
 		return

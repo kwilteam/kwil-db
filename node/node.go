@@ -130,10 +130,12 @@ type Node struct {
 	bp  BlockProcessor
 
 	// broadcast channels
-	ackChan  chan AckRes                  // from consensus engine, to gossip to leader
-	resetMsg chan ConsensusReset          // gossiped in from peers, to consensus engine
-	discReq  chan types.DiscoveryRequest  // from consensus engine, to gossip to leader for calculating best height of the validators during blocksync.
-	discResp chan types.DiscoveryResponse // from gossip, to consensus engine for calculating best height of the validators during blocksync.
+	ackChan  chan AckRes         // from consensus engine, to gossip to leader
+	resetMsg chan ConsensusReset // gossiped in from peers, to consensus engine
+	// from consensus engine, to gossip to leader for calculating best height of the validators during blocksync.
+	// discReq  chan types.DiscoveryRequest
+	// from gossip, to consensus engine for calculating best height of the validators during blocksync.
+	// discResp chan types.DiscoveryResponse
 
 	wg  sync.WaitGroup
 	log log.Logger
@@ -168,8 +170,8 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 
 		ackChan:  make(chan AckRes, 1),
 		resetMsg: make(chan ConsensusReset, 1),
-		discReq:  make(chan types.DiscoveryRequest, 1),
-		discResp: make(chan types.DiscoveryResponse, 1),
+		// discReq:  make(chan types.DiscoveryRequest, 1),
+		// discResp: make(chan types.DiscoveryResponse, 1),
 
 		P2PService: *cfg.P2PService,
 	}
@@ -305,15 +307,16 @@ func (n *Node) Start(ctx context.Context) error {
 		return err
 	}
 
-	if err := n.startDiscoveryRequestGossip(ctx, ps); err != nil {
-		cancel()
-		return err
-	}
+	/*
+		if err := n.startDiscoveryRequestGossip(ctx, ps); err != nil {
+			cancel()
+			return err
+		}
 
-	if err := n.startDiscoveryResponseGossip(ctx, ps); err != nil {
-		cancel()
-		return err
-	}
+		if err := n.startDiscoveryResponseGossip(ctx, ps); err != nil {
+			cancel()
+			return err
+		} */
 
 	// custom stream-based gossip uses txAnnStreamHandler and announceTx.
 	// This dummy method will make create+announce new pretend transactions.
@@ -333,18 +336,17 @@ func (n *Node) Start(ctx context.Context) error {
 			TxAnnouncer: func(ctx context.Context, txHash types.Hash, rawTx []byte) {
 				n.announceTx(ctx, txHash, rawTx, n.host.ID())
 			},
-			BlkAnnouncer:            n.announceBlk,
-			AckBroadcaster:          n.sendACK,
-			BlkRequester:            n.getBlkHeight,
-			RstStateBroadcaster:     n.sendReset,
-			DiscoveryReqBroadcaster: n.sendDiscoveryRequest,
-			TxBroadcaster:           n.BroadcastTx,
+			BlkAnnouncer:        n.announceBlk,
+			AckBroadcaster:      n.sendACK,
+			BlkRequester:        n.getBlkHeight,
+			RstStateBroadcaster: n.sendReset,
+			// DiscoveryReqBroadcaster: n.sendDiscoveryRequest,
+			TxBroadcaster: n.BroadcastTx,
 		}
 
 		whitelistFns := consensus.WhitelistFns{
 			AddPeer:    n.Whitelister().AddPeer,
 			RemovePeer: n.Whitelister().RemovePeer,
-			// ListPeers:  n.Whitelister().List,
 		}
 
 		nodeErr = n.ce.Start(ctx, broadcastFns, whitelistFns)
@@ -363,7 +365,6 @@ func (n *Node) Start(ctx context.Context) error {
 	n.log.Info("Node started.")
 
 	<-ctx.Done()
-	// n.log.Info("Stopping Node protocol handlers...")
 	n.wg.Wait()
 
 	n.log.Info("Node stopped.")

@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding"
 	"encoding/binary"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
@@ -22,8 +23,8 @@ import (
 type (
 	ConsensusReset = types.ConsensusReset
 	AckRes         = types.AckRes
-	DiscReq        = types.DiscoveryRequest
-	DiscRes        = types.DiscoveryResponse
+	// DiscReq        = types.DiscoveryRequest
+	// DiscRes        = types.DiscoveryResponse
 )
 
 type blockProp struct {
@@ -269,18 +270,8 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 // sendACK is a callback for the result of validator block execution/precommit.
 // After then consensus engine executes the block, this is used to gossip the
 // result back to the leader.
-func (n *Node) sendACK(ack bool, height int64, blkID types.Hash, appHash *types.Hash, signature []byte) error {
-	// n.log.Debugln("sending ACK", height, ack, blkID, appHash)
-	n.ackChan <- types.AckRes{
-		ACK:     ack,
-		AppHash: appHash,
-		BlkHash: blkID,
-		Height:  height,
-
-		Signature:  signature,
-		PubKeyType: n.pubkey.Type(),
-		PubKey:     n.pubkey.Bytes(),
-	}
+func (n *Node) sendACK(msg *AckRes) error {
+	n.ackChan <- *msg
 	return nil // actually gossip the nack
 }
 
@@ -359,6 +350,17 @@ func (n *Node) startAckGossip(ctx context.Context, ps *pubsub.PubSub) error {
 				continue
 			}
 			pubkeyBytes := peerPubKey.Bytes() // does not error for secp256k1 or ed25519
+
+			if ack.Signature == nil {
+				n.log.Warnf("received ACK with nil signature from %s", fromPeerID)
+				continue
+			}
+
+			if !bytes.Equal(ack.Signature.PubKey, pubkeyBytes) {
+				n.log.Warnf("invalid ack msg source: sender mismatch %s, expected: %s", hex.EncodeToString(pubkeyBytes), hex.EncodeToString(ack.Signature.PubKey))
+				continue
+			}
+
 			go n.ce.NotifyACK(pubkeyBytes, ack)
 		}
 	}()
@@ -366,6 +368,7 @@ func (n *Node) startAckGossip(ctx context.Context, ps *pubsub.PubSub) error {
 	return nil
 }
 
+/*
 func (n *Node) sendDiscoveryRequest() {
 	n.log.Debug("sending Discovery request")
 	n.discReq <- types.DiscoveryRequest{}
@@ -518,6 +521,7 @@ func (n *Node) startDiscoveryResponseGossip(ctx context.Context, ps *pubsub.PubS
 
 	return nil
 }
+*/
 
 func (n *Node) sendReset(height int64, txIDs []ktypes.Hash) error {
 	n.resetMsg <- types.ConsensusReset{
