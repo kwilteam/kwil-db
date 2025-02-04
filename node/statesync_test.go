@@ -50,7 +50,8 @@ var (
 )
 
 func newTestStatesyncer(ctx context.Context, t *testing.T, mn mock.Mocknet, rootDir string, sCfg *config.StateSyncConfig) (host.Host, discovery.Discovery, *snapshotStore, *StateSyncService, crypto.PrivateKey, error) {
-	pkBts, h := newTestHost(t, mn)
+	priv, h := newTestHost(t, mn)
+	pkBts, _ := priv.Raw()
 	pk, err := crypto.UnmarshalSecp256k1PrivateKey(pkBts)
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
