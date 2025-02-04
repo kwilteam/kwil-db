@@ -59,10 +59,10 @@ go build
 Or without even cloning the source repository:
 
 ```shell
-go install github.com/kwilteam/kwil-db/cmd/kwild@v0.7.0
+go install github.com/kwilteam/kwil-db/cmd/kwild@v0.9.0
 ```
 
-Just replace `v0.7.0` with the desired version or `latest`.
+Just replace `v0.9.0` with the desired version or `latest`.
 
 ### Running `kwild`
 
@@ -87,7 +87,7 @@ You can then start a single node network using the `kwild` binary built in the p
 
 ```shell
 # Use the full path to kwild if it is not on your PATH.
-kwild --autogen
+kwild start --autogen
 ```
 
 With the `--autogen` flag, the node automatically creates a new random network

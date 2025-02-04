@@ -13,7 +13,7 @@ require (
 	github.com/docker/go-connections v0.5.0
 	github.com/ethereum/go-ethereum v1.14.12
 	github.com/kwilteam/kwil-db v0.10.0-beta-1.0.20250203233330-7ed1d5f0a9d7
-	github.com/kwilteam/kwil-db/core v0.3.1-0.20250203233330-7ed1d5f0a9d7
+	github.com/kwilteam/kwil-db/core v0.4.0-beta.1
 	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go v0.34.0
 	github.com/testcontainers/testcontainers-go/modules/compose v0.34.0
