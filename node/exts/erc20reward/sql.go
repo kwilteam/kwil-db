@@ -170,11 +170,11 @@ func (pr *Reward) UnpackValues() []any {
 
 func (pr *Reward) UnpackTypes(decimalType *types.DataType) []pc.PrecompileValue {
 	return []pc.PrecompileValue{
-		{Type: types.UUIDType, Nullable: false},
-		{Type: types.TextType, Nullable: false},
-		{Type: decimalType, Nullable: false},
-		{Type: types.UUIDType, Nullable: false},
-		{Type: types.IntType, Nullable: false},
+		{Name: "id", Type: types.UUIDType, Nullable: false},
+		{Name: "recipient", Type: types.TextType, Nullable: false},
+		{Name: "amount", Type: decimalType, Nullable: false},
+		{Name: "contract_id", Type: types.UUIDType, Nullable: false},
+		{Name: "created_at", Type: types.IntType, Nullable: false},
 	}
 }
 
@@ -191,24 +191,7 @@ type Epoch struct {
 	ContractID   *types.UUID
 	BlockHash    []byte
 	CreatedAt    int64
-	Voters       []string //
-}
-
-func (br *Epoch) UnpackColumns() []string {
-	return []string{
-		"id",
-		"start_height",
-		"end_height",
-		"total_rewards",
-		//"mtree_json", // we don't want user to access this
-		"reward_root",
-		"safe_nonce",
-		"sign_hash",
-		"contract_id",
-		"block_hash",
-		"created_at",
-		"voters",
-	}
+	Voters       []string
 }
 
 func (br *Epoch) UnpackValues() []any {
@@ -227,19 +210,35 @@ func (br *Epoch) UnpackValues() []any {
 	}
 }
 
+func (br *Epoch) UnpackColumns() []string {
+	return []string{
+		"id",
+		"start_height",
+		"end_height",
+		"total_rewards",
+		"reward_root",
+		"safe_nonce",
+		"sign_hash",
+		"contract_id",
+		"block_hash",
+		"created_at",
+		"voters",
+	}
+}
+
 func (br *Epoch) UnpackTypes(decimalType *types.DataType) []pc.PrecompileValue {
 	return []pc.PrecompileValue{
-		{Type: types.UUIDType, Nullable: false},
-		{Type: types.IntType, Nullable: false},
-		{Type: types.IntType, Nullable: false},
-		{Type: decimalType, Nullable: false},
-		{Type: types.ByteaType, Nullable: false},
-		{Type: types.IntType, Nullable: false},
-		{Type: types.ByteaType, Nullable: false},
-		{Type: types.UUIDType, Nullable: false},
-		{Type: types.ByteaType, Nullable: false},
-		{Type: types.IntType, Nullable: false},
-		{Type: types.TextArrayType, Nullable: false},
+		{Name: "id", Type: types.UUIDType, Nullable: false},
+		{Name: "start_height", Type: types.IntType, Nullable: false},
+		{Name: "end_height", Type: types.IntType, Nullable: false},
+		{Name: "total_rewards", Type: decimalType, Nullable: false},
+		{Name: "reward_root", Type: types.ByteaType, Nullable: false},
+		{Name: "safe_nonce", Type: types.IntType, Nullable: false},
+		{Name: "sign_hash", Type: types.ByteaType, Nullable: false},
+		{Name: "contract_id", Type: types.UUIDType, Nullable: false},
+		{Name: "block_hash", Type: types.ByteaType, Nullable: false},
+		{Name: "created_at", Type: types.IntType, Nullable: false},
+		{Name: "voters", Type: types.TextArrayType, Nullable: false},
 	}
 }
 
@@ -259,24 +258,6 @@ type FinalizedReward struct {
 	SignHash     []byte
 	ContractID   *types.UUID
 	BlockHash    []byte
-}
-
-func (fr *FinalizedReward) UnpackColumns() []string {
-	return []string{
-		"id",
-		"voters",
-		"signatures",
-		"epoch_id",
-		"created_at",
-		"start_height",
-		"end_height",
-		"total_rewards",
-		"reward_root",
-		"safe_nonce",
-		"sign_hash",
-		"contract_id",
-		"block_hash",
-	}
 }
 
 func (fr *FinalizedReward) UnpackValues() []any {
@@ -299,19 +280,19 @@ func (fr *FinalizedReward) UnpackValues() []any {
 
 func (fr *FinalizedReward) UnpackTypes(decimalType *types.DataType) []pc.PrecompileValue {
 	return []pc.PrecompileValue{
-		{Type: types.UUIDType, Nullable: false},
-		{Type: types.TextArrayType, Nullable: false},
-		{Type: types.ByteaArrayType, Nullable: false},
-		{Type: types.UUIDType, Nullable: false},
-		{Type: types.IntType, Nullable: false},
-		{Type: types.IntType, Nullable: false},
-		{Type: types.IntType, Nullable: false},
-		{Type: decimalType, Nullable: false},
-		{Type: types.ByteaType, Nullable: false},
-		{Type: types.IntType, Nullable: false},
-		{Type: types.ByteaType, Nullable: false},
-		{Type: types.UUIDType, Nullable: false},
-		{Type: types.ByteaType, Nullable: false},
+		{Name: "id", Type: types.UUIDType, Nullable: false},
+		{Name: "voters", Type: types.TextArrayType, Nullable: false},
+		{Name: "signatures", Type: types.ByteaArrayType, Nullable: false},
+		{Name: "epoch_id", Type: types.UUIDType, Nullable: false},
+		{Name: "created_at", Type: types.IntType, Nullable: false},
+		{Name: "start_height", Type: types.IntType, Nullable: false},
+		{Name: "end_height", Type: types.IntType, Nullable: false},
+		{Name: "total_rewards", Type: decimalType, Nullable: false},
+		{Name: "reward_root", Type: types.ByteaType, Nullable: false},
+		{Name: "safe_nonce", Type: types.IntType, Nullable: false},
+		{Name: "sign_hash", Type: types.ByteaType, Nullable: false},
+		{Name: "contract_id", Type: types.UUIDType, Nullable: false},
+		{Name: "block_hash", Type: types.ByteaType, Nullable: false},
 	}
 }
 
@@ -337,21 +318,6 @@ type WalletReward struct {
 	MTreeJSON string `json:"mtree_json,omitempty"`
 }
 
-func (wr *WalletReward) UnpackColumns() []string {
-	return []string{
-		"chain",
-		"chain_id",
-		"contract",
-		"etherscan",
-		"created_at",
-		"param_recipient",
-		"param_amount",
-		"param_block_hash",
-		"param_root",
-		"param_proofs",
-	}
-}
-
 func (wr *WalletReward) UnpackValues() []any {
 	return []any{
 		wr.Chain,
@@ -369,16 +335,16 @@ func (wr *WalletReward) UnpackValues() []any {
 
 func (wr *WalletReward) UnpackTypes() []pc.PrecompileValue {
 	return []pc.PrecompileValue{
-		{Type: types.TextType, Nullable: false},
-		{Type: types.TextType, Nullable: false},
-		{Type: types.TextType, Nullable: false},
-		{Type: types.TextType, Nullable: false},
-		{Type: types.IntType, Nullable: false},
-		{Type: types.TextType, Nullable: false},
-		{Type: types.TextType, Nullable: false},
-		{Type: types.TextType, Nullable: false},
-		{Type: types.TextType, Nullable: false},
-		{Type: types.TextArrayType, Nullable: false},
+		{Name: "chain", Type: types.TextType, Nullable: false},
+		{Name: "chain_id", Type: types.TextType, Nullable: false},
+		{Name: "contract", Type: types.TextType, Nullable: false},
+		{Name: "etherscan", Type: types.TextType, Nullable: false},
+		{Name: "created_at", Type: types.IntType, Nullable: false},
+		{Name: "param_recipient", Type: types.TextType, Nullable: false},
+		{Name: "param_amount", Type: types.TextType, Nullable: false},
+		{Name: "param_block_hash", Type: types.TextType, Nullable: false},
+		{Name: "param_root", Type: types.TextType, Nullable: false},
+		{Name: "param_proofs", Type: types.TextArrayType, Nullable: false},
 	}
 }
 

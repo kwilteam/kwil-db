@@ -5,7 +5,6 @@ package interpreter
 import (
 	"context"
 	"fmt"
-	"maps"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/common"
@@ -655,7 +654,7 @@ func Test_Metadata(t *testing.T) {
 	assertQuery(`SELECT * FROM actions WHERE namespace = 'ext1'`, [][]any{
 		{"ext1", "no_params_no_returns", "", stringArr("PRIVATE", "OWNER"), stringArr(), stringArr(), stringArr(), stringArr(), false, true},
 		{"ext1", "returns_one_named", "", stringArr("PUBLIC", "VIEW"), stringArr("$param_1"), stringArr("int8"), stringArr("id"), stringArr("int8"), false, true},
-		{"ext1", "returns_one_unnamed", "", stringArr("PUBLIC"), stringArr(), stringArr(), stringArr("column_1"), stringArr("int8"), false, true},
+		{"ext1", "returns_one_no_param", "", stringArr("PUBLIC"), stringArr(), stringArr(), stringArr("id"), stringArr("int8"), false, true},
 		{"ext1", "returns_table", "", stringArr("SYSTEM", "VIEW"), stringArr(), stringArr(), stringArr("id", "name"), stringArr("int8", "text"), true, true},
 	})
 
@@ -988,6 +987,8 @@ func Test_Metadata(t *testing.T) {
 	// 3.3 Roles
 	// hasRole func does not take the namespace because roles are global
 	hasRole := func(want string, perms *perms) {
+		t.Logf("checking role: %s", want)
+
 		ps, ok := interp.i.accessController.roles[want]
 		require.True(t, ok)
 
@@ -997,11 +998,26 @@ func Test_Metadata(t *testing.T) {
 
 	// all roles will have a namespacePrivileges map that has all the namespaces (but empty privileges)
 	defaultNamespacePrivileges := map[string]map[privilege]struct{}{
-		"info":  {},
-		"main":  {},
-		"other": {},
-		"ext1":  {},
-		"ext2":  {},
+		"info": {
+			_SELECT_PRIVILEGE: {},
+			_CALL_PRIVILEGE:   {},
+		},
+		"main": {
+			_SELECT_PRIVILEGE: {},
+			_CALL_PRIVILEGE:   {},
+		},
+		"other": {
+			_SELECT_PRIVILEGE: {},
+			_CALL_PRIVILEGE:   {},
+		},
+		"ext1": {
+			_SELECT_PRIVILEGE: {},
+			_CALL_PRIVILEGE:   {},
+		},
+		"ext2": {
+			_SELECT_PRIVILEGE: {},
+			_CALL_PRIVILEGE:   {},
+		},
 	}
 
 	hasRole("default", &perms{
@@ -1012,29 +1028,54 @@ func Test_Metadata(t *testing.T) {
 		},
 	})
 	hasRole("no_perms", &perms{
-		namespacePrivileges: defaultNamespacePrivileges,
-		globalPrivileges:    map[privilege]struct{}{},
-	})
-	hasRole("owner", &perms{
-		namespacePrivileges: defaultNamespacePrivileges,
-		globalPrivileges: map[privilege]struct{}{
-			_ALTER_PRIVILEGE:  {},
-			_CALL_PRIVILEGE:   {},
-			_CREATE_PRIVILEGE: {},
-			_DELETE_PRIVILEGE: {},
-			_DROP_PRIVILEGE:   {},
-			_INSERT_PRIVILEGE: {},
-			_ROLES_PRIVILEGE:  {},
-			_SELECT_PRIVILEGE: {},
-			_UPDATE_PRIVILEGE: {},
-			_USE_PRIVILEGE:    {},
+		namespacePrivileges: map[string]map[privilege]struct{}{
+			"info":  {},
+			"main":  {},
+			"other": {},
+			"ext1":  {},
+			"ext2":  {},
 		},
+		globalPrivileges: map[privilege]struct{}{},
 	})
 
-	somePermsNamespacePrivileges := maps.Clone(defaultNamespacePrivileges)
+	allPrivs := map[privilege]struct{}{
+		_ALTER_PRIVILEGE:  {},
+		_CALL_PRIVILEGE:   {},
+		_CREATE_PRIVILEGE: {},
+		_DELETE_PRIVILEGE: {},
+		_DROP_PRIVILEGE:   {},
+		_INSERT_PRIVILEGE: {},
+		_ROLES_PRIVILEGE:  {},
+		_SELECT_PRIVILEGE: {},
+		_UPDATE_PRIVILEGE: {},
+		_USE_PRIVILEGE:    {},
+	}
+
+	hasRole("owner", &perms{
+		namespacePrivileges: map[string]map[privilege]struct{}{
+			"info":  allPrivs,
+			"main":  allPrivs,
+			"other": allPrivs,
+			"ext1":  allPrivs,
+			"ext2":  allPrivs,
+		},
+		globalPrivileges: allPrivs,
+	})
+
+	somePermsNamespacePrivileges := make(map[string]map[privilege]struct{})
+
+	for ns := range defaultNamespacePrivileges {
+		somePermsNamespacePrivileges[ns] = map[privilege]struct{}{}
+	}
+
 	somePermsNamespacePrivileges["info"] = map[privilege]struct{}{
 		_SELECT_PRIVILEGE: {},
 	}
+
+	for _, privs := range somePermsNamespacePrivileges {
+		privs[_INSERT_PRIVILEGE] = struct{}{}
+	}
+
 	hasRole("some_perms", &perms{
 		namespacePrivileges: somePermsNamespacePrivileges,
 		globalPrivileges: map[privilege]struct{}{
@@ -1051,7 +1092,7 @@ func Test_Metadata(t *testing.T) {
 		require.True(t, ok)
 		assert.Equal(t, e.namespaceType, namespaceTypeExtension)
 
-		_, ok = e.availableFunctions["returns_one_unnamed"]
+		_, ok = e.availableFunctions["returns_one_no_param"]
 		require.True(t, ok)
 		_, ok = e.availableFunctions["returns_one_named"]
 		require.True(t, ok)
@@ -1088,11 +1129,11 @@ func stringArr(vals ...string) []*string {
 var testSchemaExt = precompiles.Precompile{
 	Methods: []precompiles.Method{
 		{
-			Name:            "returns_one_unnamed",
+			Name:            "returns_one_no_param",
 			AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
 			Returns: &precompiles.MethodReturn{
 				Fields: []precompiles.PrecompileValue{
-					{Type: types.IntType},
+					{Name: "id", Type: types.IntType},
 				},
 			},
 			Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
@@ -1103,13 +1144,12 @@ var testSchemaExt = precompiles.Precompile{
 			Name:            "returns_one_named",
 			AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
 			Parameters: []precompiles.PrecompileValue{
-				{Type: types.IntType},
+				{Name: "id", Type: types.IntType},
 			},
 			Returns: &precompiles.MethodReturn{
 				Fields: []precompiles.PrecompileValue{
-					{Type: types.IntType},
+					{Name: "id", Type: types.IntType},
 				},
-				FieldNames: []string{"id"},
 			},
 			Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 				return resultFn([]any{2})
@@ -1119,11 +1159,10 @@ var testSchemaExt = precompiles.Precompile{
 			Name:            "returns_table",
 			AccessModifiers: []precompiles.Modifier{precompiles.SYSTEM, precompiles.VIEW},
 			Returns: &precompiles.MethodReturn{
-				IsTable:    true,
-				FieldNames: []string{"id", "name"},
+				IsTable: true,
 				Fields: []precompiles.PrecompileValue{
-					{Type: types.IntType},
-					{Type: types.TextType},
+					{Name: "id", Type: types.IntType},
+					{Name: "name", Type: types.TextType},
 				},
 			},
 			Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
@@ -1158,6 +1197,31 @@ func Test_Transactionality(t *testing.T) {
 	})
 	require.NoError(t, err)
 	defer db.Close()
+
+	cache := &transactionalCache{}
+	err = precompiles.RegisterPrecompile("transactionality", precompiles.Precompile{
+		Cache: cache,
+		Methods: []precompiles.Method{
+			{
+				Name:            "increment",
+				AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
+				Parameters: []precompiles.PrecompileValue{
+					{Name: "amount", Type: types.IntType},
+				},
+				Returns: &precompiles.MethodReturn{
+					Fields: []precompiles.PrecompileValue{
+						{Name: "counter", Type: types.IntType},
+					},
+				},
+				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+					amount := inputs[0].(int64)
+					cache.counter += amount
+					return resultFn([]any{cache.counter})
+				},
+			},
+		},
+	})
+	require.NoError(t, err)
 
 	tx, err := db.BeginTx(ctx)
 	require.NoError(t, err)
@@ -1196,4 +1260,44 @@ func Test_Transactionality(t *testing.T) {
 	CREATE TABLE table2 (id INT PRIMARY KEY, name TEXT);
 	`, nil, nil)
 	require.NoError(t, err)
+
+	// test extension transactionality
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `
+	USE transactionality AS trans;
+	CREATE ACTION test_act() public {
+		$j := 0;
+		for $i in 1..10 {
+			$j := trans.increment(1);
+			if $j != $i {
+				error('expected $i, got $j');
+			}
+		};
+
+		error('rollback');
+	};
+	`, nil, nil)
+	require.NoError(t, err)
+
+	_, err = interp.Call(newInvalidEngineCtx(ctx), tx, "", "test_act", nil, nil)
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "rollback")
+
+	// check that the counter was not incremented
+	if cache.counter != 0 {
+		t.Fatalf("expected counter to be 0, got %d", cache.counter)
+	}
+}
+
+type transactionalCache struct {
+	counter int64
+}
+
+func (t *transactionalCache) Copy() precompiles.Cache {
+	return &transactionalCache{
+		counter: t.counter,
+	}
+}
+
+func (t *transactionalCache) Apply(cache precompiles.Cache) {
+	t.counter = cache.(*transactionalCache).counter
 }

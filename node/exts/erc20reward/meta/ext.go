@@ -197,3 +197,9 @@ func Map[T1, T2 any](s []T1, f func(T1) T2) []T2 {
 	}
 	return r
 }
+
+// new creates a new reward extension. It is called by the engine when the extension is used.
+// It has the signature: NEW(chain TEXT, contract TEXT, period TEXT, alias TEXT)
+func (h *Erc20RewardMeta) new(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+	// in order to create a new reward extension
+}

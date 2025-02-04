@@ -90,8 +90,8 @@ func initializeExtension(ctx context.Context, svc *common.Service, db sql.DB, i 
 							}
 						}
 
-						if len(method.Returns.FieldNames) > 0 {
-							colNames = method.Returns.FieldNames
+						for _, field := range method.Returns.Fields {
+							colNames = append(colNames, field.Name)
 						}
 					}
 
@@ -122,6 +122,7 @@ func initializeExtension(ctx context.Context, svc *common.Service, db sql.DB, i 
 		},
 		namespaceType: namespaceTypeExtension,
 		methods:       methods,
+		extCache:      inst.Cache,
 	}, &inst, nil
 }
 

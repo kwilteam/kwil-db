@@ -43,8 +43,27 @@ const (
 	ExtensionName = "kwil_ordered_sync"
 )
 
+// RegisterResolveFunc registers a resolve function.
+// It gives it a name which it can be identified by.
+// It MUST be called in init.
+func RegisterResolveFunc(s string, resolveFn ResolveFunc) {
+	_, ok := registered[s]
+	if ok {
+		panic(fmt.Sprintf("resolve function with name %s already registered", s))
+	}
+
+	registered[s] = resolveFn
+}
+
+var registered = make(map[string]ResolveFunc)
+
+// RegisterOrderedSync registers the ordered sync extension.
+// It can be called many times, but each time must have a different suffix.
+// It should be called in init.
 func init() {
-	err := resolutions.RegisterResolution(ExtensionName, resolutions.ModAdd, resolutions.ResolutionConfig{
+	extName := ExtensionName
+
+	err := resolutions.RegisterResolution(extName+"_resolution", resolutions.ModAdd, resolutions.ResolutionConfig{
 		RefundThreshold:       big.NewRat(1, 3),
 		ConfirmationThreshold: big.NewRat(1, 2),
 		ExpirationPeriod:      1 * time.Hour,
@@ -62,19 +81,19 @@ func init() {
 		panic(err)
 	}
 
-	err = hooks.RegisterEngineReadyHook(ExtensionName+"_engine_ready_hook", Synchronizer.readTopicInfoOnStartup)
+	err = hooks.RegisterEngineReadyHook(extName+"_engine_ready_hook", Synchronizer.readTopicInfoOnStartup)
 	if err != nil {
 		panic(err)
 	}
 
-	err = hooks.RegisterGenesisHook(ExtensionName+"_genesis_hook", func(ctx context.Context, app *common.App, chain *common.ChainContext) error {
+	err = hooks.RegisterGenesisHook(extName+"_genesis_hook", func(ctx context.Context, app *common.App, chain *common.ChainContext) error {
 		return createNamespace(ctx, app.DB, app.Engine)
 	})
 	if err != nil {
 		panic(err)
 	}
 
-	err = hooks.RegisterEndBlockHook(ExtensionName+"_end_block_hook", Synchronizer.resolve)
+	err = hooks.RegisterEndBlockHook(extName+"_end_block_hook", Synchronizer.resolve)
 	if err != nil {
 		panic(err)
 	}
@@ -207,15 +226,17 @@ func (r *ResolutionMessage) UnmarshalBinary(data []byte) error {
 // orderedsync of a new topic they will be publishing for.
 // It should be called every time the engine starts.
 // It is idempotent.
-func registerTopic(ctx context.Context, db sql.DB, eng common.Engine, topic string) error {
+func registerTopic(ctx context.Context, db sql.DB, eng common.Engine, topic, resolveFn string) error {
 	return eng.ExecuteWithoutEngineCtx(ctx, db,
-		fmt.Sprintf(`{%s}INSERT INTO topics (id, name, last_processed_point) VALUES (
+		fmt.Sprintf(`{%s}INSERT INTO topics (id, name, last_processed_point, resolve_func) VALUES (
 		uuid_generate_v5('5ac60ab5-9335-4ea9-8fe5-bbfe931f276e'::uuid, $name),
 		$name,
-		null
+		null,
+		$resolve_func
 		) ON CONFLICT DO NOTHING`, ExtensionName),
 		map[string]any{
-			"name": topic,
+			"name":         topic,
+			"resolve_func": resolveFn,
 		},
 		nil,
 	)

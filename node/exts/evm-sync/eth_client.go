@@ -2,16 +2,9 @@ package evmsync
 
 import (
 	"context"
-	"encoding/hex"
-	"fmt"
-	"math/big"
-	"strings"
 	"time"
 
-	"github.com/ethereum/go-ethereum"
-	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/jpillora/backoff"
 
@@ -22,37 +15,15 @@ import (
 // it handles retries and resubscribing to the blockchain in case of
 // transient errors
 type ethClient struct {
-	targetAddress []ethcommon.Address
-	topics        [][]ethcommon.Hash
-	maxRetries    int64
-	logger        log.Logger
-	client        *ethclient.Client
-	done          <-chan struct{}
+	maxRetries int64
+	logger     log.Logger
+	client     *ethclient.Client
+	done       <-chan struct{}
 }
 
 // newEthClient creates a new ethereum client
-func newEthClient(ctx context.Context, rpcurl string, maxRetries int64, targetAddresses []string, topics []string, done <-chan struct{}, logger log.Logger) (*ethClient, error) {
+func newEthClient(ctx context.Context, rpcurl string, maxRetries int64, done <-chan struct{}, logger log.Logger) (*ethClient, error) {
 	var client *ethclient.Client
-
-	addresses := make([]ethcommon.Address, len(targetAddresses))
-	for i, addr := range targetAddresses {
-		if !strings.HasPrefix(addr, "0x") {
-			return nil, fmt.Errorf("invalid contract address: %s", addr)
-		}
-		if _, err := hex.DecodeString(addr[2:]); err != nil {
-			return nil, fmt.Errorf("invalid contract address: %s", addr)
-		}
-
-		addresses[i] = ethcommon.HexToAddress(addr)
-	}
-
-	// default nil to allow all events
-	var topicHashes []ethcommon.Hash
-	for _, topic := range topics {
-		// as per https://goethereumbook.org/event-read/#topics,
-		// the first topic is the event signature
-		topicHashes = append(topicHashes, crypto.Keccak256Hash([]byte(topic)))
-	}
 
 	// I don't set the max retries here because this only gets run on startup
 	// the max retries are used for resubscribing to the blockchain
@@ -73,12 +44,10 @@ func newEthClient(ctx context.Context, rpcurl string, maxRetries int64, targetAd
 	}
 
 	return &ethClient{
-		targetAddress: addresses,
-		topics:        [][]ethcommon.Hash{topicHashes},
-		maxRetries:    maxRetries,
-		logger:        logger,
-		client:        client,
-		done:          done,
+		maxRetries: maxRetries,
+		logger:     logger,
+		client:     client,
+		done:       done,
 	}, nil
 }
 
@@ -95,27 +64,6 @@ func (ec *ethClient) GetLatestBlock(ctx context.Context) (int64, error) {
 		return nil
 	})
 	return blockNumber, err
-}
-
-// GetEventLogs gets the logs for the events from the ethereum blockchain.
-// It can be given a start range and an end range to filter the logs by block height.
-func (ec *ethClient) GetEventLogs(ctx context.Context, fromBlock, toBlock int64) ([]types.Log, error) {
-	var logs []types.Log
-	err := retry(ctx, ec.maxRetries, func() error {
-		var err error
-		logs, err = ec.client.FilterLogs(ctx, ethereum.FilterQuery{
-			ToBlock:   big.NewInt(toBlock),
-			FromBlock: big.NewInt(fromBlock),
-			Addresses: ec.targetAddress,
-			Topics:    ec.topics,
-		})
-		if err != nil {
-			ec.logger.Error("Failed to get credit event logs", "error", err)
-		}
-
-		return err
-	})
-	return logs, err
 }
 
 // ListenToBlocks subscribes to new blocks on the ethereum blockchain.

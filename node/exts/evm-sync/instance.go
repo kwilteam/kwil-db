@@ -13,10 +13,35 @@ import (
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )
 
-// EventSyncer is the singleton that is responsible for syncing events from Ethereum.
-var EventSyncer = &globalListenerManager{
-	listeners: make(map[string]*listenerInfo),
+// RegisterEventResolution registers a resolution function for the EVM event listener.
+// It should be called in an init function.
+func RegisterEventResolution(name string, resolve ResolveFunc) {
+	_, ok := registeredResolutions[name]
+	if ok {
+		panic(fmt.Sprintf("resolution with name %s already registered", name))
+	}
+
+	registeredResolutions[name] = resolve
+
+	orderedsync.RegisterResolveFunc(name, func(ctx context.Context, app *common.App, block *common.BlockContext, res *orderedsync.ResolutionMessage) error {
+		logs, err := deserializeLogs(res.Data)
+		if err != nil {
+			return err
+		}
+
+		return resolve(ctx, app, block, res.Topic, logs)
+	})
 }
+
+var (
+	// EventSyncer is the singleton that is responsible for syncing events from Ethereum.
+	EventSyncer = &globalListenerManager{
+		listeners: make(map[string]*listenerInfo),
+	}
+
+	// resolutions is a map of resolution functions
+	registeredResolutions = make(map[string]ResolveFunc)
+)
 
 // this file contains a thread-safe in-memory cache for the chains that the network cares about.
 
@@ -27,9 +52,17 @@ type globalListenerManager struct {
 	listeners map[string]*listenerInfo
 	// shouldListen is a flag that is set to true when the node should have
 	// its listeners running.
-	// We can probably get rid of this field, its mostly just to protect against unexpected
-	// behavior by the rest of the code outside of this package.
 	shouldListen bool
+
+	/*
+		THE BELOW FIELDS ARE ONLY SET WHEN shouldListen IS TRUE
+	*/
+
+	// runningContext is the context that the listeners are running in.
+	runningContext    context.Context
+	runningService    *common.Service
+	runningEventStore listeners.EventStore
+	runningSyncConf   *syncConfig
 }
 
 // EVMEventListenerConfig is the configuration for an EVM event listener.
@@ -37,27 +70,28 @@ type EVMEventListenerConfig struct {
 	// UniqueName is a unique name for the listener.
 	// It MUST be unique from all other listeners.
 	UniqueName string
-	// ContractAddresses is a list of contract addresses to listen to events from.
-	ContractAddresses []string
-	// EventSignatures is a list of event signatures to listen to.
-	// All events from any contract configured matching any of these signatures will be emitted.
-	// It is optional and defaults to all events.
-	EventSignatures []string
 	// Chain is the chain that the listener is listening to.
 	Chain chains.Chain
+	// GetLogs is a function that queries logs to be synced from the chain.
+	GetLogs GetBlockLogsFunc
 	// Resolve is the function that will be called the Kwil network
 	// has confirmed events from Ethereum.
-	Resolve ResolveFunc
+	Resolve string
 }
 
 // RegisterListener registers a new listener.
 // It should be called when a node starts up (e.g. on a precompile's
-// OnStart method).
+// OnStart method), or when a new extension is added.
 func (l *globalListenerManager) RegisterNewListener(ctx context.Context, db sql.DB, eng common.Engine, conf EVMEventListenerConfig) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
-	_, ok := l.listeners[conf.UniqueName]
+	_, ok := registeredResolutions[conf.Resolve]
+	if !ok {
+		return fmt.Errorf("resolve function %s not registered", conf.Resolve)
+	}
+
+	_, ok = l.listeners[conf.UniqueName]
 	if ok {
 		return fmt.Errorf("listener with name %s already registered", conf.UniqueName)
 	}
@@ -67,28 +101,26 @@ func (l *globalListenerManager) RegisterNewListener(ctx context.Context, db sql.
 		return fmt.Errorf("chain %s not found", conf.Chain)
 	}
 
-	err := orderedsync.Synchronizer.RegisterTopic(ctx, db, eng, conf.UniqueName,
-		func(ctx context.Context, app *common.App, block *common.BlockContext, res *orderedsync.ResolutionMessage) error {
-			// in our callback, we will deserialize the finalized message into ethereum logs and pass that to our own resolve function
-			logs, err := deserializeLogs(res.Data)
-			if err != nil {
-				return err
-			}
-
-			return conf.Resolve(ctx, app, block, logs)
-		})
+	err := orderedsync.Synchronizer.RegisterTopic(ctx, db, eng, conf.UniqueName, conf.Resolve)
 	if err != nil {
 		return err
 	}
 
 	doneCh := make(chan struct{})
 
-	l.listeners[conf.UniqueName] = &listenerInfo{
-		contractAddresses: conf.ContractAddresses,
-		eventSignatures:   conf.EventSignatures,
-		done:              doneCh,
-		chain:             chainInfo,
-		uniqueName:        conf.UniqueName,
+	linfo := &listenerInfo{
+		getLogs:    conf.GetLogs,
+		done:       doneCh,
+		chain:      chainInfo,
+		uniqueName: conf.UniqueName,
+	}
+	l.listeners[conf.UniqueName] = linfo
+
+	if l.shouldListen {
+		// this means it is already listening, so we should start the listener.
+		// Otherwise, when the oracle starts, it will listen to all values
+		// in the l.listeners map.
+		go linfo.listen(ctx, l.runningService, l.runningEventStore, l.runningSyncConf)
 	}
 
 	return nil
@@ -96,18 +128,13 @@ func (l *globalListenerManager) RegisterNewListener(ctx context.Context, db sql.
 
 // UnregisterListener unregisters a listener.
 // It should be called when an extension gets unused
-func (l *globalListenerManager) UnregisterListener(ctx context.Context, db sql.DB, eng common.Engine, uniqueName string) error {
+func (l *globalListenerManager) UnregisterListener(uniqueName string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
 	info, ok := l.listeners[uniqueName]
 	if !ok {
 		return fmt.Errorf("listener with name %s not registered", uniqueName)
-	}
-
-	err := orderedsync.Synchronizer.UnregisterTopic(ctx, db, eng, uniqueName)
-	if err != nil {
-		return err
 	}
 
 	close(info.done)
@@ -128,9 +155,18 @@ func (l *globalListenerManager) listen(ctx context.Context, service *common.Serv
 	}
 
 	l.shouldListen = true
+	l.runningContext = ctx
+	l.runningService = service
+	l.runningEventStore = eventstore
+	l.runningSyncConf = syncConf
+
 	defer func() {
 		l.mu.Lock()
 		l.shouldListen = false
+		l.runningContext = nil
+		l.runningService = nil
+		l.runningEventStore = nil
+		l.runningSyncConf = nil
 		l.mu.Unlock()
 	}()
 
@@ -144,19 +180,17 @@ func (l *globalListenerManager) listen(ctx context.Context, service *common.Serv
 	return nil
 }
 
-type ResolveFunc func(ctx context.Context, app *common.App, block *common.BlockContext, logs []ethtypes.Log) error
+type ResolveFunc func(ctx context.Context, app *common.App, block *common.BlockContext, uniqueName string, logs []ethtypes.Log) error
 
 type listenerInfo struct {
 	// done is a channel that is closed when the listener is done
 	done chan struct{}
 	// chain is the chain that the listener is listening to
 	chain chains.ChainInfo
-	// contractAddresses is a list of contract addresses to listen to events from
-	contractAddresses []string
-	// eventSignatures is a list of event signatures to listen to
-	eventSignatures []string
 	// uniqueName is the unique name of the listener
 	uniqueName string
+	// getLogs is a function that queries logs to be synced from the chain
+	getLogs GetBlockLogsFunc
 }
 
 // listen makes a new client and starts listening for events.
@@ -172,7 +206,7 @@ func (l *listenerInfo) listen(ctx context.Context, service *common.Service, even
 		return
 	}
 
-	ethClient, err := newEthClient(ctx, chainConf.Provider, syncConf.MaxRetries, l.contractAddresses, l.eventSignatures, l.done, logger)
+	ethClient, err := newEthClient(ctx, chainConf.Provider, syncConf.MaxRetries, l.done, logger)
 	if err != nil {
 		logger.Error("failed to create evm client", "err", err)
 		return
@@ -184,6 +218,7 @@ func (l *listenerInfo) listen(ctx context.Context, service *common.Service, even
 		chainConf:        chainConf,
 		client:           ethClient,
 		orderedSyncTopic: l.uniqueName,
+		getLogsFunc:      l.getLogs,
 	}
 
 	err = indiv.listen(ctx, eventstore, logger)

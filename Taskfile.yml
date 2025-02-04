@@ -89,6 +89,13 @@ tasks:
     generates:
       - node/engine/parse/gen/*.{go,interp,tokens}
 
+  generate:abi:
+    desc: Generate the ABI for the smart contracts
+    cmds:
+      - abigen --abi=./node/exts/erc20reward/abigen/reward_distributor_abi.json  --pkg abigen --out=./node/exts/erc20reward/abigen/reward_distributor.go --type RewardDistributor
+      - abigen --abi=./node/exts/erc20reward/abigen/erc20_abi.json  --pkg abigen --out=./node/exts/erc20reward/abigen/erc20.go --type Erc20
+      - abigen --abi=./node/exts/erc20reward/abigen/safe_abi.json  --pkg abigen --out=./node/exts/erc20reward/abigen/safe.go --type Safe
+
   # ************ docker ************
   vendor:
     desc: Generate vendor

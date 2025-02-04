@@ -13,6 +13,7 @@
     JOIN topics t ON p.topic_id = t.id
      -- we use IS NOT DISTINCT FROM to handle NULLs, since the first data point will have a NULL previous_point and last_processed_point
     WHERE previous_point IS NOT DISTINCT FROM last_processed_point
+    -- the recursive query finds points in order
 ), recursive_cte AS (
     -- base case: get the lowest point for each topic
     SELECT

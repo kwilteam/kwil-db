@@ -3,9 +3,8 @@ package erc20reward
 import (
 	"testing"
 
-	"github.com/stretchr/testify/require"
-
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/stretchr/testify/require"
 )
 
 func Test_scaleUpUint256(t *testing.T) {

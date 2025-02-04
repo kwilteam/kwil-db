@@ -9,12 +9,11 @@ import (
 	"math/big"
 	"strings"
 
-	ethAccounts "github.com/ethereum/go-ethereum/accounts"
-	ethCommon "github.com/ethereum/go-ethereum/common"
-
-	kcommon "github.com/kwilteam/kwil-db/common"
+	"github.com/ethereum/go-ethereum/accounts"
+	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
-	pc "github.com/kwilteam/kwil-db/extensions/precompiles"
+	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/node/exts/erc20reward/meta"
 	"github.com/kwilteam/kwil-db/node/exts/erc20reward/reward"
 	"github.com/kwilteam/kwil-db/node/types/sql"
@@ -51,7 +50,7 @@ var chainConvMap = map[string]chainInfo{
 	"1": {
 		Name:      "Ethereum",
 		Etherscan: "https://etherscan.io/address/",
-	},
+	}, // TODO: we should not keep these hard-coded here
 	"11155111": {
 		Name:      "Sepolia",
 		Etherscan: "https://sepolia.etherscan.io/address/",
@@ -59,8 +58,8 @@ var chainConvMap = map[string]chainInfo{
 }
 
 func init() {
-	err := pc.RegisterInitializer("erc20_rewards",
-		func(ctx context.Context, service *kcommon.Service, db sql.DB, alias string, metadata map[string]any) (p pc.Precompile, err error) {
+	err := precompiles.RegisterInitializer("erc20_rewards",
+		func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]any) (p precompiles.Precompile, err error) {
 			chainID, contractAddr, contractNonce, signers, threshold, safeAddr, safeNonce, decimals, err := getMetadata(metadata)
 			if err != nil {
 				return p, fmt.Errorf("parse ext configuration: %w", err)
@@ -84,36 +83,35 @@ func init() {
 				return p, fmt.Errorf("failed to create decimal type: %w", err)
 			}
 
-			return pc.Precompile{
-				Methods: []pc.Method{ // NOTE: engine ensures 'resultFn' in Handler is always non-nil
+			return precompiles.Precompile{
+				Methods: []precompiles.Method{ // NOTE: engine ensures 'resultFn' in Handler is always non-nil
 					{
 						// Supposed to be called by App
 						Name:            "issue_reward",
-						AccessModifiers: []pc.Modifier{pc.PUBLIC},
-						Handler: func(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC}, // TODO: change to SYSTEM
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 							return ext.issueReward(ctx, app, inputs, resultFn)
 						},
-						Parameters: []pc.PrecompileValue{
-							{Type: types.TextType, Nullable: false},
-							{Type: rewardAmtDecimal, Nullable: false},
+						Parameters: []precompiles.PrecompileValue{
+							{Name: "wallet_address", Type: types.TextType, Nullable: false},
+							{Name: "amount", Type: rewardAmtDecimal, Nullable: false},
 						},
 					},
 					{
 						// Supposed to be called by Signer service
 						// Returns epoch rewards after(non-include) after_height, in ASC order.
 						Name:            "list_epochs",
-						AccessModifiers: []pc.Modifier{pc.PUBLIC, pc.VIEW},
-						Handler: func(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 							return ext.listEpochs(ctx, app, inputs, resultFn)
 						},
-						Parameters: []pc.PrecompileValue{
-							{Type: types.IntType, Nullable: false}, // after height
-							{Type: types.IntType, Nullable: false}, // limit
+						Parameters: []precompiles.PrecompileValue{
+							{Name: "after_height", Type: types.IntType, Nullable: false}, // after height
+							{Name: "limit", Type: types.IntType, Nullable: false},        // limit
 						},
-						Returns: &pc.MethodReturn{
-							IsTable:    true,
-							Fields:     (&Epoch{}).UnpackTypes(rewardAmtDecimal),
-							FieldNames: (&Epoch{}).UnpackColumns(),
+						Returns: &precompiles.MethodReturn{
+							IsTable: true,
+							Fields:  (&Epoch{}).UnpackTypes(rewardAmtDecimal),
 						},
 					},
 					{
@@ -122,74 +120,71 @@ func init() {
 						// Returns pending rewards from(include) start_height to(include) end_height, in ASC order.
 						// NOTE: Rewards of same address will be aggregated.
 						Name:            "search_rewards", // maybe not useful for Signer Service.
-						AccessModifiers: []pc.Modifier{pc.PUBLIC, pc.VIEW},
-						Handler: func(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 							return ext.searchRewards(ctx, app, inputs, resultFn)
 						},
-						Parameters: []pc.PrecompileValue{
-							{Type: types.IntType, Nullable: false}, // start height
-							{Type: types.IntType, Nullable: false}, // end height
+						Parameters: []precompiles.PrecompileValue{
+							{Name: "start_height", Type: types.IntType, Nullable: false}, // start height
+							{Name: "end_height", Type: types.IntType, Nullable: false},   // end height
 						},
-						Returns: &pc.MethodReturn{
-							IsTable:    true,
-							Fields:     (&Reward{}).UnpackTypes(rewardAmtDecimal),
-							FieldNames: (&Reward{}).UnpackColumns(),
+						Returns: &precompiles.MethodReturn{
+							IsTable: true,
+							Fields:  (&Reward{}).UnpackTypes(rewardAmtDecimal),
 						},
 					},
 					{
 						// Supposed to be called by Kwil network.
 						Name:            "propose_epoch",
-						AccessModifiers: []pc.Modifier{pc.PUBLIC}, // TODO: make this SYSTEM or Private
-						Handler: func(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC}, // TODO: make this SYSTEM or Private
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 							return ext.proposeEpoch(ctx, app, inputs, resultFn)
 						},
 					},
 					{
 						// Supposed to be called by SignerService.
 						Name:            "vote_epoch",
-						AccessModifiers: []pc.Modifier{pc.PUBLIC},
-						Handler: func(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 							return ext.voteEpochReward(ctx, app, inputs, resultFn)
 						},
-						Parameters: []pc.PrecompileValue{
+						Parameters: []precompiles.PrecompileValue{
 							// TODO: change to uuid??
-							{Type: types.ByteaType, Nullable: false}, // sign hash
-							{Type: types.ByteaType, Nullable: false}, // signature
+							{Name: "sign_hash", Type: types.ByteaType, Nullable: false}, // sign hash
+							{Name: "signature", Type: types.ByteaType, Nullable: false}, // signature
 						},
 					},
 					{
 						// Supposed to be called by PosterService.
 						// Returns finalized rewards after(non-include) start_height, in ASC order.
 						Name:            "list_finalized",
-						AccessModifiers: []pc.Modifier{pc.PUBLIC, pc.VIEW},
-						Handler: func(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 							return ext.listFinalized(ctx, app, inputs, resultFn)
 						},
-						Parameters: []pc.PrecompileValue{
-							{Type: types.IntType, Nullable: false}, // after height
-							{Type: types.IntType, Nullable: false}, // limit
+						Parameters: []precompiles.PrecompileValue{
+							{Name: "after_height", Type: types.IntType, Nullable: false}, // after height
+							{Name: "limit", Type: types.IntType, Nullable: false},        // limit
 						},
-						Returns: &pc.MethodReturn{
-							IsTable:    true,
-							Fields:     (&FinalizedReward{}).UnpackTypes(rewardAmtDecimal),
-							FieldNames: (&FinalizedReward{}).UnpackColumns(),
+						Returns: &precompiles.MethodReturn{
+							IsTable: true,
+							Fields:  (&FinalizedReward{}).UnpackTypes(rewardAmtDecimal),
 						},
 					},
 					{
 						// Supposed to be called by PosterService ?? seems this is not PosterService wants
 						// Returns finalized rewards from(include) latest, in DESC order.
 						Name:            "latest_finalized",
-						AccessModifiers: []pc.Modifier{pc.PUBLIC, pc.VIEW},
-						Handler: func(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 							return ext.latestFinalized(ctx, app, inputs, resultFn)
 						},
-						Parameters: []pc.PrecompileValue{
-							{Type: types.IntType, Nullable: true}, // limit, default to 1
+						Parameters: []precompiles.PrecompileValue{
+							{Name: "limit", Type: types.IntType, Nullable: true}, // limit, default to 1
 						},
-						Returns: &pc.MethodReturn{
-							IsTable:    true,
-							Fields:     (&FinalizedReward{}).UnpackTypes(rewardAmtDecimal),
-							FieldNames: (&FinalizedReward{}).UnpackColumns(),
+						Returns: &precompiles.MethodReturn{
+							IsTable: true,
+							Fields:  (&FinalizedReward{}).UnpackTypes(rewardAmtDecimal),
 						},
 					},
 					//{
@@ -214,46 +209,44 @@ func init() {
 					{
 						// Supposed to be called by App/User
 						Name:            "list_wallet_rewards",
-						AccessModifiers: []pc.Modifier{pc.PUBLIC, pc.VIEW},
-						Parameters: []pc.PrecompileValue{
-							{Type: types.TextType, Nullable: false}, // wallet address
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+						Parameters: []precompiles.PrecompileValue{
+							{Name: "address", Type: types.TextType, Nullable: false}, // wallet address
 						},
-						Returns: &pc.MethodReturn{
-							IsTable:    true,
-							Fields:     (&WalletReward{}).UnpackTypes(),
-							FieldNames: (&WalletReward{}).UnpackColumns(),
+						Returns: &precompiles.MethodReturn{
+							IsTable: true,
+							Fields:  (&WalletReward{}).UnpackTypes(),
 						},
-						Handler: func(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 							return ext.listWalletRewards(ctx, app, inputs, resultFn)
 						},
 					},
 					{
 						// Supposed to be called by App/User
 						Name:            "claim_param",
-						AccessModifiers: []pc.Modifier{pc.PUBLIC, pc.VIEW},
-						Handler: func(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 							return ext.getClaimParam(ctx, app, inputs, resultFn)
 						},
-						Parameters: []pc.PrecompileValue{
+						Parameters: []precompiles.PrecompileValue{
 							// TODO: change to uuid??
-							{Type: types.ByteaType, Nullable: false}, // sign hash
-							{Type: types.TextType, Nullable: false},  // wallet address
+							{Name: "sign_hash", Type: types.ByteaType, Nullable: false},     // sign hash
+							{Name: "wallet_address", Type: types.TextType, Nullable: false}, // wallet address
 						},
-						Returns: &pc.MethodReturn{
+						Returns: &precompiles.MethodReturn{
 							IsTable: true,
-							Fields: []pc.PrecompileValue{
-								{Type: types.TextType, Nullable: false},
-								{Type: types.TextType, Nullable: false},
-								{Type: types.TextType, Nullable: false},
-								{Type: types.TextType, Nullable: false},
-								{Type: types.TextArrayType, Nullable: true},
+							Fields: []precompiles.PrecompileValue{
+								{Name: "recipient", Type: types.TextType, Nullable: false},
+								{Name: "amount", Type: types.TextType, Nullable: false},
+								{Name: "block_hash", Type: types.TextType, Nullable: false},
+								{Name: "root", Type: types.TextType, Nullable: false},
+								{Name: "proofs", Type: types.TextArrayType, Nullable: true},
 							},
-							FieldNames: []string{"recipient", "amount", "block_hash", "root", "proofs"},
 						},
 					},
 					// TODO: modify posterFee, modify signers
 				},
-				OnStart: func(ctx context.Context, app *kcommon.App) error {
+				OnStart: func(ctx context.Context, app *common.App) error {
 					tx, err := app.DB.BeginTx(ctx)
 					if err != nil {
 						return err
@@ -261,8 +254,8 @@ func init() {
 					defer tx.Rollback(ctx)
 
 					// OnStart is not called at a certain block height, nor in a transaction
-					emptyEngineCtx := &kcommon.EngineContext{
-						TxContext: &kcommon.TxContext{
+					emptyEngineCtx := &common.EngineContext{
+						TxContext: &common.TxContext{
 							Ctx: ctx,
 						}}
 
@@ -283,7 +276,15 @@ func init() {
 					ext.SafeNonce = contract.SafeNonce
 					return nil
 				},
-				OnUse: func(ctx *kcommon.EngineContext, app *kcommon.App) error {
+				OnUse: func(ctx *common.EngineContext, app *common.App) error {
+					// if the engine is not using OverrideAuthz, usage should fail.
+					// This is because we want to prevent the DB owner from being able to
+					// call USE on this extension. Instead, this extension should only
+					// be created by the meta extension
+					if !ctx.OverrideAuthz && !ctx.InvalidTxCtx {
+						return errors.New("erc20_rewards extension can only be used by the meta extension")
+					}
+
 					app.Service.Logger.Info("Register a new erc20_rewards contract",
 						"chainID", ext.ChainID, "contractAddr", ext.ContractAddr, "alias", ext.alias)
 					initRewardMeta := "USE IF NOT EXISTS erc20_rewards_meta as " + meta.ExtAlias + ";"
@@ -309,7 +310,14 @@ func init() {
 
 					return initTables(ctx, app, ext.alias)
 				},
-				OnUnuse: func(ctx *kcommon.EngineContext, app *kcommon.App) error {
+				OnUnuse: func(ctx *common.EngineContext, app *common.App) error {
+					// if the engine is not using OverrideAuthz, usage should fail.
+					// This is because we want to prevent the DB owner from being able to
+					// call UNUSE on this extension. Instead, this extension should only
+					// be unused by the meta extension
+					if !ctx.OverrideAuthz && !ctx.InvalidTxCtx {
+						return errors.New("erc20_rewards extension can only be unused by the meta extension")
+					}
 					return nil
 				},
 			}, nil
@@ -319,7 +327,7 @@ func init() {
 	}
 }
 
-func initTables(ctx *kcommon.EngineContext, app *kcommon.App, ns string) error {
+func initTables(ctx *common.EngineContext, app *common.App, ns string) error {
 	ctx.OverrideAuthz = true
 	defer func() { ctx.OverrideAuthz = false }()
 
@@ -378,114 +386,137 @@ type Erc20RewardExt struct {
 	SafeNonce     int64
 }
 
-func getMetadata(metadata map[string]any) (chainID int64, contractAddr string,
-	contractNonce int64, signers []string, threshold int64, safeAddr string,
-	safeNonce int64, decimals uint16, err error) {
-	var ok bool
+// erc20RewardMetadata is the metadata for erc20 reward extension.
+// It is used in the USE statement.
+type erc20RewardMetadata struct {
+	ChainID       int64
+	EscrowAddress string
+	Threshold     int64
+	Signers       [][]byte
+	SafeAddress   []byte
+	SafeNonce     int64
+	Erc20Address  []byte
+	Decimals      uint16
+}
 
-	allKeys := []string{"chain_id", "contract_address", "contract_nonce",
-		"threshold", "signers", "safe_address", "safe_nonce", "decimals"}
-	for _, key := range allKeys {
-		_, ok := metadata[key]
-		if !ok {
-			err = fmt.Errorf("missing %s", key)
-			return
+// use executes a use statement for the metadata.
+func (m *erc20RewardMetadata) use(ctx context.Context, app *common.App, alias string) error {
+	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, fmt.Sprintf(`
+	USE erc20_rewards {
+		chain_id: $chain_id,
+		contract_address: $contract_address,
+		threshold: $threshold,
+		signers: $signers,
+		safe_address: $safe_address,
+		safe_nonce: $safe_nonce,
+		erc20_address: $erc20_address,
+		decimals: $decimals
+	} AS %s
+	`, alias), map[string]any{
+		"chain_id":         m.ChainID,
+		"contract_address": m.EscrowAddress,
+		"threshold":        m.Threshold,
+		"signers":          m.Signers,
+		"safe_address":     m.SafeAddress,
+		"safe_nonce":       m.SafeNonce,
+		"erc20_address":    m.Erc20Address,
+		"decimals":         m.Decimals,
+	}, nil)
+}
+
+// getMetadata parses the metadata map and returns the chainID, contractAddr, contractNonce, signers, threshold, safeAddr, safeNonce, decimals.
+func getMetadata(metadata map[string]any) (*erc20RewardMetadata, error) {
+	chainID, ok := metadata["chain_id"].(int64)
+	if !ok {
+		return nil, fmt.Errorf("invalid chain_id")
+	}
+
+	contractAddr, ok := metadata["contract_address"].([]byte)
+	if !ok {
+		return nil, fmt.Errorf("invalid contract_address")
+	}
+
+	signersBts, ok := metadata["signers"].([]*[]byte)
+	if !ok {
+		return nil, fmt.Errorf("invalid signers")
+	}
+
+	if len(signersBts) == 0 {
+		return nil, fmt.Errorf("signers is empty")
+	}
+
+	signers := make([][]byte, len(signersBts))
+	for i, signer := range signersBts {
+		if signer == nil {
+			return nil, fmt.Errorf("received null signer")
 		}
-	}
 
-	chainID, ok = metadata["chain_id"].(int64)
-	if !ok {
-		err = fmt.Errorf("invalid chain_id")
-		return
-	}
-
-	contractAddr, ok = metadata["contract_address"].(string)
-	if !ok {
-		err = fmt.Errorf("invalid contract_address")
-		return
-	}
-
-	contractNonce, ok = metadata["contract_nonce"].(int64)
-	if !ok {
-		err = fmt.Errorf("invalid contract_nonce")
-		return
-	}
-
-	if !ethCommon.IsHexAddress(contractAddr) {
-		err = fmt.Errorf("invalid contract_address")
-		return
-	}
-
-	signersStr, ok := metadata["signers"].(string)
-	if !ok {
-		err = fmt.Errorf("invalid signers")
-		return
-	}
-
-	if len(signersStr) == 0 {
-		err = fmt.Errorf("signers is empty")
-		return
-	}
-
-	signers = strings.Split(signersStr, ",")
-	for _, signer := range signers {
-		if !ethCommon.IsHexAddress(signer) {
-			err = fmt.Errorf("invalid signer")
-			return
+		if !ethcommon.IsHexAddress(hex.EncodeToString(*signer)) {
+			return nil, fmt.Errorf("signer is not a valid address: %s", hex.EncodeToString(*signer))
 		}
+
+		signers[i] = *signer
 	}
 
-	threshold, ok = metadata["threshold"].(int64)
+	threshold, ok := metadata["threshold"].(int64)
 	if !ok {
-		err = fmt.Errorf("invalid threshold")
-		return
+		return nil, fmt.Errorf("invalid threshold")
 	}
 
 	if threshold == 0 {
-		err = fmt.Errorf("threshold is 0")
-		return
+		return nil, fmt.Errorf("threshold is 0")
 	}
 
 	if threshold > int64(len(signers)) {
-		err = fmt.Errorf("threshold is larger than the number of signers")
-		return
+		return nil, fmt.Errorf("threshold is larger than the number of signers")
 	}
 
-	safeAddr, ok = metadata["safe_address"].(string)
+	safeAddr, ok := metadata["safe_address"].([]byte)
 	if !ok {
-		err = fmt.Errorf("invalid safe_address")
-		return
+		return nil, fmt.Errorf("invalid safe_address")
 	}
 
-	if !ethCommon.IsHexAddress(safeAddr) {
-		err = fmt.Errorf("invalid safe_address")
+	if !ethcommon.IsHexAddress(hex.EncodeToString(safeAddr)) {
+		return nil, fmt.Errorf("invalid safe_address")
 	}
 
-	safeNonce, ok = metadata["safe_nonce"].(int64)
+	safeNonce, ok := metadata["safe_nonce"].(int64)
 	if !ok {
-		err = fmt.Errorf("invalid safe_nonce")
-		return
+		return nil, fmt.Errorf("invalid safe_nonce")
 	}
 
-	decimals64, ok := metadata["decimals"].(int64)
+	erc20Addr, ok := metadata["erc20_address"].([]byte)
 	if !ok {
-		err = fmt.Errorf("invalid decimals")
-		return
+		return nil, fmt.Errorf("invalid erc20_address")
 	}
 
-	if decimals64 <= 0 {
-		err = fmt.Errorf("decimals should be positive")
-		return
+	if !ethcommon.IsHexAddress(hex.EncodeToString(erc20Addr)) {
+		return nil, fmt.Errorf("invalid erc20_address")
 	}
 
-	if decimals64 > math.MaxUint16 {
-		err = fmt.Errorf("decimals too large")
-		return
+	decimals, ok := metadata["decimals"].(int64)
+	if !ok {
+		return nil, fmt.Errorf("invalid decimals")
 	}
 
-	decimals = uint16(decimals64)
+	if decimals <= 0 {
+		return nil, fmt.Errorf("decimals should be positive")
+	}
 
-	return
+	if decimals > math.MaxUint16 {
+		return nil, fmt.Errorf("decimals too large")
+	}
+
+	return &erc20RewardMetadata{
+		ChainID:       chainID,
+		EscrowAddress: hex.EncodeToString(contractAddr),
+		Threshold:     threshold,
+		Signers:       signers,
+		SafeAddress:   safeAddr,
+		SafeNonce:     safeNonce,
+		Erc20Address:  erc20Addr,
+		Decimals:      uint16(decimals),
+	}, nil
 }
 
 // scaleUpUint256 turns a decimal into uint256, i.e. (11.22, 4) -> 112200
@@ -533,13 +564,13 @@ func scaleDownUint256(amount *types.Decimal, decimals uint16) (*types.Decimal, e
 	return n, nil
 }
 
-func (h *Erc20RewardExt) issueReward(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+func (h *Erc20RewardExt) issueReward(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 	wallet, ok := inputs[0].(string)
 	if !ok {
 		return fmt.Errorf("invalid wallet address")
 	}
 
-	if !ethCommon.IsHexAddress(wallet) {
+	if !ethcommon.IsHexAddress(wallet) {
 		return fmt.Errorf("invalid wallet address")
 	}
 
@@ -588,7 +619,7 @@ func (h *Erc20RewardExt) issueReward(ctx *kcommon.EngineContext, app *kcommon.Ap
 }
 
 // searchRewards returns rewards between a starting height and ending height.
-func (h *Erc20RewardExt) searchRewards(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+func (h *Erc20RewardExt) searchRewards(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 	startHeight, ok := inputs[0].(int64)
 	if !ok {
 		return fmt.Errorf("invalid start height")
@@ -640,7 +671,7 @@ func (h *Erc20RewardExt) searchRewards(ctx *kcommon.EngineContext, app *kcommon.
 // but safeNonce(which could also be inferred inside the Extension, no need to be provided by caller)
 // For simplicity, we just use safeNonce tracked by extension.
 // NOTE: well, do we need to check permission? e.g., check the caller??
-func (h *Erc20RewardExt) proposeEpoch(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+func (h *Erc20RewardExt) proposeEpoch(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 	endHeight := ctx.TxContext.BlockContext.Height
 	blockHash := ctx.TxContext.BlockContext.Hash
 
@@ -702,7 +733,7 @@ func (h *Erc20RewardExt) proposeEpoch(ctx *kcommon.EngineContext, app *kcommon.A
 
 	// NOTE: we save the digest of the msg, so it's fix length
 	// well, safeTxHash should also be a fix length, we save the digest anyway.
-	signHash := ethAccounts.TextHash(safeTxHash)
+	signHash := accounts.TextHash(safeTxHash)
 
 	ctx.OverrideAuthz = true
 	defer func() { ctx.OverrideAuthz = false }()
@@ -729,7 +760,7 @@ func (h *Erc20RewardExt) proposeEpoch(ctx *kcommon.EngineContext, app *kcommon.A
 
 // listEpochs returns reward epochs starting from a given height.
 // inputs[0] is the starting height, inputs[1] is the return size and default to 10.
-func (h *Erc20RewardExt) listEpochs(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+func (h *Erc20RewardExt) listEpochs(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 	afterHeight, ok := inputs[0].(int64)
 	if !ok {
 		return fmt.Errorf("invalid after height")
@@ -773,7 +804,7 @@ func (h *Erc20RewardExt) listEpochs(ctx *kcommon.EngineContext, app *kcommon.App
 // voteEpochReward votes one epoch of rewards by providing correspond signature.
 // inputs[0] is the data digest, inputs[1] is the signature.
 // This is supposed to be called by Signer service.
-func (h *Erc20RewardExt) voteEpochReward(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+func (h *Erc20RewardExt) voteEpochReward(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 	// verify the caller is signer
 	_voter, err := meta.GetSigner(ctx, app.Engine, app.DB, ctx.TxContext.Caller, h.contractID)
 	if err != nil {
@@ -797,7 +828,7 @@ func (h *Erc20RewardExt) voteEpochReward(ctx *kcommon.EngineContext, app *kcommo
 		return fmt.Errorf("invalid signature")
 	}
 
-	caller := ethCommon.HexToAddress(ctx.TxContext.Caller)
+	caller := ethcommon.HexToAddress(ctx.TxContext.Caller)
 	err = reward.EthGnosisVerifyDigest(signature, digest, caller.Bytes())
 	if err != nil {
 		return err
@@ -811,7 +842,7 @@ func (h *Erc20RewardExt) voteEpochReward(ctx *kcommon.EngineContext, app *kcommo
 			"$signer_address": ctx.TxContext.Caller,
 			"$contract_id":    h.contractID,
 		},
-		func(row *kcommon.Row) error {
+		func(row *common.Row) error {
 			voted = true
 			return nil
 		})
@@ -853,7 +884,7 @@ func (h *Erc20RewardExt) voteEpochReward(ctx *kcommon.EngineContext, app *kcommo
 // listFinalized returns finalized rewards.
 // inputs[0] is the starting height, inputs[1] is the batch size and default to 10.
 // This is supposed to be called by Poster service.
-func (h *Erc20RewardExt) listFinalized(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+func (h *Erc20RewardExt) listFinalized(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 	afterHeight, ok := inputs[0].(int64)
 	if !ok {
 		return fmt.Errorf("invalid after height")
@@ -897,7 +928,7 @@ func (h *Erc20RewardExt) listFinalized(ctx *kcommon.EngineContext, app *kcommon.
 // latestFinalized returns latest finalized rewards.
 // inputs[0] is the size and default to 0, i.e. return the newest.
 // This is supposed to be called by Poster service.
-func (h *Erc20RewardExt) latestFinalized(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+func (h *Erc20RewardExt) latestFinalized(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 	var limit int64 = 1
 	if inputs[0] != nil {
 		var ok bool
@@ -930,17 +961,17 @@ func (h *Erc20RewardExt) latestFinalized(ctx *kcommon.EngineContext, app *kcommo
 	return nil
 }
 
-func (h *Erc20RewardExt) listWalletRewards(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+func (h *Erc20RewardExt) listWalletRewards(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 	wallet, ok := inputs[0].(string)
 	if !ok {
 		return fmt.Errorf("invalid wallet address")
 	}
 
-	if !ethCommon.IsHexAddress(wallet) {
+	if !ethcommon.IsHexAddress(wallet) {
 		return fmt.Errorf("invalid wallet address")
 	}
 
-	walletAddr := ethCommon.HexToAddress(wallet)
+	walletAddr := ethcommon.HexToAddress(wallet)
 
 	partialWrs, err := GetWalletRewards(ctx, app.Engine, app.DB, h.alias, walletAddr.String())
 	if err != nil {
@@ -992,7 +1023,7 @@ func toBytes32Str(bs []byte) string {
 // User can use the parameters directly to call the `claimReward` method on reward contract.
 // inputs[0] is the safeTxHash, inputs[1] is the user wallet address.
 // This is supposed to be called by User.
-func (h *Erc20RewardExt) getClaimParam(ctx *kcommon.EngineContext, app *kcommon.App, inputs []any, resultFn func([]any) error) error {
+func (h *Erc20RewardExt) getClaimParam(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 	signHash, ok := inputs[0].([]byte)
 	if !ok {
 		return fmt.Errorf("invalid signhash")
@@ -1007,11 +1038,11 @@ func (h *Erc20RewardExt) getClaimParam(ctx *kcommon.EngineContext, app *kcommon.
 		return fmt.Errorf("invalid wallet address")
 	}
 
-	if !ethCommon.IsHexAddress(wallet) {
+	if !ethcommon.IsHexAddress(wallet) {
 		return fmt.Errorf("invalid wallet address")
 	}
 
-	walletAddr := ethCommon.HexToAddress(wallet)
+	walletAddr := ethcommon.HexToAddress(wallet)
 
 	mTreeJson, err := GetEpochMTreeBySignhash(ctx, app.Engine, app.DB, h.alias, signHash)
 	if err != nil {

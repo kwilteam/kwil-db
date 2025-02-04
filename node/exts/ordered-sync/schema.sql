@@ -4,6 +4,7 @@ SET CURRENT NAMESPACE TO kwil_ordered_sync;
 CREATE TABLE topics (
     id UUID PRIMARY KEY,
     name TEXT UNIQUE NOT NULL,
+    resolve_func TEXT NOT NULL,
     last_processed_point int8
 );
 

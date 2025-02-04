@@ -142,6 +142,9 @@ type namespace struct {
 	namespaceType namespaceType
 	// methods is a map of methods that are available if the namespace is an extension.
 	methods map[string]precompileExecutable
+	// extensionCache is a cache of in-memory state for an extension.
+	// It can be nil if the namespace does not have an extension.
+	extCache precompiles.Cache
 }
 
 // copy creates a deep copy of the namespace.
@@ -155,6 +158,10 @@ func (n *namespace) copy() *namespace {
 		methods:            make(map[string]precompileExecutable), // we need to copy the methods as well, so shallow copy is not enough
 	}
 
+	if n.extCache != nil {
+		n2.extCache = n.extCache.Copy()
+	}
+
 	for tblName, tbl := range n.tables {
 		n2.tables[tblName] = tbl.Copy()
 	}
@@ -164,6 +171,21 @@ func (n *namespace) copy() *namespace {
 	}
 
 	return n2
+}
+
+// apply applies a previously created deep copy of the namespace.
+// The value passed from Apply will never be changed by the engine,
+func (n *namespace) apply(n2 *namespace) {
+	n.availableFunctions = n2.availableFunctions
+	n.tables = n2.tables
+	n.onDeploy = n2.onDeploy
+	n.onUndeploy = n2.onUndeploy
+	n.namespaceType = n2.namespaceType
+	n.methods = n2.methods
+
+	if n.extCache != nil {
+		n.extCache.Apply(n2.extCache)
+	}
 }
 
 type namespaceType string
@@ -465,6 +487,30 @@ func (i *baseInterpreter) copy() *baseInterpreter {
 	}
 }
 
+// apply applies a previously copied state to the interpreter.
+// It is used to roll back the interpreter to a previous state.
+func (i *baseInterpreter) apply(copied *baseInterpreter) {
+	newNamespaces := make(map[string]*namespace)
+	for k, v := range copied.namespaces {
+		// if a namespace already exists, we need to call
+		// the apply function. If it is new, we just add it.
+		toSet, ok := i.namespaces[k]
+		if ok {
+			toSet.apply(v)
+		} else {
+			toSet = v
+		}
+
+		newNamespaces[k] = toSet
+	}
+	i.namespaces = newNamespaces
+
+	i.accessController = copied.accessController
+	i.service = copied.service
+	i.validators = copied.validators
+	i.accounts = copied.accounts
+}
+
 // Execute executes a statement against the database.
 func (i *baseInterpreter) execute(ctx *common.EngineContext, db sql.DB, statement string, params map[string]any, fn func(*common.Row) error, toplevel bool) (err error) {
 	copied := i.copy()
@@ -483,8 +529,7 @@ func (i *baseInterpreter) execute(ctx *common.EngineContext, db sql.DB, statemen
 			i.syncNamespaceManager()
 		} else {
 			// rollback
-			i.namespaces = copied.namespaces
-			i.accessController = copied.accessController
+			i.apply(copied)
 		}
 	}()
 
@@ -569,10 +614,23 @@ func isValidVarName(s string) error {
 // Call executes an action against the database.
 // The resultFn is called with the result of the action, if any.
 func (i *baseInterpreter) call(ctx *common.EngineContext, db sql.DB, namespace, action string, args []any, resultFn func(*common.Row) error, toplevel bool) (callRes *common.CallResult, err error) {
+	copied := i.copy()
 	defer func() {
-		i.syncNamespaceManager()
+		noErrOrPanic := true
+		if err != nil {
+			// rollback the interpreter
+			noErrOrPanic = false
+		}
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic: %v", r)
+			noErrOrPanic = false
+		}
+
+		if noErrOrPanic {
+			i.syncNamespaceManager()
+		} else {
+			// rollback
+			i.apply(copied)
 		}
 	}()
 
