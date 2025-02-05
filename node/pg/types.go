@@ -117,8 +117,11 @@ type datatype struct {
 	// https://github.com/jackc/pglogrepl/blob/828fbfe908e97cfeb409a17e4ec339dede1f1a17/message.go#L379
 	// Every implementation must be able to handle a string "NULL".
 	SerializeChangeset func(value string) ([]byte, error)
-	// DeserializeChangeset encodes a data type from a changeset to its native Go/Kwil type.
-	// This can then be used to execute an incoming changeset against a database.
+	// DeserializeChangeset encodes a data type from a changeset to its native
+	// Go/Kwil type. This can then be used to execute an incoming changeset
+	// against a database. This does NOT match SerializeChangeset, which starts
+	// from a postgres string representation of a "tuple column", while this
+	// returns a Go type that is provided as an argument to a SQL Execute() call.
 	DeserializeChangeset func([]byte) (any, error)
 }
 
@@ -149,8 +152,9 @@ func pgNumericToDecimal(num pgtype.Numeric) (*types.Decimal, error) {
 	return types.NewDecimalFromBigInt(i, e)
 }
 
-// splitString splits a pg array of strings that may have escape sequences.
-func splitString(s string) []string {
+// pgStringArraySplit splits a pg array of strings that may have escape sequences.
+// The curlys must already be removed.
+func pgStringArraySplit(s string) []string {
 	var tokens []string
 	var token strings.Builder
 	var inQuotes, escape bool
@@ -190,7 +194,7 @@ func splitString(s string) []string {
 var (
 	textType = &datatype{
 		KwilType:       types.TextType,
-		Matches:        []reflect.Type{reflect.TypeOf("")},
+		Matches:        []reflect.Type{reflect.TypeFor[string]()},
 		OID:            func(*pgtype.Map) uint32 { return pgtype.TextOID },
 		ExtraOIDs:      []uint32{pgtype.VarcharOID},
 		EncodeInferred: defaultEncodeDecode,
@@ -199,12 +203,19 @@ var (
 			if value == `NULL` {
 				return nil, nil
 			}
+			// DeserializeChangeset will pass through any non-nil []byte as a
+			// string, the resulting variable going on to be inserted via an
+			// Execute arg. In this flow, a nil any var is a NULL value, while
+			// any other string is a non-NULL value. If we do not strip the
+			// quotes from around a string containing "NULL", a non-NULL string
+			// that is two bytes longer than the original will be inserted.
 			if value == `"NULL"` {
-				value = "NULL" // never change, postgres
+				value = `NULL` // never change, postgres
 			}
 			return []byte(value), nil
 		},
 		DeserializeChangeset: func(b []byte) (any, error) {
+			// Only nil represents a NULL value. An empty slice is an empty string.
 			if b == nil {
 				return nil, nil
 			}
@@ -214,10 +225,10 @@ var (
 
 	textArrayType = &datatype{
 		KwilType:       types.TextArrayType,
-		Matches:        []reflect.Type{reflect.TypeOf([]string{})},
+		Matches:        []reflect.Type{reflect.TypeFor[[]string](), reflect.TypeFor[[]*string]()},
 		OID:            func(*pgtype.Map) uint32 { return pgtype.TextArrayOID },
 		EncodeInferred: defaultEncodeDecode,
-		Decode:         decodeArray[string](textType.Decode),
+		Decode:         decodePtrArray[string](textType.Decode),
 		SerializeChangeset: func(value string) ([]byte, error) {
 			// text arrays are delimited by commas, so we need to split on commas.
 			// We also need to ensure that the commas
@@ -227,7 +238,7 @@ var (
 				return nil, fmt.Errorf("invalid text array: %s", value)
 			}
 
-			strs := splitString(value)
+			strs := pgStringArraySplit(value)
 
 			return serializeArray(strs, 4, textType.SerializeChangeset)
 		},
@@ -236,8 +247,10 @@ var (
 
 	// we intentionally ignore uint8, since we don't want to cause issues with []byte.
 	intType = &datatype{
-		KwilType:       types.IntType,
-		Matches:        []reflect.Type{reflect.TypeOf(int(0)), reflect.TypeOf(int8(0)), reflect.TypeOf(int16(0)), reflect.TypeOf(int32(0)), reflect.TypeOf(int64(0)), reflect.TypeOf(uint(0)), reflect.TypeOf(uint16(0)), reflect.TypeOf(uint32(0)), reflect.TypeOf(uint64(0))},
+		KwilType: types.IntType,
+		Matches: []reflect.Type{reflect.TypeOf(int(0)), reflect.TypeOf(int8(0)), reflect.TypeOf(int16(0)),
+			reflect.TypeOf(int32(0)), reflect.TypeOf(int64(0)), reflect.TypeOf(uint(0)), reflect.TypeOf(uint16(0)),
+			reflect.TypeOf(uint32(0)), reflect.TypeOf(uint64(0))},
 		OID:            func(*pgtype.Map) uint32 { return pgtype.Int8OID },
 		ExtraOIDs:      []uint32{pgtype.Int2OID, pgtype.Int4OID},
 		EncodeInferred: defaultEncodeDecode,
@@ -265,17 +278,24 @@ var (
 			if len(b) == 0 {
 				return nil, nil
 			}
+			if len(b) != 8 {
+				return nil, fmt.Errorf("invalid int64: %s", b)
+			}
 			return int64(binary.LittleEndian.Uint64(b)), nil
 		},
 	}
 
 	intArrayType = &datatype{
-		KwilType:             types.IntArrayType,
-		Matches:              []reflect.Type{reflect.TypeOf([]int{}), reflect.TypeOf([]int8{}), reflect.TypeOf([]int16{}), reflect.TypeOf([]int32{}), reflect.TypeOf([]int64{}), reflect.TypeOf([]uint{}), reflect.TypeOf([]uint16{}), reflect.TypeOf([]uint32{}), reflect.TypeOf([]uint64{})},
+		KwilType: types.IntArrayType,
+		Matches: []reflect.Type{reflect.TypeOf([]int{}), reflect.TypeOf([]int8{}), reflect.TypeOf([]int16{}),
+			reflect.TypeOf([]int32{}), reflect.TypeOf([]int64{}), reflect.TypeOf([]uint{}), reflect.TypeOf([]uint16{}),
+			reflect.TypeOf([]uint32{}), reflect.TypeOf([]uint64{}), reflect.TypeOf([]*int{}), reflect.TypeOf([]*int8{}),
+			reflect.TypeOf([]*int16{}), reflect.TypeOf([]*int32{}), reflect.TypeOf([]*int64{}), reflect.TypeOf([]*uint{}),
+			reflect.TypeOf([]*uint16{}), reflect.TypeOf([]*uint32{}), reflect.TypeOf([]*uint64{})},
 		OID:                  func(*pgtype.Map) uint32 { return pgtype.Int8ArrayOID },
 		ExtraOIDs:            []uint32{pgtype.Int2ArrayOID, pgtype.Int4ArrayOID},
 		EncodeInferred:       defaultEncodeDecode,
-		Decode:               decodeArray[int64](intType.Decode),
+		Decode:               decodePtrArray[int64](intType.Decode),
 		SerializeChangeset:   arrayFromChildFunc(1, intType.SerializeChangeset),
 		DeserializeChangeset: deserializeArrayFn[int64](1, intType.DeserializeChangeset),
 	}
@@ -308,10 +328,10 @@ var (
 
 	boolArrayType = &datatype{
 		KwilType:             types.BoolArrayType,
-		Matches:              []reflect.Type{reflect.TypeOf([]bool{})},
+		Matches:              []reflect.Type{reflect.TypeOf([]bool{}), reflect.TypeOf([]*bool{})},
 		OID:                  func(*pgtype.Map) uint32 { return pgtype.BoolArrayOID },
 		EncodeInferred:       defaultEncodeDecode,
-		Decode:               decodeArray[bool](boolType.Decode),
+		Decode:               decodePtrArray[bool](boolType.Decode),
 		SerializeChangeset:   arrayFromChildFunc(1, boolType.SerializeChangeset),
 		DeserializeChangeset: deserializeArrayFn[bool](1, boolType.DeserializeChangeset),
 	}
@@ -339,7 +359,7 @@ var (
 			return hex.DecodeString(value[2:])
 		},
 		DeserializeChangeset: func(b []byte) (any, error) {
-			if len(b) == 0 {
+			if b == nil {
 				return nil, nil
 			}
 			return b, nil
@@ -348,10 +368,10 @@ var (
 
 	blobArrayType = &datatype{
 		KwilType:       types.ByteaArrayType,
-		Matches:        []reflect.Type{reflect.TypeOf([][]byte{})},
+		Matches:        []reflect.Type{reflect.TypeFor[[][]byte]()},
 		OID:            func(*pgtype.Map) uint32 { return pgtype.ByteaArrayOID },
 		EncodeInferred: defaultEncodeDecode,
-		Decode:         decodeArray[[]byte](blobType.Decode),
+		Decode:         decodeValueArray[[]byte](blobType.Decode),
 		SerializeChangeset: func(value string) ([]byte, error) {
 			// postgres wraps each hex encoded blob in double quotes, so we need to remove them
 			var ok bool
@@ -365,6 +385,7 @@ var (
 
 			bts := make([][]byte, len(vals))
 			for i, v := range vals {
+				// this has null handling up here instead of in the blobType.SerializeChangeset
 				if v == `NULL` {
 					continue
 				}
@@ -403,7 +424,7 @@ var (
 
 	uuidType = &datatype{
 		KwilType: types.UUIDType,
-		Matches:  []reflect.Type{reflect.TypeOf(types.NewUUIDV5([]byte{})), reflect.TypeOf(*types.NewUUIDV5([]byte{}))},
+		Matches:  []reflect.Type{reflect.TypeFor[types.UUID](), reflect.TypeFor[*types.UUID]()},
 		OID:      func(*pgtype.Map) uint32 { return pgtype.UUIDOID },
 		EncodeInferred: func(v any) (any, error) {
 			var val *types.UUID
@@ -412,8 +433,17 @@ var (
 				val = &v
 			case *types.UUID:
 				val = v
+			case nil:
+				return pgtype.UUID{
+					Valid: false,
+				}, nil
 			default:
-				panic("unreachable")
+				return nil, fmt.Errorf("unexpected type encoding uuid %T", v)
+			}
+			if val == nil {
+				return pgtype.UUID{
+					Valid: false,
+				}, nil
 			}
 
 			return pgtype.UUID{
@@ -425,9 +455,14 @@ var (
 			var u types.UUID
 			switch v := v.(type) {
 			case pgtype.UUID:
+				if !v.Valid { // also shouldn't ever happen with current uuid-ossp
+					return nil, nil
+				}
 				u = types.UUID(v.Bytes)
 			case [16]byte:
 				u = types.UUID(v)
+			case nil: // this won't happen unless uuid-ossp starts supporting NULL
+				return nil, nil
 			default:
 				return nil, fmt.Errorf("unexpected type decoding uuid %T", v)
 			}
@@ -447,6 +482,9 @@ var (
 			if len(b) == 0 {
 				return nil, nil
 			}
+			if len(b) != len(types.UUID{}) {
+				return nil, fmt.Errorf("invalid uuid length: %d", len(b))
+			}
 			u := types.UUID(b)
 			return &u, nil
 		},
@@ -454,11 +492,16 @@ var (
 
 	uuidArrayType = &datatype{
 		KwilType: types.UUIDArrayType,
-		Matches:  []reflect.Type{reflect.TypeOf(types.UUIDArray{})},
+		Matches:  []reflect.Type{reflect.TypeOf(types.UUIDArray{}), reflect.TypeOf([]*types.UUID{})},
 		OID:      func(*pgtype.Map) uint32 { return pgtype.UUIDArrayOID },
 		EncodeInferred: func(v any) (any, error) {
-			val, ok := v.(types.UUIDArray)
-			if !ok {
+			var val types.UUIDArray
+			switch v := v.(type) {
+			case types.UUIDArray:
+				val = v
+			case []*types.UUID:
+				val = types.UUIDArray(v)
+			default:
 				return nil, fmt.Errorf("expected UUIDArray, got %T", v)
 			}
 
@@ -481,9 +524,15 @@ var (
 
 			vals := make(types.UUIDArray, len(arr))
 			for i, v := range arr {
+				if v == nil {
+					continue // leave nil, but uuid-ossp doesn't support NULL
+				}
 				val, err := uuidType.Decode(v)
 				if err != nil {
 					return nil, err
+				}
+				if val == nil {
+					continue // leave nil
 				}
 				vals[i] = val.(*types.UUID)
 			}
@@ -491,12 +540,12 @@ var (
 			return vals, nil
 		},
 		SerializeChangeset:   arrayFromChildFunc(1, uuidType.SerializeChangeset),
-		DeserializeChangeset: deserializeArrayFn[*types.UUID](1, uuidType.DeserializeChangeset),
+		DeserializeChangeset: deserializeArrayFn[types.UUID](1, uuidType.DeserializeChangeset),
 	}
 
 	decimalType = &datatype{
 		KwilType: types.NumericType,
-		Matches:  []reflect.Type{reflect.TypeOf(types.Decimal{}), reflect.TypeOf(&types.Decimal{})},
+		Matches:  []reflect.Type{reflect.TypeFor[types.Decimal](), reflect.TypeFor[*types.Decimal]()},
 		OID:      func(*pgtype.Map) uint32 { return pgtype.NumericOID },
 		EncodeInferred: func(v any) (any, error) {
 			var dec *types.Decimal
@@ -505,8 +554,18 @@ var (
 				dec = &v
 			case *types.Decimal:
 				dec = v
+			case nil:
+				return pgtype.Numeric{
+					Valid: false,
+				}, nil
 			default:
 				return nil, fmt.Errorf("unexpected type encoding decimal %T", v)
+			}
+
+			if dec == nil {
+				return pgtype.Numeric{
+					Valid: false,
+				}, nil
 			}
 
 			return pgtype.Numeric{
@@ -545,14 +604,18 @@ var (
 
 	decimalArrayType = &datatype{
 		KwilType: types.NumericArrayType,
-		Matches:  []reflect.Type{reflect.TypeOf(types.DecimalArray{})},
+		Matches:  []reflect.Type{reflect.TypeOf(types.DecimalArray{}), reflect.TypeOf([]*types.Decimal{})},
 		OID:      func(*pgtype.Map) uint32 { return pgtype.NumericArrayOID },
 		EncodeInferred: func(v any) (any, error) {
-			val, ok := v.(types.DecimalArray)
-			if !ok {
-				return nil, fmt.Errorf("expected DecimalArray, got %T", v)
+			var val types.DecimalArray
+			switch vt := v.(type) {
+			case types.DecimalArray:
+				val = vt
+			case []*types.Decimal:
+				val = vt
+			default:
+				return nil, fmt.Errorf("unexpected type encoding decimal array %T", v)
 			}
-
 			var arr []pgtype.Numeric
 			for _, d := range val {
 				v2, err := decimalType.EncodeInferred(d)
@@ -572,6 +635,9 @@ var (
 
 			vals := make(types.DecimalArray, len(arr))
 			for i, v := range arr {
+				if v == nil {
+					continue // leave nil
+				}
 				val, err := decimalType.Decode(v)
 				if err != nil {
 					return nil, err
@@ -582,7 +648,7 @@ var (
 			return vals, nil
 		},
 		SerializeChangeset:   arrayFromChildFunc(2, decimalType.SerializeChangeset),
-		DeserializeChangeset: deserializeArrayFn[*types.Decimal](2, decimalType.DeserializeChangeset),
+		DeserializeChangeset: deserializeArrayFn[types.Decimal](2, decimalType.DeserializeChangeset),
 	}
 )
 
@@ -590,10 +656,43 @@ var (
 // It simply returns the value as is, without any modifications.
 func defaultEncodeDecode(v any) (any, error) { return v, nil }
 
-// decodeArrayFn creates a function that decodes an array of a given type.
-// it takes a generic for the target scalar type, as well as a decode function
-// for the scalar type.
-func decodeArray[T any](decode func(any) (any, error)) func(any) (any, error) {
+// decodePtrArray creates a function that decodes an array of a given type. it
+// takes a generic for the target scalar type, as well as a decode function for
+// the scalar type. The first return of the returned function is a []*T, which
+// allows to represent NULL values.
+func decodePtrArray[T any](decode func(any) (any, error)) func(any) (any, error) {
+	return func(a any) (any, error) {
+		arr, ok := a.([]any) // pgx always returns arrays as []any
+		if !ok {
+			return nil, fmt.Errorf("expected []any, got %T", a)
+		}
+
+		vals := make([]*T, len(arr))
+		for i, v := range arr {
+			if v == nil {
+				continue // leaving it as nil
+			}
+			val, err := decode(v)
+			if err != nil {
+				return nil, err
+			}
+
+			if val == nil {
+				continue // leaving it as nil
+			}
+
+			switch vt := val.(type) {
+			case *T:
+				vals[i] = vt
+			case T:
+				vals[i] = &vt
+			}
+		}
+
+		return vals, nil
+	}
+}
+func decodeValueArray[T any](decode func(any) (any, error)) func(any) (any, error) {
 	return func(a any) (any, error) {
 		arr, ok := a.([]any) // pgx always returns arrays as []any
 		if !ok {
@@ -608,7 +707,7 @@ func decodeArray[T any](decode func(any) (any, error)) func(any) (any, error) {
 			}
 
 			if val == nil {
-				continue // leaving it as nil / zero value
+				continue // leaving it as the zero value
 			}
 
 			vals[i] = val.(T)
@@ -796,7 +895,13 @@ func serializeArray[T any](arr []T, lengthSize uint8, serialize func(T) ([]byte,
 		if err != nil {
 			return nil, err
 		}
+		if encoded == nil {
+			buf = append(buf, 0x00) // signals NULL
+			continue
+		}
 
+		// 1 byte for the NULL flag
+		buf = append(buf, 0x01) // remember: deserialize funcs must match
 		buf = append(buf, encodeLength(len(encoded))...)
 		buf = append(buf, encoded...)
 	}
@@ -808,7 +913,7 @@ func serializeArray[T any](arr []T, lengthSize uint8, serialize func(T) ([]byte,
 // It takes a function that deserializes the scalar values from []byte.
 // it is the inverse of serializeArray. lengthSize must be 1, 2, or 4,
 // corresponding to 8-bit, 16-bit, and 32-bit lengths.
-func deserializeArray[T any](buf []byte, lengthSize uint8, deserialize func([]byte) (any, error)) ([]T, error) {
+func deserializePtrArray[T any](buf []byte, lengthSize uint8, deserialize func([]byte) (any, error)) ([]*T, error) {
 	// the lengthSize thing might be a bit overkill, but it is very encapsulated so
 	// I'll keep it for now, since it can help decrease the size of the changeset that
 	// a network has to process.
@@ -825,8 +930,20 @@ func deserializeArray[T any](buf []byte, lengthSize uint8, deserialize func([]by
 		}
 	}
 
-	var arr []T
+	var arr []*T
 	for len(buf) > 0 {
+		// read the NULL flag
+		var flag byte
+		flag, buf = buf[0], buf[1:]
+		if flag == 0 {
+			arr = append(arr, nil)
+			continue
+		}
+
+		if len(buf) < int(lengthSize) {
+			return nil, errors.New("invalid array: not enough bytes for length")
+		}
+
 		length, rest := determineLength(buf)
 
 		v, err := deserialize(rest[:length])
@@ -834,7 +951,21 @@ func deserializeArray[T any](buf []byte, lengthSize uint8, deserialize func([]by
 			return nil, err
 		}
 
-		arr = append(arr, v.(T))
+		// Support deserialize returning either value or pointer to T.
+		switch vt := v.(type) {
+		case T:
+			arr = append(arr, &vt)
+		case *T:
+			arr = append(arr, vt)
+		case nil: // untyped nil
+			arr = append(arr, nil)
+			// NOTE: if used with serializeArray and a well behaved serialize
+			// function provided to it, which should return a nil interface{}
+			// rather than a typed nil, we would have hit a null flag above.
+		default:
+			return nil, fmt.Errorf("invalid type %T", v)
+		}
+
 		buf = rest[length:]
 	}
 
@@ -857,10 +988,12 @@ func arrayFromChildFunc(size uint8, serialize func(string) ([]byte, error)) func
 	}
 }
 
-// deserializeArrayFn returns a function that deserializes an array of some type from a serialized array.
-// It is the logical inverse of arrayFromChildFunc.
+// deserializeArrayFn returns a function that deserializes an array of some type
+// from a serialized array. It is the logical inverse of arrayFromChildFunc. The
+// any return from the returned function will be a []*T (slice of pointers to T).
+// See deserializePtrArray. This is required to support a NULL value within the array.
 func deserializeArrayFn[T any](size uint8, deserialize func([]byte) (any, error)) func([]byte) (any, error) {
 	return func(b []byte) (any, error) {
-		return deserializeArray[T](b, size, deserialize)
+		return deserializePtrArray[T](b, size, deserialize)
 	}
 }

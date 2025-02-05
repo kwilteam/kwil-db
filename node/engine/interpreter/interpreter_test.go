@@ -796,8 +796,8 @@ func Test_Roundtrip(t *testing.T) {
 			value:    true,
 		},
 		{
-			name:     "decimal",
-			datatype: "DECIMAL(70,5)",
+			name:     "numeric",
+			datatype: "numeric(70,5)",
 			value:    mustExplicitDecimal("100.101", 70, 5),
 		},
 		{
@@ -818,7 +818,7 @@ func Test_Roundtrip(t *testing.T) {
 		{
 			name:     "text_array",
 			datatype: "TEXT[]",
-			value:    append(ptrArr("hello", "world", "NULL"), nil),
+			value:    append(ptrArr("hello", "", `"actualquotes"`, "world", "NULL"), nil),
 		},
 		{
 			name:     "bool_array",
@@ -826,8 +826,8 @@ func Test_Roundtrip(t *testing.T) {
 			value:    append(ptrArr(true, false), nil),
 		},
 		{
-			name:     "decimal_array",
-			datatype: "DECIMAL(70,5)[]",
+			name:     "numeric_array",
+			datatype: "numeric(70,5)[]",
 			value:    append([]*types.Decimal{mustExplicitDecimal("100.101", 70, 5), mustExplicitDecimal("200.202", 70, 5)}, nil),
 		},
 		{
@@ -838,7 +838,7 @@ func Test_Roundtrip(t *testing.T) {
 		{
 			name:     "bytea_array",
 			datatype: "BYTEA[]",
-			value:    append(ptrArr([]byte("hello"), []byte("world")), nil),
+			value:    append(ptrArr([]byte("hello"), []byte{}, []byte("world")), nil),
 		},
 	}
 

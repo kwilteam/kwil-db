@@ -7,6 +7,56 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func Test_ArrayEncodeDecodeNULLs(t *testing.T) {
+	arr := []string{"a", "b", "c", "NULL"}
+	res, err := serializeArray(arr, 4, func(s string) ([]byte, error) {
+		if s == "NULL" {
+			return nil, nil
+		}
+		return []byte(s), nil
+	})
+	require.NoError(t, err)
+
+	// use deserializePtrArray to handle NULL values
+	res2, err := deserializePtrArray[string](res, 4, func(b []byte) (any, error) {
+		if b == nil {
+			return nil, nil
+		}
+		return string(b), nil
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, len(arr), len(res2))
+
+	for i := range res2 {
+		if res2[i] == nil {
+			require.Equal(t, arr[i], "NULL")
+			continue
+		}
+
+		require.Equal(t, arr[i], *res2[i])
+	}
+}
+
+// don't use this in product code, it doesn't handle NULL values.
+// this is only a test helper when not testing arrays with NULLs.
+func deserializeTestArray[T any](buf []byte, lengthSize uint8, deserialize func([]byte) (any, error)) ([]T, error) {
+	ptrs, err := deserializePtrArray[T](buf, lengthSize, deserialize)
+	if err != nil {
+		return nil, err
+	}
+	var vals []T
+	for _, ptr := range ptrs {
+		if ptr == nil {
+			var vt T
+			vals = append(vals, vt)
+		} else {
+			vals = append(vals, *ptr)
+		}
+	}
+	return vals, nil
+}
+
 func Test_ArrayEncodeDecode(t *testing.T) {
 	arr := []string{"a", "b", "c"}
 	res, err := serializeArray(arr, 4, func(s string) ([]byte, error) {
@@ -14,7 +64,7 @@ func Test_ArrayEncodeDecode(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	res2, err := deserializeArray[string](res, 4, func(b []byte) (any, error) {
+	res2, err := deserializeTestArray[string](res, 4, func(b []byte) (any, error) {
 		return string(b), nil
 	})
 	require.NoError(t, err)
@@ -29,15 +79,13 @@ func Test_ArrayEncodeDecode(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	res3, err := deserializeArray[int64](res, 1, func(b []byte) (any, error) {
+	res3, err := deserializeTestArray[int64](res, 1, func(b []byte) (any, error) {
 		return int64(binary.LittleEndian.Uint64(b)), nil
 	})
 	require.NoError(t, err)
 
 	require.EqualValues(t, arr2, res3)
 }
-
-// TODO: the SerializeChangeset and DeserializeChangeset functions are not tested
 
 func TestSplitString(t *testing.T) {
 	tests := []struct {
@@ -99,7 +147,7 @@ func TestSplitString(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result := splitString(tt.input)
+			result := pgStringArraySplit(tt.input)
 			require.Equal(t, tt.expected, result)
 		})
 	}
