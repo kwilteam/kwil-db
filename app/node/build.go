@@ -26,23 +26,23 @@ import (
 	"github.com/kwilteam/kwil-db/node/consensus"
 	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/engine/interpreter"
+	_ "github.com/kwilteam/kwil-db/node/exts/erc20reward"
 	"github.com/kwilteam/kwil-db/node/listeners"
 	"github.com/kwilteam/kwil-db/node/mempool"
 	"github.com/kwilteam/kwil-db/node/meta"
 	"github.com/kwilteam/kwil-db/node/migrations"
 	"github.com/kwilteam/kwil-db/node/pg"
-	"github.com/kwilteam/kwil-db/node/snapshotter"
-	"github.com/kwilteam/kwil-db/node/store"
-	"github.com/kwilteam/kwil-db/node/txapp"
-	"github.com/kwilteam/kwil-db/node/types/sql"
-	"github.com/kwilteam/kwil-db/node/voting"
-
-	_ "github.com/kwilteam/kwil-db/node/exts/erc20reward"
+	signersvc "github.com/kwilteam/kwil-db/node/services/erc20signersvc"
 	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/node/services/jsonrpc/adminsvc"
 	"github.com/kwilteam/kwil-db/node/services/jsonrpc/chainsvc"
 	"github.com/kwilteam/kwil-db/node/services/jsonrpc/funcsvc"
 	"github.com/kwilteam/kwil-db/node/services/jsonrpc/usersvc"
+	"github.com/kwilteam/kwil-db/node/snapshotter"
+	"github.com/kwilteam/kwil-db/node/store"
+	"github.com/kwilteam/kwil-db/node/txapp"
+	"github.com/kwilteam/kwil-db/node/types/sql"
+	"github.com/kwilteam/kwil-db/node/voting"
 )
 
 func buildServer(ctx context.Context, d *coreDependencies) *server {
@@ -95,6 +95,9 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 
 	// Consensus
 	ce := buildConsensusEngine(ctx, d, db, mp, bs, bp)
+
+	// Erc20 reward signer service
+	erc20RWSignerMgr := buildErc20RWignerMgr(d)
 
 	// Node
 	node := buildNode(d, mp, bs, ce, snapshotStore, db, bp, p2pSvc)
@@ -155,6 +158,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 		jsonRPCAdminServer: jsonRPCAdminServer,
 		dbCtx:              db,
 		log:                d.logger,
+		erc20RWSigner:      erc20RWSignerMgr,
 	}
 
 	return s
@@ -502,6 +506,42 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB,
 	}
 
 	return ce
+}
+
+func buildErc20RWignerMgr(d *coreDependencies) *signersvc.ServiceMgr {
+	cfg := d.cfg.Erc20RWSigner
+	if !cfg.Enable {
+		return nil
+	}
+
+	if err := cfg.Validate(); err != nil {
+		failBuild(err, "invalid erc20 reward signer config")
+	}
+
+	// create shared state
+	stateFile := signersvc.StateFilePath(d.rootDir)
+
+	if !fileExists(stateFile) {
+		emptyFile, err := os.Create(stateFile)
+		if err != nil {
+			failBuild(err, "Failed to create erc20 reward signer state file")
+		}
+		_ = emptyFile.Close()
+	}
+
+	state, err := signersvc.LoadStateFromFile(stateFile)
+	if err != nil {
+		failBuild(err, "Failed to load erc20 reward signer state file")
+	}
+
+	rpcUrl := "http://" + d.cfg.RPC.ListenAddress
+
+	mgr, err := signersvc.NewServiceMgr(rpcUrl, cfg.Targets, cfg.EthRpcs, cfg.PrivateKeys, time.Duration(cfg.SyncEvery), state, d.logger.New("EVMRW"))
+	if err != nil {
+		failBuild(err, "Failed to create erc20 reward signer service manager")
+	}
+
+	return mgr
 }
 
 func buildNode(d *coreDependencies, mp *mempool.Mempool, bs *store.BlockStore,

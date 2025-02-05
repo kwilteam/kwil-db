@@ -73,11 +73,11 @@ tasks:
     generates:
       - .build/kwild
 
-  generate:grammar:
-    desc: Generate the kuneiform grammar go code.
+  gen:abi: # TODO: merge with brennan's
+    desc: Generate abis
     cmds:
-      - rm -rf node/engine/parse/gen/*
-      - cd node/engine/parse/grammar && ./generate.sh
+      - abigen --abi=./node/services/erc20signersvc/abigen/safe_abi.json --pkg abigen --out=./node/services/erc20signersvc/abigen/safe.go --type Safe
+      - abigen --abi=./node/services/erc20signersvc/abigen/multicall3_abi.json --pkg abigen --out=./node/services/erc20signersvc/abigen/multicall3.go --type Multicall3
 
   generate:docs:
     desc: Generate docs for CLIs

@@ -505,7 +505,7 @@ func init() {
 						},
 						Returns: &precompiles.MethodReturn{
 							Fields: []precompiles.PrecompileValue{
-								{Name: "chain", Type: types.TextType},
+								{Name: "chain_id", Type: types.TextType},
 								{Name: "escrow", Type: types.TextType},
 								{Name: "epoch_period", Type: types.TextType},
 								{Name: "erc20", Type: types.TextType, Nullable: true},
@@ -820,11 +820,15 @@ func init() {
 						},
 					},
 					{
-						// lists epochs that have not been confirmed yet, but have been ended.
-						// It lists them in ascending order (e.g. oldest first).
-						Name: "list_unconfirmed_epochs",
+						// lists epochs after(non-include) given height, in ASC order.
+						// If confirmedOnly is true, only returns confirmed epochs.
+						// NOTE: only unfirmed epoch will return voters and vote_nonces
+						Name: "list_epochs",
 						Parameters: []precompiles.PrecompileValue{
 							{Name: "id", Type: types.UUIDType},
+							{Name: "after", Type: types.IntType},
+							{Name: "limit", Type: types.IntType},
+							{Name: "confirmed_only", Type: types.BoolType},
 						},
 						Returns: &precompiles.MethodReturn{
 							IsTable: true,
@@ -835,13 +839,18 @@ func init() {
 								{Name: "end_height", Type: types.IntType},
 								{Name: "reward_root", Type: types.ByteaType},
 								{Name: "end_block_hash", Type: types.ByteaType},
+								{Name: "voters", Type: types.TextArrayType},
+								{Name: "vote_nonces", Type: types.IntType},
 							},
 						},
 						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
 						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 							id := inputs[0].(*types.UUID)
+							after := inputs[1].(int64)
+							limit := inputs[2].(int64)
+							confirmedOnly := inputs[3].(bool)
 
-							return getUnconfirmedEpochs(ctx.TxContext.Ctx, app, id, func(e *Epoch) error {
+							return getEpochs(ctx.TxContext.Ctx, app, id, after, limit, confirmedOnly, func(e *Epoch) error {
 								return resultFn([]any{e.ID, e.StartHeight, e.StartTime.Unix(), *e.EndHeight, e.Root, e.BlockHash})
 							})
 						},
@@ -989,22 +998,63 @@ func init() {
 					// 			return errors.New("propose_epoch can only be called by the Kwil network")
 					// 		}
 
-					// 		panic("finish me")
-					// 	},
-					// },
-					// {
-					// 	// Supposed to be called by a multisig signer
-					// 	Name: "vote_epoch",
-					// 	Parameters: []precompiles.PrecompileValue{
-					// 		{Name: "id", Type: types.UUIDType},
-					// 		{Name: "sign_hash", Type: types.ByteaType},
-					// 		{Name: "signatures", Type: types.ByteaType},
-					// 	},
-					// 	AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
-					// 	Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
-					// 		panic("finish me")
-					// 	},
-					// },
+					{
+						// Supposed to be called by the SignerService, to verify the reward root.
+						Name: "get_epoch_rewards",
+						Parameters: []precompiles.PrecompileValue{
+							{Name: "id", Type: types.UUIDType},
+							{Name: "epoch_id", Type: types.UUIDType},
+						},
+						Returns: &precompiles.MethodReturn{
+							IsTable: true,
+							Fields: []precompiles.PrecompileValue{
+								{Name: "recipient", Type: types.TextType},
+								{Name: "amount", Type: types.TextType},
+							},
+						},
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+							//id := inputs[0].(*types.UUID)
+							epochID := inputs[1].(*types.UUID)
+							return getRewardsForEpoch(ctx.TxContext.Ctx, app, epochID, func(reward *EpochReward) error {
+								return resultFn([]any{reward.Recipient.String(), reward.Amount.String()})
+							})
+						},
+					},
+					{
+						// Supposed to be called by a multisig signer
+						Name: "vote_epoch",
+						Parameters: []precompiles.PrecompileValue{
+							{Name: "id", Type: types.UUIDType},
+							{Name: "epoch_id", Type: types.UUIDType},
+							{Name: "signature", Type: types.ByteaType},
+						},
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+							//id := inputs[0].(*types.UUID)
+							epochID := inputs[1].(*types.UUID)
+							signature := inputs[2].([]byte)
+
+							if len(signature) != reward.GnosisSafeSigLength {
+								return fmt.Errorf("signature is not 65 bytes")
+							}
+
+							from, err := ethAddressFromHex(ctx.TxContext.Caller)
+							if err != nil {
+								return err
+							}
+
+							confirmed, err := epochConfirmed(ctx.TxContext.Ctx, app, epochID)
+							if err != nil {
+								return fmt.Errorf("check epoch is confirmed: %w", err)
+							}
+
+							if confirmed {
+								return fmt.Errorf("epoch is already confirmed")
+							}
+
+							return voteEpoch(ctx.TxContext.Ctx, app, epochID, from, signature)
+						},
+					},
 					// {
 					// 	// Lists all epochs that have received enough votes
 					// 	Name: "list_finalized",
@@ -1097,7 +1147,11 @@ func init() {
 				return nil
 			}
 
-			rewards, err := getRewardsForEpoch(ctx, app, info.currentEpoch.ID)
+			var rewards []*EpochReward
+			err := getRewardsForEpoch(ctx, app, info.currentEpoch.ID, func(reward *EpochReward) error {
+				rewards = append(rewards, reward)
+				return nil
+			})
 			if err != nil {
 				return err
 			}
@@ -1279,12 +1333,18 @@ func (p *PendingEpoch) copy() *PendingEpoch {
 	}
 }
 
+type EpochVoteInfo struct {
+	Voters     []ethcommon.Address
+	VoteNonces []int64
+}
+
 // Epoch is a period in which rewards are distributed.
 type Epoch struct {
 	PendingEpoch
 	EndHeight *int64 // nil if not finalized
 	BlockHash []byte // hash of the block that finalized the epoch, nil if not finalized
 	Root      []byte // merkle root of all rewards, nil if not finalized
+	EpochVoteInfo
 }
 
 type extensionInfo struct {

@@ -5,11 +5,13 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
+	signersvc "github.com/kwilteam/kwil-db/node/services/erc20signersvc"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
+	"time"
 
 	"github.com/kwilteam/kwil-db/app/key"
 	"github.com/kwilteam/kwil-db/config"
@@ -43,6 +45,7 @@ type server struct {
 	listeners          *listeners.ListenerManager
 	jsonRPCServer      *rpcserver.Server
 	jsonRPCAdminServer *rpcserver.Server
+	erc20RWSigner      *signersvc.ServiceMgr
 }
 
 func runNode(ctx context.Context, rootDir string, cfg *config.Config, autogen bool, dbOwner string) (err error) {
@@ -258,6 +261,15 @@ func (s *server) Start(ctx context.Context) error {
 		return s.listeners.Start()
 	})
 	s.log.Info("listener manager started")
+
+	// Start erc20 reward signer svc
+	if s.erc20RWSigner != nil {
+		// a naive way to wait for the RPC service is running, should be fine
+		time.Sleep(time.Second * 3)
+		group.Go(func() error {
+			return s.erc20RWSigner.Start(groupCtx)
+		})
+	}
 
 	// TODO: node is starting the consensus engine for ease of testing
 	// Start the consensus engine

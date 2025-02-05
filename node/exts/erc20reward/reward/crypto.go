@@ -23,6 +23,8 @@ const ContractABI = `[{"name":"postReward","type":"function","inputs":[{"name":"
 {"name":"updatePosterFee","type":"function","inputs":[{"name":"newFee","type":"uint256"}],"outputs":[]},
 {"name":"rewardPoster","type":"function","inputs":[{"name":"root","type":"bytes32"}],"outputs":[{"name":"","type":"address"}]}]`
 
+const GnosisSafeSigLength = ethCrypto.SignatureLength
+
 func GenPostRewardTxData(root []byte, amount *big.Int) ([]byte, error) {
 	// Parse the ABI
 	parsedABI, err := ethAbi.JSON(strings.NewReader(ContractABI))
@@ -45,16 +47,16 @@ func GenPostRewardTxData(root []byte, amount *big.Int) ([]byte, error) {
 
 // GenGnosisSafeTx returns a safe tx, and the tx hash to be used to generate signature.
 // More info: https://docs.safe.global/sdk/protocol-kit/guides/signatures/transactions
-// Since Gnosis 1.3.0, ChainId is a part of the EIP-712 domain.
-func GenGnosisSafeTx(to, safe string, value int64, data hexutil.Bytes, chainID int64,
-	nonce int64) (*core.GnosisSafeTx, []byte, error) {
+// Since Gnosis 1.3.0, ChainID is a part of the EIP-712 domain.
+func GenGnosisSafeTx(to, safe string, value int64, data hexutil.Bytes, chainID math.HexOrDecimal256,
+	nonce big.Int) (*core.GnosisSafeTx, []byte, error) {
 	gnosisSafeTx := core.GnosisSafeTx{
 		To:        ethCommon.NewMixedcaseAddress(ethCommon.HexToAddress(to)),
 		Value:     *math.NewDecimal256(value),
 		Data:      &data,
 		Operation: 0, // Call
 
-		ChainId: math.NewHexOrDecimal256(chainID),
+		ChainId: &chainID,
 		Safe:    ethCommon.NewMixedcaseAddress(ethCommon.HexToAddress(safe)),
 
 		// NOTE: we ignore all those parameters since we're generating off-chain
@@ -66,7 +68,7 @@ func GenGnosisSafeTx(to, safe string, value int64, data hexutil.Bytes, chainID i
 		//SafeTxGas:      big.Int{},
 		//SafeTxGas:      *big.NewInt(*safeTxGas),
 
-		Nonce: *big.NewInt(nonce),
+		Nonce: nonce,
 
 		// not sure what's the purpose of this field
 		InputExpHash: ethCommon.Hash{},
@@ -136,9 +138,9 @@ func EthGnosisSignDigest(digest []byte, key *ecdsa.PrivateKey) ([]byte, error) {
 
 func EthGnosisVerifyDigest(sig []byte, digest []byte, address []byte) error {
 	// signature is 65 bytes, [R || S || V] format
-	if len(sig) != ethCrypto.SignatureLength {
+	if len(sig) != GnosisSafeSigLength {
 		return fmt.Errorf("invalid signature length: expected %d, received %d",
-			ethCrypto.SignatureLength, len(sig))
+			GnosisSafeSigLength, len(sig))
 	}
 
 	if sig[ethCrypto.RecoveryIDOffset] != 31 && sig[ethCrypto.RecoveryIDOffset] != 32 {
@@ -164,9 +166,9 @@ func EthGnosisVerifyDigest(sig []byte, digest []byte, address []byte) error {
 
 func EthGnosisRecoverSigner(sig []byte, digest []byte) (*ethCommon.Address, error) {
 	// signature is 65 bytes, [R || S || V] format
-	if len(sig) != ethCrypto.SignatureLength {
+	if len(sig) != GnosisSafeSigLength {
 		return nil, fmt.Errorf("invalid signature length: expected %d, received %d",
-			ethCrypto.SignatureLength, len(sig))
+			GnosisSafeSigLength, len(sig))
 	}
 
 	if sig[ethCrypto.RecoveryIDOffset] != 31 && sig[ethCrypto.RecoveryIDOffset] != 32 {
