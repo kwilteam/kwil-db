@@ -221,6 +221,10 @@ func NewDB(ctx context.Context, cfg *DBConfig) (*DB, error) {
 		<-db.repl.done      // wait for capture goroutine to end (broadcast channel)
 		cancel(db.repl.err) // set the cause
 
+		if db.repl.err != nil && !errors.Is(db.repl.err, context.Canceled) {
+			logger.Errorf("replication monitor failed: %v", db.repl.err)
+		}
+
 		// db.pool.Close()
 
 		// If the DB has shut down, there will be no more notices, which may be
@@ -552,6 +556,7 @@ func (db *DB) precommit(ctx context.Context, changes chan<- any) ([]byte, error)
 		return nil, errors.New("no tx exists")
 	}
 
+	// track the changes, and set the changeset writer
 	resChan, ok := db.repl.recvID(db.seq, changes)
 	if !ok { // commitID will not be available, error. There is no recovery presently.
 		return nil, errors.New("replication connection is down")
@@ -562,8 +567,6 @@ func (db *DB) precommit(ctx context.Context, changes chan<- any) ([]byte, error)
 	if _, err := db.tx.Exec(ctx, sqlPrepareTx); err != nil {
 		return nil, err
 	}
-	db.txid = txid
-
 	db.txid = txid
 
 	logger.Debugf("prepared transaction %q", db.txid)

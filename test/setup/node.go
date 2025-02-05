@@ -438,7 +438,7 @@ func runDockerCompose(ctx context.Context, t *testing.T, testCtx *testingContext
 	t.Cleanup(func() {
 		if t.Failed() {
 			t.Logf("Stopping but keeping containers for inspection after failed test: %v", dc.Services())
-			time.Sleep(10 * time.Minute)
+			time.Sleep(5 * time.Second)
 			svcs := dc.Services()
 			slices.Sort(svcs)
 			for _, svc := range svcs {

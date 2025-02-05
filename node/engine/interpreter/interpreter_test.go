@@ -12,15 +12,23 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/engine/interpreter"
 	"github.com/kwilteam/kwil-db/node/pg"
+	pgtest "github.com/kwilteam/kwil-db/node/pg/test"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestMain(m *testing.M) {
+	pg.UseLogger(log.New(log.WithName("PG"), log.WithFormat(log.FormatUnstructured),
+		log.WithLevel(log.LevelDebug)))
+	m.Run()
+}
 
 const (
 	defaultCaller    = "owner"
@@ -675,9 +683,7 @@ func Test_SQL(t *testing.T) {
 		},
 	}
 
-	db, err := newTestDB()
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t, nil, nil)
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -779,7 +785,7 @@ func Test_Roundtrip(t *testing.T) {
 		{
 			name:     "text_array",
 			datatype: "TEXT[]",
-			value:    append(ptrArr("hello", "world"), nil),
+			value:    append(ptrArr("hello", "world", "NULL"), nil),
 		},
 		{
 			name:     "bool_array",
@@ -803,19 +809,35 @@ func Test_Roundtrip(t *testing.T) {
 		},
 	}
 
-	db, err := newTestDB()
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t, func(db *pg.DB) {
+		d := db.Pool() // direct, don't worry about commit ID or anything
+		_, err := d.Execute(context.Background(), `DROP SCHEMA IF EXISTS main CASCADE;`)
+		assert.NoError(t, err)
+		_, err = d.Execute(context.Background(), `DROP SCHEMA IF EXISTS info CASCADE;`)
+		assert.NoError(t, err)
+		_, err = d.Execute(context.Background(), `DROP SCHEMA IF EXISTS kwild_engine CASCADE;`)
+		assert.NoError(t, err)
+	}, func(s string) bool {
+		return s == "main"
+	})
 
 	ctx := context.Background()
 	tx, err := db.BeginTx(ctx)
 	require.NoError(t, err)
-	defer tx.Rollback(ctx) // always rollback
-
 	interp := newTestInterp(t, tx, nil, false)
+	err = tx.Commit(ctx)
+	if err != nil {
+		t.Errorf("failed to commit tx: %v", err)
+	}
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
+			tx, err := db.BeginPreparedTx(ctx)
+			require.NoError(t, err)
+			t.Cleanup(func() {
+				tx.Rollback(ctx)
+			})
+
 			// we will create a table with the datatype
 			// and then insert the value into the table
 			err = interp.ExecuteWithoutEngineCtx(ctx, tx, fmt.Sprintf("CREATE TABLE tbl_%s (id int primary key, val %s);", test.name, test.datatype), nil, nil)
@@ -867,15 +889,33 @@ func Test_Roundtrip(t *testing.T) {
 				assert.True(t, r.Values[0] == nil)
 				return nil
 			})
+			require.NoError(t, err)
+
+			csChan := make(chan any, 1)
+			go func() {
+				for range csChan {
+				} // discard whatever precommit sends
+			}()
+			cid, err := tx.Precommit(ctx, csChan)
+			require.NoError(t, err)
+			t.Logf("commit ID: %x", cid)
+
+			// err = tx.Commit(ctx)
+			// require.NoError(t, err)
+
+			// and we rollback
 		})
+
+		// If DB failed, stop all tests
+		if dbErr := db.Err(); dbErr != nil && !errors.Is(dbErr, context.Canceled) {
+			t.Fatalf("db error: %v", dbErr)
+		}
 	}
 }
 
 func Test_RoundtripNull(t *testing.T) {
 
-	db, err := newTestDB()
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t, nil, nil)
 
 	ctx := context.Background()
 	tx, err := db.BeginTx(ctx)
@@ -949,9 +989,7 @@ func Test_CreateAndDelete(t *testing.T) {
 		},
 	}
 
-	db, err := newTestDB()
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t, nil, nil)
 
 	for _, test := range tests {
 		// the first run through, we will test creating and dropping tables
@@ -1842,9 +1880,7 @@ func Test_Actions(t *testing.T) {
 		},
 	}
 
-	db, err := newTestDB()
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t, nil, nil)
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -2049,9 +2085,7 @@ func Test_Extensions(t *testing.T) {
 
 	// finally, the extension is initialized, used, and unused in the correct order (notifications)
 
-	db, err := newTestDB()
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t, nil, nil)
 
 	ctx := context.Background()
 	tx, err := db.BeginTx(ctx)
@@ -2280,9 +2314,7 @@ func Test_Extensions(t *testing.T) {
 // methods can be overwritten by actions. Dropping actions should restore the correct previous
 // behavior.
 func Test_NamingOverwrites(t *testing.T) {
-	db, err := newTestDB()
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t, nil, nil)
 
 	ctx := context.Background()
 	tx, err := db.BeginTx(ctx)
@@ -2375,9 +2407,7 @@ func Test_NamingOverwrites(t *testing.T) {
 
 // This tests that db ownership functionality works as expected
 func Test_Ownership(t *testing.T) {
-	db, err := newTestDB()
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t, nil, nil)
 
 	ctx := context.Background()
 	tx, err := db.BeginTx(ctx)
@@ -2436,9 +2466,7 @@ func Test_Ownership(t *testing.T) {
 // This tests that the `notice` function works correctly, even when methods call an action that
 // logs a notice, and that method is called from another action (which was a previous bug).
 func Test_Notice(t *testing.T) {
-	db, err := newTestDB()
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t, nil, nil)
 
 	ctx := context.Background()
 	tx, err := db.BeginTx(ctx)
@@ -2508,9 +2536,7 @@ func Test_Notice(t *testing.T) {
 
 // this tests that extension type checks work properly
 func Test_ExtensionTypeChecks(t *testing.T) {
-	db, err := newTestDB()
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t, nil, nil)
 
 	ctx := context.Background()
 	tx, err := db.BeginTx(ctx)
@@ -2640,9 +2666,7 @@ func Test_ExtensionTypeChecks(t *testing.T) {
 
 // This tests that SET CURRENT NAMESPACE works as expected
 func Test_SetCurrentNamespace(t *testing.T) {
-	db, err := newTestDB()
-	require.NoError(t, err)
-	defer db.Close()
+	db := newTestDB(t, nil, nil) // dropSchemas(t, append(mainSchemas, "test_ns")...)
 
 	ctx := context.Background()
 	tx, err := db.BeginTx(ctx)
@@ -2782,7 +2806,25 @@ func mustUUID(s string) *types.UUID {
 	return u
 }
 
-func newTestDB() (*pg.DB, error) {
+func dropSchemas(t *testing.T, schemas ...string) func(db *pg.DB) {
+	return func(db *pg.DB) {
+		d := db.Pool()
+		for _, schema := range schemas {
+			_, err := d.Execute(context.Background(), fmt.Sprintf(`DROP SCHEMA IF EXISTS %s CASCADE;`, schema))
+			if err != nil {
+				t.Logf("cleanup issue: %v", err)
+			}
+		}
+	}
+}
+
+var mainSchemas = []string{"main", "info", "kwild_engine"}
+
+func dropMainSchemas(t *testing.T) func(db *pg.DB) {
+	return dropSchemas(t, mainSchemas...)
+}
+
+func newTestDB(t *testing.T, cleanUp func(d *pg.DB), schemaFilter func(string) bool) *pg.DB {
 	cfg := &pg.DBConfig{
 		PoolConfig: pg.PoolConfig{
 			ConnConfig: pg.ConnConfig{
@@ -2794,11 +2836,14 @@ func newTestDB() (*pg.DB, error) {
 			},
 			MaxConns: 11,
 		},
+		SchemaFilter: schemaFilter,
 	}
 
-	ctx := context.Background()
+	if cleanUp == nil {
+		cleanUp = dropMainSchemas(t)
+	}
 
-	return pg.NewDB(ctx, cfg)
+	return pgtest.NewTestDBWithCfg(t, cfg, cleanUp)
 }
 
 // newTestInterp creates a new interpreter for testing purposes.

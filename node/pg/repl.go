@@ -175,7 +175,7 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64, comm
 			if err != nil {
 				return fmt.Errorf("SendStandbyStatusUpdate failed: %w", err)
 			}
-			logger.Debugf("Sent Standby status message at %s (%d)\n", clientXLogPos, uint64(clientXLogPos))
+			logger.Debugf("Sent Standby status message at %s (%d)", clientXLogPos, uint64(clientXLogPos))
 			nextStandbyMessageDeadline = time.Now().Add(standbyMessageTimeout)
 		}
 
@@ -200,7 +200,7 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64, comm
 		case *pgproto3.ErrorResponse:
 			return fmt.Errorf("received Postgres WAL stream error: %+v", msgT)
 		default:
-			logger.Warnf("Received unexpected message: %T\n", rawMsg)
+			logger.Warnf("Received unexpected message: %T", rawMsg)
 			continue
 		}
 
@@ -242,7 +242,7 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64, comm
 				clientXLogPos = xld.WALStart
 			}
 
-			// logger.Debugf("XLogData (in stream? %v) => WALStart %s ServerWALEnd %s\n",
+			// logger.Debugf("XLogData (in stream? %v) => WALStart %s ServerWALEnd %s",
 			// 	inStream, xld.WALStart, xld.ServerWALEnd)
 
 			if final {
@@ -469,11 +469,11 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 
 	// prepared transaction messages
 	case *BeginPrepareMessageV3:
-		logger.Debugf(" [msg] BEGIN PREPARED TRANSACTION (id %v): Prepare LSN %v (%d), End LSN %v (%d) \n",
+		logger.Debugf(" [msg] BEGIN PREPARED TRANSACTION (id %v): Prepare LSN %v (%d), End LSN %v (%d)",
 			logicalMsg.UserGID, logicalMsg.PrepareLSN, uint64(logicalMsg.PrepareLSN),
 			logicalMsg.EndPrepareLSN, uint64(logicalMsg.EndPrepareLSN))
 	case *PrepareMessageV3:
-		logger.Debugf(" [msg] PREPARE TRANSACTION (id %v): Prepare LSN %v (%d), End LSN %v (%d) \n",
+		logger.Debugf(" [msg] PREPARE TRANSACTION (id %v): Prepare LSN %v (%d), End LSN %v (%d)",
 			logicalMsg.UserGID, logicalMsg.PrepareLSN, uint64(logicalMsg.PrepareLSN),
 			logicalMsg.EndPrepareLSN, uint64(logicalMsg.EndPrepareLSN))
 
@@ -488,7 +488,7 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 		changesetWriter.finalize()
 
 	case *CommitPreparedMessageV3:
-		logger.Debugf(" [msg] COMMIT PREPARED TRANSACTION (id %v): Commit LSN %v (%d), End LSN %v (%d) \n",
+		logger.Debugf(" [msg] COMMIT PREPARED TRANSACTION (id %v): Commit LSN %v (%d), End LSN %v (%d)",
 			logicalMsg.UserGID, logicalMsg.CommitLSN, uint64(logicalMsg.CommitLSN),
 			logicalMsg.EndCommitLSN, uint64(logicalMsg.EndCommitLSN))
 		// With a prepared transaction, we're ready for the commit ID and
@@ -496,7 +496,7 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 		// just indicates that the second stage of commit is done.
 
 	case *RollbackPreparedMessageV3:
-		logger.Debugf(" [msg] ROLLBACK PREPARED TRANSACTION (id %v): Rollback LSN %v (%d), End LSN %v (%d) \n",
+		logger.Debugf(" [msg] ROLLBACK PREPARED TRANSACTION (id %v): Rollback LSN %v (%d), End LSN %v (%d)",
 			logicalMsg.UserGID, logicalMsg.RollbackLSN, uint64(logicalMsg.RollbackLSN),
 			logicalMsg.EndLSN, uint64(logicalMsg.EndLSN))
 
