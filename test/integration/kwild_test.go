@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"math/big"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -1146,6 +1147,251 @@ func TestKwildEthDepositOracleValidatorUpdates(t *testing.T) {
 				require.NoError(t, err)
 				return acct2.Balance.Cmp(acct1.Balance) == 1
 			}, 60*time.Second, 3*time.Second)
+		})
+	}
+}
+
+func TestKwildReplaceLeader(t *testing.T) {
+	for _, driver := range setup.AllDrivers {
+		t.Run(driver.String()+"_driver", func(t *testing.T) {
+			p := setup.SetupTests(t, &setup.TestConfig{
+				ClientDriver: driver,
+				Network: &setup.NetworkConfig{
+					Nodes: []*setup.NodeConfig{
+						setup.DefaultNodeConfig(), // node0 -> leader
+						setup.DefaultNodeConfig(), // node1 -> validator
+						setup.DefaultNodeConfig(), // node2 -> validator
+						setup.DefaultNodeConfig(), // node3 -> validator
+						setup.DefaultNodeConfig(), // node4 -> validator  (will start later)
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) { // node5 -> sentry
+							nc.Validator = false
+						}),
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) { // node6 -> sentry (for blocksync)
+							nc.Validator = false
+						}),
+					},
+				},
+
+				InitialServices: []string{"node0", "pg0", "node1", "pg1", "node2", "pg2", "node3", "pg3", "node5", "pg5"},
+			})
+
+			ctx := context.Background()
+			// wait for the nodes to discover each other
+			time.Sleep(2 * time.Second)
+
+			// leader update to node1 (node1,2 approves)
+			// n0, n3 --> leader n0, whereas n1,n2 -> leader (n1)
+			// there no blocks will be produced until n4 joins the network and votes for n0's proposal
+			// this should revert the n1 and n2 to accept n0 as the leader
+			n0Admin := p.Nodes[0].AdminClient(t, ctx)
+			n1Admin := p.Nodes[1].AdminClient(t, ctx)
+			n2Admin := p.Nodes[2].AdminClient(t, ctx)
+			n3Admin := p.Nodes[3].AdminClient(t, ctx)
+			n5Admin := p.Nodes[5].AdminClient(t, ctx)
+
+			// node1 and node2 promotes node1 as the leader
+			n1PubK := p.Nodes[1].PrivateKey().Public()
+			n0PubK := p.Nodes[0].PrivateKey().Public()
+			n1Admin.PromoteValidator(ctx, n1PubK.Bytes(), n1PubK.Type(), big.NewInt(30))
+			n2Admin.PromoteValidator(ctx, n1PubK.Bytes(), n1PubK.Type(), big.NewInt(30))
+
+			time.Sleep(30 * time.Second)
+			// not enough majority to change the leader, also not enough majority to produce blocks, so the network is stuck
+			info, err := p.Nodes[0].JSONRPCClient(t, ctx, nil).ChainInfo(ctx)
+			require.NoError(t, err)
+			require.Equal(t, uint64(29), info.BlockHeight) // block 30 never gets committed.
+
+			// bringup node4, this should give the previous leader the majority and the previous leader
+			// should continue to be the leader and produce blocks
+			msgStr := "Block sync completed"
+			p.RunServices(t, ctx, []*setup.ServiceDefinition{
+				{Name: "node4", WaitMsg: &msgStr},
+				setup.PostgresServiceDefinition("pg4"),
+			}, defaultContainerTimeout)
+
+			// wait for the nodes to discover each other and should start seeing blocks
+			require.Eventually(t, func() bool {
+				info, err := p.Nodes[3].JSONRPCClient(t, ctx, nil).ChainInfo(ctx)
+				require.NoError(t, err)
+				return info.BlockHeight > uint64(30)
+			}, 20*time.Second, 1*time.Second)
+
+			n4Admin := p.Nodes[4].AdminClient(t, ctx)
+
+			// ensure that n0, n1 have the same leader
+			p0, err := n0Admin.Params(ctx)
+			require.NoError(t, err)
+			require.Equal(t, n0PubK, p0.Leader.PublicKey)
+
+			// n1 is unrecoverable until we restart it.
+			// lets work with the rest of the validators
+
+			// retry again in 30 blocks and this time enough validators agreed to the promotion
+			info, err = p.Nodes[0].JSONRPCClient(t, ctx, nil).ChainInfo(ctx)
+			require.NoError(t, err)
+			height := int64(info.BlockHeight) + int64(40)
+
+			n2PubK := p.Nodes[2].PrivateKey().Public()
+			n2Admin.PromoteValidator(ctx, n2PubK.Bytes(), n2PubK.Type(), big.NewInt(height))
+			n3Admin.PromoteValidator(ctx, n2PubK.Bytes(), n2PubK.Type(), big.NewInt(height))
+			n4Admin.PromoteValidator(ctx, n2PubK.Bytes(), n2PubK.Type(), big.NewInt(height))
+
+			time.Sleep(30 * time.Second)
+
+			// ensure that the previous leader correctly accepted the new leader
+			require.Eventually(t, func() bool {
+				infoT, err := p.Nodes[0].JSONRPCClient(t, ctx, nil).ChainInfo(ctx)
+				require.NoError(t, err)
+				return infoT.BlockHeight > uint64(height)
+			}, 20*time.Second, 1*time.Second)
+
+			p0, err = n0Admin.Params(ctx)
+			require.NoError(t, err)
+			require.Equal(t, n2PubK, p0.Leader.PublicKey)
+
+			// sentry node should also have the updated leader
+			p5, err := n5Admin.Params(ctx)
+			require.NoError(t, err)
+			require.Equal(t, n2PubK, p5.Leader.PublicKey)
+
+			info, err = p.Nodes[0].JSONRPCClient(t, ctx, nil).ChainInfo(ctx)
+			require.NoError(t, err)
+			height = int64(info.BlockHeight)
+
+			info, err = p.Nodes[1].JSONRPCClient(t, ctx, nil).ChainInfo(ctx)
+			require.NoError(t, err)
+			// ensure that the node1 (failed leader promotion) is not stuck and is catching up
+			require.Greater(t, info.BlockHeight, uint64(30))
+
+			// node6 blocksync and joins the network and should catchup correctly
+			p.RunServices(t, ctx, []*setup.ServiceDefinition{
+				{Name: "node6", WaitMsg: &msgStr},
+				setup.PostgresServiceDefinition("pg6"),
+			}, defaultContainerTimeout)
+
+			require.Eventually(t, func() bool {
+				info, err := p.Nodes[5].JSONRPCClient(t, ctx, nil).ChainInfo(ctx)
+				require.NoError(t, err)
+				return info.BlockHeight >= uint64(height)
+			}, 20*time.Second, 1*time.Second)
+
+			// check that the leader is updated on node6
+			n6Admin := p.Nodes[5].AdminClient(t, ctx)
+			p6, err := n6Admin.Params(ctx)
+			require.NoError(t, err)
+			require.Equal(t, n2PubK, p6.Leader.PublicKey)
+		})
+	}
+}
+
+func TestKwildNetworkParamsLeaderUpdate(t *testing.T) {
+	for _, driver := range setup.AllDrivers {
+		t.Run(driver.String()+"_driver", func(t *testing.T) {
+			p := setup.SetupTests(t, &setup.TestConfig{
+				ClientDriver: driver,
+				Network: &setup.NetworkConfig{
+					Nodes: []*setup.NodeConfig{
+						setup.DefaultNodeConfig(), // node0 -> leader
+						setup.DefaultNodeConfig(), // node1 -> validator
+						setup.DefaultNodeConfig(), // node2 -> validator
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) { // node3 -> sentry
+							nc.Validator = false
+						}),
+						setup.CustomNodeConfig(func(nc *setup.NodeConfig) { // node4 -> sentry (for blocksync)
+							nc.Validator = false
+						}),
+					},
+				},
+				InitialServices: []string{"node0", "pg0", "node1", "pg1", "node2", "pg2", "node3", "pg3"},
+			})
+
+			ctx := context.Background()
+
+			// make proposal for node1 to become the leader
+			n0Admin := p.Nodes[0].AdminClient(t, ctx)
+			n1Admin := p.Nodes[1].AdminClient(t, ctx)
+
+			n1PubK := p.Nodes[1].PrivateKey().Public()
+			updates := types.ParamUpdates{}
+			updates[types.ParamNameLeader] = types.PublicKey{
+				PublicKey: n1PubK,
+			}
+
+			txid, uuid, err := n1Admin.ProposeParamUpdates(ctx, &updates, "leader_update")
+			require.NoError(t, err)
+			specifications.ExpectTxSuccess(t, n0Admin, ctx, txid)
+
+			// ensure that the proposal exists
+			proposals, err := n0Admin.ListParamUpdateProposals(ctx)
+			require.NoError(t, err)
+			contains := slices.ContainsFunc(proposals, func(p *types.ConsensusParamUpdateProposal) bool {
+				return p.ID == uuid
+			})
+			require.True(t, contains)
+
+			// verify that the proposal is not yet approved
+			status, err := n0Admin.ParamUpdateStatus(ctx, uuid)
+			require.NoError(t, err)
+			// count number of approvals
+			resolution := status.ResStatus.PendingResolution
+			var approvals int
+			for _, v := range resolution.Approved {
+				if v {
+					approvals++
+				}
+			}
+			require.Equal(t, 1, approvals)
+
+			// node2 approves the proposal
+			n2Admin := p.Nodes[2].AdminClient(t, ctx)
+			txid, err = n2Admin.ApproveParamUpdates(ctx, uuid)
+			require.NoError(t, err)
+			specifications.ExpectTxSuccess(t, n0Admin, ctx, txid)
+
+			// ensure that the proposal is approved
+			_, err = n0Admin.ParamUpdateStatus(ctx, uuid)
+			require.Error(t, err) // not found
+
+			// check that the leader is updated
+			p0, err := n0Admin.Params(ctx)
+			require.NoError(t, err)
+			require.Equal(t, n1PubK, p0.Leader.PublicKey)
+
+			// get the block height
+			info, err := p.Nodes[0].JSONRPCClient(t, ctx, nil).ChainInfo(ctx)
+			require.NoError(t, err)
+			height := info.BlockHeight
+
+			// sentry node should also have the updated leader
+			require.Eventually(t, func() bool {
+				infoT, err := p.Nodes[3].JSONRPCClient(t, ctx, nil).ChainInfo(ctx)
+				require.NoError(t, err)
+				return infoT.BlockHeight >= height
+			}, 20*time.Second, 1*time.Second)
+
+			n3Admin := p.Nodes[3].AdminClient(t, ctx)
+			p3, err := n3Admin.Params(ctx)
+			require.NoError(t, err)
+			require.Equal(t, n1PubK, p3.Leader.PublicKey)
+
+			// node4 blocksync and joins the network and should catchup correctly
+			msgStr := "Block sync completed"
+			p.RunServices(t, ctx, []*setup.ServiceDefinition{
+				{Name: "node4", WaitMsg: &msgStr},
+				setup.PostgresServiceDefinition("pg4"),
+			}, defaultContainerTimeout)
+			require.Eventually(t, func() bool {
+				info, err := p.Nodes[4].JSONRPCClient(t, ctx, nil).ChainInfo(ctx)
+				require.NoError(t, err)
+				return info.BlockHeight > height
+			}, 30*time.Second, 1*time.Second)
+
+			// ensure that the leader is updated on node4
+			n4Admin := p.Nodes[4].AdminClient(t, ctx)
+			p4, err := n4Admin.Params(ctx)
+			require.NoError(t, err)
+			require.Equal(t, n1PubK, p4.Leader.PublicKey)
+
 		})
 	}
 }

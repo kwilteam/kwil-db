@@ -116,7 +116,6 @@ type Node struct {
 	P2PService
 
 	// cfg
-	pex    bool
 	pubkey crypto.PublicKey
 	dir    string
 	// pf *prefetch
@@ -159,7 +158,6 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 	node := &Node{
 		log:     logger,
 		pubkey:  pubkey,
-		pex:     cfg.P2P.Pex,
 		mp:      cfg.Mempool,
 		bki:     cfg.BlockStore,
 		ce:      cfg.Consensus,
@@ -575,6 +573,10 @@ func (n *Node) ConsensusParams() *ktypes.NetworkParameters {
 
 func (n *Node) AbortBlockExecution(height int64, txIDs []types.Hash) error {
 	return n.ce.CancelBlockExecution(height, txIDs)
+}
+
+func (n *Node) PromoteLeader(candidate crypto.PublicKey, height int64) error {
+	return n.ce.PromoteLeader(candidate, height)
 }
 
 func (n *Node) Role() types.Role {

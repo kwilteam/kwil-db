@@ -11,6 +11,7 @@ import (
 	"math/big"
 	"strings"
 
+	"github.com/kwilteam/kwil-db/app/params"
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -133,6 +134,15 @@ func (a *AdminClient) ValidatorNodeRemove(ctx context.Context, target []byte, pu
 	keyStr := config.EncodePubKeyAndType(target, pubKeyType)
 	err := exec(a, ctx, &res, "validators", "remove", keyStr)
 	return res.TxHash, err
+}
+
+type emptyRes struct{}
+
+func (a *AdminClient) PromoteValidator(ctx context.Context, target []byte, pubKeyType crypto.KeyType, height *big.Int) error {
+	keyStr := config.EncodePubKeyAndType(target, pubKeyType)
+	var res emptyRes
+	err := exec(a, ctx, &res, "validators", "replace-leader", keyStr, height.String())
+	return err
 }
 
 type valInfo struct {
@@ -285,4 +295,58 @@ func (a *AdminClient) CreateSnapshot(ctx context.Context, host, port, dbname, us
 	}
 
 	return res.Snapshot, res.StateHash, nil
+}
+
+func (a *AdminClient) Params(ctx context.Context) (*types.NetworkParameters, error) {
+	var res *types.NetworkParameters
+	err := exec(a, ctx, &res, "consensus", "params")
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+func (a *AdminClient) ProposeParamUpdates(ctx context.Context, params *types.ParamUpdates, desc string) (types.Hash, types.UUID, error) {
+	var res display.RespResolutionBroadcast
+
+	args := []string{"consensus", "propose", "--updates", params.String(), "--yes"}
+	if desc != "" {
+		args = append(args, "--description", desc)
+	}
+
+	err := exec(a, ctx, &res, args...)
+	if err != nil {
+		return types.Hash{}, types.UUID{}, err
+	}
+
+	return res.TxHash, res.ID, nil
+}
+
+func (a *AdminClient) ListParamUpdateProposals(ctx context.Context) ([]*types.ConsensusParamUpdateProposal, error) {
+	var res []*types.ConsensusParamUpdateProposal
+	err := exec(a, ctx, &res, "consensus", "list-proposals")
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
+}
+
+func (a *AdminClient) ApproveParamUpdates(ctx context.Context, proposalID types.UUID) (types.Hash, error) {
+	var res display.TxHashResponse
+	err := exec(a, ctx, &res, "consensus", "approve", proposalID.String())
+	if err != nil {
+		return types.Hash{}, err
+	}
+	return res.TxHash, nil
+}
+
+func (a *AdminClient) ParamUpdateStatus(ctx context.Context, proposalID types.UUID) (*params.MsgUpdateResolutionStatus, error) {
+	var res params.MsgUpdateResolutionStatus
+	err := exec(a, ctx, &res, "consensus", "update-status", proposalID.String())
+	if err != nil {
+		return nil, err
+	}
+	return &res, nil
 }

@@ -260,7 +260,6 @@ func TestValidatorStateMachine(t *testing.T) {
 	}
 
 	var blkProp1, blkProp2 *blockProposal
-	var err error
 
 	testcases := []struct {
 		name    string
@@ -449,7 +448,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "reset",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.sendResetMsg(&resetMsg{height: 0})
+						val.sendResetMsg(&resetMsg{height: 1})
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 0, zeroHash)
@@ -504,7 +503,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "reset",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.sendResetMsg(&resetMsg{height: 0})
+						val.sendResetMsg(&resetMsg{height: 1})
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 1, zeroHash)
@@ -530,7 +529,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "reset",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.sendResetMsg(&resetMsg{height: 0})
+						val.sendResetMsg(&resetMsg{height: 1})
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 0, zeroHash)
@@ -539,7 +538,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "reset",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.sendResetMsg(&resetMsg{height: 0})
+						val.sendResetMsg(&resetMsg{height: 1})
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 0, zeroHash)
@@ -575,7 +574,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "reset",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.sendResetMsg(&resetMsg{height: 1})
+						val.sendResetMsg(&resetMsg{height: 2})
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
@@ -584,7 +583,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "reset",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.sendResetMsg(&resetMsg{height: 2})
+						val.sendResetMsg(&resetMsg{height: 3})
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
@@ -679,8 +678,11 @@ func TestValidatorStateMachine(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			ceConfigs, valset := tc.setup(t)
 
-			leader := New(ceConfigs[0])
-			val := New(ceConfigs[1])
+			leader, err := New(ceConfigs[0])
+			require.NoError(t, err)
+
+			val, err := New(ceConfigs[1])
+			require.NoError(t, err)
 
 			ctxM := context.Background()
 			proposals := createBlockProposals(t, leader, valset)
@@ -733,11 +735,13 @@ func createBlockProposals(t *testing.T, ce *ConsensusEngine, valSet map[string]k
 	}
 	hash := hasher.Sum(nil)
 
-	blk1 := ktypes.NewBlock(1, zeroHash, zeroHash, hash, time.Now(), txs)
+	paramsHash := ce.blockProcessor.ConsensusParams().Hash()
+
+	blk1 := ktypes.NewBlock(1, zeroHash, zeroHash, hash, paramsHash, time.Now(), txs)
 	err := blk1.Sign(ce.privKey)
 	require.NoError(t, err)
 
-	blk2 := ktypes.NewBlock(1, zeroHash, zeroHash, hash, time.Now().Add(500*time.Millisecond), txs)
+	blk2 := ktypes.NewBlock(1, zeroHash, zeroHash, hash, paramsHash, time.Now().Add(500*time.Millisecond), txs)
 	err = blk2.Sign(ce.privKey)
 	require.NoError(t, err)
 
@@ -760,7 +764,8 @@ func TestCELeaderSingleNode(t *testing.T) {
 	ceConfigs, _ := generateTestCEConfig(t, 1, true)
 
 	// bring up the node
-	leader := New(ceConfigs[0])
+	leader, err := New(ceConfigs[0])
+	require.NoError(t, err)
 
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
@@ -785,7 +790,9 @@ func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
 	ceConfigs, _ := generateTestCEConfig(t, 2, true)
 
 	// bring up the nodes
-	n1 := New(ceConfigs[0])
+	n1, err := New(ceConfigs[0])
+	require.NoError(t, err)
+
 	// start node 1 (Leader)
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup
@@ -846,7 +853,9 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 	ceConfigs, _ := generateTestCEConfig(t, 3, true)
 
 	// bring up the nodes
-	n1 := New(ceConfigs[0])
+	n1, err := New(ceConfigs[0])
+	require.NoError(t, err)
+
 	// start node 1 (Leader)
 	ctx, cancel := context.WithCancel(context.Background())
 	var wg sync.WaitGroup

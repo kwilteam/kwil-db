@@ -14,6 +14,7 @@ type AdminClient interface {
 	Join(ctx context.Context) (types.Hash, error)
 	JoinStatus(ctx context.Context, pubkey []byte, pubKeyType crypto.KeyType) (*types.JoinRequest, error)
 	Leave(ctx context.Context) (types.Hash, error)
+	Promote(ctx context.Context, publicKey []byte, pubKeyType crypto.KeyType, height int64) error
 	ListValidators(ctx context.Context) ([]*types.Validator, error)
 	Peers(ctx context.Context) ([]*adminTypes.PeerInfo, error)
 	Remove(ctx context.Context, publicKey []byte, pubKeyType crypto.KeyType) (types.Hash, error)

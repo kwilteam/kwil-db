@@ -24,6 +24,7 @@ func NewValidatorsCmd() *cobra.Command {
 		removeCmd(),
 		leaveCmd(),
 		listJoinRequestsCmd(),
+		promoteCmd(),
 	)
 
 	rpc.BindRPCFlags(validatorsCmd)

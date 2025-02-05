@@ -200,7 +200,7 @@ func initializeStatesyncService(ctx context.Context, d *coreDependencies, p2p *n
 	}
 	closers.addCloser(poolDB.Close, "Closing Eventstore DB")
 
-	rcvdSnapsDir := filepath.Join(d.rootDir, "rcvd_snaps")
+	rcvdSnapsDir := config.ReceivedSnapshotsDir(d.rootDir)
 	ssCfg := &node.StatesyncConfig{
 		RcvdSnapsDir:  rcvdSnapsDir,
 		StateSyncCfg:  &d.cfg.StateSync,
@@ -366,7 +366,7 @@ func schemaExists(ctx context.Context, db sql.Executor, schema string) (bool, er
 }
 
 func buildBlockStore(d *coreDependencies, closers *closeFuncs) *store.BlockStore {
-	blkStrDir := filepath.Join(d.rootDir, "blockstore")
+	blkStrDir := config.BlockstoreDir(d.rootDir)
 	bs, err := store.NewBlockStore(blkStrDir)
 	if err != nil {
 		failBuild(err, "failed to open blockstore")
@@ -479,6 +479,7 @@ func buildMigrator(d *coreDependencies, ctx context.Context, db *pg.DB, accounts
 func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB,
 	mempool *mempool.Mempool, bs *store.BlockStore, bp *blockprocessor.BlockProcessor) *consensus.ConsensusEngine {
 	ceCfg := &consensus.Config{
+		RootDir:               d.rootDir,
 		PrivateKey:            d.privKey,
 		Leader:                d.genesisCfg.Leader.PublicKey,
 		DB:                    db,
@@ -495,9 +496,9 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB,
 		Checkpoint:            d.cfg.Checkpoint,
 	}
 
-	ce := consensus.New(ceCfg)
-	if ce == nil {
-		failBuild(nil, "failed to create consensus engine")
+	ce, err := consensus.New(ceCfg)
+	if err != nil {
+		failBuild(err, "failed to create consensus engine")
 	}
 
 	return ce
@@ -573,7 +574,7 @@ func buildEngine(d *coreDependencies, ctx context.Context, db *pg.DB, accounts c
 }
 
 func buildSnapshotStore(d *coreDependencies, bs *store.BlockStore) *snapshotter.SnapshotStore {
-	snapshotDir := filepath.Join(d.rootDir, "snapshots")
+	snapshotDir := config.LocalSnapshotsDir(d.rootDir)
 	cfg := &snapshotter.SnapshotConfig{
 		SnapshotDir:     snapshotDir,
 		MaxSnapshots:    int(d.cfg.Snapshots.MaxSnapshots),

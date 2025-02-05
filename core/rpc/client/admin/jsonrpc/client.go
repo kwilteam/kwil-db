@@ -131,6 +131,17 @@ func (cl *Client) Remove(ctx context.Context, publicKey []byte, pubKeyType crypt
 	return res.TxHash, err
 }
 
+// Promote promotes a validator to a leader at the specified height.
+func (cl *Client) Promote(ctx context.Context, publicKey []byte, pubKeyType crypto.KeyType, height int64) error {
+	cmd := &adminjson.PromoteRequest{
+		PubKey:     publicKey,
+		PubKeyType: pubKeyType,
+		Height:     height,
+	}
+	res := &adminjson.PromoteResponse{}
+	return cl.CallMethod(ctx, string(adminjson.MethodValPromote), cmd, res)
+}
+
 // Status gets the node's status, such as it's name, chain ID, versions, sync
 // status, best block info, and validator identity.
 func (cl *Client) Status(ctx context.Context) (*adminTypes.Status, error) {

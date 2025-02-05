@@ -158,6 +158,7 @@ func (n *Node) advertiseToPeer(ctx context.Context, peerID peer.ID, proto protoc
 type blockAnnMsg struct {
 	Hash       types.Hash
 	Height     int64
+	Header     *ktypes.BlockHeader
 	CommitInfo *types.CommitInfo // commit sigs of validators attest to the block and app hash
 	LeaderSig  []byte            // to avoid having to get the block to realize if it is fake (spam)
 }
@@ -194,9 +195,20 @@ func (m *blockAnnMsg) WriteTo(w io.Writer) (int64, error) {
 		return cw.Written(), err
 	}
 
+	// Block header must be present in the block announcement messages
+	if m.Header == nil {
+		return cw.Written(), errors.New("nil block header")
+	}
+
 	// CommitInfo must be present in the block announcement messages
 	if m.CommitInfo == nil {
 		return cw.Written(), errors.New("nil commit info")
+	}
+
+	// write block header length and bytes
+	hBts := ktypes.EncodeBlockHeader(m.Header)
+	if err := ktypes.WriteBytes(cw, hBts); err != nil {
+		return cw.Written(), err
 	}
 
 	ciBts, err := m.CommitInfo.MarshalBinary()
@@ -229,6 +241,16 @@ func (m *blockAnnMsg) ReadFrom(r io.Reader) (int64, error) {
 	if err := binary.Read(cr, binary.LittleEndian, &m.Height); err != nil {
 		return cr.ReadCount(), err
 	}
+
+	headerBts, err := ktypes.ReadBytes(cr)
+	if err != nil {
+		return cr.ReadCount(), err
+	}
+	hdr, err := ktypes.DecodeBlockHeader(bytes.NewBuffer(headerBts))
+	if err != nil {
+		return cr.ReadCount(), err
+	}
+	m.Header = hdr
 
 	ciBts, err := ktypes.ReadBytes(cr)
 	if err != nil {

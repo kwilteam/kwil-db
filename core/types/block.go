@@ -32,8 +32,25 @@ type BlockHeader struct {
 	// Hash of the current validator set for the block
 	ValidatorSetHash Hash
 
-	// ConsensusParams updates for the block, empty if no updates, ignored for this release
-	// ConsensusParamsUpdates *ConsensusParams
+	// Hash of the network params for the block
+	NetworkParamsHash Hash
+
+	// New leader for this block if changed through some kind of offline consensus.
+	// NOTE: leader updates currently can occur two ways:
+	// 1. By creating the param_updates resolutions with the leader change and
+	//    letting the validators vote on it. This is the preferred method but requires
+	//    the leader to be online to propose a block containing the resolution related
+	//    transactions.
+	// 2. By using the "validators replace-leader" command. This is a temporary solution.
+	//    In scenarios where the leader is offline and unrecoverable, the validators
+	//    can offline agree on a new leader and issue `kwild validators promote` command
+	//    to promote the new leader. It's important that the leader candidate also issues
+	//    this command and become a leader and propose a block with the leader update.
+	//    If enough validators agree to the change, they can accept the proposals and
+	//    commit the block with the leader update. Once the block is committed, the other
+	//    validators that didn't participate in the offline agreement will update their
+	//    leader to the new candidate.
+	NewLeader crypto.PublicKey
 }
 
 type Block struct {
@@ -42,7 +59,7 @@ type Block struct {
 	Signature []byte // Signature is the block producer's signature (leader in our model)
 }
 
-func NewBlock(height int64, prevHash, appHash, valSetHash Hash, stamp time.Time, txns []*Transaction) *Block {
+func NewBlock(height int64, prevHash, appHash, valSetHash, paramsHash Hash, stamp time.Time, txns []*Transaction) *Block {
 	numTxns := len(txns)
 	txHashes := make([]Hash, numTxns)
 	for i, tx := range txns {
@@ -58,7 +75,8 @@ func NewBlock(height int64, prevHash, appHash, valSetHash Hash, stamp time.Time,
 		Timestamp:   stamp.Truncate(time.Millisecond).UTC(),
 		MerkleRoot:  merkelRoot,
 
-		ValidatorSetHash: valSetHash,
+		ValidatorSetHash:  valSetHash,
+		NetworkParamsHash: paramsHash,
 	}
 	return &Block{
 		Header: hdr,
@@ -123,6 +141,11 @@ func DecodeBlockHeader(r io.Reader) (*BlockHeader, error) {
 		return nil, fmt.Errorf("failed to read validator hash: %w", err)
 	}
 
+	_, err = io.ReadFull(r, hdr.NetworkParamsHash[:])
+	if err != nil {
+		return nil, fmt.Errorf("failed to read network params hash: %w", err)
+	}
+
 	var timeStamp uint64
 	if err := binary.Read(r, binary.LittleEndian, &timeStamp); err != nil {
 		return nil, fmt.Errorf("failed to read number of transactions: %w", err)
@@ -134,7 +157,24 @@ func DecodeBlockHeader(r io.Reader) (*BlockHeader, error) {
 		return nil, fmt.Errorf("failed to read merkel root: %w", err)
 	}
 
-	// Read validator updates
+	// Read leader updates if any
+	var leaderUpdate bool
+	if err := binary.Read(r, binary.LittleEndian, &leaderUpdate); err != nil {
+		return nil, fmt.Errorf("failed to read leader update flag: %w", err)
+	}
+	if leaderUpdate {
+		keyBts, err := ReadBytes(r)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read leader update key: %w", err)
+		}
+
+		key, err := crypto.WireDecodePubKey(keyBts)
+		if err != nil {
+			return nil, fmt.Errorf("failed to decode leader update key: %w", err)
+		}
+
+		hdr.NewLeader = key
+	}
 
 	return hdr, nil
 }
@@ -175,6 +215,10 @@ func (bh *BlockHeader) writeBlockHeader(w io.Writer) error {
 		return fmt.Errorf("failed to write validator hash: %w", err)
 	}
 
+	if _, err := w.Write(bh.NetworkParamsHash[:]); err != nil {
+		return fmt.Errorf("failed to write network params hash: %w", err)
+	}
+
 	if err := binary.Write(w, binary.LittleEndian, uint64(bh.Timestamp.UnixMilli())); err != nil {
 		return fmt.Errorf("failed to write timestamp: %w", err)
 	}
@@ -183,15 +227,16 @@ func (bh *BlockHeader) writeBlockHeader(w io.Writer) error {
 		return fmt.Errorf("failed to write merkel root: %w", err)
 	}
 
-	// for _, v := range bh.ValidatorUpdates {
-	// 	if err := binary.Write(w, binary.LittleEndian, v.PubKey); err != nil {
-	// 		return fmt.Errorf("failed to write validator pubkey: %w", err)
-	// 	}
-
-	// 	if err := binary.Write(w, binary.LittleEndian, v.Power); err != nil {
-	// 		return fmt.Errorf("failed to write validator power: %w", err)
-	// 	}
-	// }
+	// leader updates if any
+	leaderUpdate := bh.NewLeader != nil
+	if err := binary.Write(w, binary.LittleEndian, leaderUpdate); err != nil {
+		return fmt.Errorf("failed to write leader update flag: %w", err)
+	}
+	if leaderUpdate {
+		if err := WriteBytes(w, crypto.WireEncodeKey(bh.NewLeader)); err != nil {
+			return fmt.Errorf("failed to write leader update key: %w", err)
+		}
+	}
 
 	return nil
 }

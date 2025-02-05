@@ -5,6 +5,7 @@ import (
 	"errors"
 	"math"
 	"testing"
+	"time"
 
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
@@ -22,8 +23,24 @@ func TestBlockAnnMsg_MarshalUnmarshal(t *testing.T) {
 			wantErr: true,
 		},
 		{
-			name: "empty message with commitInfo",
+			name: "empty message without commitInfo",
 			msg: &blockAnnMsg{
+				Header:     nil,
+				CommitInfo: &types.CommitInfo{},
+			},
+			wantErr: true,
+		},
+		{
+			name: "empty message with commitInfo, without header",
+			msg: &blockAnnMsg{
+				CommitInfo: &types.CommitInfo{},
+			},
+			wantErr: true,
+		},
+		{
+			name: "empty message with header and commitInfo",
+			msg: &blockAnnMsg{
+				Header:     &ktypes.BlockHeader{},
 				CommitInfo: &types.CommitInfo{},
 			},
 			wantErr: false,
@@ -43,6 +60,7 @@ func TestBlockAnnMsg_MarshalUnmarshal(t *testing.T) {
 			msg: &blockAnnMsg{
 				Height: 100,
 				Hash:   [32]byte{1, 2, 3},
+				Header: &ktypes.BlockHeader{},
 				CommitInfo: &types.CommitInfo{
 					AppHash: ktypes.Hash{1, 2, 3},
 				},
@@ -58,8 +76,28 @@ func TestBlockAnnMsg_MarshalUnmarshal(t *testing.T) {
 				CommitInfo: &types.CommitInfo{
 					AppHash: ktypes.Hash{1, 2, 3},
 				},
+				Header: &ktypes.BlockHeader{},
 			},
 			wantErr: false, // leaderSig verified at higher level
+		},
+		{
+			name: "valid payload",
+			msg: &blockAnnMsg{
+				Height: 100,
+				Hash:   [32]byte{1, 2, 3},
+				Header: &ktypes.BlockHeader{
+					Height:            100,
+					NumTxns:           0,
+					Timestamp:         time.Now(),
+					PrevAppHash:       ktypes.Hash{1, 2, 3},
+					ValidatorSetHash:  ktypes.Hash{1, 2, 3},
+					NetworkParamsHash: ktypes.Hash{1, 2, 3},
+				},
+				CommitInfo: &types.CommitInfo{
+					AppHash: ktypes.Hash{1, 2, 3},
+				},
+				LeaderSig: []byte{7, 8, 9},
+			},
 		},
 	}
 

@@ -31,6 +31,7 @@ type Node interface {
 	BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (*ktypes.ResultBroadcastTx, error)
 	Role() ntypes.Role
 	AbortBlockExecution(height int64, txIDs []ktypes.Hash) error
+	PromoteLeader(leader crypto.PublicKey, height int64) error
 }
 
 type Whitelister interface { // maybe merge with Node since it's same job
@@ -185,6 +186,8 @@ func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 		adminjson.MethodValRemove: rpcserver.MakeMethodDef(svc.Remove,
 			"vote to remote a validator",
 			"the hash of the broadcasted validator remove transaction"),
+		adminjson.MethodValPromote: rpcserver.MakeMethodDef(svc.Promote,
+			"promote a validator to leader starting from the specified height", ""),
 		adminjson.MethodAddPeer: rpcserver.MakeMethodDef(svc.AddPeer,
 			"add a peer to the network", ""),
 		adminjson.MethodRemovePeer: rpcserver.MakeMethodDef(svc.RemovePeer,
@@ -377,6 +380,21 @@ func (svc *Service) Remove(ctx context.Context, req *adminjson.RemoveRequest) (*
 		Validator: req.PubKey,
 		KeyType:   req.PubKeyType,
 	})
+}
+
+func (svc *Service) Promote(ctx context.Context, req *adminjson.PromoteRequest) (*adminjson.PromoteResponse, *jsonrpc.Error) {
+	// convert this into crypto.PublicKey
+	pubKey, err := crypto.UnmarshalPublicKey(req.PubKey, req.PubKeyType)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to unmarshal public key: "+err.Error(), nil)
+	}
+
+	err = svc.blockchain.PromoteLeader(pubKey, req.Height)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "failed to promote leader: "+err.Error(), nil)
+	}
+
+	return nil, nil
 }
 
 func (svc *Service) JoinStatus(ctx context.Context, req *adminjson.JoinStatusRequest) (*adminjson.JoinStatusResponse, *jsonrpc.Error) {

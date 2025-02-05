@@ -83,7 +83,7 @@ func createTestBlock(_ *testing.T, height int64, numTxns int) (*ktypes.Block, ty
 		txns[i] = rawTx
 	}
 	blk := ktypes.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5},
-		time.Unix(1729723553+height, 0), txs)
+		types.Hash{5, 5, 5}, time.Unix(1729723553+height, 0), txs)
 	return blk, fakeAppHash(height), txns
 }
 
@@ -240,7 +240,7 @@ func TestBlockStore_HaveTx(t *testing.T) {
 func TestBlockStore_StoreWithNoTransactions(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 	block := ktypes.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{},
-		time.Unix(1729723553, 0), []*ktypes.Transaction{})
+		types.Hash{5, 5, 5}, time.Unix(1729723553, 0), []*ktypes.Transaction{})
 	appHash := fakeAppHash(1)
 
 	err := bs.Store(block, &types.CommitInfo{AppHash: appHash})
@@ -347,7 +347,7 @@ func TestBlockStore_StoreWithLargeTransactions(t *testing.T) {
 	}
 
 	block := ktypes.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{},
-		time.Unix(1729723553, 0), []*ktypes.Transaction{largeTx, otherTx})
+		types.Hash{5, 5, 5}, time.Unix(1729723553, 0), []*ktypes.Transaction{largeTx, otherTx})
 	appHash := fakeAppHash(1)
 
 	err = bs.Store(block, &types.CommitInfo{AppHash: appHash})
@@ -454,7 +454,7 @@ func TestLargeBlockStore(t *testing.T) {
 		}
 
 		// Create and store block
-		block := ktypes.NewBlock(height, prevHash, prevAppHash, types.Hash{}, time.Now(), txns)
+		block := ktypes.NewBlock(height, prevHash, prevAppHash, types.Hash{}, types.Hash{}, time.Now(), txns)
 		appHash := types.HashBytes([]byte(fmt.Sprintf("app-%d", height)))
 		err = bs.Store(block, &types.CommitInfo{AppHash: appHash})
 		if err != nil {
@@ -570,7 +570,7 @@ func TestBlockStore_StoreResultsEmptyBlock(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
 	block := ktypes.NewBlock(1, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{},
-		time.Unix(1729723553, 0), []*ktypes.Transaction{})
+		types.Hash{5, 5, 5}, time.Unix(1729723553, 0), []*ktypes.Transaction{})
 	appHash := fakeAppHash(1)
 
 	err := bs.Store(block, &types.CommitInfo{AppHash: appHash})

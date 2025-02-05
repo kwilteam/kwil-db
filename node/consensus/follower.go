@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 
@@ -29,7 +30,7 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 	ce.log.Info("Accept proposal?", "height", height, "blockID", blkID, "prevHash", prevBlockID)
 
 	// Check if the block is for an already committed height, but the blkID is different and newer.
-	if height <= ce.stateInfo.lastCommit.height {
+	if height < ce.stateInfo.lastCommit.height {
 		// proposal is for an already committed height
 		bHash, blk, _, err := ce.blockStore.GetByHeight(height)
 		if err != nil {
@@ -41,10 +42,21 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 			return false
 		}
 
-		// TODO: is this check needed? can we always enforce this upon a node and how do we handle scenarios
-		// where a node operator resets/updates the time settings on the leader?
 		if blk.Header.Timestamp.UnixMilli() > timestamp {
 			// stale proposal, ignore
+			return false
+		}
+
+		// ensure that the proposal is sent by the leader, else it will unnecessarily
+		// trigger a catchup on the leader.
+		valid, err := ce.leader.Verify(blkID[:], leaderSig)
+		if err != nil {
+			ce.log.Error("Error verifying leader signature", "error", err)
+			return false
+		}
+
+		if !valid {
+			ce.log.Debug("Invalid leader signature, ignoring the block proposal msg: ", "height", height)
 			return false
 		}
 
@@ -75,6 +87,8 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 			},
 			Signature: sig,
 		}
+
+		ce.log.Info("leader is out of sync, sending outOfSyncNack to the leader", "leaderHeight", height, "bestHeight", bestBlk.Header.Height)
 		go ce.ackBroadcaster(ackRes)
 		return false
 	}
@@ -117,10 +131,11 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 // This also checks if the node should request the block from its peers. This can happen
 // 1. If the node is a sentry node and doesn't have the block.
 // 2. If the node is a validator and missed the block proposal message.
-func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, ci *types.CommitInfo, leaderSig []byte) bool {
-	if ce.role.Load() == types.RoleLeader {
-		return false
-	}
+func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, hdr *ktypes.BlockHeader, ci *types.CommitInfo, leaderSig []byte) bool {
+	// NOTE: If not enough validators have agreed to promote the node as a leader,
+	// the node will stop receiving any committed blocks from the network and
+	// is stuck waiting for the votes. The only way to recover the node is to
+	// restart it, so that it can start
 
 	ce.stateInfo.mtx.RLock()
 	defer ce.stateInfo.mtx.RUnlock()
@@ -131,60 +146,60 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, ci *type
 		return false
 	}
 
-	// Verify the leader signature
-	valid, err := ce.leader.Verify(blkID[:], leaderSig)
-	if err != nil {
-		ce.log.Error("Error verifying leader signature", "error", err)
-		return false
+	// Ensure that the leader update is valid, i.e the new leader is a validator.
+	if hdr.NewLeader != nil {
+		candidate := hdr.NewLeader
+		// ensure that the Candidate is a validator
+		if _, ok := ce.validatorSet[hex.EncodeToString(candidate.Bytes())]; !ok {
+			ce.log.Error("Invalid leader update, candidate is not an existing validator, rejecting the block proposal", "leader with the update", hex.EncodeToString(candidate.Bytes()))
+			return false
+		}
 	}
 
-	if !valid {
-		ce.log.Info("Invalid leader signature, ignoring the blkAnn message ", "height", height)
-		return false
-	}
-
-	blkCommit := &blockAnnounce{
-		ci: ci,
-	}
-	if ce.stateInfo.status == Committed {
-		// Sentry node or slow validator
-		// check if this is the first time we are hearing about this block and not already downloaded it.
-		blk, _, err := ce.blockStore.Get(blkID)
-		if err != nil {
-			if errors.Is(err, types.ErrNotFound) || errors.Is(err, types.ErrBlkNotFound) {
-				return true // we want it
-			}
-			ce.log.Error("Unexpected error getting block from blockstore", "error", err)
+	// check if there are any leader updates in the block header
+	leader := ce.leader
+	updatedLeader, leaderUpdated := ci.ParamUpdates[ktypes.ParamNameLeader]
+	if leaderUpdated {
+		// accept this new leader only if the commitInfo votes are correctly validated
+		if err := ce.verifyVotes(ci, blkID); err != nil {
+			ce.log.Error("Error verifying votes", "error", err)
 			return false
 		}
 
-		blkCommit.blk = blk
-		go ce.sendConsensusMessage(&consensusMessage{
-			MsgType: blkCommit.Type(),
-			Msg:     blkCommit,
-			Sender:  ce.leader.Bytes(),
-		})
-		return false // already have it, just committed it...
+		leader = (updatedLeader.(ktypes.PublicKey)).PublicKey
+
+		ce.log.Infof("Received block with leader update, new leader: %s  old leader: %s", hex.EncodeToString(leader.Bytes()), hex.EncodeToString(ce.leader.Bytes()))
 	}
 
-	// We are currently processing a block proposal, ensure that it's the correct block proposal.
-	if ce.stateInfo.blkProp.blkHash != blkID {
-		// Rollback and reprocess the block sent as part of the commit message.
-		ce.log.Debug("Processing incorrect block, notify consensus engine to abort: ", "height", height)
-		go ce.sendResetMsg(&resetMsg{height: height})
-		return true // fetch the correct block
-	}
+	// Leader signature verification is not required as long as the commitInfo includes the signatures
+	// from majority of the validators. There can also scenarios where the node tried to promote a new
+	// leader candidate, but the candidate did not receive enough votes to be promoted as a leader.
+	// In such cases, the old leader prodces the block, but this node will not accept the blkAnn message
+	// from the old leader, as the node has a different leader now. So accept the committed block as
+	// long as the block is valid, without worrying about who the leader is.
 
-	if ce.stateInfo.status == Proposed {
-		// still processing the block, ignore the commit message for now and commit when ready.
+	// check if this is the first time we are hearing about this block and not already downloaded it.
+	blk, _, err := ce.blockStore.Get(blkID)
+	if err != nil {
+		if errors.Is(err, types.ErrNotFound) || errors.Is(err, types.ErrBlkNotFound) {
+			ce.log.Debugf("Block not found in the store, request it from the network", "height", height, "blockID", blkID)
+			return true // we want it
+		}
+		ce.log.Error("Unexpected error getting block from blockstore", "error", err)
 		return false
 	}
 
-	blkCommit.blk = ce.stateInfo.blkProp.blk
+	// no need to worry if we are currently processing a different block, commitBlock will take care of it.
+	// just ensure that you are processing the block which is for the height after the last committed block.
+	blkCommit := &blockAnnounce{
+		ci:  ci,
+		blk: blk,
+	}
+
 	go ce.sendConsensusMessage(&consensusMessage{
 		MsgType: blkCommit.Type(),
 		Msg:     blkCommit,
-		Sender:  ce.leader.Bytes(),
+		Sender:  leader.Bytes(),
 	})
 
 	return false
@@ -193,6 +208,7 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, ci *type
 // ProcessBlockProposal is used by the validator's consensus engine to process the new block proposal message.
 // This method is used to validate the received block, execute the block and generate appHash and
 // report the result back to the leader.
+// Only accept the block proposals from the node that this node considers as a leader.
 func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg *blockProposal) error {
 	if ce.role.Load() != types.RoleValidator {
 		ce.log.Warn("Only validators can process block proposals")
@@ -222,6 +238,17 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 		if err := ce.rollbackState(ctx); err != nil {
 			ce.log.Error("Error aborting execution of block", "height", blkPropMsg.height, "blockID", ce.state.blkProp.blkHash, "error", err)
 			return err
+		}
+	}
+
+	if blkPropMsg.blk.Header.NewLeader != nil {
+		// leader updated, ensure one more time that the node is okay with the leader change
+		newLeader := hex.EncodeToString(blkPropMsg.blk.Header.NewLeader.Bytes())
+		if ce.leader.Equals(blkPropMsg.blk.Header.NewLeader) {
+			ce.log.Info("Node accepts the leader change", "newLeader", newLeader)
+		} else {
+			ce.log.Error("Node does not accept the leader change", "newLeader", newLeader)
+			return nil
 		}
 	}
 
@@ -302,10 +329,6 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 // Validator nodes can skip the block execution and directly commit the block if they have already processed the block.
 // The nodes should only commit the block if the appHash is valid, else halt the node.
 func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, ci *types.CommitInfo) error {
-	if ce.role.Load() == types.RoleLeader {
-		return nil
-	}
-
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
@@ -330,11 +353,14 @@ func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, c
 	}
 
 	if ce.state.blkProp.blkHash != blk.Header.Hash() {
+		ce.log.Info("Received committed block is different from the block processed, rollback and process the committed block", "height", blk.Header.Height, "blockID", blk.Header.Hash(), "processedBlockID", ce.state.blkProp.blkHash)
+
 		if err := ce.rollbackState(ctx); err != nil {
 			ce.log.Error("error aborting execution of incorrect block proposal", "height", blk.Header.Height, "blockID", blk.Header.Hash(), "error", err)
 			// that's ok???
 			return fmt.Errorf("error aborting execution of incorrect block proposal: %w", err)
 		}
+
 		return ce.processAndCommit(ctx, blk, ci)
 	}
 
@@ -348,6 +374,7 @@ func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, c
 		ce.haltChan <- haltR
 		return nil
 	}
+
 	if ce.state.blockRes.appHash != ci.AppHash {
 		haltR := fmt.Sprintf("Incorrect AppHash, halting the node. received: %s, computed: %s", ci.AppHash, ce.state.blockRes.appHash)
 		ce.haltChan <- haltR
@@ -364,9 +391,6 @@ func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, c
 		ce.log.Errorf("Error committing block: height: %d, error: %v", blk.Header.Height, err)
 		return err
 	}
-
-	// Move to the next state
-	ce.nextState()
 	return nil
 }
 
@@ -381,6 +405,17 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Blo
 	ce.log.Info("Processing committed block", "height", blk.Header.Height, "blockID", blkID, "appHash", ci.AppHash)
 	if err := ce.validateBlock(blk); err != nil {
 		return err
+	}
+
+	// ensure that the commit info is valid
+	if err := ce.acceptCommitInfo(ci, blkID); err != nil {
+		return fmt.Errorf("error validating commitInfo: %w", err)
+	}
+
+	// accept the leader updates here
+	if blk.Header.NewLeader != nil {
+		// definitely this node is not the leader, so no role change need to be done here
+		ce.leader = blk.Header.NewLeader
 	}
 
 	ce.state.blkProp = &blockProposal{
@@ -404,22 +439,17 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Blo
 		ce.haltChan <- haltR
 		return errors.New(haltR)
 	}
-	if ce.state.blockRes.appHash != ci.AppHash { // do in acceptCommitInfo?
+
+	// Commit the block if the appHash and commitInfo is valid
+	if ce.state.blockRes.appHash != ci.AppHash {
 		haltR := fmt.Sprintf("processAndCommit: AppHash mismatch, halting the node. expected: %s, received: %s", ce.state.blockRes.appHash, ci.AppHash)
 		ce.haltChan <- haltR
 		return errors.New(haltR)
 	}
 
-	// Commit the block if the appHash and commitInfo is valid
-	if err := ce.acceptCommitInfo(ci, blkID); err != nil {
-		return fmt.Errorf("error validating commitInfo: %w", err)
-	}
-
 	if err := ce.commit(ctx); err != nil {
 		return fmt.Errorf("error committing block: %w", err)
 	}
-
-	ce.nextState()
 	return nil
 }
 
@@ -429,8 +459,29 @@ func (ce *ConsensusEngine) acceptCommitInfo(ci *types.CommitInfo, blkID ktypes.H
 	}
 
 	// Validate CommitInfo
+	if err := ce.verifyVotes(ci, blkID); err != nil {
+		return fmt.Errorf("error verifying votes: %w", err)
+	}
+
+	if err := ktypes.ValidateUpdates(ci.ParamUpdates); err != nil {
+		return fmt.Errorf("paramUpdates failed validation: %w", err)
+	}
+
+	ce.state.commitInfo = ci
+
+	return nil
+}
+
+func (ce *ConsensusEngine) verifyVotes(ci *types.CommitInfo, blkID ktypes.Hash) error {
+	// Validate CommitInfo
 	var acks int
 	for _, vote := range ci.Votes {
+		// vote is from a validator
+		_, ok := ce.validatorSet[hex.EncodeToString(vote.Signature.PubKey)]
+		if !ok {
+			return fmt.Errorf("vote is from a non-validator: %s", hex.EncodeToString(vote.Signature.PubKey))
+		}
+
 		err := vote.Verify(blkID, ci.AppHash)
 		if err != nil {
 			return fmt.Errorf("error verifying vote: %w", err)
@@ -441,15 +492,9 @@ func (ce *ConsensusEngine) acceptCommitInfo(ci *types.CommitInfo, blkID ktypes.H
 		}
 	}
 
-	if err := ktypes.ValidateUpdates(ci.ParamUpdates); err != nil {
-		return fmt.Errorf("paramUpdates failed validation: %w", err)
-	}
-
 	if !ce.hasMajorityCeil(acks) {
 		return fmt.Errorf("invalid blkAnn message, not enough acks in the commitInfo, leader misbehavior: %d", acks)
 	}
-
-	ce.state.commitInfo = ci
 
 	return nil
 }
