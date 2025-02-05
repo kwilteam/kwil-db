@@ -109,12 +109,13 @@ type datatype struct {
 	EncodeInferred func(any) (any, error)
 	// Decode decodes a data type received from Postgres. The input will either be a data type
 	// native to Go, a type defined in pgx, or a type in a custom pgx Codec (which we currently
-	// don't use).
+	// don't use). Decode should never be called with null values, but it may be called with
+	// empty strings / 0 values.
 	Decode func(any) (any, error)
 	// SerializeChangeset decodes a data type received from Postgres as a string. PGX only returns
-	// replication data as strings, so this is used to decode replication data. Decode will never be called
-	// with null values, but it may be called with empty strings / 0 values.
+	// replication data as strings, so this is used to decode replication data.
 	// https://github.com/jackc/pglogrepl/blob/828fbfe908e97cfeb409a17e4ec339dede1f1a17/message.go#L379
+	// Every implementation must be able to handle a string "NULL".
 	SerializeChangeset func(value string) ([]byte, error)
 	// DeserializeChangeset encodes a data type from a changeset to its native Go/Kwil type.
 	// This can then be used to execute an incoming changeset against a database.
@@ -148,6 +149,44 @@ func pgNumericToDecimal(num pgtype.Numeric) (*types.Decimal, error) {
 	return types.NewDecimalFromBigInt(i, e)
 }
 
+// splitString splits a pg array of strings that may have escape sequences.
+func splitString(s string) []string {
+	var tokens []string
+	var token strings.Builder
+	var inQuotes, escape bool
+
+	for _, r := range s {
+		switch {
+		// If the previous character was a backslash, append the current rune.
+		case escape:
+			token.WriteRune(r)
+			escape = false
+		// Mark the next character as escaped.
+		case r == '\\':
+			escape = true
+		// Toggle the inQuotes flag and do not add the quote itself.
+		case r == '"':
+			inQuotes = !inQuotes
+		// If we hit a comma outside quotes, end the current token.
+		case r == ',' && !inQuotes:
+			tokens = append(tokens, token.String())
+			token.Reset()
+		// Otherwise, add the current rune to the token.
+		default:
+			token.WriteRune(r)
+		}
+	}
+
+	// If the string ends with a trailing backslash, add it literally.
+	if escape {
+		token.WriteRune('\\')
+	}
+
+	// Append the final token.
+	tokens = append(tokens, token.String())
+	return tokens
+}
+
 var (
 	textType = &datatype{
 		KwilType:       types.TextType,
@@ -157,9 +196,18 @@ var (
 		EncodeInferred: defaultEncodeDecode,
 		Decode:         defaultEncodeDecode,
 		SerializeChangeset: func(value string) ([]byte, error) {
+			if value == `NULL` {
+				return nil, nil
+			}
+			if value == `"NULL"` {
+				value = "NULL" // never change, postgres
+			}
 			return []byte(value), nil
 		},
 		DeserializeChangeset: func(b []byte) (any, error) {
+			if b == nil {
+				return nil, nil
+			}
 			return string(b), nil
 		},
 	}
@@ -179,41 +227,7 @@ var (
 				return nil, fmt.Errorf("invalid text array: %s", value)
 			}
 
-			// each string is now wrapped in double quotes in the text literal,
-			// e.g. "aaa","bbb","c\"cc"
-			// we need to split on "," but not on "\",\""
-			inQuote := false
-			var strs []string
-			currentStr := strings.Builder{}
-			i := 0
-			for i < len(value) {
-				v := value[i]
-				switch v {
-				case '\\':
-					if len(value) <= i+1 {
-						return nil, fmt.Errorf("invalid text array: %s", value)
-					}
-					// add the next character to the string
-					currentStr.WriteByte(value[i+1])
-					i++
-				case '"':
-					// toggle inQuote
-					inQuote = !inQuote
-				case ',':
-					if inQuote {
-						currentStr.WriteByte(v)
-					} else {
-						strs = append(strs, currentStr.String())
-						currentStr.Reset()
-					}
-				default:
-					currentStr.WriteByte(v)
-				}
-				i++
-			}
-
-			// add the last string
-			strs = append(strs, currentStr.String())
+			strs := splitString(value)
 
 			return serializeArray(strs, 4, textType.SerializeChangeset)
 		},
@@ -235,6 +249,9 @@ var (
 			return v, nil
 		},
 		SerializeChangeset: func(value string) ([]byte, error) {
+			if value == `NULL` {
+				return nil, nil
+			}
 			intVal, err := strconv.ParseInt(value, 10, 64)
 			if err != nil {
 				return nil, err
@@ -245,6 +262,9 @@ var (
 			return buf, nil
 		},
 		DeserializeChangeset: func(b []byte) (any, error) {
+			if len(b) == 0 {
+				return nil, nil
+			}
 			return int64(binary.LittleEndian.Uint64(b)), nil
 		},
 	}
@@ -267,6 +287,9 @@ var (
 		EncodeInferred: defaultEncodeDecode,
 		Decode:         defaultEncodeDecode,
 		SerializeChangeset: func(value string) ([]byte, error) {
+			if value == `NULL` {
+				return nil, nil
+			}
 			if strings.EqualFold(value, "true") || strings.EqualFold(value, "t") {
 				return []byte{1}, nil
 			}
@@ -276,6 +299,9 @@ var (
 			return nil, fmt.Errorf("invalid boolean value: %s", value)
 		},
 		DeserializeChangeset: func(b []byte) (any, error) {
+			if len(b) == 0 {
+				return nil, nil
+			}
 			return b[0] == 1, nil
 		},
 	}
@@ -297,6 +323,9 @@ var (
 		EncodeInferred: defaultEncodeDecode,
 		Decode:         defaultEncodeDecode,
 		SerializeChangeset: func(value string) ([]byte, error) {
+			if value == `NULL` {
+				return nil, nil
+			}
 			// postgres returns all blobs as hex, prefixed with \x
 			// we need to remove the \x and decode the hex
 			if len(value) < 2 {
@@ -310,6 +339,9 @@ var (
 			return hex.DecodeString(value[2:])
 		},
 		DeserializeChangeset: func(b []byte) (any, error) {
+			if len(b) == 0 {
+				return nil, nil
+			}
 			return b, nil
 		},
 	}
@@ -325,16 +357,19 @@ var (
 			var ok bool
 			value, ok = trimCurlys(value)
 			if !ok {
-				return nil, fmt.Errorf("invalid blob array: %s", value)
+				return nil, fmt.Errorf("invalid blob array 1: %s", value)
 			}
 
-			// each blob is now wrapped in double quotes in the text literal,
+			// each blob is now wrapped in double quotes in the text literal, except for NULL
 			vals := strings.Split(value, ",")
 
 			bts := make([][]byte, len(vals))
 			for i, v := range vals {
+				if v == `NULL` {
+					continue
+				}
 				if !strings.HasPrefix(v, `"`) || !strings.HasSuffix(v, `"`) {
-					return nil, fmt.Errorf("invalid blob array: %s", value)
+					return nil, fmt.Errorf("invalid blob array 2: %s => %v", value, v)
 				}
 
 				vals[i] = v[1 : len(v)-1]
@@ -399,6 +434,9 @@ var (
 			return &u, nil
 		},
 		SerializeChangeset: func(value string) ([]byte, error) {
+			if value == `NULL` {
+				return nil, nil
+			}
 			u, err := types.ParseUUID(value)
 			if err != nil {
 				return nil, err
@@ -406,6 +444,9 @@ var (
 			return u.Bytes(), nil
 		},
 		DeserializeChangeset: func(b []byte) (any, error) {
+			if len(b) == 0 {
+				return nil, nil
+			}
 			u := types.UUID(b)
 			return &u, nil
 		},
@@ -483,6 +524,9 @@ var (
 			return pgNumericToDecimal(pgType)
 		},
 		SerializeChangeset: func(value string) ([]byte, error) {
+			if value == `NULL` {
+				return nil, nil
+			}
 			// parse to ensure it is a valid decimal, then re-encode it to ensure it is in the correct format.
 			dec, err := types.ParseDecimal(value)
 			if err != nil {
@@ -492,6 +536,9 @@ var (
 			return []byte(dec.String()), nil
 		},
 		DeserializeChangeset: func(b []byte) (any, error) {
+			if len(b) == 0 {
+				return nil, nil
+			}
 			return types.ParseDecimal(string(b))
 		},
 	}
@@ -665,7 +712,8 @@ func decodeFromPGVal(val any, oid uint32, oidToDataType map[uint32]*datatype) (a
 
 // decodeFromPG decodes several pgx types to their corresponding Go types.
 // It is capable of detecting special Kwil types and decoding them to their
-// corresponding Go types.
+// corresponding Go types. This is used when scanning blindly (into any or
+// using row.Values()) when pgx uses whatever pgtype types it prefers.
 func decodeFromPG(vals []any, oids []uint32, oidToDataType map[uint32]*datatype) ([]any, error) {
 	var results []any
 	for i, oid := range oids {

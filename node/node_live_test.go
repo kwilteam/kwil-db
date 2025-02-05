@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -452,15 +453,23 @@ func TestDualNodeMocknet(t *testing.T) {
 }
 
 func initDB(t *testing.T, port, dbName string) *pg.DB {
-	cfg := &config.DBConfig{
-		Host:   "127.0.0.1",
-		Port:   port,
-		User:   "kwild",
-		Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
-		DBName: dbName,
+	cfg := &pg.DBConfig{
+		PoolConfig: pg.PoolConfig{
+			ConnConfig: pg.ConnConfig{
+				Host:   "127.0.0.1",
+				Port:   port,
+				User:   "kwild",
+				Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
+				DBName: dbName,
+			},
+			MaxConns: 11,
+		},
+		SchemaFilter: func(s string) bool {
+			return strings.Contains(s, pg.DefaultSchemaFilterPrefix)
+		},
 	}
-	db, err := pgtest.NewTestDBWithCfg(t, cfg, cleanupDB)
-	require.NoError(t, err)
+	db := pgtest.NewTestDBWithCfg(t, cfg, cleanupDB)
+
 	ctx := context.Background()
 
 	tx, err := db.BeginTx(ctx)

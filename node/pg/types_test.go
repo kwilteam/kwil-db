@@ -36,3 +36,71 @@ func Test_ArrayEncodeDecode(t *testing.T) {
 
 	require.EqualValues(t, arr2, res3)
 }
+
+// TODO: the SerializeChangeset and DeserializeChangeset functions are not tested
+
+func TestSplitString(t *testing.T) {
+	tests := []struct {
+		name     string
+		input    string
+		expected []string
+	}{
+		{
+			name:     "empty string",
+			input:    "",
+			expected: []string{""},
+		},
+		{
+			name:     "single value",
+			input:    "hello",
+			expected: []string{"hello"},
+		},
+		{
+			name:     "simple values",
+			input:    "a,b,c",
+			expected: []string{"a", "b", "c"},
+		},
+		{
+			name:     "quoted strings with commas",
+			input:    `"hello,world",next,"another,value"`,
+			expected: []string{`hello,world`, "next", `another,value`},
+		},
+		{
+			name:     "escaped quotes",
+			input:    `value1,"escaped\"quote",value3`,
+			expected: []string{"value1", `escaped"quote`, "value3"},
+		},
+		{
+			name:     "escaped backslashes",
+			input:    `normal,with\\backslashes,"quoted\\with\\backslashes"`,
+			expected: []string{"normal", `with\backslashes`, `quoted\with\backslashes`},
+		},
+		{
+			name:     "trailing backslash",
+			input:    `value1,value2\`,
+			expected: []string{"value1", "value2\\"},
+		},
+		{
+			name:     "mixed escapes and quotes",
+			input:    `simple,"quoted,value",escaped\\comma\,,"quoted\"escape\\chars"`,
+			expected: []string{"simple", "quoted,value", `escaped\comma,`, `quoted"escape\chars`},
+		},
+		{ // well formed arrays from pg should no have whitespace outside of quotes...
+			name:     "whitespace handling",
+			input:    ` spaced , "quoted space" ,nospace`,
+			expected: []string{" spaced ", " quoted space ", "nospace"},
+		},
+		{
+			name:     "empty elements",
+			input:    "first,,last",
+			expected: []string{"first", "", "last"},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := splitString(tt.input)
+			require.Equal(t, tt.expected, result)
+		})
+	}
+}

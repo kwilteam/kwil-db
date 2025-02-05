@@ -569,7 +569,6 @@ func getTypeMetadata(t *types.DataType) []byte {
 // SQL with Value types.
 func query(ctx context.Context, db sql.DB, query string, scanVals []value, fn func() error, args []value) error {
 	argVals := make([]any, len(args))
-	var err error
 	for i, v := range args {
 		argVals[i] = v
 	}
@@ -579,12 +578,7 @@ func query(ctx context.Context, db sql.DB, query string, scanVals []value, fn fu
 		recVals[i] = scanVals[i]
 	}
 
-	err = queryRowFunc(ctx, db, query, recVals, fn, argVals...)
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return queryRowFunc(ctx, db, query, recVals, fn, argVals...)
 }
 
 // queryRowFunc executes a SQL query with the given values.

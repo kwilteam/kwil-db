@@ -2600,6 +2600,8 @@ type arrayOfNulls struct {
 	length int32 // 0-based
 }
 
+var _ driver.Valuer = (*arrayOfNulls)(nil)
+
 var _ arrayValue = (*arrayOfNulls)(nil)
 
 func (n *arrayOfNulls) Len() int32 {
