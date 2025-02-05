@@ -5,6 +5,7 @@ package node
 import (
 	"context"
 	"encoding/hex"
+	"net"
 	"os"
 	"path/filepath"
 	"sync"
@@ -50,6 +51,7 @@ func TestSingleNodeMocknet(t *testing.T) {
 	pk1, h1 := newTestHost(t, mn)
 	bs1 := memstore.NewMemBS()
 	mp1 := mempool.New()
+	priv1, _ := pk1.Raw()
 
 	db1 := initDB(t, "5432", "kwil_test_db")
 
@@ -63,7 +65,7 @@ func TestSingleNodeMocknet(t *testing.T) {
 		wg.Wait()
 	})
 
-	privKeys, _ := newGenesis(t, [][]byte{pk1})
+	privKeys, _ := newGenesis(t, [][]byte{priv1})
 
 	valSet := make(map[string]ktypes.Validator)
 	for _, priv := range privKeys {
@@ -89,7 +91,7 @@ func TestSingleNodeMocknet(t *testing.T) {
 	genCfg.Leader = ktypes.PublicKey{PublicKey: privKeys[0].Public()}
 	genCfg.Validators = valSetList
 
-	k, err := crypto.UnmarshalSecp256k1PrivateKey(pk1)
+	k, err := crypto.UnmarshalSecp256k1PrivateKey(priv1)
 	require.NoError(t, err)
 
 	signer1 := &auth.EthPersonalSigner{Key: *k}
@@ -206,10 +208,18 @@ func TestDualNodeMocknet(t *testing.T) {
 		require.NoError(t, err)
 	}()
 
+	priv1, _ := pk1.Raw()
+	pub1, _ := pk1.GetPublic().Raw()
+	host1, port1, _ := maHostPort(h1.Addrs()[0])
+	peerStr1 := hex.EncodeToString(pub1) + "#secp256k1@" + net.JoinHostPort(host1, port1)
+
 	pk2, h2 := newTestHost(t, mn)
 	bs2 := memstore.NewMemBS()
 	mp2 := mempool.New()
 	db2 := initDB(t, "5432", "kwil_test_db2") // NOTE: using the same postgres host is a little wild
+
+	priv2, _ := pk2.Raw()
+	// pub2, _ := pk2.GetPublic().Raw()
 
 	root1 := t.TempDir()
 	root2 := t.TempDir()
@@ -222,7 +232,7 @@ func TestDualNodeMocknet(t *testing.T) {
 		wg.Wait()
 	})
 
-	privKeys, _ := newGenesis(t, [][]byte{pk1, pk2})
+	privKeys, _ := newGenesis(t, [][]byte{priv1, priv2})
 
 	valSet := make(map[string]ktypes.Validator)
 	for _, priv := range privKeys {
@@ -299,6 +309,7 @@ func TestDualNodeMocknet(t *testing.T) {
 	ps1, err := NewP2PService(ctx, psCfg1, h1)
 	require.NoError(t, err)
 	err = ps1.Start(ctx)
+	defer ps1.Close()
 	require.NoError(t, err, "failed to start p2p service")
 
 	cfg1 := &Config{
@@ -316,18 +327,6 @@ func TestDualNodeMocknet(t *testing.T) {
 		BlockProc:   &dummyBP{vals: valSetList},
 		P2PService:  ps1,
 	}
-	node1, err := NewNode(cfg1)
-	if err != nil {
-		t.Fatalf("Failed to create Node 1: %v", err)
-	}
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer os.RemoveAll(node1.Dir())
-		node1.Start(ctx)
-	}()
-
-	time.Sleep(20 * time.Millisecond)
 
 	// Node 2
 	es2 := &mockEventStore{}
@@ -372,6 +371,11 @@ func TestDualNodeMocknet(t *testing.T) {
 
 	log2 := log.New(log.WithName("NODE2"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
 
+	// Link the hosts (allows them to actually connect)
+	if err := mn.LinkAll(); err != nil {
+		t.Fatalf("Failed to link hosts: %v", err)
+	}
+
 	psCfg2 := &P2PServiceConfig{
 		PrivKey: privKeys[1],
 		RootDir: root2,
@@ -381,7 +385,8 @@ func TestDualNodeMocknet(t *testing.T) {
 	}
 	ps2, err := NewP2PService(ctx, psCfg2, h2)
 	require.NoError(t, err)
-	err = ps2.Start(ctx)
+	err = ps2.Start(ctx, peerStr1)
+	defer ps2.Close()
 	require.NoError(t, err, "failed to start p2p service")
 
 	cfg2 := &Config{
@@ -399,6 +404,20 @@ func TestDualNodeMocknet(t *testing.T) {
 		BlockProc:   &dummyBP{vals: valSetList},
 		P2PService:  ps2,
 	}
+
+	node1, err := NewNode(cfg1)
+	if err != nil {
+		t.Fatalf("Failed to create Node 1: %v", err)
+	}
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		defer os.RemoveAll(node1.Dir())
+		node1.Start(ctx)
+	}()
+
+	time.Sleep(100 * time.Millisecond)
+
 	node2, err := NewNode(cfg2)
 	if err != nil {
 		t.Fatalf("Failed to create Node 2: %v", err)
@@ -409,14 +428,6 @@ func TestDualNodeMocknet(t *testing.T) {
 		defer os.RemoveAll(node2.Dir())
 		node2.Start(ctx)
 	}()
-
-	// Link and connect the hosts
-	if err := mn.LinkAll(); err != nil {
-		t.Fatalf("Failed to link hosts: %v", err)
-	}
-	if err := mn.ConnectAllButSelf(); err != nil {
-		t.Fatalf("Failed to connect hosts: %v", err)
-	}
 
 	reachHeight := int64(2)
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
@@ -429,7 +440,6 @@ func TestDualNodeMocknet(t *testing.T) {
 
 	mn.DisconnectPeers(ps1.Host().ID(), ps2.Host().ID())
 	time.Sleep(time.Second)
-	// mn.ConnectPeers(ps1.Host().ID(), ps2.Host().ID())
 
 	require.EventuallyWithT(t, func(c *assert.CollectT) {
 		connectedPeers, err := node1.Peers(ctx)

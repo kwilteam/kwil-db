@@ -37,7 +37,7 @@ import (
 
 var blackholeIP6 = net.ParseIP("100::")
 
-func newTestHost(t *testing.T, mn mock.Mocknet) ([]byte, host.Host) {
+func newTestHost(t *testing.T, mn mock.Mocknet) (p2pcrypto.PrivKey, host.Host) {
 	privKey, _, err := p2pcrypto.GenerateSecp256k1Key(rand.Reader)
 	if err != nil {
 		t.Fatalf("Failed to generate private key: %v", err)
@@ -62,11 +62,11 @@ func newTestHost(t *testing.T, mn mock.Mocknet) ([]byte, host.Host) {
 		t.Fatalf("Failed to add peer to mocknet: %v", err)
 	}
 
-	pkBytes, err := privKey.Raw()
-	if err != nil {
-		t.Fatalf("Failed to get private key bytes: %v", err)
-	}
-	return pkBytes, host
+	// pkBytes, err := privKey.Raw()
+	// if err != nil {
+	// 	t.Fatalf("Failed to get private key bytes: %v", err)
+	// }
+	return privKey, host
 }
 
 func makeTestHosts(t *testing.T, nNodes, nExtraHosts int, blockInterval time.Duration) ([]*Node, []host.Host, []*P2PService, mock.Mocknet) {
@@ -87,7 +87,8 @@ func makeTestHosts(t *testing.T, nNodes, nExtraHosts int, blockInterval time.Dur
 		pk, h := newTestHost(t, mn)
 		t.Logf("node host is %v", h.ID())
 
-		priv, err := crypto.UnmarshalSecp256k1PrivateKey(pk)
+		pkBts, _ := pk.Raw()
+		priv, err := crypto.UnmarshalSecp256k1PrivateKey(pkBts)
 		if err != nil {
 			t.Fatalf("Failed to unmarshal private key: %v", err)
 		}
