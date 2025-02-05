@@ -330,17 +330,17 @@ func parseTypedParam(param string) (datatype *types.DataType, val any, err error
 
 	parts := strings.SplitN(param, ":", 2)
 	if len(parts) != 2 {
-		return nil, nil, fmt.Errorf(`invalid parameter format: "%s". error: %w`, param, err)
+		return nil, nil, fmt.Errorf(`invalid parameter format: "%s"; parameters must be of format type:value (e.g. text:"Hello World!")`, param)
 	}
 
 	datatype, err = types.ParseDataType(parts[0])
 	if err != nil {
-		return nil, nil, fmt.Errorf(`invalid parameter type: "%s". error: %w`, parts[0], err)
+		return nil, nil, fmt.Errorf(`invalid parameter type: "%s"; error: %w`, parts[0], err)
 	}
 
 	val, err = stringAndTypeToVal(parts[1], datatype)
 	if err != nil {
-		return nil, nil, fmt.Errorf(`invalid parameter value: "%s". error: %w`, parts[1], err)
+		return nil, nil, fmt.Errorf(`invalid parameter value: "%s";sla error: %w`, parts[1], err)
 	}
 
 	return datatype, val, nil

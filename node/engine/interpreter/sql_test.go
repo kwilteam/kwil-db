@@ -1176,6 +1176,7 @@ func Test_Transactionality(t *testing.T) {
 	// The below tables are syntactically valid, but the second table has a foreign key constraint
 	// that references a non-existent table.
 	err = interp.ExecuteWithoutEngineCtx(ctx, tx2, `
+		CREATE NAMESPACE not_exists;
 		CREATE TABLE table1 (id INT PRIMARY KEY);
 		CREATE TABLE table2 (id INT PRIMARY KEY, name TEXT REFERENCES not_exists(id));
 		`, nil, nil)
@@ -1190,6 +1191,7 @@ func Test_Transactionality(t *testing.T) {
 
 	// fix the bug and continue
 	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `
+	CREATE NAMESPACE not_exists;
 	CREATE TABLE table1 (id INT PRIMARY KEY);
 	CREATE TABLE table2 (id INT PRIMARY KEY, name TEXT);
 	`, nil, nil)
