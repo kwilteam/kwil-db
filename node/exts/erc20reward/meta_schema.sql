@@ -63,6 +63,18 @@ CREATE TABLE epoch_rewards (
 
 CREATE INDEX idx_epoch_rewards_epoch_id ON epoch_rewards(epoch_id);
 
-CREATE TABLE meta (
+CREATE TABLE meta
+(
     version INT8 PRIMARY KEY
+);
+
+-- epoch_votes holds the votes from signer
+-- A signer can vote multiple times with different safe_nonce
+-- After an epoch is confirmed, we can delete all related votes.
+CREATE TABLE epoch_votes (
+    epoch_id UUID NOT NULL REFERENCES epochs(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+    voter TEXT NOT NULL,
+    signature BYTEA NOT NULL,
+    nonce INT8 NOT NULL, -- safe nonce; technically we don't need this, but this helps to identify why a signer is not valid
+    PRIMARY KEY (epoch_id, voter)
 );

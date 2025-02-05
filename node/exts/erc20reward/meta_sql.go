@@ -193,7 +193,7 @@ func bytesToEthAddress(bts []byte) (ethcommon.Address, error) {
 
 // creditBalance credits a balance to a user.
 // The rewardId is the ID of the reward instance.
-// It if is negative, it will subtract.
+// If it is negative, it will subtract.
 func creditBalance(ctx context.Context, app *common.App, rewardId *types.UUID, user ethcommon.Address, amount *types.Decimal) error {
 	balanceId := userBalanceID(rewardId, user)
 	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
@@ -328,9 +328,8 @@ func balanceOf(ctx context.Context, app *common.App, rewardID *types.UUID, user 
 }
 
 // getRewardsForEpoch gets all rewards for an epoch.
-func getRewardsForEpoch(ctx context.Context, app *common.App, epochID *types.UUID) ([]*EpochReward, error) {
-	var rewards []*EpochReward
-	err := app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
+func getRewardsForEpoch(ctx context.Context, app *common.App, epochID *types.UUID, fn func(reward *EpochReward) error) error {
+	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
 	{kwil_erc20_meta}SELECT recipient, amount
 	FROM epoch_rewards
 	WHERE epoch_id = $epoch_id
@@ -346,27 +345,29 @@ func getRewardsForEpoch(ctx context.Context, app *common.App, epochID *types.UUI
 			return err
 		}
 
-		rewards = append(rewards, &EpochReward{
+		return fn(&EpochReward{
 			Recipient: recipient,
 			Amount:    row.Values[1].(*types.Decimal),
 		})
-		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
-	return rewards, nil
 }
 
-// getUnconfirmedEpochs gets all unconfirmed epochs.
-func getUnconfirmedEpochs(ctx context.Context, app *common.App, instanceID *types.UUID, fn func(*Epoch) error) error {
-	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
-	SELECT id, created_at_block, created_at_unix, ended_at, block_hash, reward_root
-	FROM epochs
-	WHERE instance_id = $instance_id AND confirmed IS FALSE
-	ORDER BY ended_at ASC
-	`, map[string]any{
+// getEpochs gets epochs by given conditions.
+func getEpochs(ctx context.Context, app *common.App, instanceID *types.UUID, after int64, limit int64, confirmedOnly bool, fn func(*Epoch) error) error {
+	query := `
+    SELECT e.id, e.created_at_block, e.created_at_unix, e.ended_at, e.block_hash, e.reward_root, array_agg(v.voter) as voters, array_agg(v.nonce) as signatures
+	FROM epochs e
+	JOIN epoch_votes as v ON v.epoch_id = epochs.id
+	WHERE instance_id = $instance_id AND ended_at_block > $after`
+	if confirmedOnly {
+		query += ` AND confirmed IS $confirmed`
+	}
+	query += ` ORDER BY ended_at ASC LIMIT $limit`
+	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, query, map[string]any{
 		"instance_id": instanceID,
+		"after":       after,
+		"limit":       limit,
+		"confirmed":   confirmedOnly,
 	}, func(r *common.Row) error {
 		if len(r.Values) != 6 {
 			return fmt.Errorf("expected 6 values, got %d", len(r.Values))
@@ -433,5 +434,50 @@ func setVersionToCurrent(ctx context.Context, app *common.App) error {
 	ON CONFLICT (version) DO UPDATE SET version = $version
 	`, map[string]any{
 		"version": currentVersion,
+	}, nil)
+}
+
+func epochConfirmed(ctx context.Context, app *common.App, epochID *types.UUID) (bool, error) {
+	var confirmed bool
+	err := app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
+	{kwil_erc20_meta}SELECT confirmed
+    FROM epochs WHERE id = $id;
+    `, map[string]any{
+		"id": epochID,
+	}, func(row *common.Row) error {
+		if len(row.Values) != 1 {
+			return fmt.Errorf("expected 1 value, got %d", len(row.Values))
+		}
+
+		confirmed = row.Values[0].(bool)
+		return nil
+	})
+
+	if err != nil {
+		return false, err
+	}
+
+	return confirmed, nil
+}
+
+// voteEpoch vote an epoch by submitting signature.
+func voteEpoch(ctx context.Context, app *common.App, epochID *types.UUID, voter ethcommon.Address, signature []byte) error {
+	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
+	{kwil_erc20_meta}INSERT into epoch_votes(epoch_id, voter, signature)
+    VALUES ($epoch_id, $voter, $signature);
+	`, map[string]any{
+		"epoch_id":  epochID,
+		"voter":     voter.Bytes(),
+		"signature": signature,
+	}, nil)
+}
+
+// removeEpochVotes removes all votes associated with an epoch.
+func removeEpochVotes(ctx context.Context, app *common.App, epochID *types.UUID) error {
+	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
+	{kwil_erc20_meta}DELETE FROM epoch_votes
+	WHERE epoch_id = $epoch_id;
+	`, map[string]any{
+		"epoch_id": epochID,
 	}, nil)
 }

@@ -41,7 +41,7 @@ func init() {
 		var distributionPeriod string
 		distributionPeriodAny, ok := metadata["distribution_period"]
 		if !ok {
-			distributionPeriod = "24h"
+			distributionPeriod = "24h" // 'h' is the highest units supported
 		} else {
 			distributionPeriod, ok = distributionPeriodAny.(string)
 			if !ok {
@@ -171,7 +171,13 @@ func init() {
 					Handler:         makeMetaHandler("balance"),
 				},
 				{
-					Name: "list_unconfirmed_epochs",
+					Name: "list_epochs",
+					Parameters: []precompiles.PrecompileValue{
+						{Name: "id", Type: types.UUIDType},
+						{Name: "after", Type: types.IntType},
+						{Name: "limit", Type: types.IntType},
+						{Name: "confirmed_only", Type: types.BoolType},
+					},
 					Returns: &precompiles.MethodReturn{
 						IsTable: true,
 						Fields: []precompiles.PrecompileValue{
