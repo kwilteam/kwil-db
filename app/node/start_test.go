@@ -22,7 +22,7 @@ func Test_ExtensionFlags(t *testing.T) {
 		},
 		{
 			name:    "single flag",
-			flagset: []string{"--extension.extname.flagname", "value"},
+			flagset: []string{"--extensions.extname.flagname", "value"},
 			want: map[string]map[string]string{
 				"extname": {
 					"flagname": "value",
@@ -31,7 +31,7 @@ func Test_ExtensionFlags(t *testing.T) {
 		},
 		{
 			name:    "multiple flags",
-			flagset: []string{"--extension.extname.flagname", "value", "--extension.extname2.flagname2=value2"},
+			flagset: []string{"--extensions.extname.flagname", "value", "--extensions.extname2.flagname2=value2"},
 			want: map[string]map[string]string{
 				"extname": {
 					"flagname": "value",
@@ -42,16 +42,33 @@ func Test_ExtensionFlags(t *testing.T) {
 			},
 		},
 		{
+			name:    "multiple flags with dot values",
+			flagset: []string{"--extensions.extname.flagname", "value.a.b", "--extensions.extname2.flagname2=value2.a.b"},
+			want: map[string]map[string]string{
+				"extname": {
+					"flagname": "value.a.b",
+				},
+				"extname2": {
+					"flagname2": "value2.a.b",
+				},
+			},
+		},
+		{
+			name:    "more than 3 fields",
+			flagset: []string{"--extensions.extname.flagname.another", "value", "--extensions.extname.flagname.another=value"},
+			wantErr: true,
+		},
+		{
 			name: "missing value",
 			flagset: []string{
-				"--extension.extname.flagname",
+				"--extensions.extname.flagname",
 			},
 			wantErr: true,
 		},
 		{
 			name: "pass flag as a value errors",
 			flagset: []string{
-				"--extension.extname.flagname", "--extension.extname2.flagname2=value2",
+				"--extensions.extname.flagname", "--extensions.extname2.flagname2=value2",
 			},
 			wantErr: true,
 		},
@@ -62,6 +79,7 @@ func Test_ExtensionFlags(t *testing.T) {
 			got, err := parseExtensionFlags(tt.flagset)
 			if tt.wantErr {
 				require.Error(t, err)
+				t.Log(err)
 				return
 			}
 			require.NoError(t, err)

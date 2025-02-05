@@ -1,4 +1,4 @@
-// package meta implements a meta extension that manages all rewards on a Kwil network.
+// package erc20reward implements a meta extension that manages all rewards on a Kwil network.
 // It is used to create other extensions with which users can distribute erc20 tokens
 // to users.
 // It works by exposing an action to the DB owner which allows creation of new extensions
@@ -10,7 +10,7 @@
 // Internally, the node will start another event listener which is responsible for tracking
 // the erc20's Transfer event. When a transfer event is detected, the node will update the
 // reward balance of the recipient.
-package erc20reward
+package erc20
 
 import (
 	"bytes"
@@ -23,11 +23,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/decred/dcrd/container/lru"
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -37,8 +39,8 @@ import (
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/node/engine"
-	"github.com/kwilteam/kwil-db/node/exts/erc20reward/abigen"
-	"github.com/kwilteam/kwil-db/node/exts/erc20reward/reward"
+	"github.com/kwilteam/kwil-db/node/exts/erc20-bridge/abigen"
+	"github.com/kwilteam/kwil-db/node/exts/erc20-bridge/utils"
 	evmsync "github.com/kwilteam/kwil-db/node/exts/evm-sync"
 	"github.com/kwilteam/kwil-db/node/exts/evm-sync/chains"
 	"github.com/kwilteam/kwil-db/node/types/sql"
@@ -48,6 +50,8 @@ import (
 const (
 	RewardMetaExtensionName = "kwil_erc20_meta"
 	uint256Precision        = 78
+
+	rewardMerkleTreeLRUSize = 1000
 )
 
 var (
@@ -68,6 +72,8 @@ var (
 	// so that we know how to decode them
 	logTypeTransfer       = []byte("e20trsnfr")
 	logTypeConfirmedEpoch = []byte("cnfepch")
+
+	mtLRUCache = lru.NewMap[[32]byte, []byte](rewardMerkleTreeLRUSize) // tree root => tree body
 )
 
 // generates a deterministic UUID for the chain and escrow
@@ -505,12 +511,12 @@ func init() {
 						},
 						Returns: &precompiles.MethodReturn{
 							Fields: []precompiles.PrecompileValue{
-								{Name: "chain", Type: types.TextType},
+								{Name: "chain_id", Type: types.TextType},
 								{Name: "escrow", Type: types.TextType},
 								{Name: "epoch_period", Type: types.TextType},
 								{Name: "erc20", Type: types.TextType, Nullable: true},
 								{Name: "decimals", Type: types.IntType, Nullable: true},
-								{Name: "balance", Type: types.TextType, Nullable: true}, // total unspent balance
+								{Name: "balance", Type: uint256Numeric, Nullable: true}, // total unspent balance
 								{Name: "synced", Type: types.BoolType},
 								{Name: "synced_at", Type: types.IntType, Nullable: true},
 								{Name: "enabled", Type: types.BoolType},
@@ -529,7 +535,8 @@ func init() {
 							defer info.mu.RUnlock()
 
 							// these values can be null if the extension is not synced
-							var erc20Address, ownedBalance *string
+							var erc20Address *string
+							var ownedBalance *types.Decimal
 							var decimals, syncedAt *int64
 
 							dur := time.Duration(info.userProvidedData.DistributionPeriod) * time.Second
@@ -538,8 +545,8 @@ func init() {
 								erc20Addr := info.syncedRewardData.Erc20Address.Hex()
 								erc20Address = &erc20Addr
 								decimals = &info.syncedRewardData.Erc20Decimals
-								owbalStr := info.ownedBalance.String()
-								ownedBalance = &owbalStr
+								//owbalStr := info.ownedBalance.String()
+								ownedBalance = info.ownedBalance
 								syncedAt = &info.syncedAt
 							}
 
@@ -640,7 +647,7 @@ func init() {
 								return err
 							}
 
-							err = issueReward(ctx.TxContext.Ctx, app, info.currentEpoch.ID, addr, amount)
+							err = issueReward(ctx.TxContext.Ctx, app, id, info.currentEpoch.ID, addr, amount)
 							if err != nil {
 								info.mu.RUnlock()
 								return err
@@ -816,34 +823,11 @@ func init() {
 								return err
 							}
 
-							return resultFn([]any{bal})
-						},
-					},
-					{
-						// lists epochs that have not been confirmed yet, but have been ended.
-						// It lists them in ascending order (e.g. oldest first).
-						Name: "list_unconfirmed_epochs",
-						Parameters: []precompiles.PrecompileValue{
-							{Name: "id", Type: types.UUIDType},
-						},
-						Returns: &precompiles.MethodReturn{
-							IsTable: true,
-							Fields: []precompiles.PrecompileValue{
-								{Name: "epoch_id", Type: types.UUIDType},
-								{Name: "start_height", Type: types.IntType},
-								{Name: "start_timestamp", Type: types.IntType},
-								{Name: "end_height", Type: types.IntType},
-								{Name: "reward_root", Type: types.ByteaType},
-								{Name: "end_block_hash", Type: types.ByteaType},
-							},
-						},
-						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
-						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
-							id := inputs[0].(*types.UUID)
+							if bal == nil {
+								bal, _ = erc20ValueFromBigInt(big.NewInt(0))
+							}
 
-							return getUnconfirmedEpochs(ctx.TxContext.Ctx, app, id, func(e *Epoch) error {
-								return resultFn([]any{e.ID, e.StartHeight, e.StartTime.Unix(), *e.EndHeight, e.Root, e.BlockHash})
-							})
+							return resultFn([]any{bal})
 						},
 					},
 					{
@@ -942,107 +926,256 @@ func init() {
 							return resultFn([]any{scaled})
 						},
 					},
-					// {
-					// 	// Supposed to be called by Signer service
-					// 	// Returns epoch rewards after(non-include) after_height, in ASC order.
-					// 	Name: "list_epochs",
-					// 	Parameters: []precompiles.PrecompileValue{
-					// 		{Name: "id", Type: types.UUIDType},
-					// 		{Name: "after_height", Type: types.IntType},
-					// 		{Name: "limit", Type: types.IntType},
-					// 	},
-					// 	Returns: &precompiles.MethodReturn{
-					// 		IsTable: true,
-					// 		Fields:  (&Epoch{}).UnpackTypes(), // TODO: I might need to update this depending on what happens with decimal types
-					// 	},
-					// 	AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
-					// 	Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
-					// 		panic("finish me")
-					// 	},
-					// },
-					// {
-					// 	// Supposed to be called by the SignerService, to verify the reward root.
-					// 	// Could be merged into 'list_epochs'
-					// 	// Returns pending rewards from(include) start_height to(include) end_height, in ASC order.
-					// 	// NOTE: Rewards of same address will be aggregated.
-					// 	Name: "search_rewards",
-					// 	Parameters: []precompiles.PrecompileValue{
-					// 		{Name: "id", Type: types.UUIDType},
-					// 		{Name: "start_height", Type: types.IntType},
-					// 		{Name: "end_height", Type: types.IntType},
-					// 	},
-					// 	Returns: &precompiles.MethodReturn{
-					// 		IsTable: true,
-					// 		Fields:  (&Reward{}).UnpackTypes(), // TODO: I might need to update this depending on what happens with decimal types
-					// 	},
-					// 	AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
-					// 	Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
-					// 		panic("finish me")
-					// 	},
-					// },
-					// {
-					// 	// Supposed to be called by Kwil network in an end block hook.
-					// 	Name:            "propose_epoch",
-					// 	AccessModifiers: []precompiles.Modifier{precompiles.SYSTEM},
-					// 	Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
-					// 		if !calledByExtension(ctx) {
-					// 			return errors.New("propose_epoch can only be called by the Kwil network")
-					// 		}
+					{
+						// get only active epochs: finalized epoch and collecting epoch
+						Name: "get_active_epochs",
+						Parameters: []precompiles.PrecompileValue{
+							{Name: "id", Type: types.UUIDType},
+						},
+						Returns: &precompiles.MethodReturn{
+							IsTable: true,
+							Fields: []precompiles.PrecompileValue{
+								{Name: "id", Type: types.UUIDType},
+								{Name: "start_height", Type: types.IntType},
+								{Name: "start_timestamp", Type: types.IntType},
+								{Name: "end_height", Type: types.IntType, Nullable: true},
+								{Name: "reward_root", Type: types.ByteaType, Nullable: true},
+								{Name: "reward_amount", Type: uint256Numeric, Nullable: true},
+								{Name: "end_block_hash", Type: types.ByteaType, Nullable: true},
+								{Name: "confirmed", Type: types.BoolType},
+								{Name: "voters", Type: types.TextArrayType, Nullable: true},
+								{Name: "vote_nonces", Type: types.IntArrayType, Nullable: true},
+								{Name: "voter_signatures", Type: types.ByteaArrayType, Nullable: true},
+							},
+						},
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+							id := inputs[0].(*types.UUID)
 
-					// 		panic("finish me")
-					// 	},
-					// },
-					// {
-					// 	// Supposed to be called by a multisig signer
-					// 	Name: "vote_epoch",
-					// 	Parameters: []precompiles.PrecompileValue{
-					// 		{Name: "id", Type: types.UUIDType},
-					// 		{Name: "sign_hash", Type: types.ByteaType},
-					// 		{Name: "signatures", Type: types.ByteaType},
-					// 	},
-					// 	AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
-					// 	Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
-					// 		panic("finish me")
-					// 	},
-					// },
-					// {
-					// 	// Lists all epochs that have received enough votes
-					// 	Name: "list_finalized",
-					// 	Parameters: []precompiles.PrecompileValue{
-					// 		{Name: "id", Type: types.UUIDType},
-					// 		{Name: "after_height", Type: types.IntType},
-					// 		{Name: "limit", Type: types.IntType},
-					// 	},
-					// 	Returns: &precompiles.MethodReturn{
-					// 		IsTable: true,
-					// 		Fields:  (&FinalizedReward{}).UnpackTypes(), // TODO: I might need to update this depending on what happens with decimal types
-					// 	},
-					// 	AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
-					// 	Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
-					// 		panic("finish me")
-					// 	},
-					// },
-					// {
-					// 	// Called by app / user
-					// 	Name: "claim_info",
-					// 	Parameters: []precompiles.PrecompileValue{
-					// 		{Name: "id", Type: types.UUIDType},
-					// 		{Name: "sign_hash", Type: types.ByteaType, Nullable: false},
-					// 		{Name: "wallet_address", Type: types.TextType, Nullable: false},
-					// 	},
-					// 	Returns: &precompiles.MethodReturn{
-					// 		Fields: []precompiles.PrecompileValue{
-					// 			{Name: "amount", Type: types.TextType},
-					// 			{Name: "block_hash", Type: types.TextType},
-					// 			{Name: "root", Type: types.TextType},
-					// 			{Name: "proofs", Type: types.TextArrayType},
-					// 		},
-					// 	},
-					// 	AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
-					// 	Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
-					// 		panic("finish me")
-					// 	},
-					// },
+							return getActiveEpochs(ctx.TxContext.Ctx, app, id, func(e *Epoch) error {
+								var voters []string
+								if len(e.Voters) > 0 {
+									for _, item := range e.Voters {
+										voters = append(voters, item.String())
+									}
+								}
+
+								return resultFn([]any{e.ID, e.StartHeight, e.StartTime, *e.EndHeight, e.Root, e.Total, e.BlockHash, e.Confirmed,
+									voters,
+									e.VoteNonces,
+									e.VoteSigs,
+								})
+							})
+						}},
+					{
+						// lists epochs after(non-include) given height, in ASC order.
+						Name: "list_epochs",
+						Parameters: []precompiles.PrecompileValue{
+							{Name: "id", Type: types.UUIDType},
+							{Name: "after", Type: types.IntType},
+							{Name: "limit", Type: types.IntType},
+						},
+						Returns: &precompiles.MethodReturn{
+							IsTable: true,
+							Fields: []precompiles.PrecompileValue{
+								{Name: "id", Type: types.UUIDType},
+								{Name: "start_height", Type: types.IntType},
+								{Name: "start_timestamp", Type: types.IntType},
+								{Name: "end_height", Type: types.IntType, Nullable: true},
+								{Name: "reward_root", Type: types.ByteaType, Nullable: true},
+								{Name: "reward_amount", Type: uint256Numeric, Nullable: true},
+								{Name: "end_block_hash", Type: types.ByteaType, Nullable: true},
+								{Name: "confirmed", Type: types.BoolType},
+								{Name: "voters", Type: types.TextArrayType, Nullable: true},
+								{Name: "vote_nonces", Type: types.IntArrayType, Nullable: true},
+								{Name: "voter_signatures", Type: types.ByteaArrayType, Nullable: true},
+							},
+						},
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+							id := inputs[0].(*types.UUID)
+							after := inputs[1].(int64)
+							limit := inputs[2].(int64)
+
+							return getEpochs(ctx.TxContext.Ctx, app, id, after, limit, func(e *Epoch) error {
+								var voters []string
+								if len(e.Voters) > 0 {
+									for _, item := range e.Voters {
+										voters = append(voters, item.String())
+									}
+								}
+
+								return resultFn([]any{e.ID, e.StartHeight, e.StartTime, *e.EndHeight, e.Root, e.Total, e.BlockHash, e.Confirmed,
+									voters,
+									e.VoteNonces,
+									e.VoteSigs,
+								})
+							})
+						},
+					},
+					{
+						// get all rewards associated with given epoch_id
+						Name: "get_epoch_rewards",
+						Parameters: []precompiles.PrecompileValue{
+							{Name: "id", Type: types.UUIDType},
+							{Name: "epoch_id", Type: types.UUIDType},
+						},
+						Returns: &precompiles.MethodReturn{
+							IsTable: true,
+							Fields: []precompiles.PrecompileValue{
+								{Name: "recipient", Type: types.TextType},
+								{Name: "amount", Type: types.TextType},
+							},
+						},
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+							//id := inputs[0].(*types.UUID)
+							epochID := inputs[1].(*types.UUID)
+							return getRewardsForEpoch(ctx.TxContext.Ctx, app, epochID, func(reward *EpochReward) error {
+								return resultFn([]any{reward.Recipient.String(), reward.Amount.String()})
+							})
+						},
+					},
+					{
+						Name: "vote_epoch",
+						Parameters: []precompiles.PrecompileValue{
+							{Name: "id", Type: types.UUIDType},
+							{Name: "epoch_id", Type: types.UUIDType},
+							{Name: "nonce", Type: types.IntType},
+							{Name: "signature", Type: types.ByteaType},
+						},
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+							//id := inputs[0].(*types.UUID)
+							epochID := inputs[1].(*types.UUID)
+							nonce := inputs[2].(int64)
+							signature := inputs[3].([]byte)
+
+							if len(signature) != utils.GnosisSafeSigLength {
+								return fmt.Errorf("signature is not 65 bytes")
+							}
+
+							from, err := ethAddressFromHex(ctx.TxContext.Caller)
+							if err != nil {
+								return err
+							}
+
+							// NOTE: if we have safe address and safe nonce, we can verify the signature
+							// But if we only have safe address, and safeNonce from the input, then it's no point
+
+							ok, err := canVoteEpoch(ctx.TxContext.Ctx, app, epochID)
+							if err != nil {
+								return fmt.Errorf("check epoch can vote: %w", err)
+							}
+
+							if !ok {
+								return fmt.Errorf("epoch cannot be voted")
+							}
+
+							return voteEpoch(ctx.TxContext.Ctx, app, epochID, from, nonce, signature)
+						},
+					},
+					{
+						// list all the rewards of the given wallet;
+						// if pending=true, the results will include all finalized(not necessary confirmed) rewards
+						Name: "list_wallet_rewards",
+						Parameters: []precompiles.PrecompileValue{
+							{Name: "id", Type: types.UUIDType},
+							{Name: "wallet", Type: types.TextType},
+							{Name: "pending", Type: types.BoolType},
+						},
+						Returns: &precompiles.MethodReturn{
+							IsTable: true,
+							Fields: []precompiles.PrecompileValue{
+								{Name: "chain", Type: types.TextType},
+								{Name: "chain_id", Type: types.TextType},
+								{Name: "contract", Type: types.TextType},
+								{Name: "created_at", Type: types.IntType},
+								{Name: "param_recipient", Type: types.TextType},
+								{Name: "param_amount", Type: uint256Numeric},
+								{Name: "param_block_hash", Type: types.ByteaType},
+								{Name: "param_root", Type: types.ByteaType},
+								{Name: "param_proofs", Type: types.ByteaArrayType},
+							},
+						},
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+							id := inputs[0].(*types.UUID)
+							wallet := inputs[1].(string)
+							walletAddr, err := ethAddressFromHex(wallet)
+							if err != nil {
+								return err
+							}
+
+							pending := inputs[2].(bool)
+
+							info, err := SINGLETON.getUsableInstance(id)
+							if err != nil {
+								return err
+							}
+
+							info.mu.RLock()
+							defer info.mu.RUnlock()
+
+							var epochs []*Epoch
+							err = getWalletEpochs(ctx.TxContext.Ctx, app, id, walletAddr, pending, func(e *Epoch) error {
+								epochs = append(epochs, e)
+								return nil
+							})
+							if err != nil {
+								return fmt.Errorf("get wallet epochs :%w", err)
+							}
+
+							var jsonTree, root []byte
+							var ok bool
+							for _, epoch := range epochs {
+								var b32Root [32]byte
+								copy(b32Root[:], epoch.Root)
+
+								jsonTree, ok = mtLRUCache.Get(b32Root)
+								if !ok {
+									var b32Hash [32]byte
+									copy(b32Hash[:], epoch.BlockHash)
+									_, jsonTree, root, _, err = genMerkleTreeForEpoch(ctx.TxContext.Ctx, app, epoch.ID, info.EscrowAddress.Hex(), b32Hash)
+									if err != nil {
+										return err
+									}
+
+									if !bytes.Equal(root, epoch.Root) {
+										return fmt.Errorf("internal bug: epoch root mismatch")
+									}
+
+									mtLRUCache.Put(b32Root, jsonTree)
+								}
+
+								_, proofs, _, bh, amtBig, err := utils.GetMTreeProof(jsonTree, walletAddr.String())
+								if err != nil {
+									return err
+								}
+
+								uint256Amt, err := erc20ValueFromBigInt(amtBig)
+								if err != nil {
+									return err
+								}
+
+								err = resultFn([]any{info.ChainInfo.Name.String(),
+									info.ChainInfo.ID,
+									info.EscrowAddress.String(),
+									epoch.EndHeight,
+									walletAddr.String(),
+									uint256Amt,
+									bh,
+									epoch.Root,
+									proofs,
+								})
+								if err != nil {
+									return err
+								}
+							}
+
+							return nil
+						},
+					},
 				},
 			}, nil
 		})
@@ -1091,44 +1224,64 @@ func init() {
 		err := SINGLETON.ForEachInstance(true, func(id *types.UUID, info *rewardExtensionInfo) error {
 			info.mu.RLock()
 			defer info.mu.RUnlock()
-			// if the block is greater than or equal to the start time + distribution period,
-			// we should propose a new epoch. Otherwise, we should do nothing.
-			if block.Timestamp < info.currentEpoch.StartTime.Add(time.Duration(info.userProvidedData.DistributionPeriod)*time.Second).Unix() {
+			// If the block is greater than or equal to the start time + distribution period: Otherwise, we should do nothing.
+			if block.Timestamp-info.currentEpoch.StartTime < info.userProvidedData.DistributionPeriod {
 				return nil
 			}
 
-			rewards, err := getRewardsForEpoch(ctx, app, info.currentEpoch.ID)
+			// There will be always 2 epochs(except the very first epoch):
+			// - finalized epoch: finalized but not confirmed, wait to be confimed
+			// - current epoch: collect all new rewards, wait to be finalized
+			// Thus:
+			// - The first epoch should always be finalized
+			// - All other epochs wait for their previous epoch to be confirmed before finalizing and creating a new one.
+
+			// NOTE: last epoch endHeight = curren epoch startHeight
+			preExists, preConfirmed, err := previousEpochConfirmed(ctx, app, id, info.currentEpoch.StartHeight)
 			if err != nil {
 				return err
 			}
 
-			users := make([]string, len(rewards))
-			amounts := make([]*big.Int, len(rewards))
+			if !preExists || // first epoch should always be finalized
+				(preExists && preConfirmed) { // previous epoch exists and is confirmed
+				leafNum, jsonBody, root, total, err := genMerkleTreeForEpoch(ctx, app, info.currentEpoch.ID, info.EscrowAddress.Hex(), block.Hash)
+				if err != nil {
+					return err
+				}
 
-			for i, reward := range rewards {
-				users[i] = reward.Recipient.Hex()
-				amounts[i] = reward.Amount.BigInt()
+				if leafNum == 0 {
+					app.Service.Logger.Info("no rewards to distribute, deplay finalized current epoch")
+					return nil
+				}
+
+				erc20Total, err := erc20ValueFromBigInt(total)
+				if err != nil {
+					return err
+				}
+
+				err = finalizeEpoch(ctx, app, info.currentEpoch.ID, block.Height, block.Hash[:], root, erc20Total)
+				if err != nil {
+					return err
+				}
+
+				// put in cache
+				var b32Root [32]byte
+				copy(b32Root[:], root)
+				mtLRUCache.Put(b32Root, jsonBody)
+
+				// create a new epoch
+				newEpoch := newPendingEpoch(id, block)
+				err = createEpoch(ctx, app, newEpoch, id)
+				if err != nil {
+					return err
+				}
+
+				newEpochs[*id] = newEpoch
+				return nil
 			}
 
-			_, root, err := reward.GenRewardMerkleTree(users, amounts, info.EscrowAddress.Hex(), block.Hash)
-			if err != nil {
-				return err
-			}
-
-			err = finalizeEpoch(ctx, app, info.currentEpoch.ID, block.Height, block.Hash[:], root)
-			if err != nil {
-				return err
-			}
-
-			// create a new epoch
-			newEpoch := newPendingEpoch(id, block)
-			err = createEpoch(ctx, app, newEpoch, id)
-			if err != nil {
-				return err
-			}
-
-			newEpochs[*id] = newEpoch
-
+			// if previous epoch exists and not confirmed, we do nothing.
+			app.Service.Logger.Info("log previous epoch is not confirmed yet, skip finalize current epoch")
 			return nil
 		})
 		if err != nil {
@@ -1149,6 +1302,39 @@ func init() {
 	if err != nil {
 		panic(err)
 	}
+}
+
+func genMerkleTreeForEpoch(ctx context.Context, app *common.App, epochID *types.UUID,
+	escrowAddr string, blockHash [32]byte) (leafNum int, jsonTree []byte, root []byte, total *big.Int, err error) {
+	var rewards []*EpochReward
+	err = getRewardsForEpoch(ctx, app, epochID, func(reward *EpochReward) error {
+		rewards = append(rewards, reward)
+		return nil
+	})
+	if err != nil {
+		return 0, nil, nil, nil, err
+	}
+
+	if len(rewards) == 0 { // no rewards, delay finalize current epoch
+		return 0, nil, nil, nil, nil // should skip
+	}
+
+	users := make([]string, len(rewards))
+	amounts := make([]*big.Int, len(rewards))
+	total = big.NewInt(0)
+
+	for i, r := range rewards {
+		users[i] = r.Recipient.Hex()
+		amounts[i] = r.Amount.BigInt()
+		total.Add(total, amounts[i])
+	}
+
+	jsonTree, root, err = utils.GenRewardMerkleTree(users, amounts, escrowAddr, blockHash)
+	if err != nil {
+		return 0, nil, nil, nil, err
+	}
+
+	return len(rewards), jsonTree, root, total, nil
 }
 
 func genesisExec(ctx context.Context, app *common.App) error {
@@ -1254,7 +1440,7 @@ func newPendingEpoch(rewardID *types.UUID, block *common.BlockContext) *PendingE
 	return &PendingEpoch{
 		ID:          generateEpochID(rewardID, block.Height),
 		StartHeight: block.Height,
-		StartTime:   time.Unix(block.Timestamp, 0),
+		StartTime:   block.Timestamp,
 	}
 }
 
@@ -1262,7 +1448,7 @@ func newPendingEpoch(rewardID *types.UUID, block *common.BlockContext) *PendingE
 type PendingEpoch struct {
 	ID          *types.UUID
 	StartHeight int64
-	StartTime   time.Time
+	StartTime   int64
 }
 
 // EpochReward is a reward given to a user within an epoch
@@ -1276,15 +1462,25 @@ func (p *PendingEpoch) copy() *PendingEpoch {
 	return &PendingEpoch{
 		ID:          &id,
 		StartHeight: p.StartHeight,
+		StartTime:   p.StartTime,
 	}
+}
+
+type EpochVoteInfo struct {
+	Voters     []ethcommon.Address
+	VoteSigs   [][]byte
+	VoteNonces []int64
 }
 
 // Epoch is a period in which rewards are distributed.
 type Epoch struct {
 	PendingEpoch
 	EndHeight *int64 // nil if not finalized
-	BlockHash []byte // hash of the block that finalized the epoch, nil if not finalized
 	Root      []byte // merkle root of all rewards, nil if not finalized
+	Total     *types.Decimal
+	BlockHash []byte // hash of the block that finalized the epoch, nil if not finalized
+	Confirmed bool
+	EpochVoteInfo
 }
 
 type extensionInfo struct {
@@ -1335,7 +1531,7 @@ func (e *extensionInfo) ForEachInstance(readOnly bool, fn func(id *types.UUID, i
 		}
 
 		for _, kv := range order.OrderMap(orderableMap) {
-			err := fn(kv.Value.userProvidedData.ID, kv.Value)
+			err = fn(kv.Value.userProvidedData.ID, kv.Value)
 			if err != nil {
 				return
 			}

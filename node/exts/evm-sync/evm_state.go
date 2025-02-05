@@ -211,7 +211,7 @@ func (s *statePoller) runPollFuncs(ctx context.Context, service *common.Service,
 }
 
 func makeNewClient(ctx context.Context, service *common.Service, chain chains.Chain) (*ethclient.Client, error) {
-	chainConf, err := getChainConf(service.LocalConfig.Extensions, chain)
+	chainConf, err := getChainConf(service.LocalConfig.Erc20Bridge, chain)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get chain config for %s: %v", chain, err)
 	}
