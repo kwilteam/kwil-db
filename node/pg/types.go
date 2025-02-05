@@ -199,9 +199,15 @@ var (
 			if value == `NULL` {
 				return nil, nil
 			}
+			if value == `"NULL"` {
+				value = "NULL" // never change, postgres
+			}
 			return []byte(value), nil
 		},
 		DeserializeChangeset: func(b []byte) (any, error) {
+			if b == nil {
+				return nil, nil
+			}
 			return string(b), nil
 		},
 	}
