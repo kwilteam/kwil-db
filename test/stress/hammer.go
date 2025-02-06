@@ -7,20 +7,18 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
-	"strconv"
-	"sync/atomic"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/client"
+	clientType "github.com/kwilteam/kwil-db/core/client/types"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/gatewayclient"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
-	clientType "github.com/kwilteam/kwil-db/core/types/client"
-	"golang.org/x/sync/errgroup"
-
-	"go.uber.org/zap"
+	"github.com/kwilteam/kwil-db/core/utils/random"
 )
 
 // runLooped executes a basic function with a specified delay between each call
@@ -28,7 +26,7 @@ import (
 // If the function has an error, it is only logged. The function should be a
 // closure, getting it's inputs and assigning its outputs in the scope of the
 // caller.
-func runLooped(ctx context.Context, fn func() error, name string, every time.Duration, logger *log.Logger) {
+func runLooped(ctx context.Context, fn func() error, name string, every time.Duration, logger log.Logger) {
 	defer wg.Done()
 	if every < 0 { // so caller doesn't need to put an if around this
 		return
@@ -56,31 +54,34 @@ func hammer(ctx context.Context) error {
 	var err error
 	var priv *crypto.Secp256k1PrivateKey
 	if key == "" { // only useful with no gas or when spamming non-tx/view calls
-		priv, err = crypto.GenerateSecp256k1Key()
+		pk, _, err := crypto.GenerateSecp256k1Key(nil)
 		if err != nil {
 			return err
 		}
-		fmt.Printf("Generated new key: %v\n\n", priv.Hex())
+		priv = pk.(*crypto.Secp256k1PrivateKey)
+		fmt.Printf("Generated new key: %x\n\n", priv.Bytes())
 	} else {
-		priv, err = crypto.Secp256k1PrivateKeyFromHex(key)
+		keyBts, err := hex.DecodeString(key)
+		if err != nil {
+			return err
+		}
+		priv, err = crypto.UnmarshalSecp256k1PrivateKey(keyBts)
 		if err != nil {
 			return err
 		}
 	}
 	signer := &auth.EthPersonalSigner{Key: *priv}
-	acctID := signer.Identity()
-	fmt.Println("Identity:", hex.EncodeToString(acctID))
+	acctID := &types.AccountID{
+		Identifier: signer.CompactID(),
+		KeyType:    signer.PubKey().Type(),
+	}
+	fmt.Println("Identity:", acctID)
 
-	logger := log.New(log.Config{
-		Level:       log.InfoLevel.String(),
-		OutputPaths: []string{"stdout"},
-		Format:      log.FormatPlain,
-		EncodeTime:  log.TimeEncodingRFC3339Milli,
-	})
-	defer logger.Close()
-	logger = *logger.WithOptions(zap.AddStacktrace(zap.FatalLevel))
-	trLogger := *logger.WithOptions(zap.AddCallerSkip(1))
+	logger := log.New(log.WithFormat(log.FormatUnstructured),
+		log.WithLevel(log.LevelInfo), log.WithName("STRESS"),
+		log.WithWriter(os.Stdout))
 
+	trLogger := logger.New("client")
 	var kwilClt clientType.Client
 	if gatewayProvider {
 		kwilClt, err = gatewayclient.NewClient(ctx, host, &gatewayclient.GatewayOptions{
@@ -102,7 +103,7 @@ func hammer(ctx context.Context) error {
 		return err
 	}
 
-	kwilClt = &timedClient{Client: kwilClt, logger: &logger, showReqDur: rpcTiming}
+	kwilClt = &timedClient{Client: kwilClt, logger: logger, showReqDur: rpcTiming}
 
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel() // any early return cancels other goroutines
@@ -116,10 +117,10 @@ func hammer(ctx context.Context) error {
 	h := &harness{
 		Client:              kwilClt,
 		concurrentBroadcast: concurrentBroadcast,
-		logger:              &logger,
+		logger:              logger,
 		acctID:              acctID,
 		signer:              signer,
-		nestedLogger:        logger.WithOptions(zap.AddCallerSkip(1)),
+		nestedLogger:        logger, // caller skip?
 		quiet:               quiet,
 	}
 
@@ -129,47 +130,36 @@ func hammer(ctx context.Context) error {
 		h.nonce = acct.Nonce
 	}
 
-	// procedure spammer
-	psc := procSchemaClient{h}
-
 	// action spammer
-	asc := actSchemaClient{h}
+	if namespace == "" {
+		namespace = "blahblah" + random.String(8)
+	}
+	namespace = strings.ToLower(namespace)
+	h.println(namespace)
 
-	var dbid, dbidProc string
-	var userIDact int
-	grp, ctxg := errgroup.WithContext(ctx)
-	grp.Go(func() error {
-		var err error
-		dbidProc, err = psc.deployDB(ctxg)
-		if err != nil {
-			return err
-		}
-
-		uidProc, unameProc, err := psc.getOrCreateUser(ctxg, dbidProc)
-		if err != nil {
-			return fmt.Errorf("getOrCreateUser: %w", err)
-		}
-		h.printf("proc schema: user ID = %s / user name = %v", uidProc, unameProc)
-		return nil
-	})
-	grp.Go(func() error {
-		var err error
-		dbid, err = asc.deployDB(ctxg)
-		if err != nil {
-			return err
-		}
-
-		var userName string
-		userIDact, userName, err = asc.getOrCreateUser(ctxg, dbid)
-		if err != nil {
-			return fmt.Errorf("getOrCreateUser: %w", err)
-		}
-		h.printf("act schema: user ID = %d / user name = %v", userIDact, userName)
-		return nil
-	})
-
-	if err = grp.Wait(); err != nil {
+	// try to use this namespace if it exists, otherwise deploy a new one
+	asc := newActSchemaClient(h, namespace)
+	res, err := asc.h.Client.Query(ctx, fmt.Sprintf(`select exists (select 1 from info.namespaces where name = '%s');`, namespace), nil)
+	if err != nil {
 		return err
+	}
+	if len(res.Values) == 0 || len(res.Values[0]) == 0 {
+		return errors.New("didn't get a result in namespace query")
+	}
+	exists := res.Values[0][0].(bool)
+	if exists {
+		h.printf("act schema: namespace %q already exists", namespace)
+	} else {
+		err = asc.deployDB(ctx)
+		if err != nil {
+			return err
+		}
+		h.printf("act schema: deployed namespace %q", namespace)
+	}
+
+	err = asc.getOrCreateUserProfile(ctx, namespace)
+	if err != nil {
+		return fmt.Errorf("getOrCreateUser: %w", err)
 	}
 
 	h.nonceChaos = nonceChaos // after successfully deploying the test db and creating a user in it
@@ -181,28 +171,24 @@ func hammer(ctx context.Context) error {
 	go runLooped(ctx, func() error {
 		_, err := h.GetAccount(ctx, acctID, types.AccountStatus(rand.Intn(2)))
 		return err
-	}, "GetAccount", badgerInterval, &logger)
+	}, "GetAccount", badgerInterval, logger)
 
 	wg.Add(1)
 	go runLooped(ctx, func() error {
-		notAnAccount := randomBytes(len(acctID))
+		notAnAccount := &types.AccountID{
+			Identifier: randomBytes(32),
+			KeyType:    crypto.KeyTypeEd25519,
+		}
 		_, err := h.GetAccount(ctx, notAnAccount, types.AccountStatusPending)
 		return err
-	}, "GetAccount", badgerInterval, &logger)
-
-	// bother the masterDB
-	wg.Add(1)
-	go runLooped(ctx, func() error {
-		_, err := h.ListDatabases(ctx, h.signer.Identity())
-		return err
-	}, "ListDatabases", badgerInterval, &logger)
+	}, "GetAccount", badgerInterval, logger)
 
 	// bother the authn&kgw
 	wg.Add(1)
 	go runLooped(ctx, func() error {
-		_, err := kwilClt.Call(ctx, dbid, actAuthnOnly, []any{})
+		_, err := kwilClt.Call(ctx, namespace, actAuthnOnly, []any{})
 		return err
-	}, "call authn action", viewInterval, &logger)
+	}, "call authn action", viewInterval, logger)
 
 	// ## "deploy / drop" program - trivial deploy/drop cycle, sometimes
 	// immediately dropping. The interval for this one is different since it is
@@ -211,11 +197,14 @@ func hammer(ctx context.Context) error {
 
 	wg.Add(1)
 	go runLooped(ctx, func() error {
-		newDBID, promise, err := asc.deployDBAsync(ctx)
+		junkNamespace := random.String(22)
+		junkSchema := makeTestSchemaSQL(junkNamespace)
+		asc.h.deployDBAsync(ctx, asc.schemaSQL)
+		promise, err := asc.h.deployDBAsync(ctx, junkSchema)
 		if err != nil {
 			return err
 		}
-		h.printf("deploying temp db %v", newDBID)
+		h.printf("deploying temp namespace %v", junkNamespace)
 
 		if noDrop {
 			return nil
@@ -224,8 +213,8 @@ func hammer(ctx context.Context) error {
 		dropNow := fastDropRate > 0 && rand.Intn(fastDropRate) == 0
 		if dropNow {
 			// drop now
-			h.printf("immediately dropping new db %s", newDBID)
-			err = errors.Join(h.dropDB(ctx, newDBID))
+			h.printf("immediately dropping new db %s", junkNamespace)
+			err = errors.Join(h.dropDB(ctx, junkNamespace))
 		}
 
 		// TODO: in the deploy/drop scenario, there is a lot more to exercise
@@ -235,37 +224,36 @@ func hammer(ctx context.Context) error {
 		if resErr := res.Error(); resErr != nil {
 			return errors.Join(err, resErr) // deploy failed, no drop needed
 		}
-		h.printf("deployed temp db %v", newDBID)
+		h.printf("deployed temp db %v", junkNamespace)
 
 		if dropNow {
 			return nil // already dropped it
 		}
 
-		h.printf("dropping temp db %s", newDBID)
-		return h.dropDB(ctx, newDBID)
-	}, "deploy/drop", deployDropInterval, &logger)
+		h.printf("dropping temp db %s", junkNamespace)
+		return h.dropDB(ctx, junkNamespace)
+	}, "deploy/drop", deployDropInterval, logger)
 
 	// ## "posters" exec/view program - work with the toy social media scheme,
 	// concurrently posting and retrieving random posts.
 
-	var pid atomic.Int64 // post ID accessed by separate goroutines
-
-	nextPostID, err := asc.nextPostID(ctx, dbid, userIDact)
-	if err != nil {
-		return fmt.Errorf("nextPostID: %w", err)
-	}
-	h.printf("next post ID = %d", nextPostID)
-	pid.Store(int64(nextPostID))
-
 	wg.Add(1)
 	go runLooped(ctx, func() error {
-		postID := strconv.Itoa(rand.Intn(int(pid.Load() + 1)))
-		_, err := kwilClt.Call(ctx, dbid, actGetPost, []any{postID})
+		lastPostID, err := asc.lastPostID(ctx, namespace)
+		if err != nil {
+			return fmt.Errorf("nextPostID: %w", err)
+		}
+		if lastPostID == nil {
+			return nil // will try again
+		}
+		h.printf("last post ID = %d", lastPostID)
+
+		_, err = kwilClt.Call(ctx, namespace, actGetPost, []any{lastPostID})
 		if err != nil {
 			return err
 		}
 		return nil
-	}, "get post", viewInterval, &logger)
+	}, "get post", viewInterval, logger)
 
 	// Content length is limited by multiple things: message size, max transaction size, block size e.g.:
 	//  - "rpc error: code = ResourceExhausted desc = grpc: received message larger than max (5000168 vs. 4194304)"
@@ -285,43 +273,18 @@ func hammer(ctx context.Context) error {
 		go runLooped(ctx,
 			asyncFn(ctx, posters, h.printf, operation,
 				func() (<-chan asyncResp, error) {
-					next := int(pid.Add(1))
 					var content string
 					if variableLen {
 						content = bigData[:rand.Intn(contentLen)+1] // random.String(rand.Intn(maxContentLen) + 1) // randomBytes(maxContentLen)
 					} else {
 						content = bigData[:contentLen]
 					}
-					h.printf("beginning createPostAsync id = %d, content len = %d (concurrent with %d others)",
-						next, len(content), len(posters)-1)
-					return asc.createPostAsync(ctx, dbid, next, "title_"+strconv.Itoa(next), content)
-				},
-			),
-			operation, postInterval, &logger,
-		)
-	}
-
-	// post (procedures)
-	if maxPosters > 0 {
-		maxProcPost := maxPosters / 2
-		operation := "create post (proc)"
-		posters := make(chan struct{}, maxProcPost)
-		wg.Add(1)
-		go runLooped(ctx,
-			asyncFn(ctx, posters, h.printf, operation,
-				func() (<-chan asyncResp, error) {
-					var content string
-					if variableLen {
-						content = bigData[:rand.Intn(contentLen)+1] // random.String(rand.Intn(maxContentLen) + 1) // randomBytes(maxContentLen)
-					} else {
-						content = bigData[:contentLen]
-					}
-					h.printf("beginning createPostAsync (proc), content len = %d (concurrent with %d others)",
+					h.printf("beginning createPostAsync, content len = %d (concurrent with %d others)",
 						len(content), len(posters)-1)
-					return psc.createPostAsync(ctx, dbidProc, content)
+					return asc.createPostAsync(ctx, namespace, content)
 				},
 			),
-			operation, postInterval, &logger,
+			operation, postInterval, logger,
 		)
 	}
 

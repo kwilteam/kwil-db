@@ -73,6 +73,12 @@ tasks:
     generates:
       - .build/kwild
 
+  generate:grammar:
+    desc: Generate the kuneiform grammar go code.
+    cmds:
+      - rm -rf node/engine/parse/gen/*
+      - cd node/engine/parse/grammar && ./generate.sh
+
   generate:docs:
     desc: Generate docs for CLIs
     cmds:

@@ -22,6 +22,10 @@ var (
 	key             string
 	quiet           bool
 
+	// namespace is the existing namespace to use (no need to be DB owner),
+	// otherwise deploy a new one (requires DB owner key)
+	namespace string
+
 	chainId  string
 	authCall bool
 
@@ -55,6 +59,7 @@ func main() {
 	flag.BoolVar(&gatewayProvider, "gw", false, "gateway provider instead of vanilla provider, "+
 		"need to make sure host is same as gateway's domain")
 	flag.StringVar(&key, "key", "", "existing key to use instead of generating a new one")
+	flag.StringVar(&namespace, "ns", "", "existing namespace to use instead of deploying a new one, which would require DB owner key")
 	flag.BoolVar(&quiet, "q", false, "only print errors")
 
 	flag.StringVar(&chainId, "chain", "", "chain ID to require (default is any)")

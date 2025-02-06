@@ -5,13 +5,13 @@ import (
 	"errors"
 	"fmt"
 	"math/rand"
+	"strings"
 	"sync"
 
+	clientType "github.com/kwilteam/kwil-db/core/client/types"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
-	clientType "github.com/kwilteam/kwil-db/core/types/client"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
 )
 
 // harness is a Client driver designed around an embedded dataset Kuneiform
@@ -20,8 +20,8 @@ import (
 // increasing nonces. See underNonceLock and recoverNonce.
 type harness struct {
 	clientType.Client
-	logger *log.Logger
-	acctID []byte
+	logger log.Logger
+	acctID *types.AccountID
 
 	signer auth.Signer
 
@@ -31,7 +31,7 @@ type harness struct {
 	concurrentBroadcast bool // broadcast many before confirm, still coordinate nonces
 	nonceChaos          int  // apply random nonce-jitter every 1/n times
 
-	nestedLogger *log.Logger
+	nestedLogger log.Logger
 
 	quiet bool
 
@@ -64,7 +64,7 @@ func (h *harness) underNonceLock(ctx context.Context, fn func(int64) error) erro
 		nonce := h.nonce + randNonceJitter(h.nonceChaos)
 		h.nonceMtx.Unlock()
 		if err := fn(nonce); err != nil {
-			if errors.Is(err, transactions.ErrInvalidNonce) {
+			if errors.Is(err, types.ErrInvalidNonce) {
 				// Note: several goroutines may all try to do this if they all hit the nonce error
 				h.recoverNonce(ctx)
 				h.printf("error, nonce %d was wrong, reverting to %d\n", nonce, h.nonce)
@@ -81,7 +81,7 @@ func (h *harness) underNonceLock(ctx context.Context, fn func(int64) error) erro
 	h.printf("using next nonce %d", h.nonce)
 
 	if err := fn(h.nonce); err != nil {
-		if errors.Is(err, transactions.ErrInvalidNonce) { // this alone should not happen
+		if errors.Is(err, types.ErrInvalidNonce) { // this alone should not happen
 			// NOTE: if GetAccount returns only the confirmed nonce, we'll error
 			// again shortly if there are others already in mempool.
 			acct, err := h.GetAccount(ctx, h.acctID, types.AccountStatusPending)
@@ -109,6 +109,13 @@ func (h *harness) recoverNonce(ctx context.Context) error {
 	return nil
 }
 
+func (h *harness) println(args ...any) {
+	if h.quiet {
+		return
+	}
+	h.nestedLogger.Info(fmt.Sprintln(args...))
+}
+
 func (h *harness) printf(msg string, args ...any) {
 	var hasErr bool
 	for _, arg := range args {
@@ -127,18 +134,20 @@ func (h *harness) printf(msg string, args ...any) {
 	fun(fmt.Sprintf(msg, args...))
 }
 
-func (h *harness) printRecs(ctx context.Context, recs *clientType.Records) {
-	for recs.Next() {
-		if ctx.Err() != nil {
-			return
+func (h *harness) printRecs(results *types.QueryResult) {
+	h.logger.Infoln(strings.Join(results.ColumnNames, ","))
+	for _, row := range results.Values {
+		rowStr := make([]string, len(row))
+		for i, v := range row {
+			rowStr[i] = fmt.Sprintf("%v", v)
 		}
-		h.logger.Info(fmt.Sprintf("%#v\n", recs.Record().String()))
+		h.logger.Info(strings.Join(rowStr, ","))
 	}
 }
 
 func (h *harness) executeAsync(ctx context.Context, dbid, action string,
-	inputs [][]any) (transactions.TxHash, error) {
-	var txHash transactions.TxHash
+	inputs [][]any) (types.Hash, error) {
+	var txHash types.Hash
 	err := h.underNonceLock(ctx, func(nonce int64) error {
 		var err error
 		txHash, err = h.Execute(ctx, dbid, action, inputs,
@@ -146,7 +155,7 @@ func (h *harness) executeAsync(ctx context.Context, dbid, action string,
 		return err
 	})
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", action, err)
+		return types.Hash{}, fmt.Errorf("%s: %w", action, err)
 	}
 	return txHash, nil
 }
@@ -167,8 +176,8 @@ func (h *harness) execute(ctx context.Context, dbid string, action string,
 		err = errors.Join(err, h.recoverNonce(ctx))
 		return fmt.Errorf("WaitTx (%v): %w", action, err)
 	}
-	if code := txResp.TxResult.Code; code != 0 {
-		return fmt.Errorf("%s tx failed (%d): %v", action, code, txResp.TxResult.Log)
+	if code := txResp.Result.Code; code != 0 {
+		return fmt.Errorf("%s tx failed (%d): %v", action, code, txResp.Result.Log)
 	}
 	return nil
 }

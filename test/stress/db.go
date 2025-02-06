@@ -6,12 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	clientType "github.com/kwilteam/kwil-db/core/client/types"
 	"github.com/kwilteam/kwil-db/core/types"
-	clientType "github.com/kwilteam/kwil-db/core/types/client"
-	"github.com/kwilteam/kwil-db/core/types/transactions"
-	"github.com/kwilteam/kwil-db/core/utils"
-	"github.com/kwilteam/kwil-db/core/utils/random"
-	"go.uber.org/zap"
 )
 
 // The harness methods in this file pertain to the embedded dataset schema,
@@ -19,7 +15,7 @@ import (
 
 type asyncResp struct {
 	err        error
-	res        *transactions.TransactionResult
+	res        *types.TxResult
 	expectFail bool
 }
 
@@ -47,11 +43,15 @@ func (ar *asyncResp) Error() error {
 	return nil
 }
 
-func (h *harness) dropDB(ctx context.Context, dbid string) error {
-	var txHash transactions.TxHash
+// With the new SQL schema, drop and deploy aren't client functions. Instead we
+// use ExecuteSQL with DDL. e.g. 'DROP NAMESPACE IF EXISTS dbname;' or `{dbname}DROP TABLE t;`
+
+func (h *harness) dropDB(ctx context.Context, namespace string) error {
+	var txHash types.Hash
 	err := h.underNonceLock(ctx, func(nonce int64) error {
+		sql := fmt.Sprintf("DROP NAMESPACE IF EXISTS %s;", namespace)
 		var err error
-		txHash, err = h.DropDatabaseID(ctx, dbid, clientType.WithNonce(nonce))
+		txHash, err = h.ExecuteSQL(ctx, sql, nil, clientType.WithNonce(nonce))
 		return err
 	})
 	if err != nil {
@@ -64,57 +64,53 @@ func (h *harness) dropDB(ctx context.Context, dbid string) error {
 		err = errors.Join(err, h.recoverNonce(ctx))
 		return fmt.Errorf("WaitTx (drop): %w", err)
 	}
-	if code := txResp.TxResult.Code; code != 0 {
-		return fmt.Errorf("drop tx failed (%d): %v", code, txResp.TxResult.Log)
+	if code := txResp.Result.Code; code != 0 {
+		return fmt.Errorf("drop tx failed (%d): %v", code, txResp.Result.Log)
 	}
 	return nil
 }
 
-func (h *harness) deployDBAsync(ctx context.Context, schema *types.Schema) (string, <-chan asyncResp, error) {
-	schema.Name = random.String(12)
-
-	var txHash transactions.TxHash
+func (h *harness) deployDBAsync(ctx context.Context, schemaSQL string) (<-chan asyncResp, error) {
+	var txHash types.Hash
 	err := h.underNonceLock(ctx, func(nonce int64) error {
 		var err error
-		txHash, err = h.DeployDatabase(ctx, schema, clientType.WithNonce(nonce))
+		txHash, err = h.ExecuteSQL(ctx, schemaSQL, nil, clientType.WithNonce(nonce))
 		return err
 	})
 	if err != nil {
-		return "", nil, err
+		return nil, err
 	}
 
-	dbid := utils.GenerateDBID(schema.Name, h.signer.Identity())
-	// fmt.Println("deployDBAsync", dbid)
 	promise := make(chan asyncResp, 1)
 	go func() {
 		ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 		defer cancel()
 		resp, err := h.WaitTx(ctx, txHash, txPollInterval)
 		if err != nil {
-			h.logger.Error("WaitTx", zap.Error(err))
+			h.logger.Error("WaitTx", "error", err)
 			err = errors.Join(err, h.recoverNonce(ctx))
 			promise <- asyncResp{err: err}
 			return
 		}
-		promise <- asyncResp{res: &resp.TxResult}
-		h.logger.Info(fmt.Sprintf("database %q deployed in block %d", dbid, resp.Height))
+		promise <- asyncResp{res: resp.Result}
+		h.logger.Info(fmt.Sprintf("database deployed in tx %v in block %d", txHash, resp.Height))
 	}()
 
-	return dbid, promise, nil
+	return promise, nil
 }
 
-func (h *harness) deployDB(ctx context.Context, schema *types.Schema) (string, error) {
-	dbid, promise, err := h.deployDBAsync(ctx, schema)
+func (h *harness) deployDB(ctx context.Context, schemaSQL string) error {
+	promise, err := h.deployDBAsync(ctx, schemaSQL)
 	if err != nil {
-		return "", err
+		return err
 	}
 	res := <-promise
 	if res.err != nil {
-		return "", res.err
+		return res.err
 	}
 	txRes := res.res
 	if code := txRes.Code; code != 0 {
-		return "", fmt.Errorf("failed to deploy database, code = %d, log = %q", code, txRes.Log)
+		return fmt.Errorf("failed to deploy database, code = %d, log = %q", code, txRes.Log)
 	}
-	return dbid, nil
+	return nil
 }
