@@ -329,7 +329,7 @@ func Test_built_in_sql(t *testing.T) {
 	}
 }
 
-func namedTypesEq(t *testing.T, a, b []*namedType) {
+func namedTypesEq(t *testing.T, a, b []*engine.NamedType) {
 	require.Equal(t, len(a), len(b))
 	for i, at := range a {
 		require.Equal(t, at.Name, b[i].Name)

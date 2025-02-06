@@ -194,3 +194,24 @@ const (
 	InfoNamespace          = "info"
 	InternalEnginePGSchema = "kwild_engine"
 )
+
+// NamedType is a parameter in a procedure.
+type NamedType struct {
+	// Name is the name of the parameter.
+	// It should always be lower case.
+	// If it is a procedure parameter, it should begin
+	// with a $.
+	Name string `json:"name"`
+	// Type is the type of the parameter.
+	Type *types.DataType `json:"type"`
+}
+
+// MakeTypeCast returns the string that type casts a value to the given type.
+// It should be used when generating SQL. If the type is null, no type cast is returned.
+func MakeTypeCast(d *types.DataType) (string, error) {
+	if d.EqualsStrict(types.NullType) || d.EqualsStrict(types.NullArrayType) {
+		return "", nil
+	}
+	str, err := d.PGString()
+	return "::" + str, err
+}

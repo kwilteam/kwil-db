@@ -11,6 +11,7 @@ import (
 	antlr "github.com/antlr4-go/antlr/v4"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/validation"
+	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/engine/parse/gen"
 )
 
@@ -120,7 +121,7 @@ func (s *schemaVisitor) VisitCreate_action_statement(ctx *gen.Create_action_stat
 		IfNotExists: ctx.EXISTS() != nil,
 		OrReplace:   ctx.REPLACE() != nil,
 		Name:        s.getIdent(ctx.Identifier(0)),
-		Parameters:  arr[*NamedType](len(ctx.AllType_())),
+		Parameters:  arr[*engine.NamedType](len(ctx.AllType_())),
 		Statements:  arr[ActionStmt](len(ctx.AllAction_statement())),
 		Raw:         s.getTextFromStream(ctx.GetStart().GetStart(), ctx.GetStop().GetStop()),
 	}
@@ -158,7 +159,7 @@ func (s *schemaVisitor) VisitCreate_action_statement(ctx *gen.Create_action_stat
 		}
 
 		typ := t.Accept(s).(*types.DataType)
-		cas.Parameters[i] = &NamedType{
+		cas.Parameters[i] = &engine.NamedType{
 			Name: name,
 			Type: typ,
 		}
@@ -514,9 +515,9 @@ func (s *schemaVisitor) VisitType_list(ctx *gen.Type_listContext) any {
 }
 
 func (s *schemaVisitor) VisitNamed_type_list(ctx *gen.Named_type_listContext) any {
-	var ts []*NamedType
+	var ts []*engine.NamedType
 	for i, t := range ctx.AllIdentifier() {
-		ts = append(ts, &NamedType{
+		ts = append(ts, &engine.NamedType{
 			Name: s.getIdent(t),
 			Type: ctx.Type_(i).Accept(s).(*types.DataType),
 		})
@@ -531,12 +532,12 @@ func (s *schemaVisitor) VisitAction_return(ctx *gen.Action_returnContext) any {
 	usesNamedFields := false
 	switch {
 	case ctx.GetReturn_columns() != nil:
-		ret.Fields = ctx.GetReturn_columns().Accept(s).([]*NamedType)
+		ret.Fields = ctx.GetReturn_columns().Accept(s).([]*engine.NamedType)
 		usesNamedFields = true
 	case ctx.GetUnnamed_return_types() != nil:
-		ret.Fields = make([]*NamedType, len(ctx.GetUnnamed_return_types().AllType_()))
+		ret.Fields = make([]*engine.NamedType, len(ctx.GetUnnamed_return_types().AllType_()))
 		for i, t := range ctx.GetUnnamed_return_types().AllType_() {
-			ret.Fields[i] = &NamedType{
+			ret.Fields[i] = &engine.NamedType{
 				Name: "",
 				Type: t.Accept(s).(*types.DataType),
 			}

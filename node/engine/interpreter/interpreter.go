@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -361,7 +362,11 @@ func funcDefToExecutable(funcName string, funcDef *engine.ScalarFunctionDefiniti
 			params := make([]string, len(args))
 			argTypes := make([]*types.DataType, len(args))
 			for i, arg := range args {
-				params[i] = fmt.Sprintf("$%d", i+1)
+				pgType, err := engine.MakeTypeCast(arg.Type())
+				if err != nil {
+					return err
+				}
+				params[i] = "$" + strconv.Itoa(i+1) + pgType
 				argTypes[i] = arg.Type()
 			}
 

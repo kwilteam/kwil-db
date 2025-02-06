@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/node/engine"
@@ -24,11 +23,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMain(m *testing.M) {
-	pg.UseLogger(log.New(log.WithName("PG"), log.WithFormat(log.FormatUnstructured),
-		log.WithLevel(log.LevelDebug)))
-	m.Run()
-}
+// func TestMain(m *testing.M) {
+// 	pg.UseLogger(log.New(log.WithName("PG"), log.WithFormat(log.FormatUnstructured),
+// 		log.WithLevel(log.LevelDebug)))
+// 	m.Run()
+// }
 
 const (
 	defaultCaller    = "owner"
@@ -1913,11 +1912,12 @@ func Test_Actions(t *testing.T) {
 			name: "format inside error",
 			stmt: []string{
 				`CREATE ACTION format_error() public view {
-					$a := 'string';
+					$a := 'SomeValue';
 					error(format('this is an error with a format %s', $a));
 				}`,
 			},
-			action: "format_error",
+			action:      "format_error",
+			errContains: "this is an error with a format SomeValue",
 		},
 	}
 

@@ -1575,7 +1575,7 @@ func (i *interpreterPlanner) VisitSQLStatement(p0 *parse.SQLStatement) any {
 // genAndExec generates and executes a DML statement.
 // It should only be used for DDL statements, which do not bind or return values.
 func genAndExec(exec *executionContext, stmt parse.TopLevelStatement) error {
-	sql, _, err := pggenerate.GenerateSQL(stmt, exec.scope.namespace)
+	sql, _, err := pggenerate.GenerateSQL(stmt, exec.scope.namespace, exec.getVariableType)
 	if err != nil {
 		return fmt.Errorf("%w: %w", engine.ErrPGGen, err)
 	}

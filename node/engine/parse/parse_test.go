@@ -5,6 +5,7 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1262,7 +1263,7 @@ func TestCreateActionStatements(t *testing.T) {
 			expect: &CreateActionStatement{
 				Name:      "my_action",
 				Modifiers: []string{"private"},
-				Parameters: []*NamedType{
+				Parameters: []*engine.NamedType{
 					{Name: "$param1", Type: types.IntType},
 					{Name: "$param2", Type: &types.DataType{Name: "text"}},
 				},
@@ -1276,7 +1277,7 @@ func TestCreateActionStatements(t *testing.T) {
 		    };`,
 			expect: &CreateActionStatement{
 				Name: "my_complex_action",
-				Parameters: []*NamedType{
+				Parameters: []*engine.NamedType{
 					{Name: "$user_id", Type: types.IntType},
 				},
 				Modifiers: []string{"public", "owner", "view"},
@@ -1308,7 +1309,7 @@ func TestCreateActionStatements(t *testing.T) {
 				Modifiers: []string{"public"},
 				Returns: &ActionReturn{
 					IsTable: true,
-					Fields: []*NamedType{
+					Fields: []*engine.NamedType{
 						{Name: "id", Type: types.IntType},
 						{Name: "name", Type: &types.DataType{Name: "text"}},
 					},
@@ -1323,7 +1324,7 @@ func TestCreateActionStatements(t *testing.T) {
 				Modifiers: []string{"private"},
 				Returns: &ActionReturn{
 					IsTable: false,
-					Fields: []*NamedType{
+					Fields: []*engine.NamedType{
 						{Name: "", Type: types.IntType},
 						{Name: "", Type: &types.DataType{Name: "text"}},
 					},
@@ -1339,14 +1340,14 @@ func TestCreateActionStatements(t *testing.T) {
 		    };`,
 			expect: &CreateActionStatement{
 				Name: "do_something",
-				Parameters: []*NamedType{
+				Parameters: []*engine.NamedType{
 					{Name: "$a", Type: types.IntType},
 					{Name: "$b", Type: types.IntType},
 				},
 				Modifiers: []string{"public", "view"},
 				Returns: &ActionReturn{
 					IsTable: false,
-					Fields:  []*NamedType{{Name: "", Type: types.IntType}},
+					Fields:  []*engine.NamedType{{Name: "", Type: types.IntType}},
 				},
 				Statements: []ActionStmt{
 					&ActionStmtDeclaration{
@@ -1385,7 +1386,7 @@ func TestCreateActionStatements(t *testing.T) {
 			expect: &CreateActionStatement{
 				Name:      "conditional_action",
 				Modifiers: []string{"public"},
-				Parameters: []*NamedType{
+				Parameters: []*engine.NamedType{
 					{Name: "$val", Type: types.IntType},
 				},
 				Returns: nil,
@@ -1505,12 +1506,12 @@ func TestCreateActionStatements(t *testing.T) {
 			expect: &CreateActionStatement{
 				Name:      "return_next_action",
 				Modifiers: []string{"public"},
-				Parameters: []*NamedType{
+				Parameters: []*engine.NamedType{
 					{Name: "$arr", Type: types.IntType},
 				},
 				Returns: &ActionReturn{
 					IsTable: false,
-					Fields: []*NamedType{
+					Fields: []*engine.NamedType{
 						{Name: "", Type: types.IntType},
 					},
 				},
@@ -1554,7 +1555,7 @@ func TestCreateActionStatements(t *testing.T) {
 			expect: &CreateActionStatement{
 				Name:      "call_other_actions",
 				Modifiers: []string{"private"},
-				Parameters: []*NamedType{
+				Parameters: []*engine.NamedType{
 					{Name: "$x", Type: types.IntType},
 				},
 				Statements: []ActionStmt{
@@ -1606,12 +1607,12 @@ func TestCreateActionStatements(t *testing.T) {
 			expect: &CreateActionStatement{
 				Name:      "complex_conditions",
 				Modifiers: []string{"public"},
-				Parameters: []*NamedType{
+				Parameters: []*engine.NamedType{
 					{Name: "$score", Type: types.IntType},
 				},
 				Returns: &ActionReturn{
 					IsTable: false,
-					Fields: []*NamedType{
+					Fields: []*engine.NamedType{
 						{Name: "", Type: &types.DataType{Name: "text"}},
 					},
 				},
@@ -1667,10 +1668,10 @@ func TestCreateActionStatements(t *testing.T) {
 			expect: &CreateActionStatement{
 				Name:       "array_manipulation",
 				Modifiers:  []string{"private"},
-				Parameters: []*NamedType{{Name: "$arr", Type: &types.DataType{Name: "int8", IsArray: true}}},
+				Parameters: []*engine.NamedType{{Name: "$arr", Type: &types.DataType{Name: "int8", IsArray: true}}},
 				Returns: &ActionReturn{
 					IsTable: false,
-					Fields:  []*NamedType{{Name: "", Type: &types.DataType{Name: "int8", IsArray: true}}},
+					Fields:  []*engine.NamedType{{Name: "", Type: &types.DataType{Name: "int8", IsArray: true}}},
 				},
 				Statements: []ActionStmt{
 					&ActionStmtReturn{
@@ -1693,7 +1694,7 @@ func TestCreateActionStatements(t *testing.T) {
 			expect: &CreateActionStatement{
 				Name:      "calc_distinct",
 				Modifiers: []string{"public"},
-				Parameters: []*NamedType{
+				Parameters: []*engine.NamedType{
 					{Name: "$vals", Type: &types.DataType{Name: "int8", IsArray: true}},
 				},
 				Statements: []ActionStmt{
@@ -1752,7 +1753,7 @@ func TestCreateActionStatements(t *testing.T) {
 			expect: &CreateActionStatement{
 				Name:      "update_something",
 				Modifiers: []string{"public"},
-				Parameters: []*NamedType{
+				Parameters: []*engine.NamedType{
 					{Name: "$id", Type: types.IntType},
 					{Name: "$name", Type: &types.DataType{Name: "text"}},
 				},
@@ -1789,12 +1790,12 @@ func TestCreateActionStatements(t *testing.T) {
 			expect: &CreateActionStatement{
 				Name:      "array_access",
 				Modifiers: []string{"public"},
-				Parameters: []*NamedType{
+				Parameters: []*engine.NamedType{
 					{Name: "$arr", Type: &types.DataType{Name: "int8", IsArray: true}},
 				},
 				Returns: &ActionReturn{
 					IsTable: false,
-					Fields: []*NamedType{
+					Fields: []*engine.NamedType{
 						{Name: "", Type: types.IntType},
 					},
 				},
@@ -1828,7 +1829,7 @@ func TestCreateActionStatements(t *testing.T) {
 			expect: &CreateActionStatement{
 				Name:      "cast_stuff",
 				Modifiers: []string{"private"},
-				Parameters: []*NamedType{
+				Parameters: []*engine.NamedType{
 					{Name: "$val", Type: &types.DataType{Name: "text"}},
 				},
 				Statements: []ActionStmt{

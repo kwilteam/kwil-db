@@ -7,6 +7,7 @@ import (
 
 	antlr "github.com/antlr4-go/antlr/v4"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/node/engine"
 )
 
 // this file contains the ASTs for SQL, DDL, and actions.
@@ -591,7 +592,7 @@ type CreateActionStatement struct {
 	Name string
 
 	// Parameters are the parameters of the action.
-	Parameters []*NamedType
+	Parameters []*engine.NamedType
 	// Public is true if the action is public.
 	// Public bool
 
@@ -610,12 +611,6 @@ func (c *CreateActionStatement) topLevelStatement() {}
 
 func (c *CreateActionStatement) Accept(v Visitor) any {
 	return v.VisitCreateActionStatement(c)
-}
-
-// NamedType is a type with a name.
-type NamedType struct {
-	Name string
-	Type *types.DataType
 }
 
 type DropActionStatement struct {
@@ -639,7 +634,7 @@ type ActionReturn struct {
 	// IsTable is true if the return type is a table.
 	IsTable bool
 	// Fields are the fields of the return type.
-	Fields []*NamedType
+	Fields []*engine.NamedType
 }
 
 // CreateTableStatement is a CREATE TABLE statement.

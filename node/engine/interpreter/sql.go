@@ -504,9 +504,9 @@ func ensureMethodsRegistered(ctx context.Context, db sql.DB, alias string, metho
 			return nil
 		}
 
-		params := make([]*namedType, len(method.Parameters))
+		params := make([]*engine.NamedType, len(method.Parameters))
 		for i, p := range method.Parameters {
-			params[i] = &namedType{
+			params[i] = &engine.NamedType{
 				Name: "$param_" + strconv.Itoa(i+1),
 				Type: p.Type,
 			}
@@ -518,7 +518,7 @@ func ensureMethodsRegistered(ctx context.Context, db sql.DB, alias string, metho
 				IsTable: method.Returns.IsTable,
 			}
 
-			fields := make([]*namedType, len(method.Returns.Fields))
+			fields := make([]*engine.NamedType, len(method.Returns.Fields))
 			for i, f := range method.Returns.Fields {
 				var fieldName string
 				if len(method.Returns.FieldNames) == 0 {
@@ -527,7 +527,7 @@ func ensureMethodsRegistered(ctx context.Context, db sql.DB, alias string, metho
 					fieldName = method.Returns.FieldNames[i]
 				}
 
-				fields[i] = &namedType{
+				fields[i] = &engine.NamedType{
 					Name: fieldName,
 					Type: f.Type,
 				}
