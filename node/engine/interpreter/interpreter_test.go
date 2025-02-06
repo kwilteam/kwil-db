@@ -12,7 +12,6 @@ import (
 	"testing"
 
 	"github.com/kwilteam/kwil-db/common"
-	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/node/engine"
@@ -24,11 +23,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestMain(m *testing.M) {
-	pg.UseLogger(log.New(log.WithName("PG"), log.WithFormat(log.FormatUnstructured),
-		log.WithLevel(log.LevelDebug)))
-	m.Run()
-}
+// func TestMain(m *testing.M) {
+// 	pg.UseLogger(log.New(log.WithName("PG"), log.WithFormat(log.FormatUnstructured),
+// 		log.WithLevel(log.LevelDebug)))
+// 	m.Run()
+// }
 
 const (
 	defaultCaller    = "owner"
@@ -1099,6 +1098,8 @@ func Test_Actions(t *testing.T) {
 		results [][]any
 		// expected error
 		err error
+		// errContains is a string that should be contained in the error message
+		errContains string
 		// caller to use for the action, will default to defaultCaller
 		caller string
 	}
@@ -1830,7 +1831,7 @@ func Test_Actions(t *testing.T) {
 			if $i == 1 AND $name != 'Alice' {
 				error('name is not Alice');
 			}
-			
+
 			if $i == 2 AND $name is not null {
 				error('name is not null');
 			}
@@ -1878,6 +1879,46 @@ func Test_Actions(t *testing.T) {
 			action: "call_system_action",
 			err:    engine.ErrActionSystemOnly,
 		},
+		{
+			// regression test
+			name: "early return with no values",
+			stmt: []string{
+				`CREATE ACTION early_return() public view {
+					if true {
+						RETURN;
+						error('should not get here');
+					}
+					error('should not get here');
+				}`,
+			},
+			action: "early_return",
+		},
+		{
+			name: "return early with sql",
+			stmt: []string{
+				`CREATE ACTION early_return() public view returns table(value int) {
+					if true {
+						RETURN SELECT 1;
+						error('should not get here');
+					}
+					error('should not get here');
+				}`,
+			},
+			action:  "early_return",
+			results: [][]any{{int64(1)}},
+		},
+		{
+			// this is a regression test
+			name: "format inside error",
+			stmt: []string{
+				`CREATE ACTION format_error() public view {
+					$a := 'SomeValue';
+					error(format('this is an error with a format %s', $a));
+				}`,
+			},
+			action:      "format_error",
+			errContains: "this is an error with a format SomeValue",
+		},
 	}
 
 	db := newTestDB(t, nil, nil)
@@ -1899,6 +1940,9 @@ func Test_Actions(t *testing.T) {
 			if test.err != nil {
 				require.Error(t, err)
 				require.ErrorIs(t, err, test.err)
+			} else if test.errContains != "" {
+				require.Error(t, err)
+				require.Contains(t, err.Error(), test.errContains)
 			} else {
 				require.NoError(t, err)
 			}

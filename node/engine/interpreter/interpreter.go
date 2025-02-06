@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -361,7 +362,11 @@ func funcDefToExecutable(funcName string, funcDef *engine.ScalarFunctionDefiniti
 			params := make([]string, len(args))
 			argTypes := make([]*types.DataType, len(args))
 			for i, arg := range args {
-				params[i] = fmt.Sprintf("$%d", i+1)
+				pgType, err := engine.MakeTypeCast(arg.Type())
+				if err != nil {
+					return err
+				}
+				params[i] = "$" + strconv.Itoa(i+1) + pgType
 				argTypes[i] = arg.Type()
 			}
 
@@ -462,10 +467,24 @@ func (i *baseInterpreter) copy() *baseInterpreter {
 
 // Execute executes a statement against the database.
 func (i *baseInterpreter) execute(ctx *common.EngineContext, db sql.DB, statement string, params map[string]any, fn func(*common.Row) error, toplevel bool) (err error) {
+	copied := i.copy()
 	defer func() {
-		i.syncNamespaceManager()
+		noErrOrPanic := true
+		if err != nil {
+			// rollback the interpreter
+			noErrOrPanic = false
+		}
 		if r := recover(); r != nil {
 			err = fmt.Errorf("panic: %v", r)
+			noErrOrPanic = false
+		}
+
+		if noErrOrPanic {
+			i.syncNamespaceManager()
+		} else {
+			// rollback
+			i.namespaces = copied.namespaces
+			i.accessController = copied.accessController
 		}
 	}()
 
@@ -487,15 +506,6 @@ func (i *baseInterpreter) execute(ctx *common.EngineContext, db sql.DB, statemen
 	if len(ast) == 0 {
 		return fmt.Errorf("no valid statements provided: %s", statement)
 	}
-
-	copied := i.copy()
-	defer func() {
-		if err != nil {
-			// rollback the interpreter
-			i.namespaces = copied.namespaces
-			i.accessController = copied.accessController
-		}
-	}()
 
 	execCtx, err := i.newExecCtx(ctx, db, engine.DefaultNamespace, toplevel)
 	if err != nil {

@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
+	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/engine/parse"
 )
 
@@ -15,7 +15,7 @@ type action struct {
 	Name string `json:"name"`
 
 	// Parameters are the input parameters of the action.
-	Parameters []*namedType `json:"parameters"`
+	Parameters []*engine.NamedType `json:"parameters"`
 	// Modifiers modify the access to the action.
 	Modifiers []precompiles.Modifier `json:"modifiers"`
 
@@ -39,12 +39,12 @@ func (a *action) FromAST(ast *parse.CreateActionStatement) error {
 	a.RawStatement = ast.Raw
 	a.Body = ast.Statements
 
-	a.Parameters = convertNamedTypes(ast.Parameters)
+	a.Parameters = ast.Parameters
 
 	if ast.Returns != nil {
 		a.Returns = &actionReturn{
 			IsTable: ast.Returns.IsTable,
-			Fields:  convertNamedTypes(ast.Returns.Fields),
+			Fields:  ast.Returns.Fields,
 		}
 	}
 
@@ -78,34 +78,11 @@ func (a *action) FromAST(ast *parse.CreateActionStatement) error {
 	return nil
 }
 
-// convertNamedTypes converts a list of named types from the AST to the internal representation.
-func convertNamedTypes(params []*parse.NamedType) []*namedType {
-	namedTypes := make([]*namedType, len(params))
-	for i, p := range params {
-		namedTypes[i] = &namedType{
-			Name: p.Name,
-			Type: p.Type,
-		}
-	}
-	return namedTypes
-}
-
-// namedType is a parameter in a procedure.
-type namedType struct {
-	// Name is the name of the parameter.
-	// It should always be lower case.
-	// If it is a procedure parameter, it should begin
-	// with a $.
-	Name string `json:"name"`
-	// Type is the type of the parameter.
-	Type *types.DataType `json:"type"`
-}
-
 // actionReturn holds the return type of a procedure.
 // EITHER the Type field is set, OR the Table field is set.
 type actionReturn struct {
-	IsTable bool         `json:"is_table"`
-	Fields  []*namedType `json:"fields"`
+	IsTable bool                `json:"is_table"`
+	Fields  []*engine.NamedType `json:"fields"`
 }
 
 func stringToMod(s string) (precompiles.Modifier, error) {

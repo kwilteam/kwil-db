@@ -807,9 +807,10 @@ func (i *interpreterPlanner) VisitActionStmtReturn(p0 *parse.ActionStmtReturn) a
 		for _, v := range p0.Values {
 			valFns = append(valFns, v.Accept(i).(exprFunc))
 		}
-	} else {
+	} else if p0.SQL != nil {
 		sqlStmt = p0.SQL.Accept(i).(stmtFunc)
 	}
+	// third case: a raw `RETURN;` that does not return anything.
 
 	return stmtFunc(func(exec *executionContext, fn resultFunc) error {
 		if len(valFns) > 0 {
@@ -832,11 +833,21 @@ func (i *interpreterPlanner) VisitActionStmtReturn(p0 *parse.ActionStmtReturn) a
 			return errReturn
 		}
 
-		// otherwise, we execute the SQL statement.
-		return sqlStmt(exec, func(row *row) error {
-			row.fillUnnamed()
-			return fn(row)
-		})
+		if sqlStmt != nil {
+			// otherwise, we execute the SQL statement.
+			err := sqlStmt(exec, func(row *row) error {
+				row.fillUnnamed()
+				return fn(row)
+			})
+			if err != nil {
+				return err
+			}
+
+			return errReturn
+		}
+
+		// if there are no values, we dont return anything
+		return errReturn
 	})
 }
 
@@ -1564,7 +1575,7 @@ func (i *interpreterPlanner) VisitSQLStatement(p0 *parse.SQLStatement) any {
 // genAndExec generates and executes a DML statement.
 // It should only be used for DDL statements, which do not bind or return values.
 func genAndExec(exec *executionContext, stmt parse.TopLevelStatement) error {
-	sql, _, err := pggenerate.GenerateSQL(stmt, exec.scope.namespace)
+	sql, _, err := pggenerate.GenerateSQL(stmt, exec.scope.namespace, exec.getVariableType)
 	if err != nil {
 		return fmt.Errorf("%w: %w", engine.ErrPGGen, err)
 	}

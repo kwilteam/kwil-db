@@ -15,11 +15,13 @@ import (
 	This file implements a visitor to generate Postgres compatible SQL and plpgsql
 */
 
+type GetVarFunc func(varName string) (dataType *types.DataType, err error)
+
 // GenerateSQL generates Postgres compatible SQL from an AST
 // If orderParams is true, it will number the parameters as $1, $2, etc.
 // It will return the ordered parameters in the order they appear in the statement.
 // It will also qualify the table names with the pgSchema.
-func GenerateSQL(ast parse.Node, pgSchema string) (stmt string, params []string, err error) {
+func GenerateSQL(ast parse.Node, pgSchema string, getVar GetVarFunc) (stmt string, params []string, err error) {
 	defer func() {
 		if r := recover(); r != nil {
 			// we should try to preserve any errors
@@ -33,6 +35,7 @@ func GenerateSQL(ast parse.Node, pgSchema string) (stmt string, params []string,
 
 	s := &sqlGenerator{
 		pgSchema: pgSchema,
+		getVar:   getVar,
 	}
 
 	stmt = ast.Accept(s).(string)
@@ -47,6 +50,7 @@ type sqlGenerator struct {
 	// It is only set if numberParameters is true. For example, the statement SELECT $1, $2
 	// would have orderedParams = ["$1", "$2"]
 	orderedParams []string
+	getVar        GetVarFunc
 }
 
 func (s *sqlGenerator) VisitExpressionLiteral(p0 *parse.ExpressionLiteral) any {
@@ -163,11 +167,20 @@ func (s *sqlGenerator) VisitWindowReference(p0 *parse.WindowReference) any {
 
 func (s *sqlGenerator) VisitExpressionVariable(p0 *parse.ExpressionVariable) any {
 	str := p0.String()
+	dt, err := s.getVar(str)
+	if err != nil {
+		panic(err)
+	}
+
+	pgStr, err := engine.MakeTypeCast(dt)
+	if err != nil {
+		panic(err)
+	}
 
 	// if it already exists, we write it as that index.
 	for i, v := range s.orderedParams {
 		if v == str {
-			return "$" + strconv.Itoa(i+1)
+			return "$" + strconv.Itoa(i+1) + pgStr
 		}
 	}
 
@@ -179,6 +192,7 @@ func (s *sqlGenerator) VisitExpressionVariable(p0 *parse.ExpressionVariable) any
 	res := strings.Builder{}
 	res.WriteString("$")
 	res.WriteString(strconv.Itoa(len(s.orderedParams)))
+	res.WriteString(pgStr)
 	typeCast(p0, &res)
 	return res.String()
 }

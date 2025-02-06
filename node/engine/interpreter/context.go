@@ -127,6 +127,22 @@ func (e *executionContext) checkNamespaceMutatbility() error {
 	return nil
 }
 
+// getVariableType gets the type of a variable.
+// If the variable does not exist, it will return an error.
+func (e *executionContext) getVariableType(name string) (*types.DataType, error) {
+	val, err := e.getVariable(name)
+	if err != nil {
+		return nil, err
+	}
+
+	// if it is a record, then return nil
+	if _, ok := val.(*recordValue); ok {
+		return nil, engine.ErrUnknownVariable
+	}
+
+	return val.Type(), nil
+}
+
 // query executes a query.
 // It will parse the SQL, create a logical plan, and execute the query.
 func (e *executionContext) query(sql string, fn func(*row) error) error {
@@ -157,19 +173,7 @@ func (e *executionContext) query(sql string, fn func(*row) error) error {
 	analyzed, err := logical.CreateLogicalPlan(
 		sqlStmt,
 		e.getTable,
-		func(varName string) (dataType *types.DataType, err2 error) {
-			val, err := e.getVariable(varName)
-			if err != nil {
-				return nil, err
-			}
-
-			// if it is a record, then return nil
-			if _, ok := val.(*recordValue); ok {
-				return nil, engine.ErrUnknownVariable
-			}
-
-			return val.Type(), nil
-		},
+		e.getVariableType,
 		func(objName string) (obj map[string]*types.DataType, err2 error) {
 			val, err := e.getVariable(objName)
 			if err != nil {
@@ -194,7 +198,7 @@ func (e *executionContext) query(sql string, fn func(*row) error) error {
 		return fmt.Errorf("%w: %w", engine.ErrQueryPlanner, err)
 	}
 
-	generatedSQL, params, err := pggenerate.GenerateSQL(sqlStmt, e.scope.namespace)
+	generatedSQL, params, err := pggenerate.GenerateSQL(sqlStmt, e.scope.namespace, e.getVariableType)
 	if err != nil {
 		return fmt.Errorf("%w: %w", engine.ErrPGGen, err)
 	}
