@@ -340,7 +340,7 @@ func parseTypedParam(param string) (datatype *types.DataType, val any, err error
 
 	val, err = stringAndTypeToVal(parts[1], datatype)
 	if err != nil {
-		return nil, nil, fmt.Errorf(`invalid parameter value: "%s";sla error: %w`, parts[1], err)
+		return nil, nil, fmt.Errorf(`invalid parameter value: "%s"; error: %w`, parts[1], err)
 	}
 
 	return datatype, val, nil
