@@ -44,20 +44,9 @@ func proposeUpdatesCmd() *cobra.Command {
 			}
 
 			var updates types.ParamUpdates
-			dec := json.NewDecoder(strings.NewReader(updatesJSON))
-			dec.UseNumber()
-			err = dec.Decode(&updates)
+			err = json.Unmarshal([]byte(updatesJSON), &updates)
 			if err != nil {
 				return display.PrintErr(cmd, fmt.Errorf("bad updates json: %w", err))
-			}
-			for param, val := range updates {
-				if num, is := val.(json.Number); is {
-					intNum, err := num.Int64()
-					if err != nil {
-						return display.PrintErr(cmd, fmt.Errorf("invalid number for %s: %w", param, err))
-					}
-					updates[param] = intNum
-				}
 			}
 			if err = types.ValidateUpdates(updates); err != nil {
 				return display.PrintErr(cmd, fmt.Errorf("invalid updates: %w", err))
@@ -115,6 +104,7 @@ func promptConfirmUpdatesProposal(proposal consensus.ParamUpdatesDeclaration) er
 
 	return errors.New("user declined to submit proposal")
 }
+
 func promptYesNo(question string) bool {
 	scanner := bufio.NewScanner(os.Stdin)
 	for {

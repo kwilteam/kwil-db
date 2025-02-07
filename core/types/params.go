@@ -453,6 +453,60 @@ func (pu *ParamUpdates) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
+func (pu *ParamUpdates) UnmarshalJSON(b []byte) error {
+	// Individually unmarshal each field of the ParamUpdates map by only
+	// unmarshalling the top level of the JSON object.
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return err
+	}
+
+	// Iterate over the map and set the corresponding field in the ParamUpdates.
+	pu0 := make(ParamUpdates)
+	for pn, v := range m {
+		if bytes.EqualFold(v, []byte("null")) {
+			return errors.New("cannot set null value")
+		}
+		// Unmarshal the json value into the corresponding field in the ParamUpdates map
+		switch pn {
+		case ParamNameLeader:
+			var pk PublicKey
+			if err := json.Unmarshal(v, &pk); err != nil {
+				return err
+			}
+			pu0[pn] = pk
+
+		// the int64 params
+		case ParamNameMaxBlockSize, ParamNameJoinExpiry, ParamNameMaxVotesPerTx:
+			var i int64
+			if err := json.Unmarshal(v, &i); err != nil {
+				return err
+			}
+			pu0[pn] = i
+
+		case ParamNameMigrationStatus:
+			var ms MigrationStatus
+			if err := json.Unmarshal(v, &ms); err != nil {
+				return err
+			}
+			pu0[pn] = ms
+
+		// the bool params
+		case ParamNameDisabledGasCosts:
+			var b bool
+			if err := json.Unmarshal(v, &b); err != nil {
+				return err
+			}
+			pu0[pn] = b
+
+		default:
+			return fmt.Errorf("unknown parameter name: %s", pn)
+		}
+	}
+	*pu = pu0
+	return nil
+}
+
 func (np NetworkParameters) ToMap() map[ParamName]any {
 	// Create a map using ParamNames as keys.
 	return map[ParamName]any{
