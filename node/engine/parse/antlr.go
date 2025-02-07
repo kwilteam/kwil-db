@@ -870,8 +870,11 @@ func (s *schemaVisitor) VisitOpt_drop_behavior(ctx *gen.Opt_drop_behaviorContext
 
 func (s *schemaVisitor) VisitAlter_table_statement(ctx *gen.Alter_table_statementContext) any {
 	stmt := &AlterTableStatement{
-		Table:  s.getIdent(ctx.Identifier()),
-		Action: ctx.Alter_table_action().Accept(s).(AlterTableAction),
+		Table: s.getIdent(ctx.Identifier()),
+	}
+
+	for _, a := range ctx.AllAlter_table_action() {
+		stmt.Actions = append(stmt.Actions, a.Accept(s).(AlterTableAction))
 	}
 
 	stmt.Set(ctx)

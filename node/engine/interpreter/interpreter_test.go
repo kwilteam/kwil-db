@@ -680,6 +680,15 @@ func Test_SQL(t *testing.T) {
 			execSQL: `CREATE NAMESPACE kwil_hello;`,
 			err:     engine.ErrReservedNamespacePrefix,
 		},
+		{
+			// this is a regression test
+			// https://github.com/kwilteam/kwil-db/issues/1352
+			name: "alter table add and remove column",
+			sql: []string{
+				"CREATE TABLE users2 (id INT PRIMARY KEY, name TEXT);",
+			},
+			execSQL: `ALTER TABLE users2 ADD COLUMN age INT, DROP COLUMN name;`,
+		},
 	}
 
 	db := newTestDB(t, nil, nil)

@@ -906,8 +906,8 @@ type AlterTableAction interface {
 type AlterTableStatement struct {
 	Position
 	Namespacing
-	Table  string
-	Action AlterTableAction
+	Table   string
+	Actions []AlterTableAction
 }
 
 func (a *AlterTableStatement) topLevelStatement() {}

@@ -197,7 +197,7 @@ drop_table_statement:
 
 alter_table_statement:
     ALTER TABLE table=identifier
-    alter_table_action
+    alter_table_action (COMMA alter_table_action)*
 ;
 
 alter_table_action:
