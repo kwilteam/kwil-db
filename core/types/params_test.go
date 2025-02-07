@@ -1,6 +1,7 @@
 package types
 
 import (
+	"encoding/hex"
 	"reflect"
 	"testing"
 	"time"
@@ -488,6 +489,118 @@ func TestPublicKeyJSON(t *testing.T) {
 				var decoded PublicKey
 				err := decoded.UnmarshalJSON([]byte(tt.json))
 				require.Error(t, err)
+			}
+		})
+	}
+}
+
+func TestParamUpdatesUnmarshalJSON(t *testing.T) {
+	pubBts, err := hex.DecodeString("03642dcd0d9b1821ddf4097c442a300e4aa1593800d3358583ea554271965d792d")
+	require.NoError(t, err)
+
+	pub, err := crypto.UnmarshalSecp256k1PublicKey(pubBts)
+	require.NoError(t, err)
+
+	tests := []struct {
+		name    string
+		json    string
+		want    ParamUpdates
+		wantErr bool
+	}{
+		{
+			name: "all parameter types",
+			json: `{
+				"leader": {"type":"secp256k1","key":"03642dcd0d9b1821ddf4097c442a300e4aa1593800d3358583ea554271965d792d"},
+				"max_block_size": 5000,
+				"join_expiry": 3600,
+				"disabled_gas_costs": true,
+				"max_votes_per_tx": 100,
+				"migration_status": "in_progress"
+			}`,
+			want: ParamUpdates{
+				ParamNameLeader:           PublicKey{pub},
+				ParamNameMaxBlockSize:     int64(5000),
+				ParamNameJoinExpiry:       int64(3600),
+				ParamNameDisabledGasCosts: true,
+				ParamNameMaxVotesPerTx:    int64(100),
+				ParamNameMigrationStatus:  MigrationStatus("in_progress"),
+			},
+			wantErr: false,
+		},
+		{
+			name: "invalid max_block_size type",
+			json: `{
+				"max_block_size": "5000"
+			}`,
+			wantErr: true,
+		},
+		{
+			name: "invalid join_expiry type",
+			json: `{
+				"join_expiry": true
+			}`,
+			wantErr: true,
+		},
+		{
+			name: "invalid max_votes_per_tx type",
+			json: `{
+				"max_votes_per_tx": 3.14
+			}`,
+			wantErr: true,
+		},
+		{
+			name: "invalid disabled_gas_costs type",
+			json: `{
+				"disabled_gas_costs": "yes"
+			}`,
+			wantErr: true,
+		},
+		{
+			name: "invalid migration_status type",
+			json: `{
+				"migration_status": 123
+			}`,
+			wantErr: true,
+		},
+		{
+			name:    "malformed json object",
+			json:    `{"max_block_size": 1000`,
+			wantErr: true,
+		},
+		{
+			name: "empty object",
+			json: `{}`,
+			want: ParamUpdates{},
+		},
+		{
+			name: "null values",
+			json: `{
+				"max_block_size": null,
+				"disabled_gas_costs": null
+			}`,
+			wantErr: true,
+		},
+		{
+			name: "mixed valid and invalid fields",
+			json: `{
+				"max_block_size": 1000,
+				"disabled_gas_costs": "invalid",
+				"join_expiry": 3600
+			}`,
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var pu ParamUpdates
+			err := pu.UnmarshalJSON([]byte(tt.json))
+			if (err != nil) != tt.wantErr {
+				t.Errorf("UnmarshalJSON() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr && !reflect.DeepEqual(pu, tt.want) {
+				t.Errorf("UnmarshalJSON() got = %v, want %v", pu, tt.want)
 			}
 		})
 	}
