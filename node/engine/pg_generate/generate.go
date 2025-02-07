@@ -855,7 +855,12 @@ func (s *sqlGenerator) VisitAlterTableStatement(p0 *parse.AlterTableStatement) a
 	str.WriteString(p0.Table)
 	str.WriteString(" ")
 
-	str.WriteString(p0.Action.Accept(s).(string))
+	for i, action := range p0.Actions {
+		if i > 0 {
+			str.WriteString(",")
+		}
+		str.WriteString(action.Accept(s).(string))
+	}
 
 	return str.String()
 }

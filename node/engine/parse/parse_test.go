@@ -282,9 +282,11 @@ func Test_DDL(t *testing.T) {
 			sql:  `ALTER TABLE user ALTER COLUMN name SET NOT NULL;`,
 			want: &AlterTableStatement{
 				Table: "user",
-				Action: &AlterColumnSet{
-					Column: "name",
-					Type:   ConstraintTypeNotNull,
+				Actions: []AlterTableAction{
+					&AlterColumnSet{
+						Column: "name",
+						Type:   ConstraintTypeNotNull,
+					},
 				},
 			},
 		},
@@ -293,12 +295,14 @@ func Test_DDL(t *testing.T) {
 			sql:  `ALTER TABLE user ALTER COLUMN name SET DEFAULT 10;`,
 			want: &AlterTableStatement{
 				Table: "user",
-				Action: &AlterColumnSet{
-					Column: "name",
-					Type:   ConstraintTypeDefault,
-					Value: &ExpressionLiteral{
-						Type:  types.IntType,
-						Value: int64(10),
+				Actions: []AlterTableAction{
+					&AlterColumnSet{
+						Column: "name",
+						Type:   ConstraintTypeDefault,
+						Value: &ExpressionLiteral{
+							Type:  types.IntType,
+							Value: int64(10),
+						},
 					},
 				},
 			},
@@ -308,9 +312,11 @@ func Test_DDL(t *testing.T) {
 			sql:  `ALTER TABLE user ALTER COLUMN name DROP NOT NULL;`,
 			want: &AlterTableStatement{
 				Table: "user",
-				Action: &AlterColumnDrop{
-					Column: "name",
-					Type:   ConstraintTypeNotNull,
+				Actions: []AlterTableAction{
+					&AlterColumnDrop{
+						Column: "name",
+						Type:   ConstraintTypeNotNull,
+					},
 				},
 			},
 		},
@@ -319,9 +325,11 @@ func Test_DDL(t *testing.T) {
 			sql:  `ALTER TABLE user ALTER COLUMN name DROP DEFAULT;`,
 			want: &AlterTableStatement{
 				Table: "user",
-				Action: &AlterColumnDrop{
-					Column: "name",
-					Type:   ConstraintTypeDefault,
+				Actions: []AlterTableAction{
+					&AlterColumnDrop{
+						Column: "name",
+						Type:   ConstraintTypeDefault,
+					},
 				},
 			},
 		},
@@ -330,9 +338,11 @@ func Test_DDL(t *testing.T) {
 			sql:  `ALTER TABLE user ADD COLUMN abc int;`,
 			want: &AlterTableStatement{
 				Table: "user",
-				Action: &AddColumn{
-					Name: "abc",
-					Type: types.IntType,
+				Actions: []AlterTableAction{
+					&AddColumn{
+						Name: "abc",
+						Type: types.IntType,
+					},
 				},
 			},
 		},
@@ -341,8 +351,10 @@ func Test_DDL(t *testing.T) {
 			sql:  `ALTER TABLE user DROP COLUMN abc;`,
 			want: &AlterTableStatement{
 				Table: "user",
-				Action: &DropColumn{
-					Name: "abc",
+				Actions: []AlterTableAction{
+					&DropColumn{
+						Name: "abc",
+					},
 				},
 			},
 		},
@@ -351,9 +363,11 @@ func Test_DDL(t *testing.T) {
 			sql:  `ALTER TABLE user RENAME COLUMN abc TO def;`,
 			want: &AlterTableStatement{
 				Table: "user",
-				Action: &RenameColumn{
-					OldName: "abc",
-					NewName: "def",
+				Actions: []AlterTableAction{
+					&RenameColumn{
+						OldName: "abc",
+						NewName: "def",
+					},
 				},
 			},
 		},
@@ -362,8 +376,10 @@ func Test_DDL(t *testing.T) {
 			sql:  `ALTER TABLE user RENAME TO account;`,
 			want: &AlterTableStatement{
 				Table: "user",
-				Action: &RenameTable{
-					Name: "account",
+				Actions: []AlterTableAction{
+					&RenameTable{
+						Name: "account",
+					},
 				},
 			},
 		},
@@ -372,18 +388,20 @@ func Test_DDL(t *testing.T) {
 			sql:  `ALTER TABLE user ADD constraint new_fk FOREIGN KEY (city_id) REFERENCES cities(id) ON DELETE CASCADE;`,
 			want: &AlterTableStatement{
 				Table: "user",
-				Action: &AddTableConstraint{
-					Constraint: &OutOfLineConstraint{
-						Name: "new_fk",
-						Constraint: &ForeignKeyOutOfLineConstraint{
-							Columns: []string{"city_id"},
-							References: &ForeignKeyReferences{
-								RefTable:   "cities",
-								RefColumns: []string{"id"},
-								Actions: []*ForeignKeyAction{
-									{
-										On: ON_DELETE,
-										Do: DO_CASCADE,
+				Actions: []AlterTableAction{
+					&AddTableConstraint{
+						Constraint: &OutOfLineConstraint{
+							Name: "new_fk",
+							Constraint: &ForeignKeyOutOfLineConstraint{
+								Columns: []string{"city_id"},
+								References: &ForeignKeyReferences{
+									RefTable:   "cities",
+									RefColumns: []string{"id"},
+									Actions: []*ForeignKeyAction{
+										{
+											On: ON_DELETE,
+											Do: DO_CASCADE,
+										},
 									},
 								},
 							},
@@ -397,8 +415,10 @@ func Test_DDL(t *testing.T) {
 			sql:  `ALTER TABLE user DROP CONSTRAINT abc;`,
 			want: &AlterTableStatement{
 				Table: "user",
-				Action: &DropTableConstraint{
-					Name: "abc",
+				Actions: []AlterTableAction{
+					&DropTableConstraint{
+						Name: "abc",
+					},
 				},
 			},
 		},
