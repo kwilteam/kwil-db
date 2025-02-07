@@ -6,6 +6,8 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/stretchr/testify/require"
 )
 
 func TestSyncedRewardData_MarshalBinary(t *testing.T) {
@@ -112,4 +114,56 @@ func TestSyncedRewardData_UnmarshalBinary(t *testing.T) {
 			}
 		})
 	}
+}
+
+func Test_scaleUpUint256(t *testing.T) {
+	d, err := types.ParseDecimal("11.22")
+	require.NoError(t, err)
+
+	t.Run("scale up by 4", func(t *testing.T) {
+		nd, err := scaleUpUint256(d, 4)
+		require.NoError(t, err)
+		require.Equal(t, "112200", nd.String())
+		require.Equal(t, 78, int(nd.Precision()))
+		require.Equal(t, 0, int(nd.Scale()))
+	})
+
+	t.Run("scale up by 0, with decimal", func(t *testing.T) {
+		nd, err := scaleUpUint256(d, 0)
+		require.NoError(t, err)
+		require.Equal(t, "11", nd.String())
+		require.Equal(t, 78, int(nd.Precision()))
+		require.Equal(t, 0, int(nd.Scale()))
+	})
+
+	t.Run("scale up by 0, without decimal", func(t *testing.T) {
+		d, err := types.ParseDecimal("1122")
+		require.NoError(t, err)
+		nd, err := scaleUpUint256(d, 0)
+		require.NoError(t, err)
+		require.Equal(t, "1122", nd.String())
+		require.Equal(t, 78, int(nd.Precision()))
+		require.Equal(t, 0, int(nd.Scale()))
+	})
+}
+
+func Test_scaleDownUint256(t *testing.T) {
+	d, err := types.ParseDecimal("112200")
+	require.NoError(t, err)
+
+	t.Run("scale down by 4", func(t *testing.T) {
+		nd, err := scaleDownUint256(d, 4)
+		require.NoError(t, err)
+		require.Equal(t, "11.2200", nd.String())
+		require.Equal(t, 74, int(nd.Precision()))
+		require.Equal(t, 4, int(nd.Scale()))
+	})
+
+	t.Run("scale down by 0", func(t *testing.T) {
+		nd, err := scaleDownUint256(d, 0)
+		require.NoError(t, err)
+		require.Equal(t, "112200", nd.String())
+		require.Equal(t, 78, int(nd.Precision()))
+		require.Equal(t, 0, int(nd.Scale()))
+	})
 }

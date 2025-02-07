@@ -106,8 +106,10 @@ type Method struct {
 	// If nil, the method does not return anything.
 	Returns *MethodReturn
 	// Handler is the function that is called when the method is invoked.
-	Handler func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error
+	Handler HandlerFunc
 }
+
+type HandlerFunc func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error
 
 // Copy deep-copies a method.
 func (m *Method) Copy() *Method {

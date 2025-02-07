@@ -1,4 +1,3 @@
-CREATE NAMESPACE kwil_erc20_meta;
 SET CURRENT NAMESPACE TO kwil_erc20_meta;
 
 -- reward_instances tracks all reward extensions that have been created.
@@ -38,7 +37,8 @@ CREATE TABLE balances (
 -- but this requires partial indexes which are not yet supported in Kwil
 CREATE TABLE epochs (
 	id UUID PRIMARY KEY,
-    created_at INT8 NOT NULL, -- kwil block height
+    created_at_block INT8 NOT NULL, -- kwil block height
+    created_at_unix INT8 NOT NULL, -- unix timestamp (in seconds)
     instance_id UUID NOT NULL REFERENCES reward_instances(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
 	reward_root BYTEA UNIQUE, -- the root of the merkle tree of rewards, it's unique per contract
     ended_at INT8, -- kwil block height
@@ -53,3 +53,5 @@ CREATE TABLE epoch_rewards (
     amount NUMERIC(78,0) NOT NULL, -- allows uint256
     PRIMARY KEY (epoch_id, recipient)
 );
+
+CREATE INDEX idx_epoch_rewards_epoch_id ON epoch_rewards(epoch_id);

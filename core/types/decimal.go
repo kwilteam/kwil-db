@@ -85,6 +85,16 @@ func MustParseDecimalExplicit(s string, precision, scale uint16) *Decimal {
 	return dec
 }
 
+func NewDecimalFromInt(i int64) *Decimal {
+	b, err := NewDecimalFromBigInt(big.NewInt(i), 0)
+	if err != nil {
+		// wont panic because exp is 0
+		panic(err)
+	}
+
+	return b
+}
+
 // NewDecimalFromBigInt creates a new Decimal from a big.Int and an exponent.
 // The negative of the exponent is the scale of the decimal.
 func NewDecimalFromBigInt(i *big.Int, exp int32) (*Decimal, error) {

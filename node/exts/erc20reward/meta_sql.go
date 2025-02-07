@@ -4,6 +4,7 @@ import (
 	"context"
 	_ "embed"
 	"fmt"
+	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 
@@ -42,21 +43,23 @@ func createNewRewardInstance(ctx context.Context, app *common.App, info *userPro
 // It only stores the epoch's ID, start height, and referenced instance
 func createEpoch(ctx context.Context, app *common.App, epoch *PendingEpoch, instanceID *types.UUID) error {
 	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
-	{kwil_erc20_meta}INSERT INTO epochs(id, created_at, instance_id)
+	{kwil_erc20_meta}INSERT INTO epochs(id, created_at_block, created_at_unix, instance_id)
 	VALUES (
 		$id,
-		$created_at,
+		$created_at_block,
+		$created_at_unix,
 		$instance_id
 	)`, map[string]any{
-		"id":          epoch.ID,
-		"created_at":  epoch.StartHeight,
-		"instance_id": instanceID,
+		"id":               epoch.ID,
+		"created_at_block": epoch.StartHeight,
+		"created_at_unix":  epoch.StartTime.Unix(),
+		"instance_id":      instanceID,
 	}, nil)
 }
 
 // finalizeEpoch finalizes an epoch.
 // It sets the end height, block hash, and reward root
-func finalizeEpoch(ctx context.Context, app *common.App, epochID *types.UUID, endHeight int64, blockHeight []byte, root []byte) error {
+func finalizeEpoch(ctx context.Context, app *common.App, epochID *types.UUID, endHeight int64, blockHash []byte, root []byte) error {
 	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
 	{kwil_erc20_meta}UPDATE epochs
 	SET ended_at = $ended_at,
@@ -64,10 +67,10 @@ func finalizeEpoch(ctx context.Context, app *common.App, epochID *types.UUID, en
 		reward_root = $reward_root
 	WHERE id = $id
 	`, map[string]any{
-		"id":           epochID,
-		"finalized_at": endHeight,
-		"block_hash":   blockHeight,
-		"reward_root":  root,
+		"id":          epochID,
+		"ended_at":    endHeight,
+		"block_hash":  blockHash,
+		"reward_root": root,
 	}, nil)
 }
 
@@ -85,7 +88,7 @@ func confirmEpoch(ctx context.Context, app *common.App, epochID *types.UUID) err
 }
 
 // setRewardSynced sets a reward as synced.
-func setRewardSynced(ctx context.Context, app *common.App, id *types.UUID, kwilBlockhash []byte, syncedAt int64, info *syncedRewardData) error {
+func setRewardSynced(ctx context.Context, app *common.App, id *types.UUID, syncedAt int64, info *syncedRewardData) error {
 	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
 	{kwil_erc20_meta}UPDATE reward_instances
 	SET erc20_address = $erc20_address,
@@ -104,18 +107,18 @@ func setRewardSynced(ctx context.Context, app *common.App, id *types.UUID, kwilB
 // getStoredRewards gets all stored rewards.
 func getStoredRewards(ctx context.Context, app *common.App) ([]*rewardExtensionInfo, error) {
 	var rewards []*rewardExtensionInfo
-	// in the below query, we inner join because an instance must always have an epoch
 	err := app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
 	{kwil_erc20_meta}SELECT r.id, r.chain_id, r.escrow_address, r.distribution_period, r.synced, r.active,
-		r.erc20_address, r.erc20_decimals, r.synced_at, r.balance, e.id AS epoch_id, e.created_at AS epoch_created_at
+		r.erc20_address, r.erc20_decimals, r.synced_at, r.balance, e.id AS epoch_id,
+		e.created_at_block AS epoch_created_at_block, e.created_at_unix AS epoch_created_at_seconds
 	FROM reward_instances r
-	JOIN epochs e on r.id = e.instance_id AND e.ended_at IS NULL
+	LEFT JOIN epochs e on r.id = e.instance_id AND e.ended_at IS NULL
 	`, nil, func(row *common.Row) error {
-		if len(row.Values) != 12 {
-			return fmt.Errorf("expected 12 values, got %d", len(row.Values))
+		if len(row.Values) != 13 {
+			return fmt.Errorf("expected 13 values, got %d", len(row.Values))
 		}
 
-		escrowAddr, err := bytesToEthAddress(row.Values[3].([]byte))
+		escrowAddr, err := bytesToEthAddress(row.Values[2].([]byte))
 		if err != nil {
 			return err
 		}
@@ -134,18 +137,24 @@ func getStoredRewards(ctx context.Context, app *common.App) ([]*rewardExtensionI
 				ID:                 row.Values[0].(*types.UUID),
 				ChainInfo:          &chainInf,
 				EscrowAddress:      escrowAddr,
-				DistributionPeriod: row.Values[4].(int64),
+				DistributionPeriod: row.Values[3].(int64),
 			},
-			synced: row.Values[5].(bool),
-			active: row.Values[6].(bool),
+			synced: row.Values[4].(bool),
+			active: row.Values[5].(bool),
+		}
+
+		if row.Values[10] == nil {
+			return fmt.Errorf("internal bug: instance %s has no epoch", reward.ID)
 		}
 
 		epochID := row.Values[10].(*types.UUID)
-		epochCreatedAt := row.Values[11].(int64)
+		epochCreatedAtBlock := row.Values[11].(int64)
+		epochCreatedAtUnix := row.Values[12].(int64)
 
 		reward.currentEpoch = &PendingEpoch{
 			ID:          epochID,
-			StartHeight: epochCreatedAt,
+			StartHeight: epochCreatedAtBlock,
+			StartTime:   time.Unix(epochCreatedAtUnix, 0),
 		}
 
 		if !reward.synced {
@@ -153,14 +162,14 @@ func getStoredRewards(ctx context.Context, app *common.App) ([]*rewardExtensionI
 			return nil
 		}
 
-		erc20Addr, err := bytesToEthAddress(row.Values[7].([]byte))
+		erc20Addr, err := bytesToEthAddress(row.Values[6].([]byte))
 		if err != nil {
 			return err
 		}
 
 		reward.syncedRewardData = syncedRewardData{
 			Erc20Address:  erc20Addr,
-			Erc20Decimals: row.Values[8].(int64),
+			Erc20Decimals: row.Values[7].(int64),
 		}
 		reward.syncedAt = row.Values[8].(int64)
 		reward.ownedBalance = row.Values[9].(*types.Decimal)
@@ -182,26 +191,9 @@ func bytesToEthAddress(bts []byte) (ethcommon.Address, error) {
 	return ethcommon.BytesToAddress(bts), nil
 }
 
-// addBalanceToReward adds a balance to the database.
-// If it is negative, it will subtract.
-// Balances owned by the database can be distributed on chain.
-// TODO: I think we should delete this. It wont be needed, as balances should
-// either be transferred from a user to the db, or added directly to the user
-func addBalanceToReward(ctx context.Context, app *common.App, id *types.UUID, amount *types.Decimal) error {
-	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
-	{kwil_erc20_meta}UPDATE reward_instances
-	SET balance = balance + $amount
-	WHERE id = $id
-	`, map[string]any{
-		"id":     id,
-		"amount": amount,
-	}, nil)
-}
-
 // creditBalance credits a balance to a user.
 // The rewardId is the ID of the reward instance.
 // It if is negative, it will subtract.
-// TODO: test negative amounts
 func creditBalance(ctx context.Context, app *common.App, rewardId *types.UUID, user ethcommon.Address, amount *types.Decimal) error {
 	balanceId := userBalanceID(rewardId, user)
 	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
@@ -234,16 +226,6 @@ func setActiveStatus(ctx context.Context, app *common.App, id *types.UUID, activ
 	}, nil)
 }
 
-// deleteRewardInstance deletes a reward.
-func deleteRewardInstance(ctx context.Context, app *common.App, extAlias string) error {
-	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
-	{kwil_erc20_meta}DELETE FROM reward_instances
-	WHERE extension_alias = $extension_alias
-	`, map[string]any{
-		"extension_alias": extAlias,
-	}, nil)
-}
-
 // createSchema creates the schema for the meta extension.
 // it should be run exactly once (at genesis)
 func createSchema(ctx context.Context, app *common.App) error {
@@ -264,4 +246,114 @@ func issueReward(ctx context.Context, app *common.App, epochID *types.UUID, user
 		"user":   user.Bytes(),
 		"amount": amount,
 	}, nil)
+}
+
+// transferTokens transfers tokens from one user to another.
+func transferTokens(ctx context.Context, app *common.App, rewardID *types.UUID, from, to ethcommon.Address, amount *types.Decimal) error {
+	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
+	{kwil_erc20_meta}UPDATE user_balances
+	SET balance = balance - $amount
+	WHERE reward_id = $reward_id AND address = $from;
+
+	{kwil_erc20_meta}INSERT INTO user_balances(id, reward_id, address, balance)
+	VALUES ($to_id, $reward_id, $to, $amount)
+	ON CONFLICT (id) DO UPDATE SET balance = user_balances.balance + $amount;
+	`, map[string]any{
+		"reward_id": rewardID,
+		"from":      from.Bytes(),
+		"to":        to.Bytes(),
+		"amount":    amount,
+		"to_id":     userBalanceID(rewardID, to),
+	}, nil)
+}
+
+// transferTokensFromUserToNetwork transfers tokens from a user to the network.
+func transferTokensFromUserToNetwork(ctx context.Context, app *common.App, rewardID *types.UUID, user ethcommon.Address, amount *types.Decimal) error {
+	// we subtract first in case the user does not have enough funds
+	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
+	{kwil_erc20_meta}UPDATE user_balances
+	SET balance = balance - $amount
+	WHERE reward_id = $reward_id AND address = $user;
+
+	{kwil_erc20_meta}UPDATE reward_instances
+	SET balance = balance + $amount
+	WHERE id = $reward_id;
+	`, map[string]any{
+		"reward_id": rewardID,
+		"user":      user.Bytes(),
+		"amount":    amount,
+	}, nil)
+}
+
+// transferTokensFromNetworkToUser transfers tokens from the network to a user.
+func transferTokensFromNetworkToUser(ctx context.Context, app *common.App, rewardID *types.UUID, user ethcommon.Address, amount *types.Decimal) error {
+	// we subtract first in case the network does not have enough funds
+	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
+	{kwil_erc20_meta}UPDATE reward_instances
+	SET balance = balance - $amount
+	WHERE id = $reward_id;
+
+	{kwil_erc20_meta}INSERT INTO user_balances(id, reward_id, address, balance)
+	VALUES ($user_id, $reward_id, $user, $amount)
+	ON CONFLICT (id) DO UPDATE SET balance = user_balances.balance + $amount;
+	`, map[string]any{
+		"reward_id": rewardID,
+		"user":      user.Bytes(),
+		"amount":    amount,
+		"user_id":   userBalanceID(rewardID, user),
+	}, nil)
+}
+
+// balanceOf gets the balance of a user.
+func balanceOf(ctx context.Context, app *common.App, rewardID *types.UUID, user ethcommon.Address) (*types.Decimal, error) {
+	var balance *types.Decimal
+	err := app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
+	{kwil_erc20_meta}SELECT balance
+	FROM user_balances
+	WHERE reward_id = $reward_id AND address = $user
+	`, map[string]any{
+		"reward_id": rewardID,
+		"user":      user.Bytes(),
+	}, func(row *common.Row) error {
+		if len(row.Values) != 1 {
+			return fmt.Errorf("expected 1 value, got %d", len(row.Values))
+		}
+		balance = row.Values[0].(*types.Decimal)
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return balance, nil
+}
+
+// getRewardsForEpoch gets all rewards for an epoch.
+func getRewardsForEpoch(ctx context.Context, app *common.App, epochID *types.UUID) ([]*EpochReward, error) {
+	var rewards []*EpochReward
+	err := app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
+	{kwil_erc20_meta}SELECT recipient, amount
+	FROM epoch_rewards
+	WHERE epoch_id = $epoch_id
+	`, map[string]any{
+		"epoch_id": epochID,
+	}, func(row *common.Row) error {
+		if len(row.Values) != 2 {
+			return fmt.Errorf("expected 2 values, got %d", len(row.Values))
+		}
+
+		recipient, err := bytesToEthAddress(row.Values[0].([]byte))
+		if err != nil {
+			return err
+		}
+
+		rewards = append(rewards, &EpochReward{
+			Recipient: recipient,
+			Amount:    row.Values[1].(*types.Decimal),
+		})
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	return rewards, nil
 }

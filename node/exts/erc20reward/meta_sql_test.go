@@ -2,112 +2,20 @@ package erc20reward
 
 import (
 	"context"
-	"crypto/sha256"
-	"math/big"
 	"testing"
+	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/stretchr/testify/require"
+
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/engine/interpreter"
+	"github.com/kwilteam/kwil-db/node/exts/evm-sync/chains"
 	"github.com/kwilteam/kwil-db/node/pg"
 	"github.com/kwilteam/kwil-db/node/types/sql"
-	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
-
-// deterministic address generator
-func genEthAddress(t string) ethcommon.Address {
-	hash := sha256.Sum256([]byte(t))
-
-	return ethcommon.BytesToAddress(hash[:20])
-}
-
-func Test_RewardStore(t *testing.T) {
-	type testcase struct {
-		name    string
-		initial userProvidedData
-		synced  syncedRewardData
-		balance int64
-	}
-
-	tests := []testcase{
-		{
-			name: "simple",
-			initial: userProvidedData{
-				ID:                 types.MustParseUUID("fc2717ab-e5dd-4f42-bd70-8eac96d0d4c9"),
-				ChainID:            "1",
-				EscrowAddress:      genEthAddress("escrow"),
-				DistributionPeriod: 1000,
-			},
-			synced: syncedRewardData{
-				Erc20Address:  genEthAddress("erc20"),
-				Erc20Decimals: 18,
-			},
-			balance: 100,
-		},
-	}
-
-	db, err := newTestDB()
-	require.NoError(t, err)
-	defer db.Close()
-
-	for _, test := range tests {
-		t.Run(test.name, func(t *testing.T) {
-			ctx := context.Background()
-			tx, err := db.BeginTx(ctx)
-			require.NoError(t, err)
-			defer tx.Rollback(ctx) // always rollback to reset the state
-
-			app := newTestApp(t, tx)
-
-			err = createSchema(ctx, app)
-			require.NoError(t, err)
-
-			err = createNewRewardInstance(ctx, app, &test.initial)
-			require.NoError(t, err)
-
-			// get it and ensure it is not pending
-			rewards, err := getStoredRewards(ctx, app)
-			require.NoError(t, err)
-			require.Len(t, rewards, 1)
-			rew := rewards[0]
-
-			// ensure initial data is right, and that synced data is empty
-			assert.EqualValues(t, test.initial, rew.userProvidedData)
-			assert.False(t, rew.synced)
-			assert.EqualValues(t, 0, rew.syncedAt)
-			assert.EqualValues(t, syncedRewardData{}, rew.syncedRewardData)
-
-			// store synced data
-			err = setRewardSynced(ctx, app, test.initial.ID, []byte("blockhash"), 100, &test.synced)
-			require.NoError(t, err)
-
-			dec, err := types.NewDecimalFromBigInt(big.NewInt(test.balance), 0)
-			require.NoError(t, err)
-			err = dec.SetPrecisionAndScale(78, 0)
-			require.NoError(t, err)
-
-			// set balance
-			err = addBalanceToReward(ctx, app, test.initial.ID, dec)
-			require.NoError(t, err)
-
-			// read it back
-			rewards, err = getStoredRewards(ctx, app)
-			require.NoError(t, err)
-			require.Len(t, rewards, 1)
-			rew = rewards[0]
-
-			assert.EqualValues(t, test.initial, rew.userProvidedData)
-			assert.EqualValues(t, test.synced, rew.syncedRewardData)
-			assert.EqualValues(t, dec, rew.ownedBalance)
-
-			assert.True(t, rew.synced)
-			assert.EqualValues(t, 100, rew.syncedAt)
-		})
-	}
-}
 
 func newTestDB() (*pg.DB, error) {
 	cfg := &pg.DBConfig{
@@ -130,7 +38,7 @@ func newTestDB() (*pg.DB, error) {
 
 const defaultCaller = "owner"
 
-func newTestApp(t *testing.T, tx sql.DB) *common.App {
+func setup(t *testing.T, tx sql.DB) *common.App {
 	interp, err := interpreter.NewInterpreter(context.Background(), tx, &common.Service{}, nil, nil, nil)
 	require.NoError(t, err)
 
@@ -139,11 +47,104 @@ func newTestApp(t *testing.T, tx sql.DB) *common.App {
 	}, nil)
 	require.NoError(t, err)
 
-	return &common.App{
+	app := &common.App{
 		DB:     tx,
 		Engine: interp,
 		Service: &common.Service{
 			Logger: log.New(),
 		},
 	}
+
+	err = genesisExec(context.Background(), app)
+	require.NoError(t, err)
+
+	return app
 }
+
+var lastID = types.NewUUIDV5([]byte("first"))
+
+func newUUID() *types.UUID {
+	id := types.NewUUIDV5WithNamespace(*lastID, []byte("next"))
+	lastID = &id
+	return &id
+}
+
+// TestCreateNewRewardInstance tests the createNewRewardInstance function.
+func TestCreateNewRewardInstance(t *testing.T) {
+	ctx := context.Background()
+	db, err := newTestDB()
+	require.NoError(t, err)
+	defer db.Close()
+
+	tx, err := db.BeginTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx) // always rollback
+
+	app := setup(t, tx)
+
+	id := newUUID()
+	// Create a userProvidedData object
+	chainInfo, _ := chains.GetChainInfoByID("1") // or whichever chain ID you want
+	testReward := &userProvidedData{
+		ID:                 id,
+		ChainInfo:          &chainInfo,
+		EscrowAddress:      zeroHex,
+		DistributionPeriod: 3600,
+	}
+
+	err = createNewRewardInstance(ctx, app, testReward)
+	require.NoError(t, err)
+
+	pending := &PendingEpoch{
+		ID:          newUUID(),
+		StartHeight: 10,
+		StartTime:   time.Unix(100, 0),
+	}
+	err = createEpoch(ctx, app, pending, id)
+	require.NoError(t, err)
+
+	rewards, err := getStoredRewards(ctx, app)
+	require.NoError(t, err)
+	require.Len(t, rewards, 1)
+	require.Equal(t, testReward.ID, rewards[0].ID)
+	require.False(t, rewards[0].synced)
+	require.Equal(t, int64(3600), rewards[0].DistributionPeriod)
+	require.Equal(t, zeroHex, rewards[0].EscrowAddress)
+	require.Equal(t, chainInfo, *rewards[0].ChainInfo)
+	require.Equal(t, pending.ID, rewards[0].currentEpoch.ID)
+	require.Equal(t, pending.StartHeight, rewards[0].currentEpoch.StartHeight)
+	require.Equal(t, pending.StartTime, rewards[0].currentEpoch.StartTime)
+
+	// set synced to true, active to false
+	err = setRewardSynced(ctx, app, testReward.ID, 102, &syncedRewardData{
+		Erc20Address:  zeroHex,
+		Erc20Decimals: 18,
+	})
+	require.NoError(t, err)
+	err = setActiveStatus(ctx, app, testReward.ID, false)
+	require.NoError(t, err)
+
+	rewards, err = getStoredRewards(ctx, app)
+	require.NoError(t, err)
+
+	require.Len(t, rewards, 1)
+	// we will only check the new values
+	require.True(t, rewards[0].synced)
+	require.False(t, rewards[0].active)
+	require.Equal(t, int64(102), rewards[0].syncedAt)
+	require.Equal(t, zeroHex, rewards[0].syncedRewardData.Erc20Address)
+	require.Equal(t, int64(18), rewards[0].syncedRewardData.Erc20Decimals)
+
+	// finalize the epoch
+	err = finalizeEpoch(ctx, app, pending.ID, 20, []byte{0x01, 0x02}, []byte{0x03, 0x04})
+	require.NoError(t, err)
+
+	// confirm the epoch
+	err = confirmEpoch(ctx, app, pending.ID)
+	require.NoError(t, err)
+
+	// TODO: we currently do not have queries for reading full epochs.
+	// These will get added when we implement the rest of the extension.
+}
+
+var zeroHex = ethcommon.HexToAddress("0x0000000000000000000000000000000000000001")

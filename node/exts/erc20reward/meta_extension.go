@@ -15,6 +15,7 @@ package erc20reward
 import (
 	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -34,14 +35,17 @@ import (
 	"github.com/kwilteam/kwil-db/extensions/listeners"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
+	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/exts/erc20reward/abigen"
+	"github.com/kwilteam/kwil-db/node/exts/erc20reward/reward"
 	evmsync "github.com/kwilteam/kwil-db/node/exts/evm-sync"
 	"github.com/kwilteam/kwil-db/node/exts/evm-sync/chains"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )
 
 const (
-	RewardMetaExtensionName = "kwil_erc20_rewards_meta"
+	RewardMetaExtensionName = "kwil_erc20_meta"
+	uint256Precision        = 78
 )
 
 var (
@@ -148,25 +152,21 @@ func init() {
 		3. End block hooks (used for proposing epochs and resolving ordered events from a listener)
 		4. Event listeners (used for listening to events or polling for state on the EVM chain)
 
-		Resolutions and hooks run as part of consensus process,
-		and thus we do not need to worry about concurrent access.
+		Resolutions and hooks run as part of consensus process.
 		Methods _usually_ run as part of consensus, however they can
-		run in a read-only context (if marked with VIEW). This is simple
-		to account for; we must simply ensure that VIEW methods do not
-		modify the singleton.
+		run in a read-only context (if marked with VIEW).
 
-		A (small) amount of complexity arises with event listeners.
+		Therefore, we need to account for state being read and written
+		concurrently.
+
 		Event listeners run outside of consensus, and thus we have potential
 		concurrency issues. All variables provided to event listeners
 		are copied; this avoids concurrency issues, as well as ensures that
-		the listeners don't cause non-deterministic behavior.
+		the listeners don't cause non-deterministic behavior by modifying
+		state.
 
 		I considered making a global singleton instead of defining it here, but I felt
 		that it was more clear to track where it was used by defining it here.
-
-		TODO: I actually think we have a problem of dirty reads here, where a read coming in after execution but before end block
-		can read new state before it is committed. First and foremost, this is a concurrency problem, because the endblock hook
-		might modify state that is read by a method. Second, it is a problem because the state is not consistent.
 	*/
 
 	SINGLETON := &extensionInfo{
@@ -195,6 +195,9 @@ func init() {
 			return err
 		}
 
+		SINGLETON.mu.Lock()
+		defer SINGLETON.mu.Unlock()
+
 		info, ok := SINGLETON.instances[*id]
 		if !ok {
 			return fmt.Errorf("reward extension with id %s not found", id)
@@ -210,7 +213,7 @@ func init() {
 			return fmt.Errorf("failed to unmarshal synced reward data: %v", err)
 		}
 
-		err = setRewardSynced(ctx, app, id, block.Hash[:], block.Height, &data)
+		err = setRewardSynced(ctx, app, id, block.Height, &data)
 		if err != nil {
 			return err
 		}
@@ -237,6 +240,49 @@ func init() {
 		func(ctx context.Context, service *common.Service, db sql.DB, alias string, metadata map[string]any) (precompiles.Precompile, error) {
 			return precompiles.Precompile{
 				Cache: SINGLETON,
+				OnUse: func(ctx *common.EngineContext, app *common.App) error {
+					return createSchema(ctx.TxContext.Ctx, app)
+				},
+				OnStart: func(ctx context.Context, app *common.App) error {
+					// if the schema exists, we should read all existing reward instances
+					instances, err := getStoredRewards(ctx, app)
+					switch {
+					case err == nil:
+						// do nothing
+					case errors.Is(err, engine.ErrNamespaceNotFound):
+						// if the schema doesnt exist, then we just return
+						// since genesis has not been run yet
+						return nil
+					default:
+						return err
+					}
+
+					SINGLETON.mu.Lock()
+					defer SINGLETON.mu.Unlock()
+
+					for _, instance := range instances {
+						// if instance is active, we should start one of its
+						// two listeners. If it is synced, we should start the
+						// transfer listener. Otherwise, we should start the state poller
+						if instance.active {
+							if instance.synced {
+								err = instance.startTransferListener(ctx, app)
+								if err != nil {
+									return err
+								}
+							} else {
+								err = instance.startStatePoller()
+								if err != nil {
+									return err
+								}
+							}
+						}
+
+						SINGLETON.instances[*instance.ID] = instance
+					}
+
+					return nil
+				},
 				Methods: []precompiles.Method{
 					{
 						// prepare begins the sync process for a new reward extension.
@@ -246,8 +292,13 @@ func init() {
 							{Name: "escrow", Type: types.TextType},
 							{Name: "period", Type: types.TextType},
 						},
+						Returns: &precompiles.MethodReturn{
+							Fields: []precompiles.PrecompileValue{
+								{Name: "id", Type: types.UUIDType},
+							},
+						},
 						AccessModifiers: []precompiles.Modifier{precompiles.SYSTEM},
-						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) (err error) {
 							chain := inputs[0].(string)
 							escrow := inputs[1].(string)
 							period := inputs[2].(string)
@@ -284,6 +335,9 @@ func init() {
 								return fmt.Errorf("chain with name %s not found", chain)
 							}
 
+							SINGLETON.mu.Lock()
+							defer SINGLETON.mu.Unlock()
+
 							info, ok := SINGLETON.instances[id]
 							// if the instance already exists, it can be in two states:
 							// 1. active: we should return an error
@@ -297,15 +351,24 @@ func init() {
 								}
 								if info.synced {
 									// if it is already synced, we should just make sure to start listening
-									// to transfer events
-									return info.startTransferListener(ctx.TxContext.Ctx, app)
+									// to transfer events and activate it
+
+									err = setActiveStatus(ctx.TxContext.Ctx, app, &id, true)
+									if err != nil {
+										return err
+									}
+									info.active = true
+
+									err = info.startTransferListener(ctx.TxContext.Ctx, app)
+									if err != nil {
+										return err
+									}
+
+									return resultFn([]any{id})
 								}
 								// do nothing, we will proceed below to start the state poller
 							} else {
-								firstEpoch := PendingEpoch{
-									ID:          generateEpochID(&id, ctx.TxContext.BlockContext.Height),
-									StartHeight: ctx.TxContext.BlockContext.Height,
-								}
+								firstEpoch := newPendingEpoch(&id, ctx.TxContext.BlockContext)
 								// if not synced, register the new reward extension
 								info = &rewardExtensionInfo{
 									userProvidedData: userProvidedData{
@@ -314,7 +377,7 @@ func init() {
 										EscrowAddress:      escrowAddress,
 										DistributionPeriod: int64(dur.Seconds()),
 									},
-									currentEpoch: &firstEpoch,
+									currentEpoch: firstEpoch,
 								}
 
 								err = createNewRewardInstance(ctx.TxContext.Ctx, app, &info.userProvidedData)
@@ -323,7 +386,7 @@ func init() {
 								}
 
 								// create the first epoch
-								err = createEpoch(ctx.TxContext.Ctx, app, &firstEpoch, &id)
+								err = createEpoch(ctx.TxContext.Ctx, app, firstEpoch, &id)
 								if err != nil {
 									return err
 								}
@@ -339,7 +402,7 @@ func init() {
 							// we are just setting the same info in the map again
 							SINGLETON.instances[id] = info
 
-							return nil
+							return resultFn([]any{id})
 						},
 					},
 					{
@@ -351,6 +414,9 @@ func init() {
 						AccessModifiers: []precompiles.Modifier{precompiles.SYSTEM},
 						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 							id := inputs[0].(*types.UUID)
+
+							SINGLETON.mu.Lock()
+							defer SINGLETON.mu.Unlock()
 
 							info, ok := SINGLETON.instances[*id]
 							if !ok {
@@ -387,17 +453,20 @@ func init() {
 								{Name: "chain", Type: types.TextType},
 								{Name: "escrow", Type: types.TextType},
 								{Name: "epoch_period", Type: types.IntType},
-								{Name: "erc20", Type: types.TextType},
-								{Name: "decimals", Type: types.IntType},
-								{Name: "balance", Type: types.NumericType}, // total unspent balance
+								{Name: "erc20", Type: types.TextType, Nullable: true},
+								{Name: "decimals", Type: types.IntType, Nullable: true},
+								{Name: "balance", Type: types.TextType}, // total unspent balance
 								{Name: "synced", Type: types.BoolType},
-								{Name: "synced_at", Type: types.IntType},
+								{Name: "synced_at", Type: types.IntType, Nullable: true},
 								{Name: "enabled", Type: types.BoolType},
 							},
 						},
 						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
 						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 							id := inputs[0].(*types.UUID)
+
+							SINGLETON.mu.RLock()
+							defer SINGLETON.mu.RUnlock()
 
 							info, ok := SINGLETON.instances[*id]
 							if !ok {
@@ -413,7 +482,7 @@ func init() {
 								info.userProvidedData.DistributionPeriod,
 								erc20,
 								decimals,
-								info.ownedBalance,
+								info.ownedBalance.String(),
 								info.synced,
 								info.syncedAt,
 								info.active,
@@ -455,6 +524,8 @@ func init() {
 						},
 						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
 						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+							SINGLETON.mu.RLock()
+							defer SINGLETON.mu.RUnlock()
 
 							return SINGLETON.ForEachInstance(func(id *types.UUID, info *rewardExtensionInfo) error {
 								return resultFn([]any{id, info.userProvidedData.ChainInfo, info.userProvidedData.EscrowAddress.Hex()})
@@ -474,25 +545,23 @@ func init() {
 							id := inputs[0].(*types.UUID)
 							user := inputs[1].(string)
 							amount := inputs[2].(string)
-							amountDec, err := types.ParseDecimalExplicit(amount, 78, 0)
+
+							SINGLETON.mu.Lock()
+							defer SINGLETON.mu.Unlock()
+
+							info, err := SINGLETON.getUsableInstance(id)
 							if err != nil {
 								return err
 							}
 
-							info, ok := SINGLETON.instances[*id]
-							if !ok {
-								return fmt.Errorf("reward extension with id %s not found", id)
+							// users will pass rewards with the proper number of decimals.
+							// E.g. if the erc20 has 18 decimals, they will pass 18 decimals
+							rawAmount, err := parseAmountFromUser(amount, uint16(info.syncedRewardData.Erc20Decimals))
+							if err != nil {
+								return err
 							}
 
-							if !info.active {
-								return fmt.Errorf("reward extension with id %s is not active", id)
-							}
-
-							if !info.synced {
-								return fmt.Errorf("reward extension with id %s is not synced", id)
-							}
-
-							newBal, err := info.ownedBalance.Sub(info.ownedBalance, amountDec)
+							newBal, err := types.DecimalSub(info.ownedBalance, rawAmount)
 							if err != nil {
 								return err
 							}
@@ -506,7 +575,7 @@ func init() {
 								return err
 							}
 
-							err = issueReward(ctx.TxContext.Ctx, app, info.currentEpoch.ID, addr, amountDec)
+							err = issueReward(ctx.TxContext.Ctx, app, info.currentEpoch.ID, addr, rawAmount)
 							if err != nil {
 								return err
 							}
@@ -514,6 +583,175 @@ func init() {
 							info.ownedBalance = newBal
 
 							return nil
+						},
+					},
+					{
+						// transfer transfers tokens from the caller to another address.
+						Name: "transfer",
+						Parameters: []precompiles.PrecompileValue{
+							{Name: "id", Type: types.UUIDType},
+							{Name: "to", Type: types.TextType},
+							{Name: "amount", Type: types.TextType},
+						},
+						// anybody can call this as long as they have the tokens.
+						// There is no security risk if somebody calls this directly
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+							id := inputs[0].(*types.UUID)
+							to := inputs[1].(string)
+							amount := inputs[2].(string)
+
+							SINGLETON.mu.Lock()
+							defer SINGLETON.mu.Unlock()
+
+							info, err := SINGLETON.getUsableInstance(id)
+							if err != nil {
+								return err
+							}
+
+							// users will pass rewards with the proper number of decimals.
+							// E.g. if the erc20 has 18 decimals, they will pass 18 decimals
+							rawAmount, err := parseAmountFromUser(amount, uint16(info.syncedRewardData.Erc20Decimals))
+							if err != nil {
+								return err
+							}
+
+							from, err := ethAddressFromHex(ctx.TxContext.Caller)
+							if err != nil {
+								return err
+							}
+
+							toAddr, err := ethAddressFromHex(to)
+							if err != nil {
+								return err
+							}
+
+							return transferTokens(ctx.TxContext.Ctx, app, id, from, toAddr, rawAmount)
+						},
+					},
+					{
+						// locks takes tokens from a user's balance and gives them to the network.
+						// The network can then distribute these tokens to other users, either via
+						// unlock or issue.
+						Name: "lock",
+						Parameters: []precompiles.PrecompileValue{
+							{Name: "id", Type: types.UUIDType},
+							{Name: "amount", Type: types.TextType},
+						},
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+							id := inputs[0].(*types.UUID)
+							amount := inputs[1].(string)
+
+							SINGLETON.mu.Lock()
+							defer SINGLETON.mu.Unlock()
+
+							return SINGLETON.lockTokens(ctx.TxContext.Ctx, app, id, ctx.TxContext.Caller, amount)
+						},
+					},
+					{
+						// lock_admin is a privileged version of lock that allows the network to lock
+						// tokens on behalf of a user.
+						Name: "lock_admin",
+						Parameters: []precompiles.PrecompileValue{
+							{Name: "id", Type: types.UUIDType},
+							{Name: "user", Type: types.TextType},
+							{Name: "amount", Type: types.TextType},
+						},
+						AccessModifiers: []precompiles.Modifier{precompiles.SYSTEM},
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+							id := inputs[0].(*types.UUID)
+							user := inputs[1].(string)
+							amount := inputs[2].(string)
+
+							SINGLETON.mu.Lock()
+							defer SINGLETON.mu.Unlock()
+
+							return SINGLETON.lockTokens(ctx.TxContext.Ctx, app, id, user, amount)
+						},
+					},
+					{
+						// unlock returns tokens to a user's balance that were previously locked.
+						// It returns the tokens so that the user can spend them.
+						// It can only be called by the network when it wishes to return tokens to a user.
+						Name: "unlock",
+						Parameters: []precompiles.PrecompileValue{
+							{Name: "id", Type: types.UUIDType},
+							{Name: "user", Type: types.TextType},
+							{Name: "amount", Type: types.TextType},
+						},
+						AccessModifiers: []precompiles.Modifier{precompiles.SYSTEM},
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+							id := inputs[0].(*types.UUID)
+							user := inputs[1].(string)
+							amount := inputs[2].(string)
+
+							SINGLETON.mu.Lock()
+							defer SINGLETON.mu.Unlock()
+
+							info, err := SINGLETON.getUsableInstance(id)
+							if err != nil {
+								return err
+							}
+
+							// users will pass rewards with the proper number of decimals.
+							// E.g. if the erc20 has 18 decimals, they will pass 18 decimals
+							rawAmount, err := parseAmountFromUser(amount, uint16(info.syncedRewardData.Erc20Decimals))
+							if err != nil {
+								return err
+							}
+
+							addr, err := ethAddressFromHex(user)
+							if err != nil {
+								return err
+							}
+
+							left, err := types.DecimalSub(info.ownedBalance, rawAmount)
+							if err != nil {
+								return err
+							}
+
+							if left.IsNegative() {
+								return fmt.Errorf("network does not have enough balance to unlock %s for %s", amount, user)
+							}
+
+							err = transferTokensFromNetworkToUser(ctx.TxContext.Ctx, app, id, addr, rawAmount)
+							if err != nil {
+								return err
+							}
+
+							info.ownedBalance = left
+							return nil
+						},
+					},
+					{
+						// balance returns the balance of a user.
+						Name: "balance",
+						Parameters: []precompiles.PrecompileValue{
+							{Name: "id", Type: types.UUIDType},
+							{Name: "user", Type: types.TextType},
+						},
+						Returns: &precompiles.MethodReturn{
+							Fields: []precompiles.PrecompileValue{
+								{Name: "balance", Type: types.TextType},
+							},
+						},
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+							id := inputs[0].(*types.UUID)
+							user := inputs[1].(string)
+
+							addr, err := ethAddressFromHex(user)
+							if err != nil {
+								return err
+							}
+
+							bal, err := balanceOf(ctx.TxContext.Ctx, app, id, addr)
+							if err != nil {
+								return err
+							}
+
+							return resultFn([]any{bal.String()})
 						},
 					},
 					// {
@@ -626,18 +864,145 @@ func init() {
 
 	// we will create the schema at genesis
 	err = hooks.RegisterGenesisHook(RewardMetaExtensionName+"_genesis", func(ctx context.Context, app *common.App, chain *common.ChainContext) error {
-		err := app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, "USE kwil_erc20_rewards_meta AS kwil_erc20_rewards_meta", nil, nil)
-		if err != nil {
-			return err
-		}
-
-		// we will create the schema at genesis
-		// We do this here instead of in OnUse simply because it is more direct.
-		return createSchema(ctx, app)
+		return genesisExec(ctx, app)
 	})
 	if err != nil {
 		panic(err)
 	}
+
+	// the end block hook will be used to propose epochs
+	err = hooks.RegisterEndBlockHook(RewardMetaExtensionName+"_end_block", func(ctx context.Context, app *common.App, block *common.BlockContext) error {
+		SINGLETON.mu.Lock()
+		defer SINGLETON.mu.Unlock()
+
+		return SINGLETON.ForEachInstance(func(id *types.UUID, info *rewardExtensionInfo) error {
+			// if the block is greater than or equal to the start time + distribution period,
+			// we should propose a new epoch. Otherwise, we should do nothing.
+			if block.Timestamp < info.currentEpoch.StartTime.Add(time.Duration(info.userProvidedData.DistributionPeriod)*time.Second).Unix() {
+				return nil
+			}
+
+			rewards, err := getRewardsForEpoch(ctx, app, info.currentEpoch.ID)
+			if err != nil {
+				return err
+			}
+
+			users := make([]string, len(rewards))
+			amounts := make([]*big.Int, len(rewards))
+
+			for i, reward := range rewards {
+				users[i] = reward.Recipient.Hex()
+				amounts[i] = reward.Amount.BigInt()
+			}
+
+			_, root, err := reward.GenRewardMerkleTree(users, amounts, info.EscrowAddress.Hex(), block.Hash)
+			if err != nil {
+				return err
+			}
+
+			err = finalizeEpoch(ctx, app, info.currentEpoch.ID, block.Height, block.Hash[:], root)
+			if err != nil {
+				return err
+			}
+
+			// create a new epoch
+			newEpoch := newPendingEpoch(id, block)
+			err = createEpoch(ctx, app, newEpoch, id)
+			if err != nil {
+				return err
+			}
+
+			info.currentEpoch = newEpoch
+
+			return nil
+		})
+	})
+	if err != nil {
+		panic(err)
+	}
+}
+
+func genesisExec(ctx context.Context, app *common.App) error {
+	// we will create the schema at genesis
+	err := app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, "USE kwil_erc20_meta AS kwil_erc20_meta", nil, nil)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func callPrepare(ctx *common.EngineContext, app *common.App, chain string, escrow string, period string) (*types.UUID, error) {
+	var id *types.UUID
+	count := 0
+	_, err := app.Engine.Call(ctx, app.DB, RewardMetaExtensionName, "prepare", []any{chain, escrow, period}, func(r *common.Row) error {
+		if count > 0 {
+			return fmt.Errorf("internal bug: expected only one result on prepare erc20")
+		}
+		var ok bool
+		id, ok = r.Values[0].(*types.UUID)
+		if !ok {
+			return fmt.Errorf("internal bug: expected UUID")
+		}
+
+		count++
+		return nil
+	})
+	return id, err
+}
+
+func callDisable(ctx *common.EngineContext, app *common.App, id *types.UUID) error {
+	_, err := app.Engine.Call(ctx, app.DB, RewardMetaExtensionName, "disable", []any{id}, nil)
+	return err
+}
+
+// lockTokens locks tokens from a user's balance and gives them to the network.
+func (e *extensionInfo) lockTokens(ctx context.Context, app *common.App, id *types.UUID, from string, amount string) error {
+	fromAddr, err := ethAddressFromHex(from)
+	if err != nil {
+		return err
+	}
+
+	info, err := e.getUsableInstance(id)
+	if err != nil {
+		return err
+	}
+
+	rawAmount, err := parseAmountFromUser(amount, uint16(info.syncedRewardData.Erc20Decimals))
+	if err != nil {
+		return err
+	}
+
+	err = transferTokensFromUserToNetwork(ctx, app, id, fromAddr, rawAmount)
+	if err != nil {
+		return err
+	}
+
+	info.ownedBalance, err = info.ownedBalance.Add(info.ownedBalance, rawAmount)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// getUsableInstance gets an instance and ensures it is active and synced.
+// It is not thread safe and should be called within a lock.
+func (e *extensionInfo) getUsableInstance(id *types.UUID) (*rewardExtensionInfo, error) {
+	info, ok := e.instances[*id]
+	if !ok {
+		return nil, fmt.Errorf("reward extension with id %s not found", id)
+	}
+
+	if !info.active {
+		return nil, fmt.Errorf("reward extension with id %s is not active", id)
+	}
+
+	if !info.synced {
+		return nil, fmt.Errorf("reward extension with id %s is not synced", id)
+	}
+
+	return info, nil
 }
 
 func ethAddressFromHex(s string) (ethcommon.Address, error) {
@@ -647,15 +1012,26 @@ func ethAddressFromHex(s string) (ethcommon.Address, error) {
 	return ethcommon.HexToAddress(s), nil
 }
 
-// proposeEpoch is called by the Kwil network in an end block hook.
-func proposeEpoch(ctx context.Context, app *common.App, id *types.UUID, epoch *Epoch) error {
-	panic("finish me")
+// newPendingEpoch creates a new epoch.
+func newPendingEpoch(rewardID *types.UUID, block *common.BlockContext) *PendingEpoch {
+	return &PendingEpoch{
+		ID:          generateEpochID(rewardID, block.Height),
+		StartHeight: block.Height,
+		StartTime:   time.Unix(block.Timestamp, 0),
+	}
 }
 
 // PendingEpoch is an epoch that has been started but not yet finalized.
 type PendingEpoch struct {
 	ID          *types.UUID
 	StartHeight int64
+	StartTime   time.Time
+}
+
+// EpochReward is a reward given to a user within an epoch
+type EpochReward struct {
+	Recipient ethcommon.Address
+	Amount    *types.Decimal // numeric(78, 0)
 }
 
 func (p *PendingEpoch) copy() *PendingEpoch {
@@ -666,20 +1042,12 @@ func (p *PendingEpoch) copy() *PendingEpoch {
 	}
 }
 
-type Epoch2 struct {
+// Epoch is a period in which rewards are distributed.
+type Epoch struct {
 	PendingEpoch
 	EndHeight *int64 // nil if not finalized
 	BlockHash []byte // hash of the block that finalized the epoch, nil if not finalized
 	Root      []byte // merkle root of all rewards, nil if not finalized
-}
-
-// calledInternally returns true if the action is called using
-// ExecuteWithoutEngineCtx
-func calledByExtension(ctx *common.EngineContext) bool {
-	if ctx.OverrideAuthz && ctx.InvalidTxCtx {
-		return true
-	}
-	return false
 }
 
 type extensionInfo struct {
@@ -696,7 +1064,7 @@ func (e *extensionInfo) Copy() precompiles.Cache {
 
 	instances := make(map[types.UUID]*rewardExtensionInfo)
 	for k, v := range e.instances {
-		instances[k] = v
+		instances[k] = v.copy()
 	}
 
 	return &extensionInfo{
@@ -1003,4 +1371,60 @@ func getSyncedRewardData(
 	}
 
 	return result, nil
+}
+
+// scaleUpUint256 turns a decimal into uint256, i.e. (11.22, 4) -> 112200
+func scaleUpUint256(amount *types.Decimal, decimals uint16) (*types.Decimal, error) {
+	unit, err := types.ParseDecimal("1" + strings.Repeat("0", int(decimals)))
+	if err != nil {
+		return nil, fmt.Errorf("create decimal unit failed: %w", err)
+	}
+
+	n, err := types.DecimalMul(amount, unit)
+	if err != nil {
+		return nil, fmt.Errorf("expand amount decimal failed: %w", err)
+	}
+
+	err = n.SetPrecisionAndScale(uint256Precision, 0)
+	if err != nil {
+		return nil, fmt.Errorf("expand amount decimal failed: %w", err)
+	}
+
+	return n, nil
+}
+
+// scaleDownUint256 turns an uint256 to a decimal, i.e. (112200, 4) -> 11.22
+func scaleDownUint256(amount *types.Decimal, decimals uint16) (*types.Decimal, error) {
+	unit, err := types.ParseDecimal("1" + strings.Repeat("0", int(decimals)))
+	if err != nil {
+		return nil, fmt.Errorf("create decimal unit failed: %w", err)
+	}
+
+	n, err := types.DecimalDiv(amount, unit)
+	if err != nil {
+		return nil, fmt.Errorf("expand amount decimal failed: %w", err)
+	}
+
+	scale := n.Scale()
+	if scale > decimals {
+		scale = decimals
+	}
+
+	err = n.SetPrecisionAndScale(uint256Precision-decimals, scale)
+	if err != nil {
+		return nil, fmt.Errorf("expand amount decimal failed: %w", err)
+	}
+
+	return n, nil
+}
+
+// parseAmountFromUser parses an amount from a user input string.
+// It will scale the amount to the correct number of decimals.
+func parseAmountFromUser(amount string, decimals uint16) (*types.Decimal, error) {
+	dec, err := types.ParseDecimalExplicit(amount, 78, decimals)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse amount: %w", err)
+	}
+
+	return scaleUpUint256(dec, decimals)
 }
