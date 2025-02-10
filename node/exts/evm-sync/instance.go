@@ -163,7 +163,9 @@ func (l *globalListenerManager) listen(ctx context.Context, service *common.Serv
 	defer func() {
 		l.mu.Lock()
 		l.shouldListen = false
-		//nolint:fatcontext We are simply removing this field in the defer, not modifying the context
+		// We are simply removing this field in the defer, not modifying the context,
+		// so we can ignore the linter warning.
+		//nolint:fatcontext
 		l.runningContext = nil
 		l.runningService = nil
 		l.runningEventStore = nil
