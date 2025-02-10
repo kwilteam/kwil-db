@@ -9,10 +9,13 @@ CREATE TABLE reward_instances (
     chain_id TEXT NOT NULL,
     escrow_address BYTEA NOT NULL,
     distribution_period INT8 NOT NULL, -- interval (in seconds)
-    synced BOOLEAN NOT NULL DEFAULT FALSE, -- whether the reward has been synced
+    -- synced tells us whether we have synced the metadata associated
+    -- with the escrow address (e.g. the erc20 address, decimals, etc.).
+    -- This happens exactly once at the beginning of an instance.
+    synced BOOLEAN NOT NULL DEFAULT FALSE,
     active BOOLEAN NOT NULL DEFAULT TRUE, -- whether the reward is active
-    -- the following columns are set when the on-chain info
-    -- is synced
+    -- the following columns are set when the on-chain
+    -- info is synced from the escrow contract
     erc20_address BYTEA,
     erc20_decimals INT8,
     synced_at INT8, -- the unix timestamp (in seconds) when the reward was synced
@@ -33,7 +36,7 @@ CREATE TABLE balances (
 -- 1. Created: the epoch is created and the rewards are being distributed
 -- 2. Ended: the epoch has ended and the rewards are finalized
 -- 3. Confirmed: the epoch has been confirmed on chain
--- Ideally, Kwil would have a unique indexes on this table where the ended_at is null (to enforce only one active epoch at a time),
+-- Ideally, Kwil would have a unique indexes on this table where "confirmed" is null (to enforce only one active epoch at a time),
 -- but this requires partial indexes which are not yet supported in Kwil
 CREATE TABLE epochs (
 	id UUID PRIMARY KEY,
@@ -43,8 +46,11 @@ CREATE TABLE epochs (
 	reward_root BYTEA UNIQUE, -- the root of the merkle tree of rewards, it's unique per contract
     ended_at INT8, -- kwil block height
     block_hash BYTEA, -- the hash of the block that is used in merkle tree leaf, which is the last block of the epoch
-    confirmed BOOLEAN NOT NULL DEFAULT FALSE -- whether the epoch has been confirmed on chain
+    confirmed BOOLEAN -- whether the epoch has been confirmed on chain
 );
+
+-- index helps us query for unconfirmed epochs, which is very common
+CREATE INDEX idx_epochs_confirmed ON epochs(instance_id, confirmed);
 
 -- epoch_rewards holds information about the rewards in a given epoch
 CREATE TABLE epoch_rewards (

@@ -104,15 +104,15 @@ func setRewardSynced(ctx context.Context, app *common.App, id *types.UUID, synce
 	}, nil)
 }
 
-// getStoredRewards gets all stored rewards.
-func getStoredRewards(ctx context.Context, app *common.App) ([]*rewardExtensionInfo, error) {
+// getStoredRewardInstances gets all stored reward instances.
+func getStoredRewardInstances(ctx context.Context, app *common.App) ([]*rewardExtensionInfo, error) {
 	var rewards []*rewardExtensionInfo
 	err := app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
 	{kwil_erc20_meta}SELECT r.id, r.chain_id, r.escrow_address, r.distribution_period, r.synced, r.active,
 		r.erc20_address, r.erc20_decimals, r.synced_at, r.balance, e.id AS epoch_id,
 		e.created_at_block AS epoch_created_at_block, e.created_at_unix AS epoch_created_at_seconds
 	FROM reward_instances r
-	LEFT JOIN epochs e on r.id = e.instance_id AND e.ended_at IS NULL
+	LEFT JOIN epochs e on r.id = e.instance_id AND e.confirmed IS NULL
 	`, nil, func(row *common.Row) error {
 		if len(row.Values) != 13 {
 			return fmt.Errorf("expected 13 values, got %d", len(row.Values))
@@ -356,4 +356,38 @@ func getRewardsForEpoch(ctx context.Context, app *common.App, epochID *types.UUI
 		return nil, err
 	}
 	return rewards, nil
+}
+
+// getUnconfirmedEpochs gets all unconfirmed epochs.
+func getUnconfirmedEpochs(ctx context.Context, app *common.App, instanceID *types.UUID, fn func(*Epoch) error) error {
+	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
+	SELECT id, created_at_block, created_at_unix, ended_at, block_hash, reward_root
+	FROM epochs
+	WHERE instance_id = $instance_id AND confirmed IS FALSE
+	ORDER BY ended_at ASC
+	`, map[string]any{
+		"instance_id": instanceID,
+	}, func(r *common.Row) error {
+		if len(r.Values) != 6 {
+			return fmt.Errorf("expected 6 values, got %d", len(r.Values))
+		}
+
+		id := r.Values[0].(*types.UUID)
+		createdAtBlock := r.Values[1].(int64)
+		createdAtUnix := r.Values[2].(int64)
+		endedAt := r.Values[3].(int64)
+		blockHash := r.Values[4].([]byte)
+		rewardRoot := r.Values[5].([]byte)
+
+		return fn(&Epoch{
+			PendingEpoch: PendingEpoch{
+				ID:          id,
+				StartHeight: createdAtBlock,
+				StartTime:   time.Unix(createdAtUnix, 0),
+			},
+			EndHeight: &endedAt,
+			BlockHash: blockHash,
+			Root:      rewardRoot,
+		})
+	})
 }

@@ -245,7 +245,7 @@ func init() {
 				},
 				OnStart: func(ctx context.Context, app *common.App) error {
 					// if the schema exists, we should read all existing reward instances
-					instances, err := getStoredRewards(ctx, app)
+					instances, err := getStoredRewardInstances(ctx, app)
 					switch {
 					case err == nil:
 						// do nothing
@@ -561,6 +561,10 @@ func init() {
 								return err
 							}
 
+							if rawAmount.IsNegative() {
+								return fmt.Errorf("amount cannot be negative")
+							}
+
 							newBal, err := types.DecimalSub(info.ownedBalance, rawAmount)
 							if err != nil {
 								return err
@@ -614,6 +618,10 @@ func init() {
 							rawAmount, err := parseAmountFromUser(amount, uint16(info.syncedRewardData.Erc20Decimals))
 							if err != nil {
 								return err
+							}
+
+							if rawAmount.IsNegative() {
+								return fmt.Errorf("amount cannot be negative")
 							}
 
 							from, err := ethAddressFromHex(ctx.TxContext.Caller)
@@ -701,6 +709,10 @@ func init() {
 								return err
 							}
 
+							if rawAmount.IsNegative() {
+								return fmt.Errorf("amount cannot be negative")
+							}
+
 							addr, err := ethAddressFromHex(user)
 							if err != nil {
 								return err
@@ -752,6 +764,33 @@ func init() {
 							}
 
 							return resultFn([]any{bal.String()})
+						},
+					},
+					{
+						// lists epochs that have not been confirmed yet, but have been ended.
+						// It lists them in ascending order (e.g. oldest first).
+						Name: "list_unconfirmed_epochs",
+						Parameters: []precompiles.PrecompileValue{
+							{Name: "id", Type: types.UUIDType},
+						},
+						Returns: &precompiles.MethodReturn{
+							IsTable: true,
+							Fields: []precompiles.PrecompileValue{
+								{Name: "epoch_id", Type: types.UUIDType},
+								{Name: "start_height", Type: types.IntType},
+								{Name: "start_timestamp", Type: types.IntType},
+								{Name: "end_height", Type: types.IntType},
+								{Name: "reward_root", Type: types.ByteaType},
+								{Name: "end_block_hash", Type: types.ByteaType},
+							},
+						},
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+							id := inputs[0].(*types.UUID)
+
+							return getUnconfirmedEpochs(ctx.TxContext.Ctx, app, id, func(e *Epoch) error {
+								return resultFn([]any{e.ID, e.StartHeight, e.StartTime.Unix(), *e.EndHeight, e.Root, e.BlockHash})
+							})
 						},
 					},
 					// {
@@ -971,6 +1010,10 @@ func (e *extensionInfo) lockTokens(ctx context.Context, app *common.App, id *typ
 	rawAmount, err := parseAmountFromUser(amount, uint16(info.syncedRewardData.Erc20Decimals))
 	if err != nil {
 		return err
+	}
+
+	if rawAmount.IsNegative() {
+		return fmt.Errorf("amount cannot be negative")
 	}
 
 	err = transferTokensFromUserToNetwork(ctx, app, id, fromAddr, rawAmount)

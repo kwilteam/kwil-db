@@ -170,6 +170,22 @@ func init() {
 					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
 					Handler:         makeMetaHandler("balance"),
 				},
+				{
+					Name: "list_unconfirmed_epochs",
+					Returns: &precompiles.MethodReturn{
+						IsTable: true,
+						Fields: []precompiles.PrecompileValue{
+							{Name: "epoch_id", Type: types.UUIDType},
+							{Name: "start_height", Type: types.IntType},
+							{Name: "start_timestamp", Type: types.IntType},
+							{Name: "end_height", Type: types.IntType},
+							{Name: "reward_root", Type: types.ByteaType},
+							{Name: "end_block_hash", Type: types.ByteaType},
+						},
+					},
+					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+					Handler:         makeMetaHandler("list_unconfirmed_epochs"),
+				},
 			},
 		}, nil
 	})

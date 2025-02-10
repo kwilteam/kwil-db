@@ -103,7 +103,7 @@ func TestCreateNewRewardInstance(t *testing.T) {
 	err = createEpoch(ctx, app, pending, id)
 	require.NoError(t, err)
 
-	rewards, err := getStoredRewards(ctx, app)
+	rewards, err := getStoredRewardInstances(ctx, app)
 	require.NoError(t, err)
 	require.Len(t, rewards, 1)
 	require.Equal(t, testReward.ID, rewards[0].ID)
@@ -124,7 +124,7 @@ func TestCreateNewRewardInstance(t *testing.T) {
 	err = setActiveStatus(ctx, app, testReward.ID, false)
 	require.NoError(t, err)
 
-	rewards, err = getStoredRewards(ctx, app)
+	rewards, err = getStoredRewardInstances(ctx, app)
 	require.NoError(t, err)
 
 	require.Len(t, rewards, 1)
