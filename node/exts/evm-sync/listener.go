@@ -11,6 +11,7 @@ import (
 	"time"
 
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
+	"github.com/ethereum/go-ethereum/ethclient"
 	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/kwilteam/kwil-db/common"
@@ -180,7 +181,12 @@ type individualListener struct {
 	client *ethClient
 	// orderedSyncTopic is the ordered sync topic that the listener is posting to.
 	orderedSyncTopic string
+	// getLogsFunc gets logs for a given range of blocks.
+	getLogsFunc GetBlockLogsFunc
 }
+
+// GetBlockLogsFunc is a function that provides an ethereum client and a range of blocks and returns the logs for that range.
+type GetBlockLogsFunc func(ctx context.Context, client *ethclient.Client, startBlock, endBlock uint64, logger log.Logger) ([]ethtypes.Log, error)
 
 // listen listens for new blocks from the Ethereum chain and broadcasts them to the network.
 func (i *individualListener) listen(ctx context.Context, eventstore listeners.EventStore, logger log.Logger) error {
@@ -252,7 +258,7 @@ func (i *individualListener) listen(ctx context.Context, eventstore listeners.Ev
 }
 
 func (i *individualListener) processEvents(ctx context.Context, from, to int64, eventStore listeners.EventStore, logger log.Logger) error {
-	logs, err := i.client.GetEventLogs(ctx, from, to)
+	logs, err := i.getLogsFunc(ctx, i.client.client, uint64(from), uint64(to), logger)
 	if err != nil {
 		return err
 	}

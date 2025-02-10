@@ -990,8 +990,9 @@ func (a *AlterColumnDrop) Accept(v Visitor) any {
 
 type AddColumn struct {
 	Position
-	Name string
-	Type *types.DataType
+	Name        string
+	Type        *types.DataType
+	IfNotExists bool
 }
 
 func (a *AddColumn) alterTableAction() {}
@@ -1002,7 +1003,8 @@ func (a *AddColumn) Accept(v Visitor) any {
 
 type DropColumn struct {
 	Position
-	Name string
+	Name     string
+	IfExists bool
 }
 
 func (a *DropColumn) alterTableAction() {}
@@ -1049,7 +1051,8 @@ func (a *AddTableConstraint) Accept(v Visitor) any {
 
 type DropTableConstraint struct {
 	Position
-	Name string
+	Name     string
+	IfExists bool
 }
 
 func (a *DropTableConstraint) alterTableAction() {}

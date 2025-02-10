@@ -48,6 +48,7 @@ var (
 	ErrBuiltInRole                = errors.New("invalid operation on built-in role")
 	ErrInvalidTxCtx               = errors.New("invalid transaction context")
 	ErrReservedNamespacePrefix    = errors.New("namespace prefix is reserved")
+	ErrCannotAlterPrimaryKey      = errors.New("cannot drop or alter a table's primary key")
 
 	// Errors that are the result of not having proper permissions or failing to meet a condition
 	// that was programmed by the user.

@@ -842,15 +842,12 @@ func (s *schemaVisitor) VisitTable_constraint_def(ctx *gen.Table_constraint_defC
 
 func (s *schemaVisitor) VisitDrop_table_statement(ctx *gen.Drop_table_statementContext) any {
 	stmt := &DropTableStatement{
-		Tables: ctx.GetTables().Accept(s).([]string),
+		Tables:   ctx.GetTables().Accept(s).([]string),
+		IfExists: ctx.EXISTS() != nil,
 	}
 
 	if ctx.Opt_drop_behavior() != nil {
 		stmt.Behavior = ctx.Opt_drop_behavior().Accept(s).(DropBehavior)
-	}
-
-	if ctx.EXISTS() != nil {
-		stmt.IfExists = true
 	}
 
 	stmt.Set(ctx)
@@ -923,8 +920,9 @@ func (s *schemaVisitor) VisitDrop_column_constraint(ctx *gen.Drop_column_constra
 
 func (s *schemaVisitor) VisitAdd_column(ctx *gen.Add_columnContext) any {
 	a := &AddColumn{
-		Name: s.getIdent(ctx.Identifier()),
-		Type: ctx.Type_().Accept(s).(*types.DataType),
+		Name:        s.getIdent(ctx.Identifier()),
+		Type:        ctx.Type_().Accept(s).(*types.DataType),
+		IfNotExists: ctx.EXISTS() != nil,
 	}
 
 	a.Set(ctx)
@@ -933,7 +931,8 @@ func (s *schemaVisitor) VisitAdd_column(ctx *gen.Add_columnContext) any {
 
 func (s *schemaVisitor) VisitDrop_column(ctx *gen.Drop_columnContext) any {
 	a := &DropColumn{
-		Name: s.getIdent(ctx.Identifier()),
+		Name:     s.getIdent(ctx.Identifier()),
+		IfExists: ctx.EXISTS() != nil,
 	}
 
 	a.Set(ctx)
@@ -970,7 +969,8 @@ func (s *schemaVisitor) VisitAdd_table_constraint(ctx *gen.Add_table_constraintC
 
 func (s *schemaVisitor) VisitDrop_table_constraint(ctx *gen.Drop_table_constraintContext) any {
 	a := &DropTableConstraint{
-		Name: s.getIdent(ctx.Identifier()),
+		Name:     s.getIdent(ctx.Identifier()),
+		IfExists: ctx.EXISTS() != nil,
 	}
 
 	a.Set(ctx)

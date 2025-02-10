@@ -12,7 +12,7 @@ type ChainInfo struct {
 	Name Chain
 	// ID is the unique identifier of the chain.
 	// e.g. Ethereum mainnet is 1.
-	ID int
+	ID string
 	// RequiredConfirmations is the number of confirmations required before an event is considered final.
 	// For example, Ethereum mainnet requires 12 confirmations.
 	RequiredConfirmations int64
@@ -22,12 +22,12 @@ func init() {
 	err := registerChain(
 		ChainInfo{
 			Name:                  "ethereum",
-			ID:                    1,
+			ID:                    "1",
 			RequiredConfirmations: 12,
 		},
 		ChainInfo{
 			Name:                  "sepolia",
-			ID:                    11155111,
+			ID:                    "11155111",
 			RequiredConfirmations: 12,
 		},
 	)
@@ -53,6 +53,7 @@ func (c Chain) Valid() error {
 }
 
 var registeredChains = map[Chain]ChainInfo{}
+var chainIDs = map[string]Chain{}
 
 func registerChain(chains ...ChainInfo) error {
 	for _, chain := range chains {
@@ -70,6 +71,7 @@ func registerChain(chains ...ChainInfo) error {
 		}
 
 		registeredChains[chain.Name] = chain
+		chainIDs[chain.ID] = chain.Name
 	}
 
 	return nil
@@ -79,4 +81,15 @@ func registerChain(chains ...ChainInfo) error {
 func GetChainInfo(name Chain) (ChainInfo, bool) {
 	chain, ok := registeredChains[name]
 	return chain, ok
+}
+
+// GetChainInfoByID returns the chain information for the given chain ID.
+func GetChainInfoByID(id string) (ChainInfo, bool) {
+	name, ok := chainIDs[id]
+	if !ok {
+		return ChainInfo{}, false
+	}
+
+	c, ok := registeredChains[name]
+	return c, ok
 }

@@ -203,12 +203,12 @@ alter_table_statement:
 alter_table_action:
       ALTER COLUMN column=identifier SET (NOT NULL | DEFAULT action_expr)   # add_column_constraint
     | ALTER COLUMN column=identifier DROP (NOT NULL | DEFAULT)          # drop_column_constraint
-    | ADD COLUMN column=identifier type                                 # add_column
-    | DROP COLUMN column=identifier                                     # drop_column
+    | ADD COLUMN (IF NOT EXISTS)? column=identifier type                                 # add_column
+    | DROP COLUMN (IF EXISTS)? column=identifier                                     # drop_column
     | RENAME COLUMN old_column=identifier TO new_column=identifier      # rename_column
     | RENAME TO new_table=identifier                                    # rename_table
     | ADD table_constraint_def                                          # add_table_constraint
-    | DROP CONSTRAINT identifier                                        # drop_table_constraint
+    | DROP CONSTRAINT (IF EXISTS)? identifier                                        # drop_table_constraint
 ;
 
 create_index_statement:

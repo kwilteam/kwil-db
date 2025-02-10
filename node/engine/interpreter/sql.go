@@ -520,15 +520,8 @@ func ensureMethodsRegistered(ctx context.Context, db sql.DB, alias string, metho
 
 			fields := make([]*engine.NamedType, len(method.Returns.Fields))
 			for i, f := range method.Returns.Fields {
-				var fieldName string
-				if len(method.Returns.FieldNames) == 0 {
-					fieldName = "column_" + strconv.Itoa(i+1)
-				} else {
-					fieldName = method.Returns.FieldNames[i]
-				}
-
 				fields[i] = &engine.NamedType{
-					Name: fieldName,
+					Name: f.Name,
 					Type: f.Type,
 				}
 			}

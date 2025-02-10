@@ -32,7 +32,26 @@ type Precompile struct {
 	Methods []Method
 	// OnUnuse is called when a `UNUSE ...` statement is executed
 	OnUnuse func(ctx *common.EngineContext, app *common.App) error
+	// Cache is a snapshot of the in-memory state of the extension.
+	// It is used to save and restore the state of the extension.
+	Cache Cache
 }
+
+// Cache is a snapshot of the in-memory state of a precompile extension.
+type Cache interface {
+	// Copy creates a deep copy of the cache.
+	Copy() Cache
+	// Apply applies a previously created deep copy of the cache.
+	// The value passed from Apply will never be changed by the engine,
+	// so there is no need to copy it.
+	Apply(cache Cache)
+}
+
+type emptyCache struct{}
+
+func (e *emptyCache) Apply(cache Cache) {}
+
+func (e *emptyCache) Copy() Cache { return &emptyCache{} }
 
 // CleanExtension verifies that the extension is correctly set up.
 // It does not need to be called by extension authors, as it is called
@@ -62,6 +81,10 @@ func CleanPrecompile(e *Precompile) error {
 		e.OnUnuse = func(ctx *common.EngineContext, app *common.App) error { return nil }
 	}
 
+	if e.Cache == nil {
+		e.Cache = &emptyCache{}
+	}
+
 	return nil
 }
 
@@ -83,8 +106,10 @@ type Method struct {
 	// If nil, the method does not return anything.
 	Returns *MethodReturn
 	// Handler is the function that is called when the method is invoked.
-	Handler func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error
+	Handler HandlerFunc
 }
+
+type HandlerFunc func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error
 
 // Copy deep-copies a method.
 func (m *Method) Copy() *Method {
@@ -97,9 +122,8 @@ func (m *Method) Copy() *Method {
 
 	if m.Returns != nil {
 		m2.Returns = &MethodReturn{
-			IsTable:    m.Returns.IsTable,
-			Fields:     copyParams(m.Returns.Fields),
-			FieldNames: slices.Clone(m.Returns.FieldNames),
+			IsTable: m.Returns.IsTable,
+			Fields:  copyParams(m.Returns.Fields),
 		}
 	}
 
@@ -119,6 +143,10 @@ func (m *Method) verify() error {
 		return fmt.Errorf("method name %s must be lowercase", m.Name)
 	}
 
+	if len(m.Name) == 0 {
+		return fmt.Errorf("method name must not be empty")
+	}
+
 	if len(m.AccessModifiers) == 0 {
 		return fmt.Errorf("method %s has no access modifiers", m.Name)
 	}
@@ -134,14 +162,30 @@ func (m *Method) verify() error {
 		return fmt.Errorf("method %s must have exactly one of PUBLIC, PRIVATE, or SYSTEM", m.Name)
 	}
 
+	if err := uniqueFieldNames(m.Parameters); err != nil {
+		return fmt.Errorf("method %s: %w", m.Name, err)
+	}
+
 	if m.Returns != nil {
 		if len(m.Returns.Fields) == 0 {
 			return fmt.Errorf("method %s has no return types", m.Name)
 		}
 
-		if len(m.Returns.FieldNames) != 0 && len(m.Returns.FieldNames) != len(m.Returns.Fields) {
-			return fmt.Errorf("method %s has %d return names, but %d return types", m.Name, len(m.Returns.FieldNames), len(m.Returns.Fields))
+		if err := uniqueFieldNames(m.Returns.Fields); err != nil {
+			return fmt.Errorf("method %s: %w", m.Name, err)
 		}
+	}
+
+	return nil
+}
+
+func uniqueFieldNames(fields []PrecompileValue) error {
+	fieldNames := make(map[string]struct{})
+	for _, field := range fields {
+		if _, ok := fieldNames[field.Name]; ok {
+			return fmt.Errorf("duplicate field name %s", field.Name)
+		}
+		fieldNames[field.Name] = struct{}{}
 	}
 
 	return nil
@@ -156,11 +200,6 @@ type MethodReturn struct {
 	// It is required. If the extension returns types that are
 	// not matching the column types, the engine will return an error.
 	Fields []PrecompileValue
-	// FieldNames is a list of column names.
-	// It is optional. If it is set, its length must be equal to the length
-	// of the column types. If it is not set, the column names will be generated
-	// based on their position in the column types.
-	FieldNames []string
 }
 
 // Modifier modifies the access to a procedure.
@@ -194,6 +233,8 @@ func (m Modifiers) Has(mod Modifier) bool {
 // PrecompileValue specifies the type and nullability of a value passed to or returned from
 // a precompile method.
 type PrecompileValue struct {
+	// Name is the name of the value.
+	Name string
 	// Type is the type of the value.
 	Type *types.DataType
 	// Nullable is true if the value can be null.
@@ -202,14 +243,17 @@ type PrecompileValue struct {
 
 func (p *PrecompileValue) Copy() PrecompileValue {
 	return PrecompileValue{
+		Name:     p.Name,
 		Type:     p.Type.Copy(),
 		Nullable: p.Nullable,
 	}
 }
 
 // NewPrecompileValue creates a new precompile value.
-func NewPrecompileValue(t *types.DataType, nullable bool) PrecompileValue {
+// TODO: update this signature to include name
+func NewPrecompileValue(name string, t *types.DataType, nullable bool) PrecompileValue {
 	return PrecompileValue{
+		Name:     name,
 		Type:     t,
 		Nullable: nullable,
 	}

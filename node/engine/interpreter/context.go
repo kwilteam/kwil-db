@@ -443,7 +443,7 @@ func (e *executionContext) canExecute(newNamespace, actionName string, modifiers
 		return fmt.Errorf("%w: action %s can only be executed by the owner", engine.ErrActionOwnerOnly, actionName)
 	}
 
-	return nil
+	return e.checkPrivilege(_CALL_PRIVILEGE)
 }
 
 func (e *executionContext) app() *common.App {

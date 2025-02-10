@@ -276,6 +276,11 @@ func Test_Finalization(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
+	resolveFn := "a"
+	RegisterResolveFunc(resolveFn, func(ctx context.Context, app *common.App, block *common.BlockContext, res *ResolutionMessage) error {
+		return nil
+	})
+
 	for _, tc := range testcases {
 		t.Run(tc.name, func(t *testing.T) {
 			defer Synchronizer.reset()
@@ -289,9 +294,9 @@ func Test_Finalization(t *testing.T) {
 			err = createNamespace(ctx, tx, interp)
 			require.NoError(t, err)
 
-			err = registerTopic(ctx, tx, interp, topic1)
+			err = registerTopic(ctx, tx, interp, topic1, resolveFn)
 			require.NoError(t, err)
-			err = registerTopic(ctx, tx, interp, topic2)
+			err = registerTopic(ctx, tx, interp, topic2, resolveFn)
 			require.NoError(t, err)
 
 			if tc.startingTopic1Time != 0 {

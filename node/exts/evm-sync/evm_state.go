@@ -28,6 +28,19 @@ import (
 	that reads the desired state
 */
 
+// RegisterEventResolution registers a resolution function for the EVM event listener.
+// It should be called in an init function.
+func RegisterStatePollResolution(name string, resolve EVMPollResolveFunc) {
+	_, ok := pollFuncResolutions[name]
+	if ok {
+		panic(fmt.Sprintf("poll resolution with name %s already registered", name))
+	}
+
+	pollFuncResolutions[name] = resolve
+}
+
+var pollFuncResolutions = make(map[string]EVMPollResolveFunc)
+
 func init() {
 	err := listeners.RegisterListener("evm_sync_poller",
 		poll.NewPoller(5*time.Second, func(ctx context.Context, service *common.Service, eventstore listeners.EventStore) (poll.PollFunc, error) {
@@ -46,7 +59,17 @@ func init() {
 		ConfirmationThreshold: big.NewRat(1, 2),
 		ExpirationPeriod:      1 * time.Hour,
 		ResolveFunc: func(ctx context.Context, app *common.App, resolution *resolutions.Resolution, block *common.BlockContext) error {
-			return StatePoller.resolve(ctx, app, resolution, block)
+			p := &polledEvent{}
+			if err := p.UnmarshalBinary(resolution.Body); err != nil {
+				return fmt.Errorf("failed to unmarshal polled event: %v", err)
+			}
+
+			resolve, ok := pollFuncResolutions[p.UniqueName]
+			if !ok {
+				return fmt.Errorf("poll resolution with name %s not found", p.UniqueName)
+			}
+
+			return resolve(ctx, app, resolution, block, p.UniqueName, p.Data)
 		},
 	})
 	if err != nil {
@@ -78,13 +101,12 @@ type PollConfig struct {
 	Chain chains.Chain
 	// PollFunc is the function to call to poll the chain
 	PollFunc EVMPollFunc
-	// ResolveFunc is the function to call to resolve the state
-	ResolveFunc resolutions.ResolveFunc
 	// UniqueName is a unique name for the poller
 	UniqueName string
 }
 
-type EVMPollFunc func(ctx context.Context, service *common.Service, eventstore listeners.EventKV, broadcast func(context.Context, []byte) error, client *ethclient.Client) (done bool)
+type EVMPollFunc func(ctx context.Context, service *common.Service, eventstore listeners.EventKV, broadcast func(context.Context, []byte) error, client *ethclient.Client)
+type EVMPollResolveFunc func(ctx context.Context, app *common.App, resolution *resolutions.Resolution, block *common.BlockContext, uniqueName string, decodedData []byte) error
 
 // RegisterPoll registers a function that polls the state of Ethereum.
 // The pollFunc is responsible for reading the state of Ethereum and writing
@@ -119,27 +141,6 @@ func (s *statePoller) UnregisterPoll(uniqueName string) error {
 	delete(s.pollers, uniqueName)
 
 	return nil
-}
-
-// resolve calls the resolve function for the given poller.
-func (s *statePoller) resolve(ctx context.Context, app *common.App, resolution *resolutions.Resolution, block *common.BlockContext) error {
-	p := &polledEvent{}
-	if err := p.UnmarshalBinary(resolution.Body); err != nil {
-		return fmt.Errorf("failed to unmarshal polled event: %v", err)
-	}
-
-	s.mu.Lock()
-	defer s.mu.Unlock()
-
-	cfg, ok := s.pollers[p.UniqueName]
-	if !ok {
-		// if the poller is not registered, it may have simply been unregistered,
-		// so we should not return an error
-		app.Service.Logger.Warnf("poller %s not found when resolving EVM poll", p.UniqueName)
-		return nil
-	}
-
-	return cfg.ResolveFunc(ctx, app, resolution, block)
 }
 
 // runPollFuncs runs all poll funcs asynchronously.

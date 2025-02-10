@@ -31,16 +31,15 @@ type topicInfo struct {
 type cachedSync struct {
 	// mu protects all fields in this struct
 	mu sync.Mutex
-	// topics is a map of topics to their respective callbacks
+	// topics is a map of topics to their suffixes
 	topics      map[string]*topicInfo
 	initialized bool // basic protection against double initialization in case of a bug elsewhere
 }
 
 // RegisterTopic registers a topic with a callback.
-// It should be called exactly once in the lifecycle of the node
-// unless a topic is unregistered.
-// (e.g. within a precompile's OnStart method).
-func (c *cachedSync) RegisterTopic(ctx context.Context, db sql.DB, eng common.Engine, topic string, cb ResolveFunc) error {
+// It should be called exactly once: when a topic is made relevant (within
+// consensus). This should usually be in Genesis, but it can be called at any time.
+func (c *cachedSync) RegisterTopic(ctx context.Context, db sql.DB, eng common.Engine, topic string, resolveFunc string) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
@@ -48,11 +47,17 @@ func (c *cachedSync) RegisterTopic(ctx context.Context, db sql.DB, eng common.En
 	if ok {
 		return fmt.Errorf("topic %s already registered", topic)
 	}
-	c.topics[topic] = &topicInfo{
-		resolve: cb,
+
+	resolveFn, ok := registered[resolveFunc]
+	if !ok {
+		return fmt.Errorf("resolve function %s not registered", resolveFunc)
 	}
 
-	return registerTopic(ctx, db, eng, topic)
+	c.topics[topic] = &topicInfo{
+		resolve: resolveFn,
+	}
+
+	return registerTopic(ctx, db, eng, topic, resolveFunc)
 }
 
 // UnregisterTopic unregisters a topic.
@@ -74,7 +79,7 @@ func (c *cachedSync) UnregisterTopic(ctx context.Context, db sql.DB, eng common.
 
 // readTopicInfoOnStartup reads the last processed point in time for each topic.
 // It is meant to be called within an EngineReadyHook.
-// It is called AFTER every topic has been registered.
+// It populates the cache with topics.
 func (c *cachedSync) readTopicInfoOnStartup(ctx context.Context, app *common.App) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -85,9 +90,9 @@ func (c *cachedSync) readTopicInfoOnStartup(ctx context.Context, app *common.App
 	c.initialized = true
 
 	err := app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
-	SELECT name, last_processed_point FROM topics
+	SELECT name, last_processed_point, resolve_func FROM topics
 	`, nil, func(r *common.Row) error {
-		if len(r.Values) != 2 {
+		if len(r.Values) != 3 {
 			// this should never happen
 			return fmt.Errorf("unexpected number of columns")
 		}
@@ -107,12 +112,26 @@ func (c *cachedSync) readTopicInfoOnStartup(ctx context.Context, app *common.App
 			return fmt.Errorf("unexpected type string for topic")
 		}
 
-		info, ok := c.topics[topic]
+		resolveFunc, ok := r.Values[2].(string)
 		if !ok {
-			return fmt.Errorf("data for a topic was found but no topic was registered. topic: %s", topic)
+			return fmt.Errorf("unexpected type string for resolve function")
 		}
 
-		info.lastProcessedPoint = &point
+		_, ok = c.topics[topic]
+		if ok {
+			// signals an internal bug
+			return fmt.Errorf("topic %s already registered", topic)
+		}
+
+		resolveFn, ok := registered[resolveFunc]
+		if !ok {
+			return fmt.Errorf("resolve function %s not registered", resolveFunc)
+		}
+
+		c.topics[topic] = &topicInfo{
+			resolve:            resolveFn,
+			lastProcessedPoint: &point,
+		}
 		return nil
 	})
 	if errors.Is(err, engine.ErrUnknownTable) {
@@ -136,12 +155,12 @@ func (c *cachedSync) resolve(ctx context.Context, app *common.App, block *common
 	// update the last processed point in the database
 	latestPoint := make(map[string]int64)
 	for _, dp := range res {
-		top, ok := c.topics[dp.Topic]
+		res, ok := registered[dp.Topic]
 		if !ok {
 			return fmt.Errorf("topic %s not registered", dp.Topic)
 		}
 
-		if err := top.resolve(ctx, app, block, dp); err != nil {
+		if err := res(ctx, app, block, dp); err != nil {
 			return err
 		}
 
@@ -172,6 +191,9 @@ func (c *cachedSync) storeDataPoint(ctx context.Context, app *common.App, dp *Re
 		}
 	}
 
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
 	topic, ok := c.topics[dp.Topic]
 	if !ok {
 		// if topic is not registered, we should not store the data point.
@@ -183,7 +205,7 @@ func (c *cachedSync) storeDataPoint(ctx context.Context, app *common.App, dp *Re
 		return nil
 	}
 
-	// TODO: should we return errors here? These suggest that a majority of nodes synced some sort of incorrect data or
+	// should we return errors here? These suggest that a majority of nodes synced some sort of incorrect data or
 	// have a bug in their listener. I think we should return an error (which will stop the node), since the alternative
 	// is an event goes unprocessed (which might lead to unexpected loss of data and/or funds), but I'm not sure.
 	switch {
@@ -207,6 +229,8 @@ func (c *cachedSync) storeDataPoint(ctx context.Context, app *common.App, dp *Re
 
 // reset resets the cache.
 // THIS SHOULD ONLY BE USED IN TESTS.
+//
+//lint:ignore U1000 This is only used in tests
 func (c *cachedSync) reset() {
 	c.mu.Lock()
 	defer c.mu.Unlock()

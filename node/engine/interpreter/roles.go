@@ -75,8 +75,16 @@ func newAccessController(ctx context.Context, db sql.DB) (*accessController, err
 				return fmt.Errorf(`unknown privilege "%s" stored in DB`, *priv)
 			}
 
+			// if namespace is nil, then it is a global privilege
+			// We still register all global privileges with each namespace
 			if namespaces[i] == nil {
 				perm.globalPrivileges[privilege(*priv)] = struct{}{}
+
+				for nsPriv, np := range perm.namespacePrivileges {
+					np[privilege(*priv)] = struct{}{}
+
+					perm.namespacePrivileges[nsPriv] = np
+				}
 			} else {
 				if _, ok := perm.namespacePrivileges[*namespaces[i]]; !ok {
 					perm.namespacePrivileges[*namespaces[i]] = make(map[privilege]struct{})
@@ -84,6 +92,7 @@ func newAccessController(ctx context.Context, db sql.DB) (*accessController, err
 
 				perm.namespacePrivileges[*namespaces[i]][privilege(*priv)] = struct{}{}
 			}
+
 		}
 
 		ac.roles[roleName] = perm
@@ -211,6 +220,10 @@ func (a *accessController) DeleteRole(ctx context.Context, db sql.DB, role strin
 func (a *accessController) registerNamespace(namespace string) {
 	for _, perm := range a.roles {
 		perm.namespacePrivileges[namespace] = make(map[privilege]struct{})
+
+		for priv := range perm.globalPrivileges {
+			perm.namespacePrivileges[namespace][priv] = struct{}{}
+		}
 	}
 	a.knownNamespaces[namespace] = struct{}{}
 }
@@ -287,7 +300,7 @@ func (a *accessController) GrantPrivileges(ctx context.Context, db sql.DB, role 
 		}
 	}()
 
-	err = grantPrivileges(ctx, db, role, ungrantedPrivs, namespace)
+	err = grantPrivilegesSQL(ctx, db, role, ungrantedPrivs, namespace)
 	if err != nil {
 		return err
 	}
@@ -305,16 +318,15 @@ func (a *accessController) RevokePrivileges(ctx context.Context, db sql.DB, role
 		return fmt.Errorf(`role "%s" does not exist`, role)
 	}
 
-	grantedPrivs := make([]privilege, 0, len(privs))
+	// for each incoming privilege, if the role can already not do it, then
+	// we error out.
 	for _, p := range privs {
 		if !perms.canDo(p, namespace) {
 			if ifGranted {
-				grantedPrivs = append(grantedPrivs, p)
+				continue
 			} else {
 				return fmt.Errorf(`role "%s" does not have some or all of the specified privileges`, role)
 			}
-		} else {
-			grantedPrivs = append(grantedPrivs, p)
 		}
 	}
 
@@ -323,11 +335,11 @@ func (a *accessController) RevokePrivileges(ctx context.Context, db sql.DB, role
 	// update the cache if the db operation is successful
 	defer func() {
 		if err == nil {
-			a.roles[role].revoke(namespace, grantedPrivs...)
+			a.roles[role].revoke(namespace, privs...)
 		}
 	}()
 
-	err = revokePrivileges(ctx, db, role, grantedPrivs, namespace)
+	err = revokePrivilegesSQL(ctx, db, role, privs, namespace)
 	if err != nil {
 		return err
 	}
@@ -458,10 +470,10 @@ func createRole(ctx context.Context, db sql.DB, roleName string) error {
 	return err
 }
 
-// grantPrivileges grants privileges to a role.
+// grantPrivilegesSQL grants privileges to a role.
 // If the privileges do not exist, it will return an error.
 // It can optionally be applied to a specific namespace.
-func grantPrivileges(ctx context.Context, db sql.DB, roleName string, privileges []privilege, namespace *string) error {
+func grantPrivilegesSQL(ctx context.Context, db sql.DB, roleName string, privileges []privilege, namespace *string) error {
 	// we need to convert the privileges back to strings so that pgx can find an encode plan
 	privStrs := make([]string, len(privileges))
 	for i, p := range privileges {
@@ -481,10 +493,10 @@ func grantPrivileges(ctx context.Context, db sql.DB, roleName string, privileges
 	return err
 }
 
-// revokePrivileges revokes privileges from a role.
+// revokePrivilegesSQL revokes privileges from a role.
 // If the privileges do not exist, it will return an error.
 // It can optionally be applied to a specific namespace.
-func revokePrivileges(ctx context.Context, db sql.DB, roleName string, privileges []privilege, namespace *string) error {
+func revokePrivilegesSQL(ctx context.Context, db sql.DB, roleName string, privileges []privilege, namespace *string) error {
 	// we need to convert the privileges back to strings so that pgx can find an encode plan
 	privStrs := make([]string, len(privileges))
 	for i, p := range privileges {
@@ -571,6 +583,10 @@ type perms struct {
 	namespacePrivileges map[string]map[privilege]struct{}
 	// globalPrivileges is a set of privileges that are allowed globally.
 	// it does NOT include inherited privileges.
+	// This map should NOT be used to check if a user has a privilege.
+	// Instead, it is used when a new namespace is created, so that
+	// the new namespace (within namespacePrivileges) can inherit the global privileges.
+	// This is because a global privilege can later be revoked for a certain namespace.
 	globalPrivileges map[privilege]struct{}
 }
 
@@ -589,14 +605,12 @@ func (p *perms) copy() *perms {
 
 // canDo returns true if the role can perform the specified action.
 func (p *perms) canDo(priv privilege, namespace *string) bool {
-	// if the user has the global privilege, return true
-	_, hasGlobal := p.globalPrivileges[priv]
-	if hasGlobal {
-		return true
-	}
-	// if the user does not have global and no namespace is provided, return false
 	if namespace == nil {
-		return false
+		// if no namespace is provided, then this must be something
+		// that is not namespaceable. In that case, check if they have
+		// the global privilege
+		_, hasGlobal := p.globalPrivileges[priv]
+		return hasGlobal
 	}
 
 	// otherwise, check the namespace
@@ -614,6 +628,12 @@ func (p *perms) grant(namespace *string, privs ...privilege) {
 	if namespace == nil {
 		for _, priv := range privs {
 			p.globalPrivileges[priv] = struct{}{}
+		}
+
+		for _, np := range p.namespacePrivileges {
+			for _, priv := range privs {
+				np[priv] = struct{}{}
+			}
 		}
 	} else {
 		np, ok := p.namespacePrivileges[*namespace]
@@ -634,6 +654,12 @@ func (p *perms) revoke(namespace *string, privs ...privilege) {
 	if namespace == nil {
 		for _, priv := range privs {
 			delete(p.globalPrivileges, priv)
+		}
+
+		for _, np := range p.namespacePrivileges {
+			for _, priv := range privs {
+				delete(np, priv)
+			}
 		}
 	} else {
 		np, ok := p.namespacePrivileges[*namespace]

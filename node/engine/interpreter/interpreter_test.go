@@ -689,6 +689,31 @@ func Test_SQL(t *testing.T) {
 			},
 			execSQL: `ALTER TABLE users2 ADD COLUMN age INT, DROP COLUMN name;`,
 		},
+		{
+			name: "default ordering of complex group",
+			sql: []string{
+				`CREATE TABLE wallets (id int primary key, address text)`,
+			},
+			execSQL: `SELECT lower(address) FROM wallets GROUP BY lower(address);`,
+		},
+		{
+			name:    "namespace with hyphen",
+			execSQL: `CREATE NAMESPACE "test-hyphen";`,
+			err:     engine.ErrParse,
+		},
+		{
+			name:    "namespace with period",
+			execSQL: `CREATE NAMESPACE "test.hyphen";`,
+			err:     engine.ErrParse,
+		},
+		{
+			name: "drop primary key",
+			sql: []string{
+				`CREATE TABLE tbl (id INT PRIMARY KEY, name TEXT);`,
+			},
+			execSQL: `ALTER TABLE tbl DROP column id;`,
+			err:     engine.ErrCannotAlterPrimaryKey,
+		},
 	}
 
 	db := newTestDB(t, nil, nil)
@@ -1928,6 +1953,19 @@ func Test_Actions(t *testing.T) {
 			action:      "format_error",
 			errContains: "this is an error with a format SomeValue",
 		},
+		{
+			name: "remove call from default role",
+			stmt: []string{
+				"CREATE ROLE some_role;",
+				"CREATE NAMESPACE test;",
+				"{test} CREATE ACTION act() public { }",
+				"REVOKE CALL ON test FROM default;",
+			},
+			namespace: "test",
+			action:    "act",
+			caller:    "some_user",
+			err:       engine.ErrDoesNotHavePrivilege,
+		},
 	}
 
 	db := newTestDB(t, nil, nil)
@@ -1991,9 +2029,9 @@ func (t *testPrecompile) makeGetMethod(datatype *types.DataType) precompiles.Met
 	}
 	return precompiles.Method{
 		Name:       "get_" + name,
-		Parameters: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.TextType, false)},
+		Parameters: []precompiles.PrecompileValue{precompiles.NewPrecompileValue("param", types.TextType, false)},
 		Returns: &precompiles.MethodReturn{
-			Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(datatype, false)},
+			Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue("value", datatype, false)},
 		},
 		Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 			v, ok := t.meta[inputs[0].(string)]
@@ -2050,11 +2088,11 @@ func Test_Extensions(t *testing.T) {
 					Name:            "concat",
 					AccessModifiers: []precompiles.Modifier{precompiles.SYSTEM},
 					Parameters: []precompiles.PrecompileValue{
-						precompiles.NewPrecompileValue(types.TextType, false),
-						precompiles.NewPrecompileValue(types.TextType, false),
+						precompiles.NewPrecompileValue("a", types.TextType, false),
+						precompiles.NewPrecompileValue("b", types.TextType, false),
 					},
 					Returns: &precompiles.MethodReturn{
-						Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.TextType, false)},
+						Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue("val", types.TextType, false)},
 					},
 					Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 						tc.i++
@@ -2064,7 +2102,7 @@ func Test_Extensions(t *testing.T) {
 				{
 					Name: "owner_only",
 					Returns: &precompiles.MethodReturn{
-						Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.TextType, false)},
+						Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue("a", types.TextType, false)},
 					},
 					Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 						count := 0
@@ -2092,7 +2130,7 @@ func Test_Extensions(t *testing.T) {
 				{
 					Name: "internal",
 					Returns: &precompiles.MethodReturn{
-						Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.TextType, false)},
+						Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue("a", types.TextType, false)},
 					},
 					Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 						if len(inputs) != 0 {
@@ -2116,6 +2154,30 @@ func Test_Extensions(t *testing.T) {
 				tc.makeGetMethod(types.ArrayType(types.ByteaType)),
 				tc.makeGetMethod(types.ArrayType(types.UUIDType)),
 				tc.makeGetMethod(mustDecArrType(10, 2)),
+				{
+					Name:       "get_param_1",
+					Parameters: []precompiles.PrecompileValue{precompiles.NewPrecompileValue("a", types.TextType, false)},
+					Returns: &precompiles.MethodReturn{
+						Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue("val", types.IntType, false)},
+					},
+					Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+						tc.i++
+						return resultFn([]any{tc.meta["param_1"]})
+					},
+					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
+				},
+				{
+					Name:       "get_param_2",
+					Parameters: []precompiles.PrecompileValue{precompiles.NewPrecompileValue("a", types.TextType, false)},
+					Returns: &precompiles.MethodReturn{
+						Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue("val", types.ArrayType(types.ByteaType), false)},
+					},
+					Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+						tc.i++
+						return resultFn([]any{tc.meta["param_2"]})
+					},
+					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
+				},
 			},
 		}, nil
 	})
@@ -2178,9 +2240,14 @@ func Test_Extensions(t *testing.T) {
 			bool_array: array[true],
 			bytea_array: array[0x010203],
 			uuid_array: array['f47ac10b-58cc-4372-a567-0e02b2c3d479'::uuid],
-			numeric_array: array[1.23::numeric(10,2)]
+			numeric_array: array[1.23::numeric(10,2)],
+			param_1: $a,
+			param_2: $b
 		} AS test_ext;
-	`, nil, func(r *common.Row) error {
+	`, map[string]any{
+			"a": 1,
+			"b": [][]byte{{1, 2}, {3, 4}},
+		}, func(r *common.Row) error {
 			return nil
 		})
 		require.NoError(t, err)
@@ -2265,6 +2332,8 @@ func Test_Extensions(t *testing.T) {
 			{"bytea_array", []*[]byte{{1, 2, 3}}},
 			{"uuid_array", []*types.UUID{mustUUID("f47ac10b-58cc-4372-a567-0e02b2c3d479")}},
 			{"numeric_array", []*types.Decimal{mustExplicitDecimal("1.23", 10, 2)}},
+			{"param_1", int64(1)},
+			{"param_2", []*[]byte{{1, 2}, {3, 4}}},
 		} {
 			err = adminCall("test_ext", "get_"+get.key, []any{get.key}, exact(get.value))
 			require.NoErrorf(t, err, "key: %s", get.key)
@@ -2381,10 +2450,10 @@ func Test_NamingOverwrites(t *testing.T) {
 			{
 				Name: "abs",
 				Parameters: []precompiles.PrecompileValue{
-					precompiles.NewPrecompileValue(types.IntType, false),
+					precompiles.NewPrecompileValue("a", types.IntType, false),
 				},
 				Returns: &precompiles.MethodReturn{
-					Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.IntType, false)},
+					Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue("val", types.IntType, false)},
 				},
 				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 					absCalled = true
@@ -2606,7 +2675,7 @@ func Test_ExtensionTypeChecks(t *testing.T) {
 		Methods: []precompiles.Method{
 			{
 				Name:       "accept_null",
-				Parameters: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.TextType, true)},
+				Parameters: []precompiles.PrecompileValue{precompiles.NewPrecompileValue("a", types.TextType, true)},
 				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 					return nil
 				},
@@ -2614,7 +2683,7 @@ func Test_ExtensionTypeChecks(t *testing.T) {
 			},
 			{
 				Name:       "accept_not_null",
-				Parameters: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.TextType, false)},
+				Parameters: []precompiles.PrecompileValue{precompiles.NewPrecompileValue("a", types.TextType, false)},
 				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 					return nil
 				},
@@ -2622,9 +2691,9 @@ func Test_ExtensionTypeChecks(t *testing.T) {
 			},
 			{
 				Name:       "return_not_null",
-				Parameters: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.TextType, true)},
+				Parameters: []precompiles.PrecompileValue{precompiles.NewPrecompileValue("a", types.TextType, true)},
 				Returns: &precompiles.MethodReturn{
-					Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.TextType, false)},
+					Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue("val", types.TextType, false)},
 				},
 				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 					return resultFn(inputs)
@@ -2633,9 +2702,9 @@ func Test_ExtensionTypeChecks(t *testing.T) {
 			},
 			{
 				Name:       "return_null",
-				Parameters: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.TextType, true)},
+				Parameters: []precompiles.PrecompileValue{precompiles.NewPrecompileValue("a", types.TextType, true)},
 				Returns: &precompiles.MethodReturn{
-					Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.TextType, true)},
+					Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue("val", types.TextType, true)},
 				},
 				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 					return resultFn(inputs)
@@ -2645,7 +2714,7 @@ func Test_ExtensionTypeChecks(t *testing.T) {
 			{
 				Name: "returns_wrong_type",
 				Returns: &precompiles.MethodReturn{
-					Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.TextType, false)},
+					Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue("a", types.TextType, false)},
 				},
 				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 					return resultFn([]any{1})
@@ -2655,7 +2724,7 @@ func Test_ExtensionTypeChecks(t *testing.T) {
 			{
 				Name: "returns_wrong_count",
 				Returns: &precompiles.MethodReturn{
-					Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue(types.TextType, false), precompiles.NewPrecompileValue(types.TextType, false)},
+					Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue("a", types.TextType, false), precompiles.NewPrecompileValue("b", types.TextType, false)},
 				},
 				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 					return resultFn([]any{"hello"})
