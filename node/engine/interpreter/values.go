@@ -281,7 +281,7 @@ type value interface {
 	// Type returns the type of the variable.
 	Type() *types.DataType
 	// RawValue returns the value of the variable.
-	// This engine.IS one of: nil, int64, string, bool, []byte, *types.UUID, *decimal.Decimal,
+	// This is one of: nil, int64, string, bool, []byte, *types.UUID, *decimal.Decimal,
 	// []*int64, []*string, []*bool, [][]byte, []*decimal.Decimal, []*types.UUID
 	RawValue() any
 	// Null returns true if the variable is null.
@@ -1040,12 +1040,12 @@ func (b *boolValue) Cast(t *types.DataType) (value, error) {
 
 func makeBlob(b []byte) *blobValue {
 	return &blobValue{
-		bts: &b,
+		bts: b,
 	}
 }
 
 type blobValue struct {
-	bts *[]byte
+	bts []byte
 }
 
 func (b *blobValue) Null() bool {
@@ -1065,9 +1065,9 @@ func (b *blobValue) Compare(v value, op comparisonOp) (*boolValue, error) {
 	var b2 bool
 	switch op {
 	case _EQUAL:
-		b2 = string(*b.bts) == string(*val2.bts)
+		b2 = string(b.bts) == string(val2.bts)
 	case _IS_DISTINCT_FROM:
-		b2 = string(*b.bts) != string(*val2.bts)
+		b2 = string(b.bts) != string(val2.bts)
 	default:
 		return nil, fmt.Errorf("%w: cannot use comparison operator %s with type %s", engine.ErrComparison, b.Type(), op)
 	}
@@ -1086,7 +1086,7 @@ func (b *blobValue) Arithmetic(v scalarValue, op arithmeticOp) (scalarValue, err
 	}
 
 	if op == _CONCAT {
-		return makeBlob(append(*b.bts, *val2.bts...)), nil
+		return makeBlob(append(b.bts, val2.bts...)), nil
 	}
 
 	return nil, fmt.Errorf("%w: cannot perform arithmetic operation %s on blob", engine.ErrArithmetic, op)
@@ -1101,12 +1101,13 @@ func (b *blobValue) Type() *types.DataType {
 }
 
 func (b *blobValue) RawValue() any {
-	// this for some reason makes a difference in the output.
-	// Without this if, the output of RawValue is not equal to nil
+	// RawValue returns an any, so if we `return nil`, it return a nil
+	// interface{}. However, if we `return []byte(nil)`, the returned
+	// interface{} is NOT nil.
 	if b.bts == nil {
 		return nil
 	}
-	return *b.bts
+	return b.bts
 }
 
 func (b *blobValue) Cast(t *types.DataType) (value, error) {
@@ -1116,14 +1117,14 @@ func (b *blobValue) Cast(t *types.DataType) (value, error) {
 
 	switch *t {
 	case *types.IntType:
-		i, err := strconv.ParseInt(string(*b.bts), 10, 64)
+		i, err := strconv.ParseInt(string(b.bts), 10, 64)
 		if err != nil {
 			return nil, castErr(err)
 		}
 
 		return makeInt8(i), nil
 	case *types.TextType:
-		return makeText(string(*b.bts)), nil
+		return makeText(string(b.bts)), nil
 	case *types.ByteaType:
 		return b, nil
 	default:
@@ -1141,13 +1142,9 @@ func (b *blobValue) ScanBytes(src []byte) error {
 		return nil
 	}
 
-	if b.bts == nil {
-		b.bts = new([]byte)
-	}
-
 	// copy the src bytes into the prealloc bytes
-	*b.bts = make([]byte, len(src))
-	copy(*b.bts, src)
+	b.bts = make([]byte, len(src))
+	copy(b.bts, src)
 	return nil
 }
 
@@ -1157,7 +1154,7 @@ func (b *blobValue) BytesValue() ([]byte, error) {
 		return nil, nil
 	}
 
-	return *b.bts, nil
+	return b.bts, nil
 }
 
 // Value implements the driver.Valuer interface.
@@ -1166,7 +1163,7 @@ func (b *blobValue) Value() (driver.Value, error) {
 		return nil, nil
 	}
 
-	return *b.bts, nil
+	return b.bts, nil
 }
 
 func makeUUID(u *types.UUID) *uuidValue {
@@ -1860,7 +1857,7 @@ func (a *textArrayValue) Cast(t *types.DataType) (value, error) {
 	case *types.TextArrayType:
 		return a, nil
 	case *types.ByteaArrayType:
-		return castArr(a, func(s string) ([]byte, error) { return []byte(s), nil }, newBlobArrayValue)
+		return castValArr(a, func(s string) ([]byte, error) { return []byte(s), nil }, newBlobArrayValue)
 	default:
 		return nil, castErr(fmt.Errorf("cannot cast text array to %s", t))
 	}
@@ -1911,6 +1908,34 @@ func castArrWithPtr[A any, B any, C arrayValue, D arrayValue](c C, get func(a A)
 			if err != nil {
 				return *new(D), castErr(err)
 			}
+		}
+	}
+
+	return newArr(res), nil
+}
+
+// castValArr is for when B is itself nilable, like a slice or map, and the
+// slice passed to newArray should be a []B.
+func castValArr[A any, B any, C arrayValue, D arrayValue](c C, get func(a A) (B, error), newArr func([]B) D) (D, error) {
+	var d D
+	res := make([]B, c.Len())
+	for i := range c.Len() {
+		v, err := c.Get(i + 1) // SQL Indexes are 1-based
+		if err != nil {
+			return d, castErr(err)
+		}
+		if v.Null() {
+			continue
+		}
+
+		va, ok := v.RawValue().(A)
+		if !ok {
+			return d, castErr(fmt.Errorf("internal bug: unexpected type %T", v.RawValue()))
+		}
+
+		res[i], err = get(va) // B <= A
+		if err != nil {
+			return d, castErr(err)
 		}
 	}
 
@@ -2240,7 +2265,7 @@ func (a *decimalArrayValue) Cast(t *types.DataType) (value, error) {
 	}
 }
 
-func newBlobArrayValue(b []*[]byte) *blobArrayValue {
+func newBlobArrayValue(b [][]byte) *blobArrayValue {
 	vals := make([]blobValue, len(b))
 	for i, v := range b {
 		if v == nil {
@@ -2269,11 +2294,7 @@ func (a *blobArrayValue) Null() bool {
 func (a *blobArrayValue) Value() (driver.Value, error) {
 	var btss [][]byte
 	for _, v := range a.Elements {
-		if v.bts != nil {
-			btss = append(btss, *v.bts)
-		} else {
-			btss = append(btss, nil)
-		}
+		btss = append(btss, v.bts)
 	}
 
 	return btss, nil
@@ -2288,8 +2309,8 @@ func (a *blobArrayValue) Len() int32 {
 }
 
 func (a *blobArrayValue) Get(i int32) (scalarValue, error) {
-	return getArr(a, i, func(i blobValue) scalarValue {
-		return &i
+	return getArr(a, i, func(bv blobValue) scalarValue {
+		return &bv
 	})
 }
 
@@ -2308,12 +2329,11 @@ func (a *blobArrayValue) RawValue() (v any) {
 		return nil
 	}
 
-	res := make([]*[]byte, len(a.Elements))
+	res := make([][]byte, len(a.Elements))
 	for i, v := range a.Elements {
 		if v.bts != nil {
-			rr := make([]byte, len(*v.bts))
-			res[i] = &rr
-			copy(*res[i], *v.bts)
+			res[i] = make([]byte, len(v.bts))
+			copy(res[i], v.bts)
 		}
 	}
 
@@ -2409,7 +2429,7 @@ func (a *uuidArrayValue) Cast(t *types.DataType) (value, error) {
 	case *types.UUIDArrayType:
 		return a, nil
 	case *types.ByteaArrayType:
-		return castArr(a, func(u *types.UUID) ([]byte, error) { return u.Bytes(), nil }, newBlobArrayValue)
+		return castValArr(a, func(u *types.UUID) ([]byte, error) { return u.Bytes(), nil }, newBlobArrayValue)
 	default:
 		return nil, castErr(fmt.Errorf("cannot cast uuid array to %s", t))
 	}
@@ -2671,7 +2691,7 @@ func (n *arrayOfNulls) Cast(t *types.DataType) (value, error) {
 	case *types.UUIDArrayType:
 		return newUUIDArrayValue(make([]*types.UUID, n.length)), nil
 	case *types.ByteaArrayType:
-		return newBlobArrayValue(make([]*[]byte, n.length)), nil
+		return newBlobArrayValue(make([][]byte, n.length)), nil
 	default:
 		if t.Name == types.NumericStr {
 			return newDecimalArrayValue(make([]*types.Decimal, n.length), t), nil
@@ -2740,7 +2760,7 @@ func stringifyValue(v value) (string, error) {
 
 		return dec.String(), nil
 	case *blobValue:
-		return string(*val.bts), nil
+		return string(val.bts), nil
 	case *recordValue:
 		return "", fmt.Errorf("cannot convert record to string")
 	default:

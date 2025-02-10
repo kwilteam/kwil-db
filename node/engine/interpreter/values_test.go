@@ -541,14 +541,14 @@ func Test_Cast(t *testing.T) {
 			name:    "text-array",
 			val:     []string{"hello", "world"},
 			textArr: []string{"hello", "world"},
-			blobArr: []*[]byte{ptr([]byte("hello")), ptr([]byte("world"))},
+			blobArr: [][]byte{[]byte("hello"), []byte("world")},
 		},
 		{
 			name:    "text-array (uuid)",
 			val:     []string{"550e8400-e29b-41d4-a716-446655440000"},
 			uuidArr: []*types.UUID{mustUUID("550e8400-e29b-41d4-a716-446655440000")},
 			textArr: []string{"550e8400-e29b-41d4-a716-446655440000"},
-			blobArr: []*[]byte{ptr([]byte("550e8400-e29b-41d4-a716-446655440000"))},
+			blobArr: [][]byte{[]byte("550e8400-e29b-41d4-a716-446655440000")},
 		},
 		{
 			name:    "bool-array",
@@ -569,12 +569,12 @@ func Test_Cast(t *testing.T) {
 			val:     []*types.UUID{mustUUID("550e8400-e29b-41d4-a716-446655440000")},
 			uuidArr: []*types.UUID{mustUUID("550e8400-e29b-41d4-a716-446655440000")},
 			textArr: []string{"550e8400-e29b-41d4-a716-446655440000"},
-			blobArr: []*[]byte{ptr(mustUUID("550e8400-e29b-41d4-a716-446655440000").Bytes())},
+			blobArr: [][]byte{mustUUID("550e8400-e29b-41d4-a716-446655440000").Bytes()},
 		},
 		{
 			name:    "blob-array",
 			val:     [][]byte{[]byte("hello"), []byte("world"), nil},
-			blobArr: []*[]byte{ptr([]byte("hello")), ptr([]byte("world")), nil},
+			blobArr: [][]byte{[]byte("hello"), []byte("world"), nil},
 			textArr: []*string{ptr("hello"), ptr("world"), nil},
 		},
 		{
@@ -585,7 +585,7 @@ func Test_Cast(t *testing.T) {
 			boolArr:    make([]*bool, 2),
 			decimalArr: make([]*types.Decimal, 2),
 			uuidArr:    make([]*types.UUID, 2),
-			blobArr:    []*[]byte{nil, nil},
+			blobArr:    [][]byte{nil, nil},
 		},
 	}
 

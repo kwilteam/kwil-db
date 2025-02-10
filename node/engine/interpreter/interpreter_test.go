@@ -838,7 +838,7 @@ func Test_Roundtrip(t *testing.T) {
 		{
 			name:     "bytea_array",
 			datatype: "BYTEA[]",
-			value:    append(ptrArr([]byte("hello"), []byte{}, []byte("world")), nil),
+			value:    [][]byte{[]byte("hello"), {}, []byte("world"), nil}, //  append(ptrArr([]byte("hello"), []byte{}, []byte("world")), nil),
 		},
 	}
 
@@ -929,9 +929,8 @@ func Test_Roundtrip(t *testing.T) {
 				for range csChan {
 				} // discard whatever precommit sends
 			}()
-			cid, err := tx.Precommit(ctx, csChan)
+			_, err = tx.Precommit(ctx, csChan)
 			require.NoError(t, err)
-			t.Logf("commit ID: %x", cid)
 
 			// err = tx.Commit(ctx)
 			// require.NoError(t, err)
