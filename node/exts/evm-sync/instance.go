@@ -120,7 +120,7 @@ func (l *globalListenerManager) RegisterNewListener(ctx context.Context, db sql.
 		// this means it is already listening, so we should start the listener.
 		// Otherwise, when the oracle starts, it will listen to all values
 		// in the l.listeners map.
-		go linfo.listen(ctx, l.runningService, l.runningEventStore, l.runningSyncConf)
+		go linfo.listen(l.runningContext, l.runningService, l.runningEventStore, l.runningSyncConf)
 	}
 
 	return nil
@@ -163,6 +163,7 @@ func (l *globalListenerManager) listen(ctx context.Context, service *common.Serv
 	defer func() {
 		l.mu.Lock()
 		l.shouldListen = false
+		//nolint:fatcontext We are simply removing this field in the defer, not modifying the context
 		l.runningContext = nil
 		l.runningService = nil
 		l.runningEventStore = nil

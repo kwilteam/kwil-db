@@ -118,7 +118,7 @@ Synchronization refers to whether we have synced relevant metadata from the EVM 
 This includes things like the escrow's erc20 address, multisig address, etc.
 The second state is activation, which refers to whether the current network is using the extension.
 Since extensions can never be fully dropped (as any rewards that are distributed but unclaimed would
-effecitvely be lost), we only deactivate them, and re-activate them when needed.
+effectively be lost), we only deactivate them, and re-activate them when needed.
 
 The most complex part of this extension is the "prepare" method. This method is called when we should
 start a new extension, or re-activate a de-activated extension. Therefore, on "prepare", there are 4 states

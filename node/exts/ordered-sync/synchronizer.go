@@ -60,6 +60,23 @@ func (c *cachedSync) RegisterTopic(ctx context.Context, db sql.DB, eng common.En
 	return registerTopic(ctx, db, eng, topic, resolveFunc)
 }
 
+// UnregisterTopic unregisters a topic.
+// It should be called exactly once when a topic is no longer relevant.
+// (e.g. within a precompile's OnUnUse method).
+func (c *cachedSync) UnregisterTopic(ctx context.Context, db sql.DB, eng common.Engine, topic string) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	_, ok := c.topics[topic]
+	if !ok {
+		return fmt.Errorf("topic %s not registered", topic)
+	}
+
+	delete(c.topics, topic)
+
+	return unregisterTopic(ctx, db, eng, topic)
+}
+
 // readTopicInfoOnStartup reads the last processed point in time for each topic.
 // It is meant to be called within an EngineReadyHook.
 // It populates the cache with topics.
