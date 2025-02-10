@@ -1,4 +1,4 @@
-FROM postgres:16.5
+FROM postgres:16.6
 
 # Inject the init script that makes the kwild superuser and a kwild database
 # owned by that kwild user, as well as a kwil_test_db database for tests.
