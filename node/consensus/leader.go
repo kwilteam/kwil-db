@@ -34,6 +34,23 @@ import (
 // the current block, revert any state changes made, and remove the problematic transactions from the mempool before
 // reproposing the block.
 
+// Leader Election through the `replace-leader` command:
+// If the leader goes offline, the network can elect the new leader using the `kwild validators replace-leader` command.
+// The new leader candidate and the majority of the validators must issue the command to replace the leader.
+// The new leader candidate must be online and issue the replace command for it to start proposing blocks.
+// In the scenarios where the leader is online, and few of the validators agreed to replace the leader, any of the
+// three below scenarios can happen:
+// 1. If the majority of the validators agree to replace the leader, the new leader candidate will start proposing blocks.
+//    The previous leader and the validators that did not agree to replace the leader will accept the new leader once
+//    they see a new block with majority of the votes from the validator set.
+// 2. If the majority of the validators do not agree to replace the leader, the previous leader candidate will continue
+//    to produce blocks. The validators that agreed to replace the leader will accept the blocks from the previous leader
+//    if the block is signed by the majority of the validators. They should redo the leader election process
+//    at later heights and must ensure that they have majority of the validators to replace the leader successfully.
+// 3. If both previous leader and new leader candidate doesn't have majority of validators, then both the nodes will be
+//    proposing the blocks, but none would get majority of the votes required to commit the block. So the network will halt
+//    until one of these nodes gets majority of the validators to commit the block.
+
 func (ce *ConsensusEngine) newBlockRound(ctx context.Context) {
 	ticker := time.NewTicker(ce.proposeTimeout)
 	now := time.Now()
@@ -201,8 +218,17 @@ func (ce *ConsensusEngine) createBlockProposal(ctx context.Context) (*blockPropo
 	}
 
 	valSetHash := ce.validatorSetHash()
+	paramsHash := ce.blockProcessor.ConsensusParams().Hash()
 	stamp := time.Now().Truncate(time.Millisecond).UTC()
-	blk := ktypes.NewBlock(ce.state.lc.height+1, ce.state.lc.blkHash, ce.state.lc.appHash, valSetHash, stamp, finalTxs)
+	blk := ktypes.NewBlock(ce.state.lc.height+1, ce.state.lc.blkHash, ce.state.lc.appHash, valSetHash, paramsHash, stamp, finalTxs)
+
+	// add the leader updates to the block header if any
+	if ce.state.leaderUpdate != nil {
+		// blk.Header.OfflineLeaderUpdate = &ktypes.OfflineLeaderUpdate{
+		// 	Candidate: ce.state.leaderUpdate.Candidate,
+		// }
+		blk.Header.NewLeader = ce.state.leaderUpdate.Candidate
+	}
 
 	// Sign the block
 	if err := blk.Sign(ce.privKey); err != nil {
@@ -295,7 +321,10 @@ func (ce *ConsensusEngine) addVote(ctx context.Context, voteMsg *vote, sender st
 				// and let the leader propose a new block, and the validator can refute it
 				// until it catches up.
 			}
-			ce.newRound <- struct{}{} // signal ce to start a new round
+
+			if ce.role.Load() == types.RoleLeader {
+				ce.newRound <- struct{}{} // signal ce to start a new round
+			}
 		}()
 
 		return nil
@@ -384,6 +413,12 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) {
 		return cmp.Compare(a.Signature.PubKeyType, b.Signature.PubKeyType)
 	})
 
+	// NOTE: Something to keep in mind, if there is any leader change due to some
+	// offline update process, the leader update is included in the block header,
+	// but as this affects the network params eventually, the same leader update is
+	// included in the param updates as well. We can either keep it that way or remove
+	// it from the param updates (also update the hash)
+
 	// Set the commit info for the accepted block
 	ce.state.commitInfo = &types.CommitInfo{
 		AppHash:          blkRes.appHash,
@@ -401,13 +436,12 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) {
 	ce.log.Infoln("Announce committed block", blkProp.blk.Header.Height, blkProp.blkHash, blkRes.paramUpdates)
 
 	// Broadcast the blockAnn message
-	go ce.blkAnnouncer(ctx, blkProp.blk, ce.state.commitInfo)
+	go ce.blkAnnouncer(ctx, blkProp.blk, ce.state.lc.commitInfo)
 
-	// start the next round
-	ce.nextState()
-
-	// signal ce to start a new round
-	ce.newRound <- struct{}{}
+	// signal ce to start a new round if the node is still the leader
+	if ce.role.Load() == types.RoleLeader {
+		ce.newRound <- struct{}{}
+	}
 }
 
 func (ce *ConsensusEngine) validatorSetHash() types.Hash {

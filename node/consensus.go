@@ -210,10 +210,6 @@ func (n *Node) announceBlkProp(ctx context.Context, blk *ktypes.Block) {
 func (n *Node) blkPropStreamHandler(s network.Stream) {
 	defer s.Close()
 
-	// if n.role.Load() == types.RoleLeader {
-	// 	return
-	// }
-
 	var prop blockProp
 	_, err := prop.ReadFrom(s)
 	if err != nil {

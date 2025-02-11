@@ -109,3 +109,5 @@ type BlockExecStatusResponse struct {
 }
 
 type AbortBlockExecResponse struct{}
+
+type PromoteResponse struct{}

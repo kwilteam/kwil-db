@@ -52,8 +52,7 @@ func showUpdateProposalCmd() *cobra.Command {
 				return display.PrintErr(cmd, fmt.Errorf("proposal not found"))
 			}
 			prop := updateProps[propIdx]
-
-			return display.PrintCmd(cmd, msgUpdateResolutionStatus{
+			return display.PrintCmd(cmd, MsgUpdateResolutionStatus{
 				ResStatus: MsgResolutionStatus{PendingResolution: *status, indent: "\t"},
 				Proposal:  prop,
 			})
@@ -61,12 +60,12 @@ func showUpdateProposalCmd() *cobra.Command {
 	}
 }
 
-type msgUpdateResolutionStatus struct {
+type MsgUpdateResolutionStatus struct {
 	ResStatus MsgResolutionStatus                 `json:"status"`
 	Proposal  *types.ConsensusParamUpdateProposal `json:"proposal"`
 }
 
-func (urs msgUpdateResolutionStatus) MarshalText() ([]byte, error) {
+func (urs MsgUpdateResolutionStatus) MarshalText() ([]byte, error) {
 	rsStr, err := urs.ResStatus.MarshalText()
 	if err != nil {
 		return nil, err
@@ -82,8 +81,8 @@ func (urs msgUpdateResolutionStatus) MarshalText() ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
-func (urs msgUpdateResolutionStatus) MarshalJSON() ([]byte, error) {
-	type alias msgUpdateResolutionStatus
+func (urs MsgUpdateResolutionStatus) MarshalJSON() ([]byte, error) {
+	type alias MsgUpdateResolutionStatus
 	return json.Marshal(alias(urs))
 }
 

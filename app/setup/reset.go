@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"path/filepath"
 
 	"github.com/kwilteam/kwil-db/app/custom"
 	"github.com/kwilteam/kwil-db/app/node/conf"
@@ -68,37 +67,42 @@ func ResetCmd() *cobra.Command {
 
 			if all {
 				// remove the blockstore if all is set
-				chainDir := filepath.Join(rootDir, "blockstore")
+				chainDir := config.BlockstoreDir(rootDir)
 				if err := os.RemoveAll(chainDir); err != nil {
 					return err
 				}
 				fmt.Printf("Blockstore directory removed: %s\n", chainDir)
 
 				// remove rcvd_snaps if exists
-				snapDir := filepath.Join(rootDir, "rcvd_snaps")
+				snapDir := config.ReceivedSnapshotsDir(rootDir)
 				if err := os.RemoveAll(snapDir); err != nil {
 					return err
 				}
 				fmt.Printf("Statesync snapshots directory removed: %s\n", snapDir)
 
 				// remove snapshots if exists
-				snapDir = filepath.Join(rootDir, "snapshots")
+				snapDir = config.LocalSnapshotsDir(rootDir)
 				if err := os.RemoveAll(snapDir); err != nil {
 					return err
 				}
 				fmt.Println("Snapshots directory removed", snapDir)
 
 				// remove the migrations directory
-				migrationsDir := filepath.Join(rootDir, "migrations")
+				migrationsDir := config.MigrationDir(rootDir)
 				if err := os.RemoveAll(migrationsDir); err != nil {
 					return err
 				}
 				fmt.Println("Migrations directory removed", migrationsDir)
 
 				// remove genesis state file if exists
-				genesisFile := filepath.Join(rootDir, "genesis-state.sql.gz")
+				genesisFile := config.GenesisStateFileName(rootDir)
 				os.Remove(genesisFile) // ignore error
 				fmt.Println("Genesis state file removed", genesisFile)
+
+				// leader.json file if exists
+				leaderFile := config.LeaderUpdatesFilePath(rootDir)
+				os.Remove(leaderFile) // ignore error
+				fmt.Println("Leader file removed", leaderFile)
 			}
 
 			return nil

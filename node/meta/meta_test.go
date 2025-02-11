@@ -15,20 +15,55 @@ import (
 	"github.com/kwilteam/kwil-db/node/pg"
 )
 
-func Test_NetworkParams(t *testing.T) {
-	cfg := &pg.DBConfig{
-		PoolConfig: pg.PoolConfig{
-			ConnConfig: pg.ConnConfig{
-				Host:   "127.0.0.1",
-				Port:   "5432",
-				User:   "kwild",
-				Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
-				DBName: "kwil_test_db",
-			},
-			MaxConns: 11,
+var cfg = &pg.DBConfig{
+	PoolConfig: pg.PoolConfig{
+		ConnConfig: pg.ConnConfig{
+			Host:   "127.0.0.1",
+			Port:   "5432",
+			User:   "kwild",
+			Pass:   "kwild", // would be ignored if pg_hba.conf set with trust
+			DBName: "kwil_test_db",
 		},
-	}
+		MaxConns: 11,
+	},
+}
 
+func Test_ChainState(t *testing.T) {
+	ctx := context.Background()
+
+	db, err := pg.NewDB(ctx, cfg)
+	require.NoError(t, err)
+	defer db.Close()
+
+	tx, err := db.BeginTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx) // always rollback to reset the test
+
+	err = meta.InitializeMetaStore(ctx, tx)
+	require.NoError(t, err)
+
+	h, _, _, err := meta.GetChainState(ctx, tx)
+	require.NoError(t, err)
+	require.EqualValues(t, int64(-1), h)
+
+	err = meta.SetChainState(ctx, tx, 1, nil, false)
+	require.NoError(t, err)
+
+	h, ah, _, err := meta.GetChainState(ctx, tx)
+	require.NoError(t, err)
+	require.EqualValues(t, int64(1), h)
+	require.Nil(t, ah)
+
+	err = meta.SetChainState(ctx, tx, 2, []byte("app_hash"), true)
+	require.NoError(t, err)
+
+	h, ah, _, err = meta.GetChainState(ctx, tx)
+	require.NoError(t, err)
+	require.EqualValues(t, int64(2), h)
+	require.EqualValues(t, []byte("app_hash"), ah)
+}
+
+func Test_NetworkParams(t *testing.T) {
 	ctx := context.Background()
 
 	db, err := pg.NewDB(ctx, cfg)

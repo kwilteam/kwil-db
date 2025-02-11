@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -85,6 +86,13 @@ type ConsensusEngine struct {
 	longRunningTxs []ktypes.Hash
 	numResets      int64
 
+	// leader updates, tracks if any non-transaction based leader updates that need to be
+	// applied at configured heights. These updates are to be applied before the
+	// block at height is proposed or after the height-1 block is committed.
+	leaderUpdates *leaderUpdate
+	leaderMtx     sync.RWMutex
+	leaderFile    string // file to persist the leader updates and load from on startup
+
 	// Channels
 	newBlockProposal chan struct{} // triggers block production in the leader
 	// newRound triggers the start of a new round in the consensus engine.
@@ -127,8 +135,16 @@ type ConsensusEngine struct {
 	catchupTimeout time.Duration
 }
 
+type leaderUpdate struct {
+	// Candidate is the new leader candidate
+	Candidate crypto.PublicKey
+	// Height is the height at which the leader update should be applied
+	Height int64
+}
+
 // Config is the struct given to the constructor, [New].
 type Config struct {
+	RootDir string
 	// Signer is the private key of the node.
 	PrivateKey crypto.PrivateKey
 	// Leader is the public key of the leader.
@@ -240,6 +256,13 @@ type state struct {
 	votes map[string]*types.VoteInfo
 
 	commitInfo *types.CommitInfo
+
+	// Promoted leader uses these updates to distinguish the leader updates occurred due to
+	// "replace-leader" admin command vs the leader updates due to parameter updates
+	// and include the NewLeader field in the block header to notify the network about
+	// this leader update. This field is applicable only to the promoted leader
+	// and only on the block heights where the node became a new leader through the replace cmd.
+	leaderUpdate *leaderUpdate
 }
 
 type blockResult struct {
@@ -262,7 +285,7 @@ type lastCommit struct {
 }
 
 // New creates a new consensus engine.
-func New(cfg *Config) *ConsensusEngine {
+func New(cfg *Config) (*ConsensusEngine, error) {
 	logger := cfg.Logger
 	if logger == nil {
 		// logger = log.DiscardLogger // for prod
@@ -285,6 +308,8 @@ func New(cfg *Config) *ConsensusEngine {
 		broadcastTxTimeout:  cfg.BroadcastTxTimeout,
 		checkpoint:          cfg.Checkpoint,
 		db:                  cfg.DB,
+		leaderUpdates:       nil,
+		leaderFile:          config.LeaderUpdatesFilePath(cfg.RootDir),
 		state: state{
 			blkProp:  nil,
 			blockRes: nil,
@@ -328,7 +353,11 @@ func New(cfg *Config) *ConsensusEngine {
 		ce.proposeTimeout = defaultProposeTimeout
 	}
 
-	return ce
+	// load the leader updates from the file if any
+	if err := ce.loadLeaderUpdates(); err != nil {
+		return nil, fmt.Errorf("error loading leader updates: %w", err)
+	}
+	return ce, nil
 }
 
 func (ce *ConsensusEngine) Start(ctx context.Context, fns BroadcastFns, peerFns WhitelistFns) error {
@@ -353,6 +382,9 @@ func (ce *ConsensusEngine) Start(ctx context.Context, fns BroadcastFns, peerFns 
 	if err := ce.catchup(ctx); err != nil {
 		return fmt.Errorf("error catching up: %w", err)
 	}
+
+	// apply leader updates if any before starting the consensus event loop
+	ce.applyLeaderUpdates()
 
 	// Start the mining process if the node is a leader. Validators and sentry
 	// nodes are activated when they receive a block proposal or block announce msg.
@@ -458,12 +490,25 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) {
 			return
 
 		case <-ce.newRound:
+			// check if there are any leader updates to be made before starting a new round
+			ce.applyLeaderUpdates()
+
+			// if the node is not a leader, ignore the new round signal
+			if ce.role.Load() != types.RoleLeader {
+				continue
+			}
+
 			go ce.newBlockRound(ctx)
 
 		case <-ce.newBlockProposal:
 			params := ce.blockProcessor.ConsensusParams()
 			if params.MigrationStatus == ktypes.MigrationCompleted {
 				ce.log.Info("Network halted due to migration, no more blocks will be produced")
+				continue
+			}
+
+			if ce.role.Load() != types.RoleLeader {
+				continue
 			}
 
 			if err := ce.proposeBlock(ctx); err != nil {
@@ -524,15 +569,76 @@ func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg cons
 		}
 
 	case *blockAnnounce:
+		preRole := ce.role.Load()
 		if err := ce.commitBlock(ctx, v.blk, v.ci); err != nil {
 			ce.log.Error("Error processing committed block announcement", "error", err)
 			return
+		}
+
+		// apply the leader updates if any
+		ce.applyLeaderUpdates()
+
+		postRole := ce.role.Load()
+		if preRole != postRole && postRole == types.RoleLeader {
+			// trigger this only during the role change to leader, rest the leader state machine will take care of it.
+			ce.newRound <- struct{}{}
 		}
 
 	default:
 		ce.log.Warnf("Invalid message type received")
 	}
 
+}
+
+// applyLeaderUpdates will apply any leader updates configured on this node
+// using the `validators replace-leader` command. This method is called after
+// processing a blockAnn message and after blocksync and at the init. This method
+// ensures that only existing validators can be promted to leader at the specified
+// heights and updates the roles of the nodes if changed by this update.
+// This method also ensures that the stale updates are removed from the disk.
+func (ce *ConsensusEngine) applyLeaderUpdates() {
+	leaderUpdates := ce.getLeaderUpdates()
+	if leaderUpdates == nil { // no updates to apply
+		return
+	}
+
+	candidate := leaderUpdates.Candidate
+	height := leaderUpdates.Height
+	lastCommitHeight := ce.lastCommitHeight()
+
+	// this is a future update, nothing to do here
+	if height > lastCommitHeight+1 {
+		return
+	}
+
+	// stale updates to be cleared right away.
+	if height <= lastCommitHeight {
+		ce.log.Warn("Stale leader update, clearing it", "height", height, "validator", hex.EncodeToString(candidate.Bytes()))
+		ce.storeLeaderUpdates(nil)
+		return
+	}
+
+	ce.state.mtx.Lock()
+	defer ce.state.mtx.Unlock()
+
+	// ensure that the candidate is a validator
+	if _, ok := ce.validatorSet[hex.EncodeToString(candidate.Bytes())]; !ok {
+		ce.log.Warn("Invalid leader update, candidate is not a validator", "candidate", hex.EncodeToString(candidate.Bytes()))
+		ce.storeLeaderUpdates(nil)
+		return
+	}
+
+	if !ce.leader.Equals(candidate) {
+		ce.log.Info("Applying leader update", "height", height, "from", hex.EncodeToString(ce.leader.Bytes()), "to", hex.EncodeToString(candidate.Bytes()))
+	}
+
+	ce.leader = ce.leaderUpdates.Candidate
+	ce.updateRole()
+
+	ce.state.leaderUpdate = &leaderUpdate{
+		Candidate: ce.leaderUpdates.Candidate,
+		Height:    ce.leaderUpdates.Height,
+	}
 }
 
 func (ce *ConsensusEngine) initializeState(ctx context.Context) (int64, int64, error) {
@@ -624,12 +730,22 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 	return nil
 }
 
-// updateRole updates the validator set and role of the node based on the final state of the validator set.
-// This is called at the end of the commit phase or at the end of the catchup phase during bootstrapping.
+// updateValidatorSetAndRole updates the validator set and the role of the node based on
+// the current state of the network parameters. This method is called during the initialization
+// of the consensus engine and at the end of each block commit.
 func (ce *ConsensusEngine) updateValidatorSetAndRole() {
+	// get the final consensus params
+	params := ce.blockProcessor.ConsensusParams()
 	valset := ce.blockProcessor.GetValidators()
-	pubKey := ce.privKey.Public()
 
+	// update the leader
+	prevLeader := ce.leader
+	ce.leader = params.Leader
+	if !prevLeader.Equals(ce.leader) {
+		ce.log.Info("Leader updated", "from", hex.EncodeToString(prevLeader.Bytes()), "to", hex.EncodeToString(ce.leader.Bytes()))
+	}
+
+	// update the validator set
 	ce.validatorSet = make(map[string]ktypes.Validator)
 	for _, v := range valset {
 		ce.validatorSet[hex.EncodeToString(v.Identifier)] = ktypes.Validator{
@@ -641,24 +757,26 @@ func (ce *ConsensusEngine) updateValidatorSetAndRole() {
 		}
 	}
 
-	currentRole := ce.role.Load()
+	// update the role if changed
+	ce.updateRole()
+}
 
-	if pubKey.Equals(ce.leader) {
-		ce.role.Store(types.RoleLeader)
-		return
-	}
-
-	_, ok := ce.validatorSet[hex.EncodeToString(pubKey.Bytes())]
-	if ok {
-		ce.role.Store(types.RoleValidator)
+func (ce *ConsensusEngine) updateRole() {
+	var finalRole types.Role
+	if ce.privKey.Public().Equals(ce.leader) {
+		finalRole = types.RoleLeader
 	} else {
-		ce.role.Store(types.RoleSentry)
+		_, ok := ce.validatorSet[hex.EncodeToString(ce.privKey.Public().Bytes())]
+		if ok {
+			finalRole = types.RoleValidator
+		} else {
+			finalRole = types.RoleSentry
+		}
 	}
 
-	finalRole := ce.role.Load()
-
-	if currentRole != finalRole {
-		ce.log.Info("Role updated", "from", currentRole, "to", finalRole)
+	prevRole := ce.role.Swap(finalRole)
+	if prevRole != finalRole {
+		ce.log.Info("Role updated", "from", prevRole, "to", finalRole)
 	}
 }
 
@@ -764,14 +882,19 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 	}
 
 	if ce.role.Load() == types.RoleLeader {
+		// check if leader has any leader updates to apply
+		ce.applyLeaderUpdates()
+
+		if ce.role.Load() != types.RoleLeader {
+			ce.log.Info("Leader demoted to %s", ce.role.Load())
+		}
+
 		return nil
 	}
 
 	ce.log.Info("No consensus messages received recently, initiating network catchup.")
 
 	startHeight := ce.lastCommitHeight()
-	t0 := time.Now()
-
 	if err := ce.processCurrentBlock(ctx); err != nil {
 		if errors.Is(err, types.ErrBlkNotFound) || errors.Is(err, types.ErrNotFound) {
 			return nil // retry again next tick
@@ -785,8 +908,13 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 		return err
 	}
 
-	endHeight := ce.lastCommitHeight()
-	ce.log.Info("Network Sync: ", "from", startHeight, "to", endHeight, "time", time.Since(t0), "appHash", ce.state.lc.appHash)
+	// apply the leader updates if any
+	ce.applyLeaderUpdates()
+
+	// let it sync up with the network and if its promoted to a leader, trigger a new round
+	if ce.role.Load() == types.RoleLeader {
+		ce.newRound <- struct{}{}
+	}
 
 	return nil
 }
@@ -843,21 +971,17 @@ func (ce *ConsensusEngine) processCurrentBlock(ctx context.Context) error {
 		return fmt.Errorf("failed to commit the block: height: %d, error: %w", ce.state.blkProp.height, err)
 	}
 
-	ce.nextState()
-
 	return ctx.Err()
 }
 
 func (ce *ConsensusEngine) cancelBlock(height int64) bool {
-	ce.log.Info("Reset msg: ", "height", height)
-
 	ce.stateInfo.mtx.RLock()
 	defer ce.stateInfo.mtx.RUnlock()
 
 	// We will only honor the reset request if it's from the leader (already verified by now)
-	// and the height is same as the last committed block height and the
+	// and the height is same as the last committed block height + 1 and the
 	// block is still executing or waiting for the block commit message.
-	if ce.stateInfo.height != height {
+	if ce.stateInfo.height+1 != height {
 		ce.log.Warn("Invalid reset request", "height", height, "lastCommittedHeight", ce.state.lc.height)
 		return false
 	}
@@ -954,4 +1078,113 @@ func (ce *ConsensusEngine) lastCommitHeight() int64 {
 	defer ce.stateInfo.mtx.RUnlock()
 
 	return ce.stateInfo.height
+}
+
+func (ce *ConsensusEngine) PromoteLeader(candidate crypto.PublicKey, height int64) error {
+	lastCommitHeight := ce.lastCommitHeight()
+
+	if height <= lastCommitHeight {
+		return fmt.Errorf("height %d is less than or equal to the current height %d", height, lastCommitHeight)
+	}
+
+	// save the leader update to the file
+	update := &leaderUpdate{
+		Candidate: candidate,
+		Height:    height,
+	}
+
+	if err := ce.storeLeaderUpdates(update); err != nil {
+		return fmt.Errorf("error saving the leader update: %w", err)
+	}
+
+	return nil
+}
+
+// loadLeaderUpdates loads the leader updates from the file if any
+// at the start of the consensus engine.
+func (ce *ConsensusEngine) loadLeaderUpdates() error {
+	// check if the leader file exists
+	if _, err := os.Stat(ce.leaderFile); os.IsNotExist(err) {
+		return nil
+	}
+
+	// load the leader updates from the file
+	data, err := os.ReadFile(ce.leaderFile)
+	if err != nil {
+		return fmt.Errorf("error reading the leader file: %w", err)
+	}
+
+	// unmarshal the leader updates
+	update := struct {
+		PubKey  string `json:"pubKey"`
+		KeyType string `json:"keyType"`
+		Height  int64  `json:"height"`
+	}{}
+	if err := json.Unmarshal(data, &update); err != nil {
+		return fmt.Errorf("error unmarshalling the leader updates: %w", err)
+	}
+
+	pk, err := hex.DecodeString(update.PubKey)
+	if err != nil {
+		return fmt.Errorf("error decoding the pubkey from leader updates: %w", err)
+	}
+
+	candidate, err := crypto.UnmarshalPublicKey(pk, crypto.KeyType(update.KeyType))
+	if err != nil {
+		return fmt.Errorf("error unmarshalling the pubkey from leader updates: %w", err)
+	}
+
+	ce.leaderMtx.Lock()
+	defer ce.leaderMtx.Unlock()
+	ce.leaderUpdates = &leaderUpdate{
+		Candidate: candidate,
+		Height:    update.Height,
+	}
+	return nil
+}
+
+// storeLeaderUpdates persists the leader updates to the file.
+func (ce *ConsensusEngine) storeLeaderUpdates(update *leaderUpdate) error {
+	if update == nil {
+		if err := os.Remove(ce.leaderFile); err != nil {
+			return fmt.Errorf("error removing the leader file: %w", err)
+		}
+
+		ce.leaderMtx.Lock()
+		defer ce.leaderMtx.Unlock()
+		ce.leaderUpdates = update
+
+		ce.log.Infof("Removed the leader updates file %s", ce.leaderFile)
+		return nil
+	}
+
+	data, err := json.Marshal(struct {
+		PubKey  string `json:"pubKey"`
+		KeyType string `json:"keyType"`
+		Height  int64  `json:"height"`
+	}{
+		PubKey:  hex.EncodeToString(update.Candidate.Bytes()),
+		KeyType: update.Candidate.Type().String(),
+		Height:  update.Height,
+	})
+	if err != nil {
+		return fmt.Errorf("error marshalling the leader updates: %w", err)
+	}
+
+	if err := os.WriteFile(ce.leaderFile, data, 0644); err != nil {
+		return fmt.Errorf("error writing the leader file: %w", err)
+	}
+
+	ce.leaderMtx.Lock()
+	defer ce.leaderMtx.Unlock()
+	ce.leaderUpdates = update
+
+	return nil
+}
+
+func (ce *ConsensusEngine) getLeaderUpdates() *leaderUpdate {
+	ce.leaderMtx.RLock()
+	defer ce.leaderMtx.RUnlock()
+
+	return ce.leaderUpdates
 }

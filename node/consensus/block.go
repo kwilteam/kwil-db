@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"context"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -42,6 +43,19 @@ func (ce *ConsensusEngine) validateBlock(blk *ktypes.Block) error {
 	valSetHash := ce.validatorSetHash()
 	if valSetHash != blk.Header.ValidatorSetHash {
 		return fmt.Errorf("validator set hash mismatch, expected %s, got %s", valSetHash.String(), blk.Header.ValidatorSetHash.String())
+	}
+
+	// network params hash
+	if blk.Header.NetworkParamsHash != ce.blockProcessor.ConsensusParams().Hash() {
+		return fmt.Errorf("network params hash mismatch, expected %s, got %s", ce.blockProcessor.ConsensusParams().Hash().String(), blk.Header.NetworkParamsHash.String())
+	}
+
+	// Ensure that if any leader update is present, it is valid
+	if blk.Header.NewLeader != nil {
+		candidate := hex.EncodeToString(blk.Header.NewLeader.Bytes())
+		if _, ok := ce.validatorSet[candidate]; !ok {
+			return fmt.Errorf("leader update candidate %s is not a validator", candidate)
+		}
 	}
 
 	return nil
@@ -212,14 +226,18 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 	// recheck the transactions in the mempool
 	ce.mempool.RecheckTxs(ctx, ce.recheckTx)
 
+	ce.log.Info("Committed Block", "height", height, "hash", blkProp.blkHash.String(),
+		"appHash", appHash.String(), "updates", ce.state.blockRes.paramUpdates)
+
+	// update and reset the state fields
+	ce.nextState()
+
 	// update the role of the node based on the final validator set at the end of the commit.
 	ce.updateValidatorSetAndRole()
 
 	// reset the catchup timer as we have successfully processed a new block proposal
 	ce.catchupTicker.Reset(ce.catchupTimeout)
 
-	ce.log.Info("Committed Block", "height", height, "hash", blkProp.blkHash.String(),
-		"appHash", appHash.String(), "updates", ce.state.blockRes.paramUpdates)
 	return ctx.Err()
 }
 
@@ -254,6 +272,10 @@ func (ce *ConsensusEngine) resetState() {
 	ce.state.blockRes = nil
 	ce.state.votes = make(map[string]*types.VoteInfo)
 	ce.state.commitInfo = nil
+	if ce.state.leaderUpdate != nil {
+		ce.state.leaderUpdate = nil
+		ce.storeLeaderUpdates(nil) // clear the leader update once applied.
+	}
 
 	// update the stateInfo
 	ce.stateInfo.mtx.Lock()

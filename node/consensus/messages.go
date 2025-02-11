@@ -2,6 +2,7 @@ package consensus
 
 import (
 	"bytes"
+	"encoding/hex"
 	"fmt"
 
 	ktypes "github.com/kwilteam/kwil-db/core/types"
@@ -118,12 +119,19 @@ func (ce *ConsensusEngine) NotifyBlockProposal(blk *ktypes.Block) {
 }
 
 // NotifyBlockCommit is used by the p2p stream handler to notify the consensus engine of a committed block.
-// Leader should ignore this message.
 func (ce *ConsensusEngine) NotifyBlockCommit(blk *ktypes.Block, ci *types.CommitInfo) {
-	if ce.role.Load() == types.RoleLeader {
-		return
+	leaderU, ok := ci.ParamUpdates[ktypes.ParamNameLeader]
+	leader := ce.leader
+
+	if ok {
+		leader = leaderU.(ktypes.PublicKey).PublicKey
+		ce.log.Info("Notifying consensus engine of block with leader update", "newLeader", hex.EncodeToString(leader.Bytes()), "blkHash", blk.Hash().String())
 	}
 
+	// if leader receives a block announce message, with OfflineLeaderUpdate, let
+	// the leader process it and relinquish leadership to the new leader.
+	// AcceptCommit() already verified the correctness of the votes, no need to
+	// re-verify here.
 	blkCommit := &blockAnnounce{
 		blk: blk,
 		ci:  ci,
@@ -132,7 +140,7 @@ func (ce *ConsensusEngine) NotifyBlockCommit(blk *ktypes.Block, ci *types.Commit
 	go ce.sendConsensusMessage(&consensusMessage{
 		MsgType: blkCommit.Type(),
 		Msg:     blkCommit,
-		Sender:  ce.leader.Bytes(),
+		Sender:  leader.Bytes(),
 	})
 }
 

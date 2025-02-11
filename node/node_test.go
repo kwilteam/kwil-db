@@ -215,7 +215,7 @@ func createTestBlock(height int64, numTxns int) (*ktypes.Block, types.Hash) {
 		txns[i] = newTx(uint64(i), "bob", strconv.FormatInt(height, 10)+strconv.Itoa(i)+
 			strings.Repeat("data", 1000))
 	}
-	blk := ktypes.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5},
+	blk := ktypes.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5}, types.HashBytes([]byte("params")),
 		time.Unix(1729723553+height, 0), txns)
 	return blk, fakeAppHash(height)
 }
@@ -300,7 +300,7 @@ func (ce *dummyCE) AcceptProposal(height int64, blkID, prevBlkID types.Hash, lea
 	return !ce.rejectProp
 }
 
-func (ce *dummyCE) AcceptCommit(height int64, blkID types.Hash, ci *types.CommitInfo, leaderSig []byte) bool {
+func (ce *dummyCE) AcceptCommit(height int64, blkID types.Hash, hdr *ktypes.BlockHeader, ci *types.CommitInfo, leaderSig []byte) bool {
 	return !ce.rejectCommit
 }
 
@@ -376,6 +376,10 @@ func (ce *dummyCE) Start(ctx context.Context, fns consensus.BroadcastFns, peerFn
 	ce.blkRequester = fns.BlkRequester
 	ce.stateResetter = fns.RstStateBroadcaster
 
+	return nil
+}
+
+func (f *dummyCE) PromoteLeader(leader crypto.PublicKey, height int64) error {
 	return nil
 }
 

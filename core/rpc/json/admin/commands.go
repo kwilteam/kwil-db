@@ -56,3 +56,9 @@ type AbortBlockExecRequest struct {
 	Height int64    `json:"height"`
 	Txs    []string `json:"txs"`
 }
+
+type PromoteRequest struct {
+	PubKey     []byte         `json:"pubkey"`
+	PubKeyType crypto.KeyType `json:"pubkey_type"`
+	Height     int64          `json:"height"`
+}

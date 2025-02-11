@@ -137,7 +137,8 @@ func TestSingleNodeMocknet(t *testing.T) {
 		BroadcastTxTimeout:    15 * time.Second,
 		DB:                    db1,
 	}
-	ce1 := consensus.New(ceCfg1)
+	ce1, err := consensus.New(ceCfg1)
+	require.NoError(t, err)
 	defaultConfigSet := config.DefaultConfig()
 
 	psCfg := &P2PServiceConfig{
@@ -296,7 +297,8 @@ func TestDualNodeMocknet(t *testing.T) {
 		DB:                    db1,
 		BlockProcessor:        bp1,
 	}
-	ce1 := consensus.New(ceCfg1)
+	ce1, err := consensus.New(ceCfg1)
+	require.NoError(t, err)
 	defaultConfigSet := config.DefaultConfig()
 	log1 := log.New(log.WithName("NODE1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
 
@@ -368,7 +370,8 @@ func TestDualNodeMocknet(t *testing.T) {
 		BlockAnnInterval:      3 * time.Second,
 		DB:                    db2,
 	}
-	ce2 := consensus.New(ceCfg2)
+	ce2, err := consensus.New(ceCfg2)
+	require.NoError(t, err)
 
 	log2 := log.New(log.WithName("NODE2"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
 
@@ -588,22 +591,3 @@ func (m *mockEventStore) HasEvents() bool {
 }
 
 func (m *mockEventStore) UpdateStats(cnt int64) {}
-
-// TODO: can test with real migrator
-/*type mockMigrator struct{}
-
-func (m *mockMigrator) NotifyHeight(ctx context.Context, block *common.BlockContext, db migrations.Database) error {
-	return nil
-}
-
-func (m *mockMigrator) StoreChangesets(height int64, changes <-chan any) error {
-	return nil
-}
-
-func (m *mockMigrator) PersistLastChangesetHeight(ctx context.Context, tx sql.Executor) error {
-	return nil
-}
-
-func (m *mockMigrator) GetMigrationMetadata(ctx context.Context, status ktypes.MigrationStatus) (*ktypes.MigrationMetadata, error) {
-	return nil, nil
-}*/

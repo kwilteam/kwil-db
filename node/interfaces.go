@@ -3,6 +3,7 @@ package node
 import (
 	"context"
 
+	"github.com/kwilteam/kwil-db/core/crypto"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/consensus"
 	"github.com/kwilteam/kwil-db/node/snapshotter"
@@ -19,7 +20,7 @@ type ConsensusEngine interface {
 	AcceptProposal(height int64, blkID, prevBlkID types.Hash, leaderSig []byte, timestamp int64) bool
 	NotifyBlockProposal(blk *ktypes.Block)
 
-	AcceptCommit(height int64, blkID types.Hash, ci *types.CommitInfo, leaderSig []byte) bool
+	AcceptCommit(height int64, blkID types.Hash, hdr *ktypes.BlockHeader, ci *types.CommitInfo, leaderSig []byte) bool
 	NotifyBlockCommit(blk *ktypes.Block, ci *types.CommitInfo)
 
 	NotifyACK(validatorPK []byte, ack types.AckRes)
@@ -35,6 +36,9 @@ type ConsensusEngine interface {
 
 	ConsensusParams() *ktypes.NetworkParameters
 	CancelBlockExecution(height int64, txIDs []types.Hash) error
+
+	// PromoteLeader is used to promote a validator to leader starting from the specified height
+	PromoteLeader(leader crypto.PublicKey, height int64) error
 }
 
 type BlockProcessor interface {

@@ -608,3 +608,15 @@ func (np NetworkParameters) String() string {
 		&np.Leader, np.MaxBlockSize, np.JoinExpiry,
 		np.DisabledGasCosts, np.MaxVotesPerTx, np.MigrationStatus)
 }
+
+func (np *NetworkParameters) Hash() Hash {
+	hasher := NewHasher()
+	hasher.Write(np.Leader.Bytes())
+	binary.Write(hasher, SerializationByteOrder, np.MaxBlockSize)
+	binary.Write(hasher, SerializationByteOrder, np.JoinExpiry)
+	binary.Write(hasher, SerializationByteOrder, np.DisabledGasCosts)
+	binary.Write(hasher, SerializationByteOrder, np.MaxVotesPerTx)
+	hasher.Write([]byte(np.MigrationStatus))
+
+	return hasher.Sum(nil)
+}

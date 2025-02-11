@@ -35,7 +35,7 @@ func TestGetRawBlockTx(t *testing.T) {
 		for i, pl := range txnPayloads {
 			txns[i] = newTx(uint64(i), "bob", string(pl))
 		}
-		blk := NewBlock(1, Hash{1, 2, 3}, Hash{6, 7, 8}, Hash{}, time.Unix(1729890593, 0), txns)
+		blk := NewBlock(1, Hash{1, 2, 3}, Hash{6, 7, 8}, Hash{}, Hash{}, time.Unix(1729890593, 0), txns)
 		err := blk.Sign(privKey)
 		require.NoError(t, err)
 		return EncodeBlock(blk), blk
@@ -297,6 +297,37 @@ func TestBlock_EncodeDecode(t *testing.T) {
 
 		_, err := DecodeBlock(truncated)
 		require.Error(t, err)
+	})
+
+	t.Run("block header with leader update", func(t *testing.T) {
+		_, pub, err := crypto.GenerateSecp256k1Key(nil)
+		require.NoError(t, err)
+
+		original := &Block{
+			Header: &BlockHeader{
+				Version:          1,
+				Height:           100,
+				NumTxns:          0,
+				PrevHash:         Hash{1, 2, 3},
+				PrevAppHash:      Hash{4, 5, 6},
+				ValidatorSetHash: Hash{7, 8, 9},
+				Timestamp:        time.Now().UTC().Truncate(time.Millisecond),
+				MerkleRoot:       Hash{10, 11, 12},
+				NewLeader:        pub,
+				// OfflineLeaderUpdate: &OfflineLeaderUpdate{
+				// 	Candidate: pub,
+				// },
+			},
+			Txns:      []*Transaction{},
+			Signature: []byte("test-signature"),
+		}
+
+		encoded := EncodeBlock(original)
+		decoded, err := DecodeBlock(encoded)
+		require.NoError(t, err)
+		require.Equal(t, original.Header, decoded.Header)
+		require.Equal(t, original.Signature, decoded.Signature)
+		require.Empty(t, decoded.Txns)
 	})
 }
 

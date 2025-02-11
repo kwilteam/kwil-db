@@ -89,7 +89,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 		return
 	}
 
-	height, blkHash, ci, sig := reqMsg.Height, reqMsg.Hash, reqMsg.CommitInfo, reqMsg.LeaderSig
+	height, blkHash, hdr, ci, sig := reqMsg.Height, reqMsg.Hash, reqMsg.Header, reqMsg.CommitInfo, reqMsg.LeaderSig
 	blkid := blkHash.String()
 
 	// TODO: also get and pass the signature to AcceptCommit to ensure it's
@@ -104,7 +104,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 
 	// If we are a validator and this is the commit ann for a proposed block
 	// that we already started executing, consensus engine will handle it.
-	if !n.ce.AcceptCommit(height, blkHash, ci, sig) {
+	if !n.ce.AcceptCommit(height, blkHash, hdr, ci, sig) {
 		return
 	}
 
@@ -165,7 +165,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 	// re-announce
 	n.ce.NotifyBlockCommit(blk, ci)
 	go func() {
-		n.announceRawBlk(context.Background(), blkHash, height, rawBlk, ci, s.Conn().RemotePeer(), reqMsg.LeaderSig) // re-announce with the leader's signature
+		n.announceRawBlk(context.Background(), blkHash, height, rawBlk, blk.Header, ci, s.Conn().RemotePeer(), reqMsg.LeaderSig) // re-announce with the leader's signature
 	}()
 }
 
@@ -174,11 +174,11 @@ func (n *Node) announceBlk(ctx context.Context, blk *ktypes.Block, ci *types.Com
 	n.log.Debugln("announceBlk", blk.Header.Height, blkHash, ci.AppHash)
 	rawBlk := ktypes.EncodeBlock(blk)
 	from := n.host.ID() // this announcement originates from us (not a reannouncement)
-	n.announceRawBlk(ctx, blkHash, blk.Header.Height, rawBlk, ci, from, blk.Signature)
+	n.announceRawBlk(ctx, blkHash, blk.Header.Height, rawBlk, blk.Header, ci, from, blk.Signature)
 }
 
 func (n *Node) announceRawBlk(ctx context.Context, blkHash types.Hash, height int64,
-	rawBlk []byte, ci *types.CommitInfo, from peer.ID, blkSig []byte) {
+	rawBlk []byte, hdr *ktypes.BlockHeader, ci *types.CommitInfo, from peer.ID, blkSig []byte) {
 	peers := n.peers()
 	if len(peers) == 0 {
 		n.log.Warn("No peers to advertise block to")
@@ -194,6 +194,7 @@ func (n *Node) announceRawBlk(ctx context.Context, blkHash types.Hash, height in
 		resID, err := blockAnnMsg{
 			Hash:       blkHash,
 			Height:     height,
+			Header:     hdr,
 			CommitInfo: ci,
 			LeaderSig:  blkSig,
 		}.MarshalBinary()

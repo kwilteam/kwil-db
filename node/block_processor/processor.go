@@ -205,6 +205,7 @@ func (bp *BlockProcessor) Rollback(ctx context.Context, height int64, appHash kt
 		return fmt.Errorf("failed to load the network parameters: %w", err)
 	}
 	bp.chainCtx.NetworkParameters = networkParams
+	bp.chainCtx.NetworkUpdates = ktypes.ParamUpdates{}
 
 	// Rollback internal state updates to the validators, accounts and mempool.
 	bp.txapp.Rollback()
@@ -351,6 +352,13 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 			bp.consensusTx = nil
 		}
 	}()
+
+	// Update the leader in the network parameters if the proposer is different from the current leader
+	if req.Block.Header.NewLeader != nil {
+		bp.chainCtx.NetworkUpdates[ktypes.ParamNameLeader] = ktypes.PublicKey{
+			PublicKey: req.Block.Header.NewLeader,
+		}
+	}
 
 	inMigration := bp.chainCtx.NetworkParameters.MigrationStatus == ktypes.MigrationInProgress
 	haltNetwork := bp.chainCtx.NetworkParameters.MigrationStatus == ktypes.MigrationCompleted

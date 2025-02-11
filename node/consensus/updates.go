@@ -36,7 +36,7 @@ func init() {
 }
 
 var ParamUpdatesResolution = resolutions.ResolutionConfig{
-	ConfirmationThreshold: big.NewRat(2, 3),
+	ConfirmationThreshold: big.NewRat(1, 2),   // > 50%
 	ExpirationPeriod:      7 * 24 * time.Hour, // 1 week
 	ResolveFunc: func(ctx context.Context, app *common.App, resolution *resolutions.Resolution, block *common.BlockContext) error {
 		// a resolution with an invalid body should be rejected before this

@@ -85,13 +85,6 @@ func TestSetParamNames(t *testing.T) {
 	}
 }
 
-/*func acctIDForPubKey(pub crypto.PublicKey) AccountID {
-	return AccountID{
-		Identifier: pub.Bytes(),
-		KeyType:    pub.Type(),
-	}
-}*/
-
 func TestParamUpdatesMarshalBinary(t *testing.T) {
 	_, pub, err := crypto.GenerateSecp256k1Key(nil)
 	if err != nil {

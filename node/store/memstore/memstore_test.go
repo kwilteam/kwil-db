@@ -44,7 +44,7 @@ func createTestBlock(_ *testing.T, height int64, numTxns int) (*ktypes.Block, ty
 		txns[i] = rawTx
 	}
 	blk := ktypes.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5},
-		time.Unix(1729723553+height, 0), txs)
+		types.Hash{5, 5, 5}, time.Unix(1729723553+height, 0), txs)
 	return blk, fakeAppHash(height)
 }
 
