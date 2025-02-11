@@ -40,6 +40,10 @@ func StartCmd() *cobra.Command {
 
 			cfg := conf.ActiveConfig()
 
+			// we don't need to worry about order of priority with applying the extension
+			// flag configs because flags are always highest priority
+			cfg.Extensions = extConfs
+
 			bind.Debugf("effective node config (toml):\n%s", bind.LazyPrinter(func() string {
 				rawToml, err := cfg.ToTOML()
 				if err != nil {
@@ -60,8 +64,6 @@ func StartCmd() *cobra.Command {
 			if !cmd.Flags().Changed(emptyBlockTimeoutFlag) && autogen {
 				cfg.Consensus.EmptyBlockTimeout = cfg.Consensus.ProposeTimeout
 			}
-
-			cfg.Extensions = extConfs
 
 			return runNode(cmd.Context(), rootDir, cfg, autogen, dbOwner)
 		},
