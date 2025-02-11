@@ -122,8 +122,6 @@ func InitCmd() *cobra.Command {
 
 				stateFile := config.GenesisStateFileName(outDir)
 
-				fmt.Println("statefile", stateFile)
-
 				if err := utils.CopyFile(genesisState, stateFile); err != nil {
 					return display.PrintErr(cmd, err)
 				}
