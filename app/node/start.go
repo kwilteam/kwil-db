@@ -2,6 +2,7 @@ package node
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -27,7 +28,6 @@ func StartCmd() *cobra.Command {
 		CompletionOptions: cobra.CompletionOptions{
 			DisableDefaultCmd: true,
 		},
-		Args:    cobra.NoArgs,
 		Version: version.KwilVersion,
 		Example: custom.BinaryConfig.NodeCmd + " start -r .testnet",
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -71,4 +71,55 @@ func StartCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&dbOwner, "db-owner", "d", "", "owner of the database. This is either a hex pubkey or an address string")
 
 	return cmd
+}
+
+// parseExtensionFlags parses the extension flags from the command line and
+// returns a map of extension names to their configured values
+func parseExtensionFlags(args []string) (map[string]map[string]string, error) {
+	exts := make(map[string]map[string]string)
+	for i := 0; i < len(args); i++ {
+		if !strings.HasPrefix(args[i], "--extension.") {
+			return nil, fmt.Errorf("expected extension flag, got %q", args[i])
+		}
+		// split the flag into the extension name and the flag name
+		// we intentionally do not use SplitN because we want to verify
+		// there are exactly 3 parts.
+		parts := strings.Split(args[i], ".")
+		if len(parts) != 3 {
+			return nil, fmt.Errorf("invalid extension flag %q", args[i])
+		}
+
+		extName := parts[1]
+
+		// get the extension map for the extension name.
+		// if it doesn't exist, create it.
+		ext, ok := exts[extName]
+		if !ok {
+			ext = make(map[string]string)
+			exts[extName] = ext
+		}
+
+		// we now need to get the flag value. Flags can be passed
+		// as either "--extension.extname.flagname value" or
+		// "--extension.extname.flagname=value"
+		if strings.Contains(parts[2], "=") {
+			// flag value is in the same argument
+			val := strings.SplitN(parts[2], "=", 2)
+			ext[val[0]] = val[1]
+		} else {
+			// flag value is in the next argument
+			if i+1 >= len(args) {
+				return nil, fmt.Errorf("missing value for extension flag %q", args[i])
+			}
+
+			if strings.HasPrefix(args[i+1], "--") {
+				return nil, fmt.Errorf("missing value for extension flag %q", args[i])
+			}
+
+			ext[parts[2]] = args[i+1]
+			i++
+		}
+	}
+
+	return exts, nil
 }
