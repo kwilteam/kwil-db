@@ -241,7 +241,7 @@ func (s *server) Start(ctx context.Context) error {
 			if errors.Is(err, context.Canceled) {
 				s.log.Infof("Shutdown signaled. Cancellation details: [%v]", err)
 			} else {
-				s.log.Error("failed to start node", "error", err)
+				s.log.Error("Abnormal node termination", "error", err)
 			}
 			return err
 		}
@@ -268,8 +268,6 @@ func (s *server) Start(ctx context.Context) error {
 			s.log.Info("server context is canceled")
 			return nil
 		}
-
-		s.log.Error("server error", "error", err)
 		return err
 	}
 

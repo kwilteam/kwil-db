@@ -371,13 +371,13 @@ func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, c
 
 	if !ce.state.blockRes.paramUpdates.Equals(ci.ParamUpdates) { // this is absorbed in apphash anyway, but helps diagnostics
 		haltR := fmt.Sprintf("Incorrect ParamUpdates, halting the node. received: %s, computed: %s", ci.ParamUpdates, ce.state.blockRes.paramUpdates)
-		ce.haltChan <- haltR
+		ce.sendHalt(haltR)
 		return nil
 	}
 
 	if ce.state.blockRes.appHash != ci.AppHash {
 		haltR := fmt.Sprintf("Incorrect AppHash, halting the node. received: %s, computed: %s", ci.AppHash, ce.state.blockRes.appHash)
-		ce.haltChan <- haltR
+		ce.sendHalt(haltR)
 		return nil
 	}
 
@@ -436,14 +436,14 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Blo
 
 	if !ce.state.blockRes.paramUpdates.Equals(ci.ParamUpdates) { // this is absorbed in apphash anyway, but helps diagnostics
 		haltR := fmt.Sprintf("processAndCommit: Incorrect ParamUpdates, halting the node. received: %s, computed: %s", ci.ParamUpdates, ce.state.blockRes.paramUpdates)
-		ce.haltChan <- haltR
+		ce.sendHalt(haltR)
 		return errors.New(haltR)
 	}
 
 	// Commit the block if the appHash and commitInfo is valid
 	if ce.state.blockRes.appHash != ci.AppHash {
 		haltR := fmt.Sprintf("processAndCommit: AppHash mismatch, halting the node. expected: %s, received: %s", ce.state.blockRes.appHash, ci.AppHash)
-		ce.haltChan <- haltR
+		ce.sendHalt(haltR)
 		return errors.New(haltR)
 	}
 
