@@ -7,12 +7,9 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"math/big"
-	"net/http"
-	"strings"
-	"time"
+	"os"
 
 	"github.com/kwilteam/kwil-db/core/client"
 	ctypes "github.com/kwilteam/kwil-db/core/client/types"
@@ -25,11 +22,6 @@ import (
 const (
 	chainID  = "kwil-testnet"          // "longhorn-2"
 	provider = "http://127.0.0.1:8484" // "https://longhorn.kwil.com"
-
-	// If this chain requires gas, we need funds, and we can request funds from
-	// a faucet URL if needed.
-	gasEnabled = true
-	faucetURL  = "https://kwil-faucet-server.onrender.com/funds" // if set and now balance, request test funds
 )
 
 var (
@@ -46,21 +38,21 @@ func main() {
 	flag.Parse()
 
 	ctx := context.Background()
+
 	var signer auth.Signer
+	var addr string
 	if privKey == "" {
-		key := genEthKey()
+		var key crypto.PrivateKey
+		key, signer, addr = genEthKey()
 		fmt.Printf("generated private key: %x\n", key.Bytes())
 		fmt.Printf("public key: %x\n", key.Public().Bytes())
-		signer = &auth.EthPersonalSigner{Key: *key}
 	} else {
-		signer = makeEthSigner(privKey)
+		signer, addr = makeEthSigner(privKey)
 	}
-	signerID := signer.CompactID()
-	addr, _ := auth.EthSecp256k1Authenticator{}.Identifier(signerID)
 	fmt.Printf("address: %s\n", addr)
 
 	acctID := &types.AccountID{
-		Identifier: signerID,
+		Identifier: signer.CompactID(),
 		KeyType:    signer.PubKey().Type(),
 	}
 
@@ -91,12 +83,12 @@ func main() {
 	}
 	fmt.Printf("Account %s balance = %v, nonce = %d\n", acctID, acctInfo.Balance, acctInfo.Nonce)
 
-	// List previously deployed database owned by us.
-	/*datasets, err := cl.ListDatabases(ctx, acctID)
+	// List previously deployed namespaces.
+	qr, err := cl.Query(ctx, "select name from info.namespaces", nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-	fmt.Printf("Found %d database(s) owned by me.\n", len(datasets))*/
+	fmt.Printf("All namespaces: %v\n", qr.Values)
 
 	// When broadcasting a transaction, wait until it is included in a block.
 	txOpts := []ctypes.TxOpt{ctypes.WithSyncBroadcast(true)}
@@ -119,29 +111,17 @@ func main() {
 	const minBal int64 = 1e6 // dust
 	if chainInfo.Gas && acctInfo.Balance.Cmp(big.NewInt(minBal)) < 0 {
 		fmt.Println("Account lacks sufficient funds for transaction gas. Requesting funds.")
-		req := `{"address": "` + addr + `"}`
-		resp, err := http.Post(faucetURL, "application/json", strings.NewReader(req))
-		if err != nil {
-			log.Fatalf("failed to request funds: %v", err)
-		}
-		bodyBts, _ := io.ReadAll(resp.Body)
-		if resp.StatusCode != http.StatusOK {
-			log.Fatalf("failed to request funds (code %d): %v", resp.StatusCode, string(bodyBts))
-		}
-
-		fmt.Printf("funds requested: %v\n", string(bodyBts))
-		// cl.WaitTx(ctx, txHashFromPOSTResp, 500 * time.Millisecond)
-		time.Sleep(6 * time.Second)
+		os.Exit(1)
 	}
 
 	namespace := "kwilapp"
 
-	// Deploy a schema in the 'main' namespace.
+	// Define tables and actions in the 'kwilapp' namespace.
 	txHash, err := cl.ExecuteSQL(ctx, testSQLSchema, nil, txOpts...)
 	if err != nil {
-		log.Fatalf("failed to deploy schema: %v", err)
+		log.Fatalf("failed to define namespace: %v", err)
 	}
-	checkTx(txHash, "deploy schema")
+	checkTx(txHash, "define namespace")
 
 	// Insert some data with this schema's "tag" action. Two in the same block,
 	const tagAction = "tag"
@@ -161,11 +141,11 @@ func main() {
 
 	// Use a read-only view call (no blockchain transaction) to list all entries
 	const getAllAction = "get_all"
-	result, err := cl.Call(ctx, namespace, getAllAction, nil)
+	results, err := cl.Call(ctx, namespace, getAllAction, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-	headers, vals := result.QueryResult.ColumnNames, result.QueryResult.Values
+	headers, vals := results.QueryResult.ColumnNames, results.QueryResult.Values
 	if len(vals) == 0 {
 		log.Fatal("No data records in table.")
 	}
@@ -177,11 +157,11 @@ func main() {
 	}
 
 	const getMineAction = "get_my_tags"
-	result, err = cl.Call(ctx, namespace, getMineAction, nil)
+	results, err = cl.Call(ctx, namespace, getMineAction, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-	vals = result.QueryResult.Values
+	vals = results.QueryResult.Values
 	if len(vals) != 2 {
 		log.Fatal("Did not find two entries for me!")
 	}
@@ -193,28 +173,33 @@ func main() {
 	checkTx(txHash, "delete all")
 
 	// get mine, ensure none
-	result, err = cl.Call(ctx, namespace, getMineAction, nil)
+	results, err = cl.Call(ctx, namespace, getMineAction, nil)
 	if err != nil {
 		log.Fatal(err)
 	}
-	_, vals = result.QueryResult.ColumnNames, result.QueryResult.Values
+	_, vals = results.QueryResult.ColumnNames, results.QueryResult.Values
 	if len(vals) != 0 {
 		log.Fatalf("expected no results for %v, got %d", getMineAction, len(vals))
 	}
 	log.Println("deleted all!")
 }
 
-func makeEthSigner(keyHex string) auth.Signer {
-	key, err := crypto.Secp256k1PrivateKeyFromHex(keyHex) // 32 bytes / 64 hex chars
+func makeEthSigner(keyHex string) (auth.Signer, string) {
+	key, err := crypto.Secp256k1PrivateKeyFromHex(keyHex)
 	if err != nil {
 		panic(fmt.Sprintf("bad private key: %v", err))
 	}
-	return &auth.EthPersonalSigner{Key: *key} // , key.PubKey().Bytes()
+	signer := &auth.EthPersonalSigner{Key: *key}
+	addr, _ := auth.EthSecp256k1Authenticator{}.Identifier(signer.CompactID())
+	return signer, addr
 }
 
-func genEthKey() *crypto.Secp256k1PrivateKey {
+func genEthKey() (crypto.PrivateKey, auth.Signer, string) {
 	key, _, _ := crypto.GenerateSecp256k1Key(nil)
-	return key.(*crypto.Secp256k1PrivateKey)
+	secKey := key.(*crypto.Secp256k1PrivateKey)
+	signer := &auth.EthPersonalSigner{Key: *secKey}
+	addr, _ := auth.EthSecp256k1Authenticator{}.Identifier(signer.CompactID())
+	return key, signer, addr
 }
 
 var testSQLSchema = `

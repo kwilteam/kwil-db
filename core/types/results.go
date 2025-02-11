@@ -151,7 +151,7 @@ func (e *Event) UnmarshalBinary(data []byte) error {
 	return nil
 }
 
-// CallResult is the result of a procedure call.
+// CallResult is the result of an action call.
 type CallResult struct {
 	QueryResult *QueryResult `json:"query_result"`
 	Logs        []string     `json:"logs"`
