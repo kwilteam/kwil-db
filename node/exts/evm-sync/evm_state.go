@@ -83,7 +83,10 @@ func init() {
 // be performed on-demand as part of the consensus process. It also
 // provides access to an EVM client for the target chain, accessed
 // via the local node's configuration.
-var StatePoller = &statePoller{}
+var StatePoller = &statePoller{
+	pollers: make(map[string]*PollConfig),
+	clients: make(map[chains.Chain]*ethclient.Client),
+}
 
 type statePoller struct {
 	// mu protects all fields in this struct

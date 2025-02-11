@@ -41,7 +41,7 @@ func init() {
 		var distributionPeriod string
 		distributionPeriodAny, ok := metadata["distribution_period"]
 		if !ok {
-			distributionPeriod = "1d"
+			distributionPeriod = "24h"
 		} else {
 			distributionPeriod, ok = distributionPeriodAny.(string)
 			if !ok {
@@ -86,10 +86,10 @@ func init() {
 						Fields: []precompiles.PrecompileValue{
 							{Name: "chain", Type: types.TextType},
 							{Name: "escrow", Type: types.TextType},
-							{Name: "epoch_period", Type: types.IntType},
+							{Name: "epoch_period", Type: types.TextType},
 							{Name: "erc20", Type: types.TextType, Nullable: true},
 							{Name: "decimals", Type: types.IntType, Nullable: true},
-							{Name: "balance", Type: types.TextType}, // total unspent balance
+							{Name: "balance", Type: types.TextType, Nullable: true}, // total unspent balance
 							{Name: "synced", Type: types.BoolType},
 							{Name: "synced_at", Type: types.IntType, Nullable: true},
 							{Name: "enabled", Type: types.BoolType},
