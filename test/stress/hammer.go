@@ -132,14 +132,14 @@ func hammer(ctx context.Context) error {
 
 	// action spammer
 	if namespace == "" {
-		namespace = "blahblah" + random.String(8)
+		namespace = "stress_" + random.String(8)
 	}
-	namespace = strings.ToLower(namespace)
-	h.println(namespace)
+	namespace = strings.ToLower(namespace) // lower cased in info.namespaces.name
+
+	asc := newActSchemaClient(h, namespace)
 
 	// try to use this namespace if it exists, otherwise deploy a new one
-	asc := newActSchemaClient(h, namespace)
-	res, err := asc.h.Client.Query(ctx, fmt.Sprintf(`select exists (select 1 from info.namespaces where name = '%s');`, namespace), nil)
+	res, err := h.Client.Query(ctx, fmt.Sprintf(`select exists (select 1 from info.namespaces where name = '%s');`, namespace), nil)
 	if err != nil {
 		return err
 	}
@@ -148,7 +148,7 @@ func hammer(ctx context.Context) error {
 	}
 	exists := res.Values[0][0].(bool)
 	if exists {
-		h.printf("act schema: namespace %q already exists", namespace)
+		h.printf("act schema: namespace %q already exists, using it", namespace)
 	} else {
 		err = asc.deployDB(ctx)
 		if err != nil {

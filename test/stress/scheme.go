@@ -89,7 +89,6 @@ func (asc *actSchemaClient) getOrCreateUserProfile(ctx context.Context, namespac
 		if err != nil {
 			return fmt.Errorf("%s: %w", actGetMyUsernames, err)
 		}
-		h.printRecs(res.QueryResult)
 		for _, row := range res.QueryResult.Values {
 			if len(row) == 0 {
 				continue
