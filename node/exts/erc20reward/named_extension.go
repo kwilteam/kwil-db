@@ -3,6 +3,7 @@ package erc20reward
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -56,6 +57,7 @@ func init() {
 		makeMetaHandler := func(method string) precompiles.HandlerFunc {
 			return func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 				_, err2 := app.Engine.Call(ctx, app.DB, RewardMetaExtensionName, method, append([]any{&id}, inputs...), func(r *common.Row) error {
+					fmt.Printf("meta handler result: %+v\n", r.Values)
 					return resultFn(r.Values)
 				})
 				return err2
@@ -173,7 +175,6 @@ func init() {
 				{
 					Name: "list_epochs",
 					Parameters: []precompiles.PrecompileValue{
-						{Name: "id", Type: types.UUIDType},
 						{Name: "after", Type: types.IntType},
 						{Name: "limit", Type: types.IntType},
 						{Name: "confirmed_only", Type: types.BoolType},
@@ -184,13 +185,15 @@ func init() {
 							{Name: "epoch_id", Type: types.UUIDType},
 							{Name: "start_height", Type: types.IntType},
 							{Name: "start_timestamp", Type: types.IntType},
-							{Name: "end_height", Type: types.IntType},
-							{Name: "reward_root", Type: types.ByteaType},
-							{Name: "end_block_hash", Type: types.ByteaType},
+							{Name: "end_height", Type: types.IntType, Nullable: true},
+							{Name: "reward_root", Type: types.ByteaType, Nullable: true},
+							{Name: "end_block_hash", Type: types.ByteaType, Nullable: true},
+							{Name: "voters", Type: types.TextArrayType, Nullable: true},
+							{Name: "vote_nonces", Type: types.IntArrayType, Nullable: true},
 						},
 					},
 					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
-					Handler:         makeMetaHandler("list_unconfirmed_epochs"),
+					Handler:         makeMetaHandler("list_epochs"),
 				},
 				{
 					Name: "decimals",

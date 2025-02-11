@@ -73,7 +73,7 @@ CREATE TABLE meta
 -- After an epoch is confirmed, we can delete all related votes.
 CREATE TABLE epoch_votes (
     epoch_id UUID NOT NULL REFERENCES epochs(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
-    voter TEXT NOT NULL,
+    voter BYTEA NOT NULL,
     signature BYTEA NOT NULL,
     nonce INT8 NOT NULL, -- safe nonce; technically we don't need this, but this helps to identify why a signer is not valid
     PRIMARY KEY (epoch_id, voter)

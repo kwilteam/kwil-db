@@ -820,42 +820,6 @@ func init() {
 						},
 					},
 					{
-						// lists epochs after(non-include) given height, in ASC order.
-						// If confirmedOnly is true, only returns confirmed epochs.
-						// NOTE: only unfirmed epoch will return voters and vote_nonces
-						Name: "list_epochs",
-						Parameters: []precompiles.PrecompileValue{
-							{Name: "id", Type: types.UUIDType},
-							{Name: "after", Type: types.IntType},
-							{Name: "limit", Type: types.IntType},
-							{Name: "confirmed_only", Type: types.BoolType},
-						},
-						Returns: &precompiles.MethodReturn{
-							IsTable: true,
-							Fields: []precompiles.PrecompileValue{
-								{Name: "epoch_id", Type: types.UUIDType},
-								{Name: "start_height", Type: types.IntType},
-								{Name: "start_timestamp", Type: types.IntType},
-								{Name: "end_height", Type: types.IntType},
-								{Name: "reward_root", Type: types.ByteaType},
-								{Name: "end_block_hash", Type: types.ByteaType},
-								{Name: "voters", Type: types.TextArrayType},
-								{Name: "vote_nonces", Type: types.IntType},
-							},
-						},
-						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
-						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
-							id := inputs[0].(*types.UUID)
-							after := inputs[1].(int64)
-							limit := inputs[2].(int64)
-							confirmedOnly := inputs[3].(bool)
-
-							return getEpochs(ctx.TxContext.Ctx, app, id, after, limit, confirmedOnly, func(e *Epoch) error {
-								return resultFn([]any{e.ID, e.StartHeight, e.StartTime.Unix(), *e.EndHeight, e.Root, e.BlockHash})
-							})
-						},
-					},
-					{
 						Name: "decimals",
 						Parameters: []precompiles.PrecompileValue{
 							{Name: "id", Type: types.UUIDType},
@@ -997,7 +961,56 @@ func init() {
 					// 		if !calledByExtension(ctx) {
 					// 			return errors.New("propose_epoch can only be called by the Kwil network")
 					// 		}
+					{
+						// lists epochs after(non-include) given height, in ASC order.
+						// If confirmedOnly is true, only returns confirmed epochs.
+						// NOTE: only unfirmed epoch will return voters and vote_nonces
+						Name: "list_epochs",
+						Parameters: []precompiles.PrecompileValue{
+							{Name: "id", Type: types.UUIDType},
+							{Name: "after", Type: types.IntType},
+							{Name: "limit", Type: types.IntType},
+							{Name: "confirmed_only", Type: types.BoolType},
+						},
+						Returns: &precompiles.MethodReturn{
+							IsTable: true,
+							Fields: []precompiles.PrecompileValue{
+								{Name: "epoch_id", Type: types.UUIDType},
+								{Name: "start_height", Type: types.IntType},
+								{Name: "start_timestamp", Type: types.IntType},
+								{Name: "end_height", Type: types.IntType, Nullable: true},
+								{Name: "reward_root", Type: types.ByteaType, Nullable: true},
+								{Name: "end_block_hash", Type: types.ByteaType, Nullable: true},
+								{Name: "voters", Type: types.TextArrayType, Nullable: true},
+								{Name: "vote_nonces", Type: types.IntArrayType, Nullable: true},
+							},
+						},
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+							id := inputs[0].(*types.UUID)
+							after := inputs[1].(int64)
+							limit := inputs[2].(int64)
+							confirmedOnly := inputs[3].(bool)
 
+							return getEpochs(ctx.TxContext.Ctx, app, id, after, limit, confirmedOnly, func(e *Epoch) error {
+								fmt.Printf("-=-=-=-=%+v, %+v, %v, %v\n", e.Voters, e.VoteNonces, e.Voters, e.VoteNonces)
+
+								var voters []string
+								if len(e.Voters) > 0 {
+									for _, item := range e.Voters {
+										voters = append(voters, item.String())
+									}
+								}
+								fmt.Printf("voters: %v\n", voters)
+								fmt.Printf("voterNonces: %v\n", e.VoteNonces)
+
+								return resultFn([]any{e.ID, e.StartHeight, e.StartTime.Unix(), *e.EndHeight, e.Root, e.BlockHash,
+									voters,
+									e.VoteNonces,
+								})
+							})
+						},
+					},
 					{
 						// Supposed to be called by the SignerService, to verify the reward root.
 						Name: "get_epoch_rewards",

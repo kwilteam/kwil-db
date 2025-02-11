@@ -730,6 +730,7 @@ func rowToCommonRow(row *row) *common.Row {
 	convertedResults := make([]any, len(row.Values))
 	dataTypes := make([]*types.DataType, len(row.Values))
 	for i, result := range row.Values {
+		fmt.Printf("------+++------%v, %v\n", result.Type(), result.RawValue())
 		convertedResults[i] = result.RawValue()
 		dataTypes[i] = result.Type()
 	}

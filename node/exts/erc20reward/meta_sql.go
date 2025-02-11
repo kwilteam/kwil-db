@@ -355,30 +355,79 @@ func getRewardsForEpoch(ctx context.Context, app *common.App, epochID *types.UUI
 // getEpochs gets epochs by given conditions.
 func getEpochs(ctx context.Context, app *common.App, instanceID *types.UUID, after int64, limit int64, confirmedOnly bool, fn func(*Epoch) error) error {
 	query := `
-    SELECT e.id, e.created_at_block, e.created_at_unix, e.ended_at, e.block_hash, e.reward_root, array_agg(v.voter) as voters, array_agg(v.nonce) as signatures
-	FROM epochs e
-	JOIN epoch_votes as v ON v.epoch_id = epochs.id
-	WHERE instance_id = $instance_id AND ended_at_block > $after`
+    {kwil_erc20_meta}SELECT e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.ended_at, e.block_hash, array_agg(v.voter) as voters, array_agg(v.nonce) as nonces
+	FROM epochs AS e
+	LEFT JOIN epoch_votes AS v ON v.epoch_id = e.id
+	WHERE e.instance_id = $instance_id AND e.created_at_block > $after`
 	if confirmedOnly {
-		query += ` AND confirmed IS $confirmed`
+		query += ` AND confirmed IS true`
 	}
-	query += ` ORDER BY ended_at ASC LIMIT $limit`
+	query += `
+    GROUP BY e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.ended_at, e.block_hash
+    ORDER BY ended_at ASC LIMIT $limit`
+	fmt.Println("=====_+_+_+_++__++", query)
 	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, query, map[string]any{
 		"instance_id": instanceID,
 		"after":       after,
 		"limit":       limit,
-		"confirmed":   confirmedOnly,
 	}, func(r *common.Row) error {
-		if len(r.Values) != 6 {
-			return fmt.Errorf("expected 6 values, got %d", len(r.Values))
+		if len(r.Values) != 8 {
+			return fmt.Errorf("expected 8 values, got %d", len(r.Values))
 		}
 
 		id := r.Values[0].(*types.UUID)
 		createdAtBlock := r.Values[1].(int64)
 		createdAtUnix := r.Values[2].(int64)
-		endedAt := r.Values[3].(int64)
-		blockHash := r.Values[4].([]byte)
-		rewardRoot := r.Values[5].([]byte)
+
+		var rewardRoot []byte
+		if r.Values[3] != nil {
+			rewardRoot = r.Values[3].([]byte)
+		}
+
+		var endedAt int64
+		if r.Values[4] != nil {
+			endedAt = r.Values[4].(int64)
+		}
+
+		var blockHash []byte
+		if r.Values[5] != nil {
+			blockHash = r.Values[5].([]byte)
+		}
+
+		var voters []ethcommon.Address
+		fmt.Printf("+++++++ %+v, %+v\n", voters, r.Values[6])
+		if r.Values[6] != nil {
+			rawVoters := r.Values[6].([][]byte)
+			// empty value is [[]], cannot use make()
+			for _, rawVoter := range rawVoters {
+				fmt.Println("+++++++", rawVoter)
+				if len(rawVoter) == 0 {
+					continue
+				}
+				voter, err := bytesToEthAddress(rawVoter)
+				if err != nil {
+					return err
+				}
+				voters = append(voters, voter)
+			}
+		}
+
+		fmt.Printf("+++++++ %+v\n", voters)
+
+		var voteNonces []int64
+		fmt.Printf("+++-----++++ %+v\n", voteNonces, r.Values[7])
+		if r.Values[7] != nil {
+			rawNonces := r.Values[7].([]*int64)
+			for _, rawNonce := range rawNonces {
+				fmt.Println("+++-----++++", rawNonce)
+				if rawNonce == nil {
+					continue
+				}
+				voteNonces = append(voteNonces, *rawNonce)
+			}
+		}
+
+		fmt.Printf("+++-----++++ %+v\n", voteNonces)
 
 		return fn(&Epoch{
 			PendingEpoch: PendingEpoch{
@@ -389,6 +438,10 @@ func getEpochs(ctx context.Context, app *common.App, instanceID *types.UUID, aft
 			EndHeight: &endedAt,
 			BlockHash: blockHash,
 			Root:      rewardRoot,
+			EpochVoteInfo: EpochVoteInfo{
+				Voters:     voters,
+				VoteNonces: voteNonces,
+			},
 		})
 	})
 }
