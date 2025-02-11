@@ -52,7 +52,7 @@ import "github.com/kwilteam/kwil-db/core/client"
 
 ### Basic functionality
 
-The main functionality is provided by the `Client` type. The `NewClient` function constructs a new `Client` instance from the URL of a Kwil RPC provider, and a set of options in the `core/types/client.Options` type.
+The main functionality is provided by the `Client` type. The `NewClient` function constructs a new `Client` instance from the URL of a Kwil RPC provider, and a set of options in the `core/client/types.Options` type.
 
 For example:
 
@@ -66,7 +66,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/client"
 	klog "github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
-	ctypes "github.com/kwilteam/kwil-db/core/types/client"
+	ctypes "github.com/kwilteam/kwil-db/core/client/types"
 )
 
 const (
@@ -191,7 +191,7 @@ import (
 	"context"
 
 	"github.com/kwilteam/kwil-db/parse"
-	ctypes "github.com/kwilteam/kwil-db/core/types/client"
+	ctypes "github.com/kwilteam/kwil-db/core/client/types"
 )
 
 // parseAndDeploy parses a Kuneiform schema and deploys it.
@@ -336,8 +336,8 @@ if err != nil {
 }
 ```
 
-The `Call` method returns the data in the `core/types/client.Records`
-type. See the [godocs](https://pkg.go.dev/github.com/kwilteam/kwil-db/core/types/client)
+The `Call` method returns the data in the `core/client/types.Records`
+type. See the [godocs](https://pkg.go.dev/github.com/kwilteam/kwil-db/core/client/types)
 for this type to see the methods available for accessing the records.
 
 ## Complete Example

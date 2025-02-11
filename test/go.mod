@@ -11,8 +11,9 @@ require (
 	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0
 	github.com/docker/docker v27.5.1+incompatible
 	github.com/docker/go-connections v0.5.0
+	github.com/drhodes/golorem v0.0.0-20220328165741-da82e5b29246
 	github.com/ethereum/go-ethereum v1.14.13
-	github.com/kwilteam/kwil-db v0.10.0-beta-1.0.20250203233330-7ed1d5f0a9d7
+	github.com/kwilteam/kwil-db v0.10.0-beta-1.0.20250206163524-8a93bec07044
 	github.com/kwilteam/kwil-db/core v0.4.0-beta.2
 	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go v0.35.0

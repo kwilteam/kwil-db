@@ -60,7 +60,6 @@ type Erc20Filterer struct {
 	contract *bind.BoundContract // Generic contract wrapper for the low level calls
 }
 
-
 // Erc20Session is an auto generated Go binding around an Ethereum contract,
 // with pre-set call and transact options.
 type Erc20Session struct {
