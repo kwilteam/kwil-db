@@ -33,6 +33,11 @@ func StartCmd() *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			rootDir := conf.RootDir()
 
+			extConfs, err := parseExtensionFlags(args)
+			if err != nil {
+				return err
+			}
+
 			cfg := conf.ActiveConfig()
 
 			bind.Debugf("effective node config (toml):\n%s", bind.LazyPrinter(func() string {
@@ -55,6 +60,8 @@ func StartCmd() *cobra.Command {
 			if !cmd.Flags().Changed(emptyBlockTimeoutFlag) && autogen {
 				cfg.Consensus.EmptyBlockTimeout = cfg.Consensus.ProposeTimeout
 			}
+
+			cfg.Extensions = extConfs
 
 			return runNode(cmd.Context(), rootDir, cfg, autogen, dbOwner)
 		},
