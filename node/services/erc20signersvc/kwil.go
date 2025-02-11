@@ -126,8 +126,8 @@ func (k *erc20rwExtApi) ListUnconfirmedEpochs(ctx context.Context, afterHeight i
 	ers := make([]*Epoch, len(res.QueryResult.Values))
 	for i, v := range res.QueryResult.Values {
 		er := &Epoch{}
-		err = types.ScanTo(v, &er.ID, &er.StartHeight, &er.EndHeight, &er.TotalRewards,
-			&er.RewardRoot, &er.SafeNonce, &er.SignHash, &er.ContractID, &er.BlockHash, &er.CreatedAt, &er.Voters)
+		err = types.ScanTo(v, &er.ID, &er.StartHeight, &er.StartTime, &er.EndHeight,
+			&er.RewardRoot, &er.BlockHash)
 		if err != nil {
 			return nil, err
 		}

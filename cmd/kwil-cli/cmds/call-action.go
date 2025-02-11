@@ -17,7 +17,7 @@ import (
 
 var (
 	callActionLong = `Call a view action.
-	
+
 This command calls a view action against the database, and formats the results in a table.
 It can only be used to call view actions, not write actions.
 
@@ -112,6 +112,8 @@ func callActionCmd() *cobra.Command {
 				if err != nil {
 					return display.PrintErr(cmd, err)
 				}
+
+				fmt.Printf("--------Result: %+v\n", res.QueryResult)
 
 				return display.PrintCmd(cmd, &respCall{Data: res, PrintLogs: logs, cmd: cmd})
 			})

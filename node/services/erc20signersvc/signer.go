@@ -141,11 +141,11 @@ func (s *rewardSigner) canSkip(epoch *Epoch, safeMeta *safeMetadata) bool {
 		return true
 	}
 
-	for _, voter := range epoch.Voters {
-		if voter == s.signerAddr.String() {
-			return true
-		}
-	}
+	//for _, voter := range epoch.Voters {
+	//	if voter == s.signerAddr.String() {
+	//		return true
+	//	}
+	//}
 
 	return false
 }
