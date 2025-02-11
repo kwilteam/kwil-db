@@ -43,6 +43,10 @@ const (
 	Sepolia  Chain = "sepolia"
 )
 
+func (c Chain) String() string {
+	return string(c)
+}
+
 func (c Chain) Valid() error {
 	switch c {
 	case Ethereum, Sepolia:

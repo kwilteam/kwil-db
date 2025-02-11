@@ -82,11 +82,11 @@ func initializeExtension(ctx context.Context, svc *common.Service, db sql.DB, i 
 
 						for i, result := range returnVals {
 							if !result.Type().Equals(method.Returns.Fields[i].Type) {
-								return fmt.Errorf(`%w: method "%s" returned a value of type %s, but expected %s`, engine.ErrExtensionInvocation, lowerName, result.Type(), method.Returns.Fields[i].Type)
+								return fmt.Errorf(`%w: method "%s"."%s" returned a value of type %s, but expected %s. column: "%s"`, engine.ErrExtensionInvocation, alias, lowerName, result.Type(), method.Returns.Fields[i].Type, method.Returns.Fields[i].Name)
 							}
 
 							if !method.Returns.Fields[i].Nullable && result.Null() {
-								return fmt.Errorf("%w: method %s returned a null value for a non-nullable column", engine.ErrExtensionInvocation, lowerName)
+								return fmt.Errorf(`%w: method "%s"."%s" returned a null value for a non-nullable column. column: "%s"`, engine.ErrExtensionInvocation, alias, lowerName, method.Returns.Fields[i].Name)
 							}
 						}
 
