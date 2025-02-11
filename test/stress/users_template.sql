@@ -56,7 +56,7 @@
 {NAMESPACE}CREATE ACTION register_account() public returns (UUID) {
     -- uuid_generate_kwil is a special Kwil function that uses a fixed namespace
     -- to generate a deterministic UUID based on the transaction ID
-    $id = uuid_generate_kwil(@txid||'account'); 
+    $id = uuid_generate_kwil(@txid||'account');
     INSERT INTO accounts (id) VALUES ($id);
     INSERT INTO wallets (id, address, account_id) VALUES (uuid_generate_kwil(@txid||'wallet'), @caller, $id);
 
@@ -141,14 +141,17 @@
         error('You do not own this profile');
     }
 
+    $id := uuid_generate_kwil(@txid||'post');
+
     INSERT INTO posts (id, content, created_at, author_id, parent_id) VALUES (
-        uuid_generate_kwil(@txid||'post'),
+        $id,
         $content,
         @height,
         (SELECT id FROM profiles WHERE username = $username),
         $parent_id
     );
-    -- return INSERT ... RETURNING id;
+    
+    return $id;
 };
 
 -- like_post likes a post for the specified profile
