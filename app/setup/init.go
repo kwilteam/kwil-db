@@ -112,14 +112,17 @@ func InitCmd() *cobra.Command {
 				cfg.Consensus.EmptyBlockTimeout = cfg.Consensus.ProposeTimeout
 			}
 
-			if cmd.Flags().Changed(genesisSnapshotFlag) {
-				genesisState := genFlags.genesisState
+			// if the user has specified genesis state, copy it to the new directory
+			if cmd.Flags().Changed("genesis-state") {
+				genesisState := cfg.GenesisState
 				genesisState, err = node.ExpandPath(genesisState)
 				if err != nil {
 					return display.PrintErr(cmd, err)
 				}
 
 				stateFile := config.GenesisStateFileName(outDir)
+
+				fmt.Println("statefile", stateFile)
 
 				if err := utils.CopyFile(genesisState, stateFile); err != nil {
 					return display.PrintErr(cmd, err)
@@ -153,7 +156,8 @@ func InitCmd() *cobra.Command {
 			}
 
 			genFile := config.GenesisFilePath(outDir)
-			if genesisPath != "" { // Init for the node to join an existing network
+			if genesisPath != "" {
+				// Init for the node to join an existing network
 				if genesisPath, err = node.ExpandPath(genesisPath); err != nil {
 					return display.PrintErr(cmd, err)
 				}
@@ -203,6 +207,13 @@ func InitCmd() *cobra.Command {
 							KeyType: v.Identifier.String(),
 							Amount:  genesisValidatorGas,
 						})
+					}
+				}
+
+				if cfg.GenesisState != "" {
+					genCfg.StateHash, err = appHashFromSnapshotFile(cfg.GenesisState)
+					if err != nil {
+						return display.PrintErr(cmd, err)
 					}
 				}
 

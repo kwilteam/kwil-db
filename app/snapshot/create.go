@@ -166,7 +166,6 @@ func PGDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 		// Account Schema
 		"--schema", "kwild_accts",
 		"--schema", "kwild_engine",
-		"--schema", "info",
 		// Internal Schema
 		"--schema", "kwild_internal",
 		"-T", "kwild_internal.sentry", // Exclude sentry table (no versioning)

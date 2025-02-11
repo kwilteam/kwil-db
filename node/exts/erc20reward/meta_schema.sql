@@ -61,3 +61,7 @@ CREATE TABLE epoch_rewards (
 );
 
 CREATE INDEX idx_epoch_rewards_epoch_id ON epoch_rewards(epoch_id);
+
+CREATE TABLE meta (
+    version INT8 PRIMARY KEY
+);

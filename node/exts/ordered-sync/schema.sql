@@ -18,3 +18,7 @@ CREATE TABLE pending_data (
     -- can be null if events are processed out of order (which is
     -- what this package is designed to handle)
 );
+
+CREATE TABLE meta(
+    version int8 PRIMARY KEY
+)

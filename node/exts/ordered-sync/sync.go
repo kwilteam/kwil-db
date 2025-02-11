@@ -18,6 +18,7 @@ import (
 	"context"
 	_ "embed"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"math/big"
@@ -26,6 +27,7 @@ import (
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/extensions/hooks"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
+	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )
 
@@ -87,7 +89,29 @@ func init() {
 	}
 
 	err = hooks.RegisterGenesisHook(extName+"_genesis_hook", func(ctx context.Context, app *common.App, chain *common.ChainContext) error {
-		return createNamespace(ctx, app.DB, app.Engine)
+		version, notYetSet, err := getVersion(ctx, app)
+		if err != nil {
+			return err
+		}
+
+		if notYetSet {
+			err = createNamespace(ctx, app.DB, app.Engine)
+			if err != nil {
+				return err
+			}
+
+			err = setVersionToCurrent(ctx, app)
+			if err != nil {
+				return err
+			}
+		} else {
+			// in the future, we may want to add migrations here
+			if version != currentVersion {
+				return fmt.Errorf("expected version %d, got %d", currentVersion, version)
+			}
+		}
+
+		return nil
 	})
 	if err != nil {
 		panic(err)
@@ -344,4 +368,48 @@ func setLatestPointInTime(ctx context.Context, db sql.DB, eng common.Engine, top
 		},
 		nil,
 	)
+}
+
+// getVersion gets the version of the meta extension.
+func getVersion(ctx context.Context, app *common.App) (version int64, notYetSet bool, err error) {
+	count := 0
+	err = app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
+	{kwil_ordered_sync}SELECT version
+	FROM meta
+	`, nil, func(r *common.Row) error {
+		if len(r.Values) != 1 {
+			return fmt.Errorf("expected 1 value, got %d", len(r.Values))
+		}
+		count++
+		version = r.Values[0].(int64)
+		return nil
+	})
+	switch {
+	case errors.Is(err, engine.ErrNamespaceNotFound):
+		return 0, true, nil
+	case err != nil:
+		return 0, false, err
+	}
+
+	switch count {
+	case 0:
+		return 0, true, nil
+	case 1:
+		return version, false, nil
+	default:
+		return 0, false, errors.New("expected only one value for version table, got")
+	}
+}
+
+var currentVersion = int64(1)
+
+// setVersion sets the version of the meta extension.
+func setVersionToCurrent(ctx context.Context, app *common.App) error {
+	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
+	{kwil_ordered_sync}INSERT INTO meta(version)
+	VALUES ($version)
+	ON CONFLICT (version) DO UPDATE SET version = $version
+	`, map[string]any{
+		"version": currentVersion,
+	}, nil)
 }

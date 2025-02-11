@@ -903,7 +903,28 @@ func init() {
 
 	// we will create the schema at genesis
 	err = hooks.RegisterGenesisHook(RewardMetaExtensionName+"_genesis", func(ctx context.Context, app *common.App, chain *common.ChainContext) error {
-		return genesisExec(ctx, app)
+		version, notYetSet, err := getVersion(ctx, app)
+		if err != nil {
+			return err
+		}
+		if notYetSet {
+			err = genesisExec(ctx, app)
+			if err != nil {
+				return err
+			}
+
+			err = setVersionToCurrent(ctx, app)
+			if err != nil {
+				return err
+			}
+		} else {
+			// in the future, we will handle version upgrades here
+			if version != currentVersion {
+				return fmt.Errorf("reward extension version mismatch: expected %d, got %d", currentVersion, version)
+			}
+		}
+
+		return nil
 	})
 	if err != nil {
 		panic(err)

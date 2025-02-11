@@ -1990,7 +1990,14 @@ func (i *interpreterPlanner) VisitCreateNamespaceStatement(p0 *parse.CreateNames
 			return fmt.Errorf(`%w: "%s"`, engine.ErrNamespaceExists, p0.Namespace)
 		}
 
-		if _, err := createNamespace(exec.engineCtx.TxContext.Ctx, exec.db, p0.Namespace, namespaceTypeUser); err != nil {
+		nsType := namespaceTypeUser
+		// if override authz is set, then it is application code setting this,
+		// so it must be system
+		if exec.engineCtx.OverrideAuthz {
+			nsType = namespaceTypeSystem
+		}
+
+		if _, err := createNamespace(exec.engineCtx.TxContext.Ctx, exec.db, p0.Namespace, nsType); err != nil {
 			return err
 		}
 
