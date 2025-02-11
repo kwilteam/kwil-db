@@ -3,6 +3,7 @@ package erc20reward
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"time"
 
@@ -10,6 +11,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/exts/evm-sync/chains"
 )
 
@@ -390,4 +392,48 @@ func getUnconfirmedEpochs(ctx context.Context, app *common.App, instanceID *type
 			Root:      rewardRoot,
 		})
 	})
+}
+
+// getVersion gets the version of the meta extension.
+func getVersion(ctx context.Context, app *common.App) (version int64, notYetSet bool, err error) {
+	count := 0
+	err = app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
+	{kwil_erc20_meta}SELECT version
+	FROM meta
+	`, nil, func(r *common.Row) error {
+		if len(r.Values) != 1 {
+			return fmt.Errorf("expected 1 value, got %d", len(r.Values))
+		}
+		count++
+		version = r.Values[0].(int64)
+		return nil
+	})
+	switch {
+	case errors.Is(err, engine.ErrNamespaceNotFound):
+		return 0, true, nil
+	case err != nil:
+		return 0, false, err
+	}
+
+	switch count {
+	case 0:
+		return 0, true, nil
+	case 1:
+		return version, false, nil
+	default:
+		return 0, false, errors.New("expected only one value for version table, got")
+	}
+}
+
+var currentVersion = int64(1)
+
+// setVersion sets the version of the meta extension.
+func setVersionToCurrent(ctx context.Context, app *common.App) error {
+	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
+	{kwil_erc20_meta}INSERT INTO meta(version)
+	VALUES ($version)
+	ON CONFLICT (version) DO UPDATE SET version = $version
+	`, map[string]any{
+		"version": currentVersion,
+	}, nil)
 }

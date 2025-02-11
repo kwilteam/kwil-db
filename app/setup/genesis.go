@@ -42,7 +42,6 @@ type genesisFlagConfig struct {
 	maxBlockSize  int64
 	joinExpiry    time.Duration
 	maxVotesPerTx int64
-	genesisState  string
 }
 
 func GenesisCmd() *cobra.Command {
@@ -135,20 +134,18 @@ func bindGenesisFlags(cmd *cobra.Command, cfg *genesisFlagConfig) {
 	cmd.Flags().Int64Var(&cfg.maxBlockSize, maxBlockSizeFlag, 0, "maximum block size")
 	cmd.Flags().DurationVar(&cfg.joinExpiry, joinExpiryFlag, 0, "Number of blocks before a join proposal expires")
 	cmd.Flags().Int64Var(&cfg.maxVotesPerTx, maxVotesPerTxFlag, 0, "Maximum votes per transaction")
-	cmd.Flags().StringVar(&cfg.genesisState, genesisSnapshotFlag, "", "path to genesis state snapshot file")
 }
 
 const (
-	chainIDFlag         = "chain-id"
-	validatorsFlag      = "validator"
-	allocsFlag          = "alloc"
-	withGasFlag         = "with-gas"
-	leaderFlag          = "leader"
-	dbOwnerFlag         = "db-owner"
-	maxBlockSizeFlag    = "max-block-size"
-	joinExpiryFlag      = "join-expiry"
-	maxVotesPerTxFlag   = "max-votes-per-tx"
-	genesisSnapshotFlag = "genesis-snapshot"
+	chainIDFlag       = "chain-id"
+	validatorsFlag    = "validator"
+	allocsFlag        = "alloc"
+	withGasFlag       = "with-gas"
+	leaderFlag        = "leader"
+	dbOwnerFlag       = "db-owner"
+	maxBlockSizeFlag  = "max-block-size"
+	joinExpiryFlag    = "join-expiry"
+	maxVotesPerTxFlag = "max-votes-per-tx"
 )
 
 // mergeGenesisFlags merges the genesis configuration flags with the given configuration.
@@ -273,14 +270,6 @@ func mergeGenesisFlags(conf *config.GenesisConfig, cmd *cobra.Command, flagCfg *
 
 	if cmd.Flags().Changed(maxVotesPerTxFlag) {
 		conf.MaxVotesPerTx = flagCfg.maxVotesPerTx
-	}
-
-	if cmd.Flags().Changed(genesisSnapshotFlag) {
-		hash, err := appHashFromSnapshotFile(flagCfg.genesisState)
-		if err != nil {
-			return nil, err
-		}
-		conf.StateHash = hash
 	}
 
 	return conf, nil

@@ -102,7 +102,7 @@ func UserNamespaces(ctx context.Context, db DB) ([]string, error) {
 	}
 	defer tx.Rollback(ctx)
 
-	res, err := tx.Execute(ctx, "select name from kwild_engine.namespaces where type='USER'")
+	res, err := tx.Execute(ctx, "select name from kwild_engine.namespaces")
 	if err != nil {
 		return nil, fmt.Errorf("failed to execute query: %w", err)
 	}
