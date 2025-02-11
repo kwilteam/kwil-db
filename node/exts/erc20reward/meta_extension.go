@@ -1213,7 +1213,9 @@ func (e *extensionInfo) Copy() precompiles.Cache {
 	instances.Exclusive(func(m map[types.UUID]*rewardExtensionInfo) {
 		e.instances.ExclusiveRead(func(m2 map[types.UUID]*rewardExtensionInfo) {
 			for k, v := range m2 {
+				v.mu.RLock()
 				m[k] = v.copy()
+				v.mu.RUnlock()
 			}
 		})
 	})
