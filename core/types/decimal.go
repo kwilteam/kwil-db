@@ -569,7 +569,13 @@ type DecimalArray []*Decimal
 func (da DecimalArray) Value() (driver.Value, error) {
 	var res []string
 	for _, d := range da {
-		res = append(res, d.String())
+		var val string
+		if d.dec.Form == apd.NaN {
+			val = `NULL`
+		} else {
+			val = d.dec.String()
+		}
+		res = append(res, val)
 	}
 
 	return res, nil

@@ -136,6 +136,11 @@ func (u UUIDArray) Value() (driver.Value, error) {
 	// Postgres does not like []byte for uuid, so we convert to string
 	v := make([]string, len(u))
 	for i, ui := range u {
+		if ui == nil { // there's not a NULL uuid with uuid-ossp
+			return nil, errors.New("nil in UUID array not supported")
+			// v[i] = "00000000-0000-0000-0000-000000000000" // uuid_nil(), but we could do that
+			// continue
+		}
 		v[i] = ui.String()
 	}
 	return v, nil

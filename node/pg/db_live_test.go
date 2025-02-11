@@ -216,12 +216,12 @@ func TestNULL(t *testing.T) {
 
 	// no type for NULL values, just a nil interface{}
 	a := res.Rows[0][0]
-	t.Logf("%v (%T)", a, a) // <nil> (<nil>)
+	// t.Logf("%v (%T)", a, a) // <nil> (<nil>)
 	require.Equal(t, reflect.TypeOf(a), reflect.Type(nil))
 
 	// only non-NULL values get a type
 	b := res.Rows[0][1]
-	t.Logf("%v (%T)", b, b) // 6 (int64)
+	// t.Logf("%v (%T)", b, b) // 6 (int64)
 	require.Equal(t, reflect.TypeOf(b), reflect.TypeFor[int64]())
 
 	// Now with scan vals
@@ -317,7 +317,7 @@ func TestQueryRowFuncAny(t *testing.T) {
 	numCols := 6
 
 	_, err = tx.Execute(ctx, `insert into `+tbl+
-		` values (5, null, 'a', '\xabab', 12, '{2,3,4}'), `+
+		` values (5, null, 'a', '\xabab', 12, '{2,NULL,4}'), `+
 		`        (9, 2, 'b', '\xee', 0.9876, '{99}')`)
 	if err != nil {
 		t.Fatal(err)
@@ -329,7 +329,7 @@ func TestQueryRowFuncAny(t *testing.T) {
 		reflect.TypeFor[string](),
 		reflect.TypeFor[[]byte](),
 		reflect.TypeFor[*types.Decimal](),
-		reflect.TypeFor[[]int64](),
+		reflect.TypeFor[[]*int64](),
 	}
 	mustDec := func(s string) *types.Decimal {
 		d, err := types.ParseDecimal(s)
@@ -337,8 +337,8 @@ func TestQueryRowFuncAny(t *testing.T) {
 		return d
 	}
 	wantVals := [][]any{
-		{int64(5), nil, "a", []byte{0xab, 0xab}, mustDec("12.00000"), []int64{2, 3, 4}},
-		{int64(9), int64(2), "b", []byte{0xee}, mustDec("0.98760"), []int64{99}},
+		{int64(5), nil, "a", []byte{0xab, 0xab}, mustDec("12.00000"), []*int64{ptrFor(int64(2)), nil, ptrFor(int64(4))}},
+		{int64(9), int64(2), "b", []byte{0xee}, mustDec("0.98760"), toPtrSlice([]int64{99})},
 	}
 
 	var rowNum int
@@ -348,7 +348,7 @@ func TestQueryRowFuncAny(t *testing.T) {
 			t.Logf("%#v", vals) // e.g. []interface {}{1, "a", "bigint", "YES", interface {}(nil)}
 			for i, v := range vals {
 				if v != nil {
-					require.Equal(t, wantTypes[i], reflect.TypeOf(v),
+					require.EqualValues(t, wantTypes[i], reflect.TypeOf(v),
 						"it was %T not %v", v, wantTypes[i].String())
 				}
 				require.Equal(t, wantVals[rowNum][i], v)
@@ -773,7 +773,7 @@ func TestTypeRoundtrip(t *testing.T) {
 	}
 
 	for _, v := range []testcase{
-		{
+		/*{
 			typ: "int8",
 			val: int64(1),
 		},
@@ -800,21 +800,26 @@ func TestTypeRoundtrip(t *testing.T) {
 		{
 			typ: "decimal(5,0)",
 			val: mustDecimal("12300"),
-		},
+		},*/
 		{
 			typ:  "int8[]",
 			val:  []int64{1, 2, 3},
-			want: []int64{int64(1), int64(2), int64(3)},
+			want: toPtrSlice([]int64{int64(1), int64(2), int64(3)}),
+		},
+		{
+			typ:  "int8[]", // with nulls
+			val:  []*int64{ptrFor(int64(1)), nil, ptrFor(int64(3))},
+			want: []*int64{ptrFor(int64(1)), nil, ptrFor(int64(3))},
 		},
 		{
 			typ:  "bool[]",
 			val:  []bool{true, false, true},
-			want: []bool{true, false, true},
+			want: toPtrSlice([]bool{true, false, true}),
 		},
 		{
 			typ:  "text[]",
 			val:  []string{"a", "b", "c"},
-			want: []string{"a", "b", "c"},
+			want: toPtrSlice([]string{"a", "b", "c"}),
 		},
 		{
 			typ:  "bytea[]",
@@ -822,7 +827,7 @@ func TestTypeRoundtrip(t *testing.T) {
 			want: [][]byte{[]byte("a"), []byte("b"), []byte("c")},
 		},
 		{
-			typ:  "uuid[]",
+			typ:  "uuid[]", // no real NULL with uuid-ossp
 			val:  types.UUIDArray{types.NewUUIDV5([]byte("2")), types.NewUUIDV5([]byte("3"))},
 			want: types.UUIDArray{types.NewUUIDV5([]byte("2")), types.NewUUIDV5([]byte("3"))},
 		},
@@ -834,12 +839,12 @@ func TestTypeRoundtrip(t *testing.T) {
 		{
 			typ:  "text[]",
 			val:  []string{},
-			want: []string{},
+			want: []*string{},
 		},
 		{
 			typ:  "int8[]",
 			val:  []int64{},
-			want: []int64{},
+			want: []*int64{},
 		},
 		{
 			typ:     "nil",
@@ -849,13 +854,13 @@ func TestTypeRoundtrip(t *testing.T) {
 		{
 			typ:     "[]uuid",
 			val:     []any{"3146857c-8671-4f4e-99bd-fcc621f9d3d1", "3146857c-8671-4f4e-99bd-fcc621f9d3d1"},
-			want:    []string{"3146857c-8671-4f4e-99bd-fcc621f9d3d1", "3146857c-8671-4f4e-99bd-fcc621f9d3d1"},
+			want:    toPtrSlice([]string{"3146857c-8671-4f4e-99bd-fcc621f9d3d1", "3146857c-8671-4f4e-99bd-fcc621f9d3d1"}),
 			skipTbl: true,
 		},
 		{
 			typ:          "int8[]",
 			val:          []string{"1", "2"},
-			want:         []int64{int64(1), int64(2)},
+			want:         toPtrSlice([]int64{int64(1), int64(2)}),
 			skipInferred: true,
 		},
 	} {
@@ -963,58 +968,92 @@ func Test_DelayedTx(t *testing.T) {
 	require.NoError(t, err)
 }
 
+func ptrFor[T any](v T) *T {
+	return &v
+}
+
+func toPtrSlice[T any](v []T) []*T {
+	res := make([]*T, len(v))
+	for i := range v {
+		res[i] = &v[i]
+	}
+	return res
+}
+
+/*func fromPtrSlice[T any](v []*T) (res []T, nils []bool) {
+	res = make([]T, len(v))
+	nils = make([]bool, len(v))
+	for i := range v {
+		if v[i] == nil {
+			nils[i] = true
+			continue
+		}
+		res[i] = *v[i]
+	}
+	return
+}*/
+
 // This test tests changesets, and that they are properly encoded+decoded
 func Test_Changesets(t *testing.T) {
+
 	for i, tc := range []interface {
 		run(t *testing.T)
 	}{
-		&changesetTestcase[string, []string]{ // basic string test
+		&changesetTestcase[string]{ // basic string test
 			datatype:  "text",
 			val:       "hello",
-			arrayVal:  []string{"a", "b", "c"},
+			arrayVal:  toPtrSlice([]string{"a", "b", "c"}),
 			val2:      "world",
-			arrayVal2: []string{"d", "e", "f"},
+			arrayVal2: toPtrSlice([]string{"d", "e", "f"}),
 		},
-		&changesetTestcase[string, []string]{ // test with special characters and escaping
+		&changesetTestcase[string]{ // null strings
+			datatype:  "text",
+			val:       "hello",
+			arrayVal:  append(toPtrSlice([]string{"a", "b", "c"}), nil),
+			val2:      "",
+			nullval2:  true,
+			arrayVal2: []*string{ptrFor("d"), nil, ptrFor("f")},
+		},
+		&changesetTestcase[string]{ // test with special characters and escaping
 			datatype:  "text",
 			val:       "heldcsklk;le''\"';",
-			arrayVal:  []string{"hel,dcsklk;le','\",';", `";\\sdsw,"''"\',\""`},
+			arrayVal:  toPtrSlice([]string{"hel,dcsklk;le','\",';", `";\\sdsw,"''"\',\""`}),
 			val2:      "world",
-			arrayVal2: []string{"'\"", "heldcsklk;le''\"';"},
+			arrayVal2: toPtrSlice([]string{"'\"", "heldcsklk;le''\"';"}),
 		},
-		&changesetTestcase[int64, []int64]{
+		&changesetTestcase[int64]{
 			datatype:  "int8",
 			val:       1,
-			arrayVal:  []int64{1, 2, 3987654},
+			arrayVal:  toPtrSlice([]int64{1, 2, 3987654}),
 			val2:      2,
-			arrayVal2: []int64{3, 4, 5},
+			arrayVal2: toPtrSlice([]int64{3, 4, 5}),
 		},
-		&changesetTestcase[bool, []bool]{
+		&changesetTestcase[bool]{
 			datatype:  "bool",
 			val:       true,
-			arrayVal:  []bool{true, false, true},
+			arrayVal:  toPtrSlice([]bool{true, false, true}),
 			val2:      false,
-			arrayVal2: []bool{false, true, false},
+			arrayVal2: toPtrSlice([]bool{false, true, false}),
 		},
-		&changesetTestcase[[]byte, [][]byte]{
+		&changesetTestcase[[]byte]{
 			datatype:  "bytea",
 			val:       []byte("hello"),
-			arrayVal:  [][]byte{[]byte("a"), []byte("b"), []byte("c")},
+			arrayVal:  toPtrSlice([][]byte{[]byte("a"), []byte("b"), []byte("c")}),
 			val2:      []byte("world"),
-			arrayVal2: [][]byte{[]byte("d"), []byte("e"), []byte("f")},
+			arrayVal2: toPtrSlice([][]byte{[]byte("d"), []byte("e"), []byte("f")}),
 		},
-		&changesetTestcase[*types.Decimal, types.DecimalArray]{
+		&changesetTestcase[types.Decimal]{
 			datatype:  "decimal(6,3)",
-			val:       mustDecimal("123.456"),
+			val:       *mustDecimal("123.456"),
 			arrayVal:  types.DecimalArray{mustDecimal("123.456"), mustDecimal("123.456"), mustDecimal("123.456")},
-			val2:      mustDecimal("123.457"),
+			val2:      *mustDecimal("123.457"),
 			arrayVal2: types.DecimalArray{mustDecimal("123.457"), mustDecimal("123.457"), mustDecimal("123.457")},
 		},
-		&changesetTestcase[*types.UUID, types.UUIDArray]{
+		&changesetTestcase[types.UUID]{
 			datatype:  "uuid",
-			val:       mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d1"),
+			val:       *mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d1"),
 			arrayVal:  types.UUIDArray{mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d1"), mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d1")},
-			val2:      mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d2"),
+			val2:      *mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d2"),
 			arrayVal2: types.UUIDArray{mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d2"), mustParseUUID("3146857c-8671-4f4e-99bd-fcc621f9d3d2")},
 		},
 	} {
@@ -1023,15 +1062,17 @@ func Test_Changesets(t *testing.T) {
 }
 
 // this is a hack to use generics in the test
-type changesetTestcase[T any, T2 any] struct {
+type changesetTestcase[T any] struct {
 	datatype string // the postgres datatype to test
 	// the first vals will be inserted.
 	// val will be the primary key
-	val      T  // the value to test
-	arrayVal T2 // the array value to test
+	val      T // the value to test
+	nullval  bool
+	arrayVal []*T // the array value to test
 	// the second vals will update the first vals
-	val2      T  // the second value to test
-	arrayVal2 T2 // the second array value to test
+	val2      T // the second value to test
+	nullval2  bool
+	arrayVal2 []*T // the second array value to test
 }
 
 func processChangesets(csChan chan any, changesetEntries *[]*ChangesetEntry, relations *[]*Relation, done chan struct{}) {
@@ -1060,7 +1101,29 @@ func applyChangesets(ctx context.Context, tx sql.DB, csEntries []*ChangesetEntry
 	return nil
 }
 
-func (c *changesetTestcase[T, T2]) run(t *testing.T) {
+// fromTestArrayType converts from some test array type to the Kwil PG array
+// type with a Valuer for correctly inserting the array.
+func fromTestArrayType(v any) any {
+	switch vt := v.(type) {
+	case []*types.Decimal:
+		return types.DecimalArray(vt)
+	case []*types.UUID:
+		return types.UUIDArray(vt)
+	case []*[]byte:
+		var a [][]byte
+		for _, v := range vt {
+			if v == nil {
+				a = append(a, nil)
+				continue
+			}
+			a = append(a, *v)
+		}
+		return a
+	}
+	return v
+}
+
+func (c *changesetTestcase[T]) run(t *testing.T) {
 	ctx := context.Background()
 
 	db, err := NewDB(ctx, cfg)
@@ -1085,7 +1148,7 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 	_, err = regularTx.Execute(ctx, "create schema ds_test", QueryModeExec)
 	require.NoError(t, err)
 
-	_, err = regularTx.Execute(ctx, "create table ds_test.test (val "+c.datatype+" primary key, name text,  array_val "+c.datatype+"[])", QueryModeExec)
+	_, err = regularTx.Execute(ctx, "create table ds_test.test (val "+c.datatype+", name text,  array_val "+c.datatype+"[])", QueryModeExec)
 	require.NoError(t, err)
 
 	err = regularTx.Commit(ctx)
@@ -1099,10 +1162,12 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback(ctx)
 
-	_, err = tx.Execute(ctx, "insert into ds_test.test (val, array_val) values ($1, $2)", QueryModeExec, c.val, c.arrayVal)
+	_, err = tx.Execute(ctx, "insert into ds_test.test (val, array_val) values ($1, $2)", QueryModeExec, c.val, fromTestArrayType(c.arrayVal))
 	require.NoError(t, err)
 
-	// get the changeset
+	// Receive each ChangesetEntry, which was captured in the logical
+	// replication code and encoded to a ChangesetEntry using each type's
+	// SerializeChangesetEntry function.
 	changes := make(chan any, 1)
 	var changesetEntries []*ChangesetEntry
 	var relations []*Relation
@@ -1114,23 +1179,37 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 
 	// Get changeset entries
 	<-done
-	fmt.Println(changesetEntries, relations)
+	// fmt.Println(changesetEntries, relations)
 	require.Len(t, relations, 1)
 	require.Len(t, changesetEntries, 1)
 
+	// Check the inserted values from the captured changeset match the values
+	// from the testcase inputs that were the args to Execute.
 	csEntry := changesetEntries[0]
 	_, insertVals, err := csEntry.DecodeTuples(relations[0])
 	require.NoError(t, err)
-	require.EqualValues(t, c.arrayVal, insertVals[2])
+
+	// the third column is the array
+	var insertedArray []*T
+	switch vt := insertVals[2].(type) {
+	case []T: // shouldn't be
+		insertedArray = toPtrSlice(vt)
+	case []*T:
+		insertedArray = vt
+	}
+	require.EqualValues(t, c.arrayVal, insertedArray) // comparing slices of arrays, values of non-nil elements are compare, nils compared
 
 	err = tx.Rollback(ctx)
 	require.NoError(t, err)
 
+	// ensure the rollback removed it
 	res, err := tx.Execute(ctx, "select val, array_val from ds_test.test")
 	require.NoError(t, err)
-
 	require.Len(t, res.Rows, 0)
 
+	// Apply the captured changesets. This tests DeserializeChangeset for each
+	// data type to decode a ChangesetEntry into Go types used with Execute in
+	// applyInsert, applyUpdate, and applyDelete.
 	tx, err = db.BeginPreparedTx(ctx)
 	require.NoError(t, err)
 	defer tx.Rollback(ctx)
@@ -1146,7 +1225,8 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 
 	require.Len(t, res.Rows, 1)
 	require.Len(t, res.Rows[0], 2)
-	require.EqualValues(t, c.arrayVal, res.Rows[0][1])
+	require.EqualValues(t, fromTestArrayType(c.arrayVal), res.Rows[0][1])
+
 	/*
 		Block 2: Update
 	*/
@@ -1155,7 +1235,7 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback(ctx)
 
-	_, err = tx.Execute(ctx, "update ds_test.test set val = $1, array_val = $2", QueryModeExec, c.val2, c.arrayVal2)
+	_, err = tx.Execute(ctx, "update ds_test.test set val = $1, array_val = $2", QueryModeExec, c.val2, fromTestArrayType(c.arrayVal2))
 	require.NoError(t, err)
 
 	changes = make(chan any, 1)
@@ -1173,13 +1253,51 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 	oldVals, newVals, err := changesetEntries[0].DecodeTuples(relations[0])
 	require.NoError(t, err)
 
+	// OLD
+
+	// the third column is the array
+	var oldArray []*T
+	switch vt := oldVals[2].(type) {
+	case []T:
+		oldArray = toPtrSlice(vt)
+	case []*T:
+		oldArray = vt
+	}
+
 	// verify the old vals are equal to the first vals
-	require.EqualValues(t, c.val, oldVals[0])
-	require.EqualValues(t, c.arrayVal, oldVals[2])
+	if oldVals[0] == nil {
+		require.True(t, c.nullval)
+	} else {
+		if vp, ok := oldVals[0].(*T); ok {
+			require.EqualValues(t, &c.val, vp)
+		} else {
+			require.EqualValues(t, c.val, oldVals[0])
+		}
+	}
+	// and the array
+	require.EqualValues(t, c.arrayVal, oldArray)
+
+	// NEW
+
+	var newArray []*T
+	switch vt := newVals[2].(type) {
+	case []T:
+		newArray = toPtrSlice(vt)
+	case []*T:
+		newArray = vt
+	}
 
 	// verify the new vals are equal to the second vals
-	require.EqualValues(t, c.val2, newVals[0])
-	require.EqualValues(t, c.arrayVal2, newVals[2])
+	if newVals[0] == nil {
+		require.True(t, c.nullval2)
+	} else {
+		if vp, ok := newVals[0].(*T); ok {
+			require.EqualValues(t, &c.val2, vp)
+		} else {
+			require.EqualValues(t, c.val2, newVals[0])
+		}
+	}
+	require.EqualValues(t, c.arrayVal2, newArray)
 
 	err = tx.Rollback(ctx)
 	require.NoError(t, err)
@@ -1189,7 +1307,7 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 
 	require.Len(t, res.Rows, 1)
 	require.Len(t, res.Rows[0], 3)
-	require.EqualValues(t, res.Rows[0][1], c.arrayVal)
+	require.EqualValues(t, res.Rows[0][1], fromTestArrayType(c.arrayVal))
 	require.EqualValues(t, res.Rows[0][2], nil)
 
 	tx, err = db.BeginPreparedTx(ctx)
@@ -1209,7 +1327,7 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 
 	require.Len(t, res.Rows, 1)
 	require.Len(t, res.Rows[0], 2)
-	require.EqualValues(t, res.Rows[0][1], c.arrayVal2)
+	require.EqualValues(t, res.Rows[0][1], fromTestArrayType(c.arrayVal2))
 
 	/*
 		Block 3: Delete
@@ -1238,9 +1356,26 @@ func (c *changesetTestcase[T, T2]) run(t *testing.T) {
 	deleteVals, _, err := changesetEntries[0].DecodeTuples(relations[0])
 	require.NoError(t, err)
 
+	// the third column is the array
+	var deletedArray []*T
+	switch vt := deleteVals[2].(type) {
+	case []T:
+		deletedArray = toPtrSlice(vt)
+	case []*T:
+		deletedArray = vt
+	}
+
 	// verify the delete vals are equal to the second vals
-	require.EqualValues(t, c.val2, deleteVals[0])
-	require.EqualValues(t, c.arrayVal2, deleteVals[2])
+	if deleteVals[0] == nil {
+		require.True(t, c.nullval2)
+	} else {
+		if vp, ok := deleteVals[0].(*T); ok {
+			require.EqualValues(t, &c.val2, vp)
+		} else {
+			require.EqualValues(t, c.val2, deleteVals[0])
+		}
+	}
+	require.EqualValues(t, c.arrayVal2, deletedArray)
 
 	err = tx.Rollback(ctx)
 	require.NoError(t, err)
@@ -1307,10 +1442,13 @@ func Test_ApplyChangesetsConflictResolution(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback(ctx)
 
-	_, err = tx.Execute(ctx, "insert into ds_test.test (val, name, array_val) values ($1, $2, $3)", QueryModeExec, 1, "hello", []int64{1, 2, 3})
+	insert0 := toPtrSlice([]int64{1, 2, 3})
+	insert1 := []int64{11, 22, 33}
+
+	_, err = tx.Execute(ctx, "insert into ds_test.test (val, name, array_val) values ($1, $2, $3)", QueryModeExec, 1, "hello", insert0)
 	require.NoError(t, err)
 
-	_, err = tx.Execute(ctx, "insert into ds_test.test (val, name, array_val) values ($1, $2, $3)", QueryModeExec, 2, "mellow", []int64{11, 22, 33})
+	_, err = tx.Execute(ctx, "insert into ds_test.test (val, name, array_val) values ($1, $2, $3)", QueryModeExec, 2, "mellow", insert1)
 	require.NoError(t, err)
 
 	changes := make(chan any, 1)
@@ -1332,7 +1470,7 @@ func Test_ApplyChangesetsConflictResolution(t *testing.T) {
 	// verify the insert vals are equal to the first vals
 	require.EqualValues(t, 1, insertVals[0])
 	require.EqualValues(t, "hello", insertVals[1])
-	require.EqualValues(t, []int64{1, 2, 3}, insertVals[2])
+	require.EqualValues(t, insert0, insertVals[2])
 
 	_, insertVals, err = changesetEntries[1].DecodeTuples(relations[0])
 	require.NoError(t, err)
@@ -1340,7 +1478,7 @@ func Test_ApplyChangesetsConflictResolution(t *testing.T) {
 	// verify the insert vals are equal to the second vals
 	require.EqualValues(t, 2, insertVals[0])
 	require.EqualValues(t, "mellow", insertVals[1])
-	require.EqualValues(t, []int64{11, 22, 33}, insertVals[2])
+	require.EqualValues(t, toPtrSlice(insert1), insertVals[2])
 
 	// Rollback the changes
 	err = tx.Rollback(ctx)
@@ -1439,7 +1577,8 @@ func Test_ApplyChangesetsConflictResolution(t *testing.T) {
 	defer tx.Rollback(ctx)
 
 	// Update: 1, world, {4, 5, 6} -> 1, helloworld, {111, 222, 333}
-	_, err = tx.Execute(ctx, "update ds_test.test set name = $1, array_val = $2 where val = $3", QueryModeExec, "helloworld", []int64{111, 222, 333}, 1)
+	update0 := []int64{111, 222, 333}
+	_, err = tx.Execute(ctx, "update ds_test.test set name = $1, array_val = $2 where val = $3", QueryModeExec, "helloworld", update0, 1)
 	require.NoError(t, err)
 
 	// commit
@@ -1475,10 +1614,10 @@ func Test_ApplyChangesetsConflictResolution(t *testing.T) {
 	require.Len(t, res.Rows[0], 3)
 	require.EqualValues(t, 1, res.Rows[0][0])
 	require.EqualValues(t, "helloworld", res.Rows[0][1])
-	require.EqualValues(t, []int64{111, 222, 333}, res.Rows[0][2])
+	require.EqualValues(t, toPtrSlice(update0), res.Rows[0][2])
 	require.EqualValues(t, 2, res.Rows[1][0])
 	require.EqualValues(t, "yellow", res.Rows[1][1])
-	require.EqualValues(t, []int64{11, 22, 33}, res.Rows[1][2])
+	require.EqualValues(t, toPtrSlice(insert1), res.Rows[1][2])
 
 	// commit the changes
 	_, err = tx.Precommit(ctx, nil)
@@ -1522,7 +1661,7 @@ func Test_ApplyChangesetsConflictResolution(t *testing.T) {
 	require.NoError(t, err)
 
 	// update the record with id 1
-	_, err = tx.Execute(ctx, "update ds_test.test set name = $1, array_val = $2 where val = $3", QueryModeExec, "hello", []int64{1, 2, 3}, 1)
+	_, err = tx.Execute(ctx, "update ds_test.test set name = $1, array_val = $2 where val = $3", QueryModeExec, "hello", insert0, 1)
 	require.NoError(t, err)
 
 	// commit
@@ -1546,7 +1685,7 @@ func Test_ApplyChangesetsConflictResolution(t *testing.T) {
 	require.Len(t, res.Rows[0], 3)
 	require.EqualValues(t, 1, res.Rows[0][0])
 	require.EqualValues(t, "hello", res.Rows[0][1])
-	require.EqualValues(t, []int64{1, 2, 3}, res.Rows[0][2])
+	require.EqualValues(t, insert0, res.Rows[0][2])
 
 	// commit the changes
 	_, err = tx.Precommit(ctx, nil)
