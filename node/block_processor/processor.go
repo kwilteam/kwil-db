@@ -395,6 +395,7 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 			txResult := ktypes.TxResult{
 				Code: uint32(res.ResponseCode),
 				Gas:  res.Spend,
+				Log:  res.Log,
 			}
 
 			// bookkeeping for the block execution status
@@ -405,10 +406,10 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 					return nil, fmt.Errorf("fatal db error during block execution: %w", res.Error)
 				}
 
-				txResult.Log = res.Error.Error()
+				if txResult.Log == "" {
+					txResult.Log = res.Error.Error() // maybe don't?
+				}
 				bp.log.Info("Failed to execute transaction", "tx", txHash, "err", res.Error)
-			} else {
-				txResult.Log = "success"
 			}
 
 			txResults[i] = txResult

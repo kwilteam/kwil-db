@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"math/big"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -155,6 +156,49 @@ type Row struct {
 	ColumnTypes []*types.DataType
 	// Values are the values of the columns in the row.
 	Values []any
+}
+
+func (r Row) TypeStrings() []string {
+	var typeStrings []string
+	for _, ty := range r.ColumnTypes {
+		typeStrings = append(typeStrings, ty.String())
+	}
+	return typeStrings
+}
+
+func (r Row) ValueStrings() []string {
+	valueStrings := make([]string, 0, len(r.Values))
+	for _, value := range r.Values {
+		valueStrings = append(valueStrings, fmt.Sprintf("%v", value))
+	}
+	return valueStrings
+}
+
+func (r Row) String() string {
+	var sb strings.Builder
+	for i, name := range r.ColumnNames {
+		fmt.Fprintf(&sb, "%s[%s]: %v", name, r.ColumnTypes[i].String(), r.Values[i])
+		if i != len(r.ColumnNames)-1 {
+			sb.WriteString(", ")
+		}
+	}
+	return sb.String()
+}
+
+const unknownColName = "?column?" // TODO: get from interpreter pkg
+
+func (r Row) ColHeaders() []string { // "name (type)" in each string
+	if len(r.ColumnNames) == 1 && r.ColumnNames[0] == unknownColName { // just a single returned value, not table
+		return []string{r.ColumnTypes[0].String()}
+	}
+	var colHeaders []string
+	for i, name := range r.ColumnNames {
+		if name == unknownColName {
+			name = fmt.Sprintf("col%d", i)
+		}
+		colHeaders = append(colHeaders, fmt.Sprintf("%s (%s)", name, r.ColumnTypes[i].String()))
+	}
+	return colHeaders
 }
 
 // Accounts is an interface for managing accounts on the Kwil network. It

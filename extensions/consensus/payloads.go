@@ -40,5 +40,5 @@ type Route interface {
 	// InTx executes the transaction, which may include state changes via the DB
 	// or Engine. The TxCode is returned by the Router, and it should be CodeOk
 	// for a nil error.
-	InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error)
+	InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, string, error)
 }
