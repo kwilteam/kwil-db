@@ -32,6 +32,7 @@ func TestnetCmd() *cobra.Command {
 	var noPex, uniquePorts bool
 	var startingPort uint64
 	var outDir, dbOwner string
+	var hostnames []string
 
 	cmd := &cobra.Command{
 
@@ -50,6 +51,7 @@ func TestnetCmd() *cobra.Command {
 				NoPex:        noPex,
 				StartingPort: startingPort,
 				Owner:        dbOwner,
+				Hostnames:    hostnames,
 			}, &ConfigOpts{
 				UniquePorts: uniquePorts,
 				DnsHost:     false,
@@ -77,6 +79,7 @@ func TestnetCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&outDir, "out-dir", "o", ".testnet", "output directory for generated node root directories")
 	cmd.Flags().BoolVarP(&uniquePorts, "unique-ports", "u", false, "use unique ports for each node")
 	cmd.Flags().StringVar(&dbOwner, "db-owner", "", "owner of the database")
+	cmd.Flags().StringSliceVarP(&hostnames, "hostnames", "H", []string{}, "comma separated list of hostnames for the nodes")
 	return cmd
 }
 
@@ -89,8 +92,8 @@ type TestnetConfig struct {
 	StartingPort  uint64
 	StartingIP    string
 	DnsNamePrefix string // optional and only used if DnsHost is true (default: node)
-
-	Owner string
+	Hostnames     []string
+	Owner         string
 }
 
 type ConfigOpts struct {
@@ -109,6 +112,10 @@ type ConfigOpts struct {
 
 // TODO: once changes to the tests are complete, this may not be needed
 func GenerateTestnetConfigs(cfg *TestnetConfig, opts *ConfigOpts) error {
+	if cfg.Hostnames != nil && len(cfg.Hostnames) != cfg.NumVals+cfg.NumNVals {
+		return fmt.Errorf("number of hostnames %d must be equal to number of validators + number of non-validators %d", len(cfg.Hostnames), cfg.NumVals+cfg.NumNVals)
+	}
+
 	// ensure that the directory exists
 	// expand the directory path
 	outDir, err := node.ExpandPath(cfg.RootDir)
@@ -136,12 +143,15 @@ func GenerateTestnetConfigs(cfg *TestnetConfig, opts *ConfigOpts) error {
 	leaderPub := keys[0].Public()
 
 	var bootNodes []string
-	for i := range cfg.NumVals {
+	for i := range cfg.NumVals + cfg.NumNVals {
 		pubKey := keys[i].Public()
 
 		hostname := cfg.StartingIP
 		if cfg.StartingIP == "" {
 			hostname = "127.0.0.1"
+		}
+		if len(cfg.Hostnames) > 0 {
+			hostname = cfg.Hostnames[i]
 		}
 
 		if opts.DnsHost {
@@ -191,14 +201,21 @@ func GenerateTestnetConfigs(cfg *TestnetConfig, opts *ConfigOpts) error {
 		if opts.UniquePorts {
 			portOffset = i
 		}
+
+		var externalAddress string
+		if len(cfg.Hostnames) > 0 {
+			externalAddress = cfg.Hostnames[i]
+		}
+
 		err = GenerateNodeRoot(&NodeGenConfig{
-			PortOffset: portOffset,
-			IP:         cfg.StartingIP,
-			NoPEX:      cfg.NoPex,
-			RootDir:    filepath.Join(outDir, fmt.Sprintf("node%d", i)),
-			NodeKey:    keys[i],
-			Genesis:    genConfig,
-			BootNodes:  bootNodes,
+			PortOffset:      portOffset,
+			IP:              cfg.StartingIP,
+			NoPEX:           cfg.NoPex,
+			RootDir:         filepath.Join(outDir, fmt.Sprintf("node%d", i)),
+			NodeKey:         keys[i],
+			Genesis:         genConfig,
+			BootNodes:       bootNodes,
+			ExternalAddress: externalAddress,
 		})
 		if err != nil {
 			return err
@@ -218,7 +235,8 @@ type NodeGenConfig struct {
 	Genesis    *config.GenesisConfig
 
 	// TODO: gasEnabled, private p2p, auth RPC, join expiry, allocs, etc.
-	BootNodes []string
+	BootNodes       []string
+	ExternalAddress string
 }
 
 func GenerateNodeRoot(ncfg *NodeGenConfig) error {
@@ -233,6 +251,7 @@ func GenerateNodeRoot(ncfg *NodeGenConfig) error {
 	cfg.P2P.ListenAddress = net.JoinHostPort(host, strconv.FormatUint(port, 10))
 	cfg.P2P.Pex = !ncfg.NoPEX
 	cfg.P2P.BootNodes = ncfg.BootNodes
+	cfg.P2P.ExternalAddress = ncfg.ExternalAddress
 
 	// Consensus
 	cfg.Consensus.EmptyBlockTimeout = cfg.Consensus.ProposeTimeout
