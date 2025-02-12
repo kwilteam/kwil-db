@@ -1025,6 +1025,7 @@ func init() {
 								{Name: "amount", Type: types.TextType},
 							},
 						},
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
 						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 							//id := inputs[0].(*types.UUID)
 							epochID := inputs[1].(*types.UUID)
