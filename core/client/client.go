@@ -234,11 +234,11 @@ func (c *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
 	return c.txClient.ChainInfo(ctx)
 }
 
-// Execute executes a procedure or action.
+// Execute executes an action.
 // It returns the receipt, as well as outputs which is the decoded body of the receipt.
 // It can take any number of inputs, and if multiple tuples of inputs are passed,
 // it will execute them in the same transaction.
-func (c *Client) Execute(ctx context.Context, namespace string, procedure string, tuples [][]any, opts ...clientType.TxOpt) (types.Hash, error) {
+func (c *Client) Execute(ctx context.Context, namespace string, action string, tuples [][]any, opts ...clientType.TxOpt) (types.Hash, error) {
 	encodedTuples := make([][]*types.EncodedValue, len(tuples))
 	for i, tuple := range tuples {
 		encoded, err := encodeTuple(tuple)
@@ -249,7 +249,7 @@ func (c *Client) Execute(ctx context.Context, namespace string, procedure string
 	}
 
 	executionBody := &types.ActionExecution{
-		Action:    procedure,
+		Action:    action,
 		Namespace: namespace,
 		Arguments: encodedTuples,
 	}
@@ -261,7 +261,7 @@ func (c *Client) Execute(ctx context.Context, namespace string, procedure string
 	}
 
 	c.logger.Debug("execute action",
-		"Namespace", namespace, "action", procedure,
+		"Namespace", namespace, "action", action,
 		"signature_type", tx.Signature.Type,
 		"signature", base64.StdEncoding.EncodeToString(tx.Signature.Data),
 		"fee", tx.Body.Fee.String(), "nonce", tx.Body.Nonce)
@@ -301,8 +301,8 @@ func (c *Client) ExecuteSQL(ctx context.Context, stmt string, params map[string]
 	return c.txClient.Broadcast(ctx, tx, syncBcastFlag(txOpts.SyncBcast))
 }
 
-// Call calls a procedure or action. It returns the result records.
-func (c *Client) Call(ctx context.Context, namespace string, procedure string, inputs []any) (*types.CallResult, error) {
+// Call calls an action. It returns the result records.
+func (c *Client) Call(ctx context.Context, namespace string, action string, inputs []any) (*types.CallResult, error) {
 	encoded, err := encodeTuple(inputs)
 	if err != nil {
 		return nil, err
@@ -310,7 +310,7 @@ func (c *Client) Call(ctx context.Context, namespace string, procedure string, i
 
 	payload := &types.ActionCall{
 		Namespace: namespace,
-		Action:    procedure,
+		Action:    action,
 		Arguments: encoded,
 	}
 

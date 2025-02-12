@@ -509,7 +509,7 @@ func (ac *ActionCall) UnmarshalBinary(b []byte) error {
 }
 
 // EncodedValue is used to encode a value with its type specified. This is used
-// as arguments for actions and procedures.
+// as arguments for actions.
 type EncodedValue struct {
 	Type DataType `json:"type"`
 	// The double slice handles arrays of encoded values.

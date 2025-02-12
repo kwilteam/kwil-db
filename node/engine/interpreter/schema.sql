@@ -489,6 +489,11 @@ JOIN
 ORDER BY
     1, 2;
 
+CREATE VIEW info.db_owner AS
+SELECT user_identifier
+FROM info.user_roles
+WHERE role_name = 'owner';
+
 -- role_privileges is a public view that provides a list of all role privileges in the database
 CREATE VIEW info.role_privileges AS
 SELECT 

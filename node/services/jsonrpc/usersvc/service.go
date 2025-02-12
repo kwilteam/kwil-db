@@ -299,8 +299,8 @@ func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 		),
 		userjson.MethodCall: rpcserver.MakeMethodDef(
 			svc.Call,
-			"call an action or procedure",
-			"the result of the action/procedure call as a encoded records",
+			"call an action",
+			"the result of the action call as a encoded records",
 		),
 		userjson.MethodChainInfo: rpcserver.MakeMethodDef(
 			svc.ChainInfo,

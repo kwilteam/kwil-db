@@ -19,15 +19,15 @@ import (
 )
 
 var (
-	callLong = `Call a ` + "`view`" + ` procedure or action, returning the result.
+	callLong = `Call a ` + "`view`" + ` action, returning the result.
 
-` + "`view`" + ` procedure are read-only procedure that do not require gas to execute.  They are
+` + "`view`" + ` actions are read-only actions that do not require gas to execute.  They are
 the primary way to query the state of a database. The ` + "`call`" + ` command is used to call
-a ` + "`view`" + ` procedure on a database.  It takes the procedure name as the first positional
-argument, and the procedure inputs as all subsequent arguments.
+a ` + "`view`" + ` action on a database.  It takes the action name as the first positional
+argument, and the action inputs as all subsequent arguments.
 
-To specify a procedure input, you first need to specify the input name, then the input value, delimited by a colon.
-For example, for procedure ` + "`get_user($username)`" + `, you would specify the procedure as follows:
+To specify a action input, you first need to specify the input name, then the input value, delimited by a colon.
+For example, for action ` + "`get_user($username)`" + `, you would specify the action as follows:
 
 ` + "`call get_user username:satoshi`" + `
 
@@ -35,10 +35,10 @@ You specify the database namespace in which to execute this with the ` + "`--nam
 
 If you are interacting with a Kwil gateway, you can also pass the ` + "`--authenticate`" + ` flag to authenticate the call with your private key.`
 
-	callExample = `# Calling the ` + "`get_user($username)`" + ` procedure on the "somedb" namespace
+	callExample = `# Calling the ` + "`get_user($username)`" + ` action on the "somedb" namespace
 kwil-cli database call get_user --namespace somedb username:satoshi
 
-# Calling the ` + "`get_user($username)`" + ` procedure on a database using a namespace, authenticating with a private key
+# Calling the ` + "`get_user($username)`" + ` action on a database using a namespace, authenticating with a private key
 kwil-cli database call get_user --namespace somedb username:satoshi --authenticate`
 )
 
@@ -46,7 +46,7 @@ func callCmd() *cobra.Command {
 	var gwAuth, logs bool
 
 	cmd := &cobra.Command{
-		Use:        "call <procedure_or_action> <parameter_1:value_1> <parameter_2:value_2> ...",
+		Use:        "call <action> <parameter_1:value_1> <parameter_2:value_2> ...",
 		Short:      "Call a 'view' action, returning the result.",
 		Long:       callLong,
 		Example:    callExample,
@@ -68,7 +68,7 @@ func callCmd() *cobra.Command {
 
 				action, args, err := getSelectedAction(cmd, args)
 				if err != nil {
-					return display.PrintErr(cmd, fmt.Errorf("error getting selected action or procedure: %w", err))
+					return display.PrintErr(cmd, fmt.Errorf("error getting selected action: %w", err))
 				}
 
 				inputs, err := parseInputs(args)
@@ -78,7 +78,7 @@ func callCmd() *cobra.Command {
 
 				tuples, err := buildExecutionInputs(ctx, clnt, namespace, action, []map[string]string{inputs})
 				if err != nil {
-					return display.PrintErr(cmd, fmt.Errorf("error creating action/procedure inputs: %w", err))
+					return display.PrintErr(cmd, fmt.Errorf("error creating action inputs: %w", err))
 				}
 
 				if len(tuples) == 0 {
@@ -90,7 +90,7 @@ func callCmd() *cobra.Command {
 
 				data, err := clnt.Call(ctx, namespace, action, tuples[0])
 				if err != nil {
-					return display.PrintErr(cmd, fmt.Errorf("error calling action/procedure: %w", err))
+					return display.PrintErr(cmd, fmt.Errorf("error calling action: %w", err))
 				}
 
 				if data == nil {
@@ -146,8 +146,7 @@ func (r *respCall) MarshalText() (text []byte, err error) {
 	return bts, nil
 }
 
-// buildProcedureInputs will build the inputs for either
-// an action or procedure execution/call.
+// buildExecutionInputs will build the inputs for an action execution/call.
 func buildExecutionInputs(ctx context.Context, client clientType.Client, namespace string, action string, inputs []map[string]string) ([][]any, error) {
 	params, err := GetParamList(ctx, client.Query, namespace, action)
 	if err != nil {

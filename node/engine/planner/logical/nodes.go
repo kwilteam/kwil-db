@@ -62,7 +62,7 @@ func eq(a, b Traversable) bool {
 }
 
 // ScanSource is a source of data that a Scan can be performed on.
-// This is either a physical table, a procedure call that returns a table,
+// This is either a physical table, an action call that returns a table,
 // or a subquery.
 type ScanSource interface {
 	Traversable

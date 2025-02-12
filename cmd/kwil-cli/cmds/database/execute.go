@@ -30,7 +30,7 @@ The action name is specified as the first positional argument, and the action pa
 	executeExample = `# Executing a CREATE TABLE statement on the "somedb" database namespace
 kwil-cli database execute --sql "CREATE TABLE users (id UUID, name TEXT, age INT8);" --namespace mydb
 	
-# Executing the ` + "`" + `create_user($username, $age)` + "`" + ` procedure on the "somedb" database
+# Executing the ` + "`" + `create_user($username, $age)` + "`" + ` action on the "somedb" database
 kwil-cli database execute --action create_user username:satoshi age:32 --namespace somedb
 `
 )
