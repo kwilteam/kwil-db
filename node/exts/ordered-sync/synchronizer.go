@@ -90,21 +90,11 @@ func (c *cachedSync) readTopicInfoOnStartup(ctx context.Context, app *common.App
 	c.initialized = true
 
 	err := app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
-	SELECT name, last_processed_point, resolve_func FROM topics
+	SELECT name, resolve_func FROM topics
 	`, nil, func(r *common.Row) error {
-		if len(r.Values) != 3 {
+		if len(r.Values) != 2 {
 			// this should never happen
 			return fmt.Errorf("unexpected number of columns")
-		}
-
-		point, ok := r.Values[1].(int64)
-		if !ok {
-			// can be nil, if so, then we just skip
-			// because we already have nil as the default
-			if r.Values[1] == nil {
-				return nil
-			}
-			return fmt.Errorf("unexpected type int64 for last processed point")
 		}
 
 		topic, ok := r.Values[0].(string)
@@ -112,7 +102,7 @@ func (c *cachedSync) readTopicInfoOnStartup(ctx context.Context, app *common.App
 			return fmt.Errorf("unexpected type string for topic")
 		}
 
-		resolveFunc, ok := r.Values[2].(string)
+		resolveFunc, ok := r.Values[1].(string)
 		if !ok {
 			return fmt.Errorf("unexpected type string for resolve function")
 		}
@@ -129,8 +119,7 @@ func (c *cachedSync) readTopicInfoOnStartup(ctx context.Context, app *common.App
 		}
 
 		c.topics[topic] = &topicInfo{
-			resolve:            resolveFn,
-			lastProcessedPoint: &point,
+			resolve: resolveFn,
 		}
 		return nil
 	})
@@ -155,12 +144,12 @@ func (c *cachedSync) resolve(ctx context.Context, app *common.App, block *common
 	// update the last processed point in the database
 	latestPoint := make(map[string]int64)
 	for _, dp := range res {
-		res, ok := registered[dp.Topic]
+		topic, ok := c.topics[dp.Topic]
 		if !ok {
 			return fmt.Errorf("topic %s not registered", dp.Topic)
 		}
 
-		if err := res(ctx, app, block, dp); err != nil {
+		if err := topic.resolve(ctx, app, block, dp); err != nil {
 			return err
 		}
 
@@ -194,7 +183,7 @@ func (c *cachedSync) storeDataPoint(ctx context.Context, app *common.App, dp *Re
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
-	topic, ok := c.topics[dp.Topic]
+	_, ok := c.topics[dp.Topic]
 	if !ok {
 		// if topic is not registered, we should not store the data point.
 		// This is not always an error: there may be an extension that was
@@ -203,25 +192,6 @@ func (c *cachedSync) storeDataPoint(ctx context.Context, app *common.App, dp *Re
 		logger := app.Service.Logger.New("orderedsync")
 		logger.Warn("topic not registered", "topic", dp.Topic)
 		return nil
-	}
-
-	// should we return errors here? These suggest that a majority of nodes synced some sort of incorrect data or
-	// have a bug in their listener. I think we should return an error (which will stop the node), since the alternative
-	// is an event goes unprocessed (which might lead to unexpected loss of data and/or funds), but I'm not sure.
-	switch {
-	case topic.lastProcessedPoint == nil && dp.PreviousPointInTime != nil:
-		return fmt.Errorf("non-nil previous point in time received, expected nil because no previous point in time is known")
-	case topic.lastProcessedPoint != nil && dp.PreviousPointInTime == nil:
-		return fmt.Errorf("nil previous point in time received, expected %d", *topic.lastProcessedPoint)
-	case topic.lastProcessedPoint != nil && dp.PreviousPointInTime != nil:
-		// they dont have to match, but the incoming must be gte the last processed point
-		if *dp.PreviousPointInTime < *topic.lastProcessedPoint {
-			return fmt.Errorf("previous point in time must be greater than or equal to the last processed point")
-		}
-	case topic.lastProcessedPoint == nil && dp.PreviousPointInTime == nil:
-		// no previous point in time known, no previous point in time received, all good
-	default:
-		return fmt.Errorf("unexpected state in storeDataPoint")
 	}
 
 	return storeDataPoint(ctx, app.DB, app.Engine, dp)

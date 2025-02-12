@@ -135,12 +135,13 @@ func TestCreateNewRewardInstance(t *testing.T) {
 	require.Equal(t, zeroHex, rewards[0].syncedRewardData.Erc20Address)
 	require.Equal(t, int64(18), rewards[0].syncedRewardData.Erc20Decimals)
 
+	root := []byte{0x03, 0x04}
 	// finalize the epoch
-	err = finalizeEpoch(ctx, app, pending.ID, 20, []byte{0x01, 0x02}, []byte{0x03, 0x04})
+	err = finalizeEpoch(ctx, app, pending.ID, 20, []byte{0x01, 0x02}, root)
 	require.NoError(t, err)
 
 	// confirm the epoch
-	err = confirmEpoch(ctx, app, pending.ID)
+	err = confirmEpoch(ctx, app, root)
 	require.NoError(t, err)
 
 	// TODO: we currently do not have queries for reading full epochs.

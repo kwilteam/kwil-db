@@ -54,7 +54,7 @@ func init() {
 		panic(err)
 	}
 
-	err = resolutions.RegisterResolution("evm_sync_poller_resolution", resolutions.ModAdd, resolutions.ResolutionConfig{
+	err = resolutions.RegisterResolution(resolutionName, resolutions.ModAdd, resolutions.ResolutionConfig{
 		RefundThreshold:       big.NewRat(1, 3),
 		ConfirmationThreshold: big.NewRat(1, 2),
 		ExpirationPeriod:      1 * time.Hour,
@@ -64,7 +64,7 @@ func init() {
 				return fmt.Errorf("failed to unmarshal polled event: %v", err)
 			}
 
-			resolve, ok := pollFuncResolutions[p.UniqueName]
+			resolve, ok := pollFuncResolutions[p.ResolutionName]
 			if !ok {
 				return fmt.Errorf("poll resolution with name %s not found", p.UniqueName)
 			}
@@ -76,6 +76,8 @@ func init() {
 		panic(err)
 	}
 }
+
+const resolutionName = "evm_sync_poller_resolution"
 
 // StatePoller is the global instance of the state poller extension,
 // which allows polling for state on Ethereum. Unlike normal listeners
@@ -106,6 +108,8 @@ type PollConfig struct {
 	PollFunc EVMPollFunc
 	// UniqueName is a unique name for the poller
 	UniqueName string
+	// ResolutionName is the name of the registered resolution function
+	ResolutionName string
 }
 
 type EVMPollFunc func(ctx context.Context, service *common.Service, eventstore listeners.EventKV, broadcast func(context.Context, []byte) error, client *ethclient.Client)
@@ -181,11 +185,23 @@ func (s *statePoller) runPollFuncs(ctx context.Context, service *common.Service,
 		kv := makeNamespaceKV("evm.sync."+cfg.UniqueName, eventstore)
 
 		uniqueNameCopy := cfg.UniqueName
+		resolutionNameCopy := cfg.ResolutionName
 		go func() {
 			defer wg.Done()
 			wg.Add(1)
 			cfg.PollFunc(ctx, service, kv, func(ctx context.Context, data []byte) error {
-				return eventstore.Broadcast(ctx, uniqueNameCopy, data)
+				pEvent := &polledEvent{
+					UniqueName:     uniqueNameCopy,
+					Data:           data,
+					ResolutionName: resolutionNameCopy,
+				}
+
+				bts, err := pEvent.MarshalBinary()
+				if err != nil {
+					return fmt.Errorf("failed to marshal polled event: %v", err)
+				}
+
+				return eventstore.Broadcast(ctx, resolutionName, bts)
 			}, client)
 		}()
 	}
@@ -213,6 +229,8 @@ type polledEvent struct {
 	UniqueName string
 	// Data is the data that was read from the chain
 	Data []byte
+	// ResolutionName is the name of the resolution function
+	ResolutionName string
 }
 
 // MarshalBinary implements encoding.BinaryMarshaler.
@@ -238,6 +256,17 @@ func (p *polledEvent) MarshalBinary() ([]byte, error) {
 
 	// 4. Write Data bytes
 	if _, err := buf.Write(p.Data); err != nil {
+		return nil, err
+	}
+
+	// 5. Write length of ResolutionName
+	nameLen = uint64(len(p.ResolutionName))
+	if err := binary.Write(&buf, binary.BigEndian, nameLen); err != nil {
+		return nil, err
+	}
+
+	// 6. Write ResolutionName bytes
+	if _, err := buf.Write([]byte(p.ResolutionName)); err != nil {
 		return nil, err
 	}
 
@@ -273,6 +302,18 @@ func (p *polledEvent) UnmarshalBinary(data []byte) error {
 		return err
 	}
 	p.Data = dataBytes
+
+	// 5. Read length of ResolutionName
+	if err := binary.Read(reader, binary.BigEndian, &nameLen); err != nil {
+		return err
+	}
+
+	// 6. Read ResolutionName bytes
+	nameBytes = make([]byte, nameLen)
+	if _, err := io.ReadFull(reader, nameBytes); err != nil {
+		return err
+	}
+	p.ResolutionName = string(nameBytes)
 
 	return nil
 }

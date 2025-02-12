@@ -13,6 +13,7 @@
 package erc20reward
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -53,6 +54,20 @@ var (
 	rewardExtUUIDNamespace = *types.MustParseUUID("b1f140d1-91cf-4bbe-8f78-8f17f6282fc2")
 	minEpochPeriod         = time.Minute * 10
 	maxEpochPeriod         = time.Hour * 24 * 7 // 1 week
+	// uint256Numeric is a numeric that is big enough to hold a uint256
+	uint256Numeric = func() *types.DataType {
+		dt, err := types.NewNumericType(78, 0)
+		if err != nil {
+			panic(err)
+		}
+
+		return dt
+	}()
+
+	// the below are used to identify different types of logs from ethereum
+	// so that we know how to decode them
+	logTypeTransfer       = []byte("e20trsnfr")
+	logTypeConfirmedEpoch = []byte("cnfepch")
 )
 
 // generates a deterministic UUID for the chain and escrow
@@ -174,16 +189,25 @@ func init() {
 		instances: newInstanceMap(),
 	}
 
-	evmsync.RegisterEventResolution(transferEventResolutionName, func(ctx context.Context, app *common.App, block *common.BlockContext, uniqueName string, logs []ethtypes.Log) error {
+	evmsync.RegisterEventResolution(transferEventResolutionName, func(ctx context.Context, app *common.App, block *common.BlockContext, uniqueName string, logs []*evmsync.EthLog) error {
 		id, err := idFromTransferListenerUniqueName(uniqueName)
 		if err != nil {
 			return err
 		}
 
 		for _, log := range logs {
-			err := applyTransferLog(ctx, app, id, log)
-			if err != nil {
-				return err
+			if bytes.Equal(log.Metadata, logTypeTransfer) {
+				err := applyTransferLog(ctx, app, id, *log.Log)
+				if err != nil {
+					return err
+				}
+			} else if bytes.Equal(log.Metadata, logTypeConfirmedEpoch) {
+				err := applyConfirmedEpochLog(ctx, app, *log.Log)
+				if err != nil {
+					return err
+				}
+			} else {
+				return fmt.Errorf("unknown log type %x", log.Metadata)
 			}
 		}
 
@@ -228,6 +252,7 @@ func init() {
 		info.synced = true
 		info.syncedAt = block.Height
 		info.syncedRewardData = data
+		info.ownedBalance = types.MustParseDecimalExplicit("0", 78, 0)
 
 		err = evmsync.StatePoller.UnregisterPoll(uniqueName)
 		if err != nil {
@@ -399,6 +424,7 @@ func init() {
 										DistributionPeriod: int64(dur.Seconds()),
 									},
 									currentEpoch: firstEpoch,
+									active:       true,
 								}
 
 								info.mu.RLock()
@@ -566,7 +592,7 @@ func init() {
 						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
 						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 							return SINGLETON.ForEachInstance(true, func(id *types.UUID, info *rewardExtensionInfo) error {
-								return resultFn([]any{id, info.userProvidedData.ChainInfo, info.userProvidedData.EscrowAddress.Hex()})
+								return resultFn([]any{id, info.userProvidedData.ChainInfo.Name.String(), info.userProvidedData.EscrowAddress.Hex()})
 							})
 						},
 					},
@@ -576,13 +602,17 @@ func init() {
 						Parameters: []precompiles.PrecompileValue{
 							{Name: "id", Type: types.UUIDType},
 							{Name: "user", Type: types.TextType},
-							{Name: "amount", Type: types.TextType},
+							{Name: "amount", Type: uint256Numeric},
 						},
 						AccessModifiers: []precompiles.Modifier{precompiles.SYSTEM},
 						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 							id := inputs[0].(*types.UUID)
 							user := inputs[1].(string)
-							amount := inputs[2].(string)
+							amount := inputs[2].(*types.Decimal)
+
+							if amount.IsNegative() {
+								return fmt.Errorf("amount cannot be negative")
+							}
 
 							info, err := SINGLETON.getUsableInstance(id)
 							if err != nil {
@@ -593,20 +623,7 @@ func init() {
 							// the read lock before we can acquire the write lock, which
 							// we do at the end of this
 
-							// users will pass rewards with the proper number of decimals.
-							// E.g. if the erc20 has 18 decimals, they will pass 18 decimals
-							rawAmount, err := parseAmountFromUser(amount, uint16(info.syncedRewardData.Erc20Decimals))
-							if err != nil {
-								info.mu.RUnlock()
-								return err
-							}
-
-							if rawAmount.IsNegative() {
-								info.mu.RUnlock()
-								return fmt.Errorf("amount cannot be negative")
-							}
-
-							newBal, err := types.DecimalSub(info.ownedBalance, rawAmount)
+							newBal, err := types.DecimalSub(info.ownedBalance, amount)
 							if err != nil {
 								info.mu.RUnlock()
 								return err
@@ -623,7 +640,7 @@ func init() {
 								return err
 							}
 
-							err = issueReward(ctx.TxContext.Ctx, app, info.currentEpoch.ID, addr, rawAmount)
+							err = issueReward(ctx.TxContext.Ctx, app, info.currentEpoch.ID, addr, amount)
 							if err != nil {
 								info.mu.RUnlock()
 								return err
@@ -643,7 +660,7 @@ func init() {
 						Parameters: []precompiles.PrecompileValue{
 							{Name: "id", Type: types.UUIDType},
 							{Name: "to", Type: types.TextType},
-							{Name: "amount", Type: types.TextType},
+							{Name: "amount", Type: uint256Numeric},
 						},
 						// anybody can call this as long as they have the tokens.
 						// There is no security risk if somebody calls this directly
@@ -651,24 +668,9 @@ func init() {
 						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 							id := inputs[0].(*types.UUID)
 							to := inputs[1].(string)
-							amount := inputs[2].(string)
+							amount := inputs[2].(*types.Decimal)
 
-							info, err := SINGLETON.getUsableInstance(id)
-							if err != nil {
-								return err
-							}
-
-							info.mu.RLock()
-							defer info.mu.RUnlock()
-
-							// users will pass rewards with the proper number of decimals.
-							// E.g. if the erc20 has 18 decimals, they will pass 18 decimals
-							rawAmount, err := parseAmountFromUser(amount, uint16(info.syncedRewardData.Erc20Decimals))
-							if err != nil {
-								return err
-							}
-
-							if rawAmount.IsNegative() {
+							if amount.IsNegative() {
 								return fmt.Errorf("amount cannot be negative")
 							}
 
@@ -682,7 +684,7 @@ func init() {
 								return err
 							}
 
-							return transferTokens(ctx.TxContext.Ctx, app, id, from, toAddr, rawAmount)
+							return transferTokens(ctx.TxContext.Ctx, app, id, from, toAddr, amount)
 						},
 					},
 					{
@@ -692,12 +694,16 @@ func init() {
 						Name: "lock",
 						Parameters: []precompiles.PrecompileValue{
 							{Name: "id", Type: types.UUIDType},
-							{Name: "amount", Type: types.TextType},
+							{Name: "amount", Type: uint256Numeric},
 						},
 						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
 						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 							id := inputs[0].(*types.UUID)
-							amount := inputs[1].(string)
+							amount := inputs[1].(*types.Decimal)
+
+							if amount.IsNegative() {
+								return fmt.Errorf("amount cannot be negative")
+							}
 
 							return SINGLETON.lockTokens(ctx.TxContext.Ctx, app, id, ctx.TxContext.Caller, amount)
 						},
@@ -709,13 +715,17 @@ func init() {
 						Parameters: []precompiles.PrecompileValue{
 							{Name: "id", Type: types.UUIDType},
 							{Name: "user", Type: types.TextType},
-							{Name: "amount", Type: types.TextType},
+							{Name: "amount", Type: uint256Numeric},
 						},
 						AccessModifiers: []precompiles.Modifier{precompiles.SYSTEM},
 						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 							id := inputs[0].(*types.UUID)
 							user := inputs[1].(string)
-							amount := inputs[2].(string)
+							amount := inputs[2].(*types.Decimal)
+
+							if amount.IsNegative() {
+								return fmt.Errorf("amount cannot be negative")
+							}
 
 							return SINGLETON.lockTokens(ctx.TxContext.Ctx, app, id, user, amount)
 						},
@@ -728,13 +738,22 @@ func init() {
 						Parameters: []precompiles.PrecompileValue{
 							{Name: "id", Type: types.UUIDType},
 							{Name: "user", Type: types.TextType},
-							{Name: "amount", Type: types.TextType},
+							{Name: "amount", Type: uint256Numeric},
 						},
 						AccessModifiers: []precompiles.Modifier{precompiles.SYSTEM},
 						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 							id := inputs[0].(*types.UUID)
 							user := inputs[1].(string)
-							amount := inputs[2].(string)
+							amount := inputs[2].(*types.Decimal)
+
+							if amount.IsNegative() {
+								return fmt.Errorf("amount cannot be negative")
+							}
+
+							addr, err := ethAddressFromHex(user)
+							if err != nil {
+								return err
+							}
 
 							info, err := SINGLETON.getUsableInstance(id)
 							if err != nil {
@@ -746,26 +765,7 @@ func init() {
 							// the read lock before we can acquire the write lock, which
 							// we do at the end of this
 
-							// users will pass rewards with the proper number of decimals.
-							// E.g. if the erc20 has 18 decimals, they will pass 18 decimals
-							rawAmount, err := parseAmountFromUser(amount, uint16(info.syncedRewardData.Erc20Decimals))
-							if err != nil {
-								info.mu.RUnlock()
-								return err
-							}
-
-							if rawAmount.IsNegative() {
-								info.mu.RUnlock()
-								return fmt.Errorf("amount cannot be negative")
-							}
-
-							addr, err := ethAddressFromHex(user)
-							if err != nil {
-								info.mu.RUnlock()
-								return err
-							}
-
-							left, err := types.DecimalSub(info.ownedBalance, rawAmount)
+							left, err := types.DecimalSub(info.ownedBalance, amount)
 							if err != nil {
 								info.mu.RUnlock()
 								return err
@@ -776,7 +776,7 @@ func init() {
 								return fmt.Errorf("network does not have enough balance to unlock %s for %s", amount, user)
 							}
 
-							err = transferTokensFromNetworkToUser(ctx.TxContext.Ctx, app, id, addr, rawAmount)
+							err = transferTokensFromNetworkToUser(ctx.TxContext.Ctx, app, id, addr, amount)
 							if err != nil {
 								info.mu.RUnlock()
 								return err
@@ -798,7 +798,7 @@ func init() {
 						},
 						Returns: &precompiles.MethodReturn{
 							Fields: []precompiles.PrecompileValue{
-								{Name: "balance", Type: types.TextType},
+								{Name: "balance", Type: uint256Numeric},
 							},
 						},
 						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
@@ -816,7 +816,7 @@ func init() {
 								return err
 							}
 
-							return resultFn([]any{bal.String()})
+							return resultFn([]any{bal})
 						},
 					},
 					{
@@ -844,6 +844,102 @@ func init() {
 							return getUnconfirmedEpochs(ctx.TxContext.Ctx, app, id, func(e *Epoch) error {
 								return resultFn([]any{e.ID, e.StartHeight, e.StartTime.Unix(), *e.EndHeight, e.Root, e.BlockHash})
 							})
+						},
+					},
+					{
+						Name: "decimals",
+						Parameters: []precompiles.PrecompileValue{
+							{Name: "id", Type: types.UUIDType},
+						},
+						Returns: &precompiles.MethodReturn{
+							Fields: []precompiles.PrecompileValue{
+								{Name: "decimals", Type: types.IntType},
+							},
+						},
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+							id := inputs[0].(*types.UUID)
+
+							info, err := SINGLETON.getUsableInstance(id)
+							if err != nil {
+								return err
+							}
+
+							info.mu.RLock()
+							defer info.mu.RUnlock()
+
+							return resultFn([]any{info.syncedRewardData.Erc20Decimals})
+						},
+					},
+					{
+						// scale down scales an int down to the number of decimals of the erc20 token.
+						Name: "scale_down",
+						Parameters: []precompiles.PrecompileValue{
+							{Name: "id", Type: types.UUIDType},
+							{Name: "amount", Type: uint256Numeric},
+						},
+						Returns: &precompiles.MethodReturn{
+							Fields: []precompiles.PrecompileValue{
+								{Name: "scaled", Type: types.TextType},
+							},
+						},
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+							id := inputs[0].(*types.UUID)
+							amount := inputs[1].(*types.Decimal)
+
+							info, err := SINGLETON.getUsableInstance(id)
+							if err != nil {
+								return err
+							}
+
+							info.mu.RLock()
+							defer info.mu.RUnlock()
+
+							scaled, err := scaleDownUint256(amount, uint16(info.syncedRewardData.Erc20Decimals))
+							if err != nil {
+								return err
+							}
+
+							return resultFn([]any{scaled.String()})
+						},
+					},
+					{
+						// scale up scales an int up to the number of decimals of the erc20 token.
+						Name: "scale_up",
+						Parameters: []precompiles.PrecompileValue{
+							{Name: "id", Type: types.UUIDType},
+							{Name: "amount", Type: types.TextType},
+						},
+						Returns: &precompiles.MethodReturn{
+							Fields: []precompiles.PrecompileValue{
+								{Name: "scaled", Type: uint256Numeric},
+							},
+						},
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+							id := inputs[0].(*types.UUID)
+							amount := inputs[1].(string)
+
+							info, err := SINGLETON.getUsableInstance(id)
+							if err != nil {
+								return err
+							}
+
+							info.mu.RLock()
+							defer info.mu.RUnlock()
+
+							parsed, err := types.ParseDecimalExplicit(amount, 78, uint16(info.syncedRewardData.Erc20Decimals))
+							if err != nil {
+								return err
+							}
+
+							scaled, err := scaleUpUint256(parsed, uint16(info.syncedRewardData.Erc20Decimals))
+							if err != nil {
+								return err
+							}
+
+							return resultFn([]any{scaled})
 						},
 					},
 					// {
@@ -1090,44 +1186,34 @@ func callDisable(ctx *common.EngineContext, app *common.App, id *types.UUID) err
 }
 
 // lockTokens locks tokens from a user's balance and gives them to the network.
-func (e *extensionInfo) lockTokens(ctx context.Context, app *common.App, id *types.UUID, from string, amount string) error {
+func (e *extensionInfo) lockTokens(ctx context.Context, app *common.App, id *types.UUID, from string, amount *types.Decimal) error {
 	fromAddr, err := ethAddressFromHex(from)
 	if err != nil {
 		return err
 	}
 
+	if amount.IsNegative() {
+		return fmt.Errorf("amount cannot be negative")
+	}
+
+	// we call getUsableInstance before transfer to ensure that the extension is active and synced.
+	// We don't actually use the mutex lock here because it will cause a deadlock with the transfer function
+	// (which recursively calls the interpreter), we just simply want to make sure that the extension
+	// is active and synced.
 	info, err := e.getUsableInstance(id)
 	if err != nil {
 		return err
 	}
 
-	info.mu.RLock()
-	// we cannot defer an RUnlock here because we need to unlock
-	// the read lock before we can acquire the write lock, which
-	// we do at the end of this
-
-	rawAmount, err := parseAmountFromUser(amount, uint16(info.syncedRewardData.Erc20Decimals))
+	err = transferTokensFromUserToNetwork(ctx, app, id, fromAddr, amount)
 	if err != nil {
-		info.mu.RUnlock()
 		return err
 	}
 
-	if rawAmount.IsNegative() {
-		info.mu.RUnlock()
-		return fmt.Errorf("amount cannot be negative")
-	}
-
-	err = transferTokensFromUserToNetwork(ctx, app, id, fromAddr, rawAmount)
-	if err != nil {
-		info.mu.RUnlock()
-		return err
-	}
-
-	info.mu.RUnlock()
 	info.mu.Lock()
 	defer info.mu.Unlock()
 
-	info.ownedBalance, err = info.ownedBalance.Add(info.ownedBalance, rawAmount)
+	info.ownedBalance, err = info.ownedBalance.Add(info.ownedBalance, amount)
 	if err != nil {
 		return err
 	}
@@ -1141,6 +1227,9 @@ func (e *extensionInfo) getUsableInstance(id *types.UUID) (*rewardExtensionInfo,
 	if !ok {
 		return nil, fmt.Errorf("reward extension with id %s not found", id)
 	}
+
+	info.mu.RLock()
+	defer info.mu.RUnlock()
 
 	if !info.active {
 		return nil, fmt.Errorf("reward extension with id %s is not active", id)
@@ -1351,7 +1440,8 @@ func (r *rewardExtensionInfo) startStatePoller() error {
 	chainName := r.ChainInfo.Name
 
 	return evmsync.StatePoller.RegisterPoll(evmsync.PollConfig{
-		Chain: chainName,
+		Chain:          chainName,
+		ResolutionName: statePollResolutionName,
 		PollFunc: func(ctx context.Context, service *common.Service, eventstore listeners.EventKV, broadcast func(context.Context, []byte) error, client *ethclient.Client) {
 			// It is _very_ important that we do not change the state of the struct here.
 			// This function runs external to consensus, so we must not change the state of the struct.
@@ -1397,7 +1487,7 @@ func (r *rewardExtensionInfo) startTransferListener(ctx context.Context, app *co
 	return evmsync.EventSyncer.RegisterNewListener(ctx, app.DB, app.Engine, evmsync.EVMEventListenerConfig{
 		UniqueName: transferListenerUniqueName(*r.ID),
 		Chain:      r.ChainInfo.Name,
-		GetLogs: func(ctx context.Context, client *ethclient.Client, startBlock, endBlock uint64, logger log.Logger) ([]ethtypes.Log, error) {
+		GetLogs: func(ctx context.Context, client *ethclient.Client, startBlock, endBlock uint64, logger log.Logger) ([]*evmsync.EthLog, error) {
 			filt, err := abigen.NewErc20Filterer(erc20Copy, client)
 			if err != nil {
 				return nil, fmt.Errorf("failed to bind to ERC20 filterer: %w", err)
@@ -1413,12 +1503,42 @@ func (r *rewardExtensionInfo) startTransferListener(ctx context.Context, app *co
 			}
 			defer iter.Close()
 
-			var logs []ethtypes.Log
+			var logs []*evmsync.EthLog
 			for iter.Next() {
-				logs = append(logs, iter.Event.Raw)
+				logs = append(logs, &evmsync.EthLog{
+					Metadata: logTypeConfirmedEpoch,
+					Log:      &iter.Event.Raw,
+				})
+			}
+			if err := iter.Error(); err != nil {
+				return nil, fmt.Errorf("failed to get transfer logs: %w", err)
 			}
 
-			return logs, iter.Error()
+			escrowFilt, err := abigen.NewRewardDistributorFilterer(escrowCopy, client)
+			if err != nil {
+				return nil, fmt.Errorf("failed to bind to RewardDistributor filterer: %w", err)
+			}
+
+			postIter, err := escrowFilt.FilterRewardPosted(&bind.FilterOpts{
+				Start:   startBlock,
+				End:     &endBlock,
+				Context: ctx,
+			})
+			if err != nil {
+				return nil, fmt.Errorf("failed to get reward posted logs: %w", err)
+			}
+
+			for postIter.Next() {
+				logs = append(logs, &evmsync.EthLog{
+					Metadata: logTypeConfirmedEpoch,
+					Log:      &postIter.Event.Raw,
+				})
+			}
+			if err := postIter.Error(); err != nil {
+				return nil, fmt.Errorf("failed to get reward posted logs: %w", err)
+			}
+
+			return logs, nil
 		},
 		Resolve: transferEventResolutionName,
 	})
@@ -1462,6 +1582,16 @@ func applyTransferLog(ctx context.Context, app *common.App, id *types.UUID, log 
 	return creditBalance(ctx, app, id, data.From, val)
 }
 
+// applyConfirmedEpochLog applies a ConfirmedEpoch log to the reward extension.
+func applyConfirmedEpochLog(ctx context.Context, app *common.App, log ethtypes.Log) error {
+	data, err := rewardLogParser.ParseRewardPosted(log)
+	if err != nil {
+		return fmt.Errorf("failed to parse RewardPosted event: %w", err)
+	}
+
+	return confirmEpoch(ctx, app, data.Root[:])
+}
+
 // erc20ValueFromBigInt converts a big.Int to a decimal.Decimal(78,0)
 func erc20ValueFromBigInt(b *big.Int) (*types.Decimal, error) {
 	dec, err := types.NewDecimalFromBigInt(b, 0)
@@ -1484,14 +1614,28 @@ var (
 
 		return filt
 	}()
+
+	// rewardLogParser is a pre-bound RewardDistributor filterer for parsing RewardPosted events.
+	rewardLogParser = func() irewardLogParser {
+		filt, err := abigen.NewRewardDistributorFilterer(ethcommon.Address{}, nilEthFilterer{})
+		if err != nil {
+			panic(fmt.Sprintf("failed to bind to RewardDistributor filterer: %v", err))
+		}
+
+		return filt
+	}()
 )
 
 // ierc20LogParser is an interface for parsing ERC20 logs.
 // It is only defined to make it clear that the implementation
 // should not use other methods of the abigen erc20 type.
 type ierc20LogParser interface {
-	ParseApproval(log ethtypes.Log) (*abigen.Erc20Approval, error)
 	ParseTransfer(log ethtypes.Log) (*abigen.Erc20Transfer, error)
+}
+
+// irewardLogParser is an interface for parsing RewardDistributor logs.
+type irewardLogParser interface {
+	ParseRewardPosted(log ethtypes.Log) (*abigen.RewardDistributorRewardPosted, error)
 }
 
 // getSyncedRewardData reads on-chain data from both the RewardDistributor and the Gnosis Safe
@@ -1580,15 +1724,4 @@ func scaleDownUint256(amount *types.Decimal, decimals uint16) (*types.Decimal, e
 	}
 
 	return n, nil
-}
-
-// parseAmountFromUser parses an amount from a user input string.
-// It will scale the amount to the correct number of decimals.
-func parseAmountFromUser(amount string, decimals uint16) (*types.Decimal, error) {
-	dec, err := types.ParseDecimalExplicit(amount, 78, decimals)
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse amount: %w", err)
-	}
-
-	return scaleUpUint256(dec, decimals)
 }

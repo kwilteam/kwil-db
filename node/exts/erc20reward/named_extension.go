@@ -186,6 +186,42 @@ func init() {
 					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
 					Handler:         makeMetaHandler("list_unconfirmed_epochs"),
 				},
+				{
+					Name: "decimals",
+					Returns: &precompiles.MethodReturn{
+						Fields: []precompiles.PrecompileValue{
+							{Name: "decimals", Type: types.IntType},
+						},
+					},
+					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+					Handler:         makeMetaHandler("decimals"),
+				},
+				{
+					Name: "scale_down",
+					Parameters: []precompiles.PrecompileValue{
+						{Name: "amount", Type: uint256Numeric},
+					},
+					Returns: &precompiles.MethodReturn{
+						Fields: []precompiles.PrecompileValue{
+							{Name: "scaled", Type: types.TextType},
+						},
+					},
+					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+					Handler:         makeMetaHandler("scale_down"),
+				},
+				{
+					Name: "scale_up",
+					Parameters: []precompiles.PrecompileValue{
+						{Name: "amount", Type: types.TextType},
+					},
+					Returns: &precompiles.MethodReturn{
+						Fields: []precompiles.PrecompileValue{
+							{Name: "scaled", Type: uint256Numeric},
+						},
+					},
+					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+					Handler:         makeMetaHandler("scale_up"),
+				},
 			},
 		}, nil
 	})

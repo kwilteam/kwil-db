@@ -77,15 +77,13 @@ func finalizeEpoch(ctx context.Context, app *common.App, epochID *types.UUID, en
 }
 
 // confirmEpoch confirms an epoch was received on-chain
-//
-//lint:ignore U1000 This function is not used yet, but will be used in the future
-func confirmEpoch(ctx context.Context, app *common.App, epochID *types.UUID) error {
+func confirmEpoch(ctx context.Context, app *common.App, root []byte) error {
 	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
 	{kwil_erc20_meta}UPDATE epochs
 	SET confirmed = true
-	WHERE id = $id
+	WHERE reward_root = $root
 	`, map[string]any{
-		"id": epochID,
+		"root": root,
 	}, nil)
 }
 
@@ -199,9 +197,9 @@ func bytesToEthAddress(bts []byte) (ethcommon.Address, error) {
 func creditBalance(ctx context.Context, app *common.App, rewardId *types.UUID, user ethcommon.Address, amount *types.Decimal) error {
 	balanceId := userBalanceID(rewardId, user)
 	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
-	{kwil_erc20_meta}INSERT INTO user_balances(id, reward_id, address, balance)
+	{kwil_erc20_meta}INSERT INTO balances(id, reward_id, address, balance)
 	VALUES ($id, $reward_id, $user, $balance)
-	ON CONFLICT (id) DO UPDATE SET balance = user_balances.balance + $balance
+	ON CONFLICT (id) DO UPDATE SET balance = balances.balance + $balance
 	`, map[string]any{
 		"id":        balanceId,
 		"reward_id": rewardId,
@@ -253,13 +251,13 @@ func issueReward(ctx context.Context, app *common.App, epochID *types.UUID, user
 // transferTokens transfers tokens from one user to another.
 func transferTokens(ctx context.Context, app *common.App, rewardID *types.UUID, from, to ethcommon.Address, amount *types.Decimal) error {
 	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
-	{kwil_erc20_meta}UPDATE user_balances
+	{kwil_erc20_meta}UPDATE balances
 	SET balance = balance - $amount
 	WHERE reward_id = $reward_id AND address = $from;
 
-	{kwil_erc20_meta}INSERT INTO user_balances(id, reward_id, address, balance)
+	{kwil_erc20_meta}INSERT INTO balances(id, reward_id, address, balance)
 	VALUES ($to_id, $reward_id, $to, $amount)
-	ON CONFLICT (id) DO UPDATE SET balance = user_balances.balance + $amount;
+	ON CONFLICT (id) DO UPDATE SET balance = balances.balance + $amount;
 	`, map[string]any{
 		"reward_id": rewardID,
 		"from":      from.Bytes(),
@@ -273,7 +271,7 @@ func transferTokens(ctx context.Context, app *common.App, rewardID *types.UUID, 
 func transferTokensFromUserToNetwork(ctx context.Context, app *common.App, rewardID *types.UUID, user ethcommon.Address, amount *types.Decimal) error {
 	// we subtract first in case the user does not have enough funds
 	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
-	{kwil_erc20_meta}UPDATE user_balances
+	{kwil_erc20_meta}UPDATE balances
 	SET balance = balance - $amount
 	WHERE reward_id = $reward_id AND address = $user;
 
@@ -295,9 +293,9 @@ func transferTokensFromNetworkToUser(ctx context.Context, app *common.App, rewar
 	SET balance = balance - $amount
 	WHERE id = $reward_id;
 
-	{kwil_erc20_meta}INSERT INTO user_balances(id, reward_id, address, balance)
+	{kwil_erc20_meta}INSERT INTO balances(id, reward_id, address, balance)
 	VALUES ($user_id, $reward_id, $user, $amount)
-	ON CONFLICT (id) DO UPDATE SET balance = user_balances.balance + $amount;
+	ON CONFLICT (id) DO UPDATE SET balance = balances.balance + $amount;
 	`, map[string]any{
 		"reward_id": rewardID,
 		"user":      user.Bytes(),
@@ -311,7 +309,7 @@ func balanceOf(ctx context.Context, app *common.App, rewardID *types.UUID, user 
 	var balance *types.Decimal
 	err := app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
 	{kwil_erc20_meta}SELECT balance
-	FROM user_balances
+	FROM balances
 	WHERE reward_id = $reward_id AND address = $user
 	`, map[string]any{
 		"reward_id": rewardID,

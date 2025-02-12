@@ -27,7 +27,8 @@ CREATE TABLE balances (
     id UUID PRIMARY KEY,
     reward_id UUID NOT NULL REFERENCES reward_instances(id) ON UPDATE CASCADE ON DELETE CASCADE,
     address BYTEA NOT NULL, -- wallet address of the user
-    balance NUMERIC(78, 0) NOT NULL DEFAULT 0 CHECK(balance >= 0) -- the balance owned by the user on this network
+    balance NUMERIC(78, 0) NOT NULL DEFAULT 0, -- the balance owned by the user on this network
+    CONSTRAINT balance_must_be_positive CHECK (balance >= 0)
 );
 
 -- epochs holds the epoch information.
