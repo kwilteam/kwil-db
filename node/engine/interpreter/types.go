@@ -78,7 +78,7 @@ func (a *action) FromAST(ast *parse.CreateActionStatement) error {
 	return nil
 }
 
-// actionReturn holds the return type of a procedure.
+// actionReturn holds the return type of an action.
 // EITHER the Type field is set, OR the Table field is set.
 type actionReturn struct {
 	IsTable bool                `json:"is_table"`

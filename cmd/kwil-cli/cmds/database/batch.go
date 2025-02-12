@@ -21,11 +21,11 @@ var (
 )
 
 var (
-	batchLong = `Batch executes an action or procedure on a database using inputs from a CSV file.
+	batchLong = `Batch executes an action on a database using inputs from a CSV file.
 
-To map a CSV column name to a procedure input, use the ` + "`--map-inputs`" + ` flag.
-The format is ` + "`--map-inputs <csv_column_1>:<procedure_input_1>,<csv_column_2>:<procedure_input_2>`." +
-		`  If the ` + "`--map-inputs`" + ` flag is not passed, the CSV column name will be used as the procedure input name.
+To map a CSV column name to an action input, use the ` + "`--map-inputs`" + ` flag.
+The format is ` + "`--map-inputs <csv_column_1>:<action_input_1>,<csv_column_2>:<action_input_2>`." +
+		`  If the ` + "`--map-inputs`" + ` flag is not passed, the CSV column name will be used as the action input name.
 
 You can also specify the input values directly using the ` + "`" + `--values` + "`" + ` flag, delimited by a colon.
 These values will apply to all inserted rows, and will override the CSV column mappings.
@@ -49,7 +49,7 @@ func batchCmd() *cobra.Command {
 	var inputValueMappings []string // these override the csv column mappings
 
 	cmd := &cobra.Command{
-		Use:        "batch <procedure_or_action>",
+		Use:        "batch <action>",
 		Short:      "Batch execute an action using inputs from a CSV file.",
 		Long:       batchLong,
 		Example:    batchExample,
@@ -64,7 +64,7 @@ func batchCmd() *cobra.Command {
 
 				action, _, err := getSelectedAction(cmd, args)
 				if err != nil {
-					return display.PrintErr(cmd, fmt.Errorf("error getting selected action or procedure: %w", err))
+					return display.PrintErr(cmd, fmt.Errorf("error getting selected action: %w", err))
 				}
 
 				fileType, err := getFileType(filePath)

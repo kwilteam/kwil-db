@@ -873,7 +873,7 @@ func (i *interpreterPlanner) VisitActionStmtReturnNext(p0 *parse.ActionStmtRetur
 			return err
 		}
 
-		// we don't return an errReturn or mark done here because return next is not the last statement in a procedure.
+		// we don't return an errReturn or mark done here because return next is not the last statement in an action.
 		return nil
 	})
 }

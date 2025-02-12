@@ -195,12 +195,11 @@ const (
 	InternalEnginePGSchema = "kwild_engine"
 )
 
-// NamedType is a parameter in a procedure.
+// NamedType is a parameter in an action.
 type NamedType struct {
 	// Name is the name of the parameter.
 	// It should always be lower case.
-	// If it is a procedure parameter, it should begin
-	// with a $.
+	// If it is an action parameter, it should begin with a $.
 	Name string `json:"name"`
 	// Type is the type of the parameter.
 	Type *types.DataType `json:"type"`

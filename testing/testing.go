@@ -64,7 +64,7 @@ type SchemaTest struct {
 	// meant to seed the database with data. They are run after the
 	// SeedScripts.
 	SeedStatements []string `json:"seed_statements"`
-	// TestCases execute actions or procedures against the database
+	// TestCases execute actions against the database
 	// engine, taking certain inputs and expecting certain outputs or
 	// errors. These run separately from the functions, and separately
 	// from each other. They are the easiest way to test the database
@@ -268,28 +268,28 @@ var deployer = []byte("deployer")
 // A returned error signals a failed test.
 type TestFunc func(ctx context.Context, platform *Platform) error
 
-// TestCase executes an action or procedure against the database engine.
+// TestCase executes an action against the database engine.
 // It can be given inputs, expected outputs, expected error types,
 // and expected error messages.
 type TestCase struct {
 	// Name is a name that the test will be identified by if it fails.
 	Name string `json:"name"`
 	// Namespace is the name of the database schema to execute the
-	// action/procedure against.
+	// action against.
 	Namespace string `json:"namespace"`
-	// Action is the name of the action/procedure.
+	// Action is the name of the action.
 	Action string `json:"action"`
-	// Args are the inputs to the action/procedure.
-	// If the action/procedure takes no parameters, this should be nil.
+	// Args are the inputs to the action.
+	// If the action takes no parameters, this should be nil.
 	Args []any `json:"args"`
-	// Returns are the expected outputs of the action/procedure.
+	// Returns are the expected outputs of the action.
 	// It takes a two-dimensional array to model the output of a table.
-	// If the action/procedure has no outputs, this should be nil.
+	// If the action has no outputs, this should be nil.
 	Returns [][]any `json:"returns"`
 	// Err is the expected error type. If no error is expected, this
 	// should be nil.
 	Err error `json:"-"`
-	// ErrMsg will search the error returned by the action/procedure for
+	// ErrMsg will search the error returned by the action for
 	// the given substring. If no error is expected, this should be an
 	// empty string.
 	ErrMsg string `json:"error"`
@@ -309,7 +309,7 @@ func (e *TestCase) runExecution(ctx context.Context, platform *Platform) error {
 	}
 
 	// log to help users debug failed tests
-	platform.Logger.Logf(`executing action/procedure "%s" against namespace "%s"`, e.Action, e.Namespace)
+	platform.Logger.Logf(`executing action "%s" against namespace "%s"`, e.Action, e.Namespace)
 
 	var results [][]any
 	_, err := platform.Engine.Call(&common.EngineContext{
@@ -380,7 +380,7 @@ func (e *TestCase) runExecution(ctx context.Context, platform *Platform) error {
 // It allows users to access the database engine, get information about the
 // schema deployers, control transactions, or even directly access PostgreSQL.
 type Platform struct {
-	// Engine is the Kuneiform engine that can deploy schemas, execute actions/procedures,
+	// Engine is the Kuneiform engine that can deploy schemas, execute actions,
 	// execute adhoc SQL, and more. It should be the primary way to interact with the database.
 	Engine common.Engine
 	// DB is the database engine that the test case is running against.
@@ -390,10 +390,10 @@ type Platform struct {
 	// and guarantees determinism.
 	DB sql.DB
 	// Deployer is the public identifier of the user that deployed the schemas
-	// during test setup. It can be used to execute owner-only actions and procedures.
-	// To execute owner-only actions and procedures, set the Deployer to be the
+	// during test setup. It can be used to execute owner-only actions.
+	// To execute owner-only actions, set the Deployer to be the
 	// *common.ExecutionData.TransactionData.Signer field when executing the
-	// action/procedure.
+	// action.
 	Deployer []byte
 
 	// Logger is for logging information during execution of the test.

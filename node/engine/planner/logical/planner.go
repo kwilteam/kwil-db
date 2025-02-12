@@ -1230,7 +1230,7 @@ func (s *scopeContext) exprWithAggRewrite(node parse.Expression, currentRel *Rel
 			fields = append(fields, field)
 		}
 
-		// can be either a procedure call or a built-in function
+		// can be either an action call or a built-in function
 
 		if !ok {
 			return nil, nil, false, fmt.Errorf(`%w: "%s"`, ErrFunctionDoesNotExist, node.Name)

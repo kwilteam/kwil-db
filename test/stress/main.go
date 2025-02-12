@@ -75,7 +75,7 @@ func main() {
 
 	flag.BoolVar(&noErrActs, "ne", false, "don't make intentionally failed txns")
 
-	flag.IntVar(&maxPosters, "ec", 4, "max concurrent unconfirmed action and procedure executions (to get multiple tx in a block), split between actions and procedures")
+	flag.IntVar(&maxPosters, "ec", 4, "max concurrent unconfirmed action executions (to get multiple tx in a block)")
 	flag.DurationVar(&postInterval, "ei", 10*time.Millisecond,
 		"initiate non-view action execution at this interval (limited by max concurrency setting)")
 	flag.DurationVar(&viewInterval, "vi", -1, "make view action call at this interval")

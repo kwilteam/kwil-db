@@ -202,7 +202,7 @@ type MethodReturn struct {
 	Fields []PrecompileValue
 }
 
-// Modifier modifies the access to a procedure.
+// Modifier modifies the access to an action.
 type Modifier string
 
 const (
