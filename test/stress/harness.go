@@ -109,7 +109,7 @@ func (h *harness) recoverNonce(ctx context.Context) error {
 	return nil
 }
 
-func (h *harness) println(args ...any) {
+func (h *harness) println(args ...any) { //nolint:unused
 	if h.quiet {
 		return
 	}

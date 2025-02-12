@@ -260,15 +260,10 @@ func hammer(ctx context.Context) error {
 	//  - "Tx too large. Max size is 1048576, but got 4192304" a little less than 1MiB would be 1<<20 - 1e3
 	bigData := makeBigData(contentLen, h.printf)
 
-	if maxPosters%2 != 0 {
-		maxPosters++
-	}
-
 	// post (actions)
 	if maxPosters > 0 {
-		maxActPost := maxPosters / 2
 		operation := "create post (act)"
-		posters := make(chan struct{}, maxActPost)
+		posters := make(chan struct{}, maxPosters)
 		wg.Add(1)
 		go runLooped(ctx,
 			asyncFn(ctx, posters, h.printf, operation,
