@@ -670,6 +670,10 @@ func init() {
 							to := inputs[1].(string)
 							amount := inputs[2].(*types.Decimal)
 
+							if amount.IsNegative() {
+								return fmt.Errorf("amount cannot be negative")
+							}
+
 							from, err := ethAddressFromHex(ctx.TxContext.Caller)
 							if err != nil {
 								return err
@@ -697,6 +701,10 @@ func init() {
 							id := inputs[0].(*types.UUID)
 							amount := inputs[1].(*types.Decimal)
 
+							if amount.IsNegative() {
+								return fmt.Errorf("amount cannot be negative")
+							}
+
 							return SINGLETON.lockTokens(ctx.TxContext.Ctx, app, id, ctx.TxContext.Caller, amount)
 						},
 					},
@@ -714,6 +722,10 @@ func init() {
 							id := inputs[0].(*types.UUID)
 							user := inputs[1].(string)
 							amount := inputs[2].(*types.Decimal)
+
+							if amount.IsNegative() {
+								return fmt.Errorf("amount cannot be negative")
+							}
 
 							return SINGLETON.lockTokens(ctx.TxContext.Ctx, app, id, user, amount)
 						},
