@@ -79,7 +79,7 @@ func TestnetCmd() *cobra.Command {
 	cmd.Flags().StringVarP(&outDir, "out-dir", "o", ".testnet", "output directory for generated node root directories")
 	cmd.Flags().BoolVarP(&uniquePorts, "unique-ports", "u", false, "use unique ports for each node")
 	cmd.Flags().StringVar(&dbOwner, "db-owner", "", "owner of the database")
-	cmd.Flags().StringSliceVarP(&hostnames, "hostnames", "H", []string{}, "comma separated list of hostnames for the nodes")
+	cmd.Flags().StringSliceVarP(&hostnames, "hostnames", "H", nil, "comma separated list of hostnames for the nodes")
 	return cmd
 }
 
@@ -112,8 +112,9 @@ type ConfigOpts struct {
 
 // TODO: once changes to the tests are complete, this may not be needed
 func GenerateTestnetConfigs(cfg *TestnetConfig, opts *ConfigOpts) error {
-	if cfg.Hostnames != nil && len(cfg.Hostnames) != cfg.NumVals+cfg.NumNVals {
-		return fmt.Errorf("number of hostnames %d must be equal to number of validators + number of non-validators %d", len(cfg.Hostnames), cfg.NumVals+cfg.NumNVals)
+	if len(cfg.Hostnames) > 0 && len(cfg.Hostnames) != cfg.NumVals+cfg.NumNVals {
+		return fmt.Errorf("if set, the number of hostnames %d must be equal to number of validators + number of non-validators %d",
+			len(cfg.Hostnames), cfg.NumVals+cfg.NumNVals)
 	}
 
 	// ensure that the directory exists
