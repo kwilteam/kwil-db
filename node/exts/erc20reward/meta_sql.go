@@ -77,15 +77,13 @@ func finalizeEpoch(ctx context.Context, app *common.App, epochID *types.UUID, en
 }
 
 // confirmEpoch confirms an epoch was received on-chain
-//
-//lint:ignore U1000 This function is not used yet, but will be used in the future
-func confirmEpoch(ctx context.Context, app *common.App, epochID *types.UUID) error {
+func confirmEpoch(ctx context.Context, app *common.App, root []byte) error {
 	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
 	{kwil_erc20_meta}UPDATE epochs
 	SET confirmed = true
-	WHERE id = $id
+	WHERE reward_root = $root
 	`, map[string]any{
-		"id": epochID,
+		"root": root,
 	}, nil)
 }
 

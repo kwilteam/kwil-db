@@ -6,13 +6,14 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
+	"io"
 	"sort"
 	"strconv"
 	"time"
 
+	ethcommon "github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/ethereum/go-ethereum/rlp"
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/log"
@@ -186,7 +187,7 @@ type individualListener struct {
 }
 
 // GetBlockLogsFunc is a function that provides an ethereum client and a range of blocks and returns the logs for that range.
-type GetBlockLogsFunc func(ctx context.Context, client *ethclient.Client, startBlock, endBlock uint64, logger log.Logger) ([]ethtypes.Log, error)
+type GetBlockLogsFunc func(ctx context.Context, client *ethclient.Client, startBlock, endBlock uint64, logger log.Logger) ([]*EthLog, error)
 
 // listen listens for new blocks from the Ethereum chain and broadcasts them to the network.
 func (i *individualListener) listen(ctx context.Context, eventstore listeners.EventStore, logger log.Logger) error {
@@ -267,21 +268,16 @@ func (i *individualListener) processEvents(ctx context.Context, from, to int64, 
 		return nil
 	}
 
-	blocks := make(map[uint64][]ethtypes.Log)
+	blocks := make(map[uint64][]*EthLog)
 	blockOrder := make([]uint64, 0, len(blocks))
 
 	for _, log := range logs {
-		if len(log.Topics) == 0 {
-			logger.Debug("skipping log without topics", "log", log)
-			continue
-		}
-
-		_, ok := blocks[log.BlockNumber]
+		_, ok := blocks[log.Log.BlockNumber]
 		if !ok {
-			blockOrder = append(blockOrder, log.BlockNumber)
+			blockOrder = append(blockOrder, log.Log.BlockNumber)
 		}
 
-		blocks[log.BlockNumber] = append(blocks[log.BlockNumber], log)
+		blocks[log.Log.BlockNumber] = append(blocks[log.Log.BlockNumber], log)
 	}
 
 	lastUsed, err := getLastHeightWithEvent(ctx, eventStore, i.orderedSyncTopic)
@@ -300,10 +296,10 @@ func (i *individualListener) processEvents(ctx context.Context, from, to int64, 
 
 		// ensure we are ordered by tx index
 		sort.Slice(logs, func(i, j int) bool {
-			return logs[i].Index < logs[j].Index
+			return logs[i].Log.Index < logs[j].Log.Index
 		})
 
-		serLogs, err := serializeLogs(logs)
+		serLogs, err := serializeEthLogs(logs)
 		if err != nil {
 			return fmt.Errorf("failed to serialize logs: %w", err)
 		}
@@ -343,54 +339,139 @@ func (i *individualListener) processEvents(ctx context.Context, from, to int64, 
 	return setLastSeenHeight(ctx, eventStore, i.orderedSyncTopic, to)
 }
 
-// serializeLogs serializes the logs into a byte slice.
-func serializeLogs(logs []ethtypes.Log) ([]byte, error) {
-	res := new(bytes.Buffer)
-	for _, log := range logs {
-		buf := new(bytes.Buffer)
-		err := log.EncodeRLP(buf)
-		if err != nil {
-			return nil, fmt.Errorf("failed to encode log: %w", err)
-		}
+// serializeLog serializes an ethCommonLogCopy into a deterministic byte slice.
+func serializeLog(log *ethtypes.Log) ([]byte, error) {
+	buf := new(bytes.Buffer)
 
-		// write the length of the log
-		err = binary.Write(res, binary.BigEndian, int32(buf.Len()))
-		if err != nil {
-			return nil, fmt.Errorf("failed to write log length: %w", err)
-		}
+	// 1. Address (20 bytes)
+	if _, err := buf.Write(log.Address[:]); err != nil {
+		return nil, err
+	}
 
-		// write the log
-		_, err = res.Write(buf.Bytes())
-		if err != nil {
-			return nil, fmt.Errorf("failed to write log: %w", err)
+	// 2. Number of Topics (uint32) + Topics (each 32 bytes)
+	if err := binary.Write(buf, binary.BigEndian, uint32(len(log.Topics))); err != nil {
+		return nil, err
+	}
+	for _, topic := range log.Topics {
+		if _, err := buf.Write(topic[:]); err != nil {
+			return nil, err
 		}
 	}
 
-	return res.Bytes(), nil
+	// 3. Data length (uint32) + Data bytes
+	if err := binary.Write(buf, binary.BigEndian, uint32(len(log.Data))); err != nil {
+		return nil, err
+	}
+	if _, err := buf.Write(log.Data); err != nil {
+		return nil, err
+	}
+
+	// 4. BlockNumber (uint64)
+	if err := binary.Write(buf, binary.BigEndian, log.BlockNumber); err != nil {
+		return nil, err
+	}
+
+	// 5. TxHash (32 bytes)
+	if _, err := buf.Write(log.TxHash[:]); err != nil {
+		return nil, err
+	}
+
+	// 6. TxIndex (uint32)
+	if err := binary.Write(buf, binary.BigEndian, uint32(log.TxIndex)); err != nil {
+		return nil, err
+	}
+
+	// 7. BlockHash (32 bytes)
+	if _, err := buf.Write(log.BlockHash[:]); err != nil {
+		return nil, err
+	}
+
+	// 8. Index (uint32)
+	if err := binary.Write(buf, binary.BigEndian, uint32(log.Index)); err != nil {
+		return nil, err
+	}
+
+	// 9. Removed (1 byte: 0 or 1)
+	removedByte := byte(0)
+	if log.Removed {
+		removedByte = 1
+	}
+	if err := buf.WriteByte(removedByte); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
 }
 
-// deserializeLogs deserializes the logs from a byte slice.
-func deserializeLogs(bts []byte) ([]ethtypes.Log, error) {
-	res := make([]ethtypes.Log, 0)
-	buf := bytes.NewBuffer(bts)
-	for buf.Len() > 0 {
-		var logLen int32
-		err := binary.Read(buf, binary.BigEndian, &logLen)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read log length: %w", err)
-		}
+// deserializeLog deserializes the bytes back into an ethCommonLogCopy.
+func deserializeLog(data []byte) (*ethtypes.Log, error) {
+	log := &ethtypes.Log{}
+	buf := bytes.NewReader(data)
 
-		logBts := buf.Next(int(logLen))
-		log := ethtypes.Log{}
-		err = rlp.DecodeBytes(logBts, &log)
-		if err != nil {
-			return nil, fmt.Errorf("failed to decode log: %w", err)
-		}
-
-		res = append(res, log)
+	// 1. Address (20 bytes)
+	if _, err := io.ReadFull(buf, log.Address[:]); err != nil {
+		return nil, err
 	}
 
-	return res, nil
+	// 2. Number of Topics (uint32) + Topics (each 32 bytes)
+	var topicCount uint32
+	if err := binary.Read(buf, binary.BigEndian, &topicCount); err != nil {
+		return nil, err
+	}
+	log.Topics = make([]ethcommon.Hash, topicCount)
+	for i := 0; i < int(topicCount); i++ {
+		if _, err := io.ReadFull(buf, log.Topics[i][:]); err != nil {
+			return nil, err
+		}
+	}
+
+	// 3. Data length (uint32) + Data bytes
+	var dataLen uint32
+	if err := binary.Read(buf, binary.BigEndian, &dataLen); err != nil {
+		return nil, err
+	}
+	log.Data = make([]byte, dataLen)
+	if _, err := io.ReadFull(buf, log.Data); err != nil {
+		return nil, err
+	}
+
+	// 4. BlockNumber (uint64)
+	if err := binary.Read(buf, binary.BigEndian, &log.BlockNumber); err != nil {
+		return nil, err
+	}
+
+	// 5. TxHash (32 bytes)
+	if _, err := io.ReadFull(buf, log.TxHash[:]); err != nil {
+		return nil, err
+	}
+
+	// 6. TxIndex (uint32)
+	var txIndex uint32
+	if err := binary.Read(buf, binary.BigEndian, &txIndex); err != nil {
+		return nil, err
+	}
+	log.TxIndex = uint(txIndex)
+
+	// 7. BlockHash (32 bytes)
+	if _, err := io.ReadFull(buf, log.BlockHash[:]); err != nil {
+		return nil, err
+	}
+
+	// 8. Index (uint32)
+	var idx uint32
+	if err := binary.Read(buf, binary.BigEndian, &idx); err != nil {
+		return nil, err
+	}
+	log.Index = uint(idx)
+
+	// 9. Removed (1 byte: 0 or 1)
+	removedByte, err := buf.ReadByte()
+	if err != nil {
+		return nil, err
+	}
+	log.Removed = removedByte == 1
+
+	return log, nil
 }
 
 var (

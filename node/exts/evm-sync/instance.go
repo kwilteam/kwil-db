@@ -1,7 +1,9 @@
 package evmsync
 
 import (
+	"bytes"
 	"context"
+	"encoding/binary"
 	"fmt"
 	"sync"
 
@@ -24,7 +26,7 @@ func RegisterEventResolution(name string, resolve ResolveFunc) {
 	registeredResolutions[name] = resolve
 
 	orderedsync.RegisterResolveFunc(name, func(ctx context.Context, app *common.App, block *common.BlockContext, res *orderedsync.ResolutionMessage) error {
-		logs, err := deserializeLogs(res.Data)
+		logs, err := deserializeEthLogs(res.Data)
 		if err != nil {
 			return err
 		}
@@ -183,7 +185,7 @@ func (l *globalListenerManager) listen(ctx context.Context, service *common.Serv
 	return nil
 }
 
-type ResolveFunc func(ctx context.Context, app *common.App, block *common.BlockContext, uniqueName string, logs []ethtypes.Log) error
+type ResolveFunc func(ctx context.Context, app *common.App, block *common.BlockContext, uniqueName string, logs []*EthLog) error
 
 type listenerInfo struct {
 	// done is a channel that is closed when the listener is done
@@ -228,4 +230,136 @@ func (l *listenerInfo) listen(ctx context.Context, service *common.Service, even
 	if err != nil {
 		logger.Error("error listening", "err", err)
 	}
+}
+
+// EthLog holds information about an Ethereum log.
+type EthLog struct {
+	// Metadata is arbitrary metadata that can be set by the extension.
+	Metadata []byte
+	// Log is the go-ethereum log.
+	Log *ethtypes.Log
+}
+
+func (e *EthLog) MarshalBinary() ([]byte, error) {
+	buf := bytes.Buffer{}
+
+	// Write the metadata length
+	err := binary.Write(&buf, binary.BigEndian, uint64(len(e.Metadata)))
+	if err != nil {
+		return nil, err
+	}
+
+	// Write the metadata
+	_, err = buf.Write(e.Metadata)
+	if err != nil {
+		return nil, err
+	}
+
+	logBts, err := serializeLog(e.Log)
+	if err != nil {
+		return nil, err
+	}
+
+	// Write the log length
+	err = binary.Write(&buf, binary.BigEndian, uint64(len(logBts)))
+	if err != nil {
+		return nil, err
+	}
+
+	// Write the log
+	_, err = buf.Write(logBts)
+	if err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
+}
+
+func (e *EthLog) UnmarshalBinary(data []byte) error {
+	buf := bytes.NewBuffer(data)
+
+	// Read the metadata length
+	var metadataLen uint64
+	err := binary.Read(buf, binary.BigEndian, &metadataLen)
+	if err != nil {
+		return err
+	}
+
+	// Read the metadata
+	e.Metadata = make([]byte, metadataLen)
+	_, err = buf.Read(e.Metadata)
+	if err != nil {
+		return err
+	}
+
+	// Read the log length
+	var logLen uint64
+	err = binary.Read(buf, binary.BigEndian, &logLen)
+	if err != nil {
+		return err
+	}
+
+	// Read the log
+	logBts := make([]byte, logLen)
+	_, err = buf.Read(logBts)
+	if err != nil {
+		return err
+	}
+
+	e.Log, err = deserializeLog(logBts)
+	return err
+}
+
+func serializeEthLogs(logs []*EthLog) ([]byte, error) {
+	buf := bytes.Buffer{}
+	for _, log := range logs {
+		logBts, err := log.MarshalBinary()
+		if err != nil {
+			return nil, err
+		}
+
+		// Write the log length
+		err = binary.Write(&buf, binary.BigEndian, uint64(len(logBts)))
+		if err != nil {
+			return nil, err
+		}
+
+		// Write the log
+		_, err = buf.Write(logBts)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return buf.Bytes(), nil
+}
+
+func deserializeEthLogs(data []byte) ([]*EthLog, error) {
+	buf := bytes.NewBuffer(data)
+	logs := []*EthLog{}
+	for buf.Len() > 0 {
+		// Read the log length
+		var logLen uint64
+		err := binary.Read(buf, binary.BigEndian, &logLen)
+		if err != nil {
+			return nil, err
+		}
+
+		// Read the log
+		logBts := make([]byte, logLen)
+		_, err = buf.Read(logBts)
+		if err != nil {
+			return nil, err
+		}
+
+		log := &EthLog{}
+		err = log.UnmarshalBinary(logBts)
+		if err != nil {
+			return nil, err
+		}
+
+		logs = append(logs, log)
+	}
+
+	return logs, nil
 }
