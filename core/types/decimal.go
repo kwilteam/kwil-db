@@ -204,6 +204,60 @@ func (d *Decimal) String() string {
 	return d.dec.String()
 }
 
+// FullString returns the full string representation of the decimal.
+// It will never return scientific notation.
+func (d *Decimal) FullString() string {
+	bigint := d.dec.Coeff.MathBigInt()
+	str := formatBigInt(bigint, int(d.scale))
+	if d.dec.Negative {
+		str = "-" + str
+	}
+	return str
+}
+
+// FormatBigInt formats a big integer according to precision and scale
+func formatBigInt(n *big.Int, scale int) string {
+	str := n.String() // Convert big.Int to string
+
+	// Handle negative numbers
+	isNegative := false
+	if str[0] == '-' {
+		isNegative = true
+		str = str[1:] // Remove the negative sign for now
+	}
+
+	// Ensure the number is at least scale+1 digits long
+	for len(str) <= scale {
+		str = "0" + str
+	}
+
+	// Insert decimal point at the correct place
+	intPart := str[:len(str)-scale]
+	fracPart := str[len(str)-scale:]
+
+	// Ensure correct scale by padding with trailing zeros if necessary
+	for len(fracPart) < scale {
+		fracPart += "0"
+	}
+
+	// Trim unnecessary leading zeros from the integer part
+	if intPart == "" {
+		intPart = "0"
+	}
+
+	// Construct the final formatted number
+	result := intPart
+	if scale > 0 {
+		result += "." + fracPart
+	}
+
+	if isNegative {
+		result = "-" + result
+	}
+
+	return result
+}
+
 // setPrecision sets the precision of the decimal.
 // The precision must be between 1 and 1000.
 func (d *Decimal) setPrecision(precision uint16) error {

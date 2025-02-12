@@ -7,8 +7,9 @@ import (
 
 func Test_PolledEventRoundTrip(t *testing.T) {
 	original := polledEvent{
-		UniqueName: "TestPoll",
-		Data:       []byte("Hello, Blockchain"),
+		UniqueName:     "TestPoll",
+		Data:           []byte("Hello, Blockchain"),
+		ResolutionName: "TestResolution",
 	}
 
 	// Marshal

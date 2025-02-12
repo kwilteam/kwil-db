@@ -228,6 +228,7 @@ func init() {
 		info.synced = true
 		info.syncedAt = block.Height
 		info.syncedRewardData = data
+		info.ownedBalance = types.MustParseDecimalExplicit("0", 78, 0)
 
 		err = evmsync.StatePoller.UnregisterPoll(uniqueName)
 		if err != nil {
@@ -399,6 +400,7 @@ func init() {
 										DistributionPeriod: int64(dur.Seconds()),
 									},
 									currentEpoch: firstEpoch,
+									active:       true,
 								}
 
 								info.mu.RLock()
@@ -566,7 +568,7 @@ func init() {
 						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
 						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 							return SINGLETON.ForEachInstance(true, func(id *types.UUID, info *rewardExtensionInfo) error {
-								return resultFn([]any{id, info.userProvidedData.ChainInfo, info.userProvidedData.EscrowAddress.Hex()})
+								return resultFn([]any{id, info.userProvidedData.ChainInfo.Name.String(), info.userProvidedData.EscrowAddress.Hex()})
 							})
 						},
 					},
@@ -816,7 +818,23 @@ func init() {
 								return err
 							}
 
-							return resultFn([]any{bal.String()})
+							info, ok := SINGLETON.instances.Get(*id)
+							if !ok {
+								return fmt.Errorf("reward extension with id %s not found", id)
+							}
+
+							// adjust the balance to the user's decimals
+							info.mu.RLock()
+							scaled, err := scaleDownUint256(bal, uint16(info.Erc20Decimals))
+							info.mu.RUnlock()
+							if err != nil {
+								return err
+							}
+
+							// TODO: we can just do []any{scaled.String()} here
+							str := scaled.FullString()
+
+							return resultFn([]any{str})
 						},
 					},
 					{
@@ -1351,7 +1369,8 @@ func (r *rewardExtensionInfo) startStatePoller() error {
 	chainName := r.ChainInfo.Name
 
 	return evmsync.StatePoller.RegisterPoll(evmsync.PollConfig{
-		Chain: chainName,
+		Chain:          chainName,
+		ResolutionName: statePollResolutionName,
 		PollFunc: func(ctx context.Context, service *common.Service, eventstore listeners.EventKV, broadcast func(context.Context, []byte) error, client *ethclient.Client) {
 			// It is _very_ important that we do not change the state of the struct here.
 			// This function runs external to consensus, so we must not change the state of the struct.
@@ -1417,8 +1436,11 @@ func (r *rewardExtensionInfo) startTransferListener(ctx context.Context, app *co
 			for iter.Next() {
 				logs = append(logs, iter.Event.Raw)
 			}
+			if err := iter.Error(); err != nil {
+				return nil, fmt.Errorf("failed to get transfer logs: %w", err)
+			}
 
-			return logs, iter.Error()
+			return logs, nil
 		},
 		Resolve: transferEventResolutionName,
 	})

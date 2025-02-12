@@ -712,3 +712,53 @@ func TestDecimalJSONRoundTrip(t *testing.T) {
 	assert.Equal(t, original.Precision(), unmarshaled.Precision())
 	assert.Equal(t, original.Scale(), unmarshaled.Scale())
 }
+
+func TestFullString(t *testing.T) {
+	t.Run("very big number", func(t *testing.T) {
+		dec := types.MustParseDecimal("1234567890123456789012345678901234567890.0987654321")
+		str := dec.FullString()
+		assert.Equal(t, "1234567890123456789012345678901234567890.0987654321", str)
+	})
+
+	t.Run("very small number", func(t *testing.T) {
+		dec := types.MustParseDecimal("0.0000000000000000000000000000000000000000001")
+		str := dec.FullString()
+		assert.Equal(t, "0.0000000000000000000000000000000000000000001", str)
+	})
+
+	t.Run("large integer", func(t *testing.T) {
+		dec := types.MustParseDecimal("1234567890123456789012345678901234567890")
+		str := dec.FullString()
+		assert.Equal(t, "1234567890123456789012345678901234567890", str)
+	})
+
+	t.Run("negative number", func(t *testing.T) {
+		dec := types.MustParseDecimal("-1234567890123456789012345678901234567890.0987654321")
+		str := dec.FullString()
+		assert.Equal(t, "-1234567890123456789012345678901234567890.0987654321", str)
+	})
+
+	t.Run("negative large integer", func(t *testing.T) {
+		dec := types.MustParseDecimal("-1234567890123456789012345678901234567890")
+		str := dec.FullString()
+		assert.Equal(t, "-1234567890123456789012345678901234567890", str)
+	})
+
+	t.Run("negative very small number", func(t *testing.T) {
+		dec := types.MustParseDecimal("-0.0000000000000000000000000000000000000000001")
+		str := dec.FullString()
+		assert.Equal(t, "-0.0000000000000000000000000000000000000000001", str)
+	})
+
+	t.Run("zero", func(t *testing.T) {
+		dec := types.MustParseDecimal("0")
+		str := dec.FullString()
+		assert.Equal(t, "0", str)
+	})
+
+	t.Run("explicit precision and scale", func(t *testing.T) {
+		dec := types.MustParseDecimalExplicit("123.456", 100, 4)
+		str := dec.FullString()
+		assert.Equal(t, "123.4560", str)
+	})
+}

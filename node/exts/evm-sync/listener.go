@@ -263,6 +263,10 @@ func (i *individualListener) processEvents(ctx context.Context, from, to int64, 
 		return err
 	}
 
+	if len(logs) == 0 {
+		return nil
+	}
+
 	blocks := make(map[uint64][]ethtypes.Log)
 	blockOrder := make([]uint64, 0, len(blocks))
 

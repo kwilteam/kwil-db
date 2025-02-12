@@ -63,9 +63,7 @@ var registered = make(map[string]ResolveFunc)
 // It can be called many times, but each time must have a different suffix.
 // It should be called in init.
 func init() {
-	extName := ExtensionName
-
-	err := resolutions.RegisterResolution(extName+"_resolution", resolutions.ModAdd, resolutions.ResolutionConfig{
+	err := resolutions.RegisterResolution(ExtensionName, resolutions.ModAdd, resolutions.ResolutionConfig{
 		RefundThreshold:       big.NewRat(1, 3),
 		ConfirmationThreshold: big.NewRat(1, 2),
 		ExpirationPeriod:      1 * time.Hour,
@@ -83,12 +81,12 @@ func init() {
 		panic(err)
 	}
 
-	err = hooks.RegisterEngineReadyHook(extName+"_engine_ready_hook", Synchronizer.readTopicInfoOnStartup)
+	err = hooks.RegisterEngineReadyHook(ExtensionName+"_engine_ready_hook", Synchronizer.readTopicInfoOnStartup)
 	if err != nil {
 		panic(err)
 	}
 
-	err = hooks.RegisterGenesisHook(extName+"_genesis_hook", func(ctx context.Context, app *common.App, chain *common.ChainContext) error {
+	err = hooks.RegisterGenesisHook(ExtensionName+"_genesis_hook", func(ctx context.Context, app *common.App, chain *common.ChainContext) error {
 		version, notYetSet, err := getVersion(ctx, app)
 		if err != nil {
 			return err
@@ -117,7 +115,7 @@ func init() {
 		panic(err)
 	}
 
-	err = hooks.RegisterEndBlockHook(extName+"_end_block_hook", Synchronizer.resolve)
+	err = hooks.RegisterEndBlockHook(ExtensionName+"_end_block_hook", Synchronizer.resolve)
 	if err != nil {
 		panic(err)
 	}
