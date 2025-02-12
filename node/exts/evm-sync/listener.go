@@ -419,7 +419,7 @@ func deserializeLog(data []byte) (*ethtypes.Log, error) {
 		return nil, err
 	}
 	log.Topics = make([]ethcommon.Hash, topicCount)
-	for i := 0; i < int(topicCount); i++ {
+	for i := range int(topicCount) {
 		if _, err := io.ReadFull(buf, log.Topics[i][:]); err != nil {
 			return nil, err
 		}

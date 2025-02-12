@@ -77,7 +77,6 @@ func TestSerializeDeserializeEthLogs(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		t.Run(tc.name, func(t *testing.T) {
 			serialized, err := serializeEthLogs(tc.input)
 			require.NoError(t, err, "serializeEthLogs should not fail")
@@ -173,7 +172,6 @@ func TestSerializeDeserializeLog(t *testing.T) {
 	}
 
 	for _, tt := range tests {
-		tt := tt // Capture range variable.
 		t.Run(tt.name, func(t *testing.T) {
 			// Serialize
 			serialized, err := serializeLog(&tt.log)
