@@ -551,11 +551,12 @@ func (n *Node) ChainTx(hash types.Hash) (*chainTypes.Tx, error) {
 
 // ChainUnconfirmedTx return unconfirmed tx info that is used in Chain rpc.
 func (n *Node) ChainUnconfirmedTx(limit int) (int, []types.NamedTx) {
-	total := n.mp.Size()
+	total, _ := n.mp.Size()
 	if limit <= 0 {
 		return total, nil
 	}
-	return n.mp.Size(), n.mp.PeekN(limit)
+	// max 8 MB (TODO consider RPC max request size, possible request field)
+	return total, n.mp.PeekN(limit, 8_000_000)
 }
 
 func (n *Node) BlockHeight() int64 {
