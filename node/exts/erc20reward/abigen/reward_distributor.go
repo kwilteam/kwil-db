@@ -31,7 +31,7 @@ var (
 
 // RewardDistributorMetaData contains all meta data concerning the RewardDistributor contract.
 var RewardDistributorMetaData = &bind.MetaData{
-	ABI: "[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_safe\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"_posterFee\",\"type\":\"uint256\"},{\"internalType\":\"address\",\"name\":\"_rewardToken\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[],\"name\":\"ReentrancyGuardReentrantCall\",\"type\":\"error\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"newFee\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"nonce\",\"type\":\"uint256\"}],\"name\":\"PosterFeeUpdated\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"recipient\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"claimer\",\"type\":\"address\"}],\"name\":\"RewardClaimed\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes32\",\"name\":\"root\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"poster\",\"type\":\"address\"}],\"name\":\"RewardPosted\",\"type\":\"event\"},{\"stateMutability\":\"payable\",\"type\":\"fallback\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"recipient\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"internalType\":\"bytes32\",\"name\":\"kwilBlockHash\",\"type\":\"bytes32\"},{\"internalType\":\"bytes32\",\"name\":\"rewardRoot\",\"type\":\"bytes32\"},{\"internalType\":\"bytes32[]\",\"name\":\"proofs\",\"type\":\"bytes32[]\"}],\"name\":\"claimReward\",\"outputs\":[],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"\",\"type\":\"bytes32\"},{\"internalType\":\"bytes32\",\"name\":\"\",\"type\":\"bytes32\"}],\"name\":\"isRewardClaimed\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"nonce\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"root\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"postReward\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"postedRewards\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"posterFee\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"\",\"type\":\"bytes32\"}],\"name\":\"rewardPoster\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"rewardToken\",\"outputs\":[{\"internalType\":\"contractIERC20\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"safe\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"unpostedRewards\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"newFee\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"_nonce\",\"type\":\"uint256\"}],\"name\":\"updatePosterFee\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"stateMutability\":\"payable\",\"type\":\"receive\"}]",
+	ABI: "[{\"inputs\":[],\"name\":\"ReentrancyGuardReentrantCall\",\"type\":\"error\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"oldFee\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"newFee\",\"type\":\"uint256\"}],\"name\":\"PosterFeeUpdated\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"recipient\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"claimer\",\"type\":\"address\"}],\"name\":\"RewardClaimed\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"bytes32\",\"name\":\"root\",\"type\":\"bytes32\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"poster\",\"type\":\"address\"}],\"name\":\"RewardPosted\",\"type\":\"event\"},{\"stateMutability\":\"payable\",\"type\":\"fallback\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"recipient\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"},{\"internalType\":\"bytes32\",\"name\":\"kwilBlockHash\",\"type\":\"bytes32\"},{\"internalType\":\"bytes32\",\"name\":\"rewardRoot\",\"type\":\"bytes32\"},{\"internalType\":\"bytes32[]\",\"name\":\"proofs\",\"type\":\"bytes32[]\"}],\"name\":\"claimReward\",\"outputs\":[],\"stateMutability\":\"payable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"\",\"type\":\"bytes32\"},{\"internalType\":\"bytes32\",\"name\":\"\",\"type\":\"bytes32\"}],\"name\":\"isRewardClaimed\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"root\",\"type\":\"bytes32\"},{\"internalType\":\"uint256\",\"name\":\"amount\",\"type\":\"uint256\"}],\"name\":\"postReward\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"postedRewards\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"posterFee\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"bytes32\",\"name\":\"\",\"type\":\"bytes32\"}],\"name\":\"rewardPoster\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"rewardToken\",\"outputs\":[{\"internalType\":\"contractIERC20\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"safe\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_safe\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"_posterFee\",\"type\":\"uint256\"},{\"internalType\":\"address\",\"name\":\"_rewardToken\",\"type\":\"address\"}],\"name\":\"setup\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"unpostedRewards\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"newFee\",\"type\":\"uint256\"}],\"name\":\"updatePosterFee\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"stateMutability\":\"payable\",\"type\":\"receive\"}]",
 }
 
 // RewardDistributorABI is the input ABI used to generate the binding from.
@@ -209,37 +209,6 @@ func (_RewardDistributor *RewardDistributorSession) IsRewardClaimed(arg0 [32]byt
 // Solidity: function isRewardClaimed(bytes32 , bytes32 ) view returns(bool)
 func (_RewardDistributor *RewardDistributorCallerSession) IsRewardClaimed(arg0 [32]byte, arg1 [32]byte) (bool, error) {
 	return _RewardDistributor.Contract.IsRewardClaimed(&_RewardDistributor.CallOpts, arg0, arg1)
-}
-
-// Nonce is a free data retrieval call binding the contract method 0xaffed0e0.
-//
-// Solidity: function nonce() view returns(uint256)
-func (_RewardDistributor *RewardDistributorCaller) Nonce(opts *bind.CallOpts) (*big.Int, error) {
-	var out []interface{}
-	err := _RewardDistributor.contract.Call(opts, &out, "nonce")
-
-	if err != nil {
-		return *new(*big.Int), err
-	}
-
-	out0 := *abi.ConvertType(out[0], new(*big.Int)).(**big.Int)
-
-	return out0, err
-
-}
-
-// Nonce is a free data retrieval call binding the contract method 0xaffed0e0.
-//
-// Solidity: function nonce() view returns(uint256)
-func (_RewardDistributor *RewardDistributorSession) Nonce() (*big.Int, error) {
-	return _RewardDistributor.Contract.Nonce(&_RewardDistributor.CallOpts)
-}
-
-// Nonce is a free data retrieval call binding the contract method 0xaffed0e0.
-//
-// Solidity: function nonce() view returns(uint256)
-func (_RewardDistributor *RewardDistributorCallerSession) Nonce() (*big.Int, error) {
-	return _RewardDistributor.Contract.Nonce(&_RewardDistributor.CallOpts)
 }
 
 // PostedRewards is a free data retrieval call binding the contract method 0x122d52de.
@@ -470,25 +439,46 @@ func (_RewardDistributor *RewardDistributorTransactorSession) PostReward(root [3
 	return _RewardDistributor.Contract.PostReward(&_RewardDistributor.TransactOpts, root, amount)
 }
 
-// UpdatePosterFee is a paid mutator transaction binding the contract method 0xe08b22fa.
+// Setup is a paid mutator transaction binding the contract method 0xf00e5686.
 //
-// Solidity: function updatePosterFee(uint256 newFee, uint256 _nonce) returns()
-func (_RewardDistributor *RewardDistributorTransactor) UpdatePosterFee(opts *bind.TransactOpts, newFee *big.Int, _nonce *big.Int) (*types.Transaction, error) {
-	return _RewardDistributor.contract.Transact(opts, "updatePosterFee", newFee, _nonce)
+// Solidity: function setup(address _safe, uint256 _posterFee, address _rewardToken) returns()
+func (_RewardDistributor *RewardDistributorTransactor) Setup(opts *bind.TransactOpts, _safe common.Address, _posterFee *big.Int, _rewardToken common.Address) (*types.Transaction, error) {
+	return _RewardDistributor.contract.Transact(opts, "setup", _safe, _posterFee, _rewardToken)
 }
 
-// UpdatePosterFee is a paid mutator transaction binding the contract method 0xe08b22fa.
+// Setup is a paid mutator transaction binding the contract method 0xf00e5686.
 //
-// Solidity: function updatePosterFee(uint256 newFee, uint256 _nonce) returns()
-func (_RewardDistributor *RewardDistributorSession) UpdatePosterFee(newFee *big.Int, _nonce *big.Int) (*types.Transaction, error) {
-	return _RewardDistributor.Contract.UpdatePosterFee(&_RewardDistributor.TransactOpts, newFee, _nonce)
+// Solidity: function setup(address _safe, uint256 _posterFee, address _rewardToken) returns()
+func (_RewardDistributor *RewardDistributorSession) Setup(_safe common.Address, _posterFee *big.Int, _rewardToken common.Address) (*types.Transaction, error) {
+	return _RewardDistributor.Contract.Setup(&_RewardDistributor.TransactOpts, _safe, _posterFee, _rewardToken)
 }
 
-// UpdatePosterFee is a paid mutator transaction binding the contract method 0xe08b22fa.
+// Setup is a paid mutator transaction binding the contract method 0xf00e5686.
 //
-// Solidity: function updatePosterFee(uint256 newFee, uint256 _nonce) returns()
-func (_RewardDistributor *RewardDistributorTransactorSession) UpdatePosterFee(newFee *big.Int, _nonce *big.Int) (*types.Transaction, error) {
-	return _RewardDistributor.Contract.UpdatePosterFee(&_RewardDistributor.TransactOpts, newFee, _nonce)
+// Solidity: function setup(address _safe, uint256 _posterFee, address _rewardToken) returns()
+func (_RewardDistributor *RewardDistributorTransactorSession) Setup(_safe common.Address, _posterFee *big.Int, _rewardToken common.Address) (*types.Transaction, error) {
+	return _RewardDistributor.Contract.Setup(&_RewardDistributor.TransactOpts, _safe, _posterFee, _rewardToken)
+}
+
+// UpdatePosterFee is a paid mutator transaction binding the contract method 0xb19050bd.
+//
+// Solidity: function updatePosterFee(uint256 newFee) returns()
+func (_RewardDistributor *RewardDistributorTransactor) UpdatePosterFee(opts *bind.TransactOpts, newFee *big.Int) (*types.Transaction, error) {
+	return _RewardDistributor.contract.Transact(opts, "updatePosterFee", newFee)
+}
+
+// UpdatePosterFee is a paid mutator transaction binding the contract method 0xb19050bd.
+//
+// Solidity: function updatePosterFee(uint256 newFee) returns()
+func (_RewardDistributor *RewardDistributorSession) UpdatePosterFee(newFee *big.Int) (*types.Transaction, error) {
+	return _RewardDistributor.Contract.UpdatePosterFee(&_RewardDistributor.TransactOpts, newFee)
+}
+
+// UpdatePosterFee is a paid mutator transaction binding the contract method 0xb19050bd.
+//
+// Solidity: function updatePosterFee(uint256 newFee) returns()
+func (_RewardDistributor *RewardDistributorTransactorSession) UpdatePosterFee(newFee *big.Int) (*types.Transaction, error) {
+	return _RewardDistributor.Contract.UpdatePosterFee(&_RewardDistributor.TransactOpts, newFee)
 }
 
 // Fallback is a paid mutator transaction binding the contract fallback function.
@@ -602,14 +592,14 @@ func (it *RewardDistributorPosterFeeUpdatedIterator) Close() error {
 
 // RewardDistributorPosterFeeUpdated represents a PosterFeeUpdated event raised by the RewardDistributor contract.
 type RewardDistributorPosterFeeUpdated struct {
+	OldFee *big.Int
 	NewFee *big.Int
-	Nonce  *big.Int
 	Raw    types.Log // Blockchain specific contextual infos
 }
 
 // FilterPosterFeeUpdated is a free log retrieval operation binding the contract event 0x7c7423dff6eff60ac491456a649034ee92866801bb236290a4b9190e370e8952.
 //
-// Solidity: event PosterFeeUpdated(uint256 newFee, uint256 nonce)
+// Solidity: event PosterFeeUpdated(uint256 oldFee, uint256 newFee)
 func (_RewardDistributor *RewardDistributorFilterer) FilterPosterFeeUpdated(opts *bind.FilterOpts) (*RewardDistributorPosterFeeUpdatedIterator, error) {
 
 	logs, sub, err := _RewardDistributor.contract.FilterLogs(opts, "PosterFeeUpdated")
@@ -621,7 +611,7 @@ func (_RewardDistributor *RewardDistributorFilterer) FilterPosterFeeUpdated(opts
 
 // WatchPosterFeeUpdated is a free log subscription operation binding the contract event 0x7c7423dff6eff60ac491456a649034ee92866801bb236290a4b9190e370e8952.
 //
-// Solidity: event PosterFeeUpdated(uint256 newFee, uint256 nonce)
+// Solidity: event PosterFeeUpdated(uint256 oldFee, uint256 newFee)
 func (_RewardDistributor *RewardDistributorFilterer) WatchPosterFeeUpdated(opts *bind.WatchOpts, sink chan<- *RewardDistributorPosterFeeUpdated) (event.Subscription, error) {
 
 	logs, sub, err := _RewardDistributor.contract.WatchLogs(opts, "PosterFeeUpdated")
@@ -658,7 +648,7 @@ func (_RewardDistributor *RewardDistributorFilterer) WatchPosterFeeUpdated(opts 
 
 // ParsePosterFeeUpdated is a log parse operation binding the contract event 0x7c7423dff6eff60ac491456a649034ee92866801bb236290a4b9190e370e8952.
 //
-// Solidity: event PosterFeeUpdated(uint256 newFee, uint256 nonce)
+// Solidity: event PosterFeeUpdated(uint256 oldFee, uint256 newFee)
 func (_RewardDistributor *RewardDistributorFilterer) ParsePosterFeeUpdated(log types.Log) (*RewardDistributorPosterFeeUpdated, error) {
 	event := new(RewardDistributorPosterFeeUpdated)
 	if err := _RewardDistributor.contract.UnpackLog(event, "PosterFeeUpdated", log); err != nil {
