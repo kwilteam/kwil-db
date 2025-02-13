@@ -298,9 +298,10 @@ func init() {
 					// we dont need to worry about locking the instances yet
 					// because we just read them from the db
 					for _, instance := range instances {
-						if _, ok := SINGLETON.instances.Get(*instance.ID); ok {
-							return fmt.Errorf("internal bug: duplicate instance id %s", instance.ID)
-						}
+						fmt.Println("yaiba =======instance", instance.ID.String())
+						//if _, ok := SINGLETON.instances.Get(*instance.ID); ok {
+						//	return fmt.Errorf("internal bug: duplicate instance id %s", instance.ID)
+						//}
 
 						// if instance is active, we should start one of its
 						// two listeners. If it is synced, we should start the
@@ -1004,7 +1005,7 @@ func init() {
 									}
 								}
 
-								return resultFn([]any{e.ID, e.StartHeight, e.StartTime.Unix(), *e.EndHeight, e.Root, e.BlockHash,
+								return resultFn([]any{e.ID, e.StartHeight, e.StartTime, *e.EndHeight, e.Root, e.BlockHash,
 									voters,
 									e.VoteNonces,
 								})
@@ -1155,50 +1156,96 @@ func init() {
 		err := SINGLETON.ForEachInstance(true, func(id *types.UUID, info *rewardExtensionInfo) error {
 			info.mu.RLock()
 			defer info.mu.RUnlock()
-			// if the block is greater than or equal to the start time + distribution period,
-			// we should propose a new epoch. Otherwise, we should do nothing.
-			if block.Timestamp < info.currentEpoch.StartTime.Add(time.Duration(info.userProvidedData.DistributionPeriod)*time.Second).Unix() {
+			// If the block is greater than or equal to the start time + distribution period:
+			// First if current epoch is not finalized, finalized; if so, jump to next stop
+			// Then  if current epoch is finalized but not confirmed, skip; if so, create new epoch
+			// Otherwise, we should do nothing.
+
+			// Lifecycle of an epoch
+			// - created, all issurance will assicoated with this epoch
+			// - finalized, end of block hook will finalize it when epoch period is reach
+			// - confirmed, offchain PosterSvc will post finalized epoch on EVM chain, then oracle sync back as confirmed
+
+			fmt.Println("yaiba ===== epoch", info.currentEpoch.ID)
+			fmt.Println("yaiba ==== block timestamp: ", block.Timestamp)
+			fmt.Println("yaiba ==== epoch start.     ", info.currentEpoch.StartTime)
+			fmt.Println("yaiba ==== epoch period(s)  ", info.userProvidedData.DistributionPeriod)
+			if block.Timestamp-info.currentEpoch.StartTime < info.userProvidedData.DistributionPeriod {
+				return nil
+			}
+			//
+			//if block.Timestamp < info.currentEpoch.StartTime.Add(time.Duration(info.userProvidedData.DistributionPeriod)*time.Second).Unix() {
+			//	return nil
+			//}
+
+			// 1st round
+			// Create epochA
+			// Reward will be issued to epochA
+			// tick: Finalize epochA & create new epochB; Reward will be issued to epochB
+			//
+			// 2rd round
+			// Reward will be issued to epochB
+			// tick: If A is confirmed, finalize epochB & create new epochC; Reward will be issued to epochC
+			//       If not, skip;
+			//
+			// ... new round is same as 2rd round
+
+			// NOTE: last epoch endHeight = curren epoch startHeight
+			preExists, preConfirmed, err := previousEpochConfirmed(ctx, app, id, info.currentEpoch.StartHeight)
+			fmt.Println("yaiba =====preConfirmed", preExists, preConfirmed, err)
+			if err != nil {
+				return err
+			}
+
+			if !preExists || // first epoch should always be finalized
+				(preExists && preConfirmed) { // previous exists and is confirmed
+				var rewards []*EpochReward
+				err = getRewardsForEpoch(ctx, app, info.currentEpoch.ID, func(reward *EpochReward) error {
+					rewards = append(rewards, reward)
+					return nil
+				})
+				if err != nil {
+					return err
+				}
+
+				fmt.Println("yaiba =====rewards", len(rewards))
+				if len(rewards) == 0 { // no rewards, delay finalize current epoch
+					fmt.Println("TODO: log no rewards, delay finalize current epoch")
+					return nil
+				}
+
+				users := make([]string, len(rewards))
+				amounts := make([]*big.Int, len(rewards))
+
+				for i, reward := range rewards {
+					users[i] = reward.Recipient.Hex()
+					amounts[i] = reward.Amount.BigInt()
+					fmt.Println("yaiba ===== reward", reward.Recipient.Hex(), reward.Amount.BigInt())
+				}
+
+				_, root, err := reward.GenRewardMerkleTree(users, amounts, info.EscrowAddress.Hex(), block.Hash)
+				if err != nil {
+					return err
+				}
+
+				err = finalizeEpoch(ctx, app, info.currentEpoch.ID, block.Height, block.Hash[:], root)
+				if err != nil {
+					return err
+				}
+
+				// create a new epoch
+				newEpoch := newPendingEpoch(id, block)
+				err = createEpoch(ctx, app, newEpoch, id)
+				if err != nil {
+					return err
+				}
+
+				newEpochs[*id] = newEpoch
 				return nil
 			}
 
-			// TODO: if last epoch(if exists) not confirmed, we do nothing.
-
-			var rewards []*EpochReward
-			err := getRewardsForEpoch(ctx, app, info.currentEpoch.ID, func(reward *EpochReward) error {
-				rewards = append(rewards, reward)
-				return nil
-			})
-			if err != nil {
-				return err
-			}
-
-			users := make([]string, len(rewards))
-			amounts := make([]*big.Int, len(rewards))
-
-			for i, reward := range rewards {
-				users[i] = reward.Recipient.Hex()
-				amounts[i] = reward.Amount.BigInt()
-			}
-
-			_, root, err := reward.GenRewardMerkleTree(users, amounts, info.EscrowAddress.Hex(), block.Hash)
-			if err != nil {
-				return err
-			}
-
-			err = finalizeEpoch(ctx, app, info.currentEpoch.ID, block.Height, block.Hash[:], root)
-			if err != nil {
-				return err
-			}
-
-			// create a new epoch
-			newEpoch := newPendingEpoch(id, block)
-			err = createEpoch(ctx, app, newEpoch, id)
-			if err != nil {
-				return err
-			}
-
-			newEpochs[*id] = newEpoch
-
+			// if previous epoch exists and not confirmed, we do nothing.
+			fmt.Println("TODO: log previous epoch is not confirmed yet, skip finalize current epoch")
 			return nil
 		})
 		if err != nil {
@@ -1324,7 +1371,7 @@ func newPendingEpoch(rewardID *types.UUID, block *common.BlockContext) *PendingE
 	return &PendingEpoch{
 		ID:          generateEpochID(rewardID, block.Height),
 		StartHeight: block.Height,
-		StartTime:   time.Unix(block.Timestamp, 0),
+		StartTime:   block.Timestamp,
 	}
 }
 
@@ -1332,7 +1379,7 @@ func newPendingEpoch(rewardID *types.UUID, block *common.BlockContext) *PendingE
 type PendingEpoch struct {
 	ID          *types.UUID
 	StartHeight int64
-	StartTime   time.Time
+	StartTime   int64
 }
 
 // EpochReward is a reward given to a user within an epoch
@@ -1346,6 +1393,7 @@ func (p *PendingEpoch) copy() *PendingEpoch {
 	return &PendingEpoch{
 		ID:          &id,
 		StartHeight: p.StartHeight,
+		StartTime:   p.StartTime,
 	}
 }
 
@@ -1411,7 +1459,7 @@ func (e *extensionInfo) ForEachInstance(readOnly bool, fn func(id *types.UUID, i
 		}
 
 		for _, kv := range order.OrderMap(orderableMap) {
-			err := fn(kv.Value.userProvidedData.ID, kv.Value)
+			err = fn(kv.Value.userProvidedData.ID, kv.Value)
 			if err != nil {
 				return
 			}

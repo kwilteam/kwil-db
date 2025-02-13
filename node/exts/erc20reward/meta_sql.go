@@ -5,7 +5,6 @@ import (
 	_ "embed"
 	"errors"
 	"fmt"
-	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 
@@ -54,7 +53,7 @@ func createEpoch(ctx context.Context, app *common.App, epoch *PendingEpoch, inst
 	)`, map[string]any{
 		"id":               epoch.ID,
 		"created_at_block": epoch.StartHeight,
-		"created_at_unix":  epoch.StartTime.Unix(),
+		"created_at_unix":  epoch.StartTime,
 		"instance_id":      instanceID,
 	}, nil)
 }
@@ -104,7 +103,8 @@ func setRewardSynced(ctx context.Context, app *common.App, id *types.UUID, synce
 	}, nil)
 }
 
-// getStoredRewardInstances gets all stored reward instances.
+// getStoredRewardInstances gets all stored reward instances. Also returns the
+// current epoch(not finalized) that is being used.
 func getStoredRewardInstances(ctx context.Context, app *common.App) ([]*rewardExtensionInfo, error) {
 	var rewards []*rewardExtensionInfo
 	err := app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
@@ -112,7 +112,7 @@ func getStoredRewardInstances(ctx context.Context, app *common.App) ([]*rewardEx
 		r.erc20_address, r.erc20_decimals, r.synced_at, r.balance, e.id AS epoch_id,
 		e.created_at_block AS epoch_created_at_block, e.created_at_unix AS epoch_created_at_seconds
 	FROM reward_instances r
-	LEFT JOIN epochs e on r.id = e.instance_id AND e.confirmed IS NULL
+	LEFT JOIN epochs e on r.id = e.instance_id AND e.confirmed IS NOT TRUE AND e.ended_at IS NULL
 	`, nil, func(row *common.Row) error {
 		if len(row.Values) != 13 {
 			return fmt.Errorf("expected 13 values, got %d", len(row.Values))
@@ -143,6 +143,7 @@ func getStoredRewardInstances(ctx context.Context, app *common.App) ([]*rewardEx
 			active: row.Values[5].(bool),
 		}
 
+		fmt.Printf("yaiba ======", row.Values[10])
 		if row.Values[10] == nil {
 			return fmt.Errorf("internal bug: instance %s has no epoch", reward.ID)
 		}
@@ -154,7 +155,7 @@ func getStoredRewardInstances(ctx context.Context, app *common.App) ([]*rewardEx
 		reward.currentEpoch = &PendingEpoch{
 			ID:          epochID,
 			StartHeight: epochCreatedAtBlock,
-			StartTime:   time.Unix(epochCreatedAtUnix, 0),
+			StartTime:   epochCreatedAtUnix,
 		}
 
 		if !reward.synced {
@@ -354,6 +355,36 @@ func getRewardsForEpoch(ctx context.Context, app *common.App, epochID *types.UUI
 	})
 }
 
+// previousEpochConfirmed return whether previous exists and confirmed.
+func previousEpochConfirmed(ctx context.Context, app *common.App, instanceID *types.UUID, endBlock int64) (bool, bool, error) {
+	// if no previous epoch
+	exist := false
+	confirmed := false
+
+	err := app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
+    {kwil_erc20_meta}SELECT confirmed from epochs
+    WHERE instance_id = $instance_id AND ended_at = $end_block
+    `, map[string]any{
+		"instance_id": instanceID,
+		"end_block":   endBlock,
+	}, func(r *common.Row) error {
+		// might be not necessary
+		if exist {
+			return fmt.Errorf("internal bug: expected single record")
+		}
+		exist = true
+
+		if len(r.Values) != 1 {
+			return fmt.Errorf("expected 1 values, got %d", len(r.Values))
+		}
+
+		confirmed = r.Values[0].(bool)
+		return nil
+	})
+
+	return exist, confirmed, err
+}
+
 // getEpochs gets epochs by given conditions.
 func getEpochs(ctx context.Context, app *common.App, instanceID *types.UUID, after int64, limit int64, confirmedOnly bool, fn func(*Epoch) error) error {
 	query := `
@@ -426,7 +457,7 @@ func getEpochs(ctx context.Context, app *common.App, instanceID *types.UUID, aft
 			PendingEpoch: PendingEpoch{
 				ID:          id,
 				StartHeight: createdAtBlock,
-				StartTime:   time.Unix(createdAtUnix, 0),
+				StartTime:   createdAtUnix,
 			},
 			EndHeight: &endedAt,
 			BlockHash: blockHash,

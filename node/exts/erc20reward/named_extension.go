@@ -196,6 +196,22 @@ func init() {
 					Handler:         makeMetaHandler("list_epochs"),
 				},
 				{
+					// Supposed to be called by the SignerService, to verify the reward root.
+					Name: "get_epoch_rewards",
+					Parameters: []precompiles.PrecompileValue{
+						{Name: "epoch_id", Type: types.UUIDType},
+					},
+					Returns: &precompiles.MethodReturn{
+						IsTable: true,
+						Fields: []precompiles.PrecompileValue{
+							{Name: "recipient", Type: types.TextType},
+							{Name: "amount", Type: types.TextType},
+						},
+					},
+					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+					Handler:         makeMetaHandler("get_epoch_rewards"),
+				},
+				{
 					Name: "decimals",
 					Returns: &precompiles.MethodReturn{
 						Fields: []precompiles.PrecompileValue{
