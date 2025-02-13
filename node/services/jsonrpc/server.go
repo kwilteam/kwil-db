@@ -760,7 +760,7 @@ func (s *Server) handleJSONRPCRequest(ctx context.Context, req *jsonrpc.Request)
 		return jsonrpc.NewErrorResponse(req.ID, rpcErr)
 	}
 
-	s.log.Info("request success", "method", req.Method, "elapsed", time.Since(t0))
+	s.log.Debug("request success", "method", req.Method, "elapsed", time.Since(t0))
 
 	resp, err := jsonrpc.NewResponse(req.ID, result)
 	if err != nil { // failed to marshal result

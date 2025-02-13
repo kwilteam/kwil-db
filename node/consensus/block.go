@@ -85,7 +85,11 @@ func (ce *ConsensusEngine) recheckTx(ctx context.Context, tx *ktypes.Transaction
 	}
 	ce.stateInfo.mtx.RUnlock()
 
-	return ce.blockProcessor.CheckTx(ctx, tx, height, timestamp, true)
+	err := ce.blockProcessor.CheckTx(ctx, tx, height, timestamp, true)
+	if err != nil {
+		ce.log.Infof("recheckTx failed for tx %s, err: %s", tx, err)
+	}
+	return err
 }
 
 // BroadcastTx checks the Tx with the mempool and if the verification is successful, broadcasts the Tx to the network.
@@ -103,7 +107,9 @@ func (ce *ConsensusEngine) BroadcastTx(ctx context.Context, tx *ktypes.Transacti
 
 	// Announce the transaction to the network
 	if ce.txAnnouncer != nil {
-		ce.log.Infof("broadcasting new tx %v", txHash)
+		ce.log.Debugf("broadcasting new tx %v", txHash)
+		// We can't use parent context 'cause it's canceled in the caller, which
+		// could be the RPC request. handler.  This shouldn't be CE's problem...
 		go ce.txAnnouncer(context.Background(), txHash, rawTx)
 	}
 

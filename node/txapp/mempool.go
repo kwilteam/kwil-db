@@ -254,7 +254,8 @@ func (m *mempool) applyTransaction(ctx *common.TxContext, tx *types.Transaction,
 	// (but Tx with nonce is never pushed to the consensus pool).
 	acct.Nonce = int64(tx.Body.Nonce)
 
-	m.log.Info("applied transaction to mempool state", "account", hex.EncodeToString(tx.Sender), "nonce", acct.Nonce, "balance", acct.Balance)
+	m.log.Debug("applied transaction to mempool state", "account", log.LazyHex(tx.Sender),
+		"nonce", acct.Nonce, "balance", acct.Balance)
 
 	return nil
 }

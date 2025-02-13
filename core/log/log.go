@@ -12,6 +12,17 @@ import (
 	sublog "github.com/decred/slog"
 )
 
+// LazyHex is a helper type for when logging a byte slice as a hexadecimal
+// string, but only when it is actually printed. For example, in a debug log
+// that may not be printed unless the logging level is set to debug. Note that
+// in printf style logging with %x this is not an issue, but with the pervasive
+// trend of providing key value pairs, this is not possible.
+type LazyHex []byte
+
+func (lh LazyHex) String() string {
+	return hex.EncodeToString(lh)
+}
+
 type KVLogger interface {
 	Debug(msg string, args ...any)
 	Info(msg string, args ...any)

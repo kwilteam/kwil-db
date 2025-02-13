@@ -230,13 +230,12 @@ func (bp *BlockProcessor) CheckTx(ctx context.Context, tx *ktypes.Transaction, h
 		return fmt.Errorf("network is halted for migration")
 	}
 
-	bp.log.Info("Check transaction", "Recheck", recheck, "Hash", txHash, "Sender", hex.EncodeToString(tx.Sender),
-		"PayloadType", tx.Body.PayloadType.String(), "Nonce", tx.Body.Nonce, "TxFee", tx.Body.Fee.String())
+	bp.log.Debug("Check transaction", "Recheck", recheck, "Hash", txHash, "Sender", log.LazyHex(tx.Sender),
+		"PayloadType", tx.Body.PayloadType, "Nonce", tx.Body.Nonce, "TxFee", tx.Body.Fee)
 
 	if !recheck {
 		// Verify the correct chain ID is set, if it is set.
 		if protected := tx.Body.ChainID != ""; protected && tx.Body.ChainID != bp.genesisParams.ChainID {
-			bp.log.Info("Wrong chain ID", "txChainID", tx.Body.ChainID)
 			return fmt.Errorf("wrong chain ID: %s", tx.Body.ChainID)
 		}
 
@@ -269,8 +268,7 @@ func (bp *BlockProcessor) CheckTx(ctx context.Context, tx *ktypes.Transaction, h
 		Authenticator: tx.Signature.Type,
 	}, readTx, tx)
 	if err != nil {
-		// do appropriate logging
-		bp.log.Info("Failed to apply the transaction to the mempool", "tx", hex.EncodeToString(txHash[:]), "err", err)
+		bp.log.Info("Transaction rejected", "tx", txHash, "err", err)
 		return err
 	}
 

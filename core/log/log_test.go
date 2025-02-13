@@ -480,3 +480,55 @@ func TestLevelUnmarshalText(t *testing.T) {
 		})
 	}
 }
+
+func TestLazyHex(t *testing.T) {
+	tests := []struct {
+		name string
+		lh   LazyHex
+		want string
+	}{
+		{
+			name: "empty bytes",
+			lh:   LazyHex{},
+			want: "",
+		},
+		{
+			name: "single byte",
+			lh:   LazyHex{0xAB},
+			want: "ab",
+		},
+		{
+			name: "multiple bytes",
+			lh:   LazyHex{0x12, 0x34, 0x56, 0x78},
+			want: "12345678",
+		},
+		{
+			name: "zero bytes",
+			lh:   LazyHex{0x00, 0x00},
+			want: "0000",
+		},
+		{
+			name: "all possible hex values",
+			lh:   LazyHex{0x01, 0x23, 0x45, 0x67, 0x89, 0xAB, 0xCD, 0xEF},
+			want: "0123456789abcdef",
+		},
+		{
+			name: "nil bytes",
+			lh:   nil,
+			want: "",
+		},
+		{
+			name: "large byte slice",
+			lh:   LazyHex(bytes.Repeat([]byte{0xFF}, 1024)),
+			want: strings.Repeat("ff", 1024),
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.lh.String(); got != tt.want {
+				t.Errorf("LazyHex.String() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
