@@ -233,18 +233,20 @@ func createSchema(ctx context.Context, app *common.App) error {
 }
 
 // issueReward issues a reward to a user.
-func issueReward(ctx context.Context, app *common.App, epochID *types.UUID, user ethcommon.Address, amount *types.Decimal) error {
+func issueReward(ctx context.Context, app *common.App, instanceId *types.UUID, epochID *types.UUID, user ethcommon.Address, amount *types.Decimal) error {
 	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
 	{kwil_erc20_meta}UPDATE reward_instances
-	SET balance = balance - $amount;
+	SET balance = balance - $amount
+    WHERE id = $instance_id;
 
 	{kwil_erc20_meta}INSERT INTO epoch_rewards(epoch_id, recipient, amount)
-	VALUES ($id, $reward_id, $user, $amount)
-	ON CONFLICT (id, recipient) DO UPDATE SET amount = epoch_rewards.amount + $amount;
+	VALUES ($epoch_id, $user, $amount)
+	ON CONFLICT (epoch_id, recipient) DO UPDATE SET amount = epoch_rewards.amount + $amount;
 	`, map[string]any{
-		"id":     epochID,
-		"user":   user.Bytes(),
-		"amount": amount,
+		"instance_id": instanceId,
+		"epoch_id":    epochID,
+		"user":        user.Bytes(),
+		"amount":      amount,
 	}, nil)
 }
 
@@ -365,7 +367,6 @@ func getEpochs(ctx context.Context, app *common.App, instanceID *types.UUID, aft
 	query += `
     GROUP BY e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.ended_at, e.block_hash
     ORDER BY ended_at ASC LIMIT $limit`
-	fmt.Println("=====_+_+_+_++__++", query)
 	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, query, map[string]any{
 		"instance_id": instanceID,
 		"after":       after,
@@ -395,12 +396,10 @@ func getEpochs(ctx context.Context, app *common.App, instanceID *types.UUID, aft
 		}
 
 		var voters []ethcommon.Address
-		fmt.Printf("+++++++ %+v, %+v\n", voters, r.Values[6])
 		if r.Values[6] != nil {
 			rawVoters := r.Values[6].([][]byte)
 			// empty value is [[]], cannot use make()
 			for _, rawVoter := range rawVoters {
-				fmt.Println("+++++++", rawVoter)
 				if len(rawVoter) == 0 {
 					continue
 				}
@@ -412,22 +411,16 @@ func getEpochs(ctx context.Context, app *common.App, instanceID *types.UUID, aft
 			}
 		}
 
-		fmt.Printf("+++++++ %+v\n", voters)
-
 		var voteNonces []int64
-		fmt.Printf("+++-----++++ %+v\n", voteNonces, r.Values[7])
 		if r.Values[7] != nil {
 			rawNonces := r.Values[7].([]*int64)
 			for _, rawNonce := range rawNonces {
-				fmt.Println("+++-----++++", rawNonce)
 				if rawNonce == nil {
 					continue
 				}
 				voteNonces = append(voteNonces, *rawNonce)
 			}
 		}
-
-		fmt.Printf("+++-----++++ %+v\n", voteNonces)
 
 		return fn(&Epoch{
 			PendingEpoch: PendingEpoch{

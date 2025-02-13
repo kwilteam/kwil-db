@@ -131,8 +131,10 @@ func (s *rewardSigner) init() error {
 	return nil
 }
 
-// canSkip returns true if the epoch:
-// a) is not the owner b) is finalized c) is not finalized already voted from this signer;
+// canSkip returns true if:
+// - signer is not one of the safe owners
+// - signer has voted this epoch
+// - is not finalized already voted from this signer;
 func (s *rewardSigner) canSkip(epoch *Epoch, safeMeta *safeMetadata) bool {
 	// TODO: if no rewards in epoch, skip
 
@@ -141,11 +143,17 @@ func (s *rewardSigner) canSkip(epoch *Epoch, safeMeta *safeMetadata) bool {
 		return true
 	}
 
-	//for _, voter := range epoch.Voters {
-	//	if voter == s.signerAddr.String() {
-	//		return true
-	//	}
-	//}
+	if epoch.Voters == nil {
+		return false
+	}
+
+	// if has vote
+	for i, voter := range epoch.Voters {
+		if voter == s.signerAddr.String() &&
+			safeMeta.nonce.Cmp(big.NewInt(epoch.VoteNonce[i])) <= 0 {
+			return true
+		}
+	}
 
 	return false
 }
