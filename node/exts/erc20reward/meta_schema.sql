@@ -40,6 +40,9 @@ CREATE TABLE balances (
 -- 3. Confirmed: the epoch has been confirmed on chain
 -- Ideally, Kwil would have a unique indexes on this table where "confirmed" is null (to enforce only one active epoch at a time),
 -- but this requires partial indexes which are not yet supported in Kwil
+-- Because we need an epoch to issue reward to, but you should not issue reward to a finalized reward,
+-- thus we'll always have two epochs at the same time(except the very first epoch),
+-- one is finalized and waiting to be confirmed, the other is collecting new rewards.
 CREATE TABLE epochs (
 	id UUID PRIMARY KEY,
     created_at_block INT8 NOT NULL, -- kwil block height
@@ -48,7 +51,7 @@ CREATE TABLE epochs (
 	reward_root BYTEA UNIQUE, -- the root of the merkle tree of rewards, it's unique per contract
     ended_at INT8, -- kwil block height
     block_hash BYTEA, -- the hash of the block that is used in merkle tree leaf, which is the last block of the epoch
-    confirmed BOOLEAN -- whether the epoch has been confirmed on chain
+    confirmed BOOLEAN NOT NULL DEFAULT FALSE -- whether the epoch has been confirmed on chain
 );
 
 -- index helps us query for unconfirmed epochs, which is very common
