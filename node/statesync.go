@@ -202,8 +202,8 @@ func (ss *StateSyncService) blkGetHeightRequestHandler(stream network.Stream) {
 		// hang up earlier depending...
 		stream.SetWriteDeadline(time.Now().Add(blkSendTimeout))
 		stream.Write(hash[:])
-		ktypes.WriteBytes(stream, ciBytes)
-		ktypes.WriteBytes(stream, rawBlk)
+		ktypes.WriteCompactBytes(stream, ciBytes)
+		ktypes.WriteCompactBytes(stream, rawBlk)
 	}
 }
 

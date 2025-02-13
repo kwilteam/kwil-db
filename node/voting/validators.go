@@ -79,10 +79,10 @@ func (j *UpdatePowerRequest) MarshalBinary() ([]byte, error) {
 	if err := binary.Write(buf, types.SerializationByteOrder, uint16(updatePowerRequestVersion)); err != nil {
 		return nil, err
 	}
-	if err := types.WriteBytes(buf, j.PubKey); err != nil {
+	if err := types.WriteCompactBytes(buf, j.PubKey); err != nil {
 		return nil, err
 	}
-	if err := types.WriteString(buf, j.PubKeyType.String()); err != nil {
+	if err := types.WriteCompactString(buf, j.PubKeyType.String()); err != nil {
 		return nil, err
 	}
 	if err := binary.Write(buf, types.SerializationByteOrder, j.Power); err != nil {
@@ -102,10 +102,10 @@ func (j *UpdatePowerRequest) UnmarshalBinary(data []byte) error {
 	if version != updatePowerRequestVersion {
 		return fmt.Errorf("invalid version %d", version)
 	}
-	if j.PubKey, err = types.ReadBytes(buf); err != nil {
+	if j.PubKey, err = types.ReadCompactBytes(buf); err != nil {
 		return err
 	}
-	pubKeyType, err := types.ReadString(buf)
+	pubKeyType, err := types.ReadCompactString(buf)
 	if err != nil {
 		return err
 	}

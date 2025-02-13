@@ -43,8 +43,8 @@ func (n *Node) blkGetStreamHandler(s network.Stream) {
 		ciBytes, _ := ci.MarshalBinary()
 		s.SetWriteDeadline(time.Now().Add(blkSendTimeout))
 		binary.Write(s, binary.LittleEndian, blk.Header.Height)
-		ktypes.WriteBytes(s, ciBytes)
-		ktypes.WriteBytes(s, rawBlk)
+		ktypes.WriteCompactBytes(s, ciBytes)
+		ktypes.WriteCompactBytes(s, rawBlk)
 	}
 }
 
@@ -71,8 +71,8 @@ func (n *Node) blkGetHeightStreamHandler(s network.Stream) {
 		// hang up earlier depending...
 		s.SetWriteDeadline(time.Now().Add(blkSendTimeout))
 		s.Write(hash[:])
-		ktypes.WriteBytes(s, ciBytes)
-		ktypes.WriteBytes(s, rawBlk)
+		ktypes.WriteCompactBytes(s, ciBytes)
+		ktypes.WriteCompactBytes(s, rawBlk)
 	}
 }
 
@@ -268,7 +268,7 @@ func (n *Node) getBlk(ctx context.Context, blkHash types.Hash) (int64, []byte, *
 			continue
 		}
 
-		ciBts, err := ktypes.ReadBytes(rd)
+		ciBts, err := ktypes.ReadCompactBytes(rd)
 		if err != nil {
 			n.log.Info("failed to read commit info in the block response", "error", err)
 			continue
@@ -280,7 +280,7 @@ func (n *Node) getBlk(ctx context.Context, blkHash types.Hash) (int64, []byte, *
 			continue
 		}
 
-		rawBlk, err := ktypes.ReadBytes(rd)
+		rawBlk, err := ktypes.ReadCompactBytes(rd)
 		if err != nil {
 			n.log.Info("failed to read block in the block response", "error", err)
 			continue
@@ -334,7 +334,7 @@ func getBlkHeight(ctx context.Context, height int64, host host.Host, log log.Log
 			continue
 		}
 
-		ciBts, err := ktypes.ReadBytes(rd)
+		ciBts, err := ktypes.ReadCompactBytes(rd)
 		if err != nil {
 			log.Info("failed to read commit info in the block response", "error", err)
 			continue
@@ -346,7 +346,7 @@ func getBlkHeight(ctx context.Context, height int64, host host.Host, log log.Log
 			continue
 		}
 
-		rawBlk, err := ktypes.ReadBytes(rd)
+		rawBlk, err := ktypes.ReadCompactBytes(rd)
 		if err != nil {
 			log.Warn("failed to read block in the block response", "error", err)
 		}

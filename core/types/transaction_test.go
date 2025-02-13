@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"math/big"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -887,4 +888,247 @@ func Test_TransactionBodyJSONEdgeCases(t *testing.T) {
 		require.NoError(t, err)
 		assert.Equal(t, "0", decoded.Fee.String())
 	})
+}
+
+func TestTransactionBody_SerializeSize(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name     string
+		body     TransactionBody
+		expected int64
+	}{
+		{
+			name: "empty transaction body",
+			body: TransactionBody{
+				Description: "",            // 1 + 0
+				Payload:     nil,           // 1 + 0
+				PayloadType: "",            // 1 + 0
+				Fee:         big.NewInt(0), // 1 + 1 + 1
+				Nonce:       0,             // 8
+				ChainID:     "",            // 1 + 0
+			},
+			expected: 15, // 1 + 0 + 1 + 0 + 1 + 0 + (1 + 1 + 1) + 8 + 1 + 0
+		},
+		{
+			name: "large fee value",
+			body: TransactionBody{
+				Description: "",                                                    // 1 + 0
+				Payload:     nil,                                                   // 1 + 0
+				PayloadType: "",                                                    // 1 + 0
+				Fee:         new(big.Int).Exp(big.NewInt(2), big.NewInt(256), nil), // 78 chars: 115792089237316195423570985008687907853269984665640564039457584007913129639936
+				Nonce:       0,                                                     // 8
+				ChainID:     "",                                                    // 1 + 0
+			},
+			expected: 92, // 1 + 0 + 1 + 0 + 1 + 0 + (1 + 1 + 78) + 8 + 1 + 0
+		},
+		{
+			name: "nil fee",
+			body: TransactionBody{
+				Description: "",  // 1 + 0
+				Payload:     nil, // 1 + 0
+				PayloadType: "",  // 1 + 0
+				Fee:         nil, // 1
+				Nonce:       0,   // 8
+				ChainID:     "",  // 1 + 0
+			},
+			expected: 13, // 1 + 0 + 1 + 0 + 1 + 0 + (1) + 8 + 1 + 0
+		},
+		{
+			name: "large payload and description",
+			body: TransactionBody{
+				Description: string(make([]byte, 1000)),
+				Payload:     make([]byte, 1000),
+				PayloadType: "test",
+				Fee:         big.NewInt(1000),
+				Nonce:       999999999,
+				ChainID:     string(make([]byte, 1000)),
+			},
+			expected: 3025, // 2 + 1000 + 2 + 1000 + 1 + 4 + (1 + 2 + 4) + 8 + 2 + 1000
+		},
+		{
+			name: "negative fee",
+			body: TransactionBody{
+				Description: "",
+				Payload:     nil,
+				PayloadType: "",
+				Fee:         big.NewInt(-1000),
+				Nonce:       0,
+				ChainID:     "",
+			},
+			expected: 19, // 1 + 0 + 1 + 0 + 1 + 0 + (1 + 2 + 5) + 8 + 1 + 0
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			size := tc.body.SerializeSize()
+			require.Equal(t, tc.expected, size)
+
+			// Verify the calculated size matches actual serialization
+			data, err := tc.body.MarshalBinary()
+			require.NoError(t, err)
+			require.Equal(t, size, int64(len(data)))
+		})
+	}
+}
+
+func TestTransaction_SerializeSize(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name     string
+		tx       Transaction
+		expected int64
+	}{
+		{
+			name: "minimal transaction",
+			tx: Transaction{
+				Body:          &TransactionBody{},
+				Signature:     &auth.Signature{},
+				Sender:        []byte{},
+				Serialization: "",
+			},
+			expected: 21, // 2 + (1 + 13) + (1 + 2) + 1 + 1
+		},
+		{
+			name: "transaction with data",
+			tx: Transaction{
+				Body: &TransactionBody{
+					Description: "tst",           // 1 + 3
+					Payload:     []byte("t"),     // 1 + 1
+					PayloadType: "tst",           // 1 + 3
+					Fee:         big.NewInt(100), // 1 + 1 + 3
+					Nonce:       0,               // 8
+					ChainID:     "testchain",     // 1 + 9
+				},
+				Signature: &auth.Signature{
+					Type: "secp256k1",         // 1 + 9
+					Data: []byte("signature"), // 1 + 9
+				},
+				Sender:        []byte("sender"),
+				Serialization: "direct",
+			},
+			expected: 71, // 2 + 1 + (4 + 2 + 4 + 5 + 8 + 10) + 1 + (10 + 10) + 1 + 6 + 1 + 6
+		},
+		{
+			name: "nil body",
+			tx: Transaction{
+				Body:          nil,
+				Signature:     &auth.Signature{},
+				Sender:        []byte{1},
+				Serialization: "test",
+			},
+			expected: 13, // 2 + 1 + 0 + 1 + (1 + 1) + 1 + 1 + 1 + 4
+		},
+		{
+			name: "nil signature",
+			tx: Transaction{
+				Body:          &TransactionBody{},
+				Signature:     nil,
+				Sender:        []byte{1},
+				Serialization: "test",
+			},
+			expected: 24, // 2 + 1 + (13) + 1 + 0 + 1 + 1 + 1 + 4
+		},
+		{
+			name: "large signature data",
+			tx: Transaction{
+				Body:          &TransactionBody{},
+				Signature:     &auth.Signature{Data: make([]byte, 1000), Type: "test"},
+				Sender:        []byte{1},
+				Serialization: "test",
+			},
+			expected: 1032, // 2 + 1 + (13) + 2 + (2 + 1000 + 1 + 4) + 1 + 1 + 1 + 4
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			size := tc.tx.SerializeSize()
+			require.Equal(t, tc.expected, size)
+
+			// Verify calculated size matches actual serialization
+			data, err := tc.tx.MarshalBinary()
+			require.NoError(t, err)
+			require.Equal(t, size, int64(len(data)))
+		})
+	}
+}
+
+func TestByteReader(t *testing.T) {
+	t.Parallel()
+
+	t.Run("use existing ByteReader", func(t *testing.T) {
+		existingBR := bytes.NewBuffer([]byte{1, 2, 3}) // also an io.ByteReader to start
+		br := newByteReader(existingBR)                // so pass through
+		require.Equal(t, existingBR, br)
+
+		b, err := br.ReadByte()
+		require.NoError(t, err)
+		require.Equal(t, byte(1), b)
+	})
+
+	t.Run("create new ByteReader", func(t *testing.T) {
+		r := &regularReader{strings.NewReader("abc")} // just an io.Reader, not an io.ByteReader
+		br := newByteReader(r)                        // so wraps
+		require.IsType(t, &byteReader{}, br)
+
+		b, err := br.ReadByte()
+		require.NoError(t, err)
+		require.Equal(t, byte('a'), b)
+	})
+
+	t.Run("read from empty reader", func(t *testing.T) {
+		r := &regularReader{strings.NewReader("")}
+		br := newByteReader(r)
+		_, err := br.ReadByte()
+		require.Error(t, err)
+		require.Equal(t, io.EOF, err)
+	})
+
+	t.Run("read multiple bytes", func(t *testing.T) {
+		r := &regularReader{strings.NewReader("xyz")}
+		br := newByteReader(r)
+
+		b1, err := br.ReadByte()
+		require.NoError(t, err)
+		require.Equal(t, byte('x'), b1)
+
+		b2, err := br.ReadByte()
+		require.NoError(t, err)
+		require.Equal(t, byte('y'), b2)
+
+		b3, err := br.ReadByte()
+		require.NoError(t, err)
+		require.Equal(t, byte('z'), b3)
+
+		_, err = br.ReadByte()
+		require.Error(t, err)
+		require.Equal(t, io.EOF, err)
+	})
+
+	t.Run("read from failing reader", func(t *testing.T) {
+		r := &errorReader{err: errors.New("read error")}
+		br := newByteReader(r)
+		_, err := br.ReadByte()
+		require.Error(t, err)
+		require.Equal(t, "read error", err.Error())
+	})
+}
+
+type errorReader struct {
+	err error
+}
+
+func (r *errorReader) Read(p []byte) (n int, err error) {
+	return 0, r.err
+}
+
+type regularReader struct {
+	r io.Reader // hide any io.ByteReader methods
+}
+
+func (r *regularReader) Read(p []byte) (n int, err error) {
+	return r.r.Read(p)
 }

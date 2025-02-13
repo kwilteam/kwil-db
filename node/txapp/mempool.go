@@ -52,7 +52,7 @@ func (m *mempool) accountInfo(ctx context.Context, tx sql.Executor, acctID *type
 	}
 
 	m.accounts[string(id)] = acct
-	m.log.Info("added new account to mempool records", "account", acctID, "nonce", acct.Nonce, "balance", acct.Balance)
+	m.log.Debug("added new account to mempool records", "account", acctID, "nonce", acct.Nonce, "balance", acct.Balance)
 
 	return acct, nil
 }

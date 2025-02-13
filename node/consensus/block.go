@@ -58,6 +58,11 @@ func (ce *ConsensusEngine) validateBlock(blk *ktypes.Block) error {
 		}
 	}
 
+	maxBlockSize := ce.ConsensusParams().MaxBlockSize
+	if blockTxnsSize := blk.TxnsSize(); blockTxnsSize > maxBlockSize {
+		return fmt.Errorf("block size %d exceeds max block size %d", blockTxnsSize, maxBlockSize)
+	}
+
 	return nil
 }
 

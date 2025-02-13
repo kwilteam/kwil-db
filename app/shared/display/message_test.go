@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"errors"
-	"fmt"
 	"io"
 	"math/big"
 	"os"
@@ -172,7 +171,7 @@ func Example_respTxQuery_json() {
 	//       "log": "This is log",
 	//       "events": null
 	//     },
-	//     "warning": "HASH MISMATCH: requested 0102030400000000000000000000000000000000000000000000000000000000; received a349a2279adc9a6067733523298932e8a78b8ae51e41fbfcb9f6c4149bcdfeaf"
+	//     "warning": "HASH MISMATCH: requested 0102030400000000000000000000000000000000000000000000000000000000; received 53096abc68a1f0a09823a4d8dea302b0ea930715627fc80be7607a9fa714fe60"
 	//   },
 	//   "error": ""
 	// }
@@ -207,8 +206,8 @@ func Example_respTxQuery_WithRaw_json() {
 	//       "log": "This is log",
 	//       "events": null
 	//     },
-	//     "raw": "00005500000041000000cb3fed7f6ff36e59054c04a831b215e514052753ee353e6fe31d4b4ef736acd6155127db555d3006ba14fcb4c79bbad56c8e63b81a9896319bb053a9e2534758000c000000736563703235366b315f6570c1000000220000005468697320697320612074657374207472616e73616374696f6e20666f7220636c69740000000000390000007866363137616631636137373465626264366432336538666531326335366434316432356132326438316538386636376336633665653064340b0000006372656174655f75736572010001001e00000000000f000000000000000004746578740000000000010003000000666f6f070000006578656375746501030000003130300a00000000000000040000006173646606000000636f6e63617400000000",
-	//     "warning": "HASH MISMATCH: requested 0102030400000000000000000000000000000000000000000000000000000000; received a349a2279adc9a6067733523298932e8a78b8ae51e41fbfcb9f6c4149bcdfeaf"
+	//     "raw": "00009e0141cb3fed7f6ff36e59054c04a831b215e514052753ee353e6fe31d4b4ef736acd6155127db555d3006ba14fcb4c79bbad56c8e63b81a9896319bb053a9e2534758000c736563703235366b315f6570e602225468697320697320612074657374207472616e73616374696f6e20666f7220636c69e8010000390000007866363137616631636137373465626264366432336538666531326335366434316432356132326438316538386636376336633665653064340b0000006372656174655f75736572010001001e00000000000f000000000000000004746578740000000000010003000000666f6f076578656375746501033130300a00000000000000046173646606636f6e63617400",
+	//     "warning": "HASH MISMATCH: requested 0102030400000000000000000000000000000000000000000000000000000000; received 53096abc68a1f0a09823a4d8dea302b0ea930715627fc80be7607a9fa714fe60"
 	//   },
 	//   "error": ""
 	// }
@@ -229,7 +228,7 @@ func Test_TxHashAndExecResponse(t *testing.T) {
 	assert.Equal(t, expectText, string(outText), "MarshalText should return expected text")
 
 	outJSON, err := resp.MarshalJSON()
-	fmt.Println(string(outJSON))
+	// fmt.Println(string(outJSON))
 	assert.NoError(t, err, "MarshalJSON should not return error")
 	assert.Equal(t, expectJSON, string(outJSON), "MarshalJSON should return expected json")
 }
@@ -286,7 +285,7 @@ func TestRespTxQuery_MarshalText(t *testing.T) {
 			name: "pending status",
 			input: &RespTxQuery{
 				Msg: &types.TxQueryResponse{
-					Hash:   mustUnmarshalHash("8d741508a6849f9d11c8f478584b5067a6bcfc1114300feff53454b0e064c0a0"),
+					Hash:   mustUnmarshalHash("1f456bec9c3819f077a7aafce25cf43ad9ab0a264cbae6efeaa8b92ec0bf4b47"),
 					Height: -1, // -1 height indicates pending
 					Tx: &types.Transaction{
 						Body: &types.TransactionBody{
@@ -304,7 +303,7 @@ func TestRespTxQuery_MarshalText(t *testing.T) {
 					},
 				},
 			},
-			expected: "Transaction ID: 8d741508a6849f9d11c8f478584b5067a6bcfc1114300feff53454b0e064c0a0\nStatus: pending\nHeight: -1\nLog: transaction pending",
+			expected: "Transaction ID: 1f456bec9c3819f077a7aafce25cf43ad9ab0a264cbae6efeaa8b92ec0bf4b47\nStatus: pending\nHeight: -1\nLog: transaction pending",
 		},
 	}
 

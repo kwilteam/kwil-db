@@ -114,15 +114,15 @@ func (b *Block) VerifySignature(pubKey crypto.PublicKey) (bool, error) {
 func DecodeBlockHeader(r io.Reader) (*BlockHeader, error) {
 	hdr := new(BlockHeader)
 
-	if err := binary.Read(r, binary.LittleEndian, &hdr.Version); err != nil {
+	if err := binary.Read(r, SerializationByteOrder, &hdr.Version); err != nil {
 		return nil, fmt.Errorf("failed to read version: %w", err)
 	}
 
-	if err := binary.Read(r, binary.LittleEndian, &hdr.Height); err != nil {
+	if err := binary.Read(r, SerializationByteOrder, &hdr.Height); err != nil {
 		return nil, fmt.Errorf("failed to read height: %w", err)
 	}
 
-	if err := binary.Read(r, binary.LittleEndian, &hdr.NumTxns); err != nil {
+	if err := binary.Read(r, SerializationByteOrder, &hdr.NumTxns); err != nil {
 		return nil, fmt.Errorf("failed to read number of transactions: %w", err)
 	}
 
@@ -147,7 +147,7 @@ func DecodeBlockHeader(r io.Reader) (*BlockHeader, error) {
 	}
 
 	var timeStamp uint64
-	if err := binary.Read(r, binary.LittleEndian, &timeStamp); err != nil {
+	if err := binary.Read(r, SerializationByteOrder, &timeStamp); err != nil {
 		return nil, fmt.Errorf("failed to read number of transactions: %w", err)
 	}
 	hdr.Timestamp = time.UnixMilli(int64(timeStamp)).UTC()
@@ -159,11 +159,11 @@ func DecodeBlockHeader(r io.Reader) (*BlockHeader, error) {
 
 	// Read leader updates if any
 	var leaderUpdate bool
-	if err := binary.Read(r, binary.LittleEndian, &leaderUpdate); err != nil {
+	if err := binary.Read(r, SerializationByteOrder, &leaderUpdate); err != nil {
 		return nil, fmt.Errorf("failed to read leader update flag: %w", err)
 	}
 	if leaderUpdate {
-		keyBts, err := ReadBytes(r)
+		keyBts, err := ReadCompactBytes(r)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read leader update key: %w", err)
 		}
@@ -191,15 +191,15 @@ func (bh *BlockHeader) String() string {
 }
 
 func (bh *BlockHeader) writeBlockHeader(w io.Writer) error {
-	if err := binary.Write(w, binary.LittleEndian, bh.Version); err != nil {
+	if err := binary.Write(w, SerializationByteOrder, bh.Version); err != nil {
 		return fmt.Errorf("failed to write version: %w", err)
 	}
 
-	if err := binary.Write(w, binary.LittleEndian, bh.Height); err != nil {
+	if err := binary.Write(w, SerializationByteOrder, bh.Height); err != nil {
 		return fmt.Errorf("failed to write height: %w", err)
 	}
 
-	if err := binary.Write(w, binary.LittleEndian, bh.NumTxns); err != nil {
+	if err := binary.Write(w, SerializationByteOrder, bh.NumTxns); err != nil {
 		return fmt.Errorf("failed to write number of transactions: %w", err)
 	}
 
@@ -219,7 +219,7 @@ func (bh *BlockHeader) writeBlockHeader(w io.Writer) error {
 		return fmt.Errorf("failed to write network params hash: %w", err)
 	}
 
-	if err := binary.Write(w, binary.LittleEndian, uint64(bh.Timestamp.UnixMilli())); err != nil {
+	if err := binary.Write(w, SerializationByteOrder, uint64(bh.Timestamp.UnixMilli())); err != nil {
 		return fmt.Errorf("failed to write timestamp: %w", err)
 	}
 
@@ -229,12 +229,18 @@ func (bh *BlockHeader) writeBlockHeader(w io.Writer) error {
 
 	// leader updates if any
 	leaderUpdate := bh.NewLeader != nil
-	if err := binary.Write(w, binary.LittleEndian, leaderUpdate); err != nil {
-		return fmt.Errorf("failed to write leader update flag: %w", err)
-	}
 	if leaderUpdate {
-		if err := WriteBytes(w, crypto.WireEncodeKey(bh.NewLeader)); err != nil {
+		_, err := w.Write([]byte{1})
+		if err != nil {
+			return fmt.Errorf("failed to write leader update flag: %w", err)
+		}
+		if err := WriteCompactBytes(w, crypto.WireEncodeKey(bh.NewLeader)); err != nil {
 			return fmt.Errorf("failed to write leader update key: %w", err)
+		}
+	} else {
+		_, err := w.Write([]byte{0})
+		if err != nil {
+			return fmt.Errorf("failed to write leader update flag: %w", err)
 		}
 	}
 
@@ -257,12 +263,12 @@ func (bh *BlockHeader) Hash() Hash {
 	// Preallocate buffer: 2 + 8 + 4 + 32 + 32 + 8 + 32 = 118 bytes
 	buf := make([]byte, 0, 118)
 
-	buf = binary.LittleEndian.AppendUint16(buf, hdr.Version)
-	buf = binary.LittleEndian.AppendUint64(buf, uint64(hdr.Height))
-	buf = binary.LittleEndian.AppendUint32(buf, hdr.NumTxns)
+	buf = SerializationByteOrder.AppendUint16(buf, hdr.Version)
+	buf = SerializationByteOrder.AppendUint64(buf, uint64(hdr.Height))
+	buf = SerializationByteOrder.AppendUint32(buf, hdr.NumTxns)
 	buf = append(buf, hdr.PrevHash[:]...)
 	buf = append(buf, hdr.AppHash[:]...)
-	buf = binary.LittleEndian.AppendUint64(buf, uint64(hdr.Timestamp.UnixMilli()))
+	buf = SerializationByteOrder.AppendUint64(buf, uint64(hdr.Timestamp.UnixMilli()))
 	buf = append(buf, hdr.MerkelRoot[:]...)
 
 	return buf
@@ -275,16 +281,53 @@ func EncodeBlock(block *Block) []byte {
 
 	buf = append(buf, headerBytes...)
 
-	buf = binary.LittleEndian.AppendUint32(buf, uint32(len(block.Signature)))
+	buf = binary.AppendUvarint(buf, uint64(len(block.Signature)))
 	buf = append(buf, block.Signature...)
 
 	for _, tx := range block.Txns {
 		rawTx := tx.Bytes()
-		buf = binary.LittleEndian.AppendUint32(buf, uint32(len(rawTx)))
+		buf = binary.AppendUvarint(buf, uint64(len(rawTx)))
 		buf = append(buf, rawTx...)
 	}
 
 	return buf
+}
+
+// Bytes returns the serialized block. This is equivalent to calling
+// EncodeBlock with the block.
+func (b *Block) Bytes() []byte {
+	return EncodeBlock(b)
+}
+
+// SerializeSize returns the serialized size of the block. To get the total size
+// of all transactions in the block, use the TxnsSize method. If both sizes are
+// required, use the Size method to get both sizes in one call.
+func (b *Block) SerializeSize() int64 {
+	sz, _ := b.Size()
+	return sz
+}
+
+// TxnsSize returns the total size of all serialized transactions in the block.
+func (b *Block) TxnsSize() int64 {
+	var sz int64
+	for _, tx := range b.Txns {
+		sz += tx.SerializeSize()
+	}
+	return sz
+}
+
+// Size returns both the total size of the serialized block, and the total size
+// of all serialized transactions in the block.
+func (b *Block) Size() (block, txns int64) {
+	sigLen := len(b.Signature)
+	block = int64(len(EncodeBlockHeader(b.Header)) + uvarintLen(uint64(sigLen)) + sigLen)
+	for _, tx := range b.Txns {
+		txSz := tx.SerializeSize()
+		lenPrefixSize := len(binary.AppendUvarint(nil, uint64(txSz)))
+		block += int64(lenPrefixSize) + tx.SerializeSize()
+		txns += txSz
+	}
+	return block, txns
 }
 
 // CalcMerkleRoot computes the merkel root for a slice of hashes. This is based
@@ -348,8 +391,8 @@ func DecodeBlock(rawBlk []byte) (*Block, error) {
 		return nil, err
 	}
 
-	var sigLen uint32
-	if err := binary.Read(r, binary.LittleEndian, &sigLen); err != nil {
+	sigLen, err := binary.ReadUvarint(r)
+	if err != nil {
 		return nil, fmt.Errorf("failed to read signature length: %w", err)
 	}
 
@@ -365,8 +408,8 @@ func DecodeBlock(rawBlk []byte) (*Block, error) {
 	txns := make([]*Transaction, hdr.NumTxns)
 
 	for i := range txns {
-		var txLen uint32
-		if err := binary.Read(r, binary.LittleEndian, &txLen); err != nil {
+		txLen, err := binary.ReadUvarint(r)
+		if err != nil {
 			return nil, fmt.Errorf("failed to read tx length: %w", err)
 		}
 
@@ -404,8 +447,8 @@ func GetRawBlockTx(rawBlk []byte, idx uint32) ([]byte, error) {
 		return nil, err
 	}
 
-	var sigLen uint32
-	if err := binary.Read(r, binary.LittleEndian, &sigLen); err != nil {
+	sigLen, err := binary.ReadUvarint(r)
+	if err != nil {
 		return nil, fmt.Errorf("failed to read signature length: %w", err)
 	}
 
@@ -413,14 +456,14 @@ func GetRawBlockTx(rawBlk []byte, idx uint32) ([]byte, error) {
 		return nil, fmt.Errorf("invalid signature length %d", sigLen)
 	}
 
-	sig := make([]byte, sigLen)
-	if _, err := io.ReadFull(r, sig); err != nil {
-		return nil, fmt.Errorf("failed to read signature: %w", err)
+	_, err = r.Seek(int64(sigLen), io.SeekCurrent)
+	if err != nil {
+		return nil, fmt.Errorf("failed to seek to txs: %w", err)
 	}
 
 	for i := range hdr.NumTxns {
-		var txLen uint32
-		if err := binary.Read(r, binary.LittleEndian, &txLen); err != nil {
+		txLen, err := binary.ReadUvarint(r)
+		if err != nil {
 			return nil, fmt.Errorf("failed to read tx length: %w", err)
 		}
 		if int(txLen) > len(rawBlk) { // TODO: do better than this

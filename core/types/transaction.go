@@ -296,14 +296,29 @@ func (t *TransactionBody) SerializeMsg(mst SignedMsgSerializationType) ([]byte, 
 	return nil, errors.New("invalid serialization type")
 }
 
-var _ io.WriterTo = (*Transaction)(nil)
-
 // SerializeSize gives the size of the serialized transaction.
 func (t *Transaction) SerializeSize() int64 {
-	// TODO: do this better, not by actually serializing!!!!
-	sz, _ := t.WriteTo(io.Discard)
-	return sz
+	totalLen := func(l int) int {
+		return l + uvarintLen(uint64(l))
+	}
+	// NOTE: unit tests must have SerializeSize verified against MarshalBinary
+	// and/or WriteTo to ensure this method does not become stale!
+	var sigSize int64
+	if t.Signature != nil {
+		sigSize = t.Signature.SerializeSize()
+	}
+	var bodySize int64
+	if t.Body != nil {
+		bodySize = t.Body.SerializeSize()
+	}
+	return int64(2 +
+		totalLen(int(sigSize)) +
+		totalLen(int(bodySize)) +
+		totalLen(len(t.Serialization)) +
+		totalLen(len(t.Sender)))
 }
+
+var _ io.WriterTo = (*Transaction)(nil)
 
 func (t *Transaction) WriteTo(w io.Writer) (int64, error) {
 	cw := utils.NewCountingWriter(w)
@@ -375,18 +390,18 @@ var _ io.WriterTo = TransactionBody{}
 func (tb TransactionBody) WriteTo(w io.Writer) (int64, error) {
 	cw := utils.NewCountingWriter(w)
 	// Description Length + Description
-	if err := WriteString(cw, tb.Description); err != nil {
+	if err := WriteCompactString(cw, tb.Description); err != nil {
 		return cw.Written(), fmt.Errorf("failed to write transaction body description: %w", err)
 	}
 
 	// serialized Payload
-	if err := WriteBytes(cw, EmptyIfNil(tb.Payload)); err != nil {
+	if err := WriteCompactBytes(cw, EmptyIfNil(tb.Payload)); err != nil {
 		return cw.Written(), fmt.Errorf("failed to write transaction body payload: %w", err)
 	}
 
 	// PayloadType
 	payloadType := tb.PayloadType.String()
-	if err := WriteString(cw, payloadType); err != nil {
+	if err := WriteCompactString(cw, payloadType); err != nil {
 		return cw.Written(), fmt.Errorf("failed to write transaction body payload type: %w", err)
 	}
 
@@ -401,10 +416,52 @@ func (tb TransactionBody) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	// ChainID
-	if err := WriteString(cw, tb.ChainID); err != nil {
+	if err := WriteCompactString(cw, tb.ChainID); err != nil {
 		return cw.Written(), fmt.Errorf("failed to write transaction body chain ID: %w", err)
 	}
 	return cw.Written(), nil
+}
+
+// uvarintLen returns the number of bytes required to encode x as an unsigned
+// varint. This is equivalent to len(binary.AppendUvarint(nil, x)), but computed
+// without any allocations.
+func uvarintLen(x uint64) int {
+	var l int
+	for x >= 0x80 {
+		x >>= 7
+		l++
+	}
+	return l + 1
+}
+
+// varintLen returns the number of bytes required to encode x as a signed
+// varint. This is equivalent to len(binary.AppendVarint(nil, x)), but computed
+// without any allocations.
+func varintLen(x int64) int {
+	ux := uint64(x) << 1
+	if x < 0 {
+		ux = ^ux
+	}
+	return uvarintLen(ux)
+}
+
+// SerializeSize gives the size of the serialized transaction body.
+func (tb TransactionBody) SerializeSize() int64 {
+	totalLen := func(l int) int {
+		return l + uvarintLen(uint64(l))
+	}
+	// NOTE: unit tests must have SerializeSize verified against MarshalBinary!
+	fw := utils.NewCountingWriter(io.Discard)
+	WriteBigInt(fw, tb.Fee) // fee serialization involves the Fee strings, so this is not so trivial
+
+	sz := totalLen(len(tb.Description)) +
+		totalLen(len(tb.Payload)) +
+		totalLen(len(tb.PayloadType)) +
+		int(fw.Written()) +
+		8 + // nonce
+		totalLen(len(tb.ChainID))
+
+	return int64(sz)
 }
 
 var _ io.ReaderFrom = (*TransactionBody)(nil)
@@ -413,21 +470,21 @@ func (tb *TransactionBody) ReadFrom(r io.Reader) (int64, error) {
 	cr := utils.NewCountingReader(r)
 
 	// Description Length + Description
-	desc, err := ReadString(cr)
+	desc, err := ReadCompactString(cr)
 	if err != nil {
 		return cr.ReadCount(), fmt.Errorf("failed to read transaction body description: %w", err)
 	}
 	tb.Description = desc
 
 	// serialized Payload
-	payload, err := ReadBytes(cr)
+	payload, err := ReadCompactBytes(cr)
 	if err != nil {
 		return cr.ReadCount(), fmt.Errorf("failed to read transaction body payload: %w", err)
 	}
 	tb.Payload = payload
 
 	// PayloadType
-	payloadType, err := ReadString(cr)
+	payloadType, err := ReadCompactString(cr)
 	if err != nil {
 		return cr.ReadCount(), fmt.Errorf("failed to read transaction body payload type: %w", err)
 	}
@@ -446,7 +503,7 @@ func (tb *TransactionBody) ReadFrom(r io.Reader) (int64, error) {
 	}
 
 	// ChainID
-	chainID, err := ReadString(cr)
+	chainID, err := ReadCompactString(cr)
 	if err != nil {
 		return cr.ReadCount(), fmt.Errorf("failed to read transaction body chain ID: %w", err)
 	}
@@ -491,7 +548,7 @@ func (t *Transaction) serialize(w io.Writer) (err error) {
 	if t.Signature != nil {
 		sigBytes = t.Signature.Bytes()
 	}
-	if err := WriteBytes(w, EmptyIfNil(sigBytes)); err != nil {
+	if err := WriteCompactBytes(w, EmptyIfNil(sigBytes)); err != nil {
 		return fmt.Errorf("failed to write transaction signature: %w", err)
 	}
 
@@ -500,17 +557,17 @@ func (t *Transaction) serialize(w io.Writer) (err error) {
 	if t.Body != nil {
 		bodyBytes = t.Body.Bytes()
 	}
-	if err := WriteBytes(w, EmptyIfNil(bodyBytes)); err != nil {
+	if err := WriteCompactBytes(w, EmptyIfNil(bodyBytes)); err != nil {
 		return fmt.Errorf("failed to write transaction body: %w", err)
 	}
 
 	// SerializationType
-	if err := WriteString(w, string(t.Serialization)); err != nil {
+	if err := WriteCompactString(w, string(t.Serialization)); err != nil {
 		return fmt.Errorf("failed to write transaction serialization type: %w", err)
 	}
 
 	// Sender
-	if err := WriteBytes(w, EmptyIfNil(t.Sender)); err != nil {
+	if err := WriteCompactBytes(w, EmptyIfNil(t.Sender)); err != nil {
 		return fmt.Errorf("failed to write transaction sender: %w", err)
 	}
 
@@ -531,7 +588,7 @@ func (t *Transaction) deserialize(r io.Reader) (int64, error) {
 	}
 
 	// Signature
-	sigBytes, err := ReadBytes(cr)
+	sigBytes, err := ReadCompactBytes(cr)
 	if err != nil {
 		return cr.ReadCount(), fmt.Errorf("failed to read transaction signature: %w", err)
 	}
@@ -545,7 +602,7 @@ func (t *Transaction) deserialize(r io.Reader) (int64, error) {
 	}
 
 	// TxBody
-	bodyBytes, err := ReadBytes(cr)
+	bodyBytes, err := ReadCompactBytes(cr)
 	if err != nil {
 		return 0, fmt.Errorf("failed to read transaction body: %w", err)
 	}
@@ -561,14 +618,14 @@ func (t *Transaction) deserialize(r io.Reader) (int64, error) {
 	}
 
 	// SerializationType
-	serType, err := ReadString(cr)
+	serType, err := ReadCompactString(cr)
 	if err != nil {
 		return cr.ReadCount(), fmt.Errorf("failed to read transaction serialization type: %w", err)
 	}
 	t.Serialization = SignedMsgSerializationType(serType)
 
 	// Sender
-	senderBytes, err := ReadBytes(cr)
+	senderBytes, err := ReadCompactBytes(cr)
 	if err != nil {
 		return cr.ReadCount(), fmt.Errorf("failed to read transaction sender: %w", err)
 	}
@@ -591,6 +648,21 @@ func EmptyIfNil(b []byte) []byte {
 	return b
 }
 
+// WriteCompactBytes is like WriteBytes, but it uses a compact length (signed
+// varint) prefix rather than a fixed 32-bit length prefix.
+func WriteCompactBytes(w io.Writer, data []byte) error {
+	if data == nil {
+		_, err := w.Write(binary.AppendVarint(nil, -1)) // signed
+		return err
+	}
+	_, err := w.Write(binary.AppendVarint(nil, int64(len(data)))) // signed
+	if err != nil {
+		return err
+	}
+	_, err = w.Write(data)
+	return err
+}
+
 // WriteBytes writes a byte slice to a writer. This uses a 32-bit length prefix
 // to indicate how much data to read when deserializing.
 func WriteBytes(w io.Writer, data []byte) error {
@@ -604,9 +676,85 @@ func WriteBytes(w io.Writer, data []byte) error {
 	return err
 }
 
+// WriteCompactString is like WriteString, but it uses a compact length
+// (unsigned varint) prefix rather than a fixed 32-bit length prefix. Unlike
+// WriteString, which passes through to WriteBytes, this does not pass through
+// to WriteCompactBytes since there is no nil string, and there is no need to
+// use a signed varint here.
+func WriteCompactString(w io.Writer, s string) error {
+	_, err := w.Write(binary.AppendUvarint(nil, uint64(len(s)))) // unsigned
+	if err != nil {
+		return err
+	}
+	_, err = w.Write([]byte(s))
+	return err
+}
+
 // WriteString writes a string to a writer. This uses a 32-bit length prefix.
 func WriteString(w io.Writer, s string) error {
 	return WriteBytes(w, []byte(s))
+}
+
+// byteReader is a wrapper around io.Reader that implements io.ByteReader.
+// You could also do bufio.NewReader(r) but this is more direct.
+type byteReader struct {
+	r io.Reader
+}
+
+func newByteReader(r io.Reader) io.ByteReader {
+	if br, ok := r.(io.ByteReader); ok {
+		return br
+	}
+	return &byteReader{r: r}
+}
+
+var _ io.ByteReader = (*byteReader)(nil)
+
+// ReadByte satisfies the io.ByteReader interface.
+func (r *byteReader) ReadByte() (byte, error) {
+	var b [1]byte
+	_, err := r.r.Read(b[:])
+	return b[0], err
+}
+
+func safeReadBytes(r io.Reader, length int) ([]byte, error) {
+	var data []byte
+	if rl, ok := r.(interface{ Len() int }); ok { // e.g. *bytes.Reader
+		// This case allows us to preallocate somewhat safely since the reader
+		// says it actually has that length of data. A bytes.Reader will do this.
+		if length > rl.Len() {
+			return nil, fmt.Errorf("encoded length %d is longer than data length %d", length, rl.Len())
+		}
+		data = make([]byte, length)
+		if _, err := io.ReadFull(r, data); err != nil {
+			return nil, err
+		}
+	} else { // not preallocating here since we don't trust the source
+		buf := &bytes.Buffer{}
+		_, err := io.CopyN(buf, r, int64(length))
+		if err != nil {
+			return nil, fmt.Errorf("failed to read signature data: %w", err)
+		}
+		data = buf.Bytes()
+	}
+
+	return data, nil
+}
+
+// ReadCompactBytes reads a byte slice from a reader. This uses a compact
+// length (signed varint) prefix rather than a fixed 32-bit length prefix.
+func ReadCompactBytes(r io.Reader) ([]byte, error) {
+	length, err := binary.ReadVarint(newByteReader(r)) // signed
+	if err != nil {
+		return nil, err
+	}
+	if length == -1 {
+		return nil, nil
+	}
+	if length == 0 {
+		return []byte{}, nil
+	}
+	return safeReadBytes(r, int(length))
 }
 
 // ReadBytes reads a byte slice from a reader. This expects a 32-bit length
@@ -625,25 +773,7 @@ func ReadBytes(r io.Reader) ([]byte, error) {
 	default:
 	}
 
-	var data []byte
-	if rl, ok := r.(interface{ Len() int }); ok {
-		if int(length) > rl.Len() {
-			return nil, fmt.Errorf("encoded length %d is longer than data length %d", length, rl.Len())
-		}
-		data = make([]byte, length)
-		if _, err := io.ReadFull(r, data); err != nil {
-			return nil, err
-		}
-	} else {
-		buf := &bytes.Buffer{}
-		_, err := io.CopyN(buf, r, int64(length))
-		if err != nil {
-			return nil, fmt.Errorf("failed to read signature data: %w", err)
-		}
-		data = buf.Bytes()
-	}
-
-	return data, nil
+	return safeReadBytes(r, int(length))
 }
 
 // ReadString reads a string from a reader. This expects a 32-bit length prefix
@@ -653,6 +783,26 @@ func ReadString(r io.Reader) (string, error) {
 	return string(bts), err
 }
 
+// ReadCompactString reads a string from a reader. This expects a compact length
+// (unsigned varint) prefix as written by WriteCompactString. Unlike ReadString,
+// this does not pass through to ReadBytes since there is no nil string, and
+// there is no need to use a signed varint here.
+func ReadCompactString(r io.Reader) (string, error) {
+	length, err := binary.ReadUvarint(newByteReader(r)) // unsigned
+	if err != nil {
+		return "", err
+	}
+	if length == 0 {
+		return "", nil
+	}
+	bts, err := safeReadBytes(r, int(length))
+	return string(bts), err
+}
+
+// WriteBigInt writes a serialized big.Int to a writer. Nil is kept distinct
+// from 0. Currently non-nil values are written with their string representation
+// from String(). This is not ideal but it's the best we can do for now given
+// some major shortcomings fo the Bytes method of big.Int.
 func WriteBigInt(w io.Writer, b *big.Int) error {
 	if b == nil {
 		_, err := w.Write([]byte{0})
@@ -675,12 +825,13 @@ func WriteBigInt(w io.Writer, b *big.Int) error {
 	// }
 	// return WriteBytes(w, b.Bytes())
 
-	return WriteString(w, b.String())
+	return WriteCompactString(w, b.String())
 }
 
+// ReadBigInt reads a big.Int from a reader, as serialized by WriteBigInt.
 func ReadBigInt(r io.Reader) (*big.Int, error) {
-	nilByte := []byte{0}
-	_, err := io.ReadFull(r, nilByte)
+	var nilByte [1]byte
+	_, err := r.Read(nilByte[:])
 	if err != nil {
 		return nil, err
 	}
@@ -693,7 +844,7 @@ func ReadBigInt(r io.Reader) (*big.Int, error) {
 		return nil, errors.New("invalid nil int byte")
 	}
 
-	intStr, err := ReadString(r)
+	intStr, err := ReadCompactString(r)
 	if err != nil {
 		return nil, err
 	}

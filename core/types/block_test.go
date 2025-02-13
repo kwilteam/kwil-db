@@ -76,7 +76,8 @@ func TestGetRawBlockTx(t *testing.T) {
 		buf := new(bytes.Buffer)
 		header := &BlockHeader{Height: 1, NumTxns: 1}
 		buf.Write(EncodeBlockHeader(header))
-		binary.Write(buf, binary.LittleEndian, uint32(1<<30)) // Very large tx length
+		buf.Write(binary.AppendUvarint(nil, 0))             // empty sig
+		buf.Write(binary.AppendUvarint(nil, uint64(1<<30))) // Very large tx length
 
 		_, err := GetRawBlockTx(buf.Bytes(), 0)
 		if err == nil {
@@ -258,7 +259,7 @@ func TestBlock_EncodeDecode(t *testing.T) {
 		buf := new(bytes.Buffer)
 		header := &BlockHeader{Height: 1, NumTxns: 0}
 		buf.Write(EncodeBlockHeader(header))
-		binary.Write(buf, binary.LittleEndian, uint32(1<<31))
+		buf.Write(binary.AppendUvarint(nil, 1<<31)) // too big signature
 
 		_, err := DecodeBlock(buf.Bytes())
 		require.Error(t, err)
@@ -270,11 +271,11 @@ func TestBlock_EncodeDecode(t *testing.T) {
 		header := &BlockHeader{Height: 1, NumTxns: 1}
 		buf.Write(EncodeBlockHeader(header))
 		// sigLen and sig
-		binary.Write(buf, binary.LittleEndian, uint32(3))
+		buf.Write(binary.AppendUvarint(nil, 3))
 		buf.Write([]byte("sig"))
 
 		// first txLen -- too big
-		binary.Write(buf, binary.LittleEndian, uint32(1<<31))
+		buf.Write(binary.AppendUvarint(nil, uint64(1<<31)))
 
 		_, err := DecodeBlock(buf.Bytes())
 		require.Error(t, err)
@@ -314,9 +315,6 @@ func TestBlock_EncodeDecode(t *testing.T) {
 				Timestamp:        time.Now().UTC().Truncate(time.Millisecond),
 				MerkleRoot:       Hash{10, 11, 12},
 				NewLeader:        pub,
-				// OfflineLeaderUpdate: &OfflineLeaderUpdate{
-				// 	Candidate: pub,
-				// },
 			},
 			Txns:      []*Transaction{},
 			Signature: []byte("test-signature"),
@@ -420,5 +418,126 @@ func TestCalcMerkleRoot_Extended(t *testing.T) {
 		// Verify deterministic output
 		root2 := CalcMerkleRoot(leaves)
 		require.Equal(t, root, root2)
+	})
+}
+
+func TestBlock_Size(t *testing.T) {
+	t.Run("empty block", func(t *testing.T) {
+		blk := &Block{
+			Header:    &BlockHeader{Height: 1},
+			Signature: []byte{},
+			Txns:      []*Transaction{},
+		}
+		blockSize, txnsSize := blk.Size()
+		require.Greater(t, blockSize, int64(0))
+		require.Equal(t, int64(0), txnsSize)
+	})
+
+	t.Run("block with signature only", func(t *testing.T) {
+		blk := &Block{
+			Header:    &BlockHeader{Height: 1},
+			Signature: []byte("test-signature-123"),
+			Txns:      []*Transaction{},
+		}
+		blockSize, txnsSize := blk.Size()
+		expectedSigSize := len(blk.Signature)
+		require.Greater(t, blockSize, int64(expectedSigSize))
+		require.Equal(t, int64(0), txnsSize)
+	})
+
+	t.Run("block with varying transaction sizes", func(t *testing.T) {
+		txns := []*Transaction{
+			newTx(0, "sender1", "small"),
+			newTx(1, "sender2", string(make([]byte, 1000))),
+			newTx(2, "sender3", string(make([]byte, 5000))),
+		}
+		blk := &Block{
+			Header:    &BlockHeader{Height: 1, NumTxns: uint32(len(txns))},
+			Signature: []byte("sig"),
+			Txns:      txns,
+		}
+		blockSize, txnsSize := blk.Size()
+
+		var expectedTxnsSize int64
+		for _, tx := range txns {
+			expectedTxnsSize += tx.SerializeSize()
+		}
+
+		require.Greater(t, blockSize, txnsSize)
+		require.Equal(t, expectedTxnsSize, txnsSize)
+
+		txnsSize = blk.TxnsSize()
+		require.Equal(t, expectedTxnsSize, txnsSize)
+	})
+
+	t.Run("block with large header fields", func(t *testing.T) {
+		blk := &Block{
+			Header: &BlockHeader{
+				Height:           999999,
+				NumTxns:          1000,
+				PrevHash:         Hash{1, 2, 3},
+				PrevAppHash:      Hash{4, 5, 6},
+				ValidatorSetHash: Hash{7, 8, 9},
+				Timestamp:        time.Now(),
+				MerkleRoot:       Hash{10, 11, 12},
+			},
+			Signature: []byte("signature"),
+			Txns:      []*Transaction{newTx(0, "sender", "payload")},
+		}
+		blockSize, txnsSize := blk.Size()
+		require.Greater(t, blockSize, txnsSize)
+		require.Greater(t, blockSize, int64(len(blk.Signature)))
+	})
+
+	t.Run("block with many small transactions", func(t *testing.T) {
+		txns := make([]*Transaction, 100)
+		for i := range txns {
+			txns[i] = newTx(uint64(i), "sender", "small")
+		}
+		blk := &Block{
+			Header:    &BlockHeader{Height: 1, NumTxns: uint32(len(txns))},
+			Signature: []byte("sig"),
+			Txns:      txns,
+		}
+		blockSize, txnsSize := blk.Size()
+
+		var expectedTxnsSize int64
+		for _, tx := range txns {
+			expectedTxnsSize += tx.SerializeSize()
+		}
+
+		require.Greater(t, blockSize, txnsSize)
+		require.Equal(t, expectedTxnsSize, txnsSize)
+
+		txnsSize = blk.TxnsSize()
+		require.Equal(t, expectedTxnsSize, txnsSize)
+	})
+
+	// agrees with EncodeBlock
+	t.Run("match", func(t *testing.T) {
+		txns := []*Transaction{
+			newTx(0, "bob", "tx1"),
+			newTx(1, "bob", "transaction 2"),
+			newTx(0, "alice", string(make([]byte, 1000))),
+		}
+		blk := &Block{
+			Header: &BlockHeader{
+				Version:          1,
+				Height:           100,
+				NumTxns:          uint32(len(txns)),
+				PrevHash:         Hash{1, 2, 3},
+				PrevAppHash:      Hash{4, 5, 6},
+				ValidatorSetHash: Hash{7, 8, 9},
+				Timestamp:        time.Now().UTC().Truncate(time.Millisecond),
+				MerkleRoot:       Hash{10, 11, 12},
+			},
+			Txns:      txns,
+			Signature: []byte("test-signature"),
+		}
+		encoded := EncodeBlock(blk)
+		encSize := len(encoded)
+
+		blockSize, _ := blk.Size()
+		require.EqualValues(t, encSize, blockSize)
 	})
 }

@@ -207,7 +207,7 @@ func (m *blockAnnMsg) WriteTo(w io.Writer) (int64, error) {
 
 	// write block header length and bytes
 	hBts := ktypes.EncodeBlockHeader(m.Header)
-	if err := ktypes.WriteBytes(cw, hBts); err != nil {
+	if err := ktypes.WriteCompactBytes(cw, hBts); err != nil {
 		return cw.Written(), err
 	}
 
@@ -217,12 +217,12 @@ func (m *blockAnnMsg) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	// write commit info length and bytes
-	if err := ktypes.WriteBytes(cw, ciBts); err != nil {
+	if err := ktypes.WriteCompactBytes(cw, ciBts); err != nil {
 		return cw.Written(), err
 	}
 
 	// write leader sig length and bytes
-	if err := ktypes.WriteBytes(cw, m.LeaderSig); err != nil {
+	if err := ktypes.WriteCompactBytes(cw, m.LeaderSig); err != nil {
 		return cw.Written(), err
 	}
 
@@ -242,7 +242,7 @@ func (m *blockAnnMsg) ReadFrom(r io.Reader) (int64, error) {
 		return cr.ReadCount(), err
 	}
 
-	headerBts, err := ktypes.ReadBytes(cr)
+	headerBts, err := ktypes.ReadCompactBytes(cr)
 	if err != nil {
 		return cr.ReadCount(), err
 	}
@@ -252,7 +252,7 @@ func (m *blockAnnMsg) ReadFrom(r io.Reader) (int64, error) {
 	}
 	m.Header = hdr
 
-	ciBts, err := ktypes.ReadBytes(cr)
+	ciBts, err := ktypes.ReadCompactBytes(cr)
 	if err != nil {
 		return cr.ReadCount(), err
 	}
@@ -263,7 +263,7 @@ func (m *blockAnnMsg) ReadFrom(r io.Reader) (int64, error) {
 	}
 	m.CommitInfo = &ci
 
-	leaderSig, err := ktypes.ReadBytes(cr)
+	leaderSig, err := ktypes.ReadCompactBytes(cr)
 	if err != nil {
 		return cr.ReadCount(), err
 	}

@@ -58,6 +58,9 @@ func CallSigText(namespace, action string, payload []byte, challenge []byte) str
 	return fmt.Sprintf(callMsgToSignTmplV0, namespace, action, digest[:20], challenge)
 }
 
+// TODO: support authentication on execute SQL (ad hoc querys)
+// kgw client must use StmtSigText
+
 const stmtMsgToSignTmplV0 = `Kwil SQL statement.
 
 Statement: %s

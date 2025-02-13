@@ -190,25 +190,25 @@ func (ar AckRes) MarshalBinary() ([]byte, error) {
 		}
 	} else {
 		// nack status
-		if err := types.WriteString(&buf, (*ar.NackStatus).String()); err != nil {
+		if err := types.WriteCompactString(&buf, (*ar.NackStatus).String()); err != nil {
 			return nil, fmt.Errorf("failed to write nack status in AckRes: %v", err)
 		}
 		// if nack status is NackStatusOutOfSync, write out of sync proof
 		if *ar.NackStatus == NackStatusOutOfSync {
 			// write header
 			headerBts := types.EncodeBlockHeader(ar.OutOfSyncProof.Header)
-			if err := types.WriteBytes(&buf, headerBts); err != nil {
+			if err := types.WriteCompactBytes(&buf, headerBts); err != nil {
 				return nil, fmt.Errorf("failed to write header in AckRes: %v", err)
 			}
 			// write signature
-			if err := types.WriteBytes(&buf, ar.OutOfSyncProof.Signature); err != nil {
+			if err := types.WriteCompactBytes(&buf, ar.OutOfSyncProof.Signature); err != nil {
 				return nil, fmt.Errorf("failed to write signature in AckRes: %v", err)
 			}
 		}
 	}
 
 	sigBts := ar.Signature.Bytes()
-	if err := types.WriteBytes(&buf, sigBts); err != nil {
+	if err := types.WriteCompactBytes(&buf, sigBts); err != nil {
 		return nil, fmt.Errorf("failed to write signature in AckRes: %v", err)
 	}
 	return buf.Bytes(), nil
@@ -240,7 +240,7 @@ func (ar *AckRes) UnmarshalBinary(data []byte) error {
 		ar.AppHash = &appHash
 	} else {
 		// Read nack status
-		ns, err := types.ReadString(buf)
+		ns, err := types.ReadCompactString(buf)
 		if err != nil {
 			return fmt.Errorf("failed to read nack status in AckRes: %v", err)
 		}
@@ -249,7 +249,7 @@ func (ar *AckRes) UnmarshalBinary(data []byte) error {
 
 		// if nack status is NackStatusOutOfSync, read out of sync proof
 		if *ar.NackStatus == NackStatusOutOfSync {
-			headerBts, err := types.ReadBytes(buf)
+			headerBts, err := types.ReadCompactBytes(buf)
 			if err != nil {
 				return fmt.Errorf("failed to read header in AckRes: %v", err)
 			}
@@ -258,7 +258,7 @@ func (ar *AckRes) UnmarshalBinary(data []byte) error {
 				return fmt.Errorf("failed to decode header in AckRes: %v", err)
 			}
 
-			sigBts, err := types.ReadBytes(buf)
+			sigBts, err := types.ReadCompactBytes(buf)
 			if err != nil {
 				return fmt.Errorf("failed to read signature in AckRes: %v", err)
 			}
@@ -270,7 +270,7 @@ func (ar *AckRes) UnmarshalBinary(data []byte) error {
 		}
 	}
 
-	sigBts, err := types.ReadBytes(buf)
+	sigBts, err := types.ReadCompactBytes(buf)
 	if err != nil {
 		return fmt.Errorf("failed to read signature in AckRes: %v", err)
 	}

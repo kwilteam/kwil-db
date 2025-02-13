@@ -123,12 +123,12 @@ func (s *Signature) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	// PubKey Length
-	if err := types.WriteBytes(cw, s.PubKey); err != nil {
+	if err := types.WriteCompactBytes(cw, s.PubKey); err != nil {
 		return cw.Written(), err
 	}
 
 	// Signature Data Length
-	if err := types.WriteBytes(cw, s.Data); err != nil {
+	if err := types.WriteCompactBytes(cw, s.Data); err != nil {
 		return cw.Written(), err
 	}
 
@@ -145,13 +145,13 @@ func (s *Signature) ReadFrom(r io.Reader) (int64, error) {
 	}
 	s.PubKeyType = kt
 
-	pubKey, err := types.ReadBytes(cr)
+	pubKey, err := types.ReadCompactBytes(cr)
 	if err != nil {
 		return cr.ReadCount(), fmt.Errorf("failed to read public key: %w", err)
 	}
 	s.PubKey = pubKey
 
-	sig, err := types.ReadBytes(cr)
+	sig, err := types.ReadCompactBytes(cr)
 	if err != nil {
 		return cr.ReadCount(), fmt.Errorf("failed to read signature: %w", err)
 	}
@@ -279,7 +279,7 @@ func (ci *CommitInfo) MarshalBinary() ([]byte, error) {
 		return nil, fmt.Errorf("failed to write app hash: %w", err)
 	}
 
-	if err := binary.Write(&buf, SerializationByteOrder, int32(len(ci.Votes))); err != nil {
+	if _, err := buf.Write(binary.AppendUvarint(nil, uint64(len(ci.Votes)))); err != nil {
 		return nil, fmt.Errorf("failed to write vote count: %w", err)
 	}
 
@@ -289,7 +289,7 @@ func (ci *CommitInfo) MarshalBinary() ([]byte, error) {
 			return nil, fmt.Errorf("failed to marshal vote: %w", err)
 		}
 
-		if err := types.WriteBytes(&buf, voteBytes); err != nil {
+		if err := types.WriteCompactBytes(&buf, voteBytes); err != nil {
 			return nil, fmt.Errorf("failed to write vote: %w", err)
 		}
 	}
@@ -299,12 +299,12 @@ func (ci *CommitInfo) MarshalBinary() ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal param updates: %w", err)
 	}
-	if err := types.WriteBytes(&buf, puBts); err != nil {
+	if err := types.WriteCompactBytes(&buf, puBts); err != nil {
 		return nil, fmt.Errorf("failed to write param updates: %w", err)
 	}
 
 	// Validator Updates
-	if err := binary.Write(&buf, SerializationByteOrder, int32(len(ci.ValidatorUpdates))); err != nil {
+	if _, err := buf.Write(binary.AppendUvarint(nil, uint64(len(ci.ValidatorUpdates)))); err != nil {
 		return nil, fmt.Errorf("failed to write validator update count: %w", err)
 	}
 	for _, val := range ci.ValidatorUpdates {
@@ -312,7 +312,7 @@ func (ci *CommitInfo) MarshalBinary() ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal validator: %w", err)
 		}
-		if err := types.WriteBytes(&buf, valBts); err != nil {
+		if err := types.WriteCompactBytes(&buf, valBts); err != nil {
 			return nil, fmt.Errorf("failed to write validator: %w", err)
 		}
 	}
@@ -327,14 +327,14 @@ func (ci *CommitInfo) UnmarshalBinary(data []byte) error {
 		return fmt.Errorf("failed to read app hash: %w", err)
 	}
 
-	var voteCount int32
-	if err := binary.Read(rd, binary.LittleEndian, &voteCount); err != nil {
+	voteCount, err := binary.ReadUvarint(rd)
+	if err != nil {
 		return fmt.Errorf("failed to read vote count: %w", err)
 	}
 
 	ci.Votes = make([]*VoteInfo, voteCount)
 	for i := range ci.Votes {
-		voteBytes, err := types.ReadBytes(rd)
+		voteBytes, err := types.ReadCompactBytes(rd)
 		if err != nil {
 			return fmt.Errorf("failed to read vote: %w", err)
 		}
@@ -347,7 +347,7 @@ func (ci *CommitInfo) UnmarshalBinary(data []byte) error {
 		ci.Votes[i] = &vote
 	}
 
-	puBts, err := types.ReadBytes(rd)
+	puBts, err := types.ReadCompactBytes(rd)
 	if err != nil {
 		return fmt.Errorf("failed to read param updates: %w", err)
 	}
@@ -355,13 +355,13 @@ func (ci *CommitInfo) UnmarshalBinary(data []byte) error {
 		return fmt.Errorf("failed to unmarshal param updates: %w", err)
 	}
 
-	var valCount int32
-	if err := binary.Read(rd, binary.LittleEndian, &valCount); err != nil {
+	valCount, err := binary.ReadUvarint(rd)
+	if err != nil {
 		return fmt.Errorf("failed to read validator update count: %w", err)
 	}
 	ci.ValidatorUpdates = make([]*types.Validator, valCount)
 	for i := range ci.ValidatorUpdates {
-		valBts, err := types.ReadBytes(rd)
+		valBts, err := types.ReadCompactBytes(rd)
 		if err != nil {
 			return fmt.Errorf("failed to read validator: %w", err)
 		}
