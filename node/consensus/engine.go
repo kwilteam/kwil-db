@@ -395,13 +395,15 @@ func (ce *ConsensusEngine) Start(ctx context.Context, fns BroadcastFns, peerFns 
 		ce.log.Infof("Starting the validator/sentry node")
 	}
 
+	var ceErr error
+
 	// start the event loop
 	ce.wg.Add(1)
 	go func() {
 		defer ce.wg.Done()
 		defer cancel() // stop CE in case event loop terminated early e.g. halt
 
-		ce.runConsensusEventLoop(ctx)
+		ceErr = ce.runConsensusEventLoop(ctx)
 		ce.log.Info("Consensus event loop stopped...")
 	}()
 
@@ -418,7 +420,7 @@ func (ce *ConsensusEngine) Start(ctx context.Context, fns BroadcastFns, peerFns 
 
 	ce.close()
 	ce.log.Info("Consensus engine stopped")
-	return nil
+	return ceErr
 }
 
 func (ce *ConsensusEngine) close() {
@@ -462,7 +464,7 @@ func (ce *ConsensusEngine) Status() *types.NodeStatus {
 //
 // Apart from the above events, the node also periodically checks if it needs to
 // catchup with the network and reannounce the messages.
-func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) {
+func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) error {
 	ce.log.Info("Starting the consensus event loop...")
 	reannounceTicker := time.NewTicker(ce.blkAnnInterval)   // 3 secs (default)
 	blkPropTicker := time.NewTicker(ce.blkProposalInterval) // 1 sec (default)
@@ -476,18 +478,18 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) {
 		select { // ignore other ready signals if we're shutting down
 		case <-ctx.Done():
 			ce.log.Info("Shutting down the consensus engine")
-			return
+			return nil
 		default:
 		}
 
 		select {
 		case <-ctx.Done():
 			ce.log.Info("Shutting down the consensus engine")
-			return
+			return nil
 
 		case halt := <-ce.haltChan:
 			ce.log.Error("Received halt signal, stopping the consensus engine", "reason", halt)
-			return
+			return errors.New(halt)
 
 		case <-ce.newRound:
 			// check if there are any leader updates to be made before starting a new round
@@ -503,8 +505,8 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) {
 		case <-ce.newBlockProposal:
 			params := ce.blockProcessor.ConsensusParams()
 			if params.MigrationStatus == ktypes.MigrationCompleted {
-				ce.log.Info("Network halted due to migration, no more blocks will be produced")
-				continue
+				ce.log.Info("Block production halted due to migration, no more blocks will be produced")
+				continue // don't die, just don't propose blocks
 			}
 
 			if ce.role.Load() != types.RoleLeader {
@@ -512,15 +514,13 @@ func (ce *ConsensusEngine) runConsensusEventLoop(ctx context.Context) {
 			}
 
 			if err := ce.proposeBlock(ctx); err != nil {
-				ce.log.Error("Error starting a new round", "error", err)
-				return
+				return fmt.Errorf("error proposing block: %w", err)
 			}
 
 		case <-ce.catchupTicker.C:
 			err := ce.doCatchup(ctx)
 			if err != nil {
-				ce.log.Error("Failed during network catch-up", "error", err)
-				return
+				return fmt.Errorf("failed to do network catchup: %w", err)
 			}
 
 		case <-reannounceTicker.C:
@@ -957,8 +957,8 @@ func (ce *ConsensusEngine) processCurrentBlock(ctx context.Context) error {
 
 	if ci.AppHash != ce.state.blockRes.appHash {
 		// halt the node
-		haltR := fmt.Sprintf("Incorrect AppHash, received: %v, have: %v", ci.AppHash, ce.state.blockRes.appHash)
-		ce.haltChan <- haltR
+		haltReason := fmt.Sprintf("Incorrect AppHash, received: %v, have: %v", ci.AppHash, ce.state.blockRes.appHash)
+		ce.sendHalt(haltReason)
 		return nil // or an error?
 	}
 
@@ -972,6 +972,14 @@ func (ce *ConsensusEngine) processCurrentBlock(ctx context.Context) error {
 	}
 
 	return ctx.Err()
+}
+
+func (ce *ConsensusEngine) sendHalt(reason string) {
+	select {
+	case ce.haltChan <- reason:
+	default:
+		ce.log.Warnf("Halt reason not sent (already halting): %s", reason)
+	}
 }
 
 func (ce *ConsensusEngine) cancelBlock(height int64) bool {

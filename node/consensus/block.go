@@ -159,10 +159,7 @@ func (ce *ConsensusEngine) executeBlock(ctx context.Context, blkProp *blockPropo
 	}
 	results, err := ce.blockProcessor.ExecuteBlock(ctx, req)
 	if err != nil {
-		if !errors.Is(err, context.Canceled) { // unexpected error
-			ce.log.Error("Error executing block", "height", blkProp.height, "hash", blkProp.blkHash, "error", err)
-		} // else caller thinks this is a regular shutdown, with error including details
-		return fmt.Errorf("Error executing block %s at height %d: %w", blkProp.blkHash, blkProp.height, err)
+		return err
 	}
 
 	ce.state.blockRes = &blockResult{

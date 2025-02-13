@@ -323,7 +323,7 @@ func (n *Node) Start(ctx context.Context) error {
 
 	// mine is our block anns goroutine, which must be only for leader
 	n.wg.Add(1)
-	var nodeErr error
+	var ceErr error
 
 	go func() {
 		defer n.wg.Done()
@@ -347,11 +347,7 @@ func (n *Node) Start(ctx context.Context) error {
 			RemovePeer: n.Whitelister().RemovePeer,
 		}
 
-		nodeErr = n.ce.Start(ctx, broadcastFns, whitelistFns)
-		if err != nil {
-			n.log.Errorf("Consensus engine failed: %v", nodeErr)
-			return // cancel context
-		}
+		ceErr = n.ce.Start(ctx, broadcastFns, whitelistFns)
 	}()
 
 	n.wg.Add(1)
@@ -366,7 +362,7 @@ func (n *Node) Start(ctx context.Context) error {
 	n.wg.Wait()
 
 	n.log.Info("Node stopped.")
-	return nodeErr
+	return ceErr
 }
 
 func peerIDForValidator(pubkeyBts []byte) (peer.ID, error) {

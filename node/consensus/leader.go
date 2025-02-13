@@ -66,7 +66,7 @@ func (ce *ConsensusEngine) newBlockRound(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
-			ce.log.Warn("Context cancelled, stopping the new block round")
+			ce.log.Info("Context cancelled, stopping the new block round")
 			return
 		case <-ticker.C:
 			// check for the availability of transactions in the mempool or
@@ -89,30 +89,21 @@ func (ce *ConsensusEngine) newBlockRound(ctx context.Context) {
 }
 
 // proposeBlock used by the leader to propose a new block to the network.
+// Any non-nil error should be considered fatal to the node.
 func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
-	// Check if the network is halted due to migration or other reasons
-	params := ce.blockProcessor.ConsensusParams()
-	if params.MigrationStatus == ktypes.MigrationCompleted {
-		haltReason := "Network is halted for migration, cannot start a new round"
-		ce.log.Warn(haltReason)
-		ce.haltChan <- haltReason // signal the network to halt
-		return nil
-	}
 
 	blkProp, err := ce.createBlockProposal(ctx)
 	if err != nil {
-		ce.log.Errorf("Error creating a block proposal: %v", err)
-		return err
+		return fmt.Errorf("error creating block proposal: %w", err)
 	}
 
 	ce.log.Info("Created a new block proposal", "height", blkProp.height, "hash", blkProp.blkHash)
 
 	// Validate the block proposal before announcing it to the network
 	if err := ce.validateBlock(blkProp.blk); err != nil {
-		ce.log.Errorf("Error validating the block proposal: %v", err)
-		return err
+		return fmt.Errorf("block proposal failed internal validation: %w", err)
 	}
 	ce.state.blkProp = blkProp
 
@@ -131,15 +122,18 @@ func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 	defer cancel()
 
 	// Set the cancel function for the block execution
+	var reset bool
 	ce.cancelFnMtx.Lock()
-	ce.blkExecCancelFn = cancel
+	ce.blkExecCancelFn = func() {
+		reset = true
+		cancel()
+	}
 	ce.cancelFnMtx.Unlock()
 
 	// Execute the block and generate the appHash
 	if err := ce.executeBlock(execCtx, blkProp); err != nil {
 		// check if the error is due to context cancellation
-		ce.log.Errorf("Error executing the block: %v", err)
-		if execCtx.Err() != nil && errors.Is(err, context.Canceled) {
+		if errors.Is(err, context.Canceled) && reset { // NOTE: if not reset, then it's parent ctx cancellation i.e. a normal shutdown
 			ce.log.Warn("Block execution cancelled by the leader", "height", blkProp.height, "hash", blkProp.blkHash)
 			ce.cancelFnMtx.Lock()
 			// trigger a reset state message to the network
@@ -154,7 +148,6 @@ func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 			ce.cancelFnMtx.Unlock()
 
 			if err := ce.rollbackState(ctx); err != nil {
-				ce.log.Errorf("Error resetting the state: %v", err)
 				return fmt.Errorf("error resetting the state: %w", err)
 			}
 
@@ -170,15 +163,13 @@ func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 			return nil
 		}
 
-		ce.log.Errorf("Error executing the block: %v", err)
-		return err
+		return fmt.Errorf("error executing the block: %w", err)
 	}
 
 	// Add its own vote to the votes map
 	sig, err := types.SignVote(blkProp.blkHash, true, &ce.state.blockRes.appHash, ce.privKey)
 	if err != nil {
-		ce.log.Errorf("Error signing the vote: %v", err)
-		return err
+		return fmt.Errorf("error signing the vote: %w", err)
 	}
 
 	ce.state.votes[string(ce.pubKey.Bytes())] = &types.VoteInfo{
@@ -207,8 +198,7 @@ func (ce *ConsensusEngine) createBlockProposal(ctx context.Context) (*blockPropo
 
 	finalTxs, invalidTxs, err := ce.blockProcessor.PrepareProposal(ctx, txns)
 	if err != nil {
-		ce.log.Errorf("Error preparing the block proposal: %v", err)
-		return nil, err
+		return nil, fmt.Errorf("failed to prepare proposal: %w", err)
 	}
 
 	// remove invalid transactions from the mempool
@@ -313,7 +303,7 @@ func (ce *ConsensusEngine) addVote(ctx context.Context, voteMsg *vote, sender st
 			if err := ce.syncBlocksUntilHeight(ctx, ce.state.lc.height+1, proof.Header.Height); err != nil {
 				if err != types.ErrBlkNotFound {
 					haltReason := fmt.Sprintf("Error syncing blocks: %v", err)
-					ce.haltChan <- haltReason
+					ce.sendHalt(haltReason)
 					return
 				}
 
@@ -389,7 +379,7 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) {
 
 	if ce.hasMajorityCeil(nacks) {
 		haltReason := fmt.Sprintf("Majority of the validators have rejected the block, halting the network: %d acks, %d nacks", acks, nacks)
-		ce.haltChan <- haltReason
+		ce.sendHalt(haltReason)
 		return
 	}
 
@@ -429,7 +419,7 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) {
 
 	// Commit the block and broadcast the blockAnn message
 	if err := ce.commit(ctx); err != nil {
-		ce.haltChan <- fmt.Sprintf("Error committing block %v: %v", blkProp.blkHash, err)
+		ce.sendHalt(fmt.Sprintf("Error committing block %v: %v", blkProp.blkHash, err))
 		return
 	}
 
