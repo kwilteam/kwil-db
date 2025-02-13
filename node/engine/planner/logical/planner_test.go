@@ -252,9 +252,9 @@ func Test_Planner(t *testing.T) {
 				"$name": types.TextType,
 			},
 			sql: `select u.name, u2.id, count(p.id) from users u
-				inner join posts p on u.id = p.owner_id
-				full join (select id from users where age > 18) u2 on u2.id = u.id
-				group by u.name, u2.id;`,
+					inner join posts p on u.id = p.owner_id
+					full join (select id from users where age > 18) u2 on u2.id = u.id
+					group by u.name, u2.id;`,
 			wt: "Return: name [text], id [uuid], count [int8]\n" +
 				"└─Project: {#ref(A)}; {#ref(B)}; {#ref(C)}\n" +
 				"  └─Aggregate [{#ref(A) = u.name}] [{#ref(B) = u2.id}]: {#ref(C) = count(p.id)}\n" +
@@ -287,8 +287,8 @@ func Test_Planner(t *testing.T) {
 		{
 			name: "common table expressions",
 			sql: `with a (id2, name2) as (select id, name from users),
-				b as (select * from a)
-				select * from b;`,
+					b as (select * from a)
+					select * from b;`,
 			wt: "Return: id2 [uuid], name2 [text]\n" +
 				"└─Project: b.id2; b.name2\n" +
 				"  └─Scan Table: b [cte]\n" +
@@ -302,14 +302,14 @@ func Test_Planner(t *testing.T) {
 		{
 			name: "set operations",
 			sql: `select id, name from users
-				union
-				select id, name from users
-				union all
-				select id, name from users
-				intersect
-				select id, name from users
-				except
-				select id, name from users;`,
+					union
+					select id, name from users
+					union all
+					select id, name from users
+					intersect
+					select id, name from users
+					except
+					select id, name from users;`,
 			wt: "Return: id [uuid], name [text]\n" +
 				"└─Set: except\n" +
 				"  ├─Set: intersect\n" +
@@ -329,23 +329,23 @@ func Test_Planner(t *testing.T) {
 		{
 			name: "incompatible set schema types",
 			sql: `select id, name from users
-				union
-				select id, owner_id from posts;`,
+					union
+					select id, owner_id from posts;`,
 			err: logical.ErrSetIncompatibleSchemas,
 		},
 		{
 			name: "incompatible set schema lengths",
 			sql: `select id, name from users
-				union
-				select 1;`,
+					union
+					select 1;`,
 			err: logical.ErrSetIncompatibleSchemas,
 		},
 		{
 			name: "set operations with order by and limit",
 			sql: `select id, name from users
-				union
-				select id, content from posts
-				order by name desc;`,
+					union
+					select id, content from posts
+					order by name desc;`,
 			wt: "Return: id [uuid], name [text]\n" +
 				"└─Sort: name desc nulls last\n" +
 				"  └─Set: union\n" +
@@ -477,10 +477,10 @@ func Test_Planner(t *testing.T) {
 		{
 			name: "update from with join",
 			sql: `update users set name = pu.content from posts p inner join (
-			select p.content from posts p
-		inner join users u on p.owner_id = u.id
-		where u.name = 'satoshi'
-		) pu on p.content = pu.content where p.owner_id = users.id`,
+				select p.content from posts p
+			inner join users u on p.owner_id = u.id
+			where u.name = 'satoshi'
+			) pu on p.content = pu.content where p.owner_id = users.id`,
 			// will be unoptimized, so it will use a cartesian product
 			// optimization could re-write the filter to a join, as well as
 			// add projections.
@@ -600,11 +600,11 @@ func Test_Planner(t *testing.T) {
 		{
 			name: "recursive CTE",
 			sql: `with recursive r as (
-				select 1 as n
-				union all
-				select n+1 from r where n < 10
-			)
-			select * from r;`,
+					select 1 as n
+					union all
+					select n+1 from r where n < 10
+				)
+				select * from r;`,
 			wt: "Return: n [int8]\n" +
 				"└─Project: r.n\n" +
 				"  └─Scan Table: r [cte]\n" +
@@ -621,7 +621,7 @@ func Test_Planner(t *testing.T) {
 			// It is an illegal query, but it should not crash the planner.
 			name: "inserting a cte",
 			sql: `with a as (select 1)
-			INSERT INTO users VALUES ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', a)`,
+				INSERT INTO users VALUES ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', a)`,
 			err: logical.ErrColumnNotFound,
 		},
 		{
@@ -636,6 +636,20 @@ func Test_Planner(t *testing.T) {
 				"└─Project: {#ref(A)}\n" +
 				"  └─Aggregate: {#ref(A) = sum(users.age)}\n" +
 				"    └─Scan Table: users [physical]\n",
+		},
+		{
+			// regression test for a previous case where an update
+			// without a FROM and WHERE panicked because it did not
+			// use the target table as a reference-able source table.
+			name: "update without where",
+			sql:  "update users set age = age + 1",
+			wt: "Update [users]: age = users.age + 1\n" +
+				"└─Scan Table: users [physical]\n",
+		},
+		{
+			name: "on conflict to composite primary key, but one referenced column does not exist",
+			sql:  "insert into follows values ('123e4567-e89b-12d3-a456-426614174000'::uuid, '123e4567-e89b-12d3-a456-426614174001'::uuid) on conflict (follower_id, id) do nothing",
+			err:  logical.ErrColumnNotFound,
 		},
 	}
 
@@ -774,6 +788,21 @@ var testTables = map[string]*engine.Table{
 					"owner_id",
 					"created_at",
 				},
+			},
+		},
+	},
+	"follows": {
+		Name: "follows",
+		Columns: []*engine.Column{
+			{
+				Name:         "follower_id",
+				DataType:     types.UUIDType,
+				IsPrimaryKey: true,
+			},
+			{
+				Name:         "followee_id",
+				DataType:     types.UUIDType,
+				IsPrimaryKey: true,
 			},
 		},
 	},

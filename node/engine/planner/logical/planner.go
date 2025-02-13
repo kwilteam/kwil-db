@@ -2454,6 +2454,14 @@ func (s *scopeContext) buildUpsert(node *parse.OnConflict, table *engine.Table, 
 			return true
 		}
 
+		// check that the table has all the columns
+		for _, col := range node.ConflictColumns {
+			_, ok := table.Column(col)
+			if !ok {
+				return nil, fmt.Errorf(`%w: conflict column "%s" not found in table`, ErrColumnNotFound, col)
+			}
+		}
+
 		found := false
 
 		// check all indexes for a unique or pk index that matches the columns
@@ -2662,10 +2670,10 @@ func (s *scopeContext) cartesian(targetTable, alias string, from parse.Table, jo
 			return &Filter{
 				Child:     targetPlan,
 				Condition: expr,
-			}, targetRel, rel, nil
+			}, rel, rel, nil
 		}
 
-		return targetPlan, rel, nil, nil
+		return targetPlan, rel, rel, nil
 	}
 
 	// update and delete statements with a FROM require a WHERE clause,
