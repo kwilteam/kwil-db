@@ -199,10 +199,6 @@ func init() {
 		valueMapping{
 			KwilType: types.NumericArrayType,
 			ZeroValue: func(t *types.DataType) (value, error) {
-				if !t.HasMetadata() {
-					return nil, fmt.Errorf("cannot create zero value of decimal type with zero precision and scale")
-				}
-
 				prec := t.Metadata[0]
 				scale := t.Metadata[1]
 
@@ -213,10 +209,6 @@ func init() {
 				return arr, nil
 			},
 			NullValue: func(t *types.DataType) (value, error) {
-				if !t.HasMetadata() {
-					return nil, fmt.Errorf("cannot create null value of decimal array type with zero precision and scale")
-				}
-
 				prec := t.Metadata[0]
 				scale := t.Metadata[1]
 
@@ -384,14 +376,22 @@ func newValue(v any) (value, error) {
 		}
 		return makeBlob(*v), nil
 	case *types.UUID:
+		if v == nil {
+			return makeNull(types.UUIDType)
+		}
 		return makeUUID(v), nil
 	case types.UUID:
 		return makeUUID(&v), nil
 	case *types.Decimal:
+		// makeDecimal accounts for nil, so we can pass it directly
 		return makeDecimal(v), nil
 	case types.Decimal:
 		return makeDecimal(&v), nil
 	case []int64:
+		if v == nil {
+			return makeNull(types.IntArrayType)
+		}
+
 		pgInts := make([]pgtype.Int8, len(v))
 		for i, val := range v {
 			pgInts[i].Int64 = val
@@ -402,6 +402,10 @@ func newValue(v any) (value, error) {
 			singleDimArray: newValidArr(pgInts),
 		}, nil
 	case []*int64:
+		if v == nil {
+			return makeNull(types.IntArrayType)
+		}
+
 		pgInts := make([]pgtype.Int8, len(v))
 		for i, val := range v {
 			if val == nil {
@@ -415,6 +419,10 @@ func newValue(v any) (value, error) {
 			singleDimArray: newValidArr(pgInts),
 		}, nil
 	case []int:
+		if v == nil {
+			return makeNull(types.IntArrayType)
+		}
+
 		pgInts := make([]pgtype.Int8, len(v))
 		for i, val := range v {
 			pgInts[i].Int64 = int64(val)
@@ -425,6 +433,10 @@ func newValue(v any) (value, error) {
 			singleDimArray: newValidArr(pgInts),
 		}, nil
 	case []*int:
+		if v == nil {
+			return makeNull(types.IntArrayType)
+		}
+
 		pgInts := make([]pgtype.Int8, len(v))
 		for i, val := range v {
 			if val == nil {
@@ -438,6 +450,10 @@ func newValue(v any) (value, error) {
 			singleDimArray: newValidArr(pgInts),
 		}, nil
 	case []string:
+		if v == nil {
+			return makeNull(types.TextArrayType)
+		}
+
 		pgTexts := make([]pgtype.Text, len(v))
 		for i, val := range v {
 			pgTexts[i].String = val
@@ -448,6 +464,10 @@ func newValue(v any) (value, error) {
 			singleDimArray: newValidArr(pgTexts),
 		}, nil
 	case []*string:
+		if v == nil {
+			return makeNull(types.TextArrayType)
+		}
+
 		pgTexts := make([]pgtype.Text, len(v))
 		for i, val := range v {
 			if val == nil {
@@ -462,6 +482,10 @@ func newValue(v any) (value, error) {
 			singleDimArray: newValidArr(pgTexts),
 		}, nil
 	case []bool:
+		if v == nil {
+			return makeNull(types.BoolArrayType)
+		}
+
 		pgBools := make([]pgtype.Bool, len(v))
 		for i, val := range v {
 			pgBools[i].Bool = val
@@ -472,6 +496,10 @@ func newValue(v any) (value, error) {
 			singleDimArray: newValidArr(pgBools),
 		}, nil
 	case []*bool:
+		if v == nil {
+			return makeNull(types.BoolArrayType)
+		}
+
 		pgBools := make([]pgtype.Bool, len(v))
 		for i, val := range v {
 			if val == nil {
@@ -486,6 +514,10 @@ func newValue(v any) (value, error) {
 			singleDimArray: newValidArr(pgBools),
 		}, nil
 	case [][]byte:
+		if v == nil {
+			return makeNull(types.ByteaArrayType)
+		}
+
 		pgBlobs := make([]blobValue, len(v))
 		for i, val := range v {
 			if val == nil {
@@ -499,6 +531,10 @@ func newValue(v any) (value, error) {
 			singleDimArray: newValidArr(pgBlobs),
 		}, nil
 	case []*[]byte:
+		if v == nil {
+			return makeNull(types.ByteaArrayType)
+		}
+
 		pgBlobs := make([]blobValue, len(v))
 		for i, val := range v {
 			if val == nil {
@@ -512,6 +548,10 @@ func newValue(v any) (value, error) {
 			singleDimArray: newValidArr(pgBlobs),
 		}, nil
 	case []*types.Decimal:
+		if v == nil {
+			return makeNull(types.NumericArrayType)
+		}
+
 		pgDecs := make([]pgtype.Numeric, len(v))
 		var firstNonNilDecimal *types.Decimal
 		for i, val := range v {
@@ -533,6 +573,10 @@ func newValue(v any) (value, error) {
 			metadata:       metadata,
 		}, nil
 	case []*types.UUID:
+		if v == nil {
+			return makeNull(types.UUIDArrayType)
+		}
+
 		pgUUIDs := make([]pgtype.UUID, len(v))
 		for i, val := range v {
 			if val == nil {
