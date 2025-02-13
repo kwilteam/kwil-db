@@ -36,10 +36,20 @@ func NewCountingReader(r io.Reader) *CountingReader {
 	return &CountingReader{r: r}
 }
 
+var _ io.Reader = (*CountingReader)(nil)
+
 func (cr *CountingReader) Read(p []byte) (int, error) {
 	n, err := cr.r.Read(p)
 	cr.c += int64(n)
 	return n, err
+}
+
+var _ io.ByteReader = (*CountingReader)(nil)
+
+func (cr *CountingReader) ReadByte() (byte, error) {
+	var b [1]byte
+	_, err := cr.Read(b[:]) // must call our Read to count this byte
+	return b[0], err
 }
 
 func (cr *CountingReader) ReadCount() int64 {

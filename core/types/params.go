@@ -94,7 +94,9 @@ type NetworkParameters struct {
 	// Validators set is logically also network parameters that evolve, but they
 	// are tracked separately.
 
-	// MaxBlockSize is the maximum size of a block in bytes.
+	// MaxBlockSize is the maximum total size of the serialized transactions in
+	// a block, in bytes. The size of the serialized block will be slightly
+	// larger for the header and other encoding overhead
 	MaxBlockSize int64 `json:"max_block_size"`
 
 	// JoinExpiry is the time duration (in seconds) after which a resolution is

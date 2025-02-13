@@ -14,6 +14,14 @@ import (
 	"github.com/kwilteam/kwil-db/core/utils"
 )
 
+func uvarintLen(x uint64) int {
+	return len(binary.AppendUvarint(nil, x))
+}
+
+func serializedLen(x int) int {
+	return x + uvarintLen(uint64(x))
+}
+
 // Signature is a signature with a designated AuthType, which should
 // be used to determine how to verify the signature.
 type Signature struct {
@@ -24,18 +32,25 @@ type Signature struct {
 	Type string `json:"type"`
 }
 
+func (s Signature) SerializeSize() int64 {
+	return int64(serializedLen(len(s.Data)) + serializedLen(len(s.Type)))
+	// return int64(4 + len(s.Data) + 4 + len(s.Type))
+}
+
 var _ io.WriterTo = Signature{}
 
 func (s Signature) WriteTo(w io.Writer) (int64, error) {
 	cw := utils.NewCountingWriter(w)
-	if err := binary.Write(cw, binary.LittleEndian, uint32(len(s.Data))); err != nil {
+	_, err := cw.Write(binary.AppendUvarint(nil, uint64(len(s.Data))))
+	if err != nil {
 		return cw.Written(), fmt.Errorf("failed to write signature length: %w", err)
 	}
 	if err := binary.Write(cw, binary.LittleEndian, s.Data); err != nil {
 		return cw.Written(), fmt.Errorf("failed to write signature data: %w", err)
 	}
 
-	if err := binary.Write(cw, binary.LittleEndian, uint32(len(s.Type))); err != nil {
+	_, err = cw.Write(binary.AppendUvarint(nil, uint64(len(s.Type))))
+	if err != nil {
 		return cw.Written(), fmt.Errorf("failed to write signature type length: %w", err)
 	}
 	if err := binary.Write(cw, binary.LittleEndian, []byte(s.Type)); err != nil {
@@ -73,53 +88,49 @@ func (s *Signature) UnmarshalBinary(data []byte) error {
 
 func (s *Signature) ReadFrom(r io.Reader) (int64, error) {
 	rl, _ := r.(interface{ Len() int })
-	var n int64
-	var sigLen uint32
-	if err := binary.Read(r, binary.LittleEndian, &sigLen); err != nil {
-		return 0, fmt.Errorf("failed to read signature length: %w", err)
+	cr := utils.NewCountingReader(r)
+	sigLen, err := binary.ReadUvarint(cr) // signature length
+	if err != nil {
+		return cr.ReadCount(), fmt.Errorf("failed to read signature length: %w", err)
 	}
-	n += 4
 
 	if sigLen > 0 {
-		if rl != nil {
+		if rl, ok := r.(interface{ Len() int }); ok {
 			if int(sigLen) > rl.Len() {
-				return 0, fmt.Errorf("impossibly long signature length: %d", sigLen)
+				return cr.ReadCount(), fmt.Errorf("impossibly long signature length: %d", sigLen)
 			}
 			s.Data = make([]byte, sigLen)
-			if _, err := io.ReadFull(r, s.Data); err != nil {
-				return 0, fmt.Errorf("failed to read signature data: %w", err)
+			if _, err := io.ReadFull(cr, s.Data); err != nil {
+				return cr.ReadCount(), fmt.Errorf("failed to read signature data: %w", err)
 			}
 		} else {
 			sigBuf := &bytes.Buffer{}
-			_, err := io.CopyN(sigBuf, r, int64(sigLen))
+			_, err := io.CopyN(sigBuf, cr, int64(sigLen))
 			if err != nil {
-				return 0, fmt.Errorf("failed to read signature data: %w", err)
+				return cr.ReadCount(), fmt.Errorf("failed to read signature data: %w", err)
 			}
 			s.Data = sigBuf.Bytes()
 		}
 
 	}
-	n += int64(sigLen)
 
-	var typeLen uint32
-	if err := binary.Read(r, binary.LittleEndian, &typeLen); err != nil {
-		return 0, fmt.Errorf("failed to read signature type length: %w", err)
+	typeLen, err := binary.ReadUvarint(cr)
+	if err != nil {
+		return cr.ReadCount(), fmt.Errorf("failed to read signature type length: %w", err)
 	}
-	n += 4
 
 	if typeLen > 0 {
 		if rl != nil && int(typeLen) > rl.Len() {
-			return 0, fmt.Errorf("impossibly long sig type length: %d", typeLen)
+			return cr.ReadCount(), fmt.Errorf("impossibly long sig type length: %d", typeLen)
 		}
 		typeBytes := make([]byte, typeLen)
-		if _, err := io.ReadFull(r, typeBytes); err != nil {
-			return 0, fmt.Errorf("failed to read signature type: %w", err)
+		if _, err := io.ReadFull(cr, typeBytes); err != nil {
+			return cr.ReadCount(), fmt.Errorf("failed to read signature type: %w", err)
 		}
 		s.Type = string(typeBytes)
 	}
-	n += int64(typeLen)
 
-	return n, nil
+	return cr.ReadCount(), nil
 }
 
 // Signer is an interface for something that can sign messages.
