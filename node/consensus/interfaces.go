@@ -23,10 +23,10 @@ type DB interface {
 }
 
 type Mempool interface {
-	PeekN(maxSize int) []types.NamedTx
+	PeekN(maxTxns, totalSizeLimit int) []types.NamedTx
 	Remove(txid types.Hash)
 	RecheckTxs(ctx context.Context, checkFn mempool.CheckFn)
-	Store(types.Hash, *ktypes.Transaction) bool
+	Store(types.Hash, *ktypes.Transaction) (have, rejected bool)
 	TxsAvailable() bool
 }
 

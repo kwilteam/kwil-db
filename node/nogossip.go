@@ -76,8 +76,11 @@ func (n *Node) txAnnStreamHandler(s network.Stream) {
 	if err := n.ce.CheckTx(ctx, &tx); err != nil {
 		n.log.Warnf("tx %v failed check: %v", txHash, err)
 	} else {
-		n.mp.Store(txHash, &tx)
 		fetched = true
+		_, rejected := n.mp.Store(txHash, &tx)
+		if rejected { // our mempool is full
+			return
+		}
 
 		// re-announce
 		go n.announceTx(context.Background(), txHash, rawTx, s.Conn().RemotePeer())
@@ -222,7 +225,8 @@ func (n *Node) startTxAnns(ctx context.Context, reannouncePeriod time.Duration) 
 				defer cancel()
 
 				const sendN = 20
-				txns := n.mp.PeekN(sendN)
+				const sendBtsLimit = 8_000_000
+				txns := n.mp.PeekN(sendN, sendBtsLimit)
 				if len(txns) == 0 {
 					return // from this anon func, not the goroutine!
 				}

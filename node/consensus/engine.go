@@ -23,9 +23,10 @@ import (
 )
 
 const (
-	// Use these accordingly
-	MaxBlockSize = 4 * 1024 * 1024 // 1 MB
-	blockTxCount = 50
+	// maxNumTxnsInBlock is the maximum number of transactions we will put in a
+	// block proposal. Currently set to a billion, which is basically no limit
+	// since block size in bytes will hit first.
+	maxNumTxnsInBlock = 1 << 30
 
 	defaultProposeTimeout = 1 * time.Second
 )

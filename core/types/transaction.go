@@ -298,6 +298,13 @@ func (t *TransactionBody) SerializeMsg(mst SignedMsgSerializationType) ([]byte, 
 
 var _ io.WriterTo = (*Transaction)(nil)
 
+// SerializeSize gives the size of the serialized transaction.
+func (t *Transaction) SerializeSize() int64 {
+	// TODO: do this better, not by actually serializing!!!!
+	sz, _ := t.WriteTo(io.Discard)
+	return sz
+}
+
 func (t *Transaction) WriteTo(w io.Writer) (int64, error) {
 	cw := utils.NewCountingWriter(w)
 	err := t.serialize(cw)

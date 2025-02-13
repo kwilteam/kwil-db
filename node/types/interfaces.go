@@ -61,13 +61,12 @@ type TxGetter interface {
 }
 
 type MemPool interface {
-	Size() int
+	Size() (count, bts int)
 	ReapN(int) []NamedTx
 	Get(Hash) *types.Transaction
 	Remove(Hash)
-	Store(Hash, *types.Transaction) bool
-	PeekN(n int) []NamedTx
-	// Check([]byte)
+	Store(Hash, *types.Transaction) (found, rejected bool)
+	PeekN(maxNumTxns, maxTotalTxBytes int) []NamedTx
 	PreFetch(txid Hash) bool // should be app level instead
 }
 
