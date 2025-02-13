@@ -298,6 +298,10 @@ func init() {
 					// we dont need to worry about locking the instances yet
 					// because we just read them from the db
 					for _, instance := range instances {
+						if _, ok := SINGLETON.instances.Get(*instance.ID); ok {
+							return fmt.Errorf("internal bug: duplicate instance id %s", instance.ID)
+						}
+
 						// if instance is active, we should start one of its
 						// two listeners. If it is synced, we should start the
 						// transfer listener. Otherwise, we should start the state poller
@@ -640,7 +644,7 @@ func init() {
 								return err
 							}
 
-							err = issueReward(ctx.TxContext.Ctx, app, info.currentEpoch.ID, addr, amount)
+							err = issueReward(ctx.TxContext.Ctx, app, id, info.currentEpoch.ID, addr, amount)
 							if err != nil {
 								info.mu.RUnlock()
 								return err
@@ -993,16 +997,12 @@ func init() {
 							confirmedOnly := inputs[3].(bool)
 
 							return getEpochs(ctx.TxContext.Ctx, app, id, after, limit, confirmedOnly, func(e *Epoch) error {
-								fmt.Printf("-=-=-=-=%+v, %+v, %v, %v\n", e.Voters, e.VoteNonces, e.Voters, e.VoteNonces)
-
 								var voters []string
 								if len(e.Voters) > 0 {
 									for _, item := range e.Voters {
 										voters = append(voters, item.String())
 									}
 								}
-								fmt.Printf("voters: %v\n", voters)
-								fmt.Printf("voterNonces: %v\n", e.VoteNonces)
 
 								return resultFn([]any{e.ID, e.StartHeight, e.StartTime.Unix(), *e.EndHeight, e.Root, e.BlockHash,
 									voters,
@@ -1160,6 +1160,8 @@ func init() {
 			if block.Timestamp < info.currentEpoch.StartTime.Add(time.Duration(info.userProvidedData.DistributionPeriod)*time.Second).Unix() {
 				return nil
 			}
+
+			// TODO: if last epoch(if exists) not confirmed, we do nothing.
 
 			var rewards []*EpochReward
 			err := getRewardsForEpoch(ctx, app, info.currentEpoch.ID, func(reward *EpochReward) error {

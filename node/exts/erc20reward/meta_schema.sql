@@ -19,7 +19,8 @@ CREATE TABLE reward_instances (
     erc20_address BYTEA,
     erc20_decimals INT8,
     synced_at INT8, -- the unix timestamp (in seconds) when the reward was synced
-    balance NUMERIC(78, 0) NOT NULL DEFAULT 0 CHECK(balance >= 0) -- the total balance owned by the database that can be distributed
+    balance NUMERIC(78, 0) NOT NULL DEFAULT 0 CHECK(balance >= 0), -- the total balance owned by the database that can be distributed
+    UNIQUE (chain_id, escrow_address) -- unique per chain and escrow
 );
 
 -- balances tracks the balance of each user in a given reward instance.

@@ -28,6 +28,8 @@ type Epoch struct {
 	EndHeight   int64
 	RewardRoot  []byte
 	BlockHash   []byte
+	Voters      []string
+	VoteNonce   []int64
 }
 
 // TODO: use the type from Ext?

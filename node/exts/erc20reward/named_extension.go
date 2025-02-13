@@ -116,7 +116,7 @@ func init() {
 					Name: "issue",
 					Parameters: []precompiles.PrecompileValue{
 						{Name: "user", Type: types.TextType},
-						{Name: "amount", Type: types.TextType},
+						{Name: "amount", Type: uint256Numeric},
 					},
 					AccessModifiers: []precompiles.Modifier{precompiles.SYSTEM},
 					Handler:         makeMetaHandler("issue"),
@@ -125,7 +125,7 @@ func init() {
 					Name: "transfer",
 					Parameters: []precompiles.PrecompileValue{
 						{Name: "to", Type: types.TextType},
-						{Name: "amount", Type: types.TextType},
+						{Name: "amount", Type: uint256Numeric},
 					},
 					// anybody can call this as long as they have the tokens.
 					// There is no security risk if somebody calls this directly
@@ -135,7 +135,7 @@ func init() {
 				{
 					Name: "lock",
 					Parameters: []precompiles.PrecompileValue{
-						{Name: "amount", Type: types.TextType},
+						{Name: "amount", Type: uint256Numeric},
 					},
 					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
 					Handler:         makeMetaHandler("lock"),
@@ -144,7 +144,7 @@ func init() {
 					Name: "lock_admin",
 					Parameters: []precompiles.PrecompileValue{
 						{Name: "user", Type: types.TextType},
-						{Name: "amount", Type: types.TextType},
+						{Name: "amount", Type: uint256Numeric},
 					},
 					AccessModifiers: []precompiles.Modifier{precompiles.SYSTEM},
 					Handler:         makeMetaHandler("lock_admin"),
@@ -153,7 +153,7 @@ func init() {
 					Name: "unlock",
 					Parameters: []precompiles.PrecompileValue{
 						{Name: "user", Type: types.TextType},
-						{Name: "amount", Type: types.TextType},
+						{Name: "amount", Type: uint256Numeric},
 					},
 					AccessModifiers: []precompiles.Modifier{precompiles.SYSTEM},
 					Handler:         makeMetaHandler("unlock"),
@@ -166,7 +166,7 @@ func init() {
 					},
 					Returns: &precompiles.MethodReturn{
 						Fields: []precompiles.PrecompileValue{
-							{Name: "balance", Type: types.TextType},
+							{Name: "balance", Type: uint256Numeric},
 						},
 					},
 					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
@@ -208,7 +208,7 @@ func init() {
 				{
 					Name: "scale_down",
 					Parameters: []precompiles.PrecompileValue{
-						{Name: "amount", Type: uint256Numeric},
+						{Name: "amount", Type: types.TextType},
 					},
 					Returns: &precompiles.MethodReturn{
 						Fields: []precompiles.PrecompileValue{
