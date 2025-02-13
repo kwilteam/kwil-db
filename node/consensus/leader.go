@@ -191,7 +191,7 @@ func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 // does basic gas and balance checks and enforces the block size limits.
 func (ce *ConsensusEngine) createBlockProposal(ctx context.Context) (*blockProposal, error) {
 	totalTxSizeLimit := ce.ConsensusParams().MaxBlockSize
-	nTxs := ce.mempool.PeekN(blockTxCount, int(totalTxSizeLimit))
+	nTxs := ce.mempool.PeekN(maxNumTxnsInBlock, int(totalTxSizeLimit))
 	txns := make([]*ktypes.Transaction, len(nTxs))
 	for i, ntx := range nTxs {
 		txns[i] = ntx.Tx
