@@ -142,3 +142,79 @@ func TestHashIsZero(t *testing.T) {
 		}
 	})
 }
+
+func TestHashTextMarshaling(t *testing.T) {
+	t.Run("marshal text valid hash", func(t *testing.T) {
+		h := Hash{0xff, 0xee, 0xdd, 0xcc}
+		data, err := h.MarshalText()
+		if err != nil {
+			t.Fatal(err)
+		}
+		expected := "ffeeddcc00000000000000000000000000000000000000000000000000000000"
+		if string(data) != expected {
+			t.Errorf("got %s, want %s", string(data), expected)
+		}
+
+		// now test that it can be unmarshaled
+		var h2 Hash
+		err = h2.UnmarshalText(data)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if h != h2 {
+			t.Errorf("got %v, want %v", h2, h)
+		}
+	})
+
+	t.Run("unmarshal text valid hash", func(t *testing.T) {
+		input := "ffeeddcc00000000000000000000000000000000000000000000000000000000"
+		var h Hash
+		err := h.UnmarshalText([]byte(input))
+		if err != nil {
+			t.Fatal(err)
+		}
+		expected := Hash{0xff, 0xee, 0xdd, 0xcc}
+		if h != expected {
+			t.Errorf("got %v, want %v", h, expected)
+		}
+	})
+
+	t.Run("unmarshal text odd length", func(t *testing.T) {
+		input := "ffeeddccc"
+		var h Hash
+		err := h.UnmarshalText([]byte(input))
+		if err == nil {
+			t.Error("expected error for odd length hex string")
+		}
+	})
+
+	t.Run("unmarshal text invalid characters", func(t *testing.T) {
+		input := "gghhiijj00000000000000000000000000000000000000000000000000000000"
+		var h Hash
+		err := h.UnmarshalText([]byte(input))
+		if err == nil {
+			t.Error("expected error for invalid hex characters")
+		}
+	})
+
+	t.Run("marshal empty hash", func(t *testing.T) {
+		var h Hash
+		data, err := h.MarshalText()
+		if err != nil {
+			t.Fatal(err)
+		}
+		expected := "0000000000000000000000000000000000000000000000000000000000000000"
+		if string(data) != expected {
+			t.Errorf("got %s, want %s", string(data), expected)
+		}
+	})
+
+	t.Run("unmarshal text with whitespace", func(t *testing.T) {
+		input := "  ffeeddcc00000000000000000000000000000000000000000000000000000000  "
+		var h Hash
+		err := h.UnmarshalText([]byte(input))
+		if err == nil {
+			t.Error("expected error for input with whitespace")
+		}
+	})
+}

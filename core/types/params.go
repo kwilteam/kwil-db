@@ -613,7 +613,11 @@ func (np NetworkParameters) String() string {
 
 func (np *NetworkParameters) Hash() Hash {
 	hasher := NewHasher()
-	hasher.Write(np.Leader.Bytes())
+	if np.Leader.PublicKey == nil { // this is not valid in use, but don't panic
+		hasher.Write([]byte{0})
+	} else {
+		hasher.Write(np.Leader.Bytes())
+	}
 	binary.Write(hasher, SerializationByteOrder, np.MaxBlockSize)
 	binary.Write(hasher, SerializationByteOrder, np.JoinExpiry)
 	binary.Write(hasher, SerializationByteOrder, np.DisabledGasCosts)

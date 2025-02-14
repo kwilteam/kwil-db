@@ -1,6 +1,7 @@
 package types
 
 import (
+	"bytes"
 	"encoding/hex"
 	"reflect"
 	"testing"
@@ -435,12 +436,23 @@ func TestParamUpdatesMerge(t *testing.T) {
 }
 
 func TestPublicKeyJSON(t *testing.T) {
+	keyBts, _ := hex.DecodeString("02e4f82ae8d6ecac4ff0c26be1b7a3a7e7cb18b0dd77ddbe19ae10ddeafc747949")
+	testKey, err := crypto.UnmarshalSecp256k1PublicKey(keyBts)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	tests := []struct {
 		name    string
 		pk      PublicKey
 		json    string
 		wantErr bool
 	}{
+		{
+			name: "marshal",
+			pk:   PublicKey{testKey},
+			json: `{"type":"secp256k1","key":"02e4f82ae8d6ecac4ff0c26be1b7a3a7e7cb18b0dd77ddbe19ae10ddeafc747949"}`,
+		},
 		{
 			name:    "unmarshal invalid hex string",
 			json:    `{"type":"public_key","key":"XYZ"}`,
@@ -594,6 +606,215 @@ func TestParamUpdatesUnmarshalJSON(t *testing.T) {
 			}
 			if !tt.wantErr && !reflect.DeepEqual(pu, tt.want) {
 				t.Errorf("UnmarshalJSON() got = %v, want %v", pu, tt.want)
+			}
+		})
+	}
+}
+
+func TestNetworkParametersEquals(t *testing.T) {
+	pub0, err := crypto.UnmarshalSecp256k1PublicKey([]byte{0x2, 0xe0, 0x9d, 0x79, 0x32, 0xde, 0xf1, 0x1d, 0x82, 0x72, 0xdd, 0x3b, 0x58, 0x9d, 0xf8, 0xb1, 0xcf, 0x7a, 0xff, 0xb0, 0x41, 0x50, 0x19, 0x4f, 0xc2, 0x28, 0xf8, 0x17, 0xae, 0xba, 0xb2, 0xc9, 0xda})
+	require.NoError(t, err)
+
+	pub1, err := crypto.UnmarshalSecp256k1PublicKey([]byte{0x3, 0x16, 0xb4, 0x4c, 0xab, 0xfb, 0xc, 0xc, 0xa1, 0x3b, 0x58, 0xc4, 0x69, 0x3f, 0x71, 0xd8, 0xd0, 0xf1, 0x6e, 0xcb, 0x16, 0xe9, 0xb6, 0xed, 0xd3, 0xa2, 0x23, 0x74, 0xef, 0x38, 0xc7, 0xf0, 0xb})
+	require.NoError(t, err)
+
+	tests := []struct {
+		name     string
+		np1      *NetworkParameters
+		np2      *NetworkParameters
+		expected bool
+	}{
+		{
+			name:     "both nil",
+			np1:      nil,
+			np2:      nil,
+			expected: true,
+		},
+		{
+			name:     "first nil",
+			np1:      nil,
+			np2:      &NetworkParameters{},
+			expected: false,
+		},
+		{
+			name:     "second nil",
+			np1:      &NetworkParameters{},
+			np2:      nil,
+			expected: false,
+		},
+		{
+			name:     "both empty leaders",
+			np1:      &NetworkParameters{},
+			np2:      &NetworkParameters{},
+			expected: true,
+		},
+		{
+			name: "different leaders",
+			np1: &NetworkParameters{
+				Leader: PublicKey{pub0},
+			},
+			np2: &NetworkParameters{
+				Leader: PublicKey{pub1},
+			},
+			expected: false,
+		},
+		{
+			name: "different max block size",
+			np1: &NetworkParameters{
+				Leader:       PublicKey{pub0},
+				MaxBlockSize: 1000,
+			},
+			np2: &NetworkParameters{
+				Leader:       PublicKey{pub0},
+				MaxBlockSize: 2000,
+			},
+			expected: false,
+		},
+		{
+			name: "different join expiry",
+			np1: &NetworkParameters{
+				Leader:     PublicKey{pub0},
+				JoinExpiry: Duration(10 * time.Second),
+			},
+			np2: &NetworkParameters{
+				Leader:     PublicKey{pub0},
+				JoinExpiry: Duration(20 * time.Second),
+			},
+			expected: false,
+		},
+		{
+			name: "different disabled gas costs",
+			np1: &NetworkParameters{
+				Leader:           PublicKey{pub0},
+				DisabledGasCosts: true,
+			},
+			np2: &NetworkParameters{
+				Leader:           PublicKey{pub0},
+				DisabledGasCosts: false,
+			},
+			expected: false,
+		},
+		{
+			name: "different max votes per tx",
+			np1: &NetworkParameters{
+				Leader:        PublicKey{pub0},
+				MaxVotesPerTx: 10,
+			},
+			np2: &NetworkParameters{
+				Leader:        PublicKey{pub0},
+				MaxVotesPerTx: 20,
+			},
+			expected: false,
+		},
+		{
+			name: "different migration status",
+			np1: &NetworkParameters{
+				Leader:          PublicKey{pub0},
+				MigrationStatus: MigrationStatus("pending"),
+			},
+			np2: &NetworkParameters{
+				Leader:          PublicKey{pub0},
+				MigrationStatus: MigrationStatus("completed"),
+			},
+			expected: false,
+		},
+		{
+			name: "identical complete parameters",
+			np1: &NetworkParameters{
+				Leader:           PublicKey{pub0},
+				MaxBlockSize:     1000,
+				JoinExpiry:       Duration(10 * time.Second),
+				DisabledGasCosts: true,
+				MaxVotesPerTx:    10,
+				MigrationStatus:  MigrationStatus("pending"),
+			},
+			np2: &NetworkParameters{
+				Leader:           PublicKey{pub0},
+				MaxBlockSize:     1000,
+				JoinExpiry:       Duration(10 * time.Second),
+				DisabledGasCosts: true,
+				MaxVotesPerTx:    10,
+				MigrationStatus:  MigrationStatus("pending"),
+			},
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := tt.np1.Equals(tt.np2)
+			require.Equal(t, tt.expected, result)
+		})
+	}
+}
+
+func TestNetworkParametersHash(t *testing.T) {
+	pub0, err := crypto.UnmarshalSecp256k1PublicKey([]byte{0x2, 0xe0, 0x9d, 0x79, 0x32, 0xde, 0xf1, 0x1d, 0x82, 0x72, 0xdd, 0x3b, 0x58, 0x9d, 0xf8, 0xb1, 0xcf, 0x7a, 0xff, 0xb0, 0x41, 0x50, 0x19, 0x4f, 0xc2, 0x28, 0xf8, 0x17, 0xae, 0xba, 0xb2, 0xc9, 0xda})
+	require.NoError(t, err)
+	pub1, err := crypto.UnmarshalSecp256k1PublicKey([]byte{0x3, 0x16, 0xb4, 0x4c, 0xab, 0xfb, 0xc, 0xc, 0xa1, 0x3b, 0x58, 0xc4, 0x69, 0x3f, 0x71, 0xd8, 0xd0, 0xf1, 0x6e, 0xcb, 0x16, 0xe9, 0xb6, 0xed, 0xd3, 0xa2, 0x23, 0x74, 0xef, 0x38, 0xc7, 0xf0, 0xb})
+	require.NoError(t, err)
+
+	baseParams := &NetworkParameters{
+		Leader:           PublicKey{pub0},
+		MaxBlockSize:     1000,
+		JoinExpiry:       Duration(3600),
+		DisabledGasCosts: false,
+		MaxVotesPerTx:    10,
+		MigrationStatus:  "active",
+	}
+
+	tests := []struct {
+		name    string
+		mutator func(*NetworkParameters)
+	}{
+		{
+			name: "different leader",
+			mutator: func(np *NetworkParameters) {
+				np.Leader = PublicKey{pub1}
+			},
+		},
+		{
+			name: "different max block size",
+			mutator: func(np *NetworkParameters) {
+				np.MaxBlockSize = 2000
+			},
+		},
+		{
+			name: "different join expiry",
+			mutator: func(np *NetworkParameters) {
+				np.JoinExpiry = Duration(7200)
+			},
+		},
+		{
+			name: "different disabled gas costs",
+			mutator: func(np *NetworkParameters) {
+				np.DisabledGasCosts = true
+			},
+		},
+		{
+			name: "different max votes per tx",
+			mutator: func(np *NetworkParameters) {
+				np.MaxVotesPerTx = 20
+			},
+		},
+		{
+			name: "different migration status",
+			mutator: func(np *NetworkParameters) {
+				np.MigrationStatus = "inactive"
+			},
+		},
+	}
+
+	baseHash := baseParams.Hash()
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			modifiedParams := baseParams.Clone()
+			tt.mutator(modifiedParams)
+			modifiedHash := modifiedParams.Hash()
+
+			if bytes.Equal(baseHash[:], modifiedHash[:]) {
+				t.Errorf("hash should be different when changing %s", tt.name)
 			}
 		})
 	}

@@ -20,10 +20,12 @@ import (
 type TestPayload struct {
 	Key   string
 	Value string
+
+	marshalError error
 }
 
 func (p *TestPayload) MarshalBinary() ([]byte, error) {
-	return []byte(fmt.Sprintf("%s=%s", p.Key, p.Value)), nil
+	return []byte(fmt.Sprintf("%s=%s", p.Key, p.Value)), p.marshalError
 }
 
 func (p *TestPayload) UnmarshalBinary(data []byte) error {
@@ -1131,4 +1133,77 @@ type regularReader struct {
 
 func (r *regularReader) Read(p []byte) (n int, err error) {
 	return r.r.Read(p)
+}
+func TestCreateTransaction(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name        string
+		payload     Payload
+		chainID     string
+		nonce       uint64
+		expectError bool
+	}{
+		{
+			name: "valid payload",
+			payload: &TestPayload{
+				Key:   "test",
+				Value: "value",
+			},
+			chainID:     "test-chain",
+			nonce:       1,
+			expectError: false,
+		},
+		{
+			name: "payload with marshal fail",
+			payload: &TestPayload{
+				Key:          "test",
+				Value:        "value",
+				marshalError: errors.New("boom"),
+			},
+			expectError: true,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			tx, err := CreateTransaction(tc.payload, tc.chainID, tc.nonce)
+			if tc.expectError {
+				require.Error(t, err)
+				require.Nil(t, tx)
+				return
+			}
+
+			require.NoError(t, err)
+			require.NotNil(t, tx)
+			require.Equal(t, DefaultSignedMsgSerType, tx.Serialization)
+			require.Equal(t, tc.chainID, tx.Body.ChainID)
+			require.Equal(t, tc.nonce, tx.Body.Nonce)
+			require.Equal(t, big.NewInt(0), tx.Body.Fee)
+
+			if tc.payload != nil {
+				require.Equal(t, tc.payload.Type(), tx.Body.PayloadType)
+				payloadData, err := tc.payload.MarshalBinary()
+				require.NoError(t, err)
+				require.Equal(t, payloadData, tx.Body.Payload)
+			}
+		})
+	}
+}
+
+func TestCreateNodeTransaction(t *testing.T) {
+	t.Parallel()
+
+	payload := &TestPayload{
+		Key:   "node",
+		Value: "test",
+	}
+	chainID := "test-chain"
+	nonce := uint64(1)
+
+	tx, err := CreateNodeTransaction(payload, chainID, nonce)
+
+	require.NoError(t, err)
+	require.NotNil(t, tx)
+	require.Equal(t, SignedMsgDirect, tx.Serialization)
 }

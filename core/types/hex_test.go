@@ -183,6 +183,25 @@ func TestHexBytes_JSON(t *testing.T) {
 			t.Errorf("roundtrip failed: got %v, want %v", decoded, original)
 		}
 	})
+
+	t.Run("roundtrip null", func(t *testing.T) {
+		original := HexBytes(nil)
+		encoded, err := original.MarshalJSON()
+		if err != nil {
+			t.Fatalf("MarshalJSON failed: %v", err)
+		}
+		if string(encoded) != `null` { // unquoted JSON null
+			t.Errorf("expected null, got %s", encoded)
+		}
+		var decoded HexBytes
+		err = decoded.UnmarshalJSON(encoded)
+		if err != nil {
+			t.Fatalf("UnmarshalJSON failed: %v", err)
+		}
+		if decoded != nil {
+			t.Errorf("expected nil, got %v", decoded)
+		}
+	})
 }
 
 func TestHexBytes_Format(t *testing.T) {
