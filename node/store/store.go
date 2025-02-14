@@ -62,22 +62,35 @@ func NewBlockStore(dir string, opts ...Option) (*BlockStore, error) {
 	logger := options.logger
 
 	bOpts := badger.DefaultOptions(filepath.Join(dir, "bstore"))
-	bOpts.WithLogger(&badgerLogger{logger})
-	bOpts = bOpts.WithLoggingLevel(badger.WARNING)
-	// bOpts.SyncWrites = true
+	bOpts.Logger = &badgerLogger{logger.NewWithLevel(log.LevelWarn, "BADGER")}
+	// NOTE: do NOT use WithLoggingLevel since that overwrites our logger!
+	// bOpts.SyncWrites = true // write survive process crash without this by virtue of mmap
+	// Compression and caching are closely related. See comments in else case below:
 	if options.compress {
-		const bs = 1 << 16 // 18 = 256 KiB
-		bOpts = bOpts.WithBlockSize(bs)
-		bOpts.Compression = boptions.ZSTD
+		const bs = 1 << 16 // 65536, default is 4096
+		bOpts.BlockSize = bs
+		bOpts.Compression = boptions.ZSTD // not snappy
 		bOpts.ZSTDCompressionLevel = 1
+		bOpts.BlockCacheSize = 256 << 20 // 256 MiB is the default already
 	} else {
 		bOpts.Compression = boptions.None
+		bOpts.BlockCacheSize = 0
+		// badger docs say:
+		//
+		//   It is recommended to use a cache if you're using compression or
+		//   encryption. If compression and encryption both are disabled, adding a
+		//   cache will lead to unnecessary overhead which will affect the read
+		//   performance. Setting size to zero disables the cache altogether.
+		//
+		// As such, with compression disabled, we set to zero to disable the cache.
 	}
-	bOpts = bOpts.WithLoggingLevel(badger.WARNING)
+	// bOpts.CompactL0OnClose = true
+
 	db, err := badger.Open(bOpts)
 	if err != nil {
 		return nil, err
 	}
+
 	bs := &BlockStore{
 		idx:      make(map[types.Hash]int64),
 		hashes:   make(map[int64]blockHashes),
@@ -161,6 +174,7 @@ func NewBlockStore(dir string, opts ...Option) (*BlockStore, error) {
 }
 
 func (bki *BlockStore) Close() error {
+	// bki.db.RunValueLogGC(0.5)
 	return bki.db.Close()
 }
 

@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
 	"github.com/stretchr/testify/require"
@@ -409,12 +410,22 @@ func newTx(nonce uint64, sender string, optPayload ...string) *ktypes.Transactio
 }
 
 func TestLargeBlockStore(t *testing.T) {
-	// This test demonstrates that zstd level 1 compression is faster than no
+	// This test demonstrates that zstd level 1 compression is no slower than no
 	// compression for reasonably compressible data.
+	t.Run("no compression", func(t *testing.T) {
+		testLargeBlockStore(t, false)
+	})
 
+	t.Run("compression", func(t *testing.T) {
+		testLargeBlockStore(t, true)
+	})
+}
+
+func testLargeBlockStore(t *testing.T, compress bool) {
 	// Create block store
 	dir := t.TempDir()
-	bs, err := NewBlockStore(dir, WithCompression(true))
+	logger := log.NewStdoutLogger()
+	bs, err := NewBlockStore(dir, WithCompression(compress), WithLogger(logger))
 	if err != nil {
 		t.Fatal(err)
 	}
