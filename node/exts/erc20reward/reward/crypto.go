@@ -48,15 +48,15 @@ func GenPostRewardTxData(root []byte, amount *big.Int) ([]byte, error) {
 // GenGnosisSafeTx returns a safe tx, and the tx hash to be used to generate signature.
 // More info: https://docs.safe.global/sdk/protocol-kit/guides/signatures/transactions
 // Since Gnosis 1.3.0, ChainID is a part of the EIP-712 domain.
-func GenGnosisSafeTx(to, safe string, value int64, data hexutil.Bytes, chainID math.HexOrDecimal256,
-	nonce big.Int) (*core.GnosisSafeTx, []byte, error) {
+func GenGnosisSafeTx(to, safe string, value int64, data hexutil.Bytes, chainID int64,
+	nonce int64) (*core.GnosisSafeTx, []byte, error) {
 	gnosisSafeTx := core.GnosisSafeTx{
 		To:        ethCommon.NewMixedcaseAddress(ethCommon.HexToAddress(to)),
 		Value:     *math.NewDecimal256(value),
 		Data:      &data,
 		Operation: 0, // Call
 
-		ChainId: &chainID,
+		ChainId: math.NewHexOrDecimal256(chainID),
 		Safe:    ethCommon.NewMixedcaseAddress(ethCommon.HexToAddress(safe)),
 
 		// NOTE: we ignore all those parameters since we're generating off-chain
@@ -68,7 +68,7 @@ func GenGnosisSafeTx(to, safe string, value int64, data hexutil.Bytes, chainID m
 		//SafeTxGas:      big.Int{},
 		//SafeTxGas:      *big.NewInt(*safeTxGas),
 
-		Nonce: nonce,
+		Nonce: *big.NewInt(nonce),
 
 		// not sure what's the purpose of this field
 		InputExpHash: ethCommon.Hash{},

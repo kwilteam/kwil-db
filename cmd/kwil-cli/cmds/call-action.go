@@ -113,8 +113,6 @@ func callActionCmd() *cobra.Command {
 					return display.PrintErr(cmd, err)
 				}
 
-				fmt.Printf("--------Result: %+v\n", res.QueryResult)
-
 				return display.PrintCmd(cmd, &respCall{Data: res, PrintLogs: logs, cmd: cmd})
 			})
 		},

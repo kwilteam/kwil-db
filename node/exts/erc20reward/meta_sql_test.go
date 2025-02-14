@@ -2,11 +2,9 @@ package erc20reward
 
 import (
 	"context"
-	"testing"
-	"time"
-
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
+	"testing"
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/log"
@@ -98,7 +96,7 @@ func TestCreateNewRewardInstance(t *testing.T) {
 	pending := &PendingEpoch{
 		ID:          newUUID(),
 		StartHeight: 10,
-		StartTime:   time.Unix(100, 0),
+		StartTime:   100,
 	}
 	err = createEpoch(ctx, app, pending, id)
 	require.NoError(t, err)
