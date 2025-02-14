@@ -3,8 +3,6 @@ package erc20reward
 import (
 	"context"
 	"errors"
-	"fmt"
-
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
@@ -57,7 +55,6 @@ func init() {
 		makeMetaHandler := func(method string) precompiles.HandlerFunc {
 			return func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 				_, err2 := app.Engine.Call(ctx, app.DB, RewardMetaExtensionName, method, append([]any{&id}, inputs...), func(r *common.Row) error {
-					fmt.Printf("meta handler result: %+v\n", r.Values)
 					return resultFn(r.Values)
 				})
 				return err2
@@ -173,45 +170,6 @@ func init() {
 					Handler:         makeMetaHandler("balance"),
 				},
 				{
-					Name: "list_epochs",
-					Parameters: []precompiles.PrecompileValue{
-						{Name: "after", Type: types.IntType},
-						{Name: "limit", Type: types.IntType},
-						{Name: "confirmed_only", Type: types.BoolType},
-					},
-					Returns: &precompiles.MethodReturn{
-						IsTable: true,
-						Fields: []precompiles.PrecompileValue{
-							{Name: "epoch_id", Type: types.UUIDType},
-							{Name: "start_height", Type: types.IntType},
-							{Name: "start_timestamp", Type: types.IntType},
-							{Name: "end_height", Type: types.IntType, Nullable: true},
-							{Name: "reward_root", Type: types.ByteaType, Nullable: true},
-							{Name: "end_block_hash", Type: types.ByteaType, Nullable: true},
-							{Name: "voters", Type: types.TextArrayType, Nullable: true},
-							{Name: "vote_nonces", Type: types.IntArrayType, Nullable: true},
-						},
-					},
-					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
-					Handler:         makeMetaHandler("list_epochs"),
-				},
-				{
-					// Supposed to be called by the SignerService, to verify the reward root.
-					Name: "get_epoch_rewards",
-					Parameters: []precompiles.PrecompileValue{
-						{Name: "epoch_id", Type: types.UUIDType},
-					},
-					Returns: &precompiles.MethodReturn{
-						IsTable: true,
-						Fields: []precompiles.PrecompileValue{
-							{Name: "recipient", Type: types.TextType},
-							{Name: "amount", Type: types.TextType},
-						},
-					},
-					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
-					Handler:         makeMetaHandler("get_epoch_rewards"),
-				},
-				{
 					Name: "decimals",
 					Returns: &precompiles.MethodReturn{
 						Fields: []precompiles.PrecompileValue{
@@ -246,6 +204,102 @@ func init() {
 					},
 					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
 					Handler:         makeMetaHandler("scale_up"),
+				},
+				{
+					Name:       "get_active_epochs",
+					Parameters: []precompiles.PrecompileValue{},
+					Returns: &precompiles.MethodReturn{
+						IsTable: true,
+						Fields: []precompiles.PrecompileValue{
+							{Name: "id", Type: types.UUIDType},
+							{Name: "start_height", Type: types.IntType},
+							{Name: "start_timestamp", Type: types.IntType},
+							{Name: "end_height", Type: types.IntType, Nullable: true},
+							{Name: "reward_root", Type: types.ByteaType, Nullable: true},
+							{Name: "reward_amount", Type: types.TextType, Nullable: true},
+							{Name: "end_block_hash", Type: types.ByteaType, Nullable: true},
+							{Name: "confirmed", Type: types.BoolType},
+							{Name: "voters", Type: types.TextArrayType, Nullable: true},
+							{Name: "vote_amounts", Type: types.TextArrayType, Nullable: true},
+							{Name: "vote_nonces", Type: types.IntArrayType, Nullable: true},
+							{Name: "voter_signatures", Type: types.ByteaArrayType, Nullable: true},
+						},
+					},
+					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+					Handler:         makeMetaHandler("get_active_epochs"),
+				},
+				{
+					Name: "list_epochs",
+					Parameters: []precompiles.PrecompileValue{
+						{Name: "after", Type: types.IntType},
+						{Name: "limit", Type: types.IntType},
+						{Name: "finalized_only", Type: types.BoolType},
+					},
+					Returns: &precompiles.MethodReturn{
+						IsTable: true,
+						Fields: []precompiles.PrecompileValue{
+							{Name: "id", Type: types.UUIDType},
+							{Name: "start_height", Type: types.IntType},
+							{Name: "start_timestamp", Type: types.IntType},
+							{Name: "end_height", Type: types.IntType, Nullable: true},
+							{Name: "reward_root", Type: types.ByteaType, Nullable: true},
+							{Name: "reward_amount", Type: types.TextType, Nullable: true},
+							{Name: "end_block_hash", Type: types.ByteaType, Nullable: true},
+							{Name: "confirmed", Type: types.BoolType},
+							{Name: "voters", Type: types.TextArrayType, Nullable: true},
+							{Name: "vote_amounts", Type: types.TextArrayType, Nullable: true},
+							{Name: "vote_nonces", Type: types.IntArrayType, Nullable: true},
+							{Name: "voter_signatures", Type: types.ByteaArrayType, Nullable: true},
+						},
+					},
+					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+					Handler:         makeMetaHandler("list_epochs"),
+				},
+				{
+					Name: "get_epoch_rewards",
+					Parameters: []precompiles.PrecompileValue{
+						{Name: "epoch_id", Type: types.UUIDType},
+					},
+					Returns: &precompiles.MethodReturn{
+						IsTable: true,
+						Fields: []precompiles.PrecompileValue{
+							{Name: "recipient", Type: types.TextType},
+							{Name: "amount", Type: types.TextType},
+						},
+					},
+					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+					Handler:         makeMetaHandler("get_epoch_rewards"),
+				},
+				{
+					Name: "vote_epoch",
+					Parameters: []precompiles.PrecompileValue{
+						{Name: "epoch_id", Type: types.UUIDType},
+						{Name: "amount", Type: uint256Numeric},
+						{Name: "nonce", Type: types.IntType},
+						{Name: "signature", Type: types.ByteaType},
+					},
+					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
+					Handler:         makeMetaHandler("vote_epoch"),
+				},
+				{
+					Name: "list_wallet_rewards",
+					Parameters: []precompiles.PrecompileValue{
+						{Name: "wallet", Type: types.TextType}, // wallet address
+						{Name: "with_pending", Type: types.BoolType},
+					},
+					Returns: &precompiles.MethodReturn{
+						IsTable: true,
+						Fields: []precompiles.PrecompileValue{
+							{Name: "chain", Type: types.TextType},
+							{Name: "chain_id", Type: types.TextType},
+							{Name: "contract", Type: types.TextType},
+							{Name: "etherscan", Type: types.TextType},
+							{Name: "created_at", Type: types.IntType},
+							{Name: "params", Type: types.TextArrayType}, // recipient,amount,block_hash,root,proofs
+						},
+					},
+					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+					Handler:         makeMetaHandler("list_wallet_rewards"),
 				},
 			},
 		}, nil

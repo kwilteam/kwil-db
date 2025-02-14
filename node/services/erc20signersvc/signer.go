@@ -17,14 +17,16 @@ import (
 
 	ethAccounts "github.com/ethereum/go-ethereum/accounts"
 	ethCommon "github.com/ethereum/go-ethereum/common"
-	ethMath "github.com/ethereum/go-ethereum/common/math"
 	ethCrypto "github.com/ethereum/go-ethereum/crypto"
+
 	"github.com/kwilteam/kwil-db/core/client"
 	clientType "github.com/kwilteam/kwil-db/core/client/types"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/exts/erc20reward/reward"
+	"github.com/kwilteam/kwil-db/node/exts/evm-sync/chains"
 )
 
 // StateFilePath returns the state file.
@@ -114,8 +116,13 @@ func (s *rewardSigner) init() error {
 		return fmt.Errorf("create safe failed: %w", err)
 	}
 
-	if s.safe.chainID.String() != info.ChainID {
-		return fmt.Errorf("chainID mismatch: %s != %s", s.safe.chainID.String(), info.ChainID)
+	chainInfo, ok := chains.GetChainInfo(chains.Chain(info.Chain))
+	if !ok {
+		return fmt.Errorf("chainID %s not supported", s.safe.chainID.String())
+	}
+
+	if s.safe.chainID.String() != chainInfo.ID {
+		return fmt.Errorf("chainID mismatch: configured %s != target %s", s.safe.chainID.String(), chainInfo.ID)
 	}
 
 	s.escrowAddr = ethCommon.HexToAddress(info.Escrow)
@@ -133,11 +140,8 @@ func (s *rewardSigner) init() error {
 
 // canSkip returns true if:
 // - signer is not one of the safe owners
-// - signer has voted this epoch
-// - is not finalized already voted from this signer;
+// - signer has voted this epoch with the same nonce as current safe nonce
 func (s *rewardSigner) canSkip(epoch *Epoch, safeMeta *safeMetadata) bool {
-	// TODO: if no rewards in epoch, skip
-
 	if !slices.Contains(safeMeta.owners, s.signerAddr) {
 		s.logger.Warn("signer is not safe owner", "signer", s.signerAddr.String(), "owners", safeMeta.owners)
 		return true
@@ -147,10 +151,9 @@ func (s *rewardSigner) canSkip(epoch *Epoch, safeMeta *safeMetadata) bool {
 		return false
 	}
 
-	// if has vote
 	for i, voter := range epoch.Voters {
 		if voter == s.signerAddr.String() &&
-			safeMeta.nonce.Cmp(big.NewInt(epoch.VoteNonce[i])) <= 0 {
+			safeMeta.nonce.Cmp(big.NewInt(epoch.VoteNonces[i])) == 0 {
 			return true
 		}
 	}
@@ -159,7 +162,7 @@ func (s *rewardSigner) canSkip(epoch *Epoch, safeMeta *safeMetadata) bool {
 }
 
 // verify verifies if the reward root is correct, and return the total amount.
-func (s *rewardSigner) verify(ctx context.Context, epoch *Epoch, safeAddr string) (*big.Int, error) {
+func (s *rewardSigner) verify(ctx context.Context, epoch *Epoch, escrowAddr string) (*big.Int, error) {
 	rewards, err := s.kwil.GetEpochRewards(ctx, epoch.ID)
 	if err != nil {
 		return nil, err
@@ -182,9 +185,9 @@ func (s *rewardSigner) verify(ctx context.Context, epoch *Epoch, safeAddr string
 	}
 
 	var b32 [32]byte
-	copy(b32[:], epoch.BlockHash)
+	copy(b32[:], epoch.EndBlockHash)
 
-	_, root, err := reward.GenRewardMerkleTree(recipients, amounts, safeAddr, b32)
+	_, root, err := reward.GenRewardMerkleTree(recipients, amounts, escrowAddr, b32)
 	if err != nil {
 		return nil, err
 	}
@@ -197,6 +200,17 @@ func (s *rewardSigner) verify(ctx context.Context, epoch *Epoch, safeAddr string
 	return total, nil
 }
 
+// erc20ValueFromBigInt converts a big.Int to a decimal.Decimal(78,0)
+// NOTE: this is copied from meta ext
+func erc20ValueFromBigInt(b *big.Int) (*types.Decimal, error) {
+	dec, err := types.NewDecimalFromBigInt(b, 0)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert big.Int to decimal.Decimal: %w", err)
+	}
+	err = dec.SetPrecisionAndScale(78, 0)
+	return dec, err
+}
+
 // vote votes an epoch reward, and updates the state.
 // It will first fetch metadata from ETH, then generate the safeTx, then vote.
 func (s *rewardSigner) vote(ctx context.Context, epoch *Epoch, safeMeta *safeMetadata, total *big.Int) error {
@@ -207,7 +221,7 @@ func (s *rewardSigner) vote(ctx context.Context, epoch *Epoch, safeMeta *safeMet
 
 	// safeTxHash is the data that all signers will be signing(using personal_sign)
 	_, safeTxHash, err := reward.GenGnosisSafeTx(s.escrowAddr.String(), s.safe.addr.String(),
-		0, safeTxData, ethMath.HexOrDecimal256(*s.safe.chainID), *safeMeta.nonce)
+		0, safeTxData, s.safe.chainID.Int64(), safeMeta.nonce.Int64())
 	if err != nil {
 		return err
 	}
@@ -218,7 +232,12 @@ func (s *rewardSigner) vote(ctx context.Context, epoch *Epoch, safeMeta *safeMet
 		return err
 	}
 
-	h, err := s.kwil.VoteEpoch(ctx, epoch.RewardRoot, sig)
+	uint256Amount, err := erc20ValueFromBigInt(total)
+	if err != nil {
+		return err
+	}
+
+	h, err := s.kwil.VoteEpoch(ctx, epoch.ID, uint256Amount, safeMeta.nonce.Int64(), sig)
 	if err != nil {
 		return err
 	}
@@ -228,7 +247,7 @@ func (s *rewardSigner) vote(ctx context.Context, epoch *Epoch, safeMeta *safeMet
 	err = s.state.UpdateLastVote(s.target, &voteRecord{
 		RewardRoot:  epoch.RewardRoot,
 		BlockHeight: epoch.EndHeight,
-		BlockHash:   hex.EncodeToString(epoch.BlockHash),
+		BlockHash:   hex.EncodeToString(epoch.EndBlockHash),
 		SafeNonce:   safeMeta.nonce.Uint64(),
 	})
 	if err != nil {
@@ -236,75 +255,65 @@ func (s *rewardSigner) vote(ctx context.Context, epoch *Epoch, safeMeta *safeMet
 	}
 
 	s.logger.Info("vote epoch", "tx", h, "id", epoch.ID.String(),
-		"signHash", hex.EncodeToString(signHash))
+		"nonce", safeMeta.nonce.Int64())
 
 	return nil
 }
 
-// watch polls on newer epochs and try to vote/sign them.
+// sync polls on newer epochs and try to vote/sign them.
 // Since there could be the case that the target(namespace/or id) not exist for whatever reason,
 // this function won't return Error, and also won't log at Error level.
-func (s *rewardSigner) watch(ctx context.Context) {
-	s.logger.Info("start watching erc20 reward epoches")
+func (s *rewardSigner) sync(ctx context.Context) {
+	s.logger.Debug("polling epochs", "lastVoteBlock", s.lastVoteBlock)
 
-	tick := time.NewTicker(s.every)
-
-	for {
-		s.logger.Debug("polling epochs", "lastVoteBlock", s.lastVoteBlock)
-		// fetch next batch rewards to be voted, and vote them.
-		// NOTE: we use ListUnconfirmedEpochs (not FetchLatestRewards) so we don't accidently SKIP epoch.
-		epochs, err := s.kwil.ListUnconfirmedEpochs(ctx, s.lastVoteBlock, 10)
-		if err != nil {
-			s.logger.Warn("fetch epoch", "error", err.Error())
-			continue
-		}
-
-		if len(epochs) == 0 {
-			s.logger.Debug("no epoch found")
-			continue
-		}
-
-		safeMeta, err := s.safe.latestMetadata(ctx)
-		if err != nil {
-			s.logger.Warn("fetch safe metadata", "error", err.Error())
-			continue
-		}
-
-		for _, epoch := range epochs {
-			voteRecord := s.state.LastVote(s.target)
-			if voteRecord != nil && voteRecord.SafeNonce == safeMeta.nonce.Uint64() {
-				continue
-			}
-
-			if s.canSkip(epoch, safeMeta) {
-				s.logger.Debug("skip epoch", "id", epoch.ID.String(), "height", epoch.EndHeight)
-				s.lastVoteBlock = epoch.EndHeight // update since we can skip it
-				continue
-			}
-
-			total, err := s.verify(ctx, epoch, s.safe.addr.String())
-			if err != nil {
-				s.logger.Warn("verify epoch", "id", epoch.ID.String(), "height", epoch.EndHeight, "error", err.Error())
-				break
-			}
-
-			err = s.vote(ctx, epoch, safeMeta, total)
-			if err != nil {
-				s.logger.Warn("vote epoch", "id", epoch.ID.String(), "height", epoch.EndHeight, "error", err.Error())
-				break
-			}
-
-			s.lastVoteBlock = epoch.EndHeight // update after all operations succeed
-		}
-
-		select {
-		case <-ctx.Done():
-			s.logger.Info("stop watching erc20 reward epoches")
-			return
-		case <-tick.C:
-			continue
-		}
+	epochs, err := s.kwil.GetActiveEpochs(ctx)
+	if err != nil {
+		s.logger.Warn("fetch epoch", "error", err.Error())
+		return
 	}
+
+	if len(epochs) == 0 {
+		s.logger.Error("no epoch found")
+		return
+	}
+
+	if len(epochs) == 1 {
+		// the very first round of epoch, we wait until there are 2 active epochs
+		return
+	}
+
+	if len(epochs) != 2 {
+		s.logger.Error("unexpected number of epochs", "count", len(epochs))
+		return
+	}
+
+	finalizedEpoch := epochs[0]
+
+	safeMeta, err := s.safe.latestMetadata(ctx)
+	if err != nil {
+		s.logger.Warn("fetch safe metadata", "error", err.Error())
+		return
+	}
+
+	if s.canSkip(finalizedEpoch, safeMeta) {
+		s.logger.Info("skip epoch", "id", finalizedEpoch.ID.String(), "height", finalizedEpoch.EndHeight)
+		s.lastVoteBlock = finalizedEpoch.EndHeight // update since we can skip it
+		return
+	}
+
+	total, err := s.verify(ctx, finalizedEpoch, s.escrowAddr.String())
+	if err != nil {
+		s.logger.Warn("verify epoch", "id", finalizedEpoch.ID.String(), "height", finalizedEpoch.EndHeight, "error", err.Error())
+		return
+	}
+
+	err = s.vote(ctx, finalizedEpoch, safeMeta, total)
+	if err != nil {
+		s.logger.Warn("vote epoch", "id", finalizedEpoch.ID.String(), "height", finalizedEpoch.EndHeight, "error", err.Error())
+		return
+	}
+
+	s.lastVoteBlock = finalizedEpoch.EndHeight // update after all operations succeed
 }
 
 // ServiceMgr manages multiple rewardSigner instances running in parallel.
@@ -357,7 +366,20 @@ func (s *ServiceMgr) Start(ctx context.Context) error {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
-			s.watch(ctx)
+
+			s.logger.Info("start watching erc20 reward epoches")
+			tick := time.NewTicker(s.every)
+
+			for {
+				s.sync(ctx)
+
+				select {
+				case <-ctx.Done():
+					s.logger.Info("stop watching erc20 reward epoches")
+					return
+				case <-tick.C:
+				}
+			}
 		}()
 	}
 

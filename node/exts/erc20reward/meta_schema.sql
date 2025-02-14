@@ -49,6 +49,7 @@ CREATE TABLE epochs (
     created_at_unix INT8 NOT NULL, -- unix timestamp (in seconds)
     instance_id UUID NOT NULL REFERENCES reward_instances(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
 	reward_root BYTEA UNIQUE, -- the root of the merkle tree of rewards, it's unique per contract
+    reward_amount NUMERIC(78, 0), -- the total amount in current epoch
     ended_at INT8, -- kwil block height
     block_hash BYTEA, -- the hash of the block that is used in merkle tree leaf, which is the last block of the epoch
     confirmed BOOLEAN NOT NULL DEFAULT FALSE -- whether the epoch has been confirmed on chain
@@ -78,7 +79,8 @@ CREATE TABLE meta
 CREATE TABLE epoch_votes (
     epoch_id UUID NOT NULL REFERENCES epochs(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
     voter BYTEA NOT NULL,
+    amount NUMERIC(78, 0) NOT NULL, -- so posterSvc won't need to calculate again
+    nonce INT8 NOT NULL, -- safe nonce; this helps to skip unnecessary dup votes
     signature BYTEA NOT NULL,
-    nonce INT8 NOT NULL, -- safe nonce; technically we don't need this, but this helps to identify why a signer is not valid
-    PRIMARY KEY (epoch_id, voter)
+    PRIMARY KEY (epoch_id, voter, nonce)
 );

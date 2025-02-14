@@ -260,6 +260,7 @@ func (i *individualListener) listen(ctx context.Context, eventstore listeners.Ev
 
 func (i *individualListener) processEvents(ctx context.Context, from, to int64, eventStore listeners.EventStore, logger log.Logger) error {
 	logs, err := i.getLogsFunc(ctx, i.client.client, uint64(from), uint64(to), logger)
+	/// THIS IS WHERE I LEFT
 	if err != nil {
 		return err
 	}

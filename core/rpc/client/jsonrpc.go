@@ -202,8 +202,6 @@ func (cl *JSONRPCClient) CallMethod(ctx context.Context, method string, cmd, res
 	// 	fmt.Printf("got id %v, expected %v\n", resp.ID, id)
 	// } // who cares, this is http post
 
-	fmt.Println("====+++++++++resp.Result: ", string(resp.Result))
-
 	if err = json.Unmarshal(resp.Result, res); err != nil {
 		return fmt.Errorf("failed to decode result as response: %w", errors.Join(err, httpErr))
 	}
