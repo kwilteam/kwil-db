@@ -85,11 +85,7 @@ func (ce *ConsensusEngine) recheckTx(ctx context.Context, tx *ktypes.Transaction
 	}
 	ce.stateInfo.mtx.RUnlock()
 
-	err := ce.blockProcessor.CheckTx(ctx, tx, height, timestamp, true)
-	if err != nil {
-		ce.log.Infof("recheckTx failed for tx %s, err: %s", tx, err)
-	}
-	return err
+	return ce.blockProcessor.CheckTx(ctx, tx, height, timestamp, true)
 }
 
 // BroadcastTx checks the Tx with the mempool and if the verification is successful, broadcasts the Tx to the network.
