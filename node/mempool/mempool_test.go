@@ -308,6 +308,69 @@ func TestMempool_RecheckTxs(t *testing.T) {
 		assert.True(t, exists)
 	})
 
+	t.Run("with a lot more transactions mixed invalid", func(t *testing.T) {
+		mp := New()
+		tx1 := newTx(1, "A")
+		tx2 := newTx(2, "B")
+		tx3 := newTx(3, "C")
+		tx4 := newTx(4, "D")
+		tx5 := newTx(5, "E")
+		tx6 := newTx(6, "F")
+		tx7 := newTx(7, "G")
+		tx8 := newTx(8, "H")
+		tx9 := newTx(9, "I")
+		tx10 := newTx(10, "J")
+
+		mp.Store(tx1.Hash(), tx1)
+		mp.Store(tx2.Hash(), tx2)
+		mp.Store(tx3.Hash(), tx3)
+		mp.Store(tx4.Hash(), tx4)
+		mp.Store(tx5.Hash(), tx5)
+		mp.Store(tx6.Hash(), tx6)
+		mp.Store(tx7.Hash(), tx7)
+		mp.Store(tx8.Hash(), tx8)
+		mp.Store(tx9.Hash(), tx9)
+		mp.Store(tx10.Hash(), tx10)
+
+		checkFn := func(ctx context.Context, tx *ktypes.Transaction) error {
+			switch string(tx.Sender) {
+			case "B", "D", "F", "H", "J": // 2, 4, 6, 8, 10
+				return errors.New("invalid transaction")
+			default:
+				return nil
+			}
+		}
+
+		mp.RecheckTxs(context.Background(), checkFn)
+		_, count := mp.Size()
+		assert.Equal(t, 5, count)
+		assert.Len(t, mp.txQ, 5)
+		assert.Len(t, mp.txns, 5)
+
+		// Verify specific transactions
+		_, exists := mp.txns[tx2.Hash()]
+		assert.False(t, exists)
+		_, exists = mp.txns[tx4.Hash()]
+		assert.False(t, exists)
+		_, exists = mp.txns[tx6.Hash()]
+		assert.False(t, exists)
+		_, exists = mp.txns[tx8.Hash()]
+		assert.False(t, exists)
+		_, exists = mp.txns[tx10.Hash()]
+		assert.False(t, exists)
+
+		_, exists = mp.txns[tx1.Hash()]
+		assert.True(t, exists)
+		_, exists = mp.txns[tx3.Hash()]
+		assert.True(t, exists)
+		_, exists = mp.txns[tx5.Hash()]
+		assert.True(t, exists)
+		_, exists = mp.txns[tx7.Hash()]
+		assert.True(t, exists)
+		_, exists = mp.txns[tx9.Hash()]
+		assert.True(t, exists)
+	})
+
 	t.Run("recheck with canceled context", func(t *testing.T) {
 		mp := New()
 		tx1 := newTx(1, "A")

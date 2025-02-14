@@ -75,7 +75,6 @@ func (mp *Mempool) remove(txid types.Hash) {
 	if idx != -1 {
 		mp.txQ = slices.Delete(mp.txQ, idx, idx+1) // remove txQ[idx]
 	} // else there's a bug!
-
 }
 
 // Store adds a transaction to the mempool. Returns (found, rejected) where found indicates
@@ -191,16 +190,39 @@ func (mp *Mempool) PeekN(n, szLimit int) []types.NamedTx {
 // CheckFn is a function type for validating transactions.
 type CheckFn func(ctx context.Context, tx *ktypes.Transaction) error
 
-// RecheckTxs validates all transactions in the mempool using the provided check function,
-// removing any that fail validation.
+// RecheckTxs validates all transactions in the mempool using the provided check
+// function, removing any that fail validation. This function will check the
+// transaction queue in order.
 func (mp *Mempool) RecheckTxs(ctx context.Context, fn CheckFn) {
 	mp.mtx.Lock()
 	defer mp.mtx.Unlock()
 
-	for hash, tx := range mp.txns {
-		if err := fn(ctx, tx.Transaction); err != nil {
-			mp.remove(hash)
+	type indexedTx struct {
+		idx  int
+		txid types.Hash
+	}
+	var toRemove []indexedTx
+	for idx, tx := range mp.txQ { // must check in order
+		if err := fn(ctx, tx.Tx); err != nil {
+			toRemove = append(toRemove, indexedTx{idx: idx, txid: tx.Hash})
 		}
+	}
+
+	if len(toRemove) == 0 {
+		return
+	}
+
+	// Remove in reverse order to avoid shifting indices in the txQ slice.
+	slices.Reverse(toRemove)
+
+	for _, itx := range toRemove {
+		tx, have := mp.txns[itx.txid]
+		if have { // we should!
+			mp.currentSize -= tx.size
+		}
+		delete(mp.txns, itx.txid)
+
+		mp.txQ = slices.Delete(mp.txQ, itx.idx, itx.idx+1) // remove txQ[idx]
 	}
 }
 
