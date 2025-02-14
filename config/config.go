@@ -388,6 +388,7 @@ type RPCConfig struct {
 	Timeout            types.Duration `toml:"timeout" comment:"user request duration limit after which it is cancelled"`
 	MaxReqSize         int            `toml:"max_req_size" comment:"largest permissible user request size"`
 	Private            bool           `toml:"private" comment:"enable private mode that requires challenge authentication for each call"`
+	Compression        bool           `toml:"compression" comment:"use compression in RPC responses"`
 	ChallengeExpiry    types.Duration `toml:"challenge_expiry" comment:"lifetime of a server-generated challenge"`
 	ChallengeRateLimit float64        `toml:"challenge_rate_limit" comment:"maximum number of challenges per second that a user can request"`
 }

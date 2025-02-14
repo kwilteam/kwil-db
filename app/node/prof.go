@@ -32,6 +32,7 @@ func startProfilers(mode profMode, pprofFile string) (func(), error) {
 		// handler with the root path on the default mux.
 		http.Handle("/", http.RedirectHandler("/debug/pprof/", http.StatusSeeOther))
 		go func() {
+			fmt.Println("starting http profiler on localhost:6060")
 			if err := http.ListenAndServe("localhost:6060", nil); err != nil {
 				fmt.Printf("http.ListenAndServe: %v\n", err)
 			}
