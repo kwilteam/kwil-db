@@ -367,7 +367,7 @@ func schemaExists(ctx context.Context, db sql.Executor, schema string) (bool, er
 
 func buildBlockStore(d *coreDependencies, closers *closeFuncs) *store.BlockStore {
 	blkStrDir := config.BlockstoreDir(d.rootDir)
-	bs, err := store.NewBlockStore(blkStrDir)
+	bs, err := store.NewBlockStore(blkStrDir, store.WithCompression(d.cfg.Store.Compression))
 	if err != nil {
 		failBuild(err, "failed to open blockstore")
 	}

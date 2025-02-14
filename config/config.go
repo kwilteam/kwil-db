@@ -267,6 +267,9 @@ func DefaultConfig() *Config {
 			BlockProposalInterval: types.Duration(1 * time.Second),
 			BlockAnnInterval:      types.Duration(3 * time.Second),
 		},
+		Store: StoreConfig{
+			Compression: true,
+		},
 		DB: DBConfig{
 			Host:          "127.0.0.1",
 			Port:          "5432",
@@ -323,6 +326,7 @@ type Config struct {
 	P2P          PeerConfig                   `toml:"p2p" comment:"P2P related configuration"`
 	Consensus    ConsensusConfig              `toml:"consensus" comment:"Consensus related configuration"`
 	DB           DBConfig                     `toml:"db" comment:"DB (PostgreSQL) related configuration"`
+	Store        StoreConfig                  `toml:"store" comment:"Block store configuration"`
 	RPC          RPCConfig                    `toml:"rpc" comment:"User RPC service configuration"`
 	Admin        AdminConfig                  `toml:"admin" comment:"Admin RPC service configuration"`
 	Snapshots    SnapshotConfig               `toml:"snapshots" comment:"Snapshot creation and provider configuration"`
@@ -342,6 +346,18 @@ type PeerConfig struct {
 	Whitelist         []string `toml:"whitelist" comment:"allowed node IDs when in private mode"`
 	TargetConnections int      `toml:"target_connections" comment:"target number of connections to maintain"`
 	ExternalAddress   string   `toml:"external_address" comment:"external address in host:port format to advertise to the network"`
+}
+
+// StoreConfig contains options related to the block store. This is the embedded
+// database used to store the raw block data, unlike the DBConfig which is
+// effectively the state store.
+type StoreConfig struct {
+	Compression bool `toml:"compression" comment:"compress data when writing new data"`
+
+	// Internal block size and block cache size may be of use soon.
+	//   https://github.com/kwilteam/kwil-db/issues/1347
+	// CacheSize int `toml:"cache_size" comment:"size of the block store cache in bytes"`
+	// ChunkSize int `toml:"chunk_size" comment:"size of the block store's internal blocks"`
 }
 
 type DBConfig struct {
