@@ -194,8 +194,8 @@ type CheckFn func(ctx context.Context, tx *ktypes.Transaction) error
 // RecheckTxs validates all transactions in the mempool using the provided check function,
 // removing any that fail validation.
 func (mp *Mempool) RecheckTxs(ctx context.Context, fn CheckFn) {
-	mp.mtx.RLock()
-	defer mp.mtx.RUnlock()
+	mp.mtx.Lock()
+	defer mp.mtx.Unlock()
 
 	for hash, tx := range mp.txns {
 		if err := fn(ctx, tx.Transaction); err != nil {

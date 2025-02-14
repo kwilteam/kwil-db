@@ -268,7 +268,7 @@ func (bp *BlockProcessor) CheckTx(ctx context.Context, tx *ktypes.Transaction, h
 		Authenticator: tx.Signature.Type,
 	}, readTx, tx)
 	if err != nil {
-		bp.log.Info("Transaction rejected", "tx", txHash, "err", err)
+		bp.log.Info("Transaction rejected", "tx", txHash, "err", err, "recheck", recheck)
 		return err
 	}
 
