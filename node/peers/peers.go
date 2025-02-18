@@ -179,6 +179,7 @@ func NewPeerMan(cfg *Config) (*PeerMan, error) {
 
 	host.SetStreamHandler(ProtocolIDPrefixChainID+protocol.ID(cfg.ChainID), func(s network.Stream) {
 		s.Close() // protocol handshake is all we need
+		// TODO (maybe): get and serve our height is a peer actually tries to use this protocol
 	})
 
 	if cfg.SeedMode {

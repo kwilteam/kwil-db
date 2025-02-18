@@ -17,6 +17,7 @@ import (
 	"github.com/kwilteam/kwil-db/node/types"
 
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 )
@@ -27,7 +28,7 @@ const (
 
 	ProtocolIDTx          protocol.ID = "/kwil/tx/1.0.0"
 	ProtocolIDTxAnn       protocol.ID = "/kwil/txann/1.0.0"
-	ProtocolIDBlockHeight protocol.ID = "/kwil/blkheight/1.0.0"
+	ProtocolIDBlockHeight protocol.ID = "/kwil/blkheight/1.1.0"
 	ProtocolIDBlock       protocol.ID = "/kwil/blk/1.0.0"
 	ProtocolIDBlkAnn      protocol.ID = "/kwil/blkann/1.0.0"
 	// ProtocolIDBlockHeader protocol.ID = "/kwil/blkhdr/1.0.0"
@@ -68,7 +69,10 @@ func request(rw io.ReadWriter, reqMsg []byte, readLimit int64) ([]byte, error) {
 	return rawTx, nil
 }
 
-var noData = []byte{0}
+var (
+	noData   = []byte{0}
+	withData = []byte{1}
+)
 
 // readResp reads a response of unknown length until an EOF is reached when
 // reading. As such, this is the end of a protocol.
@@ -136,7 +140,7 @@ func (n *Node) advertiseToPeer(ctx context.Context, peerID peer.ID, proto protoc
 
 		req := make([]byte, len(getMsg))
 		nr, err := s.Read(req)
-		if err != nil && !errors.Is(err, io.EOF) {
+		if err != nil && !(errors.Is(err, io.EOF) || errors.Is(err, network.ErrReset)) {
 			n.log.Warn("bad advertise response", "error", err)
 			return
 		}

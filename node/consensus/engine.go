@@ -211,7 +211,7 @@ type TxAnnouncer func(ctx context.Context, txHash types.Hash, rawTx []byte)
 type AckBroadcaster func(msg *types.AckRes) error
 
 // BlkRequester requests the block from the network based on the height
-type BlkRequester func(ctx context.Context, height int64) (types.Hash, []byte, *types.CommitInfo, error)
+type BlkRequester func(ctx context.Context, height int64) (types.Hash, []byte, *types.CommitInfo, int64, error)
 
 type ResetStateBroadcaster func(height int64, txIDs []ktypes.Hash) error
 
