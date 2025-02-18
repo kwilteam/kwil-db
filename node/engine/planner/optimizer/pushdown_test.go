@@ -118,6 +118,7 @@ func Test_Pushdown(t *testing.T) {
 				func(objName string) (obj map[string]*types.DataType, err error) {
 					return nil, engine.ErrUnknownVariable
 				},
+				func(s string) bool { return false },
 				false, "")
 			require.NoError(t, err)
 

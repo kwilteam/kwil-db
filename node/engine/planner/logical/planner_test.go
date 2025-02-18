@@ -19,6 +19,7 @@ func Test_Planner(t *testing.T) {
 		wt      string                                // want, abbreviated for formatting test cases
 		vars    map[string]*types.DataType            // variables that can be accessed, can be nil
 		objects map[string]map[string]*types.DataType // objects that can be referenced, can be nil
+		actions map[string]struct{}                   // actions that exist, can be nil
 		err     error                                 // can be nil if no error is expected
 	}
 
@@ -651,6 +652,14 @@ func Test_Planner(t *testing.T) {
 			sql:  "insert into follows values ('123e4567-e89b-12d3-a456-426614174000'::uuid, '123e4567-e89b-12d3-a456-426614174001'::uuid) on conflict (follower_id, id) do nothing",
 			err:  logical.ErrColumnNotFound,
 		},
+		{
+			name: "use action in query",
+			sql:  "select my_act()",
+			actions: map[string]struct{}{
+				"my_act": {},
+			},
+			err: logical.ErrActionInSQLStmt,
+		},
 	}
 
 	for _, test := range tests {
@@ -687,6 +696,13 @@ func Test_Planner(t *testing.T) {
 					}
 
 					return obj, nil
+				},
+				func(fn string) bool {
+					if test.actions == nil {
+						return false
+					}
+					_, ok := test.actions[fn]
+					return ok
 				},
 				false, "")
 			if test.err != nil {

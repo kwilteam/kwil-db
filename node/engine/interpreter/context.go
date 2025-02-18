@@ -191,6 +191,19 @@ func (e *executionContext) query(sql string, fn func(*row) error) error {
 
 			return nil, engine.ErrUnknownVariable
 		},
+		func(fnName string) bool {
+			ns, err := e.getNamespace("")
+			if err != nil {
+				// should never happen, as it is getting the current namespace
+				panic(err)
+			}
+
+			executable, ok := ns.availableFunctions[fnName]
+			if !ok {
+				return false
+			}
+			return executable.Type == executableTypeAction || executable.Type == executableTypePrecompile
+		},
 		e.canMutateState,
 		e.scope.namespace,
 	)

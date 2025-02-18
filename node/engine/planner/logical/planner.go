@@ -22,12 +22,15 @@ type GetObjectFunc = func(objName string) (obj map[string]*types.DataType, err e
 // It can also be given a namespace to search in. If no namespace is given (passed as ""), it will search in the default namespace.
 type GetTableFunc = func(namespace string, tableName string) (table *engine.Table, err error)
 
+// IsActionFunc returns true if the passed function is an action
+type IsActionFunc = func(funcName string) bool
+
 // CreateLogicalPlan creates a logical plan from a SQL statement.
 // If applyDefaultOrdering is true, it will rewrite the query to apply default ordering.
 // Default ordering will modify the passed query.
 // If defaultNamespace is not empty, it will be used as the default namespace for all tables.
 func CreateLogicalPlan(statement *parse.SQLStatement, tables GetTableFunc,
-	vars GetVarTypeFunc, objects GetObjectFunc, applyDefaultOrdering bool, defaultNamespace string,
+	vars GetVarTypeFunc, objects GetObjectFunc, isAction IsActionFunc, applyDefaultOrdering bool, defaultNamespace string,
 ) (analyzed *AnalyzedPlan, err error) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -44,6 +47,7 @@ func CreateLogicalPlan(statement *parse.SQLStatement, tables GetTableFunc,
 		CTEs:                 make(map[string]*Relation),
 		Variables:            vars,
 		Objects:              objects,
+		IsAction:             isAction,
 		applyDefaultOrdering: applyDefaultOrdering,
 		defaultNamespace:     defaultNamespace,
 	}
@@ -116,6 +120,8 @@ type planContext struct {
 	// Kwil supports one-dimensional objects, so this would be
 	// accessible via objname.fieldname.
 	Objects GetObjectFunc
+	// IsAction returns true if the passed function is an action.
+	IsAction IsActionFunc
 	// SubqueryCount is the number of subqueries in the query.
 	// This field should be updated as the query planner
 	// processes the query.
@@ -1204,18 +1210,25 @@ func (s *scopeContext) exprWithAggRewrite(node parse.Expression, currentRel *Rel
 			Type:  node.Type,
 		}, anonField(node.Type))
 	case *parse.ExpressionFunctionCall:
-		funcDef, ok := engine.Functions[node.Name]
-		// if it is an aggregate function, we need to handle it differently
-		if ok {
-			// now we need to apply rules depending on if it is aggregate or not
-			if aggFn, ok := funcDef.(*engine.AggregateFunctionDefinition); ok {
-				expr, field, err := s.onAggregateFuncExpr(node, aggFn, groupingTerms)
-				if err != nil {
-					return nil, nil, false, err
-				}
+		// if it is an action, we should return an error
+		if s.plan.IsAction(node.Name) {
+			return nil, nil, false, fmt.Errorf(`%w: "%s"`, ErrActionInSQLStmt, node.Name)
+		}
 
-				return cast(expr, field)
+		funcDef, ok := engine.Functions[node.Name]
+		if !ok {
+			return nil, nil, false, fmt.Errorf(`%w: "%s"`, ErrFunctionDoesNotExist, node.Name)
+		}
+
+		// if it is an aggregate function, we need to handle it differently
+		// now we need to apply rules depending on if it is aggregate or not
+		if aggFn, ok := funcDef.(*engine.AggregateFunctionDefinition); ok {
+			expr, field, err := s.onAggregateFuncExpr(node, aggFn, groupingTerms)
+			if err != nil {
+				return nil, nil, false, err
 			}
+
+			return cast(expr, field)
 		}
 
 		var args []Expression
@@ -1228,12 +1241,6 @@ func (s *scopeContext) exprWithAggRewrite(node parse.Expression, currentRel *Rel
 
 			args = append(args, expr)
 			fields = append(fields, field)
-		}
-
-		// can be either an action call or a built-in function
-
-		if !ok {
-			return nil, nil, false, fmt.Errorf(`%w: "%s"`, ErrFunctionDoesNotExist, node.Name)
 		}
 
 		// it is a built-in function
