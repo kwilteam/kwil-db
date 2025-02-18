@@ -76,6 +76,7 @@ func main() {
 		fmt.Printf("Error: %v\n", err)
 		os.Exit(1)
 	}
+
 	// Write the logs to a file
 	if err := WriteLogs(logs, logFile); err != nil {
 		fmt.Printf("Error: %v\n", err)

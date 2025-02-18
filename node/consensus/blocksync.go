@@ -130,12 +130,12 @@ func (ce *ConsensusEngine) syncBlocksUntilHeight(ctx context.Context, startHeigh
 // syncBlockWithRetry fetches the specified block from the network and keeps retrying until
 // the block is successfully retrieved from the network.
 func (ce *ConsensusEngine) syncBlockWithRetry(ctx context.Context, height int64) error {
-	_, rawblk, ci, err := ce.getBlock(ctx, height)
+	_, rawBlk, ci, err := ce.getBlock(ctx, height)
 	if err != nil {
 		return fmt.Errorf("failed to get block from the network: %w", err)
 	}
 
-	return ce.applyBlock(ctx, rawblk, ci)
+	return ce.applyBlock(ctx, rawBlk, ci)
 }
 
 // syncBlock fetches the specified block from the network
