@@ -35,8 +35,7 @@ const (
 CREATE TABLE IF NOT EXISTS users (
 	id INT PRIMARY KEY,
 	name TEXT,
-	age INT,
-	address BYTEA
+	age INT
 );
 	`
 
