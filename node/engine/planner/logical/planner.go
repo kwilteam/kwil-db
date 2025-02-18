@@ -1334,7 +1334,13 @@ func (s *scopeContext) exprWithAggRewrite(node parse.Expression, currentRel *Rel
 		}, field2)
 	case *parse.ExpressionMakeArray:
 		if len(node.Values) == 0 {
-			return nil, nil, false, fmt.Errorf("array constructor must have at least one element")
+			// if there are no values, we cannot determine the type unless
+			// it is type casted
+			if node.TypeCast == nil {
+				return nil, nil, false, fmt.Errorf("%w: Try type casting to the desired type, for example ARRAY[]::TEXT[]", ErrUntypedEmptyArray)
+			}
+
+			return cast(&ArrayConstructor{}, anonField(node.TypeCast))
 		}
 
 		var exprs []Expression

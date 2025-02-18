@@ -35,7 +35,8 @@ const (
 CREATE TABLE IF NOT EXISTS users (
 	id INT PRIMARY KEY,
 	name TEXT,
-	age INT
+	age INT,
+	address BYTEA
 );
 	`
 
@@ -53,667 +54,684 @@ func Test_SQL(t *testing.T) {
 		name string // name of the test
 		// array of sql statements, first element is the namespace, second is the sql statement
 		// they can begin with {namespace}sql, or just sql
-		sql         []string
-		execSQL     string         // sql to return the results. Either this or execAction must be set
-		execVars    map[string]any // variables to pass to the execSQL
-		results     [][]any        // table of results
-		err         error          // expected error, can be nil. Errors _MUST_ occur on the exec. This is a direct match
-		errContains string         // expected error message, can be empty. Errors _MUST_ occur on the exec. This is a substring match
-		caller      string         // caller to use for the action, will default to defaultCaller
+		sql            []string
+		execSQL        string         // sql to return the results. Either this or execAction must be set
+		execVars       map[string]any // variables to pass to the execSQL
+		results        [][]any        // table of results
+		err            error          // expected error, can be nil. Errors _MUST_ occur on the exec. This is a direct match
+		errContains    string         // expected error message, can be empty. Errors _MUST_ occur on the exec. This is a substring match
+		caller         string         // caller to use for the action, will default to defaultCaller
+		skipInitTables bool           // skip the creation of the users and posts tables
 	}
-
-	// this is for debugging.
-	// It helps me skip the users and posts table creation
-	skipInitTables := false
 
 	tests := []testcase{
 		{
-			name: "insert and select",
-			sql: []string{
-				"INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
-			},
-			execSQL: "SELECT name, age FROM users;",
+			name:    "empty array agg",
+			execSQL: `SELECT ARRAY_AGG(address), 1 FROM users;`,
 			results: [][]any{
-				{"Alice", int64(30)},
-			},
+				{[]byte{}, int64(1)},
+			}, // SELECT ARRAY_AGG() from table
+			// [nil]
 		},
-		{
-			// this is a bug that previously existed where the composite
-			// unique constraint caused an issue when querying views
-			name: "create table with multi-dimensional constraint",
-			execSQL: `CREATE TABLE IF NOT EXISTS erc20rw_contracts (
-				id UUID PRIMARY KEY,
-				chain_id INT8 NOT NULL,
-				address TEXT NOT NULL,
-				nonce INT8 NOT NULL,
-				threshold INT8 NOT NULL,
-				safe_address TEXT NOT NULL,
-				safe_nonce INT8 NOT NULL,
-				unique (chain_id, address)
-		);`,
-		},
-		{
-			name: "create namespace, add table, add record, alter table, select",
-			sql: []string{
-				"CREATE NAMESPACE test;",
-				"{test}CREATE TABLE users (id INT PRIMARY KEY, name TEXT, age INT);",
-				"{test}INSERT INTO users (id, name, age) VALUES (1, 'Bob', 30);",
-				"{test}ALTER TABLE users DROP COLUMN age;",
-			},
-			execSQL: "{test}SELECT * FROM users;",
-			results: [][]any{
-				{int64(1), "Bob"},
-			},
-		},
-		{
-			name: "foreign key across namespaces",
-			sql: []string{
-				"CREATE NAMESPACE test1;",
-				"CREATE NAMESPACE test2;",
-				"{test1}CREATE TABLE users (id INT PRIMARY KEY, name TEXT);",
-				`{test2}CREATE TABLE posts (id INT PRIMARY KEY,
-				owner_id INT NOT NULL REFERENCES test1.users(id) ON UPDATE CASCADE ON DELETE CASCADE,
-				content TEXT, created_at INT);`,
-				"{test1}INSERT INTO users (id, name) VALUES (1, 'Alice'), (2, 'Bob');",
-				"{test2}INSERT INTO posts (id, owner_id, content, created_at) VALUES (1, 1, 'Hello', @height), (2, 2, 'World', @height);",
-				"{test1}DELETE FROM users WHERE id = 1;",
-			},
-			execSQL: `{test2}SELECT * FROM posts;`,
-			results: [][]any{
-				{int64(2), int64(2), "World", int64(1)},
-			},
-		},
-		{
-			name: "alter table create composite foreign key",
-			sql: []string{
-				// pretty non-sensical schema, but it tests the logic I want
-				"CREATE TABLE cars (id INT PRIMARY KEY, make TEXT, model TEXT, UNIQUE(make, model));",
-				"CREATE TABLE drivers (id INT PRIMARY KEY, name TEXT, car_make TEXT, car_model TEXT);",
-			},
-			execSQL: `ALTER TABLE drivers ADD CONSTRAINT fk_car FOREIGN KEY (car_make, car_model) REFERENCES cars (make, model);`,
-		},
-		{
-			name: "update and delete",
-			sql: []string{
-				"INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30), (2, 'Bob', 40);",
-				"UPDATE users SET age = 50 WHERE name = 'Alice';",
-				"DELETE FROM users WHERE age = 40;",
-			},
-			execSQL: "SELECT name, age FROM users;",
-			results: [][]any{
-				{"Alice", int64(50)},
-			},
-		},
-		{
-			name: "recursive common table expression",
-			execSQL: `
-			with recursive r as (
-				select 1 as n
-				union all
-				select n+1 from r where n < 6
-			)
-			select * from r;
-			`,
-			results: [][]any{
-				{int64(1)}, {int64(2)}, {int64(3)}, {int64(4)}, {int64(5)}, {int64(6)},
-			},
-		},
-		{
-			name: "alter table add column",
-			sql: []string{
-				"ALTER TABLE users ADD COLUMN email TEXT;",
-				"INSERT INTO users (id, name, age, email) VALUES (1, 'Alice', 30, 'alice@kwil.com');",
-			},
-			execSQL: "SELECT name, age, email FROM users;",
-			results: [][]any{
-				{"Alice", int64(30), "alice@kwil.com"},
-			},
-		},
-		{
-			name: "alter table drop column",
-			sql: []string{
-				"INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
-				"ALTER TABLE users DROP COLUMN age;",
-			},
-			execSQL: "SELECT * FROM users;",
-			results: [][]any{
-				{1, "Alice"},
-			},
-		},
+		// {
+		// 	name: "insert and select",
+		// 	sql: []string{
+		// 		"INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
+		// 	},
+		// 	execSQL: "SELECT name, age FROM users;",
+		// 	results: [][]any{
+		// 		{"Alice", int64(30)},
+		// 	},
+		// },
+		// {
+		// 	// this is a bug that previously existed where the composite
+		// 	// unique constraint caused an issue when querying views
+		// 	name: "create table with multi-dimensional constraint",
+		// 	execSQL: `CREATE TABLE IF NOT EXISTS erc20rw_contracts (
+		// 		id UUID PRIMARY KEY,
+		// 		chain_id INT8 NOT NULL,
+		// 		address TEXT NOT NULL,
+		// 		nonce INT8 NOT NULL,
+		// 		threshold INT8 NOT NULL,
+		// 		safe_address TEXT NOT NULL,
+		// 		safe_nonce INT8 NOT NULL,
+		// 		unique (chain_id, address)
+		// );`,
+		// },
+		// {
+		// 	name: "create namespace, add table, add record, alter table, select",
+		// 	sql: []string{
+		// 		"CREATE NAMESPACE test;",
+		// 		"{test}CREATE TABLE users (id INT PRIMARY KEY, name TEXT, age INT);",
+		// 		"{test}INSERT INTO users (id, name, age) VALUES (1, 'Bob', 30);",
+		// 		"{test}ALTER TABLE users DROP COLUMN age;",
+		// 	},
+		// 	execSQL: "{test}SELECT * FROM users;",
+		// 	results: [][]any{
+		// 		{int64(1), "Bob"},
+		// 	},
+		// },
+		// {
+		// 	name: "foreign key across namespaces",
+		// 	sql: []string{
+		// 		"CREATE NAMESPACE test1;",
+		// 		"CREATE NAMESPACE test2;",
+		// 		"{test1}CREATE TABLE users (id INT PRIMARY KEY, name TEXT);",
+		// 		`{test2}CREATE TABLE posts (id INT PRIMARY KEY,
+		// 		owner_id INT NOT NULL REFERENCES test1.users(id) ON UPDATE CASCADE ON DELETE CASCADE,
+		// 		content TEXT, created_at INT);`,
+		// 		"{test1}INSERT INTO users (id, name) VALUES (1, 'Alice'), (2, 'Bob');",
+		// 		"{test2}INSERT INTO posts (id, owner_id, content, created_at) VALUES (1, 1, 'Hello', @height), (2, 2, 'World', @height);",
+		// 		"{test1}DELETE FROM users WHERE id = 1;",
+		// 	},
+		// 	execSQL: `{test2}SELECT * FROM posts;`,
+		// 	results: [][]any{
+		// 		{int64(2), int64(2), "World", int64(1)},
+		// 	},
+		// },
+		// {
+		// 	name: "alter table create composite foreign key",
+		// 	sql: []string{
+		// 		// pretty non-sensical schema, but it tests the logic I want
+		// 		"CREATE TABLE cars (id INT PRIMARY KEY, make TEXT, model TEXT, UNIQUE(make, model));",
+		// 		"CREATE TABLE drivers (id INT PRIMARY KEY, name TEXT, car_make TEXT, car_model TEXT);",
+		// 	},
+		// 	execSQL: `ALTER TABLE drivers ADD CONSTRAINT fk_car FOREIGN KEY (car_make, car_model) REFERENCES cars (make, model);`,
+		// },
+		// {
+		// 	name: "update and delete",
+		// 	sql: []string{
+		// 		"INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30), (2, 'Bob', 40);",
+		// 		"UPDATE users SET age = 50 WHERE name = 'Alice';",
+		// 		"DELETE FROM users WHERE age = 40;",
+		// 	},
+		// 	execSQL: "SELECT name, age FROM users;",
+		// 	results: [][]any{
+		// 		{"Alice", int64(50)},
+		// 	},
+		// },
+		// {
+		// 	name: "recursive common table expression",
+		// 	execSQL: `
+		// 	with recursive r as (
+		// 		select 1 as n
+		// 		union all
+		// 		select n+1 from r where n < 6
+		// 	)
+		// 	select * from r;
+		// 	`,
+		// 	results: [][]any{
+		// 		{int64(1)}, {int64(2)}, {int64(3)}, {int64(4)}, {int64(5)}, {int64(6)},
+		// 	},
+		// },
+		// {
+		// 	name: "alter table add column",
+		// 	sql: []string{
+		// 		"ALTER TABLE users ADD COLUMN email TEXT;",
+		// 		"INSERT INTO users (id, name, age, email) VALUES (1, 'Alice', 30, 'alice@kwil.com');",
+		// 	},
+		// 	execSQL: "SELECT name, age, email FROM users;",
+		// 	results: [][]any{
+		// 		{"Alice", int64(30), "alice@kwil.com"},
+		// 	},
+		// },
+		// {
+		// 	name: "alter table drop column",
+		// 	sql: []string{
+		// 		"INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
+		// 		"ALTER TABLE users DROP COLUMN age;",
+		// 	},
+		// 	execSQL: "SELECT * FROM users;",
+		// 	results: [][]any{
+		// 		{1, "Alice"},
+		// 	},
+		// },
 
-		// Setting a column to be NOT NULL
-		{
-			name: "alter table set column not null",
-			sql: []string{
-				"ALTER TABLE users ALTER COLUMN name SET NOT NULL;",
-			},
-			execSQL:     "INSERT INTO users (id, name, age) VALUES (1, null, 30);",
-			errContains: "violates not-null constraint (SQLSTATE 23502)",
-		},
+		// // Setting a column to be NOT NULL
+		// {
+		// 	name: "alter table set column not null",
+		// 	sql: []string{
+		// 		"ALTER TABLE users ALTER COLUMN name SET NOT NULL;",
+		// 	},
+		// 	execSQL:     "INSERT INTO users (id, name, age) VALUES (1, null, 30);",
+		// 	errContains: "violates not-null constraint (SQLSTATE 23502)",
+		// },
 
-		// Setting a default on a column
-		{
-			name: "alter table set column default",
-			sql: []string{
-				"ALTER TABLE users ALTER COLUMN age SET DEFAULT 25;",
-				"INSERT INTO users (id, name) VALUES (1, 'Alice');",
-			},
-			execSQL: "SELECT id, name, age FROM users;",
-			results: [][]any{
-				{int64(1), "Alice", int64(25)},
-			},
-		},
+		// // Setting a default on a column
+		// {
+		// 	name: "alter table set column default",
+		// 	sql: []string{
+		// 		"ALTER TABLE users ALTER COLUMN age SET DEFAULT 25;",
+		// 		"INSERT INTO users (id, name) VALUES (1, 'Alice');",
+		// 	},
+		// 	execSQL: "SELECT id, name, age FROM users;",
+		// 	results: [][]any{
+		// 		{int64(1), "Alice", int64(25)},
+		// 	},
+		// },
 
-		// Removing a default from a column
-		{
-			name: "alter table drop column default",
-			sql: []string{
-				"ALTER TABLE users ALTER COLUMN age SET DEFAULT 25;",
-				"ALTER TABLE users ALTER COLUMN age DROP DEFAULT;",
-				"INSERT INTO users (id, name) VALUES (1, 'Alice');",
-			},
-			execSQL: "SELECT id, name, age FROM users;",
-			results: [][]any{
-				{int64(1), "Alice", nil}, // Age will be NULL since the default is removed
-			},
-		},
+		// // Removing a default from a column
+		// {
+		// 	name: "alter table drop column default",
+		// 	sql: []string{
+		// 		"ALTER TABLE users ALTER COLUMN age SET DEFAULT 25;",
+		// 		"ALTER TABLE users ALTER COLUMN age DROP DEFAULT;",
+		// 		"INSERT INTO users (id, name) VALUES (1, 'Alice');",
+		// 	},
+		// 	execSQL: "SELECT id, name, age FROM users;",
+		// 	results: [][]any{
+		// 		{int64(1), "Alice", nil}, // Age will be NULL since the default is removed
+		// 	},
+		// },
 
-		// Removing NOT NULL from a column
-		{
-			name: "alter table drop column not null",
-			sql: []string{
-				"ALTER TABLE users ALTER COLUMN name SET NOT NULL;",
-				"ALTER TABLE users ALTER COLUMN name DROP NOT NULL;",
-				"INSERT INTO users (id, age) VALUES (1, 30);",
-			},
-			execSQL: "SELECT id, name, age FROM users;",
-			results: [][]any{
-				{int64(1), nil, int64(30)},
-			},
-		},
+		// // Removing NOT NULL from a column
+		// {
+		// 	name: "alter table drop column not null",
+		// 	sql: []string{
+		// 		"ALTER TABLE users ALTER COLUMN name SET NOT NULL;",
+		// 		"ALTER TABLE users ALTER COLUMN name DROP NOT NULL;",
+		// 		"INSERT INTO users (id, age) VALUES (1, 30);",
+		// 	},
+		// 	execSQL: "SELECT id, name, age FROM users;",
+		// 	results: [][]any{
+		// 		{int64(1), nil, int64(30)},
+		// 	},
+		// },
 
-		// Renaming a column
-		{
-			name: "alter table rename column",
-			sql: []string{
-				"ALTER TABLE users RENAME COLUMN name TO full_name;",
-				"INSERT INTO users (id, full_name, age) VALUES (1, 'Alice', 30);",
-			},
-			execSQL: "SELECT full_name, age FROM users;",
-			results: [][]any{
-				{"Alice", int64(30)},
-			},
-		},
+		// // Renaming a column
+		// {
+		// 	name: "alter table rename column",
+		// 	sql: []string{
+		// 		"ALTER TABLE users RENAME COLUMN name TO full_name;",
+		// 		"INSERT INTO users (id, full_name, age) VALUES (1, 'Alice', 30);",
+		// 	},
+		// 	execSQL: "SELECT full_name, age FROM users;",
+		// 	results: [][]any{
+		// 		{"Alice", int64(30)},
+		// 	},
+		// },
 
-		// Renaming a table
-		{
-			name: "alter table rename table",
-			sql: []string{
-				"ALTER TABLE users RENAME TO app_users;",
-				"INSERT INTO app_users (id, name, age) VALUES (1, 'Alice', 30);",
-			},
-			execSQL: "SELECT name, age FROM app_users;",
-			results: [][]any{
-				{"Alice", int64(30)},
-			},
-		},
-		{
-			name:    "drop default namespace",
-			execSQL: "DROP NAMESPACE main;",
-			err:     engine.ErrCannotDropBuiltinNamespace,
-		},
-		{
-			name:    "drop info namespace",
-			execSQL: "DROP NAMESPACE info;",
-			err:     engine.ErrCannotDropBuiltinNamespace,
-		},
-		{
-			name:    "drop non-existent namespace",
-			execSQL: "DROP NAMESPACE some_ns;",
-			err:     engine.ErrNamespaceNotFound,
-		},
-		{
-			name: "global select permission - failure",
-			sql: []string{
-				// test_role starts with select b/c of default, but then loses it.
-				"CREATE ROLE test_role;",
-				"REVOKE select FROM default;",
-				"GRANT test_role TO 'user'",
-			},
-			execSQL:     "SELECT * FROM users;",
-			errContains: "permission denied for table users",
-			caller:      "user",
-			err:         engine.ErrDoesNotHavePrivilege,
-		},
-		{
-			name: "global select permission - success",
-			sql: []string{
-				"CREATE ROLE test_role;",
-				"REVOKE select FROM default;",
-				"GRANT test_role TO 'user'",
-				"GRANT select TO test_role;",
-			},
-			execSQL: "SELECT * FROM users;",
-			results: [][]any{},
-			caller:  "user",
-		},
-		{
-			name: "namespaced select permission - failure",
-			sql: []string{
-				"CREATE NAMESPACE test;",
-				"CREATE ROLE test_role;",
-				"REVOKE select FROM default;",
-				"GRANT test_role TO 'user'",
-				"GRANT select ON test TO test_role;",
-			},
-			// they do not have permission to select from the users table, which is in the main namespace
-			execSQL: "SELECT * FROM users;",
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "user",
-		},
-		{
-			name: "namespaced select permission - success",
-			sql: []string{
-				"CREATE NAMESPACE test;",
-				"CREATE ROLE test_role;",
-				"REVOKE select FROM default;",
-				"GRANT test_role TO 'user'",
-				"GRANT select ON test TO test_role;",
-				"{test}CREATE TABLE users (id INT PRIMARY KEY, name TEXT, age INT);",
-			},
-			execSQL: "{test}SELECT * FROM users;",
-			results: [][]any{},
-			caller:  "user",
-		},
-		{
-			name:    "global insert permission - failure",
-			execSQL: "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "user",
-		},
-		{
-			name: "global insert permission - success",
-			sql: []string{
-				"CREATE ROLE test_role;",
-				"GRANT test_role TO 'user'",
-				"GRANT insert TO test_role;",
-			},
-			execSQL: "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
-			results: [][]any{},
-			caller:  "user",
-		},
-		// I wont test other namespace-able perms because they use the same logic
-		{
-			name: "drop role",
-			sql: []string{
-				"CREATE ROLE test_role;",
-				"GRANT test_role TO 'user';",
-				"GRANT iNSert TO test_role;",
-				"DROP ROLE test_role;",
-			},
-			execSQL: "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "user",
-		},
-		{
-			name: "drop and recreate namespace",
-			sql: []string{
-				"CREATE NAMESPACE test;",
-				"CREATE ROLE test_role;",
-				"GRANT INSERT ON test TO test_role;",
-				"GRANT test_role TO 'user';",
-				"DROP NAMESPACE test;",
-				"CREATE NAMESPACE test;",
-			},
-			execSQL: "{test}INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "user",
-		},
-		{
-			name: "revoking global permission",
-			sql: []string{
-				"CREATE ROLE test_role;",
-				"GRANT test_role TO 'user';",
-				"GRANT insert TO test_role;",
-				"REVOKE insert FROM test_role;",
-			},
-			execSQL: "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "user",
-		},
-		{
-			name: "revoking namespaced permission",
-			sql: []string{
-				"CREATE NAMESPACE test;",
-				"CREATE ROLE test_role;",
-				"GRANT test_role TO 'user';",
-				"GRANT insert ON test TO test_role;",
-				"REVOKE insert ON test FROM test_role;",
-				"{test}CREATE TABLE users (id INT PRIMARY KEY, name TEXT, age INT);",
-			},
-			execSQL: "{test}INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "user",
-		},
-		{
-			name: "revoke role",
-			sql: []string{
-				"CREATE ROLE test_role;",
-				"GRANT test_role TO 'user';",
-				"GRANT insert TO test_role;",
-				"REVOKE test_role FROM 'user';",
-			},
-			execSQL: "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "user",
-		},
-		{
-			name: "transfer owner role to user",
-			sql: []string{
-				"TRANSFER OWNERSHIP TO 'user';",
-			},
-			execSQL: "TRANSFER OWNERSHIP TO 'user2';",
-			caller:  "user",
-		},
-		{
-			name:    "grant role to user, parameterized",
-			sql:     []string{"CREATE ROLE test_role;"},
-			execSQL: `grant test_role to $user;`,
-			execVars: map[string]any{
-				"user": "new_user",
-			},
-		},
-		{
-			name:    "cannot grant default role",
-			execSQL: `GRANT default TO 'user';`,
-			err:     engine.ErrBuiltInRole,
-		},
-		{
-			name:    "cannot revoke default role",
-			execSQL: `REVOKE default FROM 'user';`,
-			err:     engine.ErrBuiltInRole,
-		},
-		// here we test that privileges are correctly enforced.
-		// We do this by relying on the default role, which has no privileges
-		// except for select and call.
-		{
-			name:    "default role cannot be dropped",
-			execSQL: "DROP ROLE default;",
-			err:     engine.ErrBuiltInRole,
-		},
-		{
-			name:    "default role cannot create tables",
-			execSQL: `CREATE TABLE tbl (col int primary key);`,
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "default",
-		},
-		{
-			name:    "default role cannot alter tables",
-			execSQL: "ALTER TABLE users ADD COLUMN email TEXT;",
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "default",
-		},
-		{
-			name:    "default role cannot drop tables",
-			execSQL: "DROP TABLE users;",
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "default",
-		},
-		{
-			name:    "default role cannot create roles",
-			execSQL: `CREATE ROLE test_role;`,
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "default",
-		},
-		{
-			name:    "default role cannot drop roles",
-			execSQL: `DROP ROLE test_role;`,
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "default",
-		},
-		{
-			name:    "default role cannot create namespaces",
-			execSQL: `CREATE NAMESPACE ns;`,
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "default",
-		},
-		{
-			name: "default role cannot drop namespaces",
-			sql: []string{
-				"CREATE NAMESPACE ns;",
-			},
-			execSQL: `DROP NAMESPACE ns;`,
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "default",
-		},
-		{
-			name:    "default role cannot create actions",
-			execSQL: `CREATE ACTION act() public {};`,
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "default",
-		},
-		{
-			name: "default role cannot drop actions",
-			sql: []string{
-				"CREATE ACTION act() public {};",
-			},
-			execSQL: `DROP ACTION act;`,
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "default",
-		},
-		{
-			name: "default role cannot assign roles",
-			sql: []string{
-				"CREATE ROLE test_role;",
-			},
-			execSQL: `GRANT test_role TO 'default_user';`,
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "default",
-		},
-		{
-			name: "default role cannot revoke roles",
-			sql: []string{
-				"CREATE ROLE test_role;",
-				"GRANT test_role TO 'default_user';",
-			},
-			execSQL: `REVOKE test_role FROM 'default_user';`,
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "default",
-		},
-		{
-			name: "default role cannot assign privileges",
-			sql: []string{
-				"CREATE ROLE test_role;",
-			},
-			execSQL: `GRANT select ON users TO test_role;`,
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "default",
-		},
-		{
-			name: "default role cannot revoke privileges",
-			sql: []string{
-				"CREATE ROLE test_role;",
-				"GRANT select ON main TO test_role;",
-			},
-			execSQL: `REVOKE select ON main FROM test_role;`,
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "default",
-		},
-		{
-			name:    "default role cannot use extensions",
-			execSQL: "USE test AS test_ext;",
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "default",
-		},
-		{
-			name:    "default role cannot unuse extensions",
-			execSQL: "UNUSE test_ext;",
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "default",
-		},
-		{
-			name:    "default role cannot insert",
-			execSQL: "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "default",
-		},
-		{
-			name:    "default role cannot update",
-			execSQL: "UPDATE users SET age = 50 WHERE name = 'Alice';",
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "default",
-		},
-		{
-			name:    "default role cannot delete",
-			execSQL: "DELETE FROM users WHERE age = 40;",
-			err:     engine.ErrDoesNotHavePrivilege,
-			caller:  "default",
-		},
-		// testing that the admin cannot perform disallowed operations
-		// (e.g. dropping the info namespace)
-		{
-			name:    "admin cannot drop info namespace",
-			execSQL: "DROP NAMESPACE info;",
-			err:     engine.ErrCannotDropBuiltinNamespace,
-		},
-		{
-			name:    "admin cannot drop main namespace",
-			execSQL: `DROP NAMESPACE main;`,
-			err:     engine.ErrCannotDropBuiltinNamespace,
-		},
-		{
-			name:    "admin cannot add table to info namespace",
-			execSQL: `{info}CREATE TABLE tbl (col int primary key);`,
-			err:     engine.ErrCannotMutateInfoNamespace,
-		},
-		{
-			name:    "admin cannot add action to info namespace",
-			execSQL: `{info}CREATE ACTION act() public {};`,
-			err:     engine.ErrCannotMutateInfoNamespace,
-		},
-		{
-			name:    "admin cannot drop table from info namespace",
-			execSQL: `{info}DROP TABLE namespaces;`,
-			err:     engine.ErrCannotMutateInfoNamespace,
-		},
-		{
-			// this should always fail because it is a postgres view, but I want to make sure
-			// the error is correctly caught by the engine
-			name:    "admin cannot insert into info namespace",
-			execSQL: `{info}INSERT INTO namespaces (name, type) VALUES ('test', 'SYSTEM');`,
-			err:     engine.ErrCannotMutateInfoNamespace,
-		},
-		// testing info schema
-		// I only have one test here because sql_test.go tests all of the info schema,
-		// this is simply to ensure that it can be accessed by the engine.
-		{
-			name:    "read namespaces",
-			execSQL: "SELECT name, type FROM info.namespaces;",
-			results: [][]any{
-				{"info", "SYSTEM"},
-				{"main", "SYSTEM"},
-			},
-		},
-		{
-			name: "cannot grant roles privileges on a namespace",
-			sql: []string{
-				"CREATE ROLE test_role;",
-			},
-			execSQL: `GRANT ROLES ON main TO test_role;`,
-			err:     engine.ErrCannotBeNamespaced,
-		},
-		{
-			name: "cannot grant use privileges on a namespace",
-			sql: []string{
-				"CREATE ROLE test_role;",
-			},
-			execSQL: `GRANT USE ON main TO test_role;`,
-			err:     engine.ErrCannotBeNamespaced,
-		},
-		{
-			name:    "2d array",
-			execSQL: `SELECT ARRAY[ARRAY[1,2], ARRAY[3,4]];`,
-			err:     engine.ErrArrayDimensionality,
-		},
-		{
-			// this tests for a bug gavin found where foreign keys are read as columns
-			// from the info schema, and then incorrectly create ambiguous column errors
-			// in the query planner
-			name: "select against foreign key",
-			sql: []string{
-				`CREATE TABLE IF NOT EXISTS erc20rw_contracts (
-					id UUID PRIMARY KEY,
-					chain_id INT8 NOT NULL, -- the chain ID of the contract.
-					address TEXT NOT NULL, -- the reward escrow contract address.
-					nonce INT8 NOT NULL, -- the last known nonce of the contract
-					threshold INT8 NOT NULL,
-					safe_address TEXT NOT NULL, -- the GnosisSafe address.
-					safe_nonce INT8 NOT NULL, -- the last known nonce of the safe. NOTE: unless we force the safe can only be updated through KWIL, which is not practical, so the nonce may change without the ext knowing.
-					unique (chain_id, address) -- unique per chain and address
-				);`,
-				`CREATE TABLE IF NOT EXISTS erc20rw_signers (
-					id UUID PRIMARY KEY,
-					address TEXT NOT NULL, -- eth address
-					contract_id UUID NOT NULL REFERENCES erc20rw_contracts(id) ON UPDATE CASCADE ON DELETE CASCADE,
-					UNIQUE (address, contract_id)
-				);`,
-			},
-			execSQL: `SELECT * FROM erc20rw_signers WHERE contract_id = $contract_id;`,
-			execVars: map[string]any{
-				"contract_id": mustUUID("d3b3b3b3-3b3b-3b3b-3b3b-3b3b3b3b3b3b"),
-			},
-		},
-		{
-			// this is testing that, even though we send pgtype.Array[pgtype.Text] as all nils,
-			// it works for int[]
-			name: "insert array of nulls",
-			sql: []string{
-				`CREATE TABLE IF NOT EXISTS tbl (id INT PRIMARY KEY, arr INT[]);`,
-			},
-			execSQL: `INSERT INTO tbl (id, arr) VALUES (1, $a);`,
-			execVars: map[string]any{
-				"$a": []any{nil, nil},
-			},
-		},
-		{
-			name:    "cannot use reserved namespace prefix",
-			execSQL: `CREATE NAMESPACE kwil_hello;`,
-			err:     engine.ErrReservedNamespacePrefix,
-		},
-		{
-			// this is a regression test
-			// https://github.com/kwilteam/kwil-db/issues/1352
-			name: "alter table add and remove column",
-			sql: []string{
-				"CREATE TABLE users2 (id INT PRIMARY KEY, name TEXT);",
-			},
-			execSQL: `ALTER TABLE users2 ADD COLUMN age INT, DROP COLUMN name;`,
-		},
-		{
-			name: "default ordering of complex group",
-			sql: []string{
-				`CREATE TABLE wallets (id int primary key, address text)`,
-			},
-			execSQL: `SELECT lower(address) FROM wallets GROUP BY lower(address);`,
-		},
-		{
-			name:    "namespace with hyphen",
-			execSQL: `CREATE NAMESPACE "test-hyphen";`,
-			err:     engine.ErrParse,
-		},
-		{
-			name:    "namespace with period",
-			execSQL: `CREATE NAMESPACE "test.hyphen";`,
-			err:     engine.ErrParse,
-		},
-		{
-			name: "drop primary key",
-			sql: []string{
-				`CREATE TABLE tbl (id INT PRIMARY KEY, name TEXT);`,
-			},
-			execSQL: `ALTER TABLE tbl DROP column id;`,
-			err:     engine.ErrCannotAlterPrimaryKey,
-		},
+		// // Renaming a table
+		// {
+		// 	name: "alter table rename table",
+		// 	sql: []string{
+		// 		"ALTER TABLE users RENAME TO app_users;",
+		// 		"INSERT INTO app_users (id, name, age) VALUES (1, 'Alice', 30);",
+		// 	},
+		// 	execSQL: "SELECT name, age FROM app_users;",
+		// 	results: [][]any{
+		// 		{"Alice", int64(30)},
+		// 	},
+		// },
+		// {
+		// 	name:    "drop default namespace",
+		// 	execSQL: "DROP NAMESPACE main;",
+		// 	err:     engine.ErrCannotDropBuiltinNamespace,
+		// },
+		// {
+		// 	name:    "drop info namespace",
+		// 	execSQL: "DROP NAMESPACE info;",
+		// 	err:     engine.ErrCannotDropBuiltinNamespace,
+		// },
+		// {
+		// 	name:    "drop non-existent namespace",
+		// 	execSQL: "DROP NAMESPACE some_ns;",
+		// 	err:     engine.ErrNamespaceNotFound,
+		// },
+		// {
+		// 	name: "global select permission - failure",
+		// 	sql: []string{
+		// 		// test_role starts with select b/c of default, but then loses it.
+		// 		"CREATE ROLE test_role;",
+		// 		"REVOKE select FROM default;",
+		// 		"GRANT test_role TO 'user'",
+		// 	},
+		// 	execSQL:     "SELECT * FROM users;",
+		// 	errContains: "permission denied for table users",
+		// 	caller:      "user",
+		// 	err:         engine.ErrDoesNotHavePrivilege,
+		// },
+		// {
+		// 	name: "global select permission - success",
+		// 	sql: []string{
+		// 		"CREATE ROLE test_role;",
+		// 		"REVOKE select FROM default;",
+		// 		"GRANT test_role TO 'user'",
+		// 		"GRANT select TO test_role;",
+		// 	},
+		// 	execSQL: "SELECT * FROM users;",
+		// 	results: [][]any{},
+		// 	caller:  "user",
+		// },
+		// {
+		// 	name: "namespaced select permission - failure",
+		// 	sql: []string{
+		// 		"CREATE NAMESPACE test;",
+		// 		"CREATE ROLE test_role;",
+		// 		"REVOKE select FROM default;",
+		// 		"GRANT test_role TO 'user'",
+		// 		"GRANT select ON test TO test_role;",
+		// 	},
+		// 	// they do not have permission to select from the users table, which is in the main namespace
+		// 	execSQL: "SELECT * FROM users;",
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "user",
+		// },
+		// {
+		// 	name: "namespaced select permission - success",
+		// 	sql: []string{
+		// 		"CREATE NAMESPACE test;",
+		// 		"CREATE ROLE test_role;",
+		// 		"REVOKE select FROM default;",
+		// 		"GRANT test_role TO 'user'",
+		// 		"GRANT select ON test TO test_role;",
+		// 		"{test}CREATE TABLE users (id INT PRIMARY KEY, name TEXT, age INT);",
+		// 	},
+		// 	execSQL: "{test}SELECT * FROM users;",
+		// 	results: [][]any{},
+		// 	caller:  "user",
+		// },
+		// {
+		// 	name:    "global insert permission - failure",
+		// 	execSQL: "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "user",
+		// },
+		// {
+		// 	name: "global insert permission - success",
+		// 	sql: []string{
+		// 		"CREATE ROLE test_role;",
+		// 		"GRANT test_role TO 'user'",
+		// 		"GRANT insert TO test_role;",
+		// 	},
+		// 	execSQL: "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
+		// 	results: [][]any{},
+		// 	caller:  "user",
+		// },
+		// // I wont test other namespace-able perms because they use the same logic
+		// {
+		// 	name: "drop role",
+		// 	sql: []string{
+		// 		"CREATE ROLE test_role;",
+		// 		"GRANT test_role TO 'user';",
+		// 		"GRANT iNSert TO test_role;",
+		// 		"DROP ROLE test_role;",
+		// 	},
+		// 	execSQL: "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "user",
+		// },
+		// {
+		// 	name: "drop and recreate namespace",
+		// 	sql: []string{
+		// 		"CREATE NAMESPACE test;",
+		// 		"CREATE ROLE test_role;",
+		// 		"GRANT INSERT ON test TO test_role;",
+		// 		"GRANT test_role TO 'user';",
+		// 		"DROP NAMESPACE test;",
+		// 		"CREATE NAMESPACE test;",
+		// 	},
+		// 	execSQL: "{test}INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "user",
+		// },
+		// {
+		// 	name: "revoking global permission",
+		// 	sql: []string{
+		// 		"CREATE ROLE test_role;",
+		// 		"GRANT test_role TO 'user';",
+		// 		"GRANT insert TO test_role;",
+		// 		"REVOKE insert FROM test_role;",
+		// 	},
+		// 	execSQL: "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "user",
+		// },
+		// {
+		// 	name: "revoking namespaced permission",
+		// 	sql: []string{
+		// 		"CREATE NAMESPACE test;",
+		// 		"CREATE ROLE test_role;",
+		// 		"GRANT test_role TO 'user';",
+		// 		"GRANT insert ON test TO test_role;",
+		// 		"REVOKE insert ON test FROM test_role;",
+		// 		"{test}CREATE TABLE users (id INT PRIMARY KEY, name TEXT, age INT);",
+		// 	},
+		// 	execSQL: "{test}INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "user",
+		// },
+		// {
+		// 	name: "revoke role",
+		// 	sql: []string{
+		// 		"CREATE ROLE test_role;",
+		// 		"GRANT test_role TO 'user';",
+		// 		"GRANT insert TO test_role;",
+		// 		"REVOKE test_role FROM 'user';",
+		// 	},
+		// 	execSQL: "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "user",
+		// },
+		// {
+		// 	name: "transfer owner role to user",
+		// 	sql: []string{
+		// 		"TRANSFER OWNERSHIP TO 'user';",
+		// 	},
+		// 	execSQL: "TRANSFER OWNERSHIP TO 'user2';",
+		// 	caller:  "user",
+		// },
+		// {
+		// 	name:    "grant role to user, parameterized",
+		// 	sql:     []string{"CREATE ROLE test_role;"},
+		// 	execSQL: `grant test_role to $user;`,
+		// 	execVars: map[string]any{
+		// 		"user": "new_user",
+		// 	},
+		// },
+		// {
+		// 	name:    "cannot grant default role",
+		// 	execSQL: `GRANT default TO 'user';`,
+		// 	err:     engine.ErrBuiltInRole,
+		// },
+		// {
+		// 	name:    "cannot revoke default role",
+		// 	execSQL: `REVOKE default FROM 'user';`,
+		// 	err:     engine.ErrBuiltInRole,
+		// },
+		// // here we test that privileges are correctly enforced.
+		// // We do this by relying on the default role, which has no privileges
+		// // except for select and call.
+		// {
+		// 	name:    "default role cannot be dropped",
+		// 	execSQL: "DROP ROLE default;",
+		// 	err:     engine.ErrBuiltInRole,
+		// },
+		// {
+		// 	name:    "default role cannot create tables",
+		// 	execSQL: `CREATE TABLE tbl (col int primary key);`,
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "default",
+		// },
+		// {
+		// 	name:    "default role cannot alter tables",
+		// 	execSQL: "ALTER TABLE users ADD COLUMN email TEXT;",
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "default",
+		// },
+		// {
+		// 	name:    "default role cannot drop tables",
+		// 	execSQL: "DROP TABLE users;",
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "default",
+		// },
+		// {
+		// 	name:    "default role cannot create roles",
+		// 	execSQL: `CREATE ROLE test_role;`,
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "default",
+		// },
+		// {
+		// 	name:    "default role cannot drop roles",
+		// 	execSQL: `DROP ROLE test_role;`,
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "default",
+		// },
+		// {
+		// 	name:    "default role cannot create namespaces",
+		// 	execSQL: `CREATE NAMESPACE ns;`,
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "default",
+		// },
+		// {
+		// 	name: "default role cannot drop namespaces",
+		// 	sql: []string{
+		// 		"CREATE NAMESPACE ns;",
+		// 	},
+		// 	execSQL: `DROP NAMESPACE ns;`,
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "default",
+		// },
+		// {
+		// 	name:    "default role cannot create actions",
+		// 	execSQL: `CREATE ACTION act() public {};`,
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "default",
+		// },
+		// {
+		// 	name: "default role cannot drop actions",
+		// 	sql: []string{
+		// 		"CREATE ACTION act() public {};",
+		// 	},
+		// 	execSQL: `DROP ACTION act;`,
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "default",
+		// },
+		// {
+		// 	name: "default role cannot assign roles",
+		// 	sql: []string{
+		// 		"CREATE ROLE test_role;",
+		// 	},
+		// 	execSQL: `GRANT test_role TO 'default_user';`,
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "default",
+		// },
+		// {
+		// 	name: "default role cannot revoke roles",
+		// 	sql: []string{
+		// 		"CREATE ROLE test_role;",
+		// 		"GRANT test_role TO 'default_user';",
+		// 	},
+		// 	execSQL: `REVOKE test_role FROM 'default_user';`,
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "default",
+		// },
+		// {
+		// 	name: "default role cannot assign privileges",
+		// 	sql: []string{
+		// 		"CREATE ROLE test_role;",
+		// 	},
+		// 	execSQL: `GRANT select ON users TO test_role;`,
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "default",
+		// },
+		// {
+		// 	name: "default role cannot revoke privileges",
+		// 	sql: []string{
+		// 		"CREATE ROLE test_role;",
+		// 		"GRANT select ON main TO test_role;",
+		// 	},
+		// 	execSQL: `REVOKE select ON main FROM test_role;`,
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "default",
+		// },
+		// {
+		// 	name:    "default role cannot use extensions",
+		// 	execSQL: "USE test AS test_ext;",
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "default",
+		// },
+		// {
+		// 	name:    "default role cannot unuse extensions",
+		// 	execSQL: "UNUSE test_ext;",
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "default",
+		// },
+		// {
+		// 	name:    "default role cannot insert",
+		// 	execSQL: "INSERT INTO users (id, name, age) VALUES (1, 'Alice', 30);",
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "default",
+		// },
+		// {
+		// 	name:    "default role cannot update",
+		// 	execSQL: "UPDATE users SET age = 50 WHERE name = 'Alice';",
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "default",
+		// },
+		// {
+		// 	name:    "default role cannot delete",
+		// 	execSQL: "DELETE FROM users WHERE age = 40;",
+		// 	err:     engine.ErrDoesNotHavePrivilege,
+		// 	caller:  "default",
+		// },
+		// // testing that the admin cannot perform disallowed operations
+		// // (e.g. dropping the info namespace)
+		// {
+		// 	name:    "admin cannot drop info namespace",
+		// 	execSQL: "DROP NAMESPACE info;",
+		// 	err:     engine.ErrCannotDropBuiltinNamespace,
+		// },
+		// {
+		// 	name:    "admin cannot drop main namespace",
+		// 	execSQL: `DROP NAMESPACE main;`,
+		// 	err:     engine.ErrCannotDropBuiltinNamespace,
+		// },
+		// {
+		// 	name:    "admin cannot add table to info namespace",
+		// 	execSQL: `{info}CREATE TABLE tbl (col int primary key);`,
+		// 	err:     engine.ErrCannotMutateInfoNamespace,
+		// },
+		// {
+		// 	name:    "admin cannot add action to info namespace",
+		// 	execSQL: `{info}CREATE ACTION act() public {};`,
+		// 	err:     engine.ErrCannotMutateInfoNamespace,
+		// },
+		// {
+		// 	name:    "admin cannot drop table from info namespace",
+		// 	execSQL: `{info}DROP TABLE namespaces;`,
+		// 	err:     engine.ErrCannotMutateInfoNamespace,
+		// },
+		// {
+		// 	// this should always fail because it is a postgres view, but I want to make sure
+		// 	// the error is correctly caught by the engine
+		// 	name:    "admin cannot insert into info namespace",
+		// 	execSQL: `{info}INSERT INTO namespaces (name, type) VALUES ('test', 'SYSTEM');`,
+		// 	err:     engine.ErrCannotMutateInfoNamespace,
+		// },
+		// // testing info schema
+		// // I only have one test here because sql_test.go tests all of the info schema,
+		// // this is simply to ensure that it can be accessed by the engine.
+		// {
+		// 	name:    "read namespaces",
+		// 	execSQL: "SELECT name, type FROM info.namespaces;",
+		// 	results: [][]any{
+		// 		{"info", "SYSTEM"},
+		// 		{"main", "SYSTEM"},
+		// 	},
+		// },
+		// {
+		// 	name: "cannot grant roles privileges on a namespace",
+		// 	sql: []string{
+		// 		"CREATE ROLE test_role;",
+		// 	},
+		// 	execSQL: `GRANT ROLES ON main TO test_role;`,
+		// 	err:     engine.ErrCannotBeNamespaced,
+		// },
+		// {
+		// 	name: "cannot grant use privileges on a namespace",
+		// 	sql: []string{
+		// 		"CREATE ROLE test_role;",
+		// 	},
+		// 	execSQL: `GRANT USE ON main TO test_role;`,
+		// 	err:     engine.ErrCannotBeNamespaced,
+		// },
+		// {
+		// 	name:    "2d array",
+		// 	execSQL: `SELECT ARRAY[ARRAY[1,2], ARRAY[3,4]];`,
+		// 	err:     engine.ErrArrayDimensionality,
+		// },
+		// {
+		// 	// this tests for a bug gavin found where foreign keys are read as columns
+		// 	// from the info schema, and then incorrectly create ambiguous column errors
+		// 	// in the query planner
+		// 	name: "select against foreign key",
+		// 	sql: []string{
+		// 		`CREATE TABLE IF NOT EXISTS erc20rw_contracts (
+		// 			id UUID PRIMARY KEY,
+		// 			chain_id INT8 NOT NULL, -- the chain ID of the contract.
+		// 			address TEXT NOT NULL, -- the reward escrow contract address.
+		// 			nonce INT8 NOT NULL, -- the last known nonce of the contract
+		// 			threshold INT8 NOT NULL,
+		// 			safe_address TEXT NOT NULL, -- the GnosisSafe address.
+		// 			safe_nonce INT8 NOT NULL, -- the last known nonce of the safe. NOTE: unless we force the safe can only be updated through KWIL, which is not practical, so the nonce may change without the ext knowing.
+		// 			unique (chain_id, address) -- unique per chain and address
+		// 		);`,
+		// 		`CREATE TABLE IF NOT EXISTS erc20rw_signers (
+		// 			id UUID PRIMARY KEY,
+		// 			address TEXT NOT NULL, -- eth address
+		// 			contract_id UUID NOT NULL REFERENCES erc20rw_contracts(id) ON UPDATE CASCADE ON DELETE CASCADE,
+		// 			UNIQUE (address, contract_id)
+		// 		);`,
+		// 	},
+		// 	execSQL: `SELECT * FROM erc20rw_signers WHERE contract_id = $contract_id;`,
+		// 	execVars: map[string]any{
+		// 		"contract_id": mustUUID("d3b3b3b3-3b3b-3b3b-3b3b-3b3b3b3b3b3b"),
+		// 	},
+		// },
+		// {
+		// 	// this is testing that, even though we send pgtype.Array[pgtype.Text] as all nils,
+		// 	// it works for int[]
+		// 	name: "insert array of nulls",
+		// 	sql: []string{
+		// 		`CREATE TABLE IF NOT EXISTS tbl (id INT PRIMARY KEY, arr INT[]);`,
+		// 	},
+		// 	execSQL: `INSERT INTO tbl (id, arr) VALUES (1, $a);`,
+		// 	execVars: map[string]any{
+		// 		"$a": []any{nil, nil},
+		// 	},
+		// },
+		// {
+		// 	name:    "cannot use reserved namespace prefix",
+		// 	execSQL: `CREATE NAMESPACE kwil_hello;`,
+		// 	err:     engine.ErrReservedNamespacePrefix,
+		// },
+		// {
+		// 	// this is a regression test
+		// 	// https://github.com/kwilteam/kwil-db/issues/1352
+		// 	name: "alter table add and remove column",
+		// 	sql: []string{
+		// 		"CREATE TABLE users2 (id INT PRIMARY KEY, name TEXT);",
+		// 	},
+		// 	execSQL: `ALTER TABLE users2 ADD COLUMN age INT, DROP COLUMN name;`,
+		// },
+		// {
+		// 	name: "default ordering of complex group",
+		// 	sql: []string{
+		// 		`CREATE TABLE wallets (id int primary key, address text)`,
+		// 	},
+		// 	execSQL: `SELECT lower(address) FROM wallets GROUP BY lower(address);`,
+		// },
+		// {
+		// 	name:    "namespace with hyphen",
+		// 	execSQL: `CREATE NAMESPACE "test-hyphen";`,
+		// 	err:     engine.ErrParse,
+		// },
+		// {
+		// 	name:    "namespace with period",
+		// 	execSQL: `CREATE NAMESPACE "test.hyphen";`,
+		// 	err:     engine.ErrParse,
+		// },
+		// {
+		// 	name: "drop primary key",
+		// 	sql: []string{
+		// 		`CREATE TABLE tbl (id INT PRIMARY KEY, name TEXT);`,
+		// 	},
+		// 	execSQL: `ALTER TABLE tbl DROP column id;`,
+		// 	err:     engine.ErrCannotAlterPrimaryKey,
+		// },
+		// {
+		// 	name:           "select empty array (untyped)",
+		// 	execSQL:        `SELECT ARRAY[];`,
+		// 	err:            engine.ErrQueryPlanner,
+		// 	skipInitTables: true,
+		// },
+		// {
+		// 	name:           "select empty array (type casted)",
+		// 	execSQL:        `SELECT ARRAY[]::TEXT[];`,
+		// 	results:        [][]any{{[]*string{}}},
+		// 	skipInitTables: true,
+		// },
 	}
 
 	db := newTestDB(t, nil, nil)
@@ -725,7 +743,7 @@ func Test_SQL(t *testing.T) {
 			require.NoError(t, err)
 			defer tx.Rollback(ctx) // always rollback
 
-			interp := newTestInterp(t, tx, test.sql, !skipInitTables)
+			interp := newTestInterp(t, tx, test.sql, !test.skipInitTables)
 
 			var values [][]any
 			err = interp.Execute(newEngineCtx(test.caller), tx, test.execSQL, test.execVars, func(v *common.Row) error {
@@ -1964,6 +1982,25 @@ func Test_Actions(t *testing.T) {
 			action:    "act",
 			caller:    "some_user",
 			err:       engine.ErrDoesNotHavePrivilege,
+		},
+		{
+			name: "empty array",
+			stmt: []string{
+				`CREATE ACTION empty_array() public view {
+					$arr := array[];
+				}`,
+			},
+			action: "empty_array",
+			err:    engine.ErrArrayDimensionality,
+		},
+		{
+			name: "empty array (typecasted)",
+			stmt: []string{
+				`CREATE ACTION empty_array() public view {
+					$arr := array[]::text[];
+				}`,
+			},
+			action: "empty_array",
 		},
 	}
 

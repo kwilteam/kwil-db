@@ -660,6 +660,18 @@ func Test_Planner(t *testing.T) {
 			},
 			err: logical.ErrActionInSQLStmt,
 		},
+		{
+			name: "select empty array",
+			sql:  "select array[]",
+			err:  logical.ErrUntypedEmptyArray,
+		},
+		{
+			name: "select empty array with type",
+			sql:  "select array[]::int[]",
+			wt: "Return: ?column? [int8[]]\n" +
+				"└─Project: []::int8\n" +
+				"  └─Empty Scan\n",
+		},
 	}
 
 	for _, test := range tests {

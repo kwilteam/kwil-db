@@ -1847,3 +1847,27 @@ func Test_CancelListen(t *testing.T) {
 
 	require.Len(t, received, 10)
 }
+
+func Test_DeleteMe(t *testing.T) {
+	ctx := context.Background()
+
+	db, err := NewDB(ctx, cfg)
+	require.NoError(t, err)
+	defer db.Close()
+
+	tx, err := db.BeginTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx) // always rollback
+
+	_, err = tx.Execute(ctx, "CREATE TABLE users (id serial primary key, name text)", QueryModeExec)
+	require.NoError(t, err)
+
+	ids := []any{}
+	res := []any{
+		&ids,
+	}
+	err = QueryRowFunc(ctx, tx, "SELECT array_agg(id) from users", res, func() error {
+		return nil
+	})
+	require.NoError(t, err)
+}
