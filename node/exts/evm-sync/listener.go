@@ -268,6 +268,11 @@ func (i *individualListener) processEvents(ctx context.Context, from, to int64, 
 		return nil
 	}
 
+	// order logs by block number
+	sort.Slice(logs, func(i, j int) bool {
+		return logs[i].Log.BlockNumber < logs[j].Log.BlockNumber
+	})
+
 	blocks := make(map[uint64][]*EthLog)
 	blockOrder := make([]uint64, 0, len(blocks))
 

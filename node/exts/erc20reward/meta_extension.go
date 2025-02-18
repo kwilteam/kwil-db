@@ -1506,7 +1506,7 @@ func (r *rewardExtensionInfo) startTransferListener(ctx context.Context, app *co
 			var logs []*evmsync.EthLog
 			for iter.Next() {
 				logs = append(logs, &evmsync.EthLog{
-					Metadata: logTypeConfirmedEpoch,
+					Metadata: logTypeTransfer,
 					Log:      &iter.Event.Raw,
 				})
 			}
