@@ -18,4 +18,5 @@ var (
 	ErrInvalidWindowFunction      = errors.New("invalid window function")
 	ErrWindowNotDefined           = errors.New("window not defined")
 	ErrFunctionDoesNotExist       = errors.New("function does not exist")
+	ErrActionInSQLStmt            = errors.New("actions cannot be used in SQL statements")
 )
