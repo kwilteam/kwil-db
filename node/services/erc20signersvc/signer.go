@@ -31,7 +31,7 @@ import (
 
 // StateFilePath returns the state file.
 func StateFilePath(dir string) string {
-	return filepath.Join(dir, "erc20reward_signer_state.json")
+	return filepath.Join(dir, "erc20_signer_state.json")
 }
 
 // rewardSigner handles one registered erc20 reward instance.
@@ -353,11 +353,26 @@ func NewServiceMgr(
 // no errors are returned after the rewardSigner is running.
 func (s *ServiceMgr) Start(ctx context.Context) error {
 	// since we need to wait on RPC running, we move the initialization logic into `init`
-	for _, s := range s.signers {
-		err := s.init()
-		if err != nil {
-			return err
+
+	// To be able to run with docker, we need to apply a retry logic, since a new
+	// docker instance has no erc20 instance configured, but we need to config the
+	// erc20 instance target.
+	for { // naive way to keep trying the init
+		var err error
+		for _, s := range s.signers {
+			err = s.init()
+			if err != nil {
+				break
+			}
 		}
+
+		if err == nil {
+			break
+		}
+
+		// if any error happens in init, we try again
+		time.Sleep(time.Second * 5)
+		s.logger.Warn("failed to initialize erc20 reward signer, will retry", "error", err.Error())
 	}
 
 	wg := &sync.WaitGroup{}

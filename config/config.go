@@ -453,10 +453,10 @@ type Checkpoint struct {
 
 type Erc20RewardSignerConfig struct {
 	Enable      bool           `toml:"enable" comment:"enable the ERC20 reward signer service"`
-	Targets     []string       `json:"targets" comment:"target reward ext alias for the ERC20 reward"`
-	PrivateKeys []string       `json:"private_keys" comment:"private key for the ERC20 reward target"`
-	EthRpcs     []string       `json:"eth_rpcs" comment:"eth rpc address for the ERC20 reward target"`
-	SyncEvery   types.Duration `json:"sync_every" comment:"sync interval; a recommend value is same as the block time"`
+	Targets     []string       `toml:"targets" comment:"target reward ext alias for the ERC20 reward"`
+	PrivateKeys []string       `toml:"private_keys" comment:"private key for the ERC20 reward target"`
+	EthRpcs     []string       `toml:"eth_rpcs" comment:"eth rpc address for the ERC20 reward target"`
+	SyncEvery   types.Duration `toml:"sync_every" comment:"sync interval; a recommend value is same as the block time"`
 }
 
 func (cfg Erc20RewardSignerConfig) Validate() error {
