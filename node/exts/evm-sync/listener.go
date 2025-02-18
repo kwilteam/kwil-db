@@ -350,18 +350,6 @@ func (i *individualListener) processEvents(ctx context.Context, from, to int64, 
 	return setLastSeenHeight(ctx, eventStore, i.orderedSyncTopic, to)
 }
 
-/*
-uyyyy ===== 7606100 <nil>
-uyyyy ===== 7606108 7606100
-uyyyy ===== 7606494 7688721
-uyyyy ===== 7612561 7606494
-uyyyy ===== 7612734 7612561
-uyyyy ===== 7613118 7612734
-uyyyy ===== 7688721 7606108
-uyyyy ===== 7731215 7613118
-uyyyy ===== 7731390 7731215
-*/
-
 // serializeLog serializes an ethCommonLogCopy into a deterministic byte slice.
 func serializeLog(log *ethtypes.Log) ([]byte, error) {
 	buf := new(bytes.Buffer)
