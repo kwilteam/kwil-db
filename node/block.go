@@ -5,11 +5,14 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
+	"slices"
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/node/peers"
 	"github.com/kwilteam/kwil-db/node/types"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -48,6 +51,7 @@ func (n *Node) blkGetStreamHandler(s network.Stream) {
 	}
 }
 
+// blkGetHeightStreamHandler is the stream handler for ProtocolIDBlockHeight.
 func (n *Node) blkGetHeightStreamHandler(s network.Stream) {
 	defer s.Close()
 
@@ -60,19 +64,25 @@ func (n *Node) blkGetHeightStreamHandler(s network.Stream) {
 	}
 	n.log.Debug("Peer requested block", "height", req.Height)
 
+	bestHeight, _, _, _ := n.bki.Best()
+
 	hash, blk, ci, err := n.bki.GetByHeight(req.Height)
 	if err != nil || ci == nil {
 		s.SetWriteDeadline(time.Now().Add(reqRWTimeout))
 		s.Write(noData) // don't have it
+		// also write our best height
+		binary.Write(s, binary.LittleEndian, bestHeight)
 	} else {
 		rawBlk := ktypes.EncodeBlock(blk) // blkHash := blk.Hash()
 		ciBytes, _ := ci.MarshalBinary()
 		// maybe we remove hash from the protocol, was thinking receiver could
 		// hang up earlier depending...
 		s.SetWriteDeadline(time.Now().Add(blkSendTimeout))
+		s.Write(withData)
 		s.Write(hash[:])
 		ktypes.WriteCompactBytes(s, ciBytes)
 		ktypes.WriteCompactBytes(s, rawBlk)
+		binary.Write(s, binary.LittleEndian, bestHeight)
 	}
 }
 
@@ -291,20 +301,120 @@ func (n *Node) getBlk(ctx context.Context, blkHash types.Hash) (int64, []byte, *
 	return 0, nil, nil, ErrBlkNotFound
 }
 
-func (n *Node) getBlkHeight(ctx context.Context, height int64) (types.Hash, []byte, *types.CommitInfo, error) {
+func requestBlockHeight(ctx context.Context, host host.Host, peer peer.ID,
+	height, readLimit int64) ([]byte, error) {
+
+	const (
+		reqTimeout  = 2 * time.Second        // stream.Write(resID), sending the request
+		recvTimeout = 20 * time.Second       // allowed time to read entire response with readAll
+		idleTimeout = 500 * time.Millisecond // read timeout before each stream.Read(chunk)
+	)
+
+	resID, _ := blockHeightReq{Height: height}.MarshalBinary()
+	stream, err := host.NewStream(ctx, peer, ProtocolIDBlockHeight)
+	if err != nil {
+		return nil, peers.CompressDialError(err)
+	}
+	defer stream.Close()
+
+	stream.SetWriteDeadline(time.Now().Add(reqTimeout))
+
+	_, err = stream.Write(resID)
+	if err != nil {
+		return nil, fmt.Errorf("resource get request failed: %w", err)
+	}
+
+	resource, err := readAll(stream, readLimit, time.Now().Add(recvTimeout), idleTimeout)
+	if err != nil {
+		return nil, err
+	}
+	if len(resource) < 2 { // empty, or just a flag without additional data
+		return nil, ErrNoResponse
+	}
+
+	// The following convention allows returning extra data in the case that the
+	// resource (the block contents) are not available. In this case, the peer's
+	// best block. We may consider this more broadly for other protocols.
+
+	flag, resource := resource[0], resource[1:]
+
+	switch flag {
+	case noData[0]:
+		err := ErrBlkNotFound
+		if len(resource) == 8 {
+			h := int64(binary.LittleEndian.Uint64(resource))
+			err = errors.Join(err, &ErrNotFoundWithBestHeight{
+				BestHeight: h,
+			})
+		}
+		return nil, err
+	case withData[0]:
+		return resource, nil
+	default:
+		return nil, fmt.Errorf("invalid flag %v in block height response", flag)
+	}
+}
+
+// readAll reads from a stream until EOF or:
+// - the stream is closed
+// - the deadline is reached
+// - the stream is idle (no chunk read) for idleTimeout
+// - the total bytes read exceed the limit
+func readAll(s network.Stream, limit int64, deadline time.Time, idleTimeout time.Duration) ([]byte, error) {
+	r := io.LimitReader(s, limit)
+
+	const readChunk = 512 // like io.ReadAll
+	b := make([]byte, 0, readChunk)
+
+	for {
+		// Check absolute deadline for the entire resource.
+		if time.Now().After(deadline) {
+			return nil, fmt.Errorf("timeout")
+		}
+
+		// Set read deadline for this chunk.
+		s.SetReadDeadline(time.Now().Add(idleTimeout))
+
+		// The following is verbatim from io.ReadAll.
+		n, err := r.Read(b[len(b):cap(b)])
+		b = b[:len(b)+n] // reslice past current length
+		if err != nil {
+			if err == io.EOF {
+				err = nil
+			}
+			return b, err
+		}
+
+		// Add more capacity, to ensure space for another readChunk read.
+		// This is modified from io.ReadAll.
+		b = slices.Grow(b, readChunk) // handles: (cap - len) < readChunk
+	}
+}
+
+func (n *Node) getBlkHeight(ctx context.Context, height int64) (types.Hash, []byte, *types.CommitInfo, int64, error) {
 	return getBlkHeight(ctx, height, n.host, n.log)
 }
 
-func getBlkHeight(ctx context.Context, height int64, host host.Host, log log.Logger) (types.Hash, []byte, *types.CommitInfo, error) {
+func getBlkHeight(ctx context.Context, height int64, host host.Host, log log.Logger) (types.Hash, []byte, *types.CommitInfo, int64, error) {
 	peers := peerHosts(host)
+
+	var bestHeight int64
 
 	for _, peer := range peers {
 		log.Infof("requesting block number %d from %v", height, peer)
 		t0 := time.Now()
-		resID, _ := blockHeightReq{Height: height}.MarshalBinary()
-		resp, err := requestFrom(ctx, host, peer, resID, ProtocolIDBlockHeight, blkReadLimit)
+		resp, err := requestBlockHeight(ctx, host, peer, height, blkReadLimit)
 		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrBlkNotFound) {
-			log.Warnf("block not available on %v", peer)
+			be := new(ErrNotFoundWithBestHeight)
+			if errors.As(err, &be) {
+				theirBest := be.BestHeight
+				if theirBest > bestHeight {
+					bestHeight = theirBest
+				}
+				log.Infof("block %d not found on peer; their best height is %d", height, theirBest)
+			} else {
+				log.Warnf("block not available on %v", peer)
+			}
 			continue
 		}
 		if errors.Is(err, ErrNoResponse) {
@@ -312,7 +422,7 @@ func getBlkHeight(ctx context.Context, height int64, host host.Host, log log.Log
 			continue
 		}
 		if errors.Is(err, context.Canceled) {
-			return types.Hash{}, nil, nil, err
+			return types.Hash{}, nil, nil, 0, err
 		}
 		if err != nil {
 			log.Warnf("unexpected error from %v: %v", peer, err)
@@ -351,9 +461,49 @@ func getBlkHeight(ctx context.Context, height int64, host host.Host, log log.Log
 			log.Warn("failed to read block in the block response", "error", err)
 		}
 
-		return hash, rawBlk, &ci, nil
+		var theirBest int64
+		err = binary.Read(rd, binary.LittleEndian, &theirBest)
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				log.Info("failed to read best block height", "error", err)
+				continue
+			} // else the peer didn't want to send it (this is backwards compatible)
+		} else {
+			if theirBest > bestHeight {
+				bestHeight = theirBest
+			}
+		}
+
+		return hash, rawBlk, &ci, bestHeight, nil
 	}
-	return types.Hash{}, nil, nil, ErrBlkNotFound
+
+	err := ErrBlkNotFound
+	if bestHeight > 0 {
+		err = errors.Join(err, &ErrNotFoundWithBestHeight{BestHeight: bestHeight})
+	}
+
+	return types.Hash{}, nil, nil, 0, err
+}
+
+// ErrNotFoundWithBestHeight is an error that contains a BestHeight field, which
+// is used when a block is not found, but the the negative responses from peers
+// contained their best height.
+//
+// Use with errors.As.  For example:
+//
+//	func heightFromErr(err error) int64 {
+//		be := new(ErrNotFoundWithBestHeight)
+//		if errors.As(err, &be) {
+//			return be.BestHeight
+//		}
+//		return -1
+//	}
+type ErrNotFoundWithBestHeight struct {
+	BestHeight int64
+}
+
+func (e *ErrNotFoundWithBestHeight) Error() string {
+	return fmt.Sprintf("block not found, best height: %d", e.BestHeight)
 }
 
 // BlockByHeight returns the block by height. If height <= 0, the latest block

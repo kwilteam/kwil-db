@@ -140,7 +140,7 @@ func (ce *ConsensusEngine) syncBlockWithRetry(ctx context.Context, height int64)
 
 // syncBlock fetches the specified block from the network
 func (ce *ConsensusEngine) syncBlock(ctx context.Context, height int64) error {
-	_, rawblk, ci, err := ce.blkRequester(ctx, height)
+	_, rawblk, ci, _, err := ce.blkRequester(ctx, height)
 	if err != nil {
 		return fmt.Errorf("failed to get block from the network: %w", err)
 	}
@@ -166,7 +166,7 @@ func (ce *ConsensusEngine) applyBlock(ctx context.Context, rawBlk []byte, ci *ty
 
 func (ce *ConsensusEngine) getBlock(ctx context.Context, height int64) (blkID types.Hash, rawBlk []byte, ci *types.CommitInfo, err error) {
 	err = blkRetrier(ctx, 15, func() error {
-		blkID, rawBlk, ci, err = ce.blkRequester(ctx, height)
+		blkID, rawBlk, ci, _, err = ce.blkRequester(ctx, height)
 		return err
 	})
 

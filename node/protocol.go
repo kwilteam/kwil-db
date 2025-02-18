@@ -27,7 +27,7 @@ const (
 
 	ProtocolIDTx          protocol.ID = "/kwil/tx/1.0.0"
 	ProtocolIDTxAnn       protocol.ID = "/kwil/txann/1.0.0"
-	ProtocolIDBlockHeight protocol.ID = "/kwil/blkheight/1.0.0"
+	ProtocolIDBlockHeight protocol.ID = "/kwil/blkheight/1.1.0"
 	ProtocolIDBlock       protocol.ID = "/kwil/blk/1.0.0"
 	ProtocolIDBlkAnn      protocol.ID = "/kwil/blkann/1.0.0"
 	// ProtocolIDBlockHeader protocol.ID = "/kwil/blkhdr/1.0.0"
@@ -68,7 +68,10 @@ func request(rw io.ReadWriter, reqMsg []byte, readLimit int64) ([]byte, error) {
 	return rawTx, nil
 }
 
-var noData = []byte{0}
+var (
+	noData   = []byte{0}
+	withData = []byte{1}
+)
 
 // readResp reads a response of unknown length until an EOF is reached when
 // reading. As such, this is the end of a protocol.
