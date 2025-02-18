@@ -104,13 +104,12 @@ func StartCmd() *cobra.Command {
 func parseExtensionFlags(args []string) (map[string]map[string]string, error) {
 	exts := make(map[string]map[string]string)
 	for i := 0; i < len(args); i++ {
-		if !strings.HasPrefix(args[i], "--extension.") {
+		if !strings.HasPrefix(args[i], "--extensions.") {
 			return nil, fmt.Errorf("expected extension flag, got %q", args[i])
 		}
-		// split the flag into the extension name and the flag name
-		// we intentionally do not use SplitN because we want to verify
-		// there are exactly 3 parts.
-		parts := strings.Split(args[i], ".")
+		// split the flag into the extension name and the flag name;
+		// last part can have values like URL, will verify only 3 segements in the flag below
+		parts := strings.SplitN(args[i], ".", 3)
 		if len(parts) != 3 {
 			return nil, fmt.Errorf("invalid extension flag %q", args[i])
 		}
@@ -131,8 +130,19 @@ func parseExtensionFlags(args []string) (map[string]map[string]string, error) {
 		if strings.Contains(parts[2], "=") {
 			// flag value is in the same argument
 			val := strings.SplitN(parts[2], "=", 2)
+
+			// flag can only have 3 segements
+			if strings.Contains(val[0], ".") {
+				return nil, fmt.Errorf("invalid extension flag %q", args[i])
+			}
+
 			ext[val[0]] = val[1]
 		} else {
+			// flag can only have 3 segements
+			if strings.Contains(parts[2], ".") {
+				return nil, fmt.Errorf("invalid extension flag %q", args[i])
+			}
+
 			// flag value is in the next argument
 			if i+1 >= len(args) {
 				return nil, fmt.Errorf("missing value for extension flag %q", args[i])
