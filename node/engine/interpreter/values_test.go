@@ -647,6 +647,14 @@ func Test_Cast(t *testing.T) {
 	}
 }
 
+func ptrArr[T any](a ...T) []*T {
+	var res []*T
+	for _, v := range a {
+		res = append(res, &v)
+	}
+	return res
+}
+
 func Test_Unary(t *testing.T) {
 	type testcase struct {
 		name string
@@ -841,16 +849,6 @@ func Test_SetArrayNull(t *testing.T) {
 		err = n.(arrayValue).Set(1, &nullValue{})
 		require.NoError(t, err)
 	}
-}
-
-// ptrArr is a helper function that converts a slice of values to a slice of pointers to those values.
-// Since Kwil returns pointers to account for nulls, we need to convert the slice of values to pointers
-func ptrArr[T any](arr []T) []*T {
-	var res []*T
-	for i := range arr {
-		res = append(res, &arr[i])
-	}
-	return res
 }
 
 func ptr[T any](v T) *T {

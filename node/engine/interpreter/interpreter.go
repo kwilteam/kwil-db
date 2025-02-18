@@ -283,7 +283,17 @@ func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service, acc
 		// now, we override the built-in functions with the actions
 		namespaceFunctions := copyBuiltinExecutables()
 		for _, action := range actions {
-			exec := makeActionToExecutable(ns.Name, action)
+			exec, err := makeActionToExecutable(ns.Name, action, &interpreterPlanner{
+				prerun: &prerunContext{
+					scope:       newScope(ns.Name),
+					interpreter: interpreter,
+				},
+				isStartup: true,
+			})
+			if err != nil {
+				return nil, err
+			}
+
 			namespaceFunctions[exec.Name] = exec
 		}
 
@@ -378,6 +388,20 @@ func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service, acc
 // to do this, however it get's extroadinarily complex when getting to string formatting.
 func funcDefToExecutable(funcName string, funcDef *engine.ScalarFunctionDefinition) *executable {
 	return &executable{
+		Validate: func(args []*types.DataType) (*actionReturn, error) {
+			ret, err := funcDef.ValidateArgsFunc(args)
+			if err != nil {
+				return nil, err
+			}
+
+			if ret.EqualsStrict(types.NullType) {
+				return nil, nil
+			}
+
+			return &actionReturn{
+				Fields: []*engine.NamedType{{Name: funcName, Type: ret}},
+			}, nil
+		},
 		Name: funcName,
 		Func: func(e *executionContext, args []value, fn resultFunc) error {
 			//convert args to any
@@ -399,7 +423,7 @@ func funcDefToExecutable(funcName string, funcDef *engine.ScalarFunctionDefiniti
 			}
 
 			// if the function name is notice, then we need to get write the notice to our logs locally,
-			// instead of executing a query. This is the functional eqauivalent of Kwil's console.log().
+			// instead of executing a query. This is the functional equivalent of Kwil's console.log().
 			if funcName == "notice" {
 				var log string
 				if !args[0].Null() {
@@ -513,25 +537,26 @@ func (i *baseInterpreter) apply(copied *baseInterpreter) {
 
 // Execute executes a statement against the database.
 func (i *baseInterpreter) execute(ctx *common.EngineContext, db sql.DB, statement string, params map[string]any, fn func(*common.Row) error, toplevel bool) (err error) {
-	copied := i.copy()
-	defer func() {
-		noErrOrPanic := true
-		if err != nil {
-			// rollback the interpreter
-			noErrOrPanic = false
-		}
-		if r := recover(); r != nil {
-			err = fmt.Errorf("panic: %v", r)
-			noErrOrPanic = false
-		}
+	//	copied := i.copy()
+	// TODO: uncomment this once I am done debugging
+	// defer func() {
+	// 	noErrOrPanic := true
+	// 	if err != nil {
+	// 		// rollback the interpreter
+	// 		noErrOrPanic = false
+	// 	}
+	// 	if r := recover(); r != nil {
+	// 		err = fmt.Errorf("panic: %v", r)
+	// 		noErrOrPanic = false
+	// 	}
 
-		if noErrOrPanic {
-			i.syncNamespaceManager()
-		} else {
-			// rollback
-			i.apply(copied)
-		}
-	}()
+	// 	if noErrOrPanic {
+	// 		i.syncNamespaceManager()
+	// 	} else {
+	// 		// rollback
+	// 		i.apply(copied)
+	// 	}
+	// }()
 
 	err = ctx.Valid()
 	if err != nil {
@@ -577,10 +602,15 @@ func (i *baseInterpreter) execute(ctx *common.EngineContext, db sql.DB, statemen
 		}
 	}
 
-	interpPlanner := interpreterPlanner{}
+	interpPlanner := execCtx.interpPlanner(false)
 
 	for _, stmt := range ast {
-		err = stmt.Accept(&interpPlanner).(stmtFunc)(execCtx, func(row *row) error {
+		stmtFn, err := interpPlanner.Plan(stmt)
+		if err != nil {
+			return err
+		}
+
+		err = stmtFn(execCtx, func(row *row) error {
 			return fn(rowToCommonRow(row))
 		})
 		if err != nil {
@@ -723,11 +753,13 @@ func (i *baseInterpreter) newExecCtx(txCtx *common.EngineContext, db sql.DB, nam
 	logs := make([]string, 0)
 
 	e := &executionContext{
+		prerunContext: prerunContext{
+			scope:       newScope(namespace),
+			interpreter: i,
+		},
 		engineCtx:      txCtx,
-		scope:          newScope(namespace),
 		canMutateState: am.AccessMode() == sql.ReadWrite,
 		db:             db,
-		interpreter:    i,
 		logs:           &logs,
 	}
 	e.scope.isTopLevel = toplevel

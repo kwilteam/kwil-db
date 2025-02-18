@@ -2559,9 +2559,14 @@ func (o *recordValue) Compare(v value, op comparisonOp) (*boolValue, error) {
 }
 
 func (o *recordValue) Type() *types.DataType {
-	return &types.DataType{
-		Name: "record", // special type that is NOT in the types package
-	}
+	return recordType.Copy()
+}
+
+// special type that is NOT in the types package. It is used to represent a record type,
+// which can only be created when iterating over a SELECT query or an action execution
+// that returns a table
+var recordType = &types.DataType{
+	Name: "record",
 }
 
 func (o *recordValue) RawValue() any {

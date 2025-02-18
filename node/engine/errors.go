@@ -28,12 +28,14 @@ var (
 	ErrInvalidNull         = errors.New("invalid null value")
 	ErrArrayTooSmall       = errors.New("array too small")
 	ErrExtensionInvocation = errors.New("extension invocation error")
+	ErrInvalidRecordUsage  = errors.New("invalid record usage")
 
 	// Errors that signal the existence or non-existence of an object.
-	ErrUnknownAction     = errors.New("unknown action")
-	ErrUnknownTable      = errors.New("unknown table")
-	ErrNamespaceNotFound = errors.New("namespace not found")
-	ErrNamespaceExists   = errors.New("namespace already exists")
+	ErrUnknownAction      = errors.New("unknown action")
+	ErrUnknownTable       = errors.New("unknown table")
+	ErrNamespaceNotFound  = errors.New("namespace not found")
+	ErrNamespaceExists    = errors.New("namespace already exists")
+	ErrUnknownRecordField = errors.New("unknown record field")
 
 	// Errors that likely are not the result of a user error, but instead are informing
 	// the user of an operation that is not allowed in order to maintain the integrity of

@@ -6,10 +6,24 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )
+
+// namedTypesFromParams converts precompile parameters to named types.
+func namedTypesFromParams(params []precompiles.PrecompileValue) []*engine.NamedType {
+	var namedTypes []*engine.NamedType
+	for _, param := range params {
+		namedTypes = append(namedTypes, &engine.NamedType{
+			Name: param.Name,
+			Type: param.Type.Copy(),
+		})
+	}
+
+	return namedTypes
+}
 
 // initializeExtension initializes an extension.
 func initializeExtension(ctx context.Context, svc *common.Service, db sql.DB, i precompiles.Initializer, alias string,
@@ -34,8 +48,29 @@ func initializeExtension(ctx context.Context, svc *common.Service, db sql.DB, i 
 	methods := make(map[string]precompileExecutable)
 	for _, method := range inst.Methods {
 		lowerName := strings.ToLower(method.Name)
+		method := method // capture loop variable
 
 		exec := &executable{
+			Validate: func(args []*types.DataType) (*actionReturn, error) {
+				if len(args) != len(method.Parameters) {
+					return nil, fmt.Errorf(`%w: extension method "%s" expected %d arguments, but got %d`, engine.ErrExtensionInvocation, lowerName, len(method.Parameters), len(args))
+				}
+
+				for i, arg := range args {
+					if !method.Parameters[i].Type.Equals(arg) {
+						return nil, fmt.Errorf(`%w: extension method "%s" expected argument %d to be of type %s, but got %s`, engine.ErrExtensionInvocation, lowerName, i, method.Parameters[i].Type, arg)
+					}
+				}
+
+				if method.Returns == nil {
+					return nil, nil
+				}
+
+				return &actionReturn{
+					IsTable: method.Returns.IsTable,
+					Fields:  namedTypesFromParams(method.Returns.Fields),
+				}, nil
+			},
 			Name: lowerName,
 			Func: func(exec *executionContext, args []value, fn resultFunc) error {
 				if err := exec.canExecute(alias, lowerName, method.AccessModifiers); err != nil {

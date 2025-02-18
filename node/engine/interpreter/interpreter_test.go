@@ -1,6 +1,6 @@
 //go:build pglive
 
-package interpreter_test
+package interpreter
 
 import (
 	"bytes"
@@ -9,13 +9,13 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/node/engine"
-	"github.com/kwilteam/kwil-db/node/engine/interpreter"
 	"github.com/kwilteam/kwil-db/node/pg"
 	pgtest "github.com/kwilteam/kwil-db/node/pg/test"
 	"github.com/kwilteam/kwil-db/node/types/sql"
@@ -725,7 +725,7 @@ func Test_SQL(t *testing.T) {
 			require.NoError(t, err)
 			defer tx.Rollback(ctx) // always rollback
 
-			interp := newTestInterp(t, tx, test.sql, !skipInitTables)
+			interp := setupTestInterp(t, tx, test.sql, !skipInitTables)
 
 			var values [][]any
 			err = interp.Execute(newEngineCtx(test.caller), tx, test.execSQL, test.execVars, func(v *common.Row) error {
@@ -760,14 +760,6 @@ func Test_SQL(t *testing.T) {
 			}
 		})
 	}
-}
-
-func ptrArr[T any](a ...T) []*T {
-	var res []*T
-	for _, v := range a {
-		res = append(res, &v)
-	}
-	return res
 }
 
 // Test_Roundtrip tries roundtripping each data type
@@ -857,7 +849,7 @@ func Test_Roundtrip(t *testing.T) {
 	ctx := context.Background()
 	tx, err := db.BeginTx(ctx)
 	require.NoError(t, err)
-	interp := newTestInterp(t, tx, nil, false)
+	interp := setupTestInterp(t, tx, nil, false)
 	err = tx.Commit(ctx)
 	if err != nil {
 		t.Errorf("failed to commit tx: %v", err)
@@ -954,7 +946,7 @@ func Test_RoundtripNull(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback(ctx) // always rollback
 
-	interp := newTestInterp(t, tx, nil, false)
+	interp := setupTestInterp(t, tx, nil, false)
 
 	err = interp.ExecuteWithoutEngineCtx(ctx, tx, "CREATE TABLE tbl (id int primary key, val int);", nil, nil)
 	require.NoError(t, err)
@@ -1031,7 +1023,7 @@ func Test_CreateAndDelete(t *testing.T) {
 			require.NoError(t, err)
 			defer tx.Rollback(ctx) // always rollback
 
-			interp := newTestInterp(t, tx, nil, true)
+			interp := setupTestInterp(t, tx, nil, true)
 
 			err = interp.Execute(newEngineCtx(defaultCaller), tx, test.create, nil, nil)
 			require.NoError(t, err)
@@ -1055,12 +1047,12 @@ func Test_CreateAndDelete(t *testing.T) {
 			require.NoError(t, err)
 			defer tx.Rollback(ctx) // always rollback
 
-			interp := newTestInterp(t, tx, nil, true)
+			interp := setupTestInterp(t, tx, nil, true)
 
 			err = interp.Execute(newEngineCtx(defaultCaller), tx, test.create, nil, nil)
 			require.NoError(t, err)
 
-			interp = newTestInterp(t, tx, nil, true)
+			interp = setupTestInterp(t, tx, nil, true)
 
 			err = interp.Execute(newEngineCtx(defaultCaller), tx, test.drop, nil, nil)
 			require.NoError(t, err)
@@ -1129,6 +1121,8 @@ func Test_Actions(t *testing.T) {
 		values []any
 		// expected results
 		results [][]any
+		// deployErr is the error that should be returned when deploying the action
+		deployErr error
 		// expected error
 		err error
 		// errContains is a string that should be contained in the error message
@@ -1138,23 +1132,40 @@ func Test_Actions(t *testing.T) {
 	}
 
 	// rawTest is a helper that allows us to write test logic purely in Kuneiform.
+	// the first error is an exec error, the second is a deploy error
 	rawTest := func(name string, body string, err ...error) testcase {
-		var err1 error
-		if len(err) > 0 {
-			err1 = err[0]
-		}
-		if len(err) > 1 {
-			panic("too many errors")
-		}
-		return testcase{
+		testCase := testcase{
 			name:   name,
 			stmt:   []string{`CREATE ACTION raw_test() public {` + body + `}`},
 			action: "raw_test",
-			err:    err1,
 		}
+
+		switch len(err) {
+		case 0:
+			// expect no error
+		case 1:
+			// expect an error
+			testCase.err = err[0]
+		case 2:
+			if err[0] != nil {
+				panic("too many errors in test")
+			}
+			// expect an error during deployment
+			testCase.deployErr = err[1]
+		}
+
+		return testCase
 	}
 	_ = rawTest
 
+	// for a lot of the test cases, there are certain checks that need to be checked
+	// both during deployment and execution. For example, if an action (action 1) returns a table
+	// and we are trying to call it to assign the result to a variable (in action 2), action 2
+	// will fail to be created, citing that the table-returning action is not a valid return type.
+	// However, if action 1 returns a scalar value, action 2 is (successfully) deployed, and
+	// then action 1 is changed to return a table, action 2 will fail to execute. To signal
+	// when we account for cases like this (where some check of validity can be applied during
+	// deployment and execution), we will prefix the test name with [deploy] and [postdeploy]
 	tests := []testcase{
 		{
 			name: "insert and select",
@@ -1212,7 +1223,7 @@ func Test_Actions(t *testing.T) {
 			name: "return next from another action",
 			stmt: []string{
 				`INSERT INTO users(id, name, age) VALUES (1, 'satoshi', 42), (2, 'hal finney', 50), (3, 'craig wright', 45)`,
-				`CREATE NAMESPACE test;`,
+				`CREATE NAMESPACE test`,
 				`{test}CREATE ACTION get_users() public view returns table(name text, age int) {
 					return SELECT name, age FROM main.users ORDER BY id;
 				}`,
@@ -1273,8 +1284,9 @@ func Test_Actions(t *testing.T) {
 					$value1 text := get_table();
 				}`,
 			},
-			action: "call_get_table",
-			err:    engine.ErrReturnShape,
+			action:    "call_get_table",
+			deployErr: engine.ErrReturnShape,
+			err:       engine.ErrReturnShape,
 		},
 		{
 			name: "calling an action that returns a table to values (multiple receivers)",
@@ -1282,28 +1294,40 @@ func Test_Actions(t *testing.T) {
 				`CREATE ACTION get_table() public view returns table(value int) {
 					RETURN NEXT 1, 2, 3;
 					RETURN NEXT 4, 5, 6;
-				};
+				}
 				`,
 				`CREATE ACTION call_get_table() public view {
 					$value1, $value2, $value3 := get_table();
 				}`,
 			},
-			action: "call_get_table",
-			err:    engine.ErrReturnShape,
+			action:    "call_get_table",
+			deployErr: engine.ErrReturnShape,
 		},
 		{
-			name: "calling an action that returns not enough values (single receiver)",
+			name: "[deploy] calling an action that returns not enough values (single receiver)",
 			stmt: []string{
 				`CREATE ACTION get_val() public view { /*returns nothing*/ }`,
 				`CREATE ACTION call_get_val() public view {
 					$value1 text := get_val();
 				}`,
 			},
+			action:    "call_get_val",
+			deployErr: engine.ErrReturnShape,
+		},
+		{
+			name: "[postdeploy] calling an action that returns not enough values (single receiver)",
+			stmt: []string{
+				`CREATE ACTION get_val() public view returns (text) { RETURN 'hi'; }`,
+				`CREATE ACTION call_get_val() public view {
+					$value1 text := get_val();
+				}`,
+				`CREATE OR REPLACE ACTION get_val() public view { /*returns nothing*/ }`,
+			},
 			action: "call_get_val",
 			err:    engine.ErrReturnShape,
 		},
 		{
-			name: "calling an action that returns not enough values (multiple receivers)",
+			name: "[deploy] calling an action that returns not enough values (multiple receivers)",
 			stmt: []string{
 				`CREATE ACTION get_val() public view returns (int) {
 					RETURN 1;
@@ -1312,18 +1336,50 @@ func Test_Actions(t *testing.T) {
 					$value1, $value2 := get_val();
 				}`,
 			},
+			action:    "call_get_val",
+			deployErr: engine.ErrReturnShape,
+		},
+		{
+			name: "[postdeploy] calling an action that returns not enough values (multiple receivers)",
+			stmt: []string{
+				`CREATE ACTION get_val() public view returns (int, int) {
+					RETURN 1, 2;
+				}`,
+				`CREATE ACTION call_get_val() public view {
+					$value1, $value2 := get_val();
+				}`,
+				`CREATE OR REPLACE ACTION get_val() public view returns (int) {
+					RETURN 1;
+				}`,
+			},
 			action: "call_get_val",
 			err:    engine.ErrReturnShape,
 		},
 		{
 			// we test a single typed receiver because it calls a different interpreter function
-			name: "calling an action that returns wrong type (single receiver)",
+			name: "[deploy] calling an action that returns wrong type (single receiver)",
 			stmt: []string{
 				`CREATE ACTION get_val() public view returns (int) {
 					RETURN 1;
 				}`,
 				`CREATE ACTION call_get_val() public view {
 					$value1 text := get_val();
+				}`,
+			},
+			action:    "call_get_val",
+			deployErr: engine.ErrType,
+		},
+		{
+			name: "[postdeploy] calling an action that returns wrong type (single receiver)",
+			stmt: []string{
+				`CREATE ACTION get_val() public view returns (text) {
+					RETURN 'hi';
+				}`,
+				`CREATE ACTION call_get_val() public view {
+					$value1 text := get_val();
+				}`,
+				`CREATE OR REPLACE ACTION get_val() public view returns (int) {
+					RETURN 1;
 				}`,
 			},
 			action: "call_get_val",
@@ -1332,7 +1388,7 @@ func Test_Actions(t *testing.T) {
 		{
 			// we test multiple returns because it calls a different interpreter function
 			// if we are returning more than 1 value
-			name: "calling an action that returns wrong type (multiple receivers)",
+			name: "[deploy] calling an action that returns wrong type (multiple receivers)",
 			stmt: []string{
 				`CREATE ACTION get_val() public view returns (int, int) {
 					RETURN 1, 2;
@@ -1340,6 +1396,25 @@ func Test_Actions(t *testing.T) {
 				`CREATE ACTION call_get_val() public view {
 					$value1 text;
 					$value1, $value2 := get_val();
+				}`,
+			},
+			action:    "call_get_val",
+			deployErr: engine.ErrType,
+		},
+		{
+			// we test multiple returns because it calls a different interpreter function
+			// if we are returning more than 1 value
+			name: "[postdeploy] calling an action that returns wrong type (multiple receivers)",
+			stmt: []string{
+				`CREATE ACTION get_val() public view returns (text, int) {
+					RETURN 'hi', 2;
+				}`,
+				`CREATE ACTION call_get_val() public view {
+					$value1 text;
+					$value1, $value2 := get_val();
+				}`,
+				`CREATE OR REPLACE ACTION get_val() public view returns (int, int) {
+					RETURN 1, 2;
 				}`,
 			},
 			action: "call_get_val",
@@ -1417,7 +1492,7 @@ func Test_Actions(t *testing.T) {
 					for $row in other.get_table(1, 4) {
 						$iter := $iter + 1;
 						if $row.value != $iter {
-							error('value is not equal to iter');
+							error('value is not testEqual to iter');
 						}
 					}
 					if $iter != 4 {
@@ -1427,9 +1502,27 @@ func Test_Actions(t *testing.T) {
 			},
 			action: "call_other",
 		},
-		rawTest("assign notice to a var", `
-		$a := notice('hello');
-		`, engine.ErrReturnShape),
+		{
+			name: "[deploy] assign null to a var",
+			stmt: []string{
+				`CREATE ACTION assign_null() public view {
+					$a := notice('hi');
+				}`,
+			},
+			deployErr: engine.ErrReturnShape,
+		},
+		{
+			name: "[postdeploy] assign null to a var",
+			stmt: []string{
+				`CREATE or replace ACTION notice($msg text) public view returns (text) { return $msg; }`,
+				`CREATE ACTION assign_null() public view {
+					$a := notice('hi');
+				}`,
+				`DROP ACTION notice;`, // we drop the action, returning `notice` back to the builtin function
+			},
+			action: "assign_null",
+			err:    engine.ErrReturnShape,
+		},
 		rawTest("testing if, else if, else", `
 		$a := 1;
 		$b := 2;
@@ -1443,7 +1536,7 @@ func Test_Actions(t *testing.T) {
 		if $a > $b {
 			error('a is not greater than b');
 		} else if $a == $b {
-			error('a is not equal to b');
+			error('a is not testEqual to b');
 		} else {
 			$total := $total + 1;
 		}
@@ -1543,12 +1636,81 @@ func Test_Actions(t *testing.T) {
 			},
 			action: "act",
 		},
-		rawTest("adding a string to a number", `$a := 1 + 'a';`, engine.ErrType),
-		rawTest("if on a number", `if 'a' { error('should not be true'); }`, engine.ErrType),
-		rawTest("invalid function arg type", `abs('a');`, engine.ErrType),
-
-		rawTest("for loop with invalid range", `for $i in 'a'..3 { error('should not be true'); }`, engine.ErrType),
-		rawTest("for loop with invalid array", `for $i in array 'a' { error('should not be true'); }`, engine.ErrType),
+		{
+			name:      "[deploy] adding a string to a number",
+			stmt:      []string{"CREATE ACTION act() public { $a := 1 + 'a'; }"},
+			deployErr: engine.ErrType,
+		},
+		{
+			name: "[postdeploy] adding a string to a number",
+			stmt: []string{
+				`CREATE ACTION get_val() public view returns (int) { return 1; }`,
+				`CREATE ACTION act() public { $a := 1 + get_val(); }`,
+				`CREATE OR REPLACE ACTION get_val() public view returns (text) { return 'hi'; }`,
+			},
+			action: "act",
+			err:    engine.ErrType,
+		},
+		{
+			name:      "[deploy] if on a number",
+			stmt:      []string{"CREATE ACTION act() public { if 'a' { error('should not be true'); } }"},
+			deployErr: engine.ErrType,
+		},
+		{
+			name: "[postdeploy] if on a number",
+			stmt: []string{
+				`CREATE ACTION get_val() public view returns (bool) { return true; }`,
+				`CREATE ACTION act() public { if get_val() { error('should not be true'); } }`,
+				`CREATE OR REPLACE ACTION get_val() public view returns (int) { return 1; }`,
+			},
+			action: "act",
+			err:    engine.ErrType,
+		},
+		{
+			name:      "[deploy] invalid function arg type",
+			stmt:      []string{"CREATE ACTION act() public { abs('a'); }"},
+			deployErr: engine.ErrType,
+		},
+		{
+			name: "[postdeploy] invalid function arg type",
+			stmt: []string{
+				`CREATE ACTION get_val() public view returns (int) { return 1; }`,
+				`CREATE ACTION act() public { abs(get_val()); }`,
+				`CREATE OR REPLACE ACTION get_val() public view returns (text) { return 'hi'; }`,
+			},
+			action: "act",
+			err:    engine.ErrType,
+		},
+		{
+			name:      "[deploy] for loop with invalid range",
+			stmt:      []string{"CREATE ACTION act() public { for $i in 'a'..3 { error('should not be true'); } }"},
+			deployErr: engine.ErrType,
+		},
+		{
+			name: "[postdeploy] for loop with invalid range",
+			stmt: []string{
+				`CREATE ACTION get_val() public view returns (int) { return 1; }`,
+				`CREATE ACTION act() public { for $i in get_val()..3 { error('should not be true'); } }`,
+				`CREATE OR REPLACE ACTION get_val() public view returns (text) { return 'hi'; }`,
+			},
+			action: "act",
+			err:    engine.ErrType,
+		},
+		{
+			name:      "[deploy] for loop with invalid array",
+			stmt:      []string{"CREATE ACTION act() public { for $i in array 'a' { error('should not be true'); } }"},
+			deployErr: engine.ErrType,
+		},
+		{
+			name: "[postdeploy] for loop with invalid array",
+			stmt: []string{
+				`CREATE ACTION get_val() public view returns (int[]) { return array[1]; }`,
+				`CREATE ACTION act() public { for $i in array get_val() { error('should not be true'); } }`,
+				`CREATE OR REPLACE ACTION get_val() public view returns (text) { return 'hi'; }`,
+			},
+			action: "act",
+			err:    engine.ErrType,
+		},
 		{
 			name: "for loop over action that returns many records",
 			stmt: []string{
@@ -1591,25 +1753,35 @@ func Test_Actions(t *testing.T) {
 					if $i != 2 {
 						error('expected 2 rows');
 					}
-
-					$i := 0;
-					-- without the array keyword, it should be treated as a single row
-					for $row in get_users(3,4) {
-						$i := $i + 1;
-					}
-					if $i != 1 {
-						error('expected 1 row');
-					}
 				}`,
 			},
 			action: "loop_over_users",
 		},
-		rawTest("loop over array without ARRAY keyword", `
-		$a := array[1,2,3];
-		for $i in $a {
-			error('should not be true');
-		}
-		`, engine.ErrLoop),
+		{
+			name:      "[deploy] loop over array without ARRAY keyword",
+			stmt:      []string{"CREATE ACTION act() public { $a := array[1,2,3]; for $i in $a { error('should not be true'); } }"},
+			deployErr: engine.ErrLoop,
+		},
+		{
+			name: "[postdeploy] loop over array without ARRAY keyword",
+			stmt: []string{
+				// there isn't actually a way to prevent against this in the postdeploy phase,
+				// however we can ensure that the loop is only called once for the entire array, instead
+				// of once per element
+				`CREATE ACTION get_val() public view returns table(id int) { return next 1; return next 2; }`,
+				`CREATE ACTION act() public {
+					$j := 0;
+					for $i in get_val() {
+						$j := $j + 1;
+					};
+					if $j != 1 {
+						error('expected 1 row');
+					};
+				}`,
+				`CREATE OR REPLACE ACTION get_val() public view returns (int[]) { return array[1, 2]; }`,
+			},
+			action: "act",
+		},
 		{
 			name: "nested query",
 			stmt: []string{
@@ -1698,22 +1870,38 @@ func Test_Actions(t *testing.T) {
 		 	$a := null;`),
 		rawTest("allocate null to typed variable", `
 			$a int := null;`),
-		rawTest("set new type to variable", `
-		$a int;
-		$a text := 'hi';
-		`, engine.ErrType),
+		{
+			name: "[deploy] set new type to variable",
+			stmt: []string{
+				`CREATE ACTION act() public {
+					$a int;
+					$a := 'some_text';
+				};`,
+			},
+			deployErr: engine.ErrType,
+		},
+		{
+			name: "[postdeploy] set new type to variable",
+			stmt: []string{
+				`CREATE ACTION get_value() public view returns (int) { return 1; }`,
+				`CREATE ACTION act() public {
+					$a int;
+					$a := get_value();
+				};`,
+				`CREATE OR REPLACE ACTION get_value() public view returns (text) { return 'hi'; }`,
+			},
+			action: "act",
+			err:    engine.ErrType,
+		},
 		rawTest("set same type to variable", `
 		$a := 1;
 		$a int := 2;
 		`),
-		rawTest("assign int to @caller", `
-			@caller int := 1;
-		`, engine.ErrType),
 		rawTest("assign text to @caller", `
 			@caller text := 'hi';
-		`, engine.ErrInvalidVariable),
+		`, nil, engine.ErrInvalidVariable),
 		rawTest("assign to slice", `
-		$arr := array[1,2,3];
+		$arr := array[1,2,'3']; -- postgres allows this; it will automatically cast the text to an int
 		$arr[1:2] := array[4,5];
 		if $arr != array[4,5,3] {
 			error('arr is not [4,5,3]');
@@ -1733,12 +1921,6 @@ func Test_Actions(t *testing.T) {
 		$arr[5] := 14;
 		if $arr != array[11,12,13,null,14] {
 			error('arr is not [11,12,13,null,14]');
-		}
-
-		-- test type casting is automatic
-		$arr[1:2] := array['15','16'];
-		if $arr != array[15,16,13,null,14] {
-			error('arr is not [15,16,13,null,14]');
 		}
 		`),
 		rawTest("assign to slice that is too short (will be truncated)", `
@@ -1837,15 +2019,6 @@ func Test_Actions(t *testing.T) {
 				`CREATE ACTION call_get_null() public view { $a := get_null()::TEXT; if $a is not null { error('a is not null'); } }`,
 			},
 			action: "call_get_null",
-		},
-		{
-			name: "action returning nothing to another action",
-			stmt: []string{
-				`CREATE ACTION get_nothing() public view { /* returns nothing */ }`,
-				`CREATE ACTION call_get_nothing() public view { $a := get_nothing(); }`,
-			},
-			action: "call_get_nothing",
-			err:    engine.ErrReturnShape,
 		},
 		{
 			// this is a regression test
@@ -1976,30 +2149,77 @@ func Test_Actions(t *testing.T) {
 			require.NoError(t, err)
 			defer tx.Rollback(ctx) // always rollback
 
-			interp := newTestInterp(t, tx, test.stmt, true)
+			interp := setupTestInterp(t, tx, nil, true)
+
+			var stmts string
+			for _, stmt := range test.stmt {
+				if !strings.HasSuffix(stmt, ";") {
+					stmt += ";"
+				}
+				stmts += stmt
+			}
+
+			err = interp.ExecuteWithoutEngineCtx(ctx, tx, stmts, nil, nil)
+			if err != nil {
+				if test.deployErr != nil {
+					require.ErrorIs(t, err, test.deployErr)
+				} else {
+					require.NoError(t, err)
+				}
+				return
+			} else {
+				if test.deployErr != nil {
+					require.Fail(t, "expected deployment error")
+				}
+			}
+
+			checkExecResults := func(res [][]any, err error) {
+				if test.err != nil {
+					require.Error(t, err)
+					require.ErrorIs(t, err, test.err)
+				} else if test.errContains != "" {
+					require.Error(t, err)
+					require.Contains(t, err.Error(), test.errContains)
+				} else {
+					require.NoError(t, err)
+				}
+
+				require.Equal(t, len(test.results), len(res))
+				for i, row := range res {
+					require.Equal(t, len(test.results[i]), len(row))
+					for j, val := range row {
+						require.EqualValues(t, test.results[i][j], val)
+					}
+				}
+			}
+
+			// we create a second transaction so that we can re-run the action
+			// this is to simulate a new transaction that is created on startup
+			tx2, err := tx.BeginTx(ctx)
+			require.NoError(t, err)
+			defer tx2.Rollback(ctx)
 
 			var results [][]any
-			_, err = interp.Call(newEngineCtx(test.caller), tx, test.namespace, test.action, test.values, func(v *common.Row) error {
+			_, err = interp.Call(newEngineCtx(test.caller), tx2, test.namespace, test.action, test.values, func(v *common.Row) error {
 				results = append(results, v.Values)
 				return nil
 			})
-			if test.err != nil {
-				require.Error(t, err)
-				require.ErrorIs(t, err, test.err)
-			} else if test.errContains != "" {
-				require.Error(t, err)
-				require.Contains(t, err.Error(), test.errContains)
-			} else {
-				require.NoError(t, err)
-			}
+			checkExecResults(results, err)
 
-			require.Equal(t, len(test.results), len(results))
-			for i, row := range results {
-				require.Equal(t, len(test.results[i]), len(row))
-				for j, val := range row {
-					require.EqualValues(t, test.results[i][j], val)
-				}
-			}
+			err = tx2.Rollback(ctx)
+
+			// there is another case that is relevant to actions: on startup, actions should not perform
+			// validation. Since we cannot know the dependency order (or even have circular dependencies)
+			// for actions, we need to read them in without validation. Therefore, we will simulate
+			// startup by creating a new interpreter and running the same action again.
+			interp2 := newInterp(t, tx)
+			results = nil
+
+			_, err = interp2.Call(newEngineCtx(test.caller), tx, test.namespace, test.action, test.values, func(v *common.Row) error {
+				results = append(results, v.Values)
+				return nil
+			})
+			checkExecResults(results, err)
 		})
 	}
 }
@@ -2042,14 +2262,6 @@ func (t *testPrecompile) makeGetMethod(datatype *types.DataType) precompiles.Met
 		},
 		AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
 	}
-}
-
-func mustDecType(precision, scale uint16) *types.DataType {
-	t, err := types.NewNumericType(precision, scale)
-	if err != nil {
-		panic(err)
-	}
-	return t
 }
 
 func mustDecArrType(precision, scale uint16) *types.DataType {
@@ -2208,7 +2420,7 @@ func Test_Extensions(t *testing.T) {
 
 	i := 0 // tracks iters, since some of these cannot be made idempotent (e.g. alter table)
 
-	do := func(interp *interpreter.ThreadSafeInterpreter) {
+	do := func(interp *ThreadSafeInterpreter) {
 
 		callFromUser := func(caller string, namespace, action string, values []any, fn func(*common.Row) error) error {
 			_, err := interp.Call(newEngineCtx(caller), tx, namespace, action, values, fn)
@@ -2412,7 +2624,7 @@ func Test_Extensions(t *testing.T) {
 	}
 
 	// first run: new interpreter
-	interp := newTestInterp(t, tx, nil, true)
+	interp := setupTestInterp(t, tx, nil, true)
 	do(interp)
 
 	// check notifications
@@ -2420,7 +2632,7 @@ func Test_Extensions(t *testing.T) {
 
 	// second run: restart interpreter
 	// It will read in all previous data from the database.
-	interp = newTestInterp(t, tx, nil, true)
+	interp = setupTestInterp(t, tx, nil, true)
 	do(interp)
 
 	// unuse
@@ -2469,7 +2681,7 @@ func Test_NamingOverwrites(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	interp := newTestInterp(t, tx, nil, true)
+	interp := setupTestInterp(t, tx, nil, true)
 
 	err = interp.Execute(newEngineCtx(defaultCaller), tx, `USE IF NOT EXISTS test2 AS test_ext;`, nil, nil)
 	require.NoError(t, err)
@@ -2494,7 +2706,7 @@ func Test_NamingOverwrites(t *testing.T) {
 	assert.False(t, absCalled)
 
 	// we will make a new interpreter to ensure that they are loaded correctly
-	interp = newTestInterp(t, tx, nil, true)
+	interp = setupTestInterp(t, tx, nil, true)
 
 	// ensure that the action is still called
 	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "test_ext", "use_abs", nil, exact(int64(2)))
@@ -2535,7 +2747,7 @@ func Test_Ownership(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback(ctx) // always rollback
 
-	interp := newTestInterp(t, tx, nil, false)
+	interp := setupTestInterp(t, tx, nil, false)
 
 	user2 := "user2"
 	err = interp.Execute(newEngineCtx(defaultCaller), tx, `TRANSFER OWNERSHIP TO '`+user2+`';`, nil, nil)
@@ -2627,7 +2839,7 @@ func Test_Notice(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	interp := newTestInterp(t, tx, nil, true)
+	interp := setupTestInterp(t, tx, nil, true)
 
 	err = interp.Execute(newEngineCtx(defaultCaller), tx, `USE log AS log_ext;`, nil, nil)
 	require.NoError(t, err)
@@ -2734,7 +2946,7 @@ func Test_ExtensionTypeChecks(t *testing.T) {
 	})
 	require.NoError(t, err)
 
-	interp := newTestInterp(t, tx, nil, true)
+	interp := setupTestInterp(t, tx, nil, true)
 
 	err = interp.Execute(newEngineCtx(defaultCaller), tx, `USE types AS types_ext;`, nil, nil)
 	require.NoError(t, err)
@@ -2794,7 +3006,7 @@ func Test_SetCurrentNamespace(t *testing.T) {
 	require.NoError(t, err)
 	defer tx.Rollback(ctx) // always rollback
 
-	interp := newTestInterp(t, tx, nil, false)
+	interp := setupTestInterp(t, tx, nil, false)
 
 	// setting current namespace to non-existent namespace should fail
 	err = interp.Execute(newEngineCtx(defaultCaller), tx, `SET CURRENT NAMESPACE TO non_existent;`, nil, nil)
@@ -2830,7 +3042,7 @@ func Test_SetCurrentNamespace(t *testing.T) {
 	hasTable(t, interp, tx, "other_ns", "other_table")
 }
 
-func hasTable(t *testing.T, i *interpreter.ThreadSafeInterpreter, tx sql.DB, namespace, table string) {
+func hasTable(t *testing.T, i *ThreadSafeInterpreter, tx sql.DB, namespace, table string) {
 	count := 0
 	err := i.ExecuteWithoutEngineCtx(context.Background(), tx, "SELECT * FROM info.tables WHERE name = $tbl AND namespace = $ns;", map[string]any{
 		"tbl": table,
@@ -2851,7 +3063,7 @@ func hasTable(t *testing.T, i *interpreter.ThreadSafeInterpreter, tx sql.DB, nam
 	}
 }
 
-// exact is a helper function that verifies that a result is called exactly once, and that the result is equal to the expected value.
+// exact is a helper function that verifies that a result is called exactly once, and that the result is testEqual to the expected value.
 func exact(val any) func(*common.Row) error {
 	called := false
 	return func(row *common.Row) error {
@@ -2864,12 +3076,12 @@ func exact(val any) func(*common.Row) error {
 			return fmt.Errorf("expected 1 value, got %d", len(row.Values))
 		}
 
-		return eq(val, row.Values[0])
+		return testEq(val, row.Values[0])
 	}
 }
 
-// eq checks that two values are equal
-func eq(a, b any) error {
+// testEq checks that two values are e
+func testEq(a, b any) error {
 	switch a.(type) {
 	case []byte:
 		if !bytes.Equal(a.([]byte), b.([]byte)) {
@@ -2894,8 +3106,8 @@ func eq(a, b any) error {
 		if reflect.TypeOf(a).Kind() == reflect.Slice {
 			// iterate using reflect in case it is not of []any
 			for i := range reflect.ValueOf(a).Len() {
-				// recursively call eq
-				if err := eq(reflect.ValueOf(a).Index(i).Interface(), reflect.ValueOf(b).Index(i).Interface()); err != nil {
+				// recursively call testEq
+				if err := testEq(reflect.ValueOf(a).Index(i).Interface(), reflect.ValueOf(b).Index(i).Interface()); err != nil {
 					return err
 				}
 			}
@@ -2909,22 +3121,6 @@ func eq(a, b any) error {
 	}
 
 	return nil
-}
-
-func mustExplicitDecimal(s string, prec, scale uint16) *types.Decimal {
-	d, err := types.ParseDecimalExplicit(s, prec, scale)
-	if err != nil {
-		panic(err)
-	}
-	return d
-}
-
-func mustUUID(s string) *types.UUID {
-	u, err := types.ParseUUID(s)
-	if err != nil {
-		panic(err)
-	}
-	return u
 }
 
 func dropSchemas(t *testing.T, schemas ...string) func(db *pg.DB) {
@@ -2970,13 +3166,12 @@ func newTestDB(t *testing.T, cleanUp func(d *pg.DB), schemaFilter func(string) b
 // newTestInterp creates a new interpreter for testing purposes.
 // It is seeded with the default tables.
 
-func newTestInterp(t *testing.T, tx sql.DB, seeds []string, includeTestTables bool) *interpreter.ThreadSafeInterpreter {
-	interp, err := interpreter.NewInterpreter(context.Background(), tx, &common.Service{}, nil, nil, nil)
-	require.NoError(t, err)
+func setupTestInterp(t *testing.T, tx sql.DB, seeds []string, includeTestTables bool) *ThreadSafeInterpreter {
+	interp := newInterp(t, tx)
 
 	engCtx := newEngineCtx(defaultCaller)
 	engCtx.OverrideAuthz = true
-	err = interp.ExecuteWithoutEngineCtx(context.Background(), tx, "TRANSFER OWNERSHIP TO $user", map[string]any{
+	err := interp.ExecuteWithoutEngineCtx(context.Background(), tx, "TRANSFER OWNERSHIP TO $user", map[string]any{
 		"user": defaultCaller,
 	}, nil)
 	require.NoError(t, err)
@@ -2993,4 +3188,27 @@ func newTestInterp(t *testing.T, tx sql.DB, seeds []string, includeTestTables bo
 	}
 
 	return interp
+}
+
+func newInterp(t *testing.T, tx sql.DB) *ThreadSafeInterpreter {
+	interp, err := NewInterpreter(context.Background(), tx, &common.Service{}, nil, nil, nil)
+	require.NoError(t, err)
+
+	return interp
+}
+
+func Test_EmptyArray(t *testing.T) {
+	db := newTestDB(t, nil, nil)
+
+	ctx := context.Background()
+	tx, err := db.BeginTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx) // always rollback
+
+	interp := setupTestInterp(t, tx, nil, false)
+
+	err = interp.Execute(newEngineCtx(defaultCaller), tx, `SELECT ARRAY[]::TEXT[];`, nil, func(r *common.Row) error {
+		return nil
+	})
+	require.NoError(t, err)
 }

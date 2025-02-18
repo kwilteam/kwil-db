@@ -9,17 +9,19 @@ import (
 	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/engine/parse"
 	"github.com/kwilteam/kwil-db/node/engine/planner/logical"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func Test_Planner(t *testing.T) {
 	type testcase struct {
-		name    string
-		sql     string
-		wt      string                                // want, abbreviated for formatting test cases
-		vars    map[string]*types.DataType            // variables that can be accessed, can be nil
-		objects map[string]map[string]*types.DataType // objects that can be referenced, can be nil
-		err     error                                 // can be nil if no error is expected
+		name         string
+		sql          string
+		wt           string                                // want, abbreviated for formatting test cases
+		vars         map[string]*types.DataType            // variables that can be accessed, can be nil
+		objects      map[string]map[string]*types.DataType // objects that can be referenced, can be nil
+		mutatesState bool                                  // whether the query mutates state
+		err          error                                 // can be nil if no error is expected
 	}
 
 	tests := []testcase{
@@ -473,6 +475,7 @@ func Test_Planner(t *testing.T) {
 			wt: "Update [users]: name = 'satoshi'\n" +
 				"└─Filter: users.age = 1\n" +
 				"  └─Scan Table: users [physical]\n",
+			mutatesState: true,
 		},
 		{
 			name: "update from with join",
@@ -497,11 +500,13 @@ func Test_Planner(t *testing.T) {
 				"    └─Join [inner]: p.owner_id = u.id\n" +
 				"      ├─Scan Table [alias=\"p\"]: posts [physical]\n" +
 				"      └─Scan Table [alias=\"u\"]: users [physical]\n",
+			mutatesState: true,
 		},
 		{
-			name: "update with from without where",
-			sql:  "update users set name = pu.content from posts pu",
-			err:  logical.ErrUpdateOrDeleteWithoutWhere,
+			name:         "update with from without where",
+			sql:          "update users set name = pu.content from posts pu",
+			err:          logical.ErrUpdateOrDeleteWithoutWhere,
+			mutatesState: true,
 		},
 		{
 			name: "basic delete",
@@ -509,23 +514,27 @@ func Test_Planner(t *testing.T) {
 			wt: "Delete [users]\n" +
 				"└─Filter: users.age = 1\n" +
 				"  └─Scan Table: users [physical]\n",
+			mutatesState: true,
 		},
 		{
 			name: "insert",
 			sql:  "insert into users values ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1), ('123e4567-e89b-12d3-a456-426614174001'::uuid, 'satoshi2', 2)",
 			wt: "Insert [users]: id [uuid], name [text], age [int8]\n" +
 				"└─Values: ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1); ('123e4567-e89b-12d3-a456-426614174001'::uuid, 'satoshi2', 2)\n",
+			mutatesState: true,
 		},
 		{
 			name: "insert with null",
 			sql:  "insert into users (id, name) values ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi')",
 			wt: "Insert [users]: id [uuid], name [text], age [int8]\n" +
 				"└─Values: ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', NULL)\n",
+			mutatesState: true,
 		},
 		{
-			name: "insert null in non-nullable column",
-			sql:  "insert into users (name) values ('satoshi')",
-			err:  logical.ErrNotNullableColumn,
+			name:         "insert null in non-nullable column",
+			sql:          "insert into users (name) values ('satoshi')",
+			err:          logical.ErrNotNullableColumn,
+			mutatesState: true,
 		},
 		{
 			name: "on conflict do nothing",
@@ -533,6 +542,7 @@ func Test_Planner(t *testing.T) {
 			wt: "Insert [users]: id [uuid], name [text], age [int8]\n" +
 				"├─Values: ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1)\n" +
 				"└─Conflict [nothing]\n",
+			mutatesState: true,
 		},
 		{
 			name: "on conflict do update (arbiter index primary key)",
@@ -540,6 +550,7 @@ func Test_Planner(t *testing.T) {
 			wt: "Insert [users]: id [uuid], name [text], age [int8]\n" +
 				"├─Values: ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1)\n" +
 				"└─Conflict [update] [arbiter=users.id (primary key)]: [name = 'satoshi']\n",
+			mutatesState: true,
 		},
 		{
 			name: "on conflict do update (arbiter unique constraint)",
@@ -547,6 +558,7 @@ func Test_Planner(t *testing.T) {
 			wt: "Insert [posts]: id [uuid], owner_id [uuid], content [text], created_at [int8]\n" +
 				"├─Values: ('123e4567-e89b-12d3-a456-426614174000'::uuid, '123e4567-e89b-12d3-a456-426614174001'::uuid, 'hello', 1)\n" +
 				"└─Conflict [update] [arbiter=posts.content (unique)]: [owner_id = '123e4567-e89b-12d3-a456-426614174001'::uuid]\n",
+			mutatesState: true,
 		},
 		{
 			name: "on conflict do update (arbiter index non-primary key)",
@@ -554,21 +566,25 @@ func Test_Planner(t *testing.T) {
 			wt: "Insert [users]: id [uuid], name [text], age [int8]\n" +
 				"├─Values: ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1)\n" +
 				"└─Conflict [update] [arbiter=name_idx (index)]: [name = 'satoshi'] where [users.age = 1]\n",
+			mutatesState: true,
 		},
 		{
-			name: "on conflict with non-arbiter column",
-			sql:  "insert into users values ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1) on conflict (age) do update set name = 'satoshi'",
-			err:  logical.ErrIllegalConflictArbiter,
+			name:         "on conflict with non-arbiter column",
+			sql:          "insert into users values ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1) on conflict (age) do update set name = 'satoshi'",
+			err:          logical.ErrIllegalConflictArbiter,
+			mutatesState: true,
 		},
 		{
-			name: "on conflict with half of a composite index",
-			sql:  "insert into posts values ('123e4567-e89b-12d3-a456-426614174000'::uuid, '123e4567-e89b-12d3-a456-426614174001'::uuid, 'hello', 1) on conflict (owner_id) do update set content = 'hello'",
-			err:  logical.ErrIllegalConflictArbiter,
+			name:         "on conflict with half of a composite index",
+			sql:          "insert into posts values ('123e4567-e89b-12d3-a456-426614174000'::uuid, '123e4567-e89b-12d3-a456-426614174001'::uuid, 'hello', 1) on conflict (owner_id) do update set content = 'hello'",
+			err:          logical.ErrIllegalConflictArbiter,
+			mutatesState: true,
 		},
 		{
-			name: "on conflict with non-unique index",
-			sql:  "insert into users values ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1) on conflict (age) do update set name = 'satoshi'",
-			err:  logical.ErrIllegalConflictArbiter,
+			name:         "on conflict with non-unique index",
+			sql:          "insert into users values ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1) on conflict (age) do update set name = 'satoshi'",
+			err:          logical.ErrIllegalConflictArbiter,
+			mutatesState: true,
 		},
 		{
 			name: "conflict on composite unique index",
@@ -576,6 +592,7 @@ func Test_Planner(t *testing.T) {
 			wt: "Insert [posts]: id [uuid], owner_id [uuid], content [text], created_at [int8]\n" +
 				"├─Values: ('123e4567-e89b-12d3-a456-426614174000'::uuid, '123e4567-e89b-12d3-a456-426614174001'::uuid, 'hello', 1)\n" +
 				"└─Conflict [update] [arbiter=owner_created_idx (index)]: [content = 'hello']\n",
+			mutatesState: true,
 		},
 		{
 			name: "excluded clause",
@@ -583,12 +600,14 @@ func Test_Planner(t *testing.T) {
 			wt: "Insert [users]: id [uuid], name [text], age [int8]\n" +
 				"├─Values: ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', NULL)\n" +
 				"└─Conflict [update] [arbiter=users.id (primary key)]: [name = excluded.name] where [excluded.age / 2 = 0]\n",
+			mutatesState: true,
 		},
 		{
 			// surprisingly, this mirrors Postgres's behavior
-			name: "ambiguous column due to excluded",
-			sql:  "insert into users values ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1) on conflict (name) do update set name = 'satoshi' WHERE age = 1",
-			err:  logical.ErrAmbiguousColumn,
+			name:         "ambiguous column due to excluded",
+			sql:          "insert into users values ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', 1) on conflict (name) do update set name = 'satoshi' WHERE age = 1",
+			err:          logical.ErrAmbiguousColumn,
+			mutatesState: true,
 		},
 		{
 			name: "insert with select",
@@ -596,6 +615,7 @@ func Test_Planner(t *testing.T) {
 			wt: "Insert [users]: id [uuid], name [text], age [int8]\n" +
 				"└─Project: users.id; users.name; users.age\n" +
 				"  └─Scan Table: users [physical]\n",
+			mutatesState: true,
 		},
 		{
 			name: "recursive CTE",
@@ -622,7 +642,8 @@ func Test_Planner(t *testing.T) {
 			name: "inserting a cte",
 			sql: `with a as (select 1)
 				INSERT INTO users VALUES ('123e4567-e89b-12d3-a456-426614174000'::uuid, 'satoshi', a)`,
-			err: logical.ErrColumnNotFound,
+			err:          logical.ErrColumnNotFound,
+			mutatesState: true,
 		},
 		{
 			// this is a regression test for a previous uncaught type case
@@ -645,11 +666,13 @@ func Test_Planner(t *testing.T) {
 			sql:  "update users set age = age + 1",
 			wt: "Update [users]: age = users.age + 1\n" +
 				"└─Scan Table: users [physical]\n",
+			mutatesState: true,
 		},
 		{
-			name: "on conflict to composite primary key, but one referenced column does not exist",
-			sql:  "insert into follows values ('123e4567-e89b-12d3-a456-426614174000'::uuid, '123e4567-e89b-12d3-a456-426614174001'::uuid) on conflict (follower_id, id) do nothing",
-			err:  logical.ErrColumnNotFound,
+			name:         "on conflict to composite primary key, but one referenced column does not exist",
+			sql:          "insert into follows values ('123e4567-e89b-12d3-a456-426614174000'::uuid, '123e4567-e89b-12d3-a456-426614174001'::uuid) on conflict (follower_id, id) do nothing",
+			err:          logical.ErrColumnNotFound,
+			mutatesState: true,
 		},
 	}
 
@@ -721,6 +744,9 @@ func Test_Planner(t *testing.T) {
 
 				// make sure nothing changed
 				require.Equal(t, test.wt, plan.Format())
+
+				// check that mutates state is correct
+				assert.Equal(t, test.mutatesState, plan.MutatesState)
 			}
 		})
 	}

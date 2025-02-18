@@ -1786,8 +1786,9 @@ func (s *schemaVisitor) VisitUnary_sql_expr(ctx *gen.Unary_sql_exprContext) any 
 }
 
 func (s *schemaVisitor) VisitMake_array_sql_expr(ctx *gen.Make_array_sql_exprContext) any {
-	e := &ExpressionMakeArray{
-		Values: ctx.Sql_expr_list().Accept(s).([]Expression),
+	e := &ExpressionMakeArray{}
+	if ctx.Sql_expr_list() != nil {
+		e.Values = ctx.Sql_expr_list().Accept(s).([]Expression)
 	}
 
 	if ctx.Type_cast() != nil {

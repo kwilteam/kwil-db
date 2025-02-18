@@ -66,8 +66,9 @@ func CreateLogicalPlan(statement *parse.SQLStatement, tables GetTableFunc,
 	}
 
 	return &AnalyzedPlan{
-		Plan: plan,
-		CTEs: ctx.CTEPlans,
+		Plan:         plan,
+		CTEs:         ctx.CTEPlans,
+		MutatesState: ctx.MutatesState,
 	}, nil
 }
 
@@ -78,6 +79,8 @@ type AnalyzedPlan struct {
 	// CTEs are plans for the common table expressions in the query.
 	// They are in the order that they were defined.
 	CTEs []*Subplan
+	// MutatesState is true if the query mutates state.
+	MutatesState bool
 }
 
 // Format formats the plan into a human-readable string.
@@ -129,6 +132,8 @@ type planContext struct {
 	applyDefaultOrdering bool
 	// defaultNamespace is the default namespace (schema in Postgres) for all tables.
 	defaultNamespace string
+	// MutatesState is true if the query mutates state.
+	MutatesState bool
 }
 
 // scopeContext contains information about the current scope of the query.
@@ -2182,6 +2187,7 @@ func (s *scopeContext) join(child Plan, childRel *Relation, join *parse.Join) (P
 
 // update builds a plan for an update
 func (s *scopeContext) update(node *parse.UpdateStatement) (*Update, error) {
+	s.plan.MutatesState = true
 	plan, targetRel, cartesianRel, err := s.cartesian(node.Table, node.Alias, node.From, node.Joins, node.Where)
 	if err != nil {
 		return nil, err
@@ -2201,6 +2207,7 @@ func (s *scopeContext) update(node *parse.UpdateStatement) (*Update, error) {
 
 // delete builds a plan for a delete
 func (s *scopeContext) delete(node *parse.DeleteStatement) (*Delete, error) {
+	s.plan.MutatesState = true
 	plan, _, _, err := s.cartesian(node.Table, node.Alias, node.From, node.Joins, node.Where)
 	if err != nil {
 		return nil, err
@@ -2214,6 +2221,8 @@ func (s *scopeContext) delete(node *parse.DeleteStatement) (*Delete, error) {
 
 // insert builds a plan for an insert
 func (s *scopeContext) insert(node *parse.InsertStatement) (*Insert, error) {
+	s.plan.MutatesState = true
+
 	ins := &Insert{
 		Table:        node.Table,
 		ReferencedAs: node.Alias,
