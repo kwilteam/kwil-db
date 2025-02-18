@@ -357,6 +357,9 @@ func (n *Node) startAckGossip(ctx context.Context, ps *pubsub.PubSub) error {
 				continue
 			}
 
+			n.log.Infof("notifying CE of the ACK msg from %s (rcvd from %s), data = %x",
+				peers.PeerIDStringer(fromPeerID), peers.PeerIDStringer(ackMsg.ReceivedFrom), ack)
+
 			go n.ce.NotifyACK(pubkeyBytes, ack)
 		}
 	}()

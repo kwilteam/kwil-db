@@ -163,7 +163,7 @@ func (ss *StateSyncService) DoStatesync(ctx context.Context) (bool, error) {
 	}
 
 	// request and commit the block to the blockstore
-	_, rawBlk, ci, err := getBlkHeight(ctx, height, ss.host, ss.log)
+	_, rawBlk, ci, _, err := getBlkHeight(ctx, height, ss.host, ss.log)
 	if err != nil {
 		return false, fmt.Errorf("failed to get statesync block %d: %w", height, err)
 	}

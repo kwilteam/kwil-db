@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 )
 
 // This package includes requires tooling for extracting logs from the blockstore
@@ -100,7 +101,8 @@ func getBlockHeight(filename string) (int64, error) {
 	if err != nil {
 		return 0, fmt.Errorf("failed to read file: %v", err)
 	}
-	height, err := strconv.ParseInt(string(data), 10, 64)
+	heightStr := strings.Trim(string(data), "\n")
+	height, err := strconv.ParseInt(heightStr, 10, 64)
 	if err != nil {
 		return 0, fmt.Errorf("failed to parse block height: %v", err)
 	}

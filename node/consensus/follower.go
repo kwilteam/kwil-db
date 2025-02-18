@@ -140,7 +140,7 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, hdr *kty
 	ce.stateInfo.mtx.RLock()
 	defer ce.stateInfo.mtx.RUnlock()
 
-	ce.log.Debugf("Accept commit? height: %d,  blockID: %s, appHash: %s, lastCommitHeight: %d", height, blkID, ci.AppHash, ce.stateInfo.height)
+	ce.log.Infof("Accept commit? height: %d,  blockID: %s, appHash: %s, lastCommitHeight: %d", height, blkID, ci.AppHash, ce.stateInfo.height)
 
 	if ce.stateInfo.height+1 != height {
 		return false
@@ -196,6 +196,7 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, hdr *kty
 		blk: blk,
 	}
 
+	ce.log.Infof("Notifying the CE of the blkAnn msg as we already have the block", "height", height, "blockID", blkID)
 	go ce.sendConsensusMessage(&consensusMessage{
 		MsgType: blkCommit.Type(),
 		Msg:     blkCommit,
@@ -331,6 +332,8 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, ci *types.CommitInfo) error {
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
+
+	ce.log.Info("In CommitBlock", "height", blk.Header.Height, "blockID", blk.Header.Hash(), "ceLCHeight", ce.state.lc.height, "ceprop", ce.state.blkProp, "ceBlkRes", ce.state.blockRes)
 
 	if ce.state.lc.height+1 != blk.Header.Height { // only accept/process the block if it is for the next height
 		return nil

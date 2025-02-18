@@ -627,13 +627,14 @@ func TestValidatorStateMachine(t *testing.T) {
 
 						rawBlk := ktypes.EncodeBlock(blkProp2.blk)
 						cnt := 0
-						val.blkRequester = func(ctx context.Context, height int64) (types.Hash, []byte, *types.CommitInfo, error) {
+						bestHeight := blkProp2.height + 10 // TODO: update test when this is used
+						val.blkRequester = func(ctx context.Context, height int64) (types.Hash, []byte, *types.CommitInfo, int64, error) {
 							defer func() { cnt += 1 }()
 
 							if cnt < 1 {
-								return zeroHash, nil, nil, types.ErrBlkNotFound
+								return zeroHash, nil, nil, 0, types.ErrBlkNotFound
 							}
-							return blkProp2.blkHash, rawBlk, ci, nil
+							return blkProp2.blkHash, rawBlk, ci, bestHeight, nil
 						}
 						val.doCatchup(context.Background())
 					},
@@ -664,8 +665,9 @@ func TestValidatorStateMachine(t *testing.T) {
 						ci := addVotes(t, blkProp2.blkHash, blockAppHash, leader, val)
 
 						rawBlk := ktypes.EncodeBlock(blkProp2.blk)
-						val.blkRequester = func(ctx context.Context, height int64) (types.Hash, []byte, *types.CommitInfo, error) {
-							return blkProp2.blkHash, rawBlk, ci, nil
+						bestHeight := blkProp2.height + 10 // TODO: update test when this is used
+						val.blkRequester = func(ctx context.Context, height int64) (types.Hash, []byte, *types.CommitInfo, int64, error) {
+							return blkProp2.blkHash, rawBlk, ci, bestHeight, nil
 						}
 						val.doCatchup(context.Background())
 					},
@@ -924,8 +926,8 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 }
 
 // MockBroadcasters
-func mockBlkRequester(ctx context.Context, height int64) (types.Hash, []byte, *types.CommitInfo, error) {
-	return types.Hash{}, nil, nil, types.ErrBlkNotFound
+func mockBlkRequester(ctx context.Context, height int64) (types.Hash, []byte, *types.CommitInfo, int64, error) {
+	return types.Hash{}, nil, nil, 0, types.ErrBlkNotFound
 }
 
 func mockBlockPropBroadcaster(_ context.Context, blk *ktypes.Block) {}
