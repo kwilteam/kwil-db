@@ -309,17 +309,11 @@ func (i *individualListener) processEvents(ctx context.Context, from, to int64, 
 			return fmt.Errorf("failed to serialize logs: %w", err)
 		}
 
-		var lhCopy *int64
-		if lastUsedHeight != nil {
-			lhc2 := *lastUsedHeight
-			lhCopy = &lhc2
-		}
-
 		data := orderedsync.ResolutionMessage{
 			Topic:               i.orderedSyncTopic,
 			PointInTime:         int64(blockNum),
 			Data:                serLogs,
-			PreviousPointInTime: lhCopy,
+			PreviousPointInTime: lastUsedHeight,
 		}
 
 		bts, err := data.MarshalBinary()
