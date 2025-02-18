@@ -3196,3 +3196,19 @@ func newInterp(t *testing.T, tx sql.DB) *ThreadSafeInterpreter {
 
 	return interp
 }
+
+func Test_EmptyArray(t *testing.T) {
+	db := newTestDB(t, nil, nil)
+
+	ctx := context.Background()
+	tx, err := db.BeginTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx) // always rollback
+
+	interp := setupTestInterp(t, tx, nil, false)
+
+	err = interp.Execute(newEngineCtx(defaultCaller), tx, `SELECT ARRAY[]::TEXT[];`, nil, func(r *common.Row) error {
+		return nil
+	})
+	require.NoError(t, err)
+}
