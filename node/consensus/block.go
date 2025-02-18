@@ -63,6 +63,35 @@ func (ce *ConsensusEngine) validateBlock(blk *ktypes.Block) error {
 		return fmt.Errorf("block size %d exceeds max block size %d", blockTxnsSize, maxBlockSize)
 	}
 
+	// maxVotesPerTx
+	maxVotesPerTx := ce.ConsensusParams().MaxVotesPerTx
+	for _, txn := range blk.Txns {
+		if txn.Body.PayloadType == ktypes.PayloadTypeValidatorVoteBodies {
+			// unmarshal the payload
+			vote := &ktypes.ValidatorVoteBodies{}
+			err := vote.UnmarshalBinary(txn.Body.Payload)
+			if err != nil {
+				return fmt.Errorf("failed to unmarshal validator vote body: %v", err)
+			}
+
+			if int64(len(vote.Events)) > maxVotesPerTx {
+				return fmt.Errorf("max votes exceeded in tx of type %s : %d > %d", txn.Body.PayloadType, len(vote.Events), maxVotesPerTx)
+			}
+
+		} else if txn.Body.PayloadType == ktypes.PayloadTypeValidatorVoteIDs {
+			// unmarshal the payload
+			vote := &ktypes.ValidatorVoteIDs{}
+			err := vote.UnmarshalBinary(txn.Body.Payload)
+			if err != nil {
+				return fmt.Errorf("failed to unmarshal validator vote id: %v", err)
+			}
+
+			if int64(len(vote.ResolutionIDs)) > maxVotesPerTx {
+				return fmt.Errorf("max votes exceeded in tx of type %s : %d > %d", txn.Body.PayloadType, len(vote.ResolutionIDs), maxVotesPerTx)
+			}
+		}
+	}
+
 	return nil
 }
 
