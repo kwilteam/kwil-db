@@ -2,8 +2,10 @@ package cmds
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/client"
@@ -152,7 +154,20 @@ func getStringRows(v [][]any) [][]string {
 	for _, r := range v {
 		var row []string
 		for _, c := range r {
-			row = append(row, fmt.Sprintf("%v", c))
+			var col string
+			switch c2 := c.(type) {
+			case []byte:
+				col = base64.StdEncoding.EncodeToString(c2)
+			case float64:
+				col = strconv.FormatFloat(c2, 'f', -1, 64)
+			case bool:
+				col = strconv.FormatBool(c2)
+			case nil:
+				col = "null"
+			default:
+				col = fmt.Sprintf("%v", c)
+			}
+			row = append(row, col)
 		}
 		rows = append(rows, row)
 	}
