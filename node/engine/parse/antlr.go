@@ -1786,8 +1786,9 @@ func (s *schemaVisitor) VisitUnary_sql_expr(ctx *gen.Unary_sql_exprContext) any 
 }
 
 func (s *schemaVisitor) VisitMake_array_sql_expr(ctx *gen.Make_array_sql_exprContext) any {
-	e := &ExpressionMakeArray{
-		Values: ctx.Sql_expr_list().Accept(s).([]Expression),
+	e := &ExpressionMakeArray{}
+	if ctx.Sql_expr_list() != nil {
+		e.Values = ctx.Sql_expr_list().Accept(s).([]Expression)
 	}
 
 	if ctx.Type_cast() != nil {
@@ -2116,12 +2117,9 @@ func (s *schemaVisitor) VisitMake_array_action_expr(ctx *gen.Make_array_action_e
 		// directly below.
 	}
 
-	// we could enforce this in the parser, but it is not super intuitive,
-	// so we want to control the error message
-	if ctx.Action_expr_list() == nil {
-		s.errs.RuleErr(ctx, ErrSyntax, "cannot assign empty arrays. declare using `$arr type[];` instead`")
+	if ctx.Action_expr_list() != nil {
+		e.Values = ctx.Action_expr_list().Accept(s).([]Expression)
 	}
-	e.Values = ctx.Action_expr_list().Accept(s).([]Expression)
 
 	if ctx.Type_cast() != nil {
 		e.TypeCast = ctx.Type_cast().Accept(s).(*types.DataType)

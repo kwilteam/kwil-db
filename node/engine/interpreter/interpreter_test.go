@@ -53,18 +53,15 @@ func Test_SQL(t *testing.T) {
 		name string // name of the test
 		// array of sql statements, first element is the namespace, second is the sql statement
 		// they can begin with {namespace}sql, or just sql
-		sql         []string
-		execSQL     string         // sql to return the results. Either this or execAction must be set
-		execVars    map[string]any // variables to pass to the execSQL
-		results     [][]any        // table of results
-		err         error          // expected error, can be nil. Errors _MUST_ occur on the exec. This is a direct match
-		errContains string         // expected error message, can be empty. Errors _MUST_ occur on the exec. This is a substring match
-		caller      string         // caller to use for the action, will default to defaultCaller
+		sql            []string
+		execSQL        string         // sql to return the results. Either this or execAction must be set
+		execVars       map[string]any // variables to pass to the execSQL
+		results        [][]any        // table of results
+		err            error          // expected error, can be nil. Errors _MUST_ occur on the exec. This is a direct match
+		errContains    string         // expected error message, can be empty. Errors _MUST_ occur on the exec. This is a substring match
+		caller         string         // caller to use for the action, will default to defaultCaller
+		skipInitTables bool           // skip the creation of the users and posts tables
 	}
-
-	// this is for debugging.
-	// It helps me skip the users and posts table creation
-	skipInitTables := false
 
 	tests := []testcase{
 		{
@@ -714,6 +711,18 @@ func Test_SQL(t *testing.T) {
 			execSQL: `ALTER TABLE tbl DROP column id;`,
 			err:     engine.ErrCannotAlterPrimaryKey,
 		},
+		{
+			name:           "select empty array (untyped)",
+			execSQL:        `SELECT ARRAY[];`,
+			err:            engine.ErrQueryPlanner,
+			skipInitTables: true,
+		},
+		{
+			name:           "select empty array (type casted)",
+			execSQL:        `SELECT ARRAY[]::TEXT[];`,
+			results:        [][]any{{[]*string{}}},
+			skipInitTables: true,
+		},
 	}
 
 	db := newTestDB(t, nil, nil)
@@ -725,7 +734,7 @@ func Test_SQL(t *testing.T) {
 			require.NoError(t, err)
 			defer tx.Rollback(ctx) // always rollback
 
-			interp := newTestInterp(t, tx, test.sql, !skipInitTables)
+			interp := newTestInterp(t, tx, test.sql, !test.skipInitTables)
 
 			var values [][]any
 			err = interp.Execute(newEngineCtx(test.caller), tx, test.execSQL, test.execVars, func(v *common.Row) error {
@@ -1964,6 +1973,25 @@ func Test_Actions(t *testing.T) {
 			action:    "act",
 			caller:    "some_user",
 			err:       engine.ErrDoesNotHavePrivilege,
+		},
+		{
+			name: "empty array",
+			stmt: []string{
+				`CREATE ACTION empty_array() public view {
+					$arr := array[];
+				}`,
+			},
+			action: "empty_array",
+			err:    engine.ErrArrayDimensionality,
+		},
+		{
+			name: "empty array (typecasted)",
+			stmt: []string{
+				`CREATE ACTION empty_array() public view {
+					$arr := array[]::text[];
+				}`,
+			},
+			action: "empty_array",
 		},
 	}
 

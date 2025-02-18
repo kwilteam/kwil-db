@@ -42,7 +42,24 @@ func StartCmd() *cobra.Command {
 
 			// we don't need to worry about order of priority with applying the extension
 			// flag configs because flags are always highest priority
-			cfg.Extensions = extConfs
+
+			// we merge the flags here because we don't want to totally delete all
+			// other extension flags. For example, if we have the extension
+			// "my_ext" configured with key "foo" and value "bar" in the config file,
+			// and we pass the flag "--extension.erc20.rpc=http://localhost:8545",
+			// we want to keep the "foo" key in the "my_ext" extension.
+			for extName, extConf := range extConfs {
+				existing, ok := cfg.Extensions[extName]
+				if !ok {
+					existing = make(map[string]string)
+				}
+
+				for k, v := range extConf {
+					existing[k] = v
+				}
+
+				cfg.Extensions[extName] = existing
+			}
 
 			bind.Debugf("effective node config (toml):\n%s", bind.LazyPrinter(func() string {
 				rawToml, err := cfg.ToTOML()
