@@ -2,7 +2,6 @@ package common
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"math/big"
 
@@ -159,8 +158,6 @@ type Row struct {
 	// nil, string, int64, []byte, bool, *types.UUID, *types.Decimal,
 	// []*string, []*int64, [][]byte, []*bool, []*types.UUID, []*types.Decimal
 	Values []any
-	// JsonValues are the values of the columns in the row, formatted as JSON.
-	JsonValues []json.Marshaler
 }
 
 // Accounts is an interface for managing accounts on the Kwil network. It
