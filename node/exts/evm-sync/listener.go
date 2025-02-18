@@ -268,6 +268,11 @@ func (i *individualListener) processEvents(ctx context.Context, from, to int64, 
 		return nil
 	}
 
+	// order logs by block number
+	sort.Slice(logs, func(i, j int) bool {
+		return logs[i].Log.BlockNumber < logs[j].Log.BlockNumber
+	})
+
 	blocks := make(map[uint64][]*EthLog)
 	blockOrder := make([]uint64, 0, len(blocks))
 
@@ -304,11 +309,17 @@ func (i *individualListener) processEvents(ctx context.Context, from, to int64, 
 			return fmt.Errorf("failed to serialize logs: %w", err)
 		}
 
+		var lhCopy *int64
+		if lastUsedHeight != nil {
+			lhc2 := *lastUsedHeight
+			lhCopy = &lhc2
+		}
+
 		data := orderedsync.ResolutionMessage{
 			Topic:               i.orderedSyncTopic,
 			PointInTime:         int64(blockNum),
 			Data:                serLogs,
-			PreviousPointInTime: lastUsedHeight,
+			PreviousPointInTime: lhCopy,
 		}
 
 		bts, err := data.MarshalBinary()
@@ -338,6 +349,18 @@ func (i *individualListener) processEvents(ctx context.Context, from, to int64, 
 
 	return setLastSeenHeight(ctx, eventStore, i.orderedSyncTopic, to)
 }
+
+/*
+uyyyy ===== 7606100 <nil>
+uyyyy ===== 7606108 7606100
+uyyyy ===== 7606494 7688721
+uyyyy ===== 7612561 7606494
+uyyyy ===== 7612734 7612561
+uyyyy ===== 7613118 7612734
+uyyyy ===== 7688721 7606108
+uyyyy ===== 7731215 7613118
+uyyyy ===== 7731390 7731215
+*/
 
 // serializeLog serializes an ethCommonLogCopy into a deterministic byte slice.
 func serializeLog(log *ethtypes.Log) ([]byte, error) {
