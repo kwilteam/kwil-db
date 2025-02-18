@@ -405,7 +405,7 @@ func getBlkHeight(ctx context.Context, height int64, host host.Host, log log.Log
 		t0 := time.Now()
 		resp, err := requestBlockHeight(ctx, host, peer, height, blkReadLimit)
 		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrBlkNotFound) {
-			be := new(ErrNotFoundWithBestHeight)
+			var be *ErrNotFoundWithBestHeight
 			if errors.As(err, &be) {
 				theirBest := be.BestHeight
 				if theirBest > bestHeight {
@@ -486,7 +486,7 @@ func getBlkHeight(ctx context.Context, height int64, host host.Host, log log.Log
 }
 
 // ErrNotFoundWithBestHeight is an error that contains a BestHeight field, which
-// is used when a block is not found, but the the negative responses from peers
+// is used when a block is not found, but the negative responses from peers
 // contained their best height.
 //
 // Use with errors.As.  For example:
@@ -502,7 +502,7 @@ type ErrNotFoundWithBestHeight struct {
 	BestHeight int64
 }
 
-func (e *ErrNotFoundWithBestHeight) Error() string {
+func (e *ErrNotFoundWithBestHeight) Error() string { // keep it a pointer receiver to avoid pitfalls with errors.As
 	return fmt.Sprintf("block not found, best height: %d", e.BestHeight)
 }
 

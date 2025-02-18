@@ -17,6 +17,7 @@ import (
 	"github.com/kwilteam/kwil-db/node/types"
 
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 )
@@ -139,7 +140,7 @@ func (n *Node) advertiseToPeer(ctx context.Context, peerID peer.ID, proto protoc
 
 		req := make([]byte, len(getMsg))
 		nr, err := s.Read(req)
-		if err != nil && !errors.Is(err, io.EOF) {
+		if err != nil && !(errors.Is(err, io.EOF) || errors.Is(err, network.ErrReset)) {
 			n.log.Warn("bad advertise response", "error", err)
 			return
 		}
