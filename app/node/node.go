@@ -11,6 +11,8 @@ import (
 	"runtime"
 	"slices"
 
+	"golang.org/x/sync/errgroup"
+
 	"github.com/kwilteam/kwil-db/app/key"
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -21,10 +23,9 @@ import (
 	"github.com/kwilteam/kwil-db/node"
 	"github.com/kwilteam/kwil-db/node/consensus"
 	"github.com/kwilteam/kwil-db/node/listeners"
+	signersvc "github.com/kwilteam/kwil-db/node/services/erc20signersvc"
 	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/version"
-
-	"golang.org/x/sync/errgroup"
 )
 
 type server struct {
@@ -43,6 +44,7 @@ type server struct {
 	listeners          *listeners.ListenerManager
 	jsonRPCServer      *rpcserver.Server
 	jsonRPCAdminServer *rpcserver.Server
+	erc20RWSigner      *signersvc.ServiceMgr
 }
 
 func runNode(ctx context.Context, rootDir string, cfg *config.Config, autogen bool, dbOwner string) (err error) {
@@ -258,6 +260,13 @@ func (s *server) Start(ctx context.Context) error {
 		return s.listeners.Start()
 	})
 	s.log.Info("listener manager started")
+
+	// Start erc20 reward signer svc
+	if s.erc20RWSigner != nil {
+		group.Go(func() error {
+			return s.erc20RWSigner.Start(groupCtx)
+		})
+	}
 
 	// TODO: node is starting the consensus engine for ease of testing
 	// Start the consensus engine
