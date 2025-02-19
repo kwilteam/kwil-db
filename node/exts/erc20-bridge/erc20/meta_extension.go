@@ -1071,13 +1071,13 @@ func init() {
 								return err
 							}
 
-							confirmed, err := epochConfirmed(ctx.TxContext.Ctx, app, epochID)
+							ok, err := canVoteEpoch(ctx.TxContext.Ctx, app, epochID)
 							if err != nil {
-								return fmt.Errorf("check epoch is confirmed: %w", err)
+								return fmt.Errorf("check epoch can vote: %w", err)
 							}
 
-							if confirmed {
-								return fmt.Errorf("epoch is already confirmed")
+							if !ok {
+								return fmt.Errorf("epoch cannot be voted")
 							}
 
 							return voteEpoch(ctx.TxContext.Ctx, app, epochID, from, amount, nonce, signature)

@@ -360,12 +360,8 @@ func getRewardsForEpoch(ctx context.Context, app *common.App, epochID *types.UUI
 }
 
 // previousEpochConfirmed return whether previous exists and confirmed.
-func previousEpochConfirmed(ctx context.Context, app *common.App, instanceID *types.UUID, endBlock int64) (bool, bool, error) {
-	// if no previous epoch
-	exist := false
-	confirmed := false
-
-	err := app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
+func previousEpochConfirmed(ctx context.Context, app *common.App, instanceID *types.UUID, endBlock int64) (exist bool, confirmed bool, err error) {
+	err = app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
     {kwil_erc20_meta}SELECT confirmed from epochs
     WHERE instance_id = $instance_id AND ended_at = $end_block
     `, map[string]any{
@@ -580,11 +576,12 @@ func setVersionToCurrent(ctx context.Context, app *common.App) error {
 	}, nil)
 }
 
-func epochConfirmed(ctx context.Context, app *common.App, epochID *types.UUID) (bool, error) {
-	var confirmed bool
-	err := app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
+// canVoteEpoch returns a bool indicate whether an epoch can be voted.
+func canVoteEpoch(ctx context.Context, app *common.App, epochID *types.UUID) (ok bool, err error) {
+	// get epoch that is finalized, but not confirmed.
+	err = app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
 	{kwil_erc20_meta}SELECT confirmed
-    FROM epochs WHERE id = $id;
+    FROM epochs WHERE id = $id AND ended_at IS NOT NULL AND confirmed IS NOT true;
     `, map[string]any{
 		"id": epochID,
 	}, func(row *common.Row) error {
@@ -592,7 +589,7 @@ func epochConfirmed(ctx context.Context, app *common.App, epochID *types.UUID) (
 			return fmt.Errorf("expected 1 value, got %d", len(row.Values))
 		}
 
-		confirmed = row.Values[0].(bool)
+		ok = true
 		return nil
 	})
 
@@ -600,7 +597,7 @@ func epochConfirmed(ctx context.Context, app *common.App, epochID *types.UUID) (
 		return false, err
 	}
 
-	return confirmed, nil
+	return ok, nil
 }
 
 // voteEpoch vote an epoch by submitting signature.
