@@ -241,6 +241,11 @@ type StateInfo struct {
 	// proposed block for the current height
 	blkProp *blockProposal
 
+	// hasBlock indicates that the CE has been notified about block corresponding to the height.
+	// can be used by the p2p layer to avoid re-sending the same block multiple times
+	// to the consensus engine.
+	hasBlock atomic.Int64
+
 	lastCommit lastCommit
 }
 
@@ -346,6 +351,7 @@ func New(cfg *Config) (*ConsensusEngine, error) {
 	// Not initializing the role here will panic the node, as a lot of RPC calls such as HealthCheck,
 	// Status, etc. tries to access the role.
 	ce.role.Store(types.RoleSentry)
+	ce.stateInfo.hasBlock.Store(0)
 
 	// set the node to be in the catchup mode
 	ce.inSync.Store(true)

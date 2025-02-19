@@ -285,7 +285,7 @@ type dummyCE struct {
 	rejectACK    bool
 
 	ackHandler         func(validatorPK []byte, ack types.AckRes)
-	blockCommitHandler func(blk *ktypes.Block, ci *types.CommitInfo)
+	blockCommitHandler func(blk *ktypes.Block, ci *types.CommitInfo, blkID types.Hash)
 	blockPropHandler   func(blk *ktypes.Block)
 	resetStateHandler  func(height int64, txIDs []types.Hash)
 
@@ -308,9 +308,9 @@ func (ce *dummyCE) AcceptCommit(height int64, blkID types.Hash, hdr *ktypes.Bloc
 	return !ce.rejectCommit
 }
 
-func (ce *dummyCE) NotifyBlockCommit(blk *ktypes.Block, ci *types.CommitInfo) {
+func (ce *dummyCE) NotifyBlockCommit(blk *ktypes.Block, ci *types.CommitInfo, blkID types.Hash) {
 	if ce.blockCommitHandler != nil {
-		ce.blockCommitHandler(blk, ci)
+		ce.blockCommitHandler(blk, ci, blkID)
 		return
 	}
 }
@@ -427,7 +427,7 @@ func (f *faker) SetACKHandler(ackHandler func(validatorPK []byte, ack types.AckR
 	f.ackHandler = ackHandler
 }
 
-func (f *faker) SetBlockCommitHandler(blockCommitHandler func(blk *ktypes.Block, ci *types.CommitInfo)) {
+func (f *faker) SetBlockCommitHandler(blockCommitHandler func(blk *ktypes.Block, ci *types.CommitInfo, blkID types.Hash)) {
 	f.blockCommitHandler = blockCommitHandler
 }
 

@@ -289,7 +289,7 @@ func TestValidatorStateMachine(t *testing.T) {
 					name: "commit",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						ci := addVotes(t, blkProp1.blkHash, blockAppHash, leader, val)
-						val.NotifyBlockCommit(blkProp1.blk, ci)
+						val.NotifyBlockCommit(blkProp1.blk, ci, blkProp1.blkHash)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 1, zeroHash)
@@ -315,7 +315,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "commit(InvalidAppHash)",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.NotifyBlockCommit(blkProp1.blk, &types.CommitInfo{AppHash: ktypes.Hash{}})
+						val.NotifyBlockCommit(blkProp1.blk, &types.CommitInfo{AppHash: ktypes.Hash{}}, blkProp1.blkHash)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						if val.lastCommitHeight() != 0 {
@@ -354,7 +354,7 @@ func TestValidatorStateMachine(t *testing.T) {
 					name: "commitNew",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						ci := addVotes(t, blkProp2.blkHash, blockAppHash, leader, val)
-						val.NotifyBlockCommit(blkProp2.blk, ci)
+						val.NotifyBlockCommit(blkProp2.blk, ci, blkProp2.blkHash)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 1, zeroHash)
@@ -390,7 +390,7 @@ func TestValidatorStateMachine(t *testing.T) {
 					name: "commitNew",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						ci := addVotes(t, blkProp2.blkHash, blockAppHash, leader, val)
-						val.NotifyBlockCommit(blkProp2.blk, ci)
+						val.NotifyBlockCommit(blkProp2.blk, ci, blkProp2.blkHash)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 1, zeroHash)
@@ -417,7 +417,7 @@ func TestValidatorStateMachine(t *testing.T) {
 					name: "commitNew",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						ci := addVotes(t, blkProp2.blkHash, blockAppHash, leader, val)
-						val.NotifyBlockCommit(blkProp2.blk, ci)
+						val.NotifyBlockCommit(blkProp2.blk, ci, blkProp2.blkHash)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 1, zeroHash)
@@ -471,7 +471,7 @@ func TestValidatorStateMachine(t *testing.T) {
 					name: "commitNew",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						ci := addVotes(t, blkProp2.blkHash, blockAppHash, leader, val)
-						val.NotifyBlockCommit(blkProp2.blk, ci)
+						val.NotifyBlockCommit(blkProp2.blk, ci, blkProp2.blkHash)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 1, zeroHash)
@@ -498,7 +498,7 @@ func TestValidatorStateMachine(t *testing.T) {
 					name: "commitNew",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						ci := addVotes(t, blkProp2.blkHash, blockAppHash, leader, val)
-						val.NotifyBlockCommit(blkProp2.blk, ci)
+						val.NotifyBlockCommit(blkProp2.blk, ci, blkProp2.blkHash)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 1, zeroHash)
@@ -552,7 +552,7 @@ func TestValidatorStateMachine(t *testing.T) {
 					name: "commitNew",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						ci := addVotes(t, blkProp2.blkHash, blockAppHash, leader, val)
-						val.NotifyBlockCommit(blkProp2.blk, ci)
+						val.NotifyBlockCommit(blkProp2.blk, ci, blkProp2.blkHash)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 1, zeroHash)
@@ -597,7 +597,7 @@ func TestValidatorStateMachine(t *testing.T) {
 					name: "commitNew",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
 						ci := addVotes(t, blkProp2.blkHash, blockAppHash, leader, val)
-						val.NotifyBlockCommit(blkProp2.blk, ci)
+						val.NotifyBlockCommit(blkProp2.blk, ci, blkProp2.blkHash)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 1, zeroHash)

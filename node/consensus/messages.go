@@ -119,7 +119,7 @@ func (ce *ConsensusEngine) NotifyBlockProposal(blk *ktypes.Block) {
 }
 
 // NotifyBlockCommit is used by the p2p stream handler to notify the consensus engine of a committed block.
-func (ce *ConsensusEngine) NotifyBlockCommit(blk *ktypes.Block, ci *types.CommitInfo) {
+func (ce *ConsensusEngine) NotifyBlockCommit(blk *ktypes.Block, ci *types.CommitInfo, blkID types.Hash) {
 	leaderU, ok := ci.ParamUpdates[ktypes.ParamNameLeader]
 	leader := ce.leader
 
@@ -137,11 +137,14 @@ func (ce *ConsensusEngine) NotifyBlockCommit(blk *ktypes.Block, ci *types.Commit
 		ci:  ci,
 	}
 
-	go ce.sendConsensusMessage(&consensusMessage{
-		MsgType: blkCommit.Type(),
-		Msg:     blkCommit,
-		Sender:  leader.Bytes(),
-	})
+	// only notify if the leader doesn't already know about the block
+	if ce.stateInfo.hasBlock.Load() != blk.Header.Height {
+		go ce.sendConsensusMessage(&consensusMessage{
+			MsgType: blkCommit.Type(),
+			Msg:     blkCommit,
+			Sender:  leader.Bytes(),
+		})
+	}
 }
 
 // NotifyACK notifies the consensus engine about the ACK received from the validator.

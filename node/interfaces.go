@@ -21,7 +21,7 @@ type ConsensusEngine interface {
 	NotifyBlockProposal(blk *ktypes.Block)
 
 	AcceptCommit(height int64, blkID types.Hash, hdr *ktypes.BlockHeader, ci *types.CommitInfo, leaderSig []byte) bool
-	NotifyBlockCommit(blk *ktypes.Block, ci *types.CommitInfo)
+	NotifyBlockCommit(blk *ktypes.Block, ci *types.CommitInfo, blkID types.Hash)
 
 	NotifyACK(validatorPK []byte, ack types.AckRes)
 

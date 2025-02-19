@@ -136,6 +136,10 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, hdr *kty
 	// the node will stop receiving any committed blocks from the network and
 	// is stuck waiting for the votes. The only way to recover the node is to
 	// restart it, so that it can start
+	if ce.stateInfo.hasBlock.Load() == height {
+		ce.log.Infof("CE already been notified about the block, height: %d, blockID: %s", height, blkID)
+		return false
+	}
 
 	ce.stateInfo.mtx.RLock()
 	defer ce.stateInfo.mtx.RUnlock()
@@ -157,7 +161,6 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, hdr *kty
 	}
 
 	// check if there are any leader updates in the block header
-	leader := ce.leader
 	updatedLeader, leaderUpdated := ci.ParamUpdates[ktypes.ParamNameLeader]
 	if leaderUpdated {
 		// accept this new leader only if the commitInfo votes are correctly validated
@@ -165,11 +168,12 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, hdr *kty
 			ce.log.Error("Error verifying votes", "error", err)
 			return false
 		}
-
-		leader = (updatedLeader.(ktypes.PublicKey)).PublicKey
+		leader := (updatedLeader.(ktypes.PublicKey)).PublicKey
 
 		ce.log.Infof("Received block with leader update, new leader: %s  old leader: %s", hex.EncodeToString(leader.Bytes()), hex.EncodeToString(ce.leader.Bytes()))
 	}
+
+	return true
 
 	// Leader signature verification is not required as long as the commitInfo includes the signatures
 	// from majority of the validators. There can also scenarios where the node tried to promote a new
@@ -178,32 +182,32 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, hdr *kty
 	// from the old leader, as the node has a different leader now. So accept the committed block as
 	// long as the block is valid, without worrying about who the leader is.
 
-	// check if this is the first time we are hearing about this block and not already downloaded it.
-	blk, _, err := ce.blockStore.Get(blkID)
-	if err != nil {
-		if errors.Is(err, types.ErrNotFound) || errors.Is(err, types.ErrBlkNotFound) {
-			ce.log.Debugf("Block not found in the store, request it from the network", "height", height, "blockID", blkID)
-			return true // we want it
-		}
-		ce.log.Error("Unexpected error getting block from blockstore", "error", err)
-		return false
-	}
+	// // check if this is the first time we are hearing about this block and not already downloaded it.
+	// blk, _, err := ce.blockStore.Get(blkID)
+	// if err != nil {
+	// 	if errors.Is(err, types.ErrNotFound) || errors.Is(err, types.ErrBlkNotFound) {
+	// 		ce.log.Debugf("Block not found in the store, request it from the network", "height", height, "blockID", blkID)
+	// 		return true // we want it
+	// 	}
+	// 	ce.log.Error("Unexpected error getting block from blockstore", "error", err)
+	// 	return false
+	// }
 
-	// no need to worry if we are currently processing a different block, commitBlock will take care of it.
-	// just ensure that you are processing the block which is for the height after the last committed block.
-	blkCommit := &blockAnnounce{
-		ci:  ci,
-		blk: blk,
-	}
+	// // no need to worry if we are currently processing a different block, commitBlock will take care of it.
+	// // just ensure that you are processing the block which is for the height after the last committed block.
+	// blkCommit := &blockAnnounce{
+	// 	ci:  ci,
+	// 	blk: blk,
+	// }
 
-	ce.log.Infof("Notifying the CE of the blkAnn msg as we already have the block", "height", height, "blockID", blkID)
-	go ce.sendConsensusMessage(&consensusMessage{
-		MsgType: blkCommit.Type(),
-		Msg:     blkCommit,
-		Sender:  leader.Bytes(),
-	})
+	// ce.log.Infof("Notifying the CE of the blkAnn msg as we already have the block", "height", height, "blockID", blkID)
+	// // Notify only if CE hasn't already acknowledged the block
+	// go ce.sendConsensusMessage(&consensusMessage{
+	// 	MsgType: blkCommit.Type(),
+	// 	Msg:     blkCommit,
+	// 	Sender:  leader.Bytes(),
+	// })
 
-	return false
 }
 
 // ProcessBlockProposal is used by the validator's consensus engine to process the new block proposal message.
@@ -367,10 +371,8 @@ func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, c
 		return ce.processAndCommit(ctx, blk, ci)
 	}
 
-	if ce.state.blockRes == nil {
-		// Still processing the block, return and commit when ready.
-		return nil
-	}
+	// The block is already processed, just validate the appHash and commit the block if valid.
+	ce.stateInfo.hasBlock.CompareAndSwap(ce.state.lc.height, blk.Header.Height)
 
 	if !ce.state.blockRes.paramUpdates.Equals(ci.ParamUpdates) { // this is absorbed in apphash anyway, but helps diagnostics
 		haltR := fmt.Sprintf("Incorrect ParamUpdates, halting the node. received: %s, computed: %s", ci.ParamUpdates, ce.state.blockRes.paramUpdates)
@@ -406,6 +408,10 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Blo
 	}
 
 	ce.log.Info("Processing committed block", "height", blk.Header.Height, "blockID", blkID, "appHash", ci.AppHash)
+
+	// set the hasBlock to the height of the block
+	ce.stateInfo.hasBlock.CompareAndSwap(ce.state.lc.height, blk.Header.Height)
+
 	if err := ce.validateBlock(blk); err != nil {
 		return err
 	}
