@@ -5,12 +5,13 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"golang.org/x/sync/errgroup"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
+
+	"golang.org/x/sync/errgroup"
 
 	"github.com/kwilteam/kwil-db/app/key"
 	"github.com/kwilteam/kwil-db/config"

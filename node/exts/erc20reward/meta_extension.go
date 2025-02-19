@@ -1,4 +1,4 @@
-// package meta implements a meta extension that manages all rewards on a Kwil network.
+// package erc20reward implements a meta extension that manages all rewards on a Kwil network.
 // It is used to create other extensions with which users can distribute erc20 tokens
 // to users.
 // It works by exposing an action to the DB owner which allows creation of new extensions
