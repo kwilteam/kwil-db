@@ -73,11 +73,6 @@ tasks:
     generates:
       - .build/kwild
 
-  gen:abi: # TODO: merge with brennan's
-    desc: Generate abis
-    cmds:
-      - abigen --abi=./node/services/erc20signersvc/abigen/safe_abi.json --pkg abigen --out=./node/services/erc20signersvc/abigen/safe.go --type Safe
-      - abigen --abi=./node/services/erc20signersvc/abigen/multicall3_abi.json --pkg abigen --out=./node/services/erc20signersvc/abigen/multicall3.go --type Multicall3
 
   generate:docs:
     desc: Generate docs for CLIs
@@ -100,6 +95,8 @@ tasks:
     cmds:
       - abigen --abi=./node/exts/erc20reward/abigen/reward_distributor_abi.json  --pkg abigen --out=./node/exts/erc20reward/abigen/reward_distributor.go --type RewardDistributor
       - abigen --abi=./node/exts/erc20reward/abigen/erc20_abi.json  --pkg abigen --out=./node/exts/erc20reward/abigen/erc20.go --type Erc20
+      - abigen --abi=./node/services/erc20signersvc/abigen/safe_abi.json --pkg abigen --out=./node/services/erc20signersvc/abigen/safe.go --type Safe
+      - abigen --abi=./node/services/erc20signersvc/abigen/multicall3_abi.json --pkg abigen --out=./node/services/erc20signersvc/abigen/multicall3.go --type Multicall3
 
   # ************ docker ************
   vendor:
