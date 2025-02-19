@@ -144,6 +144,11 @@ func SetFlagsFromStructTags(fs *pflag.FlagSet, cfg interface{}, nameTag, descTag
 			default:
 				fmt.Printf("Unsupported slice type for flag: %T\n", sv)
 			}
+		case reflect.Map:
+			switch mv := fieldVal.Interface().(type) {
+			case map[string]string:
+				fs.StringToString(flagName, mv, desc)
+			}
 		}
 	}
 
