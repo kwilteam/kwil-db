@@ -16,11 +16,6 @@ import (
 	"github.com/kwilteam/kwil-db/node/services/erc20signersvc/abigen"
 )
 
-//
-//func NewEthClient(rpc string) (*ethclient.Client, error) {
-//	return ethclient.Dial(rpc)
-//}
-
 var (
 	safeABI = lo.Must(abi.JSON(strings.NewReader(abigen.SafeMetaData.ABI)))
 

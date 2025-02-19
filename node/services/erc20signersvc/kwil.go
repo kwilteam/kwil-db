@@ -63,7 +63,6 @@ type erc20ExtAPI interface {
 	SetTarget(ns string)
 	InstanceInfo(tx context.Context) (*RewardInstanceInfo, error)
 	GetActiveEpochs(ctx context.Context) ([]*Epoch, error)
-	ListUnconfirmedEpochs(ctx context.Context, afterHeight int64, limit int) ([]*Epoch, error)
 	GetEpochRewards(ctx context.Context, epochID types.UUID) ([]*EpochReward, error)
 	VoteEpoch(ctx context.Context, epochID types.UUID, amount *types.Decimal, safeNonce int64, signature []byte) (string, error)
 }
@@ -140,35 +139,6 @@ func (k *erc20rwExtApi) GetActiveEpochs(ctx context.Context) ([]*Epoch, error) {
 
 	return ers, nil
 }
-
-func (k *erc20rwExtApi) ListUnconfirmedEpochs(ctx context.Context, afterHeight int64, limit int) ([]*Epoch, error) {
-	procedure := "list_epochs"
-
-	input := []any{afterHeight, limit, false}
-
-	res, err := k.clt.Call(ctx, k.namespace, procedure, input)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(res.QueryResult.Values) == 0 {
-		return nil, nil
-	}
-
-	ers := make([]*Epoch, len(res.QueryResult.Values))
-	for i, v := range res.QueryResult.Values {
-		er := &Epoch{}
-		err = types.ScanTo(v, &er.ID, &er.StartHeight, &er.StartTimestamp, &er.EndHeight,
-			&er.RewardRoot, &er.RewardAmount, &er.EndBlockHash, &er.Confirmed, &er.Voters, &er.VoteAmounts, &er.VoteNonces, &er.VoteSignatures)
-		if err != nil {
-			return nil, err
-		}
-		ers[i] = er
-	}
-
-	return ers, nil
-}
-
 func (k *erc20rwExtApi) GetEpochRewards(ctx context.Context, epochID types.UUID) ([]*EpochReward, error) {
 	procedure := "get_epoch_rewards"
 	input := []any{epochID}

@@ -1,6 +1,6 @@
 // This file implements a naive KV persistent solution using a file, changes made
 // through the exposed functions will be written to files on every invoking.
-// For signer svc, this is good enough.
+// This state won't grow, for signer svc, this is good enough.
 
 package signersvc
 
