@@ -65,34 +65,52 @@ func initializeExtension(ctx context.Context, svc *common.Service, db sql.DB, i 
 				exec2 := exec.subscope(alias)
 
 				return method.Handler(exec2.engineCtx, exec2.app(), argVals, func(a []any) error {
-					var colNames []string
+					// if no return is specified for this method, then the callback should never be called
+					if method.Returns == nil {
+						return fmt.Errorf(`%w: method "%s"."%s" returned no value, but expected one`, engine.ErrExtensionInvocation, alias, lowerName)
+					}
+
+					colNames := make([]string, len(a))
 					returnVals := make([]value, len(a))
-					var err error
+
+					if len(method.Returns.Fields) != len(a) {
+						return fmt.Errorf("%w: method %s returned %d values, but expected %d", engine.ErrExtensionInvocation, lowerName, len(a), len(method.Returns.Fields))
+					}
+
 					for i, v := range a {
-						returnVals[i], err = newValue(v)
+						newVal, err := newValue(v)
 						if err != nil {
 							return err
 						}
-					}
 
-					if method.Returns != nil {
-						if len(method.Returns.Fields) != len(a) {
-							return fmt.Errorf("%w: method %s returned %d values, but expected %d", engine.ErrExtensionInvocation, lowerName, len(a), len(method.Returns.Fields))
-						}
-
-						for i, result := range returnVals {
-							if !result.Type().Equals(method.Returns.Fields[i].Type) {
-								return fmt.Errorf(`%w: method "%s"."%s" returned a value of type %s, but expected %s. column: "%s"`, engine.ErrExtensionInvocation, alias, lowerName, result.Type(), method.Returns.Fields[i].Type, method.Returns.Fields[i].Name)
+						// if newVal is null, then we should cast it to the expected type
+						if newVal.Null() {
+							newVal, err = newVal.Cast(method.Returns.Fields[i].Type)
+							if err != nil {
+								return err
 							}
-
-							if !method.Returns.Fields[i].Nullable && result.Null() {
-								return fmt.Errorf(`%w: method "%s"."%s" returned a null value for a non-nullable column. column: "%s"`, engine.ErrExtensionInvocation, alias, lowerName, method.Returns.Fields[i].Name)
+						} else {
+							// if it is a 0-length array, then we should cast it to the expected type
+							if arrayVal, ok := newVal.(arrayValue); ok {
+								if arrayVal.Len() == 0 {
+									newVal, err = newVal.Cast(method.Returns.Fields[i].Type)
+									if err != nil {
+										return err
+									}
+								}
 							}
 						}
 
-						for _, field := range method.Returns.Fields {
-							colNames = append(colNames, field.Name)
+						if !newVal.Type().Equals(method.Returns.Fields[i].Type) {
+							return fmt.Errorf(`%w: method "%s"."%s" returned a value of type %s, but expected %s. column: "%s"`, engine.ErrExtensionInvocation, alias, lowerName, newVal.Type(), method.Returns.Fields[i].Type, method.Returns.Fields[i].Name)
 						}
+
+						if !method.Returns.Fields[i].Nullable && newVal.Null() {
+							return fmt.Errorf(`%w: method "%s"."%s" returned a null value for a non-nullable column. column: "%s"`, engine.ErrExtensionInvocation, alias, lowerName, method.Returns.Fields[i].Name)
+						}
+
+						returnVals[i] = newVal
+						colNames[i] = method.Returns.Fields[i].Name
 					}
 
 					return fn(&row{

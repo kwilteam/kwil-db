@@ -2758,6 +2758,16 @@ func Test_ExtensionTypeChecks(t *testing.T) {
 				},
 				AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
 			},
+			{
+				Name: "returns empty decimal array",
+				Returns: &precompiles.MethodReturn{
+					Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue("a", mustDecArrType(10, 2), false)},
+				},
+				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+					return resultFn([]any{[]*types.Decimal{}})
+				},
+				AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
+			},
 		},
 	})
 	require.NoError(t, err)
@@ -2811,6 +2821,10 @@ func Test_ExtensionTypeChecks(t *testing.T) {
 	// wrong count for parameters
 	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "types_ext", "accept_not_null", []any{"hello", "world"}, nil)
 	require.ErrorIs(t, err, engine.ErrExtensionInvocation)
+
+	// empty array works ok
+	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "types_ext", "returns empty decimal array", nil, exact([]*types.Decimal{}))
+	require.NoError(t, err)
 }
 
 // This tests that SET CURRENT NAMESPACE works as expected
