@@ -68,9 +68,8 @@ type erc20ExtAPI interface {
 }
 
 type erc20rwExtApi struct {
-	clt        *client.Client
-	namespace  string
-	instanceID string
+	clt       *client.Client
+	namespace string
 }
 
 var _ erc20ExtAPI = (*erc20rwExtApi)(nil)

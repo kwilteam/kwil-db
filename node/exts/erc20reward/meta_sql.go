@@ -421,8 +421,7 @@ func rowToEpoch(r *common.Row) (*Epoch, error) {
 	confirmed := r.Values[7].(bool)
 
 	// NOTE: empty value is [[]]
-	// NOTE: should not use append, we could accidently skip some 'nil' element and messup the index
-	// But we can be sure values[7]-values[10] will all be empty if any, from the SQL;
+	// values[7]-values[10] will all be empty if any, from the SQL;
 	var voters []ethcommon.Address
 	if r.Values[8] != nil {
 		rawVoters := r.Values[8].([][]byte)
@@ -616,16 +615,6 @@ func voteEpoch(ctx context.Context, app *common.App, epochID *types.UUID,
 		"amount":    amount,
 		"signature": signature,
 		"nonce":     nonce,
-	}, nil)
-}
-
-// removeEpochVotes removes all votes associated with an epoch.
-func removeEpochVotes(ctx context.Context, app *common.App, epochID *types.UUID) error {
-	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
-	{kwil_erc20_meta}DELETE FROM epoch_votes
-	WHERE epoch_id = $epoch_id;
-	`, map[string]any{
-		"epoch_id": epochID,
 	}, nil)
 }
 

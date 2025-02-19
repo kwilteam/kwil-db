@@ -3,6 +3,7 @@ package erc20reward
 import (
 	"context"
 	"errors"
+
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
