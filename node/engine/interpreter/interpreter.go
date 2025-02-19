@@ -56,6 +56,10 @@ func (t *ThreadSafeInterpreter) Call(ctx *common.EngineContext, db sql.DB, names
 	return t.i.call(ctx, db, namespace, action, args, resultFn, true)
 }
 
+func (t *ThreadSafeInterpreter) CallWithoutEngineCtx(ctx context.Context, db sql.DB, namespace string, action string, args []any, resultFn func(*common.Row) error) (*common.CallResult, error) {
+	return t.Call(newInvalidEngineCtx(ctx), db, namespace, action, args, resultFn)
+}
+
 func (t *ThreadSafeInterpreter) Execute(ctx *common.EngineContext, db sql.DB, statement string, params map[string]any, fn func(*common.Row) error) error {
 	unlock, err := t.lock(db)
 	if err != nil {
@@ -67,7 +71,7 @@ func (t *ThreadSafeInterpreter) Execute(ctx *common.EngineContext, db sql.DB, st
 }
 
 func (t *ThreadSafeInterpreter) ExecuteWithoutEngineCtx(ctx context.Context, db sql.DB, statement string, params map[string]any, fn func(*common.Row) error) error {
-	return t.i.execute(newInvalidEngineCtx(ctx), db, statement, params, fn, false)
+	return t.Execute(newInvalidEngineCtx(ctx), db, statement, params, fn)
 }
 
 // recursiveInterpreter is an interpreter that can call itself.
@@ -89,12 +93,16 @@ func (r *recursiveInterpreter) Call(ctx *common.EngineContext, db sql.DB, namesp
 	return res, nil
 }
 
+func (r *recursiveInterpreter) CallWithoutEngineCtx(ctx context.Context, db sql.DB, namespace string, action string, args []any, resultFn func(*common.Row) error) (*common.CallResult, error) {
+	return r.Call(newInvalidEngineCtx(ctx), db, namespace, action, args, resultFn)
+}
+
 func (r *recursiveInterpreter) Execute(ctx *common.EngineContext, db sql.DB, statement string, params map[string]any, fn func(*common.Row) error) error {
 	return r.i.execute(ctx, db, statement, params, fn, false)
 }
 
 func (r *recursiveInterpreter) ExecuteWithoutEngineCtx(ctx context.Context, db sql.DB, statement string, params map[string]any, fn func(*common.Row) error) error {
-	return r.i.execute(newInvalidEngineCtx(ctx), db, statement, params, fn, false)
+	return r.Execute(newInvalidEngineCtx(ctx), db, statement, params, fn)
 }
 
 // newInvalidEngineCtx creates a new engine context that is invalid.

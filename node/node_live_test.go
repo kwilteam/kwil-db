@@ -562,6 +562,10 @@ func (me *mockEngine) Call(ctx *common.EngineContext, db sql.DB, namespace, acti
 	return nil, nil
 }
 
+func (me *mockEngine) CallWithoutEngineCtx(ctx context.Context, db sql.DB, namespace, action string, args []any, resultFn func(*common.Row) error) (*common.CallResult, error) {
+	return nil, nil
+}
+
 func (me *mockEngine) Execute(ctx *common.EngineContext, db sql.DB, statement string, params map[string]any, fn func(*common.Row) error) error {
 	return nil
 }
