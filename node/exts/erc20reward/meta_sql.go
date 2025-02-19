@@ -623,25 +623,15 @@ func voteEpoch(ctx context.Context, app *common.App, epochID *types.UUID,
 func getWalletEpochs(ctx context.Context, app *common.App, instanceID *types.UUID,
 	wallet ethcommon.Address, pending bool, fn func(*Epoch) error) error {
 
+	// WE don't need vote info, we just return empty arrays instead of JOIN
 	query := `
-	{kwil_erc20_meta}SELECT e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.reward_amount, e.ended_at, e.block_hash, e.confirmed, array_agg(v.voter) as voters, array_agg(v.amount) as amounts, array_agg(v.nonce) as nonces, array_agg(v.signature) as signatures
+	{kwil_erc20_meta}SELECT e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.reward_amount, e.ended_at, e.block_hash, e.confirmed, ARRAY[]::BYTEA[] as voters, ARRAY[]::NUMERIC(78, 0)[] as amounts, ARRAY[]::INT8[] as nonces, ARRAY[]::BYTEA[] as signatures
 	FROM epoch_rewards AS r
 	JOIN epochs AS e ON r.epoch_id = e.id
-	LEFT JOIN epoch_votes AS v ON v.epoch_id = e.id
 	WHERE recipient = $wallet AND e.instance_id = $instance_id AND e.ended_at IS NOT NULL` // at least finalized
-
-	// TODO: use this after SQL issue is fixed
-	//query := `
-	//{kwil_erc20_meta}SELECT e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.ended_at, e.block_hash, e.confirmed, ARRAY[]::bytea[], ARRAY[]::int8[]
-	//FROM epoch_rewards AS r
-	//JOIN epochs AS e ON r.epoch_id = e.id
-	//WHERE recipient = $wallet AND e.instance_id = $instance_id AND e.ended_at IS NOT NULL` // at least finalized
 	if !pending {
 		query += ` AND e.confirmed IS true`
 	}
-
-	// TODO: remove
-	query += `    GROUP BY e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.reward_amount, e.ended_at, e.block_hash, e.confirmed`
 
 	query += ";"
 	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, query,
