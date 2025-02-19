@@ -221,7 +221,7 @@ func init() {
 							{Name: "end_block_hash", Type: types.ByteaType, Nullable: true},
 							{Name: "confirmed", Type: types.BoolType},
 							{Name: "voters", Type: types.TextArrayType, Nullable: true},
-							{Name: "vote_amounts", Type: types.TextArrayType, Nullable: true}, // cannot successful return uint256NumericArray, as empty value
+							{Name: "vote_amounts", Type: uint256NumericArray, Nullable: true},
 							{Name: "vote_nonces", Type: types.IntArrayType, Nullable: true},
 							{Name: "voter_signatures", Type: types.ByteaArrayType, Nullable: true},
 						},
@@ -247,7 +247,7 @@ func init() {
 							{Name: "end_block_hash", Type: types.ByteaType, Nullable: true},
 							{Name: "confirmed", Type: types.BoolType},
 							{Name: "voters", Type: types.TextArrayType, Nullable: true},
-							{Name: "vote_amounts", Type: types.TextArrayType, Nullable: true}, // cannot successful return uint256NumericArray, as empty value
+							{Name: "vote_amounts", Type: uint256NumericArray, Nullable: true},
 							{Name: "vote_nonces", Type: types.IntArrayType, Nullable: true},
 							{Name: "voter_signatures", Type: types.ByteaArrayType, Nullable: true},
 						},

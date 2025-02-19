@@ -67,6 +67,7 @@ var (
 
 		return dt
 	}()
+	uint256NumericArray = types.ArrayType(uint256Numeric)
 
 	// the below are used to identify different types of logs from ethereum
 	// so that we know how to decode them
@@ -944,7 +945,7 @@ func init() {
 								{Name: "end_block_hash", Type: types.ByteaType, Nullable: true},
 								{Name: "confirmed", Type: types.BoolType},
 								{Name: "voters", Type: types.TextArrayType, Nullable: true},
-								{Name: "vote_amounts", Type: types.TextArrayType, Nullable: true}, // cannot successful return uint256NumericArray, as empty value
+								{Name: "vote_amounts", Type: uint256NumericArray, Nullable: true},
 								{Name: "vote_nonces", Type: types.IntArrayType, Nullable: true},
 								{Name: "voter_signatures", Type: types.ByteaArrayType, Nullable: true},
 							},
@@ -961,21 +962,9 @@ func init() {
 									}
 								}
 
-								total := e.Total
-								if total == nil {
-									total, _ = erc20ValueFromBigInt(big.NewInt(0))
-								}
-
-								var voteAmts []string
-								for _, amt := range e.VoteAmounts {
-									if amt != nil {
-										voteAmts = append(voteAmts, amt.String())
-									}
-								}
-
-								return resultFn([]any{e.ID, e.StartHeight, e.StartTime, *e.EndHeight, e.Root, total, e.BlockHash, e.Confirmed,
+								return resultFn([]any{e.ID, e.StartHeight, e.StartTime, *e.EndHeight, e.Root, e.Total, e.BlockHash, e.Confirmed,
 									voters,
-									voteAmts,
+									e.VoteAmounts,
 									e.VoteNonces,
 									e.VoteSigs,
 								})
@@ -1001,7 +990,7 @@ func init() {
 								{Name: "end_block_hash", Type: types.ByteaType, Nullable: true},
 								{Name: "confirmed", Type: types.BoolType},
 								{Name: "voters", Type: types.TextArrayType, Nullable: true},
-								{Name: "vote_amounts", Type: types.TextArrayType, Nullable: true}, // cannot successful return uint256NumericArray, as empty value
+								{Name: "vote_amounts", Type: uint256NumericArray, Nullable: true},
 								{Name: "vote_nonces", Type: types.IntArrayType, Nullable: true},
 								{Name: "voter_signatures", Type: types.ByteaArrayType, Nullable: true},
 							},
@@ -1020,24 +1009,9 @@ func init() {
 									}
 								}
 
-								total := e.Total
-								if total == nil {
-									total, _ = erc20ValueFromBigInt(big.NewInt(0))
-								}
-
-								// 	uint256NumericArray = types.ArrayType(uint256Numeric)
-								// NOTE: how to return a nil uint256NumericArray, I cannot set precision/scale on nil type
-
-								var voteAmts []string
-								for _, amt := range e.VoteAmounts {
-									if amt != nil {
-										voteAmts = append(voteAmts, amt.String())
-									}
-								}
-
-								return resultFn([]any{e.ID, e.StartHeight, e.StartTime, *e.EndHeight, e.Root, total, e.BlockHash, e.Confirmed,
+								return resultFn([]any{e.ID, e.StartHeight, e.StartTime, *e.EndHeight, e.Root, e.Total, e.BlockHash, e.Confirmed,
 									voters,
-									voteAmts,
+									e.VoteAmounts,
 									e.VoteNonces,
 									e.VoteSigs,
 								})
