@@ -50,7 +50,7 @@ func initializeExtension(ctx context.Context, svc *common.Service, db sql.DB, i 
 				}
 
 				if len(args) != len(method.Parameters) {
-					return fmt.Errorf(`%w: extension method "%s" expected %d arguments, but got %d`, engine.ErrExtensionInvocation, lowerName, len(method.Parameters), len(args))
+					return fmt.Errorf(`%w: extension method "%s" expected %d arguments, but got %d`, engine.ErrExtensionImplementation, lowerName, len(method.Parameters), len(args))
 				}
 
 				argVals := make([]any, len(args))
@@ -59,13 +59,13 @@ func initializeExtension(ctx context.Context, svc *common.Service, db sql.DB, i 
 
 					// ensure the argument types match
 					if !method.Parameters[i].Type.Equals(arg.Type()) {
-						return fmt.Errorf(`%w: extension method "%s" expected argument %d to be of type %s, but got %s`, engine.ErrExtensionInvocation, lowerName, i, method.Parameters[i].Type, arg.Type())
+						return fmt.Errorf(`%w: extension method "%s" expected argument %d to be of type %s, but got %s`, engine.ErrExtensionImplementation, lowerName, i, method.Parameters[i].Type, arg.Type())
 					}
 
 					// the above will be ok if the argument is nil
 					// we therefore check for nullability here
 					if !method.Parameters[i].Nullable && arg.Null() {
-						return fmt.Errorf(`%w: extension method "%s" expected argument %d to be non-null, but got null`, engine.ErrExtensionInvocation, lowerName, i)
+						return fmt.Errorf(`%w: extension method "%s" expected argument %d to be non-null, but got null`, engine.ErrExtensionImplementation, lowerName, i)
 					}
 				}
 
@@ -74,14 +74,14 @@ func initializeExtension(ctx context.Context, svc *common.Service, db sql.DB, i 
 				return method.Handler(exec2.engineCtx, exec2.app(), argVals, func(a []any) error {
 					// if no return is specified for this method, then the callback should never be called
 					if method.Returns == nil {
-						return fmt.Errorf(`%w: method "%s"."%s" returned no value, but expected one`, engine.ErrExtensionInvocation, alias, lowerName)
+						return fmt.Errorf(`%w: method "%s"."%s" returned no value, but expected one`, engine.ErrExtensionImplementation, alias, lowerName)
 					}
 
 					colNames := make([]string, len(a))
 					returnVals := make([]value, len(a))
 
 					if len(method.Returns.Fields) != len(a) {
-						return fmt.Errorf("%w: method %s returned %d values, but expected %d", engine.ErrExtensionInvocation, lowerName, len(a), len(method.Returns.Fields))
+						return fmt.Errorf("%w: method %s returned %d values, but expected %d", engine.ErrExtensionImplementation, lowerName, len(a), len(method.Returns.Fields))
 					}
 
 					for i, v := range a {
@@ -90,11 +90,11 @@ func initializeExtension(ctx context.Context, svc *common.Service, db sql.DB, i 
 							return err
 						}
 						if !ok {
-							return fmt.Errorf(`%w: method "%s"."%s" returned a value of type %s, but expected %s. column: "%s"`, engine.ErrExtensionInvocation, alias, lowerName, newVal.Type(), method.Returns.Fields[i].Type, method.Returns.Fields[i].Name)
+							return fmt.Errorf(`%w: method "%s"."%s" returned a value of type %s, but expected %s. column: "%s"`, engine.ErrExtensionImplementation, alias, lowerName, newVal.Type(), method.Returns.Fields[i].Type, method.Returns.Fields[i].Name)
 						}
 
 						if !method.Returns.Fields[i].Nullable && newVal.Null() {
-							return fmt.Errorf(`%w: method "%s"."%s" returned a null value for a non-nullable column. column: "%s"`, engine.ErrExtensionInvocation, alias, lowerName, method.Returns.Fields[i].Name)
+							return fmt.Errorf(`%w: method "%s"."%s" returned a null value for a non-nullable column. column: "%s"`, engine.ErrExtensionImplementation, alias, lowerName, method.Returns.Fields[i].Name)
 						}
 
 						returnVals[i] = newVal

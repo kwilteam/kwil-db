@@ -679,7 +679,7 @@ func (i *baseInterpreter) call(ctx *common.EngineContext, db sql.DB, namespace, 
 	if exec.ExpectedArgs != nil {
 		expect := *exec.ExpectedArgs
 		if len(expect) != len(args) {
-			return nil, fmt.Errorf(`action "%s" expected %d arguments, but got %d`, action, len(expect), len(args))
+			return nil, fmt.Errorf(`%w: action "%s" expected %d arguments, but got %d`, engine.ErrActionInvocation, action, len(expect), len(args))
 		}
 
 		for i, arg := range args {
