@@ -128,6 +128,10 @@ type Engine interface {
 	// called for each row in the result set. If the resultFn returns
 	// an error, the call will be aborted and the error will be returned.
 	Call(ctx *EngineContext, db sql.DB, namespace, action string, args []any, resultFn func(*Row) error) (*CallResult, error)
+	// CallWithoutEngineCtx calls an action in the database without needing
+	// an engine context. This is useful for extensions that need to interact
+	// with the engine outside of a transaction. If possible, use Call instead.
+	CallWithoutEngineCtx(ctx context.Context, db sql.DB, namespace, action string, args []any, resultFn func(*Row) error) (*CallResult, error)
 	// Execute executes a statement in the database. The fn callback is
 	// called for each row in the result set. If the fn returns an error,
 	// the call will be aborted and the error will be returned.

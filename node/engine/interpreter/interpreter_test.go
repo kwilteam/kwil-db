@@ -2253,7 +2253,7 @@ func Test_Extensions(t *testing.T) {
 			return err
 		}
 		adminCall := func(namespace, action string, values []any, fn func(*common.Row) error) error {
-			_, err := interp.Call(adminCtx(), tx, namespace, action, values, fn)
+			_, err := interp.CallWithoutEngineCtx(ctx, tx, namespace, action, values, fn)
 			return err
 		}
 		execFromUser := func(caller string, sql string, fn func(*common.Row) error) error {
