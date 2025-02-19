@@ -1993,6 +1993,16 @@ func Test_Actions(t *testing.T) {
 			},
 			action: "empty_array",
 		},
+		{
+			name: "0-length numeric array",
+			stmt: []string{
+				`CREATE ACTION smth($arr numeric(10,5)[]) public {
+					$arr := array_append($arr, 1.0);
+				}`,
+			},
+			action: "smth",
+			values: []any{[]*types.Decimal{}},
+		},
 	}
 
 	db := newTestDB(t, nil, nil)

@@ -2969,3 +2969,31 @@ func makeArray(vals []scalarValue, t *types.DataType) (arrayValue, error) {
 
 	return zeroArr, nil
 }
+
+// newValueWithSoftCast is a helper function that makes a new value.
+// It is meant to handle user-provided values by handling edge cases where
+// go's typing does not exactly match the engines. For example, if a 0-length
+// decimal array is passed, there is no way for Go to know the precision and
+// scale of the array. But in our interpreter, we do know this information.
+func newValueWithSoftCast(v any, dt *types.DataType) (value, error) {
+	val, err := newValue(v)
+	if err != nil {
+		return nil, err
+	}
+
+	// if v is null or if it is a 0-length array, we need to cast it to the correct type
+	if val.Null() {
+		val, err = val.Cast(dt)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if arr, ok := val.(arrayValue); ok && arr.Len() == 0 {
+		val, err = val.Cast(dt)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return val, nil
+}

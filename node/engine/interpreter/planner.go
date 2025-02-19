@@ -23,6 +23,11 @@ func makeActionToExecutable(namespace string, act *action) *executable {
 		stmtFns[j] = stmt.Accept(planner).(stmtFunc)
 	}
 
+	var expectedArgs []*types.DataType
+	for _, p := range act.Parameters {
+		expectedArgs = append(expectedArgs, p.Type)
+	}
+
 	validateArgs := func(v []value) ([]value, error) {
 		newVal := make([]value, len(v))
 		if len(v) != len(act.Parameters) {
@@ -46,7 +51,8 @@ func makeActionToExecutable(namespace string, act *action) *executable {
 	}
 
 	return &executable{
-		Name: act.Name,
+		Name:         act.Name,
+		ExpectedArgs: &expectedArgs,
 		Func: func(exec *executionContext, args []value, fn resultFunc) error {
 			if err := exec.canExecute(namespace, act.Name, act.Modifiers); err != nil {
 				return err

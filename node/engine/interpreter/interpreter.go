@@ -675,13 +675,30 @@ func (i *baseInterpreter) call(ctx *common.EngineContext, db sql.DB, namespace, 
 	}
 
 	argVals := make([]value, len(args))
-	for i, arg := range args {
-		val, err := newValue(arg)
-		if err != nil {
-			return nil, err
+
+	if exec.ExpectedArgs != nil {
+		expect := *exec.ExpectedArgs
+		if len(expect) != len(args) {
+			return nil, fmt.Errorf(`action "%s" expected %d arguments, but got %d`, action, len(expect), len(args))
 		}
 
-		argVals[i] = val
+		for i, arg := range args {
+			val, err := newValueWithSoftCast(arg, expect[i])
+			if err != nil {
+				return nil, err
+			}
+
+			argVals[i] = val
+		}
+	} else {
+		for i, arg := range args {
+			val, err := newValue(arg)
+			if err != nil {
+				return nil, err
+			}
+
+			argVals[i] = val
+		}
 	}
 
 	err = exec.Func(execCtx, argVals, func(row *row) error {

@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/types/sql"
@@ -35,8 +36,14 @@ func initializeExtension(ctx context.Context, svc *common.Service, db sql.DB, i 
 	for _, method := range inst.Methods {
 		lowerName := strings.ToLower(method.Name)
 
+		expectedArgs := make([]*types.DataType, len(method.Parameters))
+		for i, p := range method.Parameters {
+			expectedArgs[i] = p.Type
+		}
+
 		exec := &executable{
-			Name: lowerName,
+			Name:         lowerName,
+			ExpectedArgs: &expectedArgs,
 			Func: func(exec *executionContext, args []value, fn resultFunc) error {
 				if err := exec.canExecute(alias, lowerName, method.AccessModifiers); err != nil {
 					return err
@@ -78,27 +85,9 @@ func initializeExtension(ctx context.Context, svc *common.Service, db sql.DB, i 
 					}
 
 					for i, v := range a {
-						newVal, err := newValue(v)
+						newVal, err := newValueWithSoftCast(v, method.Returns.Fields[i].Type)
 						if err != nil {
 							return err
-						}
-
-						// if newVal is null, then we should cast it to the expected type
-						if newVal.Null() {
-							newVal, err = newVal.Cast(method.Returns.Fields[i].Type)
-							if err != nil {
-								return err
-							}
-						} else {
-							// if it is a 0-length array, then we should cast it to the expected type
-							if arrayVal, ok := newVal.(arrayValue); ok {
-								if arrayVal.Len() == 0 {
-									newVal, err = newVal.Cast(method.Returns.Fields[i].Type)
-									if err != nil {
-										return err
-									}
-								}
-							}
 						}
 
 						if !newVal.Type().Equals(method.Returns.Fields[i].Type) {
