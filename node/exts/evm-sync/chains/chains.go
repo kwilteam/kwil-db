@@ -16,8 +16,6 @@ type ChainInfo struct {
 	// RequiredConfirmations is the number of confirmations required before an event is considered final.
 	// For example, Ethereum mainnet requires 12 confirmations.
 	RequiredConfirmations int64
-	// Etherscan address for this chain.
-	Etherscan string
 }
 
 func init() {
@@ -26,13 +24,11 @@ func init() {
 			Name:                  "ethereum",
 			ID:                    "1",
 			RequiredConfirmations: 12,
-			Etherscan:             "https://etherscan.io/address/",
 		},
 		ChainInfo{
 			Name:                  "sepolia",
 			ID:                    "11155111",
 			RequiredConfirmations: 12,
-			Etherscan:             "https://sepolia.etherscan.io/address/",
 		},
 	)
 	if err != nil {

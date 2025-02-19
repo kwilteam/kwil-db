@@ -88,7 +88,7 @@ func init() {
 							{Name: "epoch_period", Type: types.TextType},
 							{Name: "erc20", Type: types.TextType, Nullable: true},
 							{Name: "decimals", Type: types.IntType, Nullable: true},
-							{Name: "balance", Type: types.TextType, Nullable: true}, // total unspent balance
+							{Name: "balance", Type: uint256Numeric, Nullable: true}, // total unspent balance
 							{Name: "synced", Type: types.BoolType},
 							{Name: "synced_at", Type: types.IntType, Nullable: true},
 							{Name: "enabled", Type: types.BoolType},
@@ -216,11 +216,11 @@ func init() {
 							{Name: "start_timestamp", Type: types.IntType},
 							{Name: "end_height", Type: types.IntType, Nullable: true},
 							{Name: "reward_root", Type: types.ByteaType, Nullable: true},
-							{Name: "reward_amount", Type: types.TextType, Nullable: true},
+							{Name: "reward_amount", Type: uint256Numeric, Nullable: true},
 							{Name: "end_block_hash", Type: types.ByteaType, Nullable: true},
 							{Name: "confirmed", Type: types.BoolType},
 							{Name: "voters", Type: types.TextArrayType, Nullable: true},
-							{Name: "vote_amounts", Type: types.TextArrayType, Nullable: true},
+							{Name: "vote_amounts", Type: types.TextArrayType, Nullable: true}, // cannot successful return uint256NumericArray, as empty value
 							{Name: "vote_nonces", Type: types.IntArrayType, Nullable: true},
 							{Name: "voter_signatures", Type: types.ByteaArrayType, Nullable: true},
 						},
@@ -233,7 +233,6 @@ func init() {
 					Parameters: []precompiles.PrecompileValue{
 						{Name: "after", Type: types.IntType},
 						{Name: "limit", Type: types.IntType},
-						{Name: "finalized_only", Type: types.BoolType},
 					},
 					Returns: &precompiles.MethodReturn{
 						IsTable: true,
@@ -243,11 +242,11 @@ func init() {
 							{Name: "start_timestamp", Type: types.IntType},
 							{Name: "end_height", Type: types.IntType, Nullable: true},
 							{Name: "reward_root", Type: types.ByteaType, Nullable: true},
-							{Name: "reward_amount", Type: types.TextType, Nullable: true},
+							{Name: "reward_amount", Type: uint256Numeric, Nullable: true},
 							{Name: "end_block_hash", Type: types.ByteaType, Nullable: true},
 							{Name: "confirmed", Type: types.BoolType},
 							{Name: "voters", Type: types.TextArrayType, Nullable: true},
-							{Name: "vote_amounts", Type: types.TextArrayType, Nullable: true},
+							{Name: "vote_amounts", Type: types.TextArrayType, Nullable: true}, // cannot successful return uint256NumericArray, as empty value
 							{Name: "vote_nonces", Type: types.IntArrayType, Nullable: true},
 							{Name: "voter_signatures", Type: types.ByteaArrayType, Nullable: true},
 						},
@@ -293,10 +292,12 @@ func init() {
 							{Name: "chain", Type: types.TextType},
 							{Name: "chain_id", Type: types.TextType},
 							{Name: "contract", Type: types.TextType},
-							{Name: "etherscan", Type: types.TextType},
 							{Name: "created_at", Type: types.IntType},
-							{Name: "params", Type: types.TextArrayType}, // recipient,amount,block_hash,root,proofs
-						},
+							{Name: "param_recipient", Type: types.TextType},
+							{Name: "param_amount", Type: uint256Numeric},
+							{Name: "param_block_hash", Type: types.ByteaType},
+							{Name: "param_root", Type: types.ByteaType},
+							{Name: "param_proofs", Type: types.ByteaArrayType}},
 					},
 					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
 					Handler:         makeMetaHandler("list_wallet_rewards"),

@@ -514,17 +514,13 @@ func getActiveEpochs(ctx context.Context, app *common.App, instanceID *types.UUI
 	})
 }
 
-// getEpochs gets epochs by given conditions.
-func getEpochs(ctx context.Context, app *common.App, instanceID *types.UUID, after int64, limit int64, finalizedOnly bool, fn func(*Epoch) error) error {
+// getEpochs gets epochs.
+func getEpochs(ctx context.Context, app *common.App, instanceID *types.UUID, after int64, limit int64, fn func(*Epoch) error) error {
 	query := `
     {kwil_erc20_meta}SELECT e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.reward_amount, e.ended_at, e.block_hash, e.confirmed, array_agg(v.voter) as voters, array_agg(v.amount) as amounts, array_agg(v.nonce) as nonces, array_agg(v.signature) as signatures
 	FROM epochs AS e
 	LEFT JOIN epoch_votes AS v ON v.epoch_id = e.id
-	WHERE e.instance_id = $instance_id AND e.created_at_block > $after`
-	if finalizedOnly {
-		query += ` AND e.ended_at IS NOT NULL AND e.confirmed IS NOT true` // finalized but not confirmed
-	}
-	query += `
+	WHERE e.instance_id = $instance_id AND e.created_at_block > $after
     GROUP BY e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.reward_amount, e.ended_at, e.block_hash, e.confirmed
     ORDER BY e.ended_at ASC LIMIT $limit`
 
