@@ -5,13 +5,12 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	signersvc "github.com/kwilteam/kwil-db/node/services/erc20signersvc"
+	"golang.org/x/sync/errgroup"
 	"io"
 	"os"
 	"path/filepath"
 	"runtime"
 	"slices"
-	"time"
 
 	"github.com/kwilteam/kwil-db/app/key"
 	"github.com/kwilteam/kwil-db/config"
@@ -23,10 +22,9 @@ import (
 	"github.com/kwilteam/kwil-db/node"
 	"github.com/kwilteam/kwil-db/node/consensus"
 	"github.com/kwilteam/kwil-db/node/listeners"
+	signersvc "github.com/kwilteam/kwil-db/node/services/erc20signersvc"
 	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/version"
-
-	"golang.org/x/sync/errgroup"
 )
 
 type server struct {
@@ -264,8 +262,6 @@ func (s *server) Start(ctx context.Context) error {
 
 	// Start erc20 reward signer svc
 	if s.erc20RWSigner != nil {
-		// a naive way to wait for the RPC service is running, should be fine
-		time.Sleep(time.Second * 3)
 		group.Go(func() error {
 			return s.erc20RWSigner.Start(groupCtx)
 		})
