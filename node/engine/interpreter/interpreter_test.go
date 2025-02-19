@@ -1993,6 +1993,16 @@ func Test_Actions(t *testing.T) {
 			},
 			action: "empty_array",
 		},
+		{
+			name: "0-length numeric array",
+			stmt: []string{
+				`CREATE ACTION smth($arr numeric(10,5)[]) public {
+					$arr := array_append($arr, 1.0);
+				}`,
+			},
+			action: "smth",
+			values: []any{[]*types.Decimal{}},
+		},
 	}
 
 	db := newTestDB(t, nil, nil)
@@ -2758,6 +2768,16 @@ func Test_ExtensionTypeChecks(t *testing.T) {
 				},
 				AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
 			},
+			{
+				Name: "returns empty decimal array",
+				Returns: &precompiles.MethodReturn{
+					Fields: []precompiles.PrecompileValue{precompiles.NewPrecompileValue("a", mustDecArrType(10, 2), false)},
+				},
+				Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+					return resultFn([]any{[]*types.Decimal{}})
+				},
+				AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
+			},
 		},
 	})
 	require.NoError(t, err)
@@ -2772,11 +2792,11 @@ func Test_ExtensionTypeChecks(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "types_ext", "accept_not_null", []any{nil}, nil)
-	require.ErrorIs(t, err, engine.ErrExtensionInvocation)
+	require.ErrorIs(t, err, engine.ErrExtensionImplementation)
 
 	// call with an int
 	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "types_ext", "accept_not_null", []any{1}, nil)
-	require.ErrorIs(t, err, engine.ErrExtensionInvocation)
+	require.ErrorIs(t, err, engine.ErrType)
 
 	// 2. takes 1 param (can be null), returns nothing
 	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "types_ext", "accept_null", []any{"hello"}, nil)
@@ -2790,7 +2810,7 @@ func Test_ExtensionTypeChecks(t *testing.T) {
 	require.NoError(t, err)
 
 	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "types_ext", "return_not_null", []any{nil}, nil)
-	require.ErrorIs(t, err, engine.ErrExtensionInvocation)
+	require.ErrorIs(t, err, engine.ErrExtensionImplementation)
 
 	// 4. takes 1 param, returns the same type (return can be null)
 	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "types_ext", "return_null", []any{"hello"}, exact("hello"))
@@ -2802,15 +2822,19 @@ func Test_ExtensionTypeChecks(t *testing.T) {
 	// Other tests:
 	// returns wrong type
 	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "types_ext", "returns_wrong_type", nil, nil)
-	require.ErrorIs(t, err, engine.ErrExtensionInvocation)
+	require.ErrorIs(t, err, engine.ErrExtensionImplementation)
 
 	// returns wrong count
 	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "types_ext", "returns_wrong_count", nil, nil)
-	require.ErrorIs(t, err, engine.ErrExtensionInvocation)
+	require.ErrorIs(t, err, engine.ErrExtensionImplementation)
 
 	// wrong count for parameters
 	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "types_ext", "accept_not_null", []any{"hello", "world"}, nil)
-	require.ErrorIs(t, err, engine.ErrExtensionInvocation)
+	require.ErrorIs(t, err, engine.ErrActionInvocation)
+
+	// empty array works ok
+	_, err = interp.Call(newEngineCtx(defaultCaller), tx, "types_ext", "returns empty decimal array", nil, exact([]*types.Decimal{}))
+	require.NoError(t, err)
 }
 
 // This tests that SET CURRENT NAMESPACE works as expected

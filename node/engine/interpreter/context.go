@@ -270,6 +270,10 @@ type executable struct {
 	Func execFunc
 	// Type is the type of the executable.
 	Type executableType
+	// ExpectedArgs is the data types of the expected arguments.
+	// It is a pointer to a slice because it may be nil;
+	// it is only set if the function is a precompile or action.
+	ExpectedArgs *[]*types.DataType
 }
 
 type executableType string

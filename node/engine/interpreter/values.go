@@ -2969,3 +2969,46 @@ func makeArray(vals []scalarValue, t *types.DataType) (arrayValue, error) {
 
 	return zeroArr, nil
 }
+
+// newValueWithSoftCast is a helper function that makes a new value.
+// It is meant to handle user-provided values by handling edge cases where
+// go's typing does not exactly match the engines. For example, if a 0-length
+// decimal array is passed, there is no way for Go to know the precision and
+// scale of the array. But in our interpreter, we do know this information.
+// If it cannot be soft casted to the correct type, it will return a false.
+// It will only return an error if there is an unexpected error.
+// A value will always be returned if err is nil, even if ok is false.
+func newValueWithSoftCast(v any, dt *types.DataType) (val value, ok bool, err error) {
+	val, err = newValue(v)
+	if err != nil {
+		return nil, false, err
+	}
+
+	// if v is null or if it is a 0-length array, we need to cast it to the correct type
+	if val.Null() {
+		val, err = val.Cast(dt)
+		if err != nil {
+			return nil, false, err
+		}
+	}
+	if arr, ok := val.(arrayValue); ok && arr.Len() == 0 {
+		// if it is an array value, then the scalar type and IsArray values must match.
+		if arr.Type().IsArray != dt.IsArray {
+			return val, false, nil
+		}
+		if arr.Type().Name != dt.Name {
+			return val, false, nil
+		}
+
+		val, err = val.Cast(dt)
+		if err != nil {
+			return nil, false, err
+		}
+	}
+
+	if !val.Type().Equals(dt) {
+		return val, false, nil
+	}
+
+	return val, true, nil
+}
