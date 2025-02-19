@@ -154,6 +154,9 @@ type Row struct {
 	// ColumnTypes are the types of the columns in the row.
 	ColumnTypes []*types.DataType
 	// Values are the values of the columns in the row.
+	// It is one of the following types:
+	// nil, string, int64, []byte, bool, *types.UUID, *types.Decimal,
+	// []*string, []*int64, [][]byte, []*bool, []*types.UUID, []*types.Decimal
 	Values []any
 }
 

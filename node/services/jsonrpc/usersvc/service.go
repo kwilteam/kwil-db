@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"strconv"
 	"sync"
 	"time"
 
@@ -706,7 +707,31 @@ func (r *rowReader) read(row *common.Row) error {
 		r.qr.ColumnNames = row.ColumnNames
 		r.qr.ColumnTypes = row.ColumnTypes
 	}
-	r.qr.Values = append(r.qr.Values, row.Values)
+
+	// since Kwil supports int64, which has a higher precision than languages
+	// like JavaScript, we convert int64s to strings to avoid precision loss
+	vals := make([]any, len(row.Values))
+	for i, v := range row.Values {
+		switch v := v.(type) {
+		case int64:
+			vals[i] = strconv.FormatInt(v, 10)
+		case []*int64:
+			var arr []*string
+			for _, n := range v {
+				if n == nil {
+					arr = append(arr, nil)
+				} else {
+					i2 := strconv.FormatInt(*n, 10)
+					arr = append(arr, &i2)
+				}
+			}
+			vals[i] = arr
+		default:
+			vals[i] = v
+		}
+	}
+
+	r.qr.Values = append(r.qr.Values, vals)
 	return nil
 }
 

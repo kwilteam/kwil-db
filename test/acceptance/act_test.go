@@ -5,6 +5,7 @@ import (
 	_ "embed"
 	"flag"
 	"fmt"
+	"math"
 	"math/big"
 	"os"
 	"os/signal"
@@ -288,7 +289,7 @@ func Test_Roundtrip(t *testing.T) {
 
 			textVal := "hello world"
 			textArrVal := []*string{p("hello"), p("world"), nil}
-			intVal := int64(123)
+			intVal := int64(math.MaxInt64)
 			intArrVal := []*int64{p(intVal), p(intVal + 1), nil}
 			boolVal := true
 			boolArrVal := []*bool{p(boolVal), p(!boolVal), nil}
