@@ -24,9 +24,6 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/container/lru"
-	"github.com/ethereum/go-ethereum/common/hexutil"
-	"github.com/samber/lo"
-
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -518,7 +515,7 @@ func init() {
 								{Name: "epoch_period", Type: types.TextType},
 								{Name: "erc20", Type: types.TextType, Nullable: true},
 								{Name: "decimals", Type: types.IntType, Nullable: true},
-								{Name: "balance", Type: types.TextType, Nullable: true}, // total unspent balance
+								{Name: "balance", Type: uint256Numeric, Nullable: true}, // total unspent balance
 								{Name: "synced", Type: types.BoolType},
 								{Name: "synced_at", Type: types.IntType, Nullable: true},
 								{Name: "enabled", Type: types.BoolType},
@@ -537,7 +534,8 @@ func init() {
 							defer info.mu.RUnlock()
 
 							// these values can be null if the extension is not synced
-							var erc20Address, ownedBalance *string
+							var erc20Address *string
+							var ownedBalance *types.Decimal
 							var decimals, syncedAt *int64
 
 							dur := time.Duration(info.userProvidedData.DistributionPeriod) * time.Second
@@ -546,8 +544,8 @@ func init() {
 								erc20Addr := info.syncedRewardData.Erc20Address.Hex()
 								erc20Address = &erc20Addr
 								decimals = &info.syncedRewardData.Erc20Decimals
-								owbalStr := info.ownedBalance.String()
-								ownedBalance = &owbalStr
+								//owbalStr := info.ownedBalance.String()
+								ownedBalance = info.ownedBalance
 								syncedAt = &info.syncedAt
 							}
 
@@ -928,7 +926,7 @@ func init() {
 						},
 					},
 					{
-						// lists only active epochs: one collects reward; one waits to be confirmed
+						// get only active epochs: finalized epoch and collecting epoch
 						Name: "get_active_epochs",
 						Parameters: []precompiles.PrecompileValue{
 							{Name: "id", Type: types.UUIDType},
@@ -941,11 +939,11 @@ func init() {
 								{Name: "start_timestamp", Type: types.IntType},
 								{Name: "end_height", Type: types.IntType, Nullable: true},
 								{Name: "reward_root", Type: types.ByteaType, Nullable: true},
-								{Name: "reward_amount", Type: types.TextType, Nullable: true},
+								{Name: "reward_amount", Type: uint256Numeric, Nullable: true},
 								{Name: "end_block_hash", Type: types.ByteaType, Nullable: true},
 								{Name: "confirmed", Type: types.BoolType},
 								{Name: "voters", Type: types.TextArrayType, Nullable: true},
-								{Name: "vote_amounts", Type: types.TextArrayType, Nullable: true},
+								{Name: "vote_amounts", Type: types.TextArrayType, Nullable: true}, // cannot successful return uint256NumericArray, as empty value
 								{Name: "vote_nonces", Type: types.IntArrayType, Nullable: true},
 								{Name: "voter_signatures", Type: types.ByteaArrayType, Nullable: true},
 							},
@@ -962,16 +960,16 @@ func init() {
 									}
 								}
 
-								var voteAmts []string
-								if len(e.VoteAmounts) > 0 {
-									for _, item := range e.VoteAmounts {
-										voteAmts = append(voteAmts, item.String())
-									}
+								total := e.Total
+								if total == nil {
+									total, _ = erc20ValueFromBigInt(big.NewInt(0))
 								}
 
-								total := "0"
-								if e.Total != nil {
-									total = e.Total.String()
+								var voteAmts []string
+								for _, amt := range e.VoteAmounts {
+									if amt != nil {
+										voteAmts = append(voteAmts, amt.String())
+									}
 								}
 
 								return resultFn([]any{e.ID, e.StartHeight, e.StartTime, *e.EndHeight, e.Root, total, e.BlockHash, e.Confirmed,
@@ -984,14 +982,11 @@ func init() {
 						}},
 					{
 						// lists epochs after(non-include) given height, in ASC order.
-						// If finalized_only is true, only returns finalized yet not confirmed epochs.
-						// NOTE: only un-confirmed epoch will return voters and vote_nonces
 						Name: "list_epochs",
 						Parameters: []precompiles.PrecompileValue{
 							{Name: "id", Type: types.UUIDType},
 							{Name: "after", Type: types.IntType},
 							{Name: "limit", Type: types.IntType},
-							{Name: "finalized_only", Type: types.BoolType},
 						},
 						Returns: &precompiles.MethodReturn{
 							IsTable: true,
@@ -1001,11 +996,11 @@ func init() {
 								{Name: "start_timestamp", Type: types.IntType},
 								{Name: "end_height", Type: types.IntType, Nullable: true},
 								{Name: "reward_root", Type: types.ByteaType, Nullable: true},
-								{Name: "reward_amount", Type: types.TextType, Nullable: true},
+								{Name: "reward_amount", Type: uint256Numeric, Nullable: true},
 								{Name: "end_block_hash", Type: types.ByteaType, Nullable: true},
 								{Name: "confirmed", Type: types.BoolType},
 								{Name: "voters", Type: types.TextArrayType, Nullable: true},
-								{Name: "vote_amounts", Type: types.TextArrayType, Nullable: true},
+								{Name: "vote_amounts", Type: types.TextArrayType, Nullable: true}, // cannot successful return uint256NumericArray, as empty value
 								{Name: "vote_nonces", Type: types.IntArrayType, Nullable: true},
 								{Name: "voter_signatures", Type: types.ByteaArrayType, Nullable: true},
 							},
@@ -1015,9 +1010,8 @@ func init() {
 							id := inputs[0].(*types.UUID)
 							after := inputs[1].(int64)
 							limit := inputs[2].(int64)
-							finalizedOnly := inputs[3].(bool)
 
-							return getEpochs(ctx.TxContext.Ctx, app, id, after, limit, finalizedOnly, func(e *Epoch) error {
+							return getEpochs(ctx.TxContext.Ctx, app, id, after, limit, func(e *Epoch) error {
 								var voters []string
 								if len(e.Voters) > 0 {
 									for _, item := range e.Voters {
@@ -1025,16 +1019,19 @@ func init() {
 									}
 								}
 
-								var voteAmts []string
-								if len(e.VoteAmounts) > 0 {
-									for _, item := range e.VoteAmounts {
-										voteAmts = append(voteAmts, item.String())
-									}
+								total := e.Total
+								if total == nil {
+									total, _ = erc20ValueFromBigInt(big.NewInt(0))
 								}
 
-								total := "0"
-								if e.Total != nil {
-									total = e.Total.String()
+								// 	uint256NumericArray = types.ArrayType(uint256Numeric)
+								// NOTE: how to return a nil uint256NumericArray, I cannot set precision/scale on nil type
+
+								var voteAmts []string
+								for _, amt := range e.VoteAmounts {
+									if amt != nil {
+										voteAmts = append(voteAmts, amt.String())
+									}
 								}
 
 								return resultFn([]any{e.ID, e.StartHeight, e.StartTime, *e.EndHeight, e.Root, total, e.BlockHash, e.Confirmed,
@@ -1126,9 +1123,12 @@ func init() {
 								{Name: "chain", Type: types.TextType},
 								{Name: "chain_id", Type: types.TextType},
 								{Name: "contract", Type: types.TextType},
-								{Name: "etherscan", Type: types.TextType},
 								{Name: "created_at", Type: types.IntType},
-								{Name: "params", Type: types.TextArrayType}, // recipient,amount,block_hash,root,proofs
+								{Name: "param_recipient", Type: types.TextType},
+								{Name: "param_amount", Type: uint256Numeric},
+								{Name: "param_block_hash", Type: types.ByteaType},
+								{Name: "param_root", Type: types.ByteaType},
+								{Name: "param_proofs", Type: types.ByteaArrayType},
 							},
 						},
 						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
@@ -1181,7 +1181,12 @@ func init() {
 									mtLRUCache.Put(b32Root, jsonTree)
 								}
 
-								_, proofs, _, bh, uint256AmtStr, err := reward.GetMTreeProof(jsonTree, walletAddr.String())
+								_, proofs, _, bh, amtBig, err := reward.GetMTreeProof(jsonTree, walletAddr.String())
+								if err != nil {
+									return err
+								}
+
+								uint256Amt, err := erc20ValueFromBigInt(amtBig)
 								if err != nil {
 									return err
 								}
@@ -1189,17 +1194,12 @@ func init() {
 								err = resultFn([]any{info.ChainInfo.Name.String(),
 									info.ChainInfo.ID,
 									info.EscrowAddress.String(),
-									info.ChainInfo.Etherscan + info.EscrowAddress.String() + "#writeContract",
 									epoch.EndHeight,
-									[]string{
-										walletAddr.String(),
-										uint256AmtStr,
-										hexutil.Encode(bh),
-										hexutil.Encode(epoch.Root),
-										strings.Join(lo.Map(proofs, func(item []byte, _ int) string {
-											return hexutil.Encode(item)
-										}), ","), // comma separated byte32str
-									},
+									walletAddr.String(),
+									uint256Amt,
+									bh,
+									epoch.Root,
+									proofs,
 								})
 								if err != nil {
 									return err

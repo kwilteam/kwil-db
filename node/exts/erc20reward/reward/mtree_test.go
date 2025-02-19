@@ -6,9 +6,10 @@ import (
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	smt "github.com/kwilteam/openzeppelin-merkle-tree-go/standard_merkle_tree"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	smt "github.com/kwilteam/openzeppelin-merkle-tree-go/standard_merkle_tree"
 )
 
 func Map[T1, T2 any](s []T1, f func(T1) T2) []T2 {

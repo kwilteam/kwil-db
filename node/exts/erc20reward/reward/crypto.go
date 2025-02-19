@@ -6,38 +6,32 @@ import (
 	"fmt"
 	"math/big"
 	"slices"
-	"strings"
 
 	ethAccounts "github.com/ethereum/go-ethereum/accounts"
-	ethAbi "github.com/ethereum/go-ethereum/accounts/abi"
 	ethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/signer/core"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
-)
 
-// ContractABI defines the ABI for the reward contract.
-const ContractABI = `[{"name":"postReward","type":"function","inputs":[{"name":"rewardRoot","type":"bytes32"},{"name":"rewardAmount","type":"uint256"}],"outputs":[]},
-{"name":"updatePosterFee","type":"function","inputs":[{"name":"newFee","type":"uint256"}],"outputs":[]},
-{"name":"rewardPoster","type":"function","inputs":[{"name":"root","type":"bytes32"}],"outputs":[{"name":"","type":"address"}]}]`
+	"github.com/kwilteam/kwil-db/node/exts/erc20reward/abigen"
+)
 
 const GnosisSafeSigLength = ethCrypto.SignatureLength
 
 func GenPostRewardTxData(root []byte, amount *big.Int) ([]byte, error) {
-	// Parse the ABI
-	parsedABI, err := ethAbi.JSON(strings.NewReader(ContractABI))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse ABI: %v", err)
-	}
-
 	// Convert the root to a common.Hash type (because it's bytes32 in Ethereum)
 	//rootHash := ethCommon.HexToHash(root)
 	rootHash := ethCommon.BytesToHash(root)
 
+	rdABI, err := abigen.RewardDistributorMetaData.GetAbi()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ABI: %v", err)
+	}
+
 	// Encode the "postReward" function call with the given parameters
-	data, err := parsedABI.Pack("postReward", rootHash, amount)
+	data, err := rdABI.Pack("postReward", rootHash, amount)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode function call: %v", err)
 	}
