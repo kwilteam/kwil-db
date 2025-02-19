@@ -509,7 +509,7 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB,
 }
 
 func buildErc20RWignerMgr(d *coreDependencies) *signersvc.ServiceMgr {
-	cfg := d.cfg.Erc20RWSigner
+	cfg := d.cfg.Erc20BridgeSigner
 	if !cfg.Enable {
 		return nil
 	}
