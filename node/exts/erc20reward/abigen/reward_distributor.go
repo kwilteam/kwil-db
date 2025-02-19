@@ -873,6 +873,7 @@ type RewardDistributorRewardPosted struct {
 //
 // Solidity: event RewardPosted(bytes32 root, uint256 amount, address poster)
 func (_RewardDistributor *RewardDistributorFilterer) FilterRewardPosted(opts *bind.FilterOpts) (*RewardDistributorRewardPostedIterator, error) {
+
 	logs, sub, err := _RewardDistributor.contract.FilterLogs(opts, "RewardPosted")
 	if err != nil {
 		return nil, err
