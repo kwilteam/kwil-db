@@ -399,7 +399,7 @@ func funcDefToExecutable(funcName string, funcDef *engine.ScalarFunctionDefiniti
 			}
 
 			// if the function name is notice, then we need to get write the notice to our logs locally,
-			// instead of executing a query. This is the functional eqauivalent of Kwil's console.log().
+			// instead of executing a query. This is the functional equivalent of Kwil's console.log().
 			if funcName == "notice" {
 				var log string
 				if !args[0].Null() {

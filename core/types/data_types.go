@@ -89,7 +89,7 @@ func (c *DataType) UnmarshalBinary(data []byte) error {
 // String returns the string representation of the type.
 func (c *DataType) String() string {
 	str := strings.Builder{}
-	aliased, ok := typeAlias[c.Name]
+	aliased, ok := typeAlias[strings.ToLower(c.Name)]
 	if !ok {
 		aliased = "[!invalid!]" + c.Name
 	}
