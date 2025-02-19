@@ -85,12 +85,11 @@ func initializeExtension(ctx context.Context, svc *common.Service, db sql.DB, i 
 					}
 
 					for i, v := range a {
-						newVal, err := newValueWithSoftCast(v, method.Returns.Fields[i].Type)
+						newVal, ok, err := newValueWithSoftCast(v, method.Returns.Fields[i].Type)
 						if err != nil {
 							return err
 						}
-
-						if !newVal.Type().Equals(method.Returns.Fields[i].Type) {
+						if !ok {
 							return fmt.Errorf(`%w: method "%s"."%s" returned a value of type %s, but expected %s. column: "%s"`, engine.ErrExtensionInvocation, alias, lowerName, newVal.Type(), method.Returns.Fields[i].Type, method.Returns.Fields[i].Name)
 						}
 

@@ -683,9 +683,12 @@ func (i *baseInterpreter) call(ctx *common.EngineContext, db sql.DB, namespace, 
 		}
 
 		for i, arg := range args {
-			val, err := newValueWithSoftCast(arg, expect[i])
+			val, ok, err := newValueWithSoftCast(arg, expect[i])
 			if err != nil {
 				return nil, err
+			}
+			if !ok {
+				return nil, fmt.Errorf(`%w: action "%s" expected argument %d to be of type %s, but got %s`, engine.ErrType, action, i, expect[i], val.Type())
 			}
 
 			argVals[i] = val
