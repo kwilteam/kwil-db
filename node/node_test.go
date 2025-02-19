@@ -308,7 +308,7 @@ func (ce *dummyCE) AcceptCommit(height int64, blkID types.Hash, hdr *ktypes.Bloc
 	return !ce.rejectCommit
 }
 
-func (ce *dummyCE) NotifyBlockCommit(blk *ktypes.Block, ci *types.CommitInfo, blkID types.Hash) {
+func (ce *dummyCE) NotifyBlockCommit(blk *ktypes.Block, ci *types.CommitInfo, blkID types.Hash, _ func()) {
 	if ce.blockCommitHandler != nil {
 		ce.blockCommitHandler(blk, ci, blkID)
 		return
@@ -456,6 +456,10 @@ func TestStreamsBlockFetch(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
+	resp := make([]byte, 9)
+	copy(resp[:], noData)
+	binary.LittleEndian.PutUint64(resp[1:], 1)
+
 	// Link and connect the hosts (was here)
 	// time.Sleep(100 * time.Millisecond)
 
@@ -550,19 +554,18 @@ func TestStreamsBlockFetch(t *testing.T) {
 		b, err := io.ReadAll(s)
 		if err != nil {
 			t.Errorf("ReadAll: %v", err)
-		} else if !bytes.Equal(b, noData) {
-			t.Error("expected a no-data response, got", b)
+		} else if !bytes.Equal(b, resp) { // expect noData + bestHeight (1)
+			t.Errorf("expected %v, got %v", resp, b)
 		}
 	})
 
 	t.Run("request by height using requestFrom, unknown", func(t *testing.T) {
 		// t.Parallel()
 		var height int64
-		req, _ := blockHeightReq{height}.MarshalBinary()
-		_, err := requestFrom(ctx, h2, h1.ID(), req, ProtocolIDBlockHeight, 1e4)
+		_, err := requestBlockHeight(ctx, h2, h1.ID(), height, 1e4)
 		if err == nil {
 			t.Errorf("expected error but got none")
-		} else if !errors.Is(err, ErrNotFound) {
+		} else if !errors.Is(err, ErrNotFound) && !errors.Is(err, ErrBlkNotFound) {
 			t.Errorf("unexpected error: %v", err)
 		}
 	})
@@ -592,8 +595,7 @@ func TestStreamsBlockFetch(t *testing.T) {
 	t.Run("request by height using requestFrom, known", func(t *testing.T) {
 		// t.Parallel()
 		var height int64 = 1
-		req, _ := blockHeightReq{height}.MarshalBinary()
-		resp, err := requestFrom(ctx, h2, h1.ID(), req, ProtocolIDBlockHeight, 1e4)
+		resp, err := requestBlockHeight(ctx, h2, h1.ID(), height, 1e4)
 		if err != nil {
 			t.Errorf("ReadAll: %v", err)
 		} else if bytes.Equal(resp, noData) {

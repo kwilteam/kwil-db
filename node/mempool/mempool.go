@@ -2,7 +2,6 @@ package mempool
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"slices"
 	"sync"
@@ -185,8 +184,6 @@ func (mp *Mempool) PeekN(n, szLimit int) []types.NamedTx {
 		}
 		txns = append(txns, tx)
 	}
-
-	fmt.Printf("PeekN: proposedTxs: %d, remainingTxs: %d", len(txns), len(mp.txQ)-len(txns))
 	return txns
 }
 

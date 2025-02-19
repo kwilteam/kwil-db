@@ -73,8 +73,12 @@ func (vm *vote) OutOfSync() (*types.OutOfSyncProof, bool) {
 // that a new block has been committed to the blockchain.
 // Ensure that the source of the block announce is the leader.
 type blockAnnounce struct {
-	blk *ktypes.Block
-	ci  *types.CommitInfo
+	blk   *ktypes.Block
+	blkID types.Hash
+	ci    *types.CommitInfo
+	// doneFn is a callback function that is called after the block has been processed
+	// and committed. This notifies the node to release the prefetch lock on this block.
+	done func()
 }
 
 func (bam *blockAnnounce) Type() consensusMsgType {
@@ -82,7 +86,7 @@ func (bam *blockAnnounce) Type() consensusMsgType {
 }
 
 func (bam *blockAnnounce) String() string {
-	return fmt.Sprintf("BlockAnnounce {height: %d, blkHash: %s, appHash: %s}", bam.blk.Header.Height, bam.blk.Hash().String(), bam.ci.AppHash.String())
+	return fmt.Sprintf("BlockAnnounce {height: %d, blkHash: %s, appHash: %s}", bam.blk.Header.Height, bam.blkID, bam.ci.AppHash.String())
 }
 
 // resetState is a message that is sent to the consensus engine to
@@ -119,7 +123,7 @@ func (ce *ConsensusEngine) NotifyBlockProposal(blk *ktypes.Block) {
 }
 
 // NotifyBlockCommit is used by the p2p stream handler to notify the consensus engine of a committed block.
-func (ce *ConsensusEngine) NotifyBlockCommit(blk *ktypes.Block, ci *types.CommitInfo, blkID types.Hash) {
+func (ce *ConsensusEngine) NotifyBlockCommit(blk *ktypes.Block, ci *types.CommitInfo, blkID types.Hash, doneFn func()) {
 	leaderU, ok := ci.ParamUpdates[ktypes.ParamNameLeader]
 	leader := ce.leader
 
@@ -133,8 +137,10 @@ func (ce *ConsensusEngine) NotifyBlockCommit(blk *ktypes.Block, ci *types.Commit
 	// AcceptCommit() already verified the correctness of the votes, no need to
 	// re-verify here.
 	blkCommit := &blockAnnounce{
-		blk: blk,
-		ci:  ci,
+		blk:   blk,
+		blkID: blkID,
+		ci:    ci,
+		done:  doneFn,
 	}
 
 	// only notify if the leader doesn't already know about the block

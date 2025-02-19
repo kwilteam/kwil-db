@@ -577,7 +577,7 @@ func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg cons
 
 	case *blockAnnounce:
 		preRole := ce.role.Load()
-		if err := ce.commitBlock(ctx, v.blk, v.ci); err != nil {
+		if err := ce.commitBlock(ctx, v.blk, v.ci, v.blkID, v.done); err != nil {
 			ce.log.Error("Error processing committed block announcement", "error", err)
 			return
 		}
@@ -809,6 +809,8 @@ func (ce *ConsensusEngine) setLastCommitInfo(height int64, appHash []byte, blk *
 		blkHash:    blkHash,
 	}
 	copy(ce.stateInfo.lastCommit.appHash[:], appHash)
+
+	ce.stateInfo.hasBlock.Store(height)
 }
 
 // replayBlocks replays all the blocks from the blockstore if the app hasn't played all the blocks yet.
@@ -832,7 +834,7 @@ func (ce *ConsensusEngine) replayFromBlockStore(ctx context.Context, startHeight
 			return nil // no more blocks to replay
 		}
 
-		err = ce.processAndCommit(ctx, blk, ci)
+		err = ce.processAndCommit(ctx, blk, ci, blk.Hash())
 		if err != nil {
 			return fmt.Errorf("failed replaying block: %w", err)
 		}
@@ -955,7 +957,7 @@ func (ce *ConsensusEngine) processCurrentBlock(ctx context.Context) error {
 			return fmt.Errorf("failed to decode the block, blkHeight: %d, blockID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
 		}
 
-		if err := ce.processAndCommit(ctx, blk, ci); err != nil {
+		if err := ce.processAndCommit(ctx, blk, ci, blkHash); err != nil {
 			return fmt.Errorf("failed to replay the block: blkHeight: %d, blockID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
 		}
 		// recovered to the correct block -> continue to replay blocks from network

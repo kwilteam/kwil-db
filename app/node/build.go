@@ -533,7 +533,7 @@ func buildNode(d *coreDependencies, mp *mempool.Mempool, bs *store.BlockStore,
 		failBuild(err, "failed to create node")
 	}
 
-	logger.Infof("This node is %s @ %s", node.ID(), node.Addrs())
+	logger.Infof("This node is %s @ %s, peerID: %s", node.ID(), node.Addrs(), p2p.Host().ID())
 	return node
 }
 

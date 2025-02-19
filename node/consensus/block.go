@@ -63,7 +63,8 @@ func (ce *ConsensusEngine) validateBlock(blk *ktypes.Block) error {
 		return fmt.Errorf("block size %d exceeds max block size %d", blockTxnsSize, maxBlockSize)
 	}
 
-	// maxVotesPerTx
+	// Ensure that the number of event and resolution IDs within validator vote transactions votes
+	// per transaction does not exceed the max consensus limit.
 	maxVotesPerTx := ce.ConsensusParams().MaxVotesPerTx
 	for _, txn := range blk.Txns {
 		if txn.Body.PayloadType == ktypes.PayloadTypeValidatorVoteBodies {
@@ -133,11 +134,15 @@ func (ce *ConsensusEngine) BroadcastTx(ctx context.Context, tx *ktypes.Transacti
 	txHash := types.HashBytes(rawTx)
 
 	// add the transaction to the mempool
-	ce.mempool.Store(txHash, tx)
+	have, rejected := ce.mempool.Store(txHash, tx)
+	if rejected {
+		return &ktypes.ResultBroadcastTx{
+			Hash: txHash,
+		}, types.ErrMempoolFull
+	}
 
-	// Announce the transaction to the network
-	if ce.txAnnouncer != nil {
-		ce.log.Debugf("broadcasting new tx %v", txHash)
+	// Announce the transaction to the network only if not previously announced
+	if ce.txAnnouncer != nil && !have {
 		// We can't use parent context 'cause it's canceled in the caller, which
 		// could be the RPC request. handler.  This shouldn't be CE's problem...
 		go ce.txAnnouncer(context.Background(), txHash, rawTx)
@@ -260,7 +265,7 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 	ce.mempool.RecheckTxs(ctx, ce.recheckTx)
 
 	ce.log.Info("Committed Block", "height", height, "hash", blkProp.blkHash.String(),
-		"appHash", appHash.String(), "updates", ce.state.blockRes.paramUpdates)
+		"appHash", appHash.String(), "numTxs", blkProp.blk.Header.NumTxns)
 
 	// update and reset the state fields
 	ce.nextState()
@@ -297,6 +302,8 @@ func (ce *ConsensusEngine) rollbackState(ctx context.Context) error {
 	}
 
 	ce.resetState()
+	ce.stateInfo.hasBlock.Store(ce.state.lc.height)
+
 	return nil
 }
 
@@ -317,6 +324,8 @@ func (ce *ConsensusEngine) resetState() {
 	ce.stateInfo.height = ce.state.lc.height
 	ce.stateInfo.lastCommit = *ce.state.lc
 	ce.stateInfo.mtx.Unlock()
+
+	ce.stateInfo.hasBlock.Store(ce.state.lc.height)
 
 	ce.cancelFnMtx.Lock()
 	ce.blkExecCancelFn = nil
