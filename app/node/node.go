@@ -22,8 +22,8 @@ import (
 	authExt "github.com/kwilteam/kwil-db/extensions/auth"
 	"github.com/kwilteam/kwil-db/node"
 	"github.com/kwilteam/kwil-db/node/consensus"
+	"github.com/kwilteam/kwil-db/node/exts/erc20-bridge/signersvc"
 	"github.com/kwilteam/kwil-db/node/listeners"
-	signersvc "github.com/kwilteam/kwil-db/node/services/erc20signersvc"
 	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/version"
 )

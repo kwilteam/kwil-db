@@ -8,8 +8,8 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
-
-	"github.com/kwilteam/kwil-db/node/services/erc20signersvc/abigen"
+	
+	"github.com/kwilteam/kwil-db/node/exts/erc20-bridge/abigen"
 )
 
 // Multicall https://github.com/mds1/multicall

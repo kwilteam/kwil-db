@@ -1,4 +1,4 @@
-package erc20reward
+package erc20
 
 import (
 	"context"

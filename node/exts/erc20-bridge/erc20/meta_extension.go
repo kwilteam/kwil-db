@@ -10,7 +10,7 @@
 // Internally, the node will start another event listener which is responsible for tracking
 // the erc20's Transfer event. When a transfer event is detected, the node will update the
 // reward balance of the recipient.
-package erc20reward
+package erc20
 
 import (
 	"bytes"
@@ -29,6 +29,7 @@ import (
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
+
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -38,8 +39,8 @@ import (
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/node/engine"
-	"github.com/kwilteam/kwil-db/node/exts/erc20reward/abigen"
-	"github.com/kwilteam/kwil-db/node/exts/erc20reward/reward"
+	"github.com/kwilteam/kwil-db/node/exts/erc20-bridge/abigen"
+	"github.com/kwilteam/kwil-db/node/exts/erc20-bridge/utils"
 	evmsync "github.com/kwilteam/kwil-db/node/exts/evm-sync"
 	"github.com/kwilteam/kwil-db/node/exts/evm-sync/chains"
 	"github.com/kwilteam/kwil-db/node/types/sql"
@@ -1087,7 +1088,7 @@ func init() {
 								return fmt.Errorf("amount cannot be negative")
 							}
 
-							if len(signature) != reward.GnosisSafeSigLength {
+							if len(signature) != utils.GnosisSafeSigLength {
 								return fmt.Errorf("signature is not 65 bytes")
 							}
 
@@ -1181,7 +1182,7 @@ func init() {
 									mtLRUCache.Put(b32Root, jsonTree)
 								}
 
-								_, proofs, _, bh, amtBig, err := reward.GetMTreeProof(jsonTree, walletAddr.String())
+								_, proofs, _, bh, amtBig, err := utils.GetMTreeProof(jsonTree, walletAddr.String())
 								if err != nil {
 									return err
 								}
@@ -1362,7 +1363,7 @@ func genMerkleTreeForEpoch(ctx context.Context, app *common.App, epochID *types.
 		total.Add(total, amounts[i])
 	}
 
-	jsonTree, root, err = reward.GenRewardMerkleTree(users, amounts, escrowAddr, blockHash)
+	jsonTree, root, err = utils.GenRewardMerkleTree(users, amounts, escrowAddr, blockHash)
 	if err != nil {
 		return 0, nil, nil, nil, err
 	}

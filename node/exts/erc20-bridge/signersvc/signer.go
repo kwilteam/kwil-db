@@ -25,7 +25,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/node/exts/erc20reward/reward"
+	"github.com/kwilteam/kwil-db/node/exts/erc20-bridge/utils"
 	"github.com/kwilteam/kwil-db/node/exts/evm-sync/chains"
 )
 
@@ -187,7 +187,7 @@ func (s *rewardSigner) verify(ctx context.Context, epoch *Epoch, escrowAddr stri
 	var b32 [32]byte
 	copy(b32[:], epoch.EndBlockHash)
 
-	_, root, err := reward.GenRewardMerkleTree(recipients, amounts, escrowAddr, b32)
+	_, root, err := utils.GenRewardMerkleTree(recipients, amounts, escrowAddr, b32)
 	if err != nil {
 		return nil, err
 	}
@@ -214,20 +214,20 @@ func erc20ValueFromBigInt(b *big.Int) (*types.Decimal, error) {
 // vote votes an epoch reward, and updates the state.
 // It will first fetch metadata from ETH, then generate the safeTx, then vote.
 func (s *rewardSigner) vote(ctx context.Context, epoch *Epoch, safeMeta *safeMetadata, total *big.Int) error {
-	safeTxData, err := reward.GenPostRewardTxData(epoch.RewardRoot, total)
+	safeTxData, err := utils.GenPostRewardTxData(epoch.RewardRoot, total)
 	if err != nil {
 		return err
 	}
 
 	// safeTxHash is the data that all signers will be signing(using personal_sign)
-	_, safeTxHash, err := reward.GenGnosisSafeTx(s.escrowAddr.String(), s.safe.addr.String(),
+	_, safeTxHash, err := utils.GenGnosisSafeTx(s.escrowAddr.String(), s.safe.addr.String(),
 		0, safeTxData, s.safe.chainID.Int64(), safeMeta.nonce.Int64())
 	if err != nil {
 		return err
 	}
 
 	signHash := ethAccounts.TextHash(safeTxHash)
-	sig, err := reward.EthGnosisSignDigest(signHash, s.signerPk)
+	sig, err := utils.EthGnosisSignDigest(signHash, s.signerPk)
 	if err != nil {
 		return err
 	}

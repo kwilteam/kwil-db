@@ -10,10 +10,8 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
+	"github.com/kwilteam/kwil-db/node/exts/erc20-bridge/abigen"
 	"github.com/samber/lo"
-
-	extabigen "github.com/kwilteam/kwil-db/node/exts/erc20reward/abigen"
-	"github.com/kwilteam/kwil-db/node/services/erc20signersvc/abigen"
 )
 
 var (
@@ -50,7 +48,7 @@ func NewSafeFromEscrow(rpc string, escrowAddr string) (*Safe, error) {
 		return nil, fmt.Errorf("create eth chainID: %w", err)
 	}
 
-	rd, err := extabigen.NewRewardDistributor(common.HexToAddress(escrowAddr), client)
+	rd, err := abigen.NewRewardDistributor(common.HexToAddress(escrowAddr), client)
 	if err != nil {
 		return nil, fmt.Errorf("create reward distributor: %w", err)
 	}

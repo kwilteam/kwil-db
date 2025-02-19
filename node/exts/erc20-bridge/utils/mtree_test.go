@@ -1,4 +1,4 @@
-package reward
+package utils
 
 import (
 	"encoding/hex"
