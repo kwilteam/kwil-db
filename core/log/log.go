@@ -188,6 +188,12 @@ func formatArgs(args ...any) string {
 var _ KVLogger = (*plainLogger)(nil)
 
 func (l *plainLogger) Debug(msg string, args ...any) {
+	// Avoid malloc and memmove with formatArgs and string concatenation. Since
+	// Debug is typically used liberally (it would be display very often) on
+	// frequently used paths, we want to avoid this unless the level is low enough.
+	if l.log.Level() > sublog.LevelDebug {
+		return
+	}
 	// args are pairs of key-values, so we will print them in pairs after the message.
 	msg += formatArgs(args...)
 	l.log.Debugf(msg)

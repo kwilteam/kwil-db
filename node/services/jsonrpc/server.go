@@ -76,6 +76,7 @@ type serverConfig struct {
 	tlsConfig  *tls.Config
 	timeout    time.Duration
 	enableCORS bool
+	compress   bool
 	specInfo   *openrpc.Info
 	reqSzLimit int
 	proxyCount int
@@ -143,6 +144,15 @@ func WithTimeout(timeout time.Duration) Opt {
 func WithCORS() Opt {
 	return func(c *serverConfig) {
 		c.enableCORS = true
+	}
+}
+
+// WithCompression enables gzip compression of responses. The adds some
+// computational overhead, but may be useful if there is no reverse proxy to
+// offload this work.
+func WithCompression() Opt {
+	return func(c *serverConfig) {
+		c.compress = true
 	}
 }
 
@@ -292,7 +302,10 @@ func NewServer(addr string, log log.Logger, opts ...Opt) (*Server, error) {
 		h = corsHandler(h)
 	}
 
-	compMW := middleware.Compress(5)
+	compMW := func(h http.Handler) http.Handler { return h }
+	if cfg.compress {
+		compMW = middleware.Compress(5)
+	}
 	h = compMW(h)
 	h = reqCounter(h, metrics[reqCounterName])
 	h = realIPHandler(h, cfg.proxyCount) // for effective rate limiting
