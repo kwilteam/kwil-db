@@ -9,7 +9,6 @@ import (
 	"io"
 	"sort"
 	"strconv"
-	"strings"
 	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
@@ -107,6 +106,11 @@ func (c *syncConfig) load(m map[string]string) error {
 
 // getChainConf gets the chain config from the node's local configuration.
 func getChainConf(cfg config.ERC20BridgeConfig, chain chains.Chain) (*chainConfig, error) {
+	err := cfg.ValidateRpc()
+	if err != nil {
+		return nil, err
+	}
+
 	var ok bool
 	var provider string
 	var syncChunk string
@@ -114,12 +118,7 @@ func getChainConf(cfg config.ERC20BridgeConfig, chain chains.Chain) (*chainConfi
 	case chains.Ethereum, chains.Sepolia:
 		provider, ok = cfg.RPC[chain.String()]
 		if !ok {
-			return nil, errors.New("local configuration does not have an ethereum_sync config")
-		}
-
-		// we need websocket endpoint
-		if !strings.HasPrefix(provider, "wss://") && !strings.HasPrefix(provider, "ws://") {
-			return nil, fmt.Errorf("chain %s rpc must start with wss:// or ws://", chain)
+			return nil, fmt.Errorf("local configuration does not have an '%s' config", chain.String())
 		}
 
 		syncChunk, ok = cfg.BlockSyncChuckSize[chains.Ethereum.String()]

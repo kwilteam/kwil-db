@@ -317,6 +317,50 @@ func (s *rewardSigner) sync(ctx context.Context) {
 	s.lastVoteBlock = finalizedEpoch.EndHeight // update after all operations succeed
 }
 
+type signerConfig struct {
+	target         string // erc20 bridge target name
+	chainRPC       string
+	privateKeyPath string // file path to private key
+}
+
+// GetSignerCfgs verifies config and returns a list of config for erc20 signerSvc.
+func getSignerCfgs(cfg config.ERC20BridgeConfig) ([]signerConfig, error) {
+	if err := cfg.ValidateRpc(); err != nil {
+		return nil, err
+	}
+
+	signerCfgDelimiter := ":"
+
+	var signerCfg []signerConfig
+
+	for target, value := range cfg.Signer {
+		if !strings.Contains(value, signerCfgDelimiter) {
+			return nil, fmt.Errorf("invalid signer config: %s", value)
+		}
+
+		segs := strings.SplitN(value, signerCfgDelimiter, 2)
+		chain := segs[0]
+		pkPath := segs[1]
+
+		chainRpc, ok := cfg.RPC[chain]
+		if !ok {
+			return nil, fmt.Errorf("chain '%s' not found in erc20_bridge.rpc config", chain)
+		}
+
+		if !ethCommon.FileExist(pkPath) {
+			return nil, fmt.Errorf("private key file %s not found", pkPath)
+		}
+
+		signerCfg = append(signerCfg, signerConfig{
+			target:         target,
+			chainRPC:       chainRpc,
+			privateKeyPath: pkPath,
+		})
+	}
+
+	return signerCfg, nil
+}
+
 // ServiceMgr manages multiple rewardSigner instances running in parallel.
 type ServiceMgr struct {
 	syncInterval time.Duration
@@ -329,41 +373,20 @@ func NewServiceMgr(
 	cfg config.ERC20BridgeConfig,
 	state *State,
 	logger log.Logger) (*ServiceMgr, error) {
-
-	signerCfgDelimiter := ":"
+	signerCfgs, err := getSignerCfgs(cfg)
+	if err != nil {
+		return nil, fmt.Errorf("get erc20 bridge signer config failed: %w", err)
+	}
 
 	var signers []*rewardSigner
-	for chain, value := range cfg.Signer {
-		chainRpc, ok := cfg.RPC[chain]
-		if !ok {
-			return nil, fmt.Errorf("chain %s not found in rpc config", chain)
-		}
-
-		// we need websocket endpoint
-		if !strings.HasPrefix(chainRpc, "wss://") && !strings.HasPrefix(chainRpc, "ws://") {
-			return nil, fmt.Errorf("chain %s rpc must start with wss:// or ws://", chain)
-		}
-
-		if !strings.Contains(value, signerCfgDelimiter) {
-			return nil, fmt.Errorf("invalid signer config: %s", value)
-		}
-
-		segs := strings.SplitN(value, signerCfgDelimiter, 2)
-
-		target := segs[0]
-		pkPath := segs[1]
-
-		if !ethCommon.FileExist(pkPath) {
-			return nil, fmt.Errorf("private key file %s not found", pkPath)
-		}
-
-		pkBytes, err := os.ReadFile(pkPath)
+	for _, cfg := range signerCfgs {
+		pkBytes, err := os.ReadFile(cfg.privateKeyPath)
 		if err != nil {
-			return nil, fmt.Errorf("read private key file %s failed: %w", pkPath, err)
+			return nil, fmt.Errorf("read private key file %s failed: %w", cfg.privateKeyPath, err)
 		}
 
-		svc, err := newRewardSigner(kwilRpc, target, chainRpc, strings.TrimSpace(string(pkBytes)),
-			state, logger.New("EVMRW."+target))
+		svc, err := newRewardSigner(kwilRpc, cfg.target, cfg.chainRPC, strings.TrimSpace(string(pkBytes)),
+			state, logger.New("EVMRW."+cfg.target))
 		if err != nil {
 			return nil, fmt.Errorf("create erc20 bridge signer service failed: %w", err)
 		}

@@ -13,12 +13,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/pelletier/go-toml/v2"
+
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
-
-	"github.com/pelletier/go-toml/v2"
+	"github.com/kwilteam/kwil-db/node/exts/evm-sync/chains"
 )
 
 var (
@@ -450,15 +451,24 @@ type Checkpoint struct {
 }
 
 type ERC20BridgeConfig struct {
-	RPC                map[string]string `toml:"rpc" comment:"evm RPC; format: chain_name='rpc_url'"`
-	BlockSyncChuckSize map[string]string `toml:"block_sync_chuck_size" comment:"block sync chunk size; format: chain_name='chunk_size'"`
-	Signer             map[string]string `toml:"signer" comment:"signer service configuration; format: chain_name='target:file_path_to_private_key'"`
+	RPC                map[string]string `toml:"rpc" comment:"evm websocket RPC; format: chain_name='rpc_url'"`
+	BlockSyncChuckSize map[string]string `toml:"block_sync_chuck_size" comment:"rpc option block sync chunk size; format: chain_name='chunk_size'"`
+	Signer             map[string]string `toml:"signer" comment:"signer service configuration; format: target='chain_name:file_path_to_private_key'"`
 }
 
-func (cfg ERC20BridgeConfig) Validate() error {
-	for chain := range cfg.Signer {
-		if _, ok := cfg.RPC[chain]; !ok {
-			return fmt.Errorf("signer service: chain '%s' is not in rpc", chain)
+// ValidateRpc validates the bridge rpc config, other validations will be performed
+// when correspond components derive config from it.
+// BlockSyncChuckSize config will be validated by evm-sync listener.
+// Signer config will be validated by erc20 signerSvc.
+func (cfg ERC20BridgeConfig) ValidateRpc() error {
+	for chain, rpc := range cfg.RPC {
+		if err := chains.Chain(chain).Valid(); err != nil {
+			return fmt.Errorf("erc20_bridge.rpc: %s", chain)
+		}
+
+		// enforce websocket
+		if !strings.HasPrefix(rpc, "wss://") && !strings.HasPrefix(rpc, "ws://") {
+			return fmt.Errorf("erc20_bridge.rpc: must start with wss:// or ws://")
 		}
 	}
 

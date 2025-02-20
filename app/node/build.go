@@ -509,12 +509,6 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB,
 }
 
 func buildErc20RWignerMgr(d *coreDependencies) *signersvc.ServiceMgr {
-	cfg := d.cfg.Erc20Bridge
-
-	if err := cfg.Validate(); err != nil {
-		failBuild(err, "invalid erc20 bridge config")
-	}
-
 	// create shared state
 	stateFile := signersvc.StateFilePath(d.rootDir)
 
@@ -533,7 +527,7 @@ func buildErc20RWignerMgr(d *coreDependencies) *signersvc.ServiceMgr {
 
 	rpcUrl := "http://" + d.cfg.RPC.ListenAddress
 
-	mgr, err := signersvc.NewServiceMgr(rpcUrl, cfg, state, d.logger.New("EVMRW"))
+	mgr, err := signersvc.NewServiceMgr(rpcUrl, d.cfg.Erc20Bridge, state, d.logger.New("EVMRW"))
 	if err != nil {
 		failBuild(err, "Failed to create erc20 bridge signer service manager")
 	}
