@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"github.com/kwilteam/kwil-db/config"
 	"io"
 	"sort"
 	"strconv"
@@ -18,6 +17,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/extensions/listeners"
 	"github.com/kwilteam/kwil-db/node/exts/evm-sync/chains"

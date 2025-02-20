@@ -456,7 +456,7 @@ type ERC20BridgeConfig struct {
 }
 
 func (cfg ERC20BridgeConfig) Validate() error {
-	for chain, _ := range cfg.Signer {
+	for chain := range cfg.Signer {
 		if _, ok := cfg.RPC[chain]; !ok {
 			return fmt.Errorf("signer service: chain '%s' is not in rpc", chain)
 		}
