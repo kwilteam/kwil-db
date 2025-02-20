@@ -106,7 +106,7 @@ func (c *syncConfig) load(m map[string]string) error {
 
 // getChainConf gets the chain config from the node's local configuration.
 func getChainConf(cfg config.ERC20BridgeConfig, chain chains.Chain) (*chainConfig, error) {
-	err := cfg.ValidateRpc()
+	err := cfg.Validate()
 	if err != nil {
 		return nil, err
 	}
