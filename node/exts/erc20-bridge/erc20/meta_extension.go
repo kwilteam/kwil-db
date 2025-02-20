@@ -67,7 +67,6 @@ var (
 
 		return dt
 	}()
-	uint256NumericArray = types.ArrayType(uint256Numeric)
 
 	// the below are used to identify different types of logs from ethereum
 	// so that we know how to decode them
@@ -945,7 +944,6 @@ func init() {
 								{Name: "end_block_hash", Type: types.ByteaType, Nullable: true},
 								{Name: "confirmed", Type: types.BoolType},
 								{Name: "voters", Type: types.TextArrayType, Nullable: true},
-								{Name: "vote_amounts", Type: uint256NumericArray, Nullable: true},
 								{Name: "vote_nonces", Type: types.IntArrayType, Nullable: true},
 								{Name: "voter_signatures", Type: types.ByteaArrayType, Nullable: true},
 							},
@@ -964,7 +962,6 @@ func init() {
 
 								return resultFn([]any{e.ID, e.StartHeight, e.StartTime, *e.EndHeight, e.Root, e.Total, e.BlockHash, e.Confirmed,
 									voters,
-									e.VoteAmounts,
 									e.VoteNonces,
 									e.VoteSigs,
 								})
@@ -990,7 +987,6 @@ func init() {
 								{Name: "end_block_hash", Type: types.ByteaType, Nullable: true},
 								{Name: "confirmed", Type: types.BoolType},
 								{Name: "voters", Type: types.TextArrayType, Nullable: true},
-								{Name: "vote_amounts", Type: uint256NumericArray, Nullable: true},
 								{Name: "vote_nonces", Type: types.IntArrayType, Nullable: true},
 								{Name: "voter_signatures", Type: types.ByteaArrayType, Nullable: true},
 							},
@@ -1011,7 +1007,6 @@ func init() {
 
 								return resultFn([]any{e.ID, e.StartHeight, e.StartTime, *e.EndHeight, e.Root, e.Total, e.BlockHash, e.Confirmed,
 									voters,
-									e.VoteAmounts,
 									e.VoteNonces,
 									e.VoteSigs,
 								})
@@ -1046,7 +1041,6 @@ func init() {
 						Parameters: []precompiles.PrecompileValue{
 							{Name: "id", Type: types.UUIDType},
 							{Name: "epoch_id", Type: types.UUIDType},
-							{Name: "amount", Type: uint256Numeric},
 							{Name: "nonce", Type: types.IntType},
 							{Name: "signature", Type: types.ByteaType},
 						},
@@ -1054,13 +1048,8 @@ func init() {
 						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 							//id := inputs[0].(*types.UUID)
 							epochID := inputs[1].(*types.UUID)
-							amount := inputs[2].(*types.Decimal)
 							nonce := inputs[3].(int64)
 							signature := inputs[4].([]byte)
-
-							if amount.IsNegative() {
-								return fmt.Errorf("amount cannot be negative")
-							}
 
 							if len(signature) != utils.GnosisSafeSigLength {
 								return fmt.Errorf("signature is not 65 bytes")
@@ -1071,6 +1060,9 @@ func init() {
 								return err
 							}
 
+							// NOTE: if we have safe address and safe nonce, we can verify the signature
+							// But if we only have safe address, and safeNonce from the input, then it's no point
+
 							ok, err := canVoteEpoch(ctx.TxContext.Ctx, app, epochID)
 							if err != nil {
 								return fmt.Errorf("check epoch can vote: %w", err)
@@ -1080,7 +1072,7 @@ func init() {
 								return fmt.Errorf("epoch cannot be voted")
 							}
 
-							return voteEpoch(ctx.TxContext.Ctx, app, epochID, from, amount, nonce, signature)
+							return voteEpoch(ctx.TxContext.Ctx, app, epochID, from, nonce, signature)
 						},
 					},
 					{
@@ -1475,10 +1467,9 @@ func (p *PendingEpoch) copy() *PendingEpoch {
 }
 
 type EpochVoteInfo struct {
-	Voters      []ethcommon.Address
-	VoteAmounts []*types.Decimal
-	VoteSigs    [][]byte
-	VoteNonces  []int64
+	Voters     []ethcommon.Address
+	VoteSigs   [][]byte
+	VoteNonces []int64
 }
 
 // Epoch is a period in which rewards are distributed.

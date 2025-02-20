@@ -78,7 +78,6 @@ CREATE TABLE meta
 CREATE TABLE epoch_votes (
     epoch_id UUID NOT NULL REFERENCES epochs(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
     voter BYTEA NOT NULL,
-    amount NUMERIC(78, 0) NOT NULL, -- so posterSvc won't need to calculate again
     nonce INT8 NOT NULL, -- safe nonce; this helps to skip unnecessary dup votes
     signature BYTEA NOT NULL,
     PRIMARY KEY (epoch_id, voter, nonce)
