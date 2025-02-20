@@ -339,12 +339,9 @@ func NewServiceMgr(
 			return nil, fmt.Errorf("chain %s not found in rpc config", chain)
 		}
 
-		// we need http endpoint
-		if strings.HasPrefix(chainRpc, "wss://") {
-			chainRpc = strings.Replace(chainRpc, "wss://", "https://", 1)
-		}
-		if strings.HasPrefix(chainRpc, "ws") {
-			chainRpc = strings.Replace(chainRpc, "ws://", "http://", 1)
+		// we need websocket endpoint
+		if !strings.HasPrefix(chainRpc, "wss://") && !strings.HasPrefix(chainRpc, "ws://") {
+			return nil, fmt.Errorf("chain %s rpc must start with wss:// or ws://", chain)
 		}
 
 		if !strings.Contains(value, signerCfgDelimiter) {

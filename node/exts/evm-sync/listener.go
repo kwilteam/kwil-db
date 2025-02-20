@@ -118,11 +118,8 @@ func getChainConf(cfg config.ERC20BridgeConfig, chain chains.Chain) (*chainConfi
 		}
 
 		// we need websocket endpoint
-		if strings.HasPrefix(provider, "https://") {
-			provider = strings.Replace(provider, "https://", "wss://", 1)
-		}
-		if strings.HasPrefix(provider, "http://") {
-			provider = strings.Replace(provider, "http://", "ws://", 1)
+		if !strings.HasPrefix(provider, "wss://") && !strings.HasPrefix(provider, "ws://") {
+			return nil, fmt.Errorf("chain %s rpc must start with wss:// or ws://", chain)
 		}
 
 		syncChunk, ok = cfg.BlockSyncChuckSize[chains.Ethereum.String()]
