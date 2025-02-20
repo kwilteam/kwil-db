@@ -311,12 +311,10 @@ func DefaultConfig() *Config {
 			Height: 0,
 			Hash:   types.Hash{},
 		},
-		Erc20BridgeSigner: ERC20BridgeSignerConfig{
-			Enable:      false,
-			PrivateKeys: nil,
-			Targets:     nil,
-			// the reasonable value is the block time
-			SyncEvery: types.Duration(1 * time.Minute),
+		Erc20Bridge: ERC20BridgeConfig{
+			RPC:                make(map[string]string),
+			BlockSyncChuckSize: make(map[string]string),
+			Signer:             make(map[string]string),
 		},
 	}
 }
@@ -330,19 +328,19 @@ type Config struct {
 	ProfileMode string `toml:"profile_mode,commented" comment:"profile mode (http, cpu, mem, mutex, or block)"`
 	ProfileFile string `toml:"profile_file,commented" comment:"profile output file path (e.g. cpu.pprof)"`
 
-	P2P               PeerConfig                   `toml:"p2p" comment:"P2P related configuration"`
-	Consensus         ConsensusConfig              `toml:"consensus" comment:"Consensus related configuration"`
-	DB                DBConfig                     `toml:"db" comment:"DB (PostgreSQL) related configuration"`
-	Store             StoreConfig                  `toml:"store" comment:"Block store configuration"`
-	RPC               RPCConfig                    `toml:"rpc" comment:"User RPC service configuration"`
-	Admin             AdminConfig                  `toml:"admin" comment:"Admin RPC service configuration"`
-	Snapshots         SnapshotConfig               `toml:"snapshots" comment:"Snapshot creation and provider configuration"`
-	StateSync         StateSyncConfig              `toml:"state_sync" comment:"Statesync configuration (vs block sync)"`
-	Extensions        map[string]map[string]string `toml:"extensions" comment:"extension configuration"`
-	GenesisState      string                       `toml:"genesis_state" comment:"path to the genesis state file, relative to the root directory"`
-	Migrations        MigrationConfig              `toml:"migrations" comment:"zero downtime migration configuration"`
-	Checkpoint        Checkpoint                   `toml:"checkpoint" comment:"checkpoint info for the leader to sync to before proposing a new block"`
-	Erc20BridgeSigner ERC20BridgeSignerConfig      `toml:"erc20_bridge_signer" comment:"ERC20 bridge signer service configuration"`
+	P2P          PeerConfig                   `toml:"p2p" comment:"P2P related configuration"`
+	Consensus    ConsensusConfig              `toml:"consensus" comment:"Consensus related configuration"`
+	DB           DBConfig                     `toml:"db" comment:"DB (PostgreSQL) related configuration"`
+	Store        StoreConfig                  `toml:"store" comment:"Block store configuration"`
+	RPC          RPCConfig                    `toml:"rpc" comment:"User RPC service configuration"`
+	Admin        AdminConfig                  `toml:"admin" comment:"Admin RPC service configuration"`
+	Snapshots    SnapshotConfig               `toml:"snapshots" comment:"Snapshot creation and provider configuration"`
+	StateSync    StateSyncConfig              `toml:"state_sync" comment:"Statesync configuration (vs block sync)"`
+	Extensions   map[string]map[string]string `toml:"extensions" comment:"extension configuration"`
+	GenesisState string                       `toml:"genesis_state" comment:"path to the genesis state file, relative to the root directory"`
+	Migrations   MigrationConfig              `toml:"migrations" comment:"zero downtime migration configuration"`
+	Checkpoint   Checkpoint                   `toml:"checkpoint" comment:"checkpoint info for the leader to sync to before proposing a new block"`
+	Erc20Bridge  ERC20BridgeConfig            `toml:"erc20_bridge" comment:"ERC20 bridge configuration"`
 }
 
 // PeerConfig corresponds to the [p2p] section of the config.
@@ -451,34 +449,16 @@ type Checkpoint struct {
 	Hash   types.Hash `toml:"hash" comment:"checkpoint block hash."`
 }
 
-type ERC20BridgeSignerConfig struct {
-	Enable      bool           `toml:"enable" comment:"enable the ERC20 bridge signer service"`
-	Targets     []string       `toml:"targets" comment:"target reward ext alias for the ERC20 reward"`
-	PrivateKeys []string       `toml:"private_keys" comment:"private key for the ERC20 reward target"`
-	EthRpcs     []string       `toml:"eth_rpcs" comment:"eth rpc address for the ERC20 reward target"`
-	SyncEvery   types.Duration `toml:"sync_every" comment:"sync interval; a recommend value is same as the block time"`
+type ERC20BridgeConfig struct {
+	RPC                map[string]string `toml:"rpc" comment:"evm RPC; format: chain_name='rpc_url'"`
+	BlockSyncChuckSize map[string]string `toml:"block_sync_chuck_size" comment:"block sync chunk size; format: chain_name='chunk_size'"`
+	Signer             map[string]string `toml:"signer" comment:"signer service configuration; format: chain_name='target:file_path_to_private_key'"`
 }
 
-func (cfg ERC20BridgeSignerConfig) Validate() error {
-	if (len(cfg.PrivateKeys) != len(cfg.Targets)) && (len(cfg.EthRpcs) != len(cfg.Targets)) {
-		return fmt.Errorf("private keys and targets and eth_rpcs must be configured in triples")
-	}
-
-	if len(cfg.Targets) == 0 {
-		return fmt.Errorf("no target configured")
-	}
-
-	for i, target := range cfg.Targets {
-		if target == "" {
-			return fmt.Errorf("target %dth is empty", i)
-		}
-
-		if cfg.PrivateKeys[i] == "" {
-			return fmt.Errorf("private key %dth is empty", i)
-		}
-
-		if cfg.EthRpcs[i] == "" {
-			return fmt.Errorf("eth rpc %dth is empty", i)
+func (cfg ERC20BridgeConfig) Validate() error {
+	for chain, _ := range cfg.Signer {
+		if _, ok := cfg.RPC[chain]; !ok {
+			return fmt.Errorf("signer service: chain '%s' is not in rpc", chain)
 		}
 	}
 

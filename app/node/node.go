@@ -261,7 +261,7 @@ func (s *server) Start(ctx context.Context) error {
 	})
 	s.log.Info("listener manager started")
 
-	// Start erc20 reward signer svc
+	// Start erc20 bridge signer svc
 	if s.erc20RWSigner != nil {
 		group.Go(func() error {
 			return s.erc20RWSigner.Start(groupCtx)

@@ -96,7 +96,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	// Consensus
 	ce := buildConsensusEngine(ctx, d, db, mp, bs, bp)
 
-	// Erc20 reward signer service
+	// Erc20 bridge signer service
 	erc20RWSignerMgr := buildErc20RWignerMgr(d)
 
 	// Node
@@ -509,13 +509,10 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB,
 }
 
 func buildErc20RWignerMgr(d *coreDependencies) *signersvc.ServiceMgr {
-	cfg := d.cfg.Erc20BridgeSigner
-	if !cfg.Enable {
-		return nil
-	}
+	cfg := d.cfg.Erc20Bridge
 
 	if err := cfg.Validate(); err != nil {
-		failBuild(err, "invalid erc20 reward signer config")
+		failBuild(err, "invalid erc20 bridge config")
 	}
 
 	// create shared state
@@ -524,21 +521,21 @@ func buildErc20RWignerMgr(d *coreDependencies) *signersvc.ServiceMgr {
 	if !fileExists(stateFile) {
 		emptyFile, err := os.Create(stateFile)
 		if err != nil {
-			failBuild(err, "Failed to create erc20 reward signer state file")
+			failBuild(err, "Failed to create erc20 bridge signer state file")
 		}
 		_ = emptyFile.Close()
 	}
 
 	state, err := signersvc.LoadStateFromFile(stateFile)
 	if err != nil {
-		failBuild(err, "Failed to load erc20 reward signer state file")
+		failBuild(err, "Failed to load erc20 bridge signer state file")
 	}
 
 	rpcUrl := "http://" + d.cfg.RPC.ListenAddress
 
-	mgr, err := signersvc.NewServiceMgr(rpcUrl, cfg.Targets, cfg.EthRpcs, cfg.PrivateKeys, time.Duration(cfg.SyncEvery), state, d.logger.New("EVMRW"))
+	mgr, err := signersvc.NewServiceMgr(rpcUrl, cfg, state, d.logger.New("EVMRW"))
 	if err != nil {
-		failBuild(err, "Failed to create erc20 reward signer service manager")
+		failBuild(err, "Failed to create erc20 bridge signer service manager")
 	}
 
 	return mgr

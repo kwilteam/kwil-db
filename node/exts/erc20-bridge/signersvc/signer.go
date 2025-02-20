@@ -10,8 +10,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"math/big"
+	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 
@@ -19,6 +21,7 @@ import (
 	ethCommon "github.com/ethereum/go-ethereum/common"
 	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 
+	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/client"
 	clientType "github.com/kwilteam/kwil-db/core/client/types"
 	"github.com/kwilteam/kwil-db/core/crypto"
@@ -49,13 +52,12 @@ type rewardSigner struct {
 	safe        *Safe
 
 	logger log.Logger
-	every  time.Duration
 	state  *State
 }
 
 // newRewardSigner returns a new rewardSigner.
 func newRewardSigner(kwilRpc string, target string, ethRpc string, pkStr string,
-	every time.Duration, state *State, logger log.Logger) (*rewardSigner, error) {
+	state *State, logger log.Logger) (*rewardSigner, error) {
 	if logger == nil {
 		logger = log.DiscardLogger
 	}
@@ -79,7 +81,6 @@ func newRewardSigner(kwilRpc string, target string, ethRpc string, pkStr string,
 		signerAddr:  address,
 		state:       state,
 		logger:      logger,
-		every:       every,
 		target:      target,
 	}, nil
 }
@@ -89,19 +90,19 @@ func (s *rewardSigner) init() error {
 
 	pkBytes, err := hex.DecodeString(s.signerPkStr)
 	if err != nil {
-		return fmt.Errorf("decode erc20 reward signer private key failed: %w", err)
+		return fmt.Errorf("decode erc20 bridge signer private key failed: %w", err)
 	}
 
 	key, err := crypto.UnmarshalSecp256k1PrivateKey(pkBytes)
 	if err != nil {
-		return fmt.Errorf("parse erc20 reward signer private key failed: %w", err)
+		return fmt.Errorf("parse erc20 bridge signer private key failed: %w", err)
 	}
 
 	opts := &clientType.Options{Signer: &auth.EthPersonalSigner{Key: *key}}
 
 	clt, err := client.NewClient(ctx, s.kwilRpc, opts)
 	if err != nil {
-		return fmt.Errorf("create erc20 reward signer api client failed: %w", err)
+		return fmt.Errorf("create erc20 bridge signer api client failed: %w", err)
 	}
 
 	s.kwil = newERC20RWExtAPI(clt, s.target)
@@ -318,40 +319,71 @@ func (s *rewardSigner) sync(ctx context.Context) {
 
 // ServiceMgr manages multiple rewardSigner instances running in parallel.
 type ServiceMgr struct {
-	signers []*rewardSigner
-	logger  log.Logger
+	syncInterval time.Duration
+	signers      []*rewardSigner
+	logger       log.Logger
 }
 
 func NewServiceMgr(
 	kwilRpc string,
-	targets []string,
-	ethRpcs []string,
-	pkStrs []string,
-	syncEvery time.Duration,
+	cfg config.ERC20BridgeConfig,
 	state *State,
 	logger log.Logger) (*ServiceMgr, error) {
 
-	signers := make([]*rewardSigner, len(targets))
-	for i, target := range targets {
-		pk := pkStrs[i]
-		svc, err := newRewardSigner(kwilRpc, target, ethRpcs[i], pk,
-			syncEvery, state, logger.New("EVMRW."+target))
-		if err != nil {
-			return nil, fmt.Errorf("create erc20 reward signer service failed: %w", err)
+	signerCfgDelimiter := ":"
+
+	var signers []*rewardSigner
+	for chain, value := range cfg.Signer {
+		chainRpc, ok := cfg.RPC[chain]
+		if !ok {
+			return nil, fmt.Errorf("chain %s not found in rpc config", chain)
 		}
 
-		signers[i] = svc
+		// we need http endpoint
+		if strings.HasPrefix(chainRpc, "wss://") {
+			chainRpc = strings.Replace(chainRpc, "wss://", "https://", 1)
+		}
+		if strings.HasPrefix(chainRpc, "ws") {
+			chainRpc = strings.Replace(chainRpc, "ws://", "http://", 1)
+		}
+
+		if !strings.Contains(value, signerCfgDelimiter) {
+			return nil, fmt.Errorf("invalid signer config: %s", value)
+		}
+
+		segs := strings.SplitN(value, signerCfgDelimiter, 2)
+
+		target := segs[0]
+		pkPath := segs[1]
+
+		if !ethCommon.FileExist(pkPath) {
+			return nil, fmt.Errorf("private key file %s not found", pkPath)
+		}
+
+		pkBytes, err := os.ReadFile(pkPath)
+		if err != nil {
+			return nil, fmt.Errorf("read private key file %s failed: %w", pkPath, err)
+		}
+
+		svc, err := newRewardSigner(kwilRpc, target, chainRpc, strings.TrimSpace(string(pkBytes)),
+			state, logger.New("EVMRW."+target))
+		if err != nil {
+			return nil, fmt.Errorf("create erc20 bridge signer service failed: %w", err)
+		}
+
+		signers = append(signers, svc)
 	}
 
 	return &ServiceMgr{
-		signers: signers,
-		logger:  logger,
+		signers:      signers,
+		logger:       logger,
+		syncInterval: time.Minute, // default to 1m
 	}, nil
 }
 
 // Start runs all rewardSigners. It returns error if there are issues initializing the rewardSigner;
 // no errors are returned after the rewardSigner is running.
-func (s *ServiceMgr) Start(ctx context.Context) error {
+func (m *ServiceMgr) Start(ctx context.Context) error {
 	// since we need to wait on RPC running, we move the initialization logic into `init`
 
 	// To be able to run with docker, we need to apply a retry logic, since a new
@@ -359,7 +391,7 @@ func (s *ServiceMgr) Start(ctx context.Context) error {
 	// erc20 instance target.
 	for { // naive way to keep trying the init
 		var err error
-		for _, s := range s.signers {
+		for _, s := range m.signers {
 			err = s.init()
 			if err != nil {
 				break
@@ -372,18 +404,18 @@ func (s *ServiceMgr) Start(ctx context.Context) error {
 
 		// if any error happens in init, we try again
 		time.Sleep(time.Second * 5)
-		s.logger.Warn("failed to initialize erc20 reward signer, will retry", "error", err.Error())
+		m.logger.Warn("failed to initialize erc20 bridge signer, will retry", "error", err.Error())
 	}
 
 	wg := &sync.WaitGroup{}
 
-	for _, s := range s.signers {
+	for _, s := range m.signers {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
 
 			s.logger.Info("start watching erc20 reward epoches")
-			tick := time.NewTicker(s.every)
+			tick := time.NewTicker(m.syncInterval)
 
 			for {
 				s.sync(ctx)
@@ -401,7 +433,7 @@ func (s *ServiceMgr) Start(ctx context.Context) error {
 	<-ctx.Done()
 	wg.Wait()
 
-	s.logger.Infof("Erc20 reward signer service shutting down...")
+	m.logger.Infof("Erc20 bridge signer service shutting down...")
 
 	return nil
 }
