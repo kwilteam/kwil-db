@@ -44,7 +44,7 @@ type server struct {
 	listeners          *listeners.ListenerManager
 	jsonRPCServer      *rpcserver.Server
 	jsonRPCAdminServer *rpcserver.Server
-	erc20RWSigner      *signersvc.ServiceMgr
+	erc20BridgeSigner  *signersvc.ServiceMgr
 }
 
 func runNode(ctx context.Context, rootDir string, cfg *config.Config, autogen bool, dbOwner string) (err error) {
@@ -262,9 +262,9 @@ func (s *server) Start(ctx context.Context) error {
 	s.log.Info("listener manager started")
 
 	// Start erc20 bridge signer svc
-	if s.erc20RWSigner != nil {
+	if s.erc20BridgeSigner != nil {
 		group.Go(func() error {
-			return s.erc20RWSigner.Start(groupCtx)
+			return s.erc20BridgeSigner.Start(groupCtx)
 		})
 	}
 

@@ -97,7 +97,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	ce := buildConsensusEngine(ctx, d, db, mp, bs, bp)
 
 	// Erc20 bridge signer service
-	erc20RWSignerMgr := buildErc20RWignerMgr(d)
+	erc20BridgeSignerMgr := buildErc20BridgeSignerMgr(d)
 
 	// Node
 	node := buildNode(d, mp, bs, ce, snapshotStore, db, bp, p2pSvc)
@@ -158,7 +158,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 		jsonRPCAdminServer: jsonRPCAdminServer,
 		dbCtx:              db,
 		log:                d.logger,
-		erc20RWSigner:      erc20RWSignerMgr,
+		erc20BridgeSigner:  erc20BridgeSignerMgr,
 	}
 
 	return s
@@ -508,7 +508,7 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB,
 	return ce
 }
 
-func buildErc20RWignerMgr(d *coreDependencies) *signersvc.ServiceMgr {
+func buildErc20BridgeSignerMgr(d *coreDependencies) *signersvc.ServiceMgr {
 	// create shared state
 	stateFile := signersvc.StateFilePath(d.rootDir)
 
