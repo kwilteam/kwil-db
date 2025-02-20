@@ -15,6 +15,7 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
+	ethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
@@ -453,22 +454,28 @@ type Checkpoint struct {
 type ERC20BridgeConfig struct {
 	RPC                map[string]string `toml:"rpc" comment:"evm websocket RPC; format: chain_name='rpc_url'"`
 	BlockSyncChuckSize map[string]string `toml:"block_sync_chuck_size" comment:"rpc option block sync chunk size; format: chain_name='chunk_size'"`
-	Signer             map[string]string `toml:"signer" comment:"signer service configuration; format: target='chain_name:file_path_to_private_key'"`
+	Signer             map[string]string `toml:"signer" comment:"signer service configuration; format: ext_alias='file_path_to_private_key'"`
 }
 
-// ValidateRpc validates the bridge rpc config, other validations will be performed
+// Validate validates the bridge general config, other validations will be performed
 // when correspond components derive config from it.
 // BlockSyncChuckSize config will be validated by evm-sync listener.
 // Signer config will be validated by erc20 signerSvc.
-func (cfg ERC20BridgeConfig) ValidateRpc() error {
+func (cfg ERC20BridgeConfig) Validate() error {
 	for chain, rpc := range cfg.RPC {
-		if err := chains.Chain(chain).Valid(); err != nil {
+		if err := chains.Chain(strings.ToLower(chain)).Valid(); err != nil {
 			return fmt.Errorf("erc20_bridge.rpc: %s", chain)
 		}
 
 		// enforce websocket
 		if !strings.HasPrefix(rpc, "wss://") && !strings.HasPrefix(rpc, "ws://") {
 			return fmt.Errorf("erc20_bridge.rpc: must start with wss:// or ws://")
+		}
+	}
+
+	for _, pkPath := range cfg.Signer {
+		if !ethCommon.FileExist(pkPath) {
+			return fmt.Errorf("erc20_bridge.signer: private key file %s not found", pkPath)
 		}
 	}
 

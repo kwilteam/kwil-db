@@ -39,104 +39,44 @@ func StateFilePath(dir string) string {
 
 // rewardSigner handles one registered erc20 reward instance.
 type rewardSigner struct {
-	kwilRpc       string
 	target        string
 	kwil          erc20ExtAPI
 	lastVoteBlock int64
 	escrowAddr    ethCommon.Address
 
-	ethRpc      string
-	signerPkStr string
-	signerPk    *ecdsa.PrivateKey
-	signerAddr  ethCommon.Address
-	safe        *Safe
+	signerPk   *ecdsa.PrivateKey
+	signerAddr ethCommon.Address
+	safe       *Safe
 
 	logger log.Logger
 	state  *State
 }
 
 // newRewardSigner returns a new rewardSigner.
-func newRewardSigner(kwilRpc string, target string, ethRpc string, pkStr string,
-	state *State, logger log.Logger) (*rewardSigner, error) {
+func newRewardSigner(kwil erc20ExtAPI, safe *Safe, target string, signerAddr ethCommon.Address, escrowAddr ethCommon.Address, state *State, logger log.Logger) (*rewardSigner, error) {
 	if logger == nil {
 		logger = log.DiscardLogger
 	}
 
-	privateKey, err := ethCrypto.HexToECDSA(pkStr)
-	if err != nil {
-		return nil, err
+	// overwrite configured lastVoteBlock with the value from state if exist
+	lastVoteBlock := int64(0)
+	lastVote := state.LastVote(target)
+	if lastVote != nil {
+		lastVoteBlock = lastVote.BlockHeight
 	}
 
-	// Get the public key
-	publicKey := privateKey.Public().(*ecdsa.PublicKey)
-
-	// Get the Ethereum address from the public key
-	address := ethCrypto.PubkeyToAddress(*publicKey)
+	logger.Info("will sync after last vote epoch", "height", lastVoteBlock)
 
 	return &rewardSigner{
-		kwilRpc:     kwilRpc,
-		ethRpc:      ethRpc,
-		signerPkStr: pkStr,
-		signerPk:    privateKey,
-		signerAddr:  address,
-		state:       state,
-		logger:      logger,
-		target:      target,
+		kwil:          kwil,
+		signerAddr:    signerAddr,
+		state:         state,
+		logger:        logger,
+		target:        target,
+		safe:          safe,
+		escrowAddr:    escrowAddr,
+		lastVoteBlock: lastVoteBlock,
 	}, nil
-}
-
-func (s *rewardSigner) init() error {
-	ctx := context.Background()
-
-	pkBytes, err := hex.DecodeString(s.signerPkStr)
-	if err != nil {
-		return fmt.Errorf("decode erc20 bridge signer private key failed: %w", err)
-	}
-
-	key, err := crypto.UnmarshalSecp256k1PrivateKey(pkBytes)
-	if err != nil {
-		return fmt.Errorf("parse erc20 bridge signer private key failed: %w", err)
-	}
-
-	opts := &clientType.Options{Signer: &auth.EthPersonalSigner{Key: *key}}
-
-	clt, err := client.NewClient(ctx, s.kwilRpc, opts)
-	if err != nil {
-		return fmt.Errorf("create erc20 bridge signer api client failed: %w", err)
-	}
-
-	s.kwil = newERC20RWExtAPI(clt, s.target)
-
-	info, err := s.kwil.InstanceInfo(ctx)
-	if err != nil {
-		return fmt.Errorf("get reward metadata failed: %w", err)
-	}
-
-	s.safe, err = NewSafeFromEscrow(s.ethRpc, info.Escrow)
-	if err != nil {
-		return fmt.Errorf("create safe failed: %w", err)
-	}
-
-	chainInfo, ok := chains.GetChainInfo(chains.Chain(info.Chain))
-	if !ok {
-		return fmt.Errorf("chainID %s not supported", s.safe.chainID.String())
-	}
-
-	if s.safe.chainID.String() != chainInfo.ID {
-		return fmt.Errorf("chainID mismatch: configured %s != target %s", s.safe.chainID.String(), chainInfo.ID)
-	}
-
-	s.escrowAddr = ethCommon.HexToAddress(info.Escrow)
-
-	// overwrite configured lastVoteBlock with the value from state if exist
-	lastVote := s.state.LastVote(s.target)
-	if lastVote != nil {
-		s.lastVoteBlock = lastVote.BlockHeight
-	}
-
-	s.logger.Info("will sync after last vote epoch", "height", s.lastVoteBlock)
-
-	return nil
 }
 
 // canSkip returns true if:
@@ -317,54 +257,102 @@ func (s *rewardSigner) sync(ctx context.Context) {
 	s.lastVoteBlock = finalizedEpoch.EndHeight // update after all operations succeed
 }
 
-type signerConfig struct {
-	target         string // erc20 bridge target name
-	chainRPC       string
-	privateKeyPath string // file path to private key
-}
-
-// GetSignerCfgs verifies config and returns a list of config for erc20 signerSvc.
-func getSignerCfgs(cfg config.ERC20BridgeConfig) ([]signerConfig, error) {
-	if err := cfg.ValidateRpc(); err != nil {
+// getSigners verifies config and returns a list of signerSvc.
+func getSigners(kwilRpc string, cfg config.ERC20BridgeConfig, state *State, logger log.Logger) ([]*rewardSigner, error) {
+	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
 
-	signerCfgDelimiter := ":"
+	ctx := context.Background()
 
-	var signerCfg []signerConfig
-
-	for target, value := range cfg.Signer {
-		if !strings.Contains(value, signerCfgDelimiter) {
-			return nil, fmt.Errorf("invalid signer config: %s", value)
-		}
-
-		segs := strings.SplitN(value, signerCfgDelimiter, 2)
-		chain := segs[0]
-		pkPath := segs[1]
-
-		chainRpc, ok := cfg.RPC[chain]
-		if !ok {
-			return nil, fmt.Errorf("chain '%s' not found in erc20_bridge.rpc config", chain)
-		}
-
-		if !ethCommon.FileExist(pkPath) {
-			return nil, fmt.Errorf("private key file %s not found", pkPath)
-		}
-
-		signerCfg = append(signerCfg, signerConfig{
-			target:         target,
-			chainRPC:       chainRpc,
-			privateKeyPath: pkPath,
-		})
+	clt, err := client.NewClient(ctx, kwilRpc, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create erc20 bridge signer api client failed: %w", err)
 	}
 
-	return signerCfg, nil
+	signers := make([]*rewardSigner, 0, len(cfg.Signer))
+	for target, pkPath := range cfg.Signer {
+		// pkPath is validated already
+
+		readOnlyAPi := newERC20RWExtAPI(clt, target)
+		instanceInfo, err := readOnlyAPi.InstanceInfo(ctx)
+		if err != nil {
+			return nil, fmt.Errorf("get reward metadata failed: %w", err)
+		}
+
+		rawPkBytes, err := os.ReadFile(pkPath)
+		if err != nil {
+			return nil, fmt.Errorf("read private key file %s failed: %w", pkPath, err)
+		}
+
+		pkStr := strings.TrimSpace(string(rawPkBytes))
+		pkBytes, err := hex.DecodeString(pkStr)
+		if err != nil {
+			return nil, fmt.Errorf("parse erc20 bridge signer private key failed: %w", err)
+		}
+
+		privateKey, err := ethCrypto.ToECDSA(pkBytes)
+		if err != nil {
+			return nil, fmt.Errorf("parse erc20 bridge signer private key failed: %w", err)
+		}
+
+		// Get the public key
+		signerPubKey := privateKey.Public().(*ecdsa.PublicKey)
+
+		// Get the Ethereum address from the public key
+		signerAddr := ethCrypto.PubkeyToAddress(*signerPubKey)
+
+		key, err := crypto.UnmarshalSecp256k1PrivateKey(pkBytes)
+		if err != nil {
+			return nil, fmt.Errorf("parse erc20 bridge signer private key failed: %w", err)
+		}
+
+		opts := &clientType.Options{Signer: &auth.EthPersonalSigner{Key: *key}}
+
+		clt, err := client.NewClient(ctx, kwilRpc, opts)
+		if err != nil {
+			return nil, fmt.Errorf("create erc20 bridge signer api client failed: %w", err)
+		}
+
+		kwil := newERC20RWExtAPI(clt, target)
+
+		chainRpc, ok := cfg.RPC[strings.ToLower(instanceInfo.Chain)]
+		if !ok {
+			return nil, fmt.Errorf("target '%s' chain '%s' not found in erc20_bridge.rpc config", target, instanceInfo.Chain)
+		}
+
+		safe, err := NewSafeFromEscrow(chainRpc, instanceInfo.Escrow)
+		if err != nil {
+			return nil, fmt.Errorf("create safe failed: %w", err)
+		}
+
+		chainInfo, ok := chains.GetChainInfo(chains.Chain(instanceInfo.Chain))
+		if !ok {
+			return nil, fmt.Errorf("chainID %s not supported", safe.chainID.String())
+		}
+
+		if safe.chainID.String() != chainInfo.ID {
+			return nil, fmt.Errorf("chainID mismatch: configured %s != target %s", safe.chainID.String(), chainInfo.ID)
+		}
+
+		// wilRpc, target, chainRpc, strings.TrimSpace(string(pkBytes))
+		svc, err := newRewardSigner(kwil, safe, target, signerAddr, ethCommon.HexToAddress(instanceInfo.Escrow), state, logger.New("EVMRW."+target))
+		if err != nil {
+			return nil, fmt.Errorf("create erc20 bridge signer service failed: %w", err)
+		}
+
+		signers = append(signers, svc)
+	}
+
+	return signers, nil
 }
 
 // ServiceMgr manages multiple rewardSigner instances running in parallel.
 type ServiceMgr struct {
+	kwilRpc      string
+	state        *State
+	bridgeCfg    config.ERC20BridgeConfig
 	syncInterval time.Duration
-	signers      []*rewardSigner
 	logger       log.Logger
 }
 
@@ -373,29 +361,10 @@ func NewServiceMgr(
 	cfg config.ERC20BridgeConfig,
 	state *State,
 	logger log.Logger) (*ServiceMgr, error) {
-	signerCfgs, err := getSignerCfgs(cfg)
-	if err != nil {
-		return nil, fmt.Errorf("get erc20 bridge signer config failed: %w", err)
-	}
-
-	var signers []*rewardSigner
-	for _, cfg := range signerCfgs {
-		pkBytes, err := os.ReadFile(cfg.privateKeyPath)
-		if err != nil {
-			return nil, fmt.Errorf("read private key file %s failed: %w", cfg.privateKeyPath, err)
-		}
-
-		svc, err := newRewardSigner(kwilRpc, cfg.target, cfg.chainRPC, strings.TrimSpace(string(pkBytes)),
-			state, logger.New("EVMRW."+cfg.target))
-		if err != nil {
-			return nil, fmt.Errorf("create erc20 bridge signer service failed: %w", err)
-		}
-
-		signers = append(signers, svc)
-	}
-
 	return &ServiceMgr{
-		signers:      signers,
+		kwilRpc:      kwilRpc,
+		state:        state,
+		bridgeCfg:    cfg,
 		logger:       logger,
 		syncInterval: time.Minute, // default to 1m
 	}, nil
@@ -406,30 +375,31 @@ func NewServiceMgr(
 func (m *ServiceMgr) Start(ctx context.Context) error {
 	// since we need to wait on RPC running, we move the initialization logic into `init`
 
-	// To be able to run with docker, we need to apply a retry logic, since a new
-	// docker instance has no erc20 instance configured, but we need to config the
-	// erc20 instance target.
-	for { // naive way to keep trying the init
-		var err error
-		for _, s := range m.signers {
-			err = s.init()
-			if err != nil {
-				break
-			}
+	var err error
+	var signers []*rewardSigner
+	// To be able to run with docker, we need to apply a retry logic, because kwild
+	// won't have erc20 instance when boot
+	for { // naive way to keep retrying the init
+		select {
+		case <-ctx.Done():
+			m.logger.Info("stop initializing erc20 bridge signer")
+			return nil
+		default:
 		}
 
+		signers, err = getSigners(m.kwilRpc, m.bridgeCfg, m.state, m.logger)
 		if err == nil {
 			break
 		}
 
-		// if any error happens in init, we try again
-		time.Sleep(time.Second * 5)
 		m.logger.Warn("failed to initialize erc20 bridge signer, will retry", "error", err.Error())
+		// any error, we try again
+		time.Sleep(time.Second * 3)
 	}
 
 	wg := &sync.WaitGroup{}
 
-	for _, s := range m.signers {
+	for _, s := range signers {
 		wg.Add(1)
 		go func() {
 			defer wg.Done()
