@@ -131,6 +131,8 @@ func (n *Node) advertiseToPeer(ctx context.Context, peerID peer.ID, proto protoc
 		return fmt.Errorf("send content ID failed: %w", err) // TODO: close stream?
 	}
 
+	mets.Advertised(ctx, string(proto))
+
 	// Keep the stream open for potential content requests
 	go func() {
 		defer s.Close()
@@ -144,6 +146,7 @@ func (n *Node) advertiseToPeer(ctx context.Context, peerID peer.ID, proto protoc
 			return
 		}
 		if nr == 0 { // they didn't want it
+			mets.AdvertiseRejected(ctx, string(proto))
 			return
 		}
 		if getMsg != string(req) {
@@ -152,6 +155,7 @@ func (n *Node) advertiseToPeer(ctx context.Context, peerID peer.ID, proto protoc
 		}
 		s.SetWriteDeadline(time.Now().Add(contentWriteTimeout))
 		s.Write(ann.content)
+		mets.AdvertiseServed(ctx, string(proto), int64(len(ann.content)))
 	}()
 
 	return nil

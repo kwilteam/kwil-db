@@ -24,6 +24,7 @@ import (
 	authExt "github.com/kwilteam/kwil-db/extensions/auth"
 	nodeConsensus "github.com/kwilteam/kwil-db/node/consensus"
 	"github.com/kwilteam/kwil-db/node/engine"
+	"github.com/kwilteam/kwil-db/node/metrics"
 	"github.com/kwilteam/kwil-db/node/migrations"
 	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/node/services/jsonrpc/ratelimit"
@@ -62,6 +63,8 @@ type Migrator interface {
 	GetChangeset(height int64, index int64) ([]byte, error)
 	GetGenesisSnapshotChunk(chunkIdx uint32) ([]byte, error)
 }
+
+var _ metrics.RPCMetrics = metrics.RPC // var mets, when needed
 
 // Service is the "user" RPC service, also known as txsvc in other contexts.
 type Service struct {

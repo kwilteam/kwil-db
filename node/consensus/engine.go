@@ -18,9 +18,12 @@ import (
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	blockprocessor "github.com/kwilteam/kwil-db/node/block_processor"
 	"github.com/kwilteam/kwil-db/node/meta"
+	"github.com/kwilteam/kwil-db/node/metrics"
 	"github.com/kwilteam/kwil-db/node/pg"
 	"github.com/kwilteam/kwil-db/node/types"
 )
+
+var mets metrics.ConsensusMetrics = metrics.Consensus
 
 const (
 	// maxNumTxnsInBlock is the maximum number of transactions we will put in a
@@ -264,6 +267,8 @@ type StateInfo struct {
 // Consensus state that is applicable for processing the block at a specific height.
 type state struct {
 	mtx sync.RWMutex
+
+	tExecuted time.Time
 
 	blkProp  *blockProposal
 	blockRes *blockResult

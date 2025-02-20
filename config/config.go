@@ -257,6 +257,10 @@ func DefaultConfig() *Config {
 		LogLevel:  log.LevelInfo,
 		LogFormat: log.FormatUnstructured,
 		LogOutput: []string{"stdout", "kwild.log"},
+		Telemetry: Telemetry{
+			Enable:       false,
+			OTLPEndpoint: "127.0.0.1:4318",
+		},
 		P2P: PeerConfig{
 			ListenAddress:     "0.0.0.0:6600",
 			Pex:               true,
@@ -333,6 +337,8 @@ type Config struct {
 	ProfileMode string `toml:"profile_mode,commented" comment:"profile mode (http, cpu, mem, mutex, or block)"`
 	ProfileFile string `toml:"profile_file,commented" comment:"profile output file path (e.g. cpu.pprof)"`
 
+	Telemetry Telemetry `toml:"telemetry" comment:"telemetry (metrics and traces) configuration"`
+
 	P2P          PeerConfig                   `toml:"p2p" comment:"P2P related configuration"`
 	Consensus    ConsensusConfig              `toml:"consensus" comment:"Consensus related configuration"`
 	Mempool      MempoolConfig                `toml:"mempool" comment:"Mempool related configuration"`
@@ -347,6 +353,11 @@ type Config struct {
 	Migrations   MigrationConfig              `toml:"migrations" comment:"zero downtime migration configuration"`
 	Checkpoint   Checkpoint                   `toml:"checkpoint" comment:"checkpoint info for the leader to sync to before proposing a new block"`
 	Erc20Bridge  ERC20BridgeConfig            `toml:"erc20_bridge" comment:"ERC20 bridge configuration"`
+}
+
+type Telemetry struct {
+	Enable       bool   `toml:"enable" comment:"enable telemetry"`
+	OTLPEndpoint string `toml:"otlp_endpoint" comment:"open telemetry protocol collector endpoint"` // "127.0.0.1:4318"
 }
 
 type MempoolConfig struct {
