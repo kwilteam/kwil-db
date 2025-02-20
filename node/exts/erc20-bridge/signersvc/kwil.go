@@ -30,26 +30,8 @@ type Epoch struct {
 	EndBlockHash   []byte
 	Confirmed      bool
 	Voters         []string
-	VoteAmounts    []string
 	VoteNonces     []int64
 	VoteSignatures [][]byte
-}
-
-type FinalizedReward struct {
-	ID         types.UUID
-	Voters     []string
-	Signatures [][]byte
-	EpochID    types.UUID
-	CreatedAt  int64
-	//
-	StartHeight  int64
-	EndHeight    int64
-	TotalRewards types.Decimal
-	RewardRoot   []byte
-	SafeNonce    int64
-	SignHash     []byte
-	ContractID   types.UUID
-	BlockHash    []byte
 }
 
 type EpochReward struct {
@@ -64,7 +46,7 @@ type erc20ExtAPI interface {
 	InstanceInfo(tx context.Context) (*RewardInstanceInfo, error)
 	GetActiveEpochs(ctx context.Context) ([]*Epoch, error)
 	GetEpochRewards(ctx context.Context, epochID types.UUID) ([]*EpochReward, error)
-	VoteEpoch(ctx context.Context, epochID types.UUID, amount *types.Decimal, safeNonce int64, signature []byte) (string, error)
+	VoteEpoch(ctx context.Context, epochID types.UUID, safeNonce int64, signature []byte) (string, error)
 }
 
 type erc20rwExtApi struct {
@@ -129,7 +111,7 @@ func (k *erc20rwExtApi) GetActiveEpochs(ctx context.Context) ([]*Epoch, error) {
 	for i, v := range res.QueryResult.Values {
 		er := &Epoch{}
 		err = types.ScanTo(v, &er.ID, &er.StartHeight, &er.StartTimestamp, &er.EndHeight,
-			&er.RewardRoot, &er.RewardAmount, &er.EndBlockHash, &er.Confirmed, &er.Voters, &er.VoteAmounts, &er.VoteNonces, &er.VoteSignatures)
+			&er.RewardRoot, &er.RewardAmount, &er.EndBlockHash, &er.Confirmed, &er.Voters, &er.VoteNonces, &er.VoteSignatures)
 		if err != nil {
 			return nil, err
 		}
@@ -164,9 +146,9 @@ func (k *erc20rwExtApi) GetEpochRewards(ctx context.Context, epochID types.UUID)
 	return ers, nil
 }
 
-func (k *erc20rwExtApi) VoteEpoch(ctx context.Context, epochID types.UUID, amount *types.Decimal, safeNonce int64, signature []byte) (string, error) {
+func (k *erc20rwExtApi) VoteEpoch(ctx context.Context, epochID types.UUID, safeNonce int64, signature []byte) (string, error) {
 	procedure := "vote_epoch"
-	input := [][]any{{epochID, amount, safeNonce, signature}}
+	input := [][]any{{epochID, safeNonce, signature}}
 
 	res, err := k.clt.Execute(ctx, k.namespace, procedure, input, clientTypes.WithSyncBroadcast(true))
 	if err != nil {

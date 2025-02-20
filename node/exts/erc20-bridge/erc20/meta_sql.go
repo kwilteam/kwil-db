@@ -386,8 +386,8 @@ func previousEpochConfirmed(ctx context.Context, app *common.App, instanceID *ty
 }
 
 func rowToEpoch(r *common.Row) (*Epoch, error) {
-	if len(r.Values) != 12 {
-		return nil, fmt.Errorf("expected 12 values, got %d", len(r.Values))
+	if len(r.Values) != 11 {
+		return nil, fmt.Errorf("expected 11 values, got %d", len(r.Values))
 	}
 
 	id := r.Values[0].(*types.UUID)
@@ -417,7 +417,7 @@ func rowToEpoch(r *common.Row) (*Epoch, error) {
 	confirmed := r.Values[7].(bool)
 
 	// NOTE: empty value is [[]]
-	// values[7]-values[10] will all be empty if any, from the SQL;
+	// values[8]-values[10] will all be empty if any, from the SQL;
 	var voters []ethcommon.Address
 	if r.Values[8] != nil {
 		rawVoters := r.Values[8].([][]byte)
@@ -435,19 +435,9 @@ func rowToEpoch(r *common.Row) (*Epoch, error) {
 	}
 
 	// NOTE: empty value is [<nil>]
-	var amounts []*types.Decimal
-	if r.Values[9] != nil {
-		for _, rawAmount := range r.Values[9].([]*types.Decimal) {
-			if rawAmount != nil {
-				amounts = append(amounts, rawAmount)
-			}
-		}
-	}
-
-	// NOTE: empty value is [<nil>]
 	var voteNonces []int64
-	if r.Values[10] != nil {
-		rawNonces := r.Values[10].([]*int64)
+	if r.Values[9] != nil {
+		rawNonces := r.Values[9].([]*int64)
 		for _, rawNonce := range rawNonces {
 			if rawNonce != nil {
 				// NOTE: this is probably problematic, since we can messup the index
@@ -459,9 +449,9 @@ func rowToEpoch(r *common.Row) (*Epoch, error) {
 
 	// NOTE: empty value is [[]]
 	var signatures [][]byte
-	if r.Values[11] != nil {
+	if r.Values[10] != nil {
 		// we skip the empty value, otherwise after conversion, [<nil>] will be returned
-		for _, rawSig := range r.Values[11].([][]byte) {
+		for _, rawSig := range r.Values[10].([][]byte) {
 			if len(rawSig) != 0 {
 				signatures = append(signatures, rawSig)
 			}
@@ -480,10 +470,9 @@ func rowToEpoch(r *common.Row) (*Epoch, error) {
 		Total:     rewardAmount,
 		Confirmed: confirmed,
 		EpochVoteInfo: EpochVoteInfo{
-			Voters:      voters,
-			VoteAmounts: amounts,
-			VoteSigs:    signatures,
-			VoteNonces:  voteNonces,
+			Voters:     voters,
+			VoteSigs:   signatures,
+			VoteNonces: voteNonces,
 		},
 	}, nil
 }
@@ -492,7 +481,7 @@ func rowToEpoch(r *common.Row) (*Epoch, error) {
 // one collects all new rewards, and one waits to be confirmed.
 func getActiveEpochs(ctx context.Context, app *common.App, instanceID *types.UUID, fn func(*Epoch) error) error {
 	query := `
-    {kwil_erc20_meta}SELECT e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.reward_amount, e.ended_at, e.block_hash, e.confirmed, array_agg(v.voter) as voters, array_agg(v.amount) as amounts, array_agg(v.nonce) as nonces, array_agg(v.signature) as signatures
+    {kwil_erc20_meta}SELECT e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.reward_amount, e.ended_at, e.block_hash, e.confirmed, array_agg(v.voter) as voters, array_agg(v.nonce) as nonces, array_agg(v.signature) as signatures
 	FROM epochs AS e
 	LEFT JOIN epoch_votes AS v ON v.epoch_id = e.id
 	WHERE e.instance_id = $instance_id AND e.confirmed IS NOT true
@@ -512,7 +501,7 @@ func getActiveEpochs(ctx context.Context, app *common.App, instanceID *types.UUI
 // getEpochs gets epochs.
 func getEpochs(ctx context.Context, app *common.App, instanceID *types.UUID, after int64, limit int64, fn func(*Epoch) error) error {
 	query := `
-    {kwil_erc20_meta}SELECT e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.reward_amount, e.ended_at, e.block_hash, e.confirmed, array_agg(v.voter) as voters, array_agg(v.amount) as amounts, array_agg(v.nonce) as nonces, array_agg(v.signature) as signatures
+    {kwil_erc20_meta}SELECT e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.reward_amount, e.ended_at, e.block_hash, e.confirmed, array_agg(v.voter) as voters, array_agg(v.nonce) as nonces, array_agg(v.signature) as signatures
 	FROM epochs AS e
 	LEFT JOIN epoch_votes AS v ON v.epoch_id = e.id
 	WHERE e.instance_id = $instance_id AND e.created_at_block > $after
@@ -602,14 +591,13 @@ func canVoteEpoch(ctx context.Context, app *common.App, epochID *types.UUID) (ok
 
 // voteEpoch vote an epoch by submitting signature.
 func voteEpoch(ctx context.Context, app *common.App, epochID *types.UUID,
-	voter ethcommon.Address, amount *types.Decimal, nonce int64, signature []byte) error {
+	voter ethcommon.Address, nonce int64, signature []byte) error {
 	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
-	{kwil_erc20_meta}INSERT into epoch_votes(epoch_id, voter, amount, nonce, signature)
-    VALUES ($epoch_id, $voter, $amount, $nonce, $signature);
+	{kwil_erc20_meta}INSERT into epoch_votes(epoch_id, voter, nonce, signature)
+    VALUES ($epoch_id, $voter, $nonce, $signature);
 	`, map[string]any{
 		"epoch_id":  epochID,
 		"voter":     voter.Bytes(),
-		"amount":    amount,
 		"signature": signature,
 		"nonce":     nonce,
 	}, nil)
@@ -622,7 +610,7 @@ func getWalletEpochs(ctx context.Context, app *common.App, instanceID *types.UUI
 
 	// WE don't need vote info, we just return empty arrays instead of JOIN
 	query := `
-	{kwil_erc20_meta}SELECT e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.reward_amount, e.ended_at, e.block_hash, e.confirmed, ARRAY[]::BYTEA[] as voters, ARRAY[]::NUMERIC(78, 0)[] as amounts, ARRAY[]::INT8[] as nonces, ARRAY[]::BYTEA[] as signatures
+	{kwil_erc20_meta}SELECT e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.reward_amount, e.ended_at, e.block_hash, e.confirmed, ARRAY[]::BYTEA[] as voters, ARRAY[]::INT8[] as nonces, ARRAY[]::BYTEA[] as signatures
 	FROM epoch_rewards AS r
 	JOIN epochs AS e ON r.epoch_id = e.id
 	WHERE recipient = $wallet AND e.instance_id = $instance_id AND e.ended_at IS NOT NULL` // at least finalized

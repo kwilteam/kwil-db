@@ -221,7 +221,6 @@ func init() {
 							{Name: "end_block_hash", Type: types.ByteaType, Nullable: true},
 							{Name: "confirmed", Type: types.BoolType},
 							{Name: "voters", Type: types.TextArrayType, Nullable: true},
-							{Name: "vote_amounts", Type: uint256NumericArray, Nullable: true},
 							{Name: "vote_nonces", Type: types.IntArrayType, Nullable: true},
 							{Name: "voter_signatures", Type: types.ByteaArrayType, Nullable: true},
 						},
@@ -247,7 +246,6 @@ func init() {
 							{Name: "end_block_hash", Type: types.ByteaType, Nullable: true},
 							{Name: "confirmed", Type: types.BoolType},
 							{Name: "voters", Type: types.TextArrayType, Nullable: true},
-							{Name: "vote_amounts", Type: uint256NumericArray, Nullable: true},
 							{Name: "vote_nonces", Type: types.IntArrayType, Nullable: true},
 							{Name: "voter_signatures", Type: types.ByteaArrayType, Nullable: true},
 						},
@@ -274,7 +272,6 @@ func init() {
 					Name: "vote_epoch",
 					Parameters: []precompiles.PrecompileValue{
 						{Name: "epoch_id", Type: types.UUIDType},
-						{Name: "amount", Type: uint256Numeric},
 						{Name: "nonce", Type: types.IntType},
 						{Name: "signature", Type: types.ByteaType},
 					},

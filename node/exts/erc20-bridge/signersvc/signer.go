@@ -27,7 +27,6 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/exts/erc20-bridge/utils"
 	"github.com/kwilteam/kwil-db/node/exts/evm-sync/chains"
 )
@@ -142,17 +141,6 @@ func (s *rewardSigner) verify(ctx context.Context, epoch *Epoch, escrowAddr stri
 	return total, nil
 }
 
-// erc20ValueFromBigInt converts a big.Int to a decimal.Decimal(78,0)
-// NOTE: this is copied from meta ext
-func erc20ValueFromBigInt(b *big.Int) (*types.Decimal, error) {
-	dec, err := types.NewDecimalFromBigInt(b, 0)
-	if err != nil {
-		return nil, fmt.Errorf("failed to convert big.Int to decimal.Decimal: %w", err)
-	}
-	err = dec.SetPrecisionAndScale(78, 0)
-	return dec, err
-}
-
 // vote votes an epoch reward, and updates the state.
 // It will first fetch metadata from ETH, then generate the safeTx, then vote.
 func (s *rewardSigner) vote(ctx context.Context, epoch *Epoch, safeMeta *safeMetadata, total *big.Int) error {
@@ -174,12 +162,7 @@ func (s *rewardSigner) vote(ctx context.Context, epoch *Epoch, safeMeta *safeMet
 		return err
 	}
 
-	uint256Amount, err := erc20ValueFromBigInt(total)
-	if err != nil {
-		return err
-	}
-
-	h, err := s.kwil.VoteEpoch(ctx, epoch.ID, uint256Amount, safeMeta.nonce.Int64(), sig)
+	h, err := s.kwil.VoteEpoch(ctx, epoch.ID, safeMeta.nonce.Int64(), sig)
 	if err != nil {
 		return err
 	}
