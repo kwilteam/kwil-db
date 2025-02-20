@@ -1,6 +1,7 @@
 package node
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -9,6 +10,7 @@ import (
 	"github.com/kwilteam/kwil-db/app/custom"
 	"github.com/kwilteam/kwil-db/app/node/conf"
 	"github.com/kwilteam/kwil-db/app/shared/bind"
+	"github.com/kwilteam/kwil-db/node/metrics"
 	"github.com/kwilteam/kwil-db/version"
 )
 
@@ -75,6 +77,13 @@ func StartCmd() *cobra.Command {
 				return err
 			}
 			defer stopProfiler()
+
+			stopMetrics, err := metrics.Start(cmd.Context(), "127.0.0.1:4318")
+			if err != nil {
+				cmd.Usage()
+				return err
+			}
+			defer stopMetrics(context.Background())
 
 			// Set the empty block timeout to the propose timeout if not set
 			// if the node is running in autogen mode

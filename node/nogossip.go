@@ -120,6 +120,8 @@ func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txHash typ
 		return fmt.Errorf("txann failed to peer %s: %w", peerID, err)
 	}
 
+	// mets.ReannouncedTx(ctx, txHash, peerID)
+
 	// n.log.Infof("advertised tx content %s to peer %s", txid, peerID)
 
 	// Keep the stream open for potential content requests
@@ -141,6 +143,8 @@ func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txHash typ
 			n.log.Warnf("advertise wait: bad get tx request %q", string(req))
 			return
 		}
+
+		// mets.ReannouncedTxRequest(ctx, txHash, peerID)
 
 		s.SetWriteDeadline(time.Now().Add(txGetTimeout))
 		s.Write(rawTx)
@@ -176,35 +180,6 @@ func randBytes(n int) []byte {
 // startTxAnns handles periodic reannouncement. It can also be modified to
 // regularly create dummy transactions.
 func (n *Node) startTxAnns(ctx context.Context, reannouncePeriod time.Duration) {
-	/*signer := secp256k1Signer()
-	if signer == nil {
-		panic("failed to create secp256k1 signer")
-	}
-
-	n.wg.Add(1)
-	go func() {
-		defer n.wg.Done()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(newPeriod):
-			}
-
-			rawTx, err := randomTx(sz, signer)
-			if err != nil {
-				n.log.Warnf("failed to create random tx: %v", err)
-				continue
-			}
-			txHash := types.HashBytes(rawTx)
-			n.mp.Store(txHash, rawTx)
-
-			// n.log.Infof("announcing txid %v", txid)
-			n.announceTx(ctx, txHash, rawTx, n.host.ID())
-		}
-	}()*/
-
 	n.wg.Add(1)
 	go func() {
 		defer n.wg.Done()

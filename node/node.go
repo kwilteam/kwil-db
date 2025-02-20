@@ -23,6 +23,7 @@ import (
 	adminTypes "github.com/kwilteam/kwil-db/core/types/admin"
 	chainTypes "github.com/kwilteam/kwil-db/core/types/chain"
 	"github.com/kwilteam/kwil-db/node/consensus"
+	"github.com/kwilteam/kwil-db/node/metrics"
 	"github.com/kwilteam/kwil-db/node/peers"
 	"github.com/kwilteam/kwil-db/node/peers/sec"
 	"github.com/kwilteam/kwil-db/node/types"
@@ -39,6 +40,11 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/transport/tcp"
 	"github.com/multiformats/go-multiaddr"
 )
+
+// by default the mets interface points to the metrics.Node struct
+// implementation in the metrics packages. The use of an interface allows this
+// to be overridden.
+var mets metrics.NodeMetrics = metrics.Node
 
 // AppVersion encompasses all aspects of the Kwil DB application. A new version
 // indicates incompatible changes to the application, and nodes with different

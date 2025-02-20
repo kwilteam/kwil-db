@@ -167,6 +167,8 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 		peerID = id
 	}
 
+	mets.DownloadedBlock(context.Background(), height, int64(len(rawBlk)))
+
 	n.log.Debugf("obtained content for block %q in %v", blkid, time.Since(t0))
 
 	blk, err := ktypes.DecodeBlock(rawBlk)
