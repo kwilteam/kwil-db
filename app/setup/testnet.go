@@ -114,7 +114,6 @@ type TestnetConfig struct {
 	DnsNamePrefix string // optional and only used if DnsHost is true (default: node)
 	Hostnames     []string
 	Allocs        []string
-	Owner         string
 }
 
 type ConfigOpts struct {
@@ -197,7 +196,6 @@ func GenerateTestnetConfigs(cfg *TestnetConfig, opts *ConfigOpts, gencfg *config
 	gencfg.ChainID = chainID
 	gencfg.Leader = types.PublicKey{PublicKey: leaderPub}
 	gencfg.Validators = make([]*types.Validator, cfg.NumVals)
-	gencfg.DBOwner = cfg.Owner
 	if gencfg.DBOwner == "" {
 		signer := auth.GetUserSigner(keys[0])
 		ident, err := authExt.GetIdentifierFromSigner(signer)
