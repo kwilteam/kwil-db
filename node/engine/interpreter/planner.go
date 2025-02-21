@@ -1624,7 +1624,7 @@ func (i *interpreterPlanner) VisitCreateTableStatement(p0 *parse.CreateTableStat
 			return err
 		}
 
-		return exec.reloadTables()
+		return exec.reloadNamespaceCache()
 	})
 }
 
@@ -1665,7 +1665,7 @@ func (i *interpreterPlanner) VisitDropTableStatement(p0 *parse.DropTableStatemen
 			return err
 		}
 
-		return exec.reloadTables()
+		return exec.reloadNamespaceCache()
 	})
 }
 
@@ -1709,7 +1709,7 @@ func (i *interpreterPlanner) VisitCreateIndexStatement(p0 *parse.CreateIndexStat
 		}
 
 		// we reload tables here because we track indexes in the table object
-		return exec.reloadTables()
+		return exec.reloadNamespaceCache()
 	})
 }
 
@@ -1735,7 +1735,7 @@ func (i *interpreterPlanner) VisitDropIndexStatement(p0 *parse.DropIndexStatemen
 		}
 
 		// we reload tables here because we track indexes in the table object
-		return exec.reloadTables()
+		return exec.reloadNamespaceCache()
 	})
 }
 
@@ -2111,7 +2111,7 @@ func (i *interpreterPlanner) VisitAlterTableStatement(p0 *parse.AlterTableStatem
 			return err
 		}
 
-		return exec.reloadTables()
+		return exec.reloadNamespaceCache()
 	})
 }
 

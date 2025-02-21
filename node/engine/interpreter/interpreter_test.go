@@ -3046,3 +3046,48 @@ func newTestInterp(t *testing.T, tx sql.DB, seeds []string, includeTestTables bo
 
 	return interp
 }
+
+// This tests that dropping a namespace invalidates the statement cache.
+// If the cache is not invalidated, the test will fail because it will try to insert
+// a string into an integer column.
+func Test_NamespaceDropsCache(t *testing.T) {
+	db := newTestDB(t, nil, nil)
+
+	ctx := context.Background()
+	tx, err := db.BeginTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx) // always rollback
+
+	interp := newTestInterp(t, tx, nil, true)
+
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `CREATE NAMESPACE test_ns;`, nil, nil)
+	require.NoError(t, err)
+
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `{test_ns}CREATE TABLE test_table (id INT PRIMARY KEY);`, nil, nil)
+	require.NoError(t, err)
+
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `{test_ns}CREATE ACTION smthn($a int) public { INSERT INTO test_table (id) VALUES ($a); }`, nil, nil)
+	require.NoError(t, err)
+
+	_, err = interp.CallWithoutEngineCtx(ctx, tx, "test_ns", "smthn", []any{1}, nil)
+	require.NoError(t, err)
+
+	// drop the namespace
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `DROP NAMESPACE test_ns;`, nil, nil)
+	require.NoError(t, err)
+
+	// create the namespace again
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `CREATE NAMESPACE test_ns;`, nil, nil)
+	require.NoError(t, err)
+
+	// create the table again
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `{test_ns}CREATE TABLE test_table (id TEXT PRIMARY KEY);`, nil, nil)
+	require.NoError(t, err)
+
+	// create the action again
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `{test_ns}CREATE ACTION smthn($a text) public { INSERT INTO test_table (id) VALUES ($a); }`, nil, nil)
+	require.NoError(t, err)
+
+	_, err = interp.CallWithoutEngineCtx(ctx, tx, "test_ns", "smthn", []any{"hello"}, nil)
+	require.NoError(t, err)
+}
