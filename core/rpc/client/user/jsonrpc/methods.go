@@ -53,28 +53,19 @@ func (cl *Client) Broadcast(ctx context.Context, tx *types.Transaction, sync rpc
 	err := cl.CallMethod(ctx, string(userjson.MethodBroadcast), cmd, res)
 	if err != nil {
 		var jsonRPCErr *jsonrpc.Error
-		if errors.As(err, &jsonRPCErr) && jsonRPCErr.Code == jsonrpc.ErrorTxExecFailure && len(jsonRPCErr.Data) > 0 {
+		if errors.As(err, &jsonRPCErr) && jsonRPCErr.Code == jsonrpc.ErrorBroadcastRejected && len(jsonRPCErr.Data) > 0 {
 			var berr userjson.BroadcastError
 			jsonErr := json.Unmarshal(jsonRPCErr.Data, &berr)
 			if jsonErr != nil {
 				return types.Hash{}, errors.Join(jsonErr, err)
 			}
 
-			err = errors.Join(berr, err)
-
-			switch types.TxCode(berr.TxCode) {
-			case types.CodeWrongChain:
-				return types.Hash{}, errors.Join(types.ErrWrongChain, err)
-			case types.CodeInvalidNonce:
-				return types.Hash{}, errors.Join(types.ErrInvalidNonce, err)
-			case types.CodeInvalidAmount:
-				return types.Hash{}, errors.Join(types.ErrInvalidAmount, err)
-			case types.CodeInsufficientBalance:
-				return types.Hash{}, errors.Join(types.ErrInsufficientBalance, err)
-			}
+			err = errors.Join(types.BroadcastCodeToError(types.TxCode(berr.ErrCode)), berr, err)
 		}
 		return types.Hash{}, err
 	}
+	// NOTE: if sync was BroadcastSyncCommit, we may have a *TxResult to return
+	// also...
 	return res.TxHash, nil
 }
 

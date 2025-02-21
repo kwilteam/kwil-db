@@ -7,11 +7,14 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
-var ErrNotFound = types.ErrNotFound
+// The following errors must be aliases for errors.Is to work properly.
+var (
+	ErrNotFound   = types.ErrNotFound
+	ErrTxNotFound = types.ErrTxNotFound
+)
 
 var (
 	HashBytes          = types.HashBytes
-	ErrTxNotFound      = errors.New("tx not available")
 	ErrTxAlreadyExists = errors.New("transaction already exists")
 	ErrBlkNotFound     = errors.New("block not available")
 	ErrStillProcessing = errors.New("block still being executed")

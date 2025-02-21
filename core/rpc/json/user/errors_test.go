@@ -15,7 +15,7 @@ func TestBroadcastError_Error(t *testing.T) {
 		{
 			name: "standard error",
 			err: BroadcastError{
-				TxCode:  1,
+				ErrCode: 1,
 				Hash:    "abc123",
 				Message: "test error",
 			},
@@ -24,7 +24,7 @@ func TestBroadcastError_Error(t *testing.T) {
 		{
 			name: "zero code error",
 			err: BroadcastError{
-				TxCode:  0,
+				ErrCode: 0,
 				Hash:    "def456",
 				Message: "another error",
 			},
@@ -33,7 +33,7 @@ func TestBroadcastError_Error(t *testing.T) {
 		{
 			name: "empty hash error",
 			err: BroadcastError{
-				TxCode:  2,
+				ErrCode: 2,
 				Hash:    "",
 				Message: "empty hash",
 			},
@@ -42,7 +42,7 @@ func TestBroadcastError_Error(t *testing.T) {
 		{
 			name: "empty message error",
 			err: BroadcastError{
-				TxCode:  3,
+				ErrCode: 3,
 				Hash:    "ghi789",
 				Message: "",
 			},

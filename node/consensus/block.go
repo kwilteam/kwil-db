@@ -123,11 +123,13 @@ func (ce *ConsensusEngine) recheckTx(ctx context.Context, tx *ktypes.Transaction
 	return ce.blockProcessor.CheckTx(ctx, tx, height, timestamp, true)
 }
 
-// BroadcastTx checks the Tx with the mempool and if the verification is successful, broadcasts the Tx to the network.
-// If sync is set to 1, the BroadcastTx returns only after the Tx is successfully committed in a block.
-func (ce *ConsensusEngine) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (*ktypes.ResultBroadcastTx, error) {
+// BroadcastTx checks the transaction with the mempool and if the verification
+// is successful, broadcasts it to the network. The TxResult will be nil unless
+// sync is set to 1, in which case the BroadcastTx returns only after it is
+// successfully executed in a committed block.
+func (ce *ConsensusEngine) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (types.Hash, *ktypes.TxResult, error) {
 	if err := ce.CheckTx(ctx, tx); err != nil {
-		return nil, err
+		return types.Hash{}, nil, err
 	}
 
 	rawTx := tx.Bytes()
@@ -136,9 +138,7 @@ func (ce *ConsensusEngine) BroadcastTx(ctx context.Context, tx *ktypes.Transacti
 	// add the transaction to the mempool
 	have, rejected := ce.mempool.Store(txHash, tx)
 	if rejected {
-		return &ktypes.ResultBroadcastTx{
-			Hash: txHash,
-		}, ktypes.ErrMempoolFull
+		return txHash, nil, ktypes.ErrMempoolFull
 	}
 
 	// Announce the transaction to the network only if not previously announced
@@ -148,35 +148,25 @@ func (ce *ConsensusEngine) BroadcastTx(ctx context.Context, tx *ktypes.Transacti
 		go ce.txAnnouncer(context.Background(), txHash, rawTx)
 	}
 
-	res := &ktypes.ResultBroadcastTx{
-		Hash: txHash, // Code and Log are set only if sync is set to 1
-	}
-
 	// If sync is set to 1, wait for the transaction to be committed in a block.
 	if sync == 1 { // Blocking code
 		subChan, err := ce.SubscribeTx(txHash)
 		if err != nil {
-			return &ktypes.ResultBroadcastTx{
-				Hash: txHash,
-			}, err
+			return txHash, nil, err
 		}
 		defer ce.UnsubscribeTx(txHash) // Unsubscribe tx if BroadcastTx returns
 
 		select {
 		case txRes := <-subChan:
-			return &ktypes.ResultBroadcastTx{
-				Code: txRes.Code,
-				Hash: txHash,
-				Log:  txRes.Log,
-			}, nil
+			return txHash, &txRes, nil
 		case <-ctx.Done():
-			return res, ctx.Err()
+			return types.Hash{}, nil, ctx.Err()
 		case <-time.After(ce.broadcastTxTimeout):
-			return res, errors.New("timed out waiting for tx to be included in a block")
+			return types.Hash{}, nil, ktypes.ErrTxTimeout
 		}
 	}
 
-	return res, nil
+	return txHash, nil, nil
 }
 
 func (ce *ConsensusEngine) ConsensusParams() *ktypes.NetworkParameters {

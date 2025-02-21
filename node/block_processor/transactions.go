@@ -365,7 +365,7 @@ func (bp *BlockProcessor) BroadcastVoteIDTx(ctx context.Context, db sql.DB) erro
 		return nil
 	}
 
-	_, err = bp.broadcastTxFn(ctx, tx, 0)
+	_, _, err = bp.broadcastTxFn(ctx, tx, 0)
 	if err != nil {
 		return err
 	}

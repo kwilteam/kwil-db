@@ -357,8 +357,8 @@ func (ce *dummyCE) CheckTx(ctx context.Context, tx *ktypes.Transaction) error {
 	return nil
 }
 
-func (ce *dummyCE) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (*ktypes.ResultBroadcastTx, error) {
-	return nil, nil
+func (ce *dummyCE) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (ktypes.Hash, *ktypes.TxResult, error) {
+	return types.Hash{}, nil, nil
 }
 
 func (ce *dummyCE) ConsensusParams() *ktypes.NetworkParameters {
