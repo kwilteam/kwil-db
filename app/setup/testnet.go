@@ -31,8 +31,9 @@ func TestnetCmd() *cobra.Command {
 	var numVals, numNVals int
 	var noPex, uniquePorts bool
 	var startingPort uint64
-	var outDir, dbOwner string
-	var hostnames []string
+	var outDir, chainID string
+	var hostnames, allocs []string
+	var paramFlags networkParams
 
 	cmd := &cobra.Command{
 
@@ -44,18 +45,34 @@ func TestnetCmd() *cobra.Command {
 		// try to read the config from a ~/.kwild directory
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error { return nil },
 		RunE: func(cmd *cobra.Command, args []string) error {
-			err := GenerateTestnetConfigs(&TestnetConfig{
+			genCfg := config.DefaultGenesisConfig()
+			genCfg, err := mergeNetworkParamFlags(genCfg, cmd, &paramFlags)
+			if err != nil {
+				return display.PrintErr(cmd, err)
+			}
+
+			// parse the allocs flag
+			if cmd.Flags().Changed(allocsFlag) {
+				allocs, err := parseAllocs(allocs)
+				if err != nil {
+					return display.PrintErr(cmd, err)
+				}
+
+				genCfg.Allocs = allocs
+			}
+
+			err = GenerateTestnetConfigs(&TestnetConfig{
 				RootDir:      outDir,
 				NumVals:      numVals,
 				NumNVals:     numNVals,
 				NoPex:        noPex,
 				StartingPort: startingPort,
-				Owner:        dbOwner,
 				Hostnames:    hostnames,
+				ChainID:      chainID,
 			}, &ConfigOpts{
 				UniquePorts: uniquePorts,
 				DnsHost:     false,
-			})
+			}, genCfg)
 			if err != nil {
 				return display.PrintErr(cmd, err)
 			}
@@ -78,8 +95,11 @@ func TestnetCmd() *cobra.Command {
 	cmd.Flags().Uint64VarP(&startingPort, "port", "p", 6600, "starting P2P port for the nodes")
 	cmd.Flags().StringVarP(&outDir, "out-dir", "o", ".testnet", "output directory for generated node root directories")
 	cmd.Flags().BoolVarP(&uniquePorts, "unique-ports", "u", false, "use unique ports for each node")
-	cmd.Flags().StringVar(&dbOwner, "db-owner", "", "owner of the database")
 	cmd.Flags().StringSliceVarP(&hostnames, "hostnames", "H", nil, "comma separated list of hostnames for the nodes")
+	cmd.Flags().StringVarP(&chainID, "chain-id", "c", "kwil-testnet", "chain ID for the network")
+	cmd.Flags().StringSliceVar(&allocs, allocsFlag, nil, "address and initial balance allocation(s) in the format id#keyType:amount")
+
+	bindNetworkParamsFlags(cmd, &paramFlags)
 	return cmd
 }
 
@@ -93,6 +113,7 @@ type TestnetConfig struct {
 	StartingIP    string
 	DnsNamePrefix string // optional and only used if DnsHost is true (default: node)
 	Hostnames     []string
+	Allocs        []string
 	Owner         string
 }
 
@@ -111,7 +132,7 @@ type ConfigOpts struct {
 }
 
 // TODO: once changes to the tests are complete, this may not be needed
-func GenerateTestnetConfigs(cfg *TestnetConfig, opts *ConfigOpts) error {
+func GenerateTestnetConfigs(cfg *TestnetConfig, opts *ConfigOpts, gencfg *config.GenesisConfig) error {
 	if len(cfg.Hostnames) > 0 && len(cfg.Hostnames) != cfg.NumVals+cfg.NumNVals {
 		return fmt.Errorf("if set, the number of hostnames %d must be equal to number of validators + number of non-validators %d",
 			len(cfg.Hostnames), cfg.NumVals+cfg.NumNVals)
@@ -172,22 +193,22 @@ func GenerateTestnetConfigs(cfg *TestnetConfig, opts *ConfigOpts) error {
 		chainID = "kwil-testnet"
 	}
 
-	genConfig := config.DefaultGenesisConfig()
-	genConfig.ChainID = chainID
-	genConfig.Leader = types.PublicKey{PublicKey: leaderPub}
-	genConfig.Validators = make([]*types.Validator, cfg.NumVals)
-	genConfig.DBOwner = cfg.Owner
-	if genConfig.DBOwner == "" {
+	// update the rest of the genesis configuration (non network parameters)
+	gencfg.ChainID = chainID
+	gencfg.Leader = types.PublicKey{PublicKey: leaderPub}
+	gencfg.Validators = make([]*types.Validator, cfg.NumVals)
+	gencfg.DBOwner = cfg.Owner
+	if gencfg.DBOwner == "" {
 		signer := auth.GetUserSigner(keys[0])
 		ident, err := authExt.GetIdentifierFromSigner(signer)
 		if err != nil {
 			return fmt.Errorf("failed to get identifier from user signer for dbOwner: %w", err)
 		}
-		genConfig.DBOwner = ident
+		gencfg.DBOwner = ident
 	}
 
 	for i := range cfg.NumVals {
-		genConfig.Validators[i] = &types.Validator{
+		gencfg.Validators[i] = &types.Validator{
 			AccountID: types.AccountID{
 				Identifier: keys[i].Public().Bytes(),
 				KeyType:    keys[i].Type(),
@@ -214,7 +235,7 @@ func GenerateTestnetConfigs(cfg *TestnetConfig, opts *ConfigOpts) error {
 			NoPEX:           cfg.NoPex,
 			RootDir:         filepath.Join(outDir, fmt.Sprintf("node%d", i)),
 			NodeKey:         keys[i],
-			Genesis:         genConfig,
+			Genesis:         gencfg,
 			BootNodes:       bootNodes,
 			ExternalAddress: externalAddress,
 		})
@@ -235,7 +256,6 @@ type NodeGenConfig struct {
 	NodeKey    *crypto.Secp256k1PrivateKey
 	Genesis    *config.GenesisConfig
 
-	// TODO: gasEnabled, private p2p, auth RPC, join expiry, allocs, etc.
 	BootNodes       []string
 	ExternalAddress string
 }
