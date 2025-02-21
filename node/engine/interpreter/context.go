@@ -220,7 +220,7 @@ func (e *executionContext) prepareQuery(sql string) (pgSql string, plan *logical
 
 			return cached.deterministicSQL, cached.deterministicPlan, values, nil
 		}
-		values, err := e.getValues(cached.deterministicParams)
+		values, err := e.getValues(cached.nonDeterministicParams)
 		if err != nil {
 			return "", nil, nil, err
 		}
@@ -342,7 +342,7 @@ func (e *executionContext) prepareQuery(sql string) (pgSql string, plan *logical
 
 		return deterministicSQL, deterministicPlan, values, nil
 	}
-	values, err := e.getValues(deterministicParams)
+	values, err := e.getValues(nonDeterministicParams)
 	if err != nil {
 		return "", nil, nil, err
 	}
