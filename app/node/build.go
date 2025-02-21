@@ -99,9 +99,6 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	// Consensus
 	ce := buildConsensusEngine(ctx, d, db, mp, bs, bp)
 
-	// Erc20 bridge signer service
-	erc20BridgeSignerMgr := buildErc20BridgeSignerMgr(d)
-
 	// Node
 	node := buildNode(d, mp, bs, ce, snapshotStore, db, bp, p2pSvc)
 
@@ -150,6 +147,8 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 		jsonRPCAdminServer.RegisterSvc(&funcsvc.Service{})
 		jsonRPCAdminServer.RegisterSvc(jsonChainSvc)
 	}
+
+	erc20BridgeSignerMgr := buildErc20BridgeSignerMgr(d, db, e, node, bp)
 
 	s := &server{
 		cfg:                d.cfg,
@@ -511,7 +510,9 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB,
 	return ce
 }
 
-func buildErc20BridgeSignerMgr(d *coreDependencies) *signersvc.ServiceMgr {
+func buildErc20BridgeSignerMgr(d *coreDependencies, db *pg.DB,
+	engine *interpreter.ThreadSafeInterpreter, node *node.Node,
+	bp *blockprocessor.BlockProcessor) *signersvc.ServiceMgr {
 	// create shared state
 	stateFile := signersvc.StateFilePath(d.rootDir)
 
@@ -528,14 +529,8 @@ func buildErc20BridgeSignerMgr(d *coreDependencies) *signersvc.ServiceMgr {
 		failBuild(err, "Failed to load erc20 bridge signer state file")
 	}
 
-	rpcUrl := "http://" + d.cfg.RPC.ListenAddress
-
-	mgr, err := signersvc.NewServiceMgr(rpcUrl, d.cfg.Erc20Bridge, state, d.logger.New("EVMRW"))
-	if err != nil {
-		failBuild(err, "Failed to create erc20 bridge signer service manager")
-	}
-
-	return mgr
+	return signersvc.NewServiceMgr(d.genesisCfg.ChainID, db, engine, node, bp,
+		d.cfg.Erc20Bridge, state, d.logger.New("EVMRW"))
 }
 
 func buildNode(d *coreDependencies, mp *mempool.Mempool, bs *store.BlockStore,

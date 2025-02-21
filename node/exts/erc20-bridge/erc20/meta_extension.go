@@ -511,7 +511,7 @@ func init() {
 						},
 						Returns: &precompiles.MethodReturn{
 							Fields: []precompiles.PrecompileValue{
-								{Name: "chain_id", Type: types.TextType},
+								{Name: "chain", Type: types.TextType},
 								{Name: "escrow", Type: types.TextType},
 								{Name: "epoch_period", Type: types.TextType},
 								{Name: "erc20", Type: types.TextType, Nullable: true},
@@ -545,7 +545,6 @@ func init() {
 								erc20Addr := info.syncedRewardData.Erc20Address.Hex()
 								erc20Address = &erc20Addr
 								decimals = &info.syncedRewardData.Erc20Decimals
-								//owbalStr := info.ownedBalance.String()
 								ownedBalance = info.ownedBalance
 								syncedAt = &info.syncedAt
 							}
@@ -1250,7 +1249,7 @@ func init() {
 				}
 
 				if leafNum == 0 {
-					app.Service.Logger.Info("no rewards to distribute, deplay finalized current epoch")
+					app.Service.Logger.Info("no rewards to distribute, delay finalized current epoch")
 					return nil
 				}
 
