@@ -80,13 +80,45 @@ func ExtractLogs(bstore string, startBlock int64, endBlock int64, logFile string
 		return nil, fmt.Errorf("failed to open blockstore: %w", err)
 	}
 
-	logs := make([]Log, endBlock-startBlock+1)
-
 	// ensure that the blockstore has the start and end blocks
 	h, _, _, _ := bs.Best()
 	if h < endBlock {
 		return nil, fmt.Errorf("blockstore does not have the required blocks, highest block is %d, required %d", h, endBlock)
 	}
+
+	// Adjust the start and end blocks to avoid empty blocks which are not part of the stress test
+	// height := startBlock
+	// for height < endBlock {
+	// 	_, blk, _, err := bs.GetByHeight(startBlock)
+	// 	if err != nil {
+	// 		return nil, fmt.Errorf("failed to get start block: %w", err)
+	// 	}
+
+	// 	if blk.Header.NumTxns > 0 { // first non empty block, use this as start block
+	// 		break
+	// 	}
+	// 	height++
+	// }
+	// startBlock = height
+
+	// height = endBlock
+	// for height > startBlock {
+	// 	_, blk, _, err := bs.GetByHeight(height)
+	// 	if err != nil {
+	// 		return nil, fmt.Errorf("failed to get end block: %w", err)
+	// 	}
+	// 	if blk.Header.NumTxns > 0 { // last non empty block, use this as end block
+	// 		break
+	// 	}
+	// 	height--
+	// }
+	// endBlock = height
+
+	if endBlock <= startBlock {
+		return nil, fmt.Errorf("no blocks with txns found between %d and %d", startBlock, endBlock)
+	}
+
+	logs := make([]Log, endBlock-startBlock+1)
 
 	_, blkPre, _, err := bs.GetByHeight(startBlock - 1)
 	if err != nil {

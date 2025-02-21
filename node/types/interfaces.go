@@ -16,6 +16,7 @@ var (
 	ErrBlkNotFound     = errors.New("block not available")
 	ErrStillProcessing = errors.New("block still being executed")
 	ErrNoResponse      = errors.New("stream closed without response")
+	ErrPeersNotFound   = errors.New("no peers available")
 )
 
 const HashLen = types.HashLen

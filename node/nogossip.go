@@ -50,7 +50,7 @@ func (n *Node) txAnnStreamHandler(s network.Stream) {
 	// First try to get from this stream.
 	rawTx, err := requestTx(s, []byte(getMsg))
 	if err != nil {
-		n.log.Warnf("announcer failed to provide %v, trying other peers", txHash)
+		n.log.Warnf("announcer failed to provide %v due to error %v, trying other peers", txHash, err)
 		// Since we are aware, ask other peers. we could also put this in a goroutine
 		s.Close() // close the announcers stream first
 		rawTx, err = n.getTxWithRetry(context.TODO(), txHash, 500*time.Millisecond, 10)
@@ -121,7 +121,7 @@ func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txHash typ
 	// Send a lightweight advertisement with the object ID
 	_, err = newTxHashAnn(txHash).WriteTo(s)
 	if err != nil {
-		return fmt.Errorf("txann failed: %w", err)
+		return fmt.Errorf("txann failed to peer %s: %w", peerID, err)
 	}
 
 	// n.log.Infof("advertised tx content %s to peer %s", txid, peerID)

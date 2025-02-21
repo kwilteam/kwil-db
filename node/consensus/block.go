@@ -63,6 +63,36 @@ func (ce *ConsensusEngine) validateBlock(blk *ktypes.Block) error {
 		return fmt.Errorf("block size %d exceeds max block size %d", blockTxnsSize, maxBlockSize)
 	}
 
+	// Ensure that the number of event and resolution IDs within validator vote transactions votes
+	// per transaction does not exceed the max consensus limit.
+	maxVotesPerTx := ce.ConsensusParams().MaxVotesPerTx
+	for _, txn := range blk.Txns {
+		if txn.Body.PayloadType == ktypes.PayloadTypeValidatorVoteBodies {
+			// unmarshal the payload
+			vote := &ktypes.ValidatorVoteBodies{}
+			err := vote.UnmarshalBinary(txn.Body.Payload)
+			if err != nil {
+				return fmt.Errorf("failed to unmarshal validator vote body: %v", err)
+			}
+
+			if int64(len(vote.Events)) > maxVotesPerTx {
+				return fmt.Errorf("max votes exceeded in tx of type %s : %d > %d", txn.Body.PayloadType, len(vote.Events), maxVotesPerTx)
+			}
+
+		} else if txn.Body.PayloadType == ktypes.PayloadTypeValidatorVoteIDs {
+			// unmarshal the payload
+			vote := &ktypes.ValidatorVoteIDs{}
+			err := vote.UnmarshalBinary(txn.Body.Payload)
+			if err != nil {
+				return fmt.Errorf("failed to unmarshal validator vote id: %v", err)
+			}
+
+			if int64(len(vote.ResolutionIDs)) > maxVotesPerTx {
+				return fmt.Errorf("max votes exceeded in tx of type %s : %d > %d", txn.Body.PayloadType, len(vote.ResolutionIDs), maxVotesPerTx)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -104,11 +134,15 @@ func (ce *ConsensusEngine) BroadcastTx(ctx context.Context, tx *ktypes.Transacti
 	txHash := types.HashBytes(rawTx)
 
 	// add the transaction to the mempool
-	ce.mempool.Store(txHash, tx)
+	have, rejected := ce.mempool.Store(txHash, tx)
+	if rejected {
+		return &ktypes.ResultBroadcastTx{
+			Hash: txHash,
+		}, ktypes.ErrMempoolFull
+	}
 
-	// Announce the transaction to the network
-	if ce.txAnnouncer != nil {
-		ce.log.Debugf("broadcasting new tx %v", txHash)
+	// Announce the transaction to the network only if not previously announced
+	if ce.txAnnouncer != nil && !have {
 		// We can't use parent context 'cause it's canceled in the caller, which
 		// could be the RPC request. handler.  This shouldn't be CE's problem...
 		go ce.txAnnouncer(context.Background(), txHash, rawTx)
@@ -231,7 +265,7 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 	ce.mempool.RecheckTxs(ctx, ce.recheckTx)
 
 	ce.log.Info("Committed Block", "height", height, "hash", blkProp.blkHash.String(),
-		"appHash", appHash.String(), "updates", ce.state.blockRes.paramUpdates)
+		"appHash", appHash.String(), "numTxs", blkProp.blk.Header.NumTxns)
 
 	// update and reset the state fields
 	ce.nextState()
@@ -268,6 +302,8 @@ func (ce *ConsensusEngine) rollbackState(ctx context.Context) error {
 	}
 
 	ce.resetState()
+	ce.stateInfo.hasBlock.Store(ce.state.lc.height)
+
 	return nil
 }
 
@@ -288,6 +324,8 @@ func (ce *ConsensusEngine) resetState() {
 	ce.stateInfo.height = ce.state.lc.height
 	ce.stateInfo.lastCommit = *ce.state.lc
 	ce.stateInfo.mtx.Unlock()
+
+	ce.stateInfo.hasBlock.Store(ce.state.lc.height)
 
 	ce.cancelFnMtx.Lock()
 	ce.blkExecCancelFn = nil

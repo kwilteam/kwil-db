@@ -96,7 +96,7 @@ func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context, requester
 			if errors.Is(err, context.Canceled) {
 				return err
 			}
-			if errors.Is(err, types.ErrBlkNotFound) || errors.Is(err, types.ErrNotFound) {
+			if errors.Is(err, types.ErrBlkNotFound) || errors.Is(err, types.ErrNotFound) || errors.Is(err, types.ErrPeersNotFound) {
 				break // no peers have this block, assume block sync is complete, continue with consensus
 			}
 			ce.log.Warn("unexpected error requesting block from the network", "height", height, "error", err)
@@ -130,25 +130,25 @@ func (ce *ConsensusEngine) syncBlocksUntilHeight(ctx context.Context, startHeigh
 // syncBlockWithRetry fetches the specified block from the network and keeps retrying until
 // the block is successfully retrieved from the network.
 func (ce *ConsensusEngine) syncBlockWithRetry(ctx context.Context, height int64) error {
-	_, rawblk, ci, err := ce.getBlock(ctx, height)
+	blkID, rawBlk, ci, err := ce.getBlock(ctx, height)
 	if err != nil {
 		return fmt.Errorf("failed to get block from the network: %w", err)
 	}
 
-	return ce.applyBlock(ctx, rawblk, ci)
+	return ce.applyBlock(ctx, rawBlk, ci, blkID)
 }
 
 // syncBlock fetches the specified block from the network
 func (ce *ConsensusEngine) syncBlock(ctx context.Context, height int64) error {
-	_, rawblk, ci, err := ce.blkRequester(ctx, height)
+	blkID, rawblk, ci, _, err := ce.blkRequester(ctx, height)
 	if err != nil {
 		return fmt.Errorf("failed to get block from the network: %w", err)
 	}
 
-	return ce.applyBlock(ctx, rawblk, ci)
+	return ce.applyBlock(ctx, rawblk, ci, blkID)
 }
 
-func (ce *ConsensusEngine) applyBlock(ctx context.Context, rawBlk []byte, ci *types.CommitInfo) error {
+func (ce *ConsensusEngine) applyBlock(ctx context.Context, rawBlk []byte, ci *types.CommitInfo, blkID types.Hash) error {
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
@@ -157,7 +157,7 @@ func (ce *ConsensusEngine) applyBlock(ctx context.Context, rawBlk []byte, ci *ty
 		return fmt.Errorf("failed to decode block: %w", err)
 	}
 
-	if err := ce.processAndCommit(ctx, blk, ci); err != nil {
+	if err := ce.processAndCommit(ctx, blk, ci, blkID); err != nil {
 		return fmt.Errorf("failed to apply block: %w", err)
 	}
 
@@ -166,7 +166,7 @@ func (ce *ConsensusEngine) applyBlock(ctx context.Context, rawBlk []byte, ci *ty
 
 func (ce *ConsensusEngine) getBlock(ctx context.Context, height int64) (blkID types.Hash, rawBlk []byte, ci *types.CommitInfo, err error) {
 	err = blkRetrier(ctx, 15, func() error {
-		blkID, rawBlk, ci, err = ce.blkRequester(ctx, height)
+		blkID, rawBlk, ci, _, err = ce.blkRequester(ctx, height)
 		return err
 	})
 

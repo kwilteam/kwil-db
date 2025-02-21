@@ -5,11 +5,14 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"io"
+	"slices"
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/node/peers"
 	"github.com/kwilteam/kwil-db/node/types"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/network"
@@ -48,6 +51,7 @@ func (n *Node) blkGetStreamHandler(s network.Stream) {
 	}
 }
 
+// blkGetHeightStreamHandler is the stream handler for ProtocolIDBlockHeight.
 func (n *Node) blkGetHeightStreamHandler(s network.Stream) {
 	defer s.Close()
 
@@ -60,19 +64,25 @@ func (n *Node) blkGetHeightStreamHandler(s network.Stream) {
 	}
 	n.log.Debug("Peer requested block", "height", req.Height)
 
+	bestHeight, _, _, _ := n.bki.Best()
+
 	hash, blk, ci, err := n.bki.GetByHeight(req.Height)
 	if err != nil || ci == nil {
 		s.SetWriteDeadline(time.Now().Add(reqRWTimeout))
 		s.Write(noData) // don't have it
+		// also write our best height
+		binary.Write(s, binary.LittleEndian, bestHeight)
 	} else {
 		rawBlk := ktypes.EncodeBlock(blk) // blkHash := blk.Hash()
 		ciBytes, _ := ci.MarshalBinary()
 		// maybe we remove hash from the protocol, was thinking receiver could
 		// hang up earlier depending...
 		s.SetWriteDeadline(time.Now().Add(blkSendTimeout))
+		s.Write(withData)
 		s.Write(hash[:])
 		ktypes.WriteCompactBytes(s, ciBytes)
 		ktypes.WriteCompactBytes(s, rawBlk)
+		binary.Write(s, binary.LittleEndian, bestHeight)
 	}
 }
 
@@ -105,6 +115,9 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 	// If we are a validator and this is the commit ann for a proposed block
 	// that we already started executing, consensus engine will handle it.
 	if !n.ce.AcceptCommit(height, blkHash, hdr, ci, sig) {
+		// this either means that the ce already has the block or it is not
+		// ready to accept it yet.  In either case, we don't need to do anything
+		// here.
 		return
 	}
 
@@ -112,7 +125,6 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 	// code like a sentry node might do.
 
 	need, done := n.bki.PreFetch(blkHash)
-	defer done()
 	if !need {
 		n.log.Debug("ALREADY HAVE OR FETCHING BLOCK")
 		return // we have or are currently fetching it, do nothing, assuming we have already re-announced
@@ -121,28 +133,38 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 	n.log.Debug("retrieving new block", "blockID", blkid)
 	t0 := time.Now()
 
+	peerID := s.Conn().RemotePeer()
+
 	// First try to get from this stream.
 	rawBlk, err := request(s, []byte(getMsg), blkReadLimit)
 	if err != nil {
-		n.log.Warnf("announcer failed to provide %v, trying other peers", blkid)
+		n.log.Warnf("announcer failed to provide %v due to error: %v, trying other peers", blkid, err)
 		// Since we are aware, ask other peers. we could also put this in a goroutine
 		s.Close() // close the announcers stream first
 		var gotHeight int64
 		var gotCI *types.CommitInfo
-
-		gotHeight, rawBlk, gotCI, err = n.getBlkWithRetry(ctx, blkHash, 500*time.Millisecond, 10)
+		var id peer.ID
+		gotHeight, rawBlk, gotCI, id, err = n.getBlkWithRetry(ctx, blkHash, 500*time.Millisecond, 10)
 		if err != nil {
 			n.log.Errorf("unable to retrieve tx %v: %v", blkid, err)
+			done()
 			return
 		}
 		if gotHeight != height {
 			n.log.Errorf("getblk response had unexpected height: wanted %d, got %d", height, gotHeight)
+			done()
 			return
 		}
 		if gotCI != nil && gotCI.AppHash != ci.AppHash {
 			n.log.Errorf("getblk response had unexpected appHash: wanted %v, got %v", ci.AppHash, gotCI.AppHash)
+			done()
 			return
 		}
+		// Ensure that the peerID from which the block was downloaded is a valid one.
+		if id != "" {
+			n.log.Errorf("getblk response had unexpected peerID: %v", id)
+		}
+		peerID = id
 	}
 
 	n.log.Debugf("obtained content for block %q in %v", blkid, time.Since(t0))
@@ -150,22 +172,26 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 	blk, err := ktypes.DecodeBlock(rawBlk)
 	if err != nil {
 		n.log.Infof("decodeBlock failed for %v: %v", blkid, err)
+		done()
 		return
 	}
 	if blk.Header.Height != height {
 		n.log.Infof("getblk response had unexpected height: wanted %d, got %d", height, blk.Header.Height)
+		done()
 		return
 	}
 	gotBlkHash := blk.Header.Hash()
 	if gotBlkHash != blkHash {
 		n.log.Infof("invalid block hash: wanted %v, got %x", blkHash, gotBlkHash)
+		done()
 		return
 	}
 
 	// re-announce
-	n.ce.NotifyBlockCommit(blk, ci)
+	n.log.Infof("downloaded block %v of height %d from %v, notifying ce of the block", blkid, height, peerID)
+	n.ce.NotifyBlockCommit(blk, ci, blkHash, done)
 	go func() {
-		n.announceRawBlk(context.Background(), blkHash, height, rawBlk, blk.Header, ci, s.Conn().RemotePeer(), reqMsg.LeaderSig) // re-announce with the leader's signature
+		n.announceRawBlk(context.Background(), blkHash, height, rawBlk, blk.Header, ci, peerID, reqMsg.LeaderSig) // re-announce with the leader's signature
 	}()
 }
 
@@ -189,7 +215,8 @@ func (n *Node) announceRawBlk(ctx context.Context, blkHash types.Hash, height in
 		if peerID == from {
 			continue
 		}
-		n.log.Infof("advertising block %s (height %d / sz %d / updates %v) to peer %v",
+
+		n.log.Debugf("advertising block %s (height %d / sz %d / updates %v) to peer %v",
 			blkHash, height, len(rawBlk), ci.ParamUpdates, peerID)
 		resID, err := blockAnnMsg{
 			Hash:       blkHash,
@@ -213,12 +240,12 @@ func (n *Node) announceRawBlk(ctx context.Context, blkHash types.Hash, height in
 }
 
 func (n *Node) getBlkWithRetry(ctx context.Context, blkHash types.Hash, baseDelay time.Duration,
-	maxAttempts int) (int64, []byte, *types.CommitInfo, error) {
+	maxAttempts int) (int64, []byte, *types.CommitInfo, peer.ID, error) {
 	var attempts int
 	for {
-		height, raw, ci, err := n.getBlk(ctx, blkHash)
+		height, raw, ci, peer, err := n.getBlk(ctx, blkHash)
 		if err == nil {
-			return height, raw, ci, nil
+			return height, raw, ci, peer, nil
 		}
 
 		n.log.Warnf("unable to retrieve block %v (%v), waiting to retry", blkHash, err)
@@ -230,14 +257,13 @@ func (n *Node) getBlkWithRetry(ctx context.Context, blkHash types.Hash, baseDela
 		baseDelay *= 2
 		attempts++
 		if attempts >= maxAttempts {
-			return 0, nil, nil, ErrBlkNotFound
+			return 0, nil, nil, "", ErrBlkNotFound
 		}
 	}
 }
 
-func (n *Node) getBlk(ctx context.Context, blkHash types.Hash) (int64, []byte, *types.CommitInfo, error) {
+func (n *Node) getBlk(ctx context.Context, blkHash types.Hash) (int64, []byte, *types.CommitInfo, peer.ID, error) {
 	for _, peer := range n.peers() {
-		n.log.Infof("requesting block %v from %v", blkHash, peer)
 		t0 := time.Now()
 		resID, _ := blockHashReq{Hash: blkHash}.MarshalBinary()
 		resp, err := requestFrom(ctx, n.host, peer, resID, ProtocolIDBlock, blkReadLimit)
@@ -258,7 +284,6 @@ func (n *Node) getBlk(ctx context.Context, blkHash types.Hash) (int64, []byte, *
 			n.log.Info("block response too short", "peer", peer, "hash", blkHash)
 			continue
 		}
-
 		n.log.Debug("Obtained content for block", "block", blkHash, "elapsed", time.Since(t0))
 
 		rd := bytes.NewReader(resp)
@@ -286,25 +311,143 @@ func (n *Node) getBlk(ctx context.Context, blkHash types.Hash) (int64, []byte, *
 			continue
 		}
 
-		return height, rawBlk, &ci, nil
+		return height, rawBlk, &ci, peer, nil
 	}
-	return 0, nil, nil, ErrBlkNotFound
+	return 0, nil, nil, "", ErrBlkNotFound
 }
 
-func (n *Node) getBlkHeight(ctx context.Context, height int64) (types.Hash, []byte, *types.CommitInfo, error) {
+func requestBlockHeight(ctx context.Context, host host.Host, peer peer.ID,
+	height, readLimit int64) ([]byte, error) {
+
+	const (
+		reqTimeout  = 2 * time.Second        // stream.Write(resID), sending the request
+		recvTimeout = 20 * time.Second       // allowed time to read entire response with readAll
+		idleTimeout = 500 * time.Millisecond // read timeout before each stream.Read(chunk)
+	)
+
+	resID, _ := blockHeightReq{Height: height}.MarshalBinary()
+	stream, err := host.NewStream(ctx, peer, ProtocolIDBlockHeight)
+	if err != nil {
+		return nil, peers.CompressDialError(err)
+	}
+	defer stream.Close()
+
+	stream.SetWriteDeadline(time.Now().Add(reqTimeout))
+
+	_, err = stream.Write(resID)
+	if err != nil {
+		return nil, fmt.Errorf("resource get request failed: %w", err)
+	}
+
+	resource, err := readAll(stream, readLimit, time.Now().Add(recvTimeout), idleTimeout)
+	if err != nil {
+		return nil, err
+	}
+	if len(resource) < 2 { // empty, or just a flag without additional data
+		return nil, ErrNoResponse
+	}
+
+	// The following convention allows returning extra data in the case that the
+	// resource (the block contents) are not available. In this case, the peer's
+	// best block. We may consider this more broadly for other protocols.
+
+	flag, resource := resource[0], resource[1:]
+
+	switch flag {
+	case noData[0]:
+		err := ErrBlkNotFound
+		if len(resource) == 8 {
+			h := int64(binary.LittleEndian.Uint64(resource))
+			err = errors.Join(err, &ErrNotFoundWithBestHeight{
+				BestHeight: h,
+			})
+		}
+		return nil, err
+	case withData[0]:
+		return resource, nil
+	default:
+		return nil, fmt.Errorf("invalid flag %v in block height response", flag)
+	}
+}
+
+// readAll reads from a stream until EOF or:
+// - the stream is closed
+// - the deadline is reached
+// - the stream is idle (no chunk read) for idleTimeout
+// - the total bytes read exceed the limit
+func readAll(s network.Stream, limit int64, deadline time.Time, idleTimeout time.Duration) ([]byte, error) {
+	r := io.LimitReader(s, limit)
+
+	const readChunk = 512 // like io.ReadAll
+	b := make([]byte, 0, readChunk)
+
+	for {
+		// Check absolute deadline for the entire resource.
+		if time.Now().After(deadline) {
+			return nil, fmt.Errorf("timeout")
+		}
+
+		// Set read deadline for this chunk.
+		s.SetReadDeadline(time.Now().Add(idleTimeout))
+
+		// The following is verbatim from io.ReadAll.
+		n, err := r.Read(b[len(b):cap(b)])
+		b = b[:len(b)+n] // reslice past current length
+		if err != nil {
+			if err == io.EOF {
+				err = nil
+			}
+			return b, err
+		}
+
+		// Add more capacity, to ensure space for another readChunk read.
+		// This is modified from io.ReadAll.
+		b = slices.Grow(b, readChunk) // handles: (cap - len) < readChunk
+	}
+}
+
+func (n *Node) getBlkHeight(ctx context.Context, height int64) (types.Hash, []byte, *types.CommitInfo, int64, error) {
 	return getBlkHeight(ctx, height, n.host, n.log)
 }
 
-func getBlkHeight(ctx context.Context, height int64, host host.Host, log log.Logger) (types.Hash, []byte, *types.CommitInfo, error) {
-	peers := peerHosts(host)
+func getBlkHeight(ctx context.Context, height int64, host host.Host, log log.Logger) (types.Hash, []byte, *types.CommitInfo, int64, error) {
+	availablePeers := peerHosts(host)
+	if len(availablePeers) == 0 {
+		return types.Hash{}, nil, nil, 0, types.ErrPeersNotFound
+	}
 
-	for _, peer := range peers {
-		log.Infof("requesting block number %d from %v", height, peer)
+	cnt := max(len(availablePeers)/5, 1) // 20% of peers
+	availablePeers = availablePeers[:cnt]
+	// incremented when a peer's best height is one less than the requested height
+	// to help determine if the block has not been committed yet and stop
+	// requesting the block from other peers if enough peers indicate that the
+	// block is not available.
+	bestHCnt := 0
+	var bestHeight int64
+
+	for _, peer := range availablePeers {
+		if bestHCnt == 5 {
+			// stop requesting the block if there is an indication that
+			// the block is not made yet.
+			break
+		}
+
 		t0 := time.Now()
-		resID, _ := blockHeightReq{Height: height}.MarshalBinary()
-		resp, err := requestFrom(ctx, host, peer, resID, ProtocolIDBlockHeight, blkReadLimit)
+		resp, err := requestBlockHeight(ctx, host, peer, height, blkReadLimit)
 		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrBlkNotFound) {
-			log.Warnf("block not available on %v", peer)
+			be := new(ErrNotFoundWithBestHeight)
+			if errors.As(err, &be) {
+				theirBest := be.BestHeight
+				if theirBest > bestHeight {
+					bestHeight = theirBest
+				}
+				if theirBest == height-1 {
+					bestHCnt++
+				}
+				log.Infof("block %d not found on peer %s; their best height is %d", height, peer, theirBest)
+			} else {
+				log.Warnf("block not available on %v", peer)
+			}
 			continue
 		}
 		if errors.Is(err, ErrNoResponse) {
@@ -312,7 +455,7 @@ func getBlkHeight(ctx context.Context, height int64, host host.Host, log log.Log
 			continue
 		}
 		if errors.Is(err, context.Canceled) {
-			return types.Hash{}, nil, nil, err
+			return types.Hash{}, nil, nil, 0, err
 		}
 		if err != nil {
 			log.Warnf("unexpected error from %v: %v", peer, err)
@@ -351,9 +494,49 @@ func getBlkHeight(ctx context.Context, height int64, host host.Host, log log.Log
 			log.Warn("failed to read block in the block response", "error", err)
 		}
 
-		return hash, rawBlk, &ci, nil
+		var theirBest int64
+		err = binary.Read(rd, binary.LittleEndian, &theirBest)
+		if err != nil {
+			if !errors.Is(err, io.EOF) {
+				log.Info("failed to read best block height", "error", err)
+				continue
+			} // else the peer didn't want to send it (this is backwards compatible)
+		} else {
+			if theirBest > bestHeight {
+				bestHeight = theirBest
+			}
+		}
+
+		return hash, rawBlk, &ci, bestHeight, nil
 	}
-	return types.Hash{}, nil, nil, ErrBlkNotFound
+
+	err := ErrBlkNotFound
+	if bestHeight > 0 {
+		err = errors.Join(err, &ErrNotFoundWithBestHeight{BestHeight: bestHeight})
+	}
+
+	return types.Hash{}, nil, nil, 0, err
+}
+
+// ErrNotFoundWithBestHeight is an error that contains a BestHeight field, which
+// is used when a block is not found, but the the negative responses from peers
+// contained their best height.
+//
+// Use with errors.As.  For example:
+//
+//	func heightFromErr(err error) int64 {
+//		be := new(ErrNotFoundWithBestHeight)
+//		if errors.As(err, &be) {
+//			return be.BestHeight
+//		}
+//		return -1
+//	}
+type ErrNotFoundWithBestHeight struct {
+	BestHeight int64
+}
+
+func (e *ErrNotFoundWithBestHeight) Error() string {
+	return fmt.Sprintf("block not found, best height: %d", e.BestHeight)
 }
 
 // BlockByHeight returns the block by height. If height <= 0, the latest block

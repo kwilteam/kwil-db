@@ -43,6 +43,7 @@ var (
 	ErrInvalidNonce        = errors.New("invalid nonce")
 	ErrInvalidAmount       = errors.New("invalid amount")
 	ErrInsufficientBalance = errors.New("insufficient balance")
+	ErrMempoolFull         = errors.New("mempool is full")
 )
 
 // TxResult is the result of a transaction execution on chain.
