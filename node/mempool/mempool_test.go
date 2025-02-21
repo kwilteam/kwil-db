@@ -14,6 +14,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	mempoolSz = 200_000_000 // 200MB
+)
+
 func newTx(nonce uint64, sender string) *ktypes.Transaction {
 	return &ktypes.Transaction{
 		Signature: &auth.Signature{},
@@ -28,7 +32,7 @@ func newTx(nonce uint64, sender string) *ktypes.Transaction {
 }
 
 func Test_MempoolRemove(t *testing.T) {
-	m := New()
+	m := New(mempoolSz)
 
 	// Setup test transactions
 	tx1 := types.NamedTx{
@@ -66,7 +70,7 @@ func Test_MempoolRemove(t *testing.T) {
 }
 
 func Test_MempoolReapN(t *testing.T) {
-	m := New()
+	m := New(mempoolSz)
 
 	// Setup test transactions
 	tx1 := types.NamedTx{
@@ -127,7 +131,7 @@ func Test_MempoolReapN(t *testing.T) {
 
 func TestMempool_Size(t *testing.T) {
 	t.Run("size tracking with stored transactions", func(t *testing.T) {
-		mp := New()
+		mp := New(mempoolSz)
 
 		// Create a test transaction
 		tx := newTx(1, "A")
@@ -151,7 +155,7 @@ func TestMempool_Size(t *testing.T) {
 	})
 
 	t.Run("size tracking with multiple transactions", func(t *testing.T) {
-		mp := New()
+		mp := New(mempoolSz)
 
 		tx1 := newTx(1, "A")
 		tx2 := newTx(2, "B")
@@ -173,7 +177,7 @@ func TestMempool_Size(t *testing.T) {
 
 	// Test store same txid again, already found
 	t.Run("size tracking with duplicate txid", func(t *testing.T) {
-		mp := New()
+		mp := New(mempoolSz)
 		tx1 := newTx(1, "A")
 		found, _ := mp.Store(tx1.Hash(), tx1)
 		require.False(t, found)
@@ -183,7 +187,7 @@ func TestMempool_Size(t *testing.T) {
 
 	// Test Store with a low SetMaxSize
 	t.Run("size tracking with SetMaxSize", func(t *testing.T) {
-		mp := New()
+		mp := New(mempoolSz)
 		mp.SetMaxSize(20)
 		tx1 := newTx(1, "abcdefghijklmnopqrstuvwxyz")
 		_, rejected := mp.Store(tx1.Hash(), tx1)
@@ -192,7 +196,7 @@ func TestMempool_Size(t *testing.T) {
 }
 
 func TestMempool_SizeWithRemove(t *testing.T) {
-	mp := New()
+	mp := New(mempoolSz)
 
 	// Create and store two transactions
 	tx1 := newTx(1, "A")
@@ -234,7 +238,7 @@ func TestMempool_SizeWithRemove(t *testing.T) {
 
 func TestMempool_RecheckTxs(t *testing.T) {
 	t.Run("recheck with all valid transactions", func(t *testing.T) {
-		mp := New()
+		mp := New(mempoolSz)
 		tx1 := newTx(1, "A")
 		tx2 := newTx(2, "B")
 
@@ -255,7 +259,7 @@ func TestMempool_RecheckTxs(t *testing.T) {
 	})
 
 	t.Run("recheck with all invalid transactions", func(t *testing.T) {
-		mp := New()
+		mp := New(mempoolSz)
 		tx1 := newTx(1, "A")
 		tx2 := newTx(2, "B")
 
@@ -276,7 +280,7 @@ func TestMempool_RecheckTxs(t *testing.T) {
 	})
 
 	t.Run("recheck with mixed valid/invalid transactions", func(t *testing.T) {
-		mp := New()
+		mp := New(mempoolSz)
 		tx1 := newTx(1, "A")
 		tx2 := newTx(2, "B")
 		tx3 := newTx(3, "C")
@@ -309,7 +313,7 @@ func TestMempool_RecheckTxs(t *testing.T) {
 	})
 
 	t.Run("with a lot more transactions mixed invalid", func(t *testing.T) {
-		mp := New()
+		mp := New(mempoolSz)
 		tx1 := newTx(1, "A")
 		tx2 := newTx(2, "B")
 		tx3 := newTx(3, "C")
@@ -372,7 +376,7 @@ func TestMempool_RecheckTxs(t *testing.T) {
 	})
 
 	t.Run("recheck with canceled context", func(t *testing.T) {
-		mp := New()
+		mp := New(mempoolSz)
 		tx1 := newTx(1, "A")
 		mp.Store(tx1.Hash(), tx1)
 
@@ -396,7 +400,7 @@ func TestMempool_RecheckTxs(t *testing.T) {
 
 func TestMempool_PeekN(t *testing.T) {
 	t.Run("peek with size limit", func(t *testing.T) {
-		mp := New()
+		mp := New(mempoolSz)
 		tx1 := newTx(1, "A")                       // small tx
 		tx2 := newTx(2, strings.Repeat("B", 1000)) // large tx
 		tx3 := newTx(3, "C")                       // small tx
@@ -418,7 +422,7 @@ func TestMempool_PeekN(t *testing.T) {
 	})
 
 	t.Run("peek with zero size limit", func(t *testing.T) {
-		mp := New()
+		mp := New(mempoolSz)
 		tx1 := newTx(1, "A")
 		tx2 := newTx(2, "B")
 
@@ -432,7 +436,7 @@ func TestMempool_PeekN(t *testing.T) {
 	})
 
 	t.Run("peek with n greater than available txs", func(t *testing.T) {
-		mp := New()
+		mp := New(mempoolSz)
 		tx1 := newTx(1, "A")
 		mp.Store(tx1.Hash(), tx1)
 
@@ -442,13 +446,13 @@ func TestMempool_PeekN(t *testing.T) {
 	})
 
 	t.Run("peek with empty mempool", func(t *testing.T) {
-		mp := New()
+		mp := New(mempoolSz)
 		txns := mp.PeekN(1, 1000)
 		assert.Empty(t, txns)
 	})
 
 	t.Run("peek with negative size limit", func(t *testing.T) {
-		mp := New()
+		mp := New(mempoolSz)
 		tx1 := newTx(1, "A")
 		tx2 := newTx(2, "B")
 
@@ -462,7 +466,7 @@ func TestMempool_PeekN(t *testing.T) {
 	})
 
 	t.Run("peek with zero n", func(t *testing.T) {
-		mp := New()
+		mp := New(mempoolSz)
 		tx1 := newTx(1, "A")
 		mp.Store(tx1.Hash(), tx1)
 

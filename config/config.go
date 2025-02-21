@@ -267,6 +267,9 @@ func DefaultConfig() *Config {
 			BlockProposalInterval: types.Duration(1 * time.Second),
 			BlockAnnInterval:      types.Duration(3 * time.Second),
 		},
+		Mempool: MempoolConfig{
+			MaxSize: 200_000_000, // 200MB
+		},
 		Store: StoreConfig{
 			Compression: true,
 		},
@@ -325,6 +328,7 @@ type Config struct {
 
 	P2P          PeerConfig                   `toml:"p2p" comment:"P2P related configuration"`
 	Consensus    ConsensusConfig              `toml:"consensus" comment:"Consensus related configuration"`
+	Mempool      MempoolConfig                `toml:"mempool" comment:"Mempool related configuration"`
 	DB           DBConfig                     `toml:"db" comment:"DB (PostgreSQL) related configuration"`
 	Store        StoreConfig                  `toml:"store" comment:"Block store configuration"`
 	RPC          RPCConfig                    `toml:"rpc" comment:"User RPC service configuration"`
@@ -335,6 +339,11 @@ type Config struct {
 	GenesisState string                       `toml:"genesis_state" comment:"path to the genesis state file, relative to the root directory"`
 	Migrations   MigrationConfig              `toml:"migrations" comment:"zero downtime migration configuration"`
 	Checkpoint   Checkpoint                   `toml:"checkpoint" comment:"checkpoint info for the leader to sync to before proposing a new block"`
+}
+
+type MempoolConfig struct {
+	// MaxSize is the maximum size of the mempool in bytes.
+	MaxSize int64 `toml:"max_size" comment:"maximum size of the mempool in bytes"`
 }
 
 // PeerConfig corresponds to the [p2p] section of the config.

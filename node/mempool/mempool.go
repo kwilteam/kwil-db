@@ -30,11 +30,11 @@ type sizedTx struct {
 
 // New creates a new Mempool instance with a default max size of 200MB.
 // See also SetMaxSize.
-func New() *Mempool {
+func New(sz int64) *Mempool {
 	return &Mempool{
 		txns:     make(map[types.Hash]*sizedTx),
 		fetching: make(map[types.Hash]bool),
-		maxSize:  200_000_000, // 200MB
+		maxSize:  sz,
 	}
 }
 

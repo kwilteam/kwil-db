@@ -41,6 +41,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const (
+	mempoolSz = 200_000_000 // 200MB
+)
+
 var (
 	broadcastFns = BroadcastFns{
 		ProposalBroadcaster: mockBlockPropBroadcaster,
@@ -158,7 +162,7 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) ([]*Config, ma
 		ceConfigs[i] = &Config{
 			PrivateKey:     privKeys[i],
 			Leader:         pubKeys[0],
-			Mempool:        mempool.New(),
+			Mempool:        mempool.New(mempoolSz),
 			BlockStore:     bs,
 			BlockProcessor: bp,
 			// ValidatorSet:          validatorSet,
