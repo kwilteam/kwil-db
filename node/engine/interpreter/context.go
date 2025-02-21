@@ -227,102 +227,33 @@ func (e *executionContext) prepareQuery(sql string) (pgSql string, plan *logical
 		return cached.nonDeterministicSQL, cached.nonDeterministicPlan, values, nil
 	}
 
-	getAST := func() (*parse.SQLStatement, error) {
-		res, err := parse.Parse(sql)
-		if err != nil {
-			return nil, fmt.Errorf("%w: invalid query '%s': %w", engine.ErrParse, sql, err)
-		}
-
-		if len(res) != 1 {
-			// this is an node bug b/c `query` is only called with a single statement
-			// from the interpreter
-			return nil, fmt.Errorf("node bug: expected exactly 1 statement, got %d", len(res))
-		}
-
-		sqlStmt, ok := res[0].(*parse.SQLStatement)
-		if !ok {
-			return nil, fmt.Errorf("node bug: expected *parse.SQLStatement, got %T", res[0])
-		}
-
-		return sqlStmt, nil
-	}
-
-	deterministicAST, err := getAST()
+	deterministicAST, err := getAST(sql)
 	if err != nil {
 		return "", nil, nil, err
 	}
-	nondeterministicAST, err := getAST()
+	nondeterministicAST, err := getAST(sql)
 	if err != nil {
 		return "", nil, nil, err
 	}
 
-	planFn := func(ast *parse.SQLStatement) (*logical.AnalyzedPlan, error) {
-		return logical.CreateLogicalPlan(
-			ast,
-			e.getTable,
-			e.getVariableType,
-			func(objName string) (obj map[string]*types.DataType, err2 error) {
-				val, err := e.getVariable(objName)
-				if err != nil {
-					return nil, err
-				}
-
-				if rec, ok := val.(*recordValue); ok {
-					dt := make(map[string]*types.DataType)
-					for _, field := range rec.Order {
-						dt[field] = rec.Fields[field].Type()
-					}
-
-					return dt, nil
-				}
-
-				return nil, engine.ErrUnknownVariable
-			},
-			func(fnName string) bool {
-				ns, err := e.getNamespace("")
-				if err != nil {
-					// should never happen, as it is getting the current namespace
-					panic(err)
-				}
-
-				executable, ok := ns.availableFunctions[fnName]
-				if !ok {
-					return false
-				}
-				return executable.Type == executableTypeAction || executable.Type == executableTypePrecompile
-			},
-			e.canMutateState,
-			e.scope.namespace,
-		)
-	}
-
-	deterministicPlan, err := planFn(deterministicAST)
+	deterministicPlan, err := makePlan(e, deterministicAST)
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("%w: %w", engine.ErrQueryPlanner, err)
 	}
 
-	nonDeterministicPlan, err := planFn(nondeterministicAST)
+	nonDeterministicPlan, err := makePlan(e, nondeterministicAST)
 	if err != nil {
 		return "", nil, nil, fmt.Errorf("%w: %w", engine.ErrQueryPlanner, err)
 	}
 
-	generatePG := func(ast *parse.SQLStatement) (string, []string, error) {
-		generatedSQL, params, err := pggenerate.GenerateSQL(ast, e.scope.namespace, e.getVariableType)
-		if err != nil {
-			return "", nil, fmt.Errorf("%w: %w", engine.ErrPGGen, err)
-		}
-
-		return generatedSQL, params, nil
+	deterministicSQL, deterministicParams, err := pggenerate.GenerateSQL(deterministicAST, e.scope.namespace, e.getVariableType)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("%w: %w", engine.ErrPGGen, err)
 	}
 
-	deterministicSQL, deterministicParams, err := generatePG(deterministicAST)
+	nonDeterministicSQL, nonDeterministicParams, err := pggenerate.GenerateSQL(nondeterministicAST, e.scope.namespace, e.getVariableType)
 	if err != nil {
-		return "", nil, nil, err
-	}
-
-	nonDeterministicSQL, nonDeterministicParams, err := generatePG(nondeterministicAST)
-	if err != nil {
-		return "", nil, nil, err
+		return "", nil, nil, fmt.Errorf("%w: %w", engine.ErrPGGen, err)
 	}
 
 	statementCache.set(e.scope.namespace, sql, &preparedStatement{
@@ -347,6 +278,68 @@ func (e *executionContext) prepareQuery(sql string) (pgSql string, plan *logical
 		return "", nil, nil, err
 	}
 	return nonDeterministicSQL, nonDeterministicPlan, values, nil
+}
+
+// getAST gets the AST of a SQL statement.
+func getAST(sql string) (*parse.SQLStatement, error) {
+	res, err := parse.Parse(sql)
+	if err != nil {
+		return nil, fmt.Errorf("%w: invalid query '%s': %w", engine.ErrParse, sql, err)
+	}
+
+	if len(res) != 1 {
+		// this is an node bug b/c `query` is only called with a single statement
+		// from the interpreter
+		return nil, fmt.Errorf("node bug: expected exactly 1 statement, got %d", len(res))
+	}
+
+	sqlStmt, ok := res[0].(*parse.SQLStatement)
+	if !ok {
+		return nil, fmt.Errorf("node bug: expected *parse.SQLStatement, got %T", res[0])
+	}
+
+	return sqlStmt, nil
+}
+
+// makePlan creates a logical plan from a SQL statement.
+func makePlan(e *executionContext, ast *parse.SQLStatement) (*logical.AnalyzedPlan, error) {
+	return logical.CreateLogicalPlan(
+		ast,
+		e.getTable,
+		e.getVariableType,
+		func(objName string) (obj map[string]*types.DataType, err error) {
+			val, err := e.getVariable(objName)
+			if err != nil {
+				return nil, err
+			}
+
+			if rec, ok := val.(*recordValue); ok {
+				dt := make(map[string]*types.DataType)
+				for _, field := range rec.Order {
+					dt[field] = rec.Fields[field].Type()
+				}
+
+				return dt, nil
+			}
+
+			return nil, engine.ErrUnknownVariable
+		},
+		func(fnName string) bool {
+			ns, err := e.getNamespace("")
+			if err != nil {
+				// should never happen, as it is getting the current namespace
+				panic(err)
+			}
+
+			executable, ok := ns.availableFunctions[fnName]
+			if !ok {
+				return false
+			}
+			return executable.Type == executableTypeAction || executable.Type == executableTypePrecompile
+		},
+		e.canMutateState,
+		e.scope.namespace,
+	)
 }
 
 // preparedStatement is a SQL statement that has been parsed and planned
