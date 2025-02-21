@@ -401,12 +401,12 @@ func (p *preparedStatements) set(namespace, query string, stmt *preparedStatemen
 	p.statements[namespace][query] = stmt
 }
 
-// clearNamespace clears the cache for a namespace.
-func (p *preparedStatements) clearNamespace(namespace string) {
+// clear clears the cache namespace.
+func (p *preparedStatements) clear() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
-	delete(p.statements, namespace)
+	p.statements = make(map[string]map[string]*preparedStatement)
 }
 
 var statementCache = &preparedStatements{
@@ -572,7 +572,7 @@ func (e *executionContext) reloadNamespaceCache() error {
 		ns.tables[table.Name] = table
 	}
 
-	statementCache.clearNamespace(e.scope.namespace)
+	statementCache.clear()
 
 	return nil
 }
