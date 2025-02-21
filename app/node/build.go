@@ -52,6 +52,9 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	}
 	d.closers = closers
 
+	// verify dependencies
+	verifyDependencies(d)
+
 	// BlockStore
 	bs := buildBlockStore(d, closers)
 
@@ -665,6 +668,24 @@ func buildJRPCAdminServer(d *coreDependencies) *rpcserver.Server {
 	}
 
 	return jsonRPCAdminServer
+}
+
+// verifyDependencies checks if the required dependencies are installed on the system, such as:
+//   - pg_dump: required for snapshotting during migrations and when snapshots are enabled.
+//     All nodes in the network must have 16.x version to produce consistent and deterministic snapshots.
+//   - psql: required for state-sync to restore the state from a snapshot. Required version is 16.x.
+func verifyDependencies(d *coreDependencies) {
+	// Check if pg_dump is installed, which is necessary for snapshotting during migrations and when snapshots are enabled. Ensure that the version is 16.x
+	if err := checkVersion("pg_dump", 16); err != nil {
+		failBuild(err, "pg_dump version is not 16.x. Please install the correct version.")
+	}
+
+	if d.cfg.StateSync.Enable {
+		// Check if psql is installed and is on version 16.x, which is required for state-sync
+		if err := checkVersion("psql", 16); err != nil {
+			failBuild(err, "psql version is not 16.x. Please install the correct version.")
+		}
+	}
 }
 
 func loadTLSCertificate(keyFile, certFile, hostname string) (*tls.Certificate, error) {
