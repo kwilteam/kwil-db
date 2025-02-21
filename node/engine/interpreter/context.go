@@ -355,8 +355,11 @@ func (e *executionContext) prepareQuery(sql string) (pgSql string, plan *logical
 // This is necessary because we use the AST to generate Postgres SQL
 // queries, so we actually modify the AST to make it deterministic.
 type preparedStatement struct {
-	deterministicPlan      *logical.AnalyzedPlan
-	deterministicSQL       string
+	deterministicPlan *logical.AnalyzedPlan
+	deterministicSQL  string
+	// the params for deterministic and non-deterministic
+	// queries _should_ be the same, but I am keeping them separate
+	// because it might change based on the implementation of the planner
 	deterministicParams    []string
 	nonDeterministicPlan   *logical.AnalyzedPlan
 	nonDeterministicSQL    string
