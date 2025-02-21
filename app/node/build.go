@@ -85,7 +85,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	d.namespaceManager.Ready()
 
 	// Mempool
-	mp := mempool.New()
+	mp := mempool.New(d.cfg.Mempool.MaxSize)
 
 	// TxAPP
 	txApp := buildTxApp(ctx, d, db, accounts, vs, e)

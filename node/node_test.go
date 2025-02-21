@@ -35,6 +35,10 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 )
 
+const (
+	mempoolSz = 200_000_000 // 200MB
+)
+
 var blackholeIP6 = net.ParseIP("100::")
 
 func newTestHost(t *testing.T, mn mock.Mocknet) (p2pcrypto.PrivKey, host.Host) {
@@ -110,7 +114,7 @@ func makeTestHosts(t *testing.T, nNodes, nExtraHosts int, blockInterval time.Dur
 			// DB unused
 			DBConfig:    &defaultConfigSet.DB,
 			Statesync:   &defaultConfigSet.StateSync,
-			Mempool:     mempool.New(),
+			Mempool:     mempool.New(mempoolSz),
 			BlockStore:  bs,
 			Snapshotter: newSnapshotStore(bs),
 			Consensus:   ce,

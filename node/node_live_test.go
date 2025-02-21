@@ -51,7 +51,7 @@ func TestSingleNodeMocknet(t *testing.T) {
 
 	pk1, h1 := newTestHost(t, mn)
 	bs1 := memstore.NewMemBS()
-	mp1 := mempool.New()
+	mp1 := mempool.New(mempoolSz)
 	priv1, _ := pk1.Raw()
 
 	db1 := initDB(t, "5432", "kwil_test_db")
@@ -199,7 +199,7 @@ func TestDualNodeMocknet(t *testing.T) {
 
 	pk1, h1 := newTestHost(t, mn)
 	bs1 := memstore.NewMemBS()
-	mp1 := mempool.New()
+	mp1 := mempool.New(mempoolSz)
 
 	db1 := initDB(t, "5432", "kwil_test_db")
 	func() {
@@ -217,7 +217,7 @@ func TestDualNodeMocknet(t *testing.T) {
 
 	pk2, h2 := newTestHost(t, mn)
 	bs2 := memstore.NewMemBS()
-	mp2 := mempool.New()
+	mp2 := mempool.New(mempoolSz)
 	db2 := initDB(t, "5432", "kwil_test_db2") // NOTE: using the same postgres host is a little wild
 
 	priv2, _ := pk2.Raw()
