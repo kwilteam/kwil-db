@@ -155,7 +155,7 @@ func (r *TxApp) Execute(ctx *common.TxContext, db sql.DB, tx *types.Transaction)
 	// RegisterRoute call is not concurrent
 	route, ok := routes[tx.Body.PayloadType.String()]
 	if !ok {
-		return txRes(nil, types.CodeInvalidTxType, fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String()))
+		return txRes(nil, types.CodeInvalidTxType, fmt.Errorf("%w: %s", types.ErrUnknownPayloadType, tx.Body.PayloadType.String()))
 	}
 
 	r.service.Logger.Debug("executing transaction", "tx", tx)
@@ -496,7 +496,7 @@ func (r *TxApp) Price(ctx context.Context, dbTx sql.DB, tx *types.Transaction, c
 
 	route := getRoute(tx.Body.PayloadType.String())
 	if route == nil {
-		return nil, fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String())
+		return nil, fmt.Errorf("%w: %s", types.ErrUnknownPayloadType, tx.Body.PayloadType.String())
 	}
 
 	return route.Price(ctx, r, dbTx, tx)
@@ -600,7 +600,7 @@ func (r *TxApp) checkAndSpend(ctx *common.TxContext, tx *types.Transaction, pric
 func (r *TxApp) ApplyMempool(ctx *common.TxContext, db sql.DB, tx *types.Transaction) error {
 	// check that payload type is valid
 	if getRoute(tx.Body.PayloadType.String()) == nil {
-		return fmt.Errorf("unknown payload type: %s", tx.Body.PayloadType.String())
+		return fmt.Errorf("%w: %s", types.ErrUnknownPayloadType, tx.Body.PayloadType.String())
 	}
 
 	return r.mempool.applyTransaction(ctx, tx, db, r.events)

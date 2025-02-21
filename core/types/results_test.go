@@ -3,6 +3,7 @@ package types
 import (
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"reflect"
 	"strconv"
 	"testing"
@@ -650,4 +651,146 @@ func ptrArr[T any](v ...any) []*T {
 		out[i] = &convV
 	}
 	return out
+}
+
+func TestBroadcastErrorToCode(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		want TxCode
+	}{
+		{
+			name: "nil error",
+			err:  nil,
+			want: CodeUnknownError,
+		},
+		{
+			name: "wrapped wrong chain error",
+			err:  fmt.Errorf("outer error: %w", ErrWrongChain),
+			want: CodeWrongChain,
+		},
+		{
+			name: "wrapped invalid nonce error",
+			err:  fmt.Errorf("outer error: %w", ErrInvalidNonce),
+			want: CodeInvalidNonce,
+		},
+		{
+			name: "multiple wrapped errors",
+			err:  fmt.Errorf("outer: %w", fmt.Errorf("inner: %w", ErrInvalidAmount)),
+			want: CodeInvalidAmount,
+		},
+		{
+			name: "unknown error type",
+			err:  errors.New("some random error"),
+			want: CodeUnknownError,
+		},
+		{
+			name: "wrapped mempool full error",
+			err:  fmt.Errorf("failed to add tx: %w", ErrMempoolFull),
+			want: CodeMempoolFull,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := BroadcastErrorToCode(tt.err)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
+func TestBroadcastCodeToError(t *testing.T) {
+	tests := []struct {
+		name    string
+		code    TxCode
+		wantErr error
+		wantNil bool
+	}{
+		{
+			name:    "wrong chain code",
+			code:    CodeWrongChain,
+			wantErr: ErrWrongChain,
+		},
+		{
+			name:    "invalid amount code",
+			code:    CodeInvalidAmount,
+			wantErr: ErrInvalidAmount,
+		},
+		{
+			name:    "insufficient balance code",
+			code:    CodeInsufficientBalance,
+			wantErr: ErrInsufficientBalance,
+		},
+		{
+			name:    "network in migration code",
+			code:    CodeNetworkInMigration,
+			wantErr: ErrDisallowedInMigration,
+		},
+		{
+			name:    "network halted code",
+			code:    CodeNetworkHalted,
+			wantErr: ErrMigrationComplete,
+		},
+		{
+			name:    "unknown code",
+			code:    TxCode(999),
+			wantNil: true,
+		},
+		{
+			name:    "zero code",
+			code:    TxCode(0),
+			wantNil: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := BroadcastCodeToError(tt.code)
+			if tt.wantNil {
+				assert.Nil(t, err)
+			} else {
+				assert.ErrorIs(t, err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestBroadcastErrorCodeRoundTrip(t *testing.T) {
+	testCases := []struct {
+		name string
+		err  error
+		code TxCode
+	}{
+		{"wrong chain", ErrWrongChain, CodeWrongChain},
+		{"invalid nonce", ErrInvalidNonce, CodeInvalidNonce},
+		{"invalid amount", ErrInvalidAmount, CodeInvalidAmount},
+		{"insufficient balance", ErrInsufficientBalance, CodeInsufficientBalance},
+		{"insufficient fee", ErrInsufficientFee, CodeInsufficientFee},
+		{"tx timeout", ErrTxTimeout, CodeTxTimeoutCommit},
+		{"mempool full", ErrMempoolFull, CodeMempoolFull},
+		{"unknown payload type", ErrUnknownPayloadType, CodeInvalidTxType},
+		{"disallowed in migration", ErrDisallowedInMigration, CodeNetworkInMigration},
+		{"migration complete", ErrMigrationComplete, CodeNetworkHalted},
+		{"unknown error", errors.New("some unknown error"), CodeUnknownError},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Test error to code conversion
+			code := BroadcastErrorToCode(tc.err)
+			if code != tc.code {
+				t.Errorf("BroadcastErrorToCode(%v) = %v, want %v", tc.err, code, tc.code)
+			}
+
+			// Test code to error conversion
+			err := BroadcastCodeToError(code)
+			if tc.code == CodeUnknownError {
+				if err != nil {
+					t.Errorf("BroadcastCodeToError(%v) = %v, want nil for unknown error", code, err)
+				}
+			} else if !errors.Is(err, tc.err) {
+				t.Errorf("BroadcastCodeToError(%v) = %v, want %v", code, err, tc.err)
+			}
+		})
+	}
 }

@@ -41,7 +41,7 @@ type BlockchainTransactor interface {
 	Status(ctx context.Context) (*adminTypes.Status, error)
 	Peers(context.Context) ([]*adminTypes.PeerInfo, error)
 	ConsensusParams() *types.NetworkParameters
-	BroadcastTx(ctx context.Context, tx *types.Transaction, sync uint8) (*types.ResultBroadcastTx, error)
+	BroadcastTx(ctx context.Context, tx *types.Transaction, sync uint8) (types.Hash, *types.TxResult, error)
 	TxQuery(ctx context.Context, hash types.Hash, prove bool) (*types.TxQueryResponse, error)
 }
 
@@ -411,43 +411,35 @@ func (svc *Service) ChainInfo(ctx context.Context, req *userjson.ChainInfoReques
 }
 
 func (svc *Service) Broadcast(ctx context.Context, req *userjson.BroadcastRequest) (*userjson.BroadcastResponse, *jsonrpc.Error) {
-	// logger := svc.log.With(log.String("rpc", "Broadcast"), // new logger each time, ick
-	// 	log.String("PayloadType", req.Tx.Body.PayloadType))
-	svc.log.Debug("incoming transaction")
-	logger := svc.log
-
-	// logger = logger.With(log.String("from", hex.EncodeToString(req.Tx.Sender)))
-
 	// NOTE: it's mostly pointless to have the structured transaction in the
 	// request rather than the serialized transaction, except that a client only
 	// has to serialize the *body* to sign.
 
-	var sync = userjson.BroadcastSyncSync // default to sync, not async or commit
+	var sync = userjson.BroadcastSyncAccept // default to accept, not commit
 	if req.Sync != nil {
 		sync = *req.Sync
 	}
-	res, err := svc.chainClient.BroadcastTx(ctx, req.Tx, uint8(sync))
+	txHash, result, err := svc.chainClient.BroadcastTx(ctx, req.Tx, uint8(sync))
 	if err != nil {
-		logger.Error("failed to broadcast tx", "error", err)
-		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, fmt.Sprintf("failed to broadcast transaction: %s", err.Error()), nil)
-	}
+		errCode := types.BroadcastErrorToCode(err)
+		if errCode == types.CodeUnknownError {
+			svc.log.Error("failed to broadcast tx", "error", err)
+		}
 
-	code, txHash := res.Code, res.Hash
-
-	if txCode := types.TxCode(code); txCode != types.CodeOk {
 		errData := &userjson.BroadcastError{
-			TxCode:  uint32(txCode), // e.g. invalid nonce, wrong chain, etc.
-			Hash:    txHash.String(),
-			Message: res.Log,
+			ErrCode: uint32(errCode), // e.g. invalid nonce, wrong chain, etc.
+			Hash:    req.Tx.Hash().String(),
+			Message: err.Error(),
 		}
 		data, _ := json.Marshal(errData)
-		return nil, jsonrpc.NewError(jsonrpc.ErrorTxExecFailure, "broadcast error", data)
+		return nil, jsonrpc.NewError(jsonrpc.ErrorBroadcastRejected, "broadcast error", data)
 	}
 
-	logger.Info("broadcast transaction", "TxHash", txHash.String(),
+	svc.log.Info("broadcast transaction", "hash", txHash,
 		"sync", sync, "nonce", req.Tx.Body.Nonce)
 	return &userjson.BroadcastResponse{
 		TxHash: txHash,
+		Result: result,
 	}, nil
 }
 

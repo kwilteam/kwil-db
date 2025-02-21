@@ -183,8 +183,8 @@ func (c *Client) Signer() auth.Signer {
 }
 
 func syncBcastFlag(syncBcast bool) rpcclient.BroadcastWait {
-	syncFlag := rpcclient.BroadcastWaitSync
-	if syncBcast { // the bool really means wait for commit in cometbft terms
+	syncFlag := rpcclient.BroadcastWaitAccept
+	if syncBcast {
 		syncFlag = rpcclient.BroadcastWaitCommit
 	}
 	return syncFlag

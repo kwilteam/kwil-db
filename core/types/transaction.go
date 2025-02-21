@@ -17,12 +17,6 @@ import (
 
 var SerializationByteOrder = binary.LittleEndian
 
-type ResultBroadcastTx struct {
-	Code uint32
-	Hash Hash
-	Log  string
-}
-
 // TxQueryResponse is the response of a transaction query.
 type TxQueryResponse struct {
 	Hash   Hash         `json:"tx_hash,omitempty"`

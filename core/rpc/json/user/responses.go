@@ -25,11 +25,8 @@ type AccountResponse struct {
 
 // BroadcastResponse contains the response object for MethodBroadcast.
 type BroadcastResponse struct {
-	TxHash types.Hash `json:"tx_hash,omitempty"`
-}
-
-type Result struct { // for other types, but embedding it is kinda annoying when instantiating
-	Result []byte `json:"result,omitempty"`
+	TxHash types.Hash      `json:"tx_hash,omitempty"`
+	Result *types.TxResult `json:"result,omitempty"`
 }
 
 // QueryResponse contains the response object for MethodCall and MethodQuery.

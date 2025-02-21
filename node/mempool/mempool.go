@@ -2,7 +2,6 @@ package mempool
 
 import (
 	"context"
-	"io"
 	"slices"
 	"sync"
 
@@ -61,6 +60,7 @@ func (mp *Mempool) Remove(txid types.Hash) {
 }
 
 func (mp *Mempool) remove(txid types.Hash) {
+	delete(mp.fetching, txid)
 	tx, have := mp.txns[txid]
 	if !have {
 		return
@@ -94,7 +94,7 @@ func (mp *Mempool) Store(txid types.Hash, tx *ktypes.Transaction) (found, reject
 		return true, false // already have it
 	}
 
-	sz, _ := tx.WriteTo(io.Discard) // TODO: make a SerializeSize method for Transaction
+	sz := tx.SerializeSize()
 
 	if mp.currentSize+sz > mp.maxSize {
 		return false, true
@@ -114,19 +114,24 @@ func (mp *Mempool) Store(txid types.Hash, tx *ktypes.Transaction) (found, reject
 }
 
 // PreFetch marks a transaction as being fetched. Returns true if the tx should be fetched.
-func (mp *Mempool) PreFetch(txid types.Hash) bool { // probably make node business
+// Always defer the returned "done" function if true is returned.
+func (mp *Mempool) PreFetch(txid types.Hash) (bool, func()) { // probably make node business
 	mp.mtx.Lock()
 	defer mp.mtx.Unlock()
 	if _, have := mp.txns[txid]; have {
-		return false // don't need it
+		return false, func() {} // don't need it
 	}
 
 	if fetching := mp.fetching[txid]; fetching {
-		return false // already getting it
+		return false, func() {} // already getting it
 	}
 	mp.fetching[txid] = true
 
-	return true // go get it
+	return true, func() {
+		mp.mtx.Lock()
+		defer mp.mtx.Unlock()
+		delete(mp.fetching, txid)
+	} // go get it
 }
 
 // Size returns the current total size in bytes and number of transactions in the mempool.

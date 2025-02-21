@@ -54,21 +54,51 @@ func randNonceJitter(f int) int64 {
 	return n
 }
 
+// this whole method is kinda messes up now; nothing is really concurrent at
+// all, the function is just called with the lock released for something else to
+// use it.
 func (h *harness) underNonceLock(ctx context.Context, fn func(int64) error) error {
+	recoverNonce := func() error {
+		acct, err := h.GetAccount(ctx, h.acctID, types.AccountStatusPending)
+		if err != nil {
+			return err
+		}
+		h.nonce = acct.Nonce
+		return nil
+	}
+
 	if h.concurrentBroadcast {
 		// Grab the next nonce in a thread-safe manner, but do not wait for
 		// broadcast to complete to release the lock. If there is a nonce error,
 		// there will be more chaos with concurrent broadcasting.
 		h.nonceMtx.Lock()
+		nonce0 := h.nonce
 		h.nonce++
 		nonce := h.nonce + randNonceJitter(h.nonceChaos)
 		h.nonceMtx.Unlock()
 		if err := fn(nonce); err != nil {
 			if errors.Is(err, types.ErrInvalidNonce) {
 				// Note: several goroutines may all try to do this if they all hit the nonce error
-				h.recoverNonce(ctx)
-				h.printf("error, nonce %d was wrong, reverting to %d\n", nonce, h.nonce)
+				recoverNonce()
+				h.printf("nonce %d was wrong, reverted to %d\n", nonce, h.nonce)
+				return err
 			}
+
+			// For other bcast errors like mempool full, the tx was rejected,
+			// but we already advanced nonce. Try to reset the nonce to what we
+			// just had and continue. If there are concurrent goroutines that
+			// are also using underNonceLock with concurrent broadcast, it is
+			// possible we are resetting to the wrong nonce. If this is
+			// detected, we'll recover the nonce from RPC.
+			h.nonceMtx.Lock()
+			if h.nonce == nonce0+1 { // lucky, we can just reset to the nonce we had before
+				h.printf("resetting nonce to %d", nonce0)
+				h.nonce = nonce0
+			} else { // concurrent goroutines may have advanced the nonce
+				recoverNonce()
+				h.printf("nonce %d was wrong, reverted to %d", nonce, h.nonce)
+			}
+			h.nonceMtx.Unlock()
 			return err
 		}
 		return nil
@@ -84,13 +114,10 @@ func (h *harness) underNonceLock(ctx context.Context, fn func(int64) error) erro
 		if errors.Is(err, types.ErrInvalidNonce) { // this alone should not happen
 			// NOTE: if GetAccount returns only the confirmed nonce, we'll error
 			// again shortly if there are others already in mempool.
-			acct, err := h.GetAccount(ctx, h.acctID, types.AccountStatusPending)
-			if err != nil {
-				return err
-			}
-			h.nonce = acct.Nonce
+			recoverNonce()
 			h.printf("RESET NONCE TO LATEST REPORTED (underNonceLock): %d", h.nonce)
 		}
+		h.nonce--
 		return err
 	}
 	return nil
@@ -155,6 +182,9 @@ func (h *harness) executeAsync(ctx context.Context, dbid, action string,
 		return err
 	})
 	if err != nil {
+		if errors.Is(err, types.ErrMempoolFull) {
+			err = types.ErrMempoolFull // throw out the verbose jsonrpc.Error
+		}
 		return types.Hash{}, fmt.Errorf("%s: %w", action, err)
 	}
 	return txHash, nil

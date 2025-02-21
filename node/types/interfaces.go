@@ -7,12 +7,15 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 )
 
-var ErrNotFound = types.ErrNotFound
+// The following errors must be aliases for errors.Is to work properly.
+var (
+	ErrNotFound        = types.ErrNotFound
+	ErrTxNotFound      = types.ErrTxNotFound
+	ErrTxAlreadyExists = types.ErrTxAlreadyExists
+)
 
 var (
 	HashBytes          = types.HashBytes
-	ErrTxNotFound      = errors.New("tx not available")
-	ErrTxAlreadyExists = errors.New("transaction already exists")
 	ErrBlkNotFound     = errors.New("block not available")
 	ErrStillProcessing = errors.New("block still being executed")
 	ErrNoResponse      = errors.New("stream closed without response")
@@ -68,7 +71,7 @@ type MemPool interface {
 	Remove(Hash)
 	Store(Hash, *types.Transaction) (found, rejected bool)
 	PeekN(maxNumTxns, maxTotalTxBytes int) []NamedTx
-	PreFetch(txid Hash) bool // should be app level instead
+	PreFetch(txid Hash) (ok bool, done func()) // should be app level instead
 }
 
 type QualifiedBlock struct { // basically just caches the hash

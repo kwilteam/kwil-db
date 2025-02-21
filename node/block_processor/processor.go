@@ -74,7 +74,7 @@ type BlockProcessor struct {
 	subMtx   sync.RWMutex
 }
 
-type BroadcastTxFn func(ctx context.Context, tx *ktypes.Transaction, sync uint8) (*ktypes.ResultBroadcastTx, error)
+type BroadcastTxFn func(ctx context.Context, tx *ktypes.Transaction, sync uint8) (ktypes.Hash, *ktypes.TxResult, error)
 
 func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Accounts, vs ValidatorModule,
 	sp SnapshotModule, es EventStore, migrator MigratorModule, bs BlockStore,
@@ -227,7 +227,7 @@ func (bp *BlockProcessor) CheckTx(ctx context.Context, tx *ktypes.Transaction, h
 
 	// If the network is halted for migration, we reject all transactions.
 	if bp.chainCtx.NetworkParameters.MigrationStatus == ktypes.MigrationCompleted {
-		return fmt.Errorf("network is halted for migration")
+		return ktypes.ErrMigrationComplete
 	}
 
 	bp.log.Debug("Check transaction", "Recheck", recheck, "Hash", txHash, "Sender", log.LazyHex(tx.Sender),
@@ -236,7 +236,7 @@ func (bp *BlockProcessor) CheckTx(ctx context.Context, tx *ktypes.Transaction, h
 	if !recheck {
 		// Verify the correct chain ID is set, if it is set.
 		if protected := tx.Body.ChainID != ""; protected && tx.Body.ChainID != bp.genesisParams.ChainID {
-			return fmt.Errorf("wrong chain ID: %s", tx.Body.ChainID)
+			return fmt.Errorf("%w: %s", ktypes.ErrWrongChain, tx.Body.ChainID)
 		}
 
 		// Ensure that the transaction is valid in terms of the signature and the payload type
@@ -254,7 +254,7 @@ func (bp *BlockProcessor) CheckTx(ctx context.Context, tx *ktypes.Transaction, h
 		return fmt.Errorf("failed to get tx sender identifier: %w", err)
 	}
 
-	err = bp.txapp.ApplyMempool(&common.TxContext{
+	return bp.txapp.ApplyMempool(&common.TxContext{
 		Ctx: ctx,
 		BlockContext: &common.BlockContext{
 			ChainContext: bp.chainCtx,
@@ -267,12 +267,6 @@ func (bp *BlockProcessor) CheckTx(ctx context.Context, tx *ktypes.Transaction, h
 		Caller:        ident,
 		Authenticator: tx.Signature.Type,
 	}, readTx, tx)
-	if err != nil {
-		bp.log.Info("Transaction rejected", "tx", txHash, "err", err, "recheck", recheck)
-		return err
-	}
-
-	return nil
 }
 
 // InitChain initializes the node with the genesis state. This included initializing the

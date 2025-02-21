@@ -96,87 +96,112 @@ func (ce *ConsensusEngine) validateBlock(blk *ktypes.Block) error {
 	return nil
 }
 
-func (ce *ConsensusEngine) CheckTx(ctx context.Context, tx *ktypes.Transaction) error {
+// lastBlock returns the height, hash, and timestamp of the last committed
+// block. This is safe for concurrent access, and access from external callers
+// such via QueueTx.
+func (ce *ConsensusEngine) lastBlock() (int64, types.Hash, time.Time) {
 	ce.stateInfo.mtx.RLock()
-	height := ce.stateInfo.height
+	defer ce.stateInfo.mtx.RUnlock()
+
 	var timestamp time.Time
-	if ce.stateInfo.lastCommit.blk != nil {
-		timestamp = ce.stateInfo.lastCommit.blk.Header.Timestamp
+	var hash types.Hash
+	if lc := ce.stateInfo.lastCommit; lc.blk != nil {
+		timestamp = lc.blk.Header.Timestamp
+		hash = lc.blkHash
 	}
-	ce.stateInfo.mtx.RUnlock()
+
+	return ce.stateInfo.height, hash, timestamp
+}
+
+// QueueTx attempts to add a transaction to the mempool.
+// It is an error if the transaction is already in the mempool.
+// It is an error if the transaction fails CheckTx.
+// This method holds the mempool lock for the duration of the call.
+func (ce *ConsensusEngine) QueueTx(ctx context.Context, tx *ktypes.Transaction) error {
+	height, _, timestamp := ce.lastBlock()
 
 	ce.mempoolMtx.Lock()
 	defer ce.mempoolMtx.Unlock()
 
-	return ce.blockProcessor.CheckTx(ctx, tx, height, timestamp, false)
-}
-
-func (ce *ConsensusEngine) recheckTx(ctx context.Context, tx *ktypes.Transaction) error {
-	ce.stateInfo.mtx.RLock()
-	height := ce.stateInfo.height
-	var timestamp time.Time
-	if ce.stateInfo.lastCommit.blk != nil {
-		timestamp = ce.stateInfo.lastCommit.blk.Header.Timestamp
-	}
-	ce.stateInfo.mtx.RUnlock()
-
-	return ce.blockProcessor.CheckTx(ctx, tx, height, timestamp, true)
-}
-
-// BroadcastTx checks the Tx with the mempool and if the verification is successful, broadcasts the Tx to the network.
-// If sync is set to 1, the BroadcastTx returns only after the Tx is successfully committed in a block.
-func (ce *ConsensusEngine) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (*ktypes.ResultBroadcastTx, error) {
-	if err := ce.CheckTx(ctx, tx); err != nil {
-		return nil, err
-	}
-
-	rawTx := tx.Bytes()
-	txHash := types.HashBytes(rawTx)
-
-	// add the transaction to the mempool
+	txHash := tx.Hash()
 	have, rejected := ce.mempool.Store(txHash, tx)
-	if rejected {
-		return &ktypes.ResultBroadcastTx{
-			Hash: txHash,
-		}, ktypes.ErrMempoolFull
+	if have {
+		return ktypes.ErrTxAlreadyExists
 	}
+	if rejected {
+		return ktypes.ErrMempoolFull
+	}
+
+	const recheck = false
+	err := ce.blockProcessor.CheckTx(ctx, tx, height, timestamp, recheck)
+	if err != nil {
+		ce.mempool.Remove(txHash)
+		return err
+	}
+	return nil
+}
+
+// lastBlockInternal is like lastBlock but but uses ce.state.lc instead of
+// ce.stateInfo.lastCommit. This does NOT lock the ce.state.mtx.
+func (ce *ConsensusEngine) lastBlockInternal() (int64, time.Time) {
+	var timestamp time.Time
+	// var hash types.Hash
+	if lc := ce.state.lc; lc.blk != nil {
+		timestamp = lc.blk.Header.Timestamp
+		// hash = lc.blkHash
+	}
+
+	return ce.state.lc.height, timestamp
+}
+
+// recheckTxFn creates a tx recheck function for the mempool that assumes the
+// provided height and timestamp for each call.
+func (ce *ConsensusEngine) recheckTxFn(height int64, timestamp time.Time) func(ctx context.Context, tx *ktypes.Transaction) error {
+	// height, _, timestamp := ce.lastBlock()
+	return func(ctx context.Context, tx *ktypes.Transaction) error {
+		const recheck = true
+		return ce.blockProcessor.CheckTx(ctx, tx, height, timestamp, recheck)
+	}
+}
+
+// BroadcastTx checks the transaction with the mempool and if the verification
+// is successful, broadcasts it to the network. The TxResult will be nil unless
+// sync is set to 1, in which case the BroadcastTx returns only after it is
+// successfully executed in a committed block.
+func (ce *ConsensusEngine) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (types.Hash, *ktypes.TxResult, error) {
+	// check and store the transaction in the mempool
+	if err := ce.QueueTx(ctx, tx); err != nil {
+		return types.Hash{}, nil, err
+	}
+
+	txHash := tx.Hash()
 
 	// Announce the transaction to the network only if not previously announced
-	if ce.txAnnouncer != nil && !have {
+	if ce.txAnnouncer != nil {
 		// We can't use parent context 'cause it's canceled in the caller, which
 		// could be the RPC request. handler.  This shouldn't be CE's problem...
-		go ce.txAnnouncer(context.Background(), txHash, rawTx)
-	}
-
-	res := &ktypes.ResultBroadcastTx{
-		Hash: txHash, // Code and Log are set only if sync is set to 1
+		go ce.txAnnouncer(context.Background(), tx)
 	}
 
 	// If sync is set to 1, wait for the transaction to be committed in a block.
 	if sync == 1 { // Blocking code
 		subChan, err := ce.SubscribeTx(txHash)
 		if err != nil {
-			return &ktypes.ResultBroadcastTx{
-				Hash: txHash,
-			}, err
+			return txHash, nil, err
 		}
 		defer ce.UnsubscribeTx(txHash) // Unsubscribe tx if BroadcastTx returns
 
 		select {
 		case txRes := <-subChan:
-			return &ktypes.ResultBroadcastTx{
-				Code: txRes.Code,
-				Hash: txHash,
-				Log:  txRes.Log,
-			}, nil
+			return txHash, &txRes, nil
 		case <-ctx.Done():
-			return res, ctx.Err()
+			return types.Hash{}, nil, ctx.Err()
 		case <-time.After(ce.broadcastTxTimeout):
-			return res, errors.New("timed out waiting for tx to be included in a block")
+			return types.Hash{}, nil, ktypes.ErrTxTimeout
 		}
 	}
 
-	return res, nil
+	return txHash, nil, nil
 }
 
 func (ce *ConsensusEngine) ConsensusParams() *ktypes.NetworkParameters {
@@ -262,7 +287,7 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 	}
 
 	// recheck the transactions in the mempool
-	ce.mempool.RecheckTxs(ctx, ce.recheckTx)
+	ce.mempool.RecheckTxs(ctx, ce.recheckTxFn(ce.lastBlockInternal()))
 
 	ce.log.Info("Committed Block", "height", height, "hash", blkProp.blkHash.String(),
 		"appHash", appHash.String(), "numTxs", blkProp.blk.Header.NumTxns)

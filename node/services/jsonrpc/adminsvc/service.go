@@ -28,7 +28,7 @@ import (
 type Node interface {
 	Status(context.Context) (*types.Status, error)
 	Peers(context.Context) ([]*types.PeerInfo, error)
-	BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (*ktypes.ResultBroadcastTx, error)
+	BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (ktypes.Hash, *ktypes.TxResult, error)
 	Role() ntypes.Role
 	AbortBlockExecution(height int64, txIDs []ktypes.Hash) error
 	PromoteLeader(leader crypto.PublicKey, height int64) error
@@ -337,27 +337,26 @@ func (svc *Service) sendTx(ctx context.Context, payload ktypes.Payload) (*userjs
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInternal, "signing transaction failed: "+err.Error(), nil)
 	}
 
-	res, err := svc.blockchain.BroadcastTx(ctx, tx, uint8(userjson.BroadcastSyncSync))
+	txHash, result, err := svc.blockchain.BroadcastTx(ctx, tx, uint8(userjson.BroadcastSyncAccept))
 	if err != nil {
-		svc.log.Error("failed to broadcast tx", "error", err)
-		return nil, jsonrpc.NewError(jsonrpc.ErrorTxInternal, "failed to broadcast transaction: "+err.Error(), nil)
-	}
+		errCode := ktypes.BroadcastErrorToCode(err)
+		if errCode == ktypes.CodeUnknownError {
+			svc.log.Error("failed to broadcast tx", "error", err)
+		}
 
-	code, txHash := res.Code, res.Hash
-
-	if txCode := ktypes.TxCode(code); txCode != ktypes.CodeOk {
 		errData := &userjson.BroadcastError{
-			TxCode:  uint32(txCode), // e.g. invalid nonce, wrong chain, etc.
-			Hash:    txHash.String(),
-			Message: res.Log,
+			ErrCode: uint32(errCode), // e.g. invalid nonce, wrong chain, etc.
+			Hash:    tx.Hash().String(),
+			Message: err.Error(),
 		}
 		data, _ := json.Marshal(errData)
-		return nil, jsonrpc.NewError(jsonrpc.ErrorTxExecFailure, "broadcast error", data)
+		return nil, jsonrpc.NewError(jsonrpc.ErrorBroadcastRejected, "broadcast error", data)
 	}
 
-	svc.log.Info("broadcast transaction", "hash", txHash.String(), "nonce", tx.Body.Nonce)
+	svc.log.Info("broadcast transaction", "hash", txHash, "nonce", tx.Body.Nonce)
 	return &userjson.BroadcastResponse{
 		TxHash: txHash,
+		Result: result,
 	}, nil
 
 }
