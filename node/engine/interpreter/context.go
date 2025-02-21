@@ -3,6 +3,7 @@ package interpreter
 import (
 	"fmt"
 	"strings"
+	"sync"
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
@@ -152,79 +153,9 @@ func (e *executionContext) query(sql string, fn func(*row) error) error {
 	e.queryActive = true
 	defer func() { e.queryActive = false }()
 
-	res, err := parse.Parse(sql)
+	generatedSQL, analyzed, args, err := e.prepareQuery(sql)
 	if err != nil {
-		return fmt.Errorf("%w: invalid query '%s': %w", engine.ErrParse, sql, err)
-	}
-
-	if len(res) != 1 {
-		// this is an node bug b/c `query` is only called with a single statement
-		// from the interpreter
-		return fmt.Errorf("node bug: expected exactly 1 statement, got %d", len(res))
-	}
-
-	sqlStmt, ok := res[0].(*parse.SQLStatement)
-	if !ok {
-		return fmt.Errorf("node bug: expected *parse.SQLStatement, got %T", res[0])
-	}
-
-	// create a logical plan. This will make the query deterministic (if necessary),
-	// as well as tell us what the return types will be.
-	analyzed, err := logical.CreateLogicalPlan(
-		sqlStmt,
-		e.getTable,
-		e.getVariableType,
-		func(objName string) (obj map[string]*types.DataType, err2 error) {
-			val, err := e.getVariable(objName)
-			if err != nil {
-				return nil, err
-			}
-
-			if rec, ok := val.(*recordValue); ok {
-				dt := make(map[string]*types.DataType)
-				for _, field := range rec.Order {
-					dt[field] = rec.Fields[field].Type()
-				}
-
-				return dt, nil
-			}
-
-			return nil, engine.ErrUnknownVariable
-		},
-		func(fnName string) bool {
-			ns, err := e.getNamespace("")
-			if err != nil {
-				// should never happen, as it is getting the current namespace
-				panic(err)
-			}
-
-			executable, ok := ns.availableFunctions[fnName]
-			if !ok {
-				return false
-			}
-			return executable.Type == executableTypeAction || executable.Type == executableTypePrecompile
-		},
-		e.canMutateState,
-		e.scope.namespace,
-	)
-	if err != nil {
-		return fmt.Errorf("%w: %w", engine.ErrQueryPlanner, err)
-	}
-
-	generatedSQL, params, err := pggenerate.GenerateSQL(sqlStmt, e.scope.namespace, e.getVariableType)
-	if err != nil {
-		return fmt.Errorf("%w: %w", engine.ErrPGGen, err)
-	}
-
-	// get the params we will pass
-	var args []value
-	for _, param := range params {
-		val, err := e.getVariable(param)
-		if err != nil {
-			return err
-		}
-
-		args = append(args, val)
+		return err
 	}
 
 	// get the scan values as well:
@@ -259,6 +190,227 @@ func (e *executionContext) query(sql string, fn func(*row) error) error {
 			Values:  scanValues,
 		})
 	}, args)
+}
+
+// getValues gets values of the names
+func (e *executionContext) getValues(names []string) ([]value, error) {
+	values := make([]value, len(names))
+	for i, name := range names {
+		val, err := e.getVariable(name)
+		if err != nil {
+			return nil, err
+		}
+		values[i] = val
+	}
+	return values, nil
+}
+
+// prepareQuery prepares a query for execution.
+// It will check the cache for a prepared statement, and if it does not exist,
+// it will parse the SQL, create a logical plan, and cache the statement.
+func (e *executionContext) prepareQuery(sql string) (pgSql string, plan *logical.AnalyzedPlan, args []value, err error) {
+	cached, ok := statementCache.get(e.scope.namespace, sql)
+	if ok {
+		// if it is mutating state it must be deterministic
+		if e.canMutateState {
+			values, err := e.getValues(cached.deterministicParams)
+			if err != nil {
+				return "", nil, nil, err
+			}
+
+			return cached.deterministicSQL, cached.deterministicPlan, values, nil
+		}
+		values, err := e.getValues(cached.deterministicParams)
+		if err != nil {
+			return "", nil, nil, err
+		}
+		return cached.nonDeterministicSQL, cached.nonDeterministicPlan, values, nil
+	}
+
+	getAST := func() (*parse.SQLStatement, error) {
+		res, err := parse.Parse(sql)
+		if err != nil {
+			return nil, fmt.Errorf("%w: invalid query '%s': %w", engine.ErrParse, sql, err)
+		}
+
+		if len(res) != 1 {
+			// this is an node bug b/c `query` is only called with a single statement
+			// from the interpreter
+			return nil, fmt.Errorf("node bug: expected exactly 1 statement, got %d", len(res))
+		}
+
+		sqlStmt, ok := res[0].(*parse.SQLStatement)
+		if !ok {
+			return nil, fmt.Errorf("node bug: expected *parse.SQLStatement, got %T", res[0])
+		}
+
+		return sqlStmt, nil
+	}
+
+	deterministicAST, err := getAST()
+	if err != nil {
+		return "", nil, nil, err
+	}
+	nondeterministicAST, err := getAST()
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	planFn := func(ast *parse.SQLStatement) (*logical.AnalyzedPlan, error) {
+		return logical.CreateLogicalPlan(
+			ast,
+			e.getTable,
+			e.getVariableType,
+			func(objName string) (obj map[string]*types.DataType, err2 error) {
+				val, err := e.getVariable(objName)
+				if err != nil {
+					return nil, err
+				}
+
+				if rec, ok := val.(*recordValue); ok {
+					dt := make(map[string]*types.DataType)
+					for _, field := range rec.Order {
+						dt[field] = rec.Fields[field].Type()
+					}
+
+					return dt, nil
+				}
+
+				return nil, engine.ErrUnknownVariable
+			},
+			func(fnName string) bool {
+				ns, err := e.getNamespace("")
+				if err != nil {
+					// should never happen, as it is getting the current namespace
+					panic(err)
+				}
+
+				executable, ok := ns.availableFunctions[fnName]
+				if !ok {
+					return false
+				}
+				return executable.Type == executableTypeAction || executable.Type == executableTypePrecompile
+			},
+			e.canMutateState,
+			e.scope.namespace,
+		)
+	}
+
+	deterministicPlan, err := planFn(deterministicAST)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("%w: %w", engine.ErrQueryPlanner, err)
+	}
+
+	nonDeterministicPlan, err := planFn(nondeterministicAST)
+	if err != nil {
+		return "", nil, nil, fmt.Errorf("%w: %w", engine.ErrQueryPlanner, err)
+	}
+
+	generatePG := func(ast *parse.SQLStatement) (string, []string, error) {
+		generatedSQL, params, err := pggenerate.GenerateSQL(ast, e.scope.namespace, e.getVariableType)
+		if err != nil {
+			return "", nil, fmt.Errorf("%w: %w", engine.ErrPGGen, err)
+		}
+
+		return generatedSQL, params, nil
+	}
+
+	deterministicSQL, deterministicParams, err := generatePG(deterministicAST)
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	nonDeterministicSQL, nonDeterministicParams, err := generatePG(nondeterministicAST)
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	statementCache.set(e.scope.namespace, sql, &preparedStatement{
+		deterministicPlan:      deterministicPlan,
+		deterministicSQL:       deterministicSQL,
+		deterministicParams:    deterministicParams,
+		nonDeterministicPlan:   nonDeterministicPlan,
+		nonDeterministicSQL:    nonDeterministicSQL,
+		nonDeterministicParams: nonDeterministicParams,
+	})
+
+	if e.canMutateState {
+		values, err := e.getValues(deterministicParams)
+		if err != nil {
+			return "", nil, nil, err
+		}
+
+		return deterministicSQL, deterministicPlan, values, nil
+	}
+	values, err := e.getValues(deterministicParams)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	return nonDeterministicSQL, nonDeterministicPlan, values, nil
+}
+
+// preparedStatement is a SQL statement that has been parsed and planned
+// against a schema (a set of tables with some actions).
+// It separates into two forms: deterministic and non-deterministic.
+// This is necessary because we use the AST to generate Postgres SQL
+// queries, so we actually modify the AST to make it deterministic.
+type preparedStatement struct {
+	deterministicPlan      *logical.AnalyzedPlan
+	deterministicSQL       string
+	deterministicParams    []string
+	nonDeterministicPlan   *logical.AnalyzedPlan
+	nonDeterministicSQL    string
+	nonDeterministicParams []string
+}
+
+// statementCache caches parsed statements.
+// It is reloaded when schema changes are made to the namespace
+type preparedStatements struct {
+	mu sync.RWMutex
+	// statements maps a namespace to a map of statements to two parsed forms.
+	statements map[string]map[string]*preparedStatement
+}
+
+// get gets a prepared statement from the cache.
+func (p *preparedStatements) get(namespace, query string) (*preparedStatement, bool) {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+
+	ns, ok := p.statements[namespace]
+	if !ok {
+		return nil, false
+	}
+
+	stmt, ok := ns[query]
+	if !ok {
+		return nil, false
+	}
+
+	return stmt, true
+}
+
+// set sets a prepared statement in the cache.
+func (p *preparedStatements) set(namespace, query string, stmt *preparedStatement) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	if _, ok := p.statements[namespace]; !ok {
+		p.statements[namespace] = make(map[string]*preparedStatement)
+	}
+
+	p.statements[namespace][query] = stmt
+}
+
+// clearNamespace clears the cache for a namespace.
+func (p *preparedStatements) clearNamespace(namespace string) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+
+	delete(p.statements, namespace)
+}
+
+var statementCache = &preparedStatements{
+	statements: make(map[string]map[string]*preparedStatement),
 }
 
 // executable is the interface and function to call a built-in Postgres function,
@@ -406,8 +558,8 @@ func (e *executionContext) getVariable(name string) (value, error) {
 	}
 }
 
-// reloadTables reloads the cached tables from the database for the current namespace.
-func (e *executionContext) reloadTables() error {
+// reloadNamespaceCache reloads the cached tables from the database for the current namespace.
+func (e *executionContext) reloadNamespaceCache() error {
 	tables, err := listTablesInNamespace(e.engineCtx.TxContext.Ctx, e.db, e.scope.namespace)
 	if err != nil {
 		return err
@@ -419,6 +571,8 @@ func (e *executionContext) reloadTables() error {
 	for _, table := range tables {
 		ns.tables[table.Name] = table
 	}
+
+	statementCache.clearNamespace(e.scope.namespace)
 
 	return nil
 }

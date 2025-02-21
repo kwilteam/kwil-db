@@ -1013,24 +1013,24 @@ func (s *scopeContext) selectCoreWithoutFrom(cols []parse.ResultColumn, isDistin
 // planWindow plans a window function.
 func (s *scopeContext) planWindow(plan Plan, rel *Relation, win *parse.WindowImpl, groupingTerms map[string]*IdentifiedExpr) (*Window, error) {
 	var partitionBy []Expression
-	if len(win.PartitionBy) > 0 {
-		for _, partition := range win.PartitionBy {
-			partition, _, err := s.expr(partition, rel, groupingTerms)
-			if err != nil {
-				return nil, err
-			}
-
-			partitionBy = append(partitionBy, partition)
+	for _, partition := range win.PartitionBy {
+		partition, _, err := s.expr(partition, rel, groupingTerms)
+		if err != nil {
+			return nil, err
 		}
+
+		partitionBy = append(partitionBy, partition)
 	}
 
-	// to add default ordering, we will now add numbers to the window's order by
+	// to add default ordering, we need to order by every column in the target relation.
+	// This is extremely inefficient, but it is the only way to guarantee that the default ordering
+	// is applied.
 	if s.plan.applyDefaultOrdering {
-		for i := range win.OrderBy {
+		for _, field := range rel.Fields {
 			win.OrderBy = append(win.OrderBy, &parse.OrderingTerm{
-				Expression: &parse.ExpressionLiteral{
-					Value: i + 1,
-					Type:  types.IntType.Copy(),
+				Expression: &parse.ExpressionColumn{
+					Table:  field.Parent,
+					Column: field.Name,
 				},
 			})
 		}

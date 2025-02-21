@@ -14,13 +14,14 @@ import (
 
 func Test_Planner(t *testing.T) {
 	type testcase struct {
-		name    string
-		sql     string
-		wt      string                                // want, abbreviated for formatting test cases
-		vars    map[string]*types.DataType            // variables that can be accessed, can be nil
-		objects map[string]map[string]*types.DataType // objects that can be referenced, can be nil
-		actions map[string]struct{}                   // actions that exist, can be nil
-		err     error                                 // can be nil if no error is expected
+		name            string
+		sql             string
+		wt              string                                // want, abbreviated for formatting test cases
+		vars            map[string]*types.DataType            // variables that can be accessed, can be nil
+		objects         map[string]map[string]*types.DataType // objects that can be referenced, can be nil
+		actions         map[string]struct{}                   // actions that exist, can be nil
+		defaultOrdering bool                                  // whether to use default ordering
+		err             error                                 // can be nil if no error is expected
 	}
 
 	tests := []testcase{
@@ -284,6 +285,16 @@ func Test_Planner(t *testing.T) {
 				"└─Project: users.name; {#ref(A)}; {#ref(B)}\n" +
 				"  └─Window [partition_by=users.name] [order_by=users.age asc nulls last]: {#ref(A) = sum(users.age)}; {#ref(B) = array_agg(users.name)}\n" +
 				"    └─Scan Table: users [physical]\n",
+		},
+		{
+			name: "window ordering",
+			sql:  "select name, sum(age) over (partition by name order by age desc) from users",
+			wt: "Return: name [text], sum [numeric(1000,0)]\n" +
+				"└─Project: users.name; {#ref(A)}\n" +
+				"  └─Sort: 1 asc nulls last; 2 asc nulls last\n" +
+				"    └─Window [partition_by=users.name] [order_by=users.age desc nulls last, users.id asc nulls last, users.name asc nulls last, users.age asc nulls last]: {#ref(A) = sum(users.age)}\n" +
+				"      └─Scan Table: users [physical]\n",
+			defaultOrdering: true,
 		},
 		{
 			name: "common table expressions",
@@ -716,7 +727,7 @@ func Test_Planner(t *testing.T) {
 					_, ok := test.actions[fn]
 					return ok
 				},
-				false, "")
+				test.defaultOrdering, "")
 			if test.err != nil {
 				require.Error(t, err)
 
