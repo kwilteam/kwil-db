@@ -138,7 +138,7 @@ func (ce *ConsensusEngine) BroadcastTx(ctx context.Context, tx *ktypes.Transacti
 	if rejected {
 		return &ktypes.ResultBroadcastTx{
 			Hash: txHash,
-		}, types.ErrMempoolFull
+		}, ktypes.ErrMempoolFull
 	}
 
 	// Announce the transaction to the network only if not previously announced
