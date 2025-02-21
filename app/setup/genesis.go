@@ -33,9 +33,13 @@ kwild setup genesis --alloc 0x7f5f4552091a69125d5dfcb7b8c2659029395bdf:100`
 )
 
 type genesisFlagConfig struct {
-	chainID       string
-	validators    []string
-	allocs        []string
+	chainID    string
+	validators []string
+	allocs     []string
+	networkParams
+}
+
+type networkParams struct {
 	withGas       bool
 	leader        string
 	dbOwner       string
@@ -128,6 +132,10 @@ func bindGenesisFlags(cmd *cobra.Command, cfg *genesisFlagConfig) {
 	cmd.Flags().StringVar(&cfg.chainID, chainIDFlag, "", "chainID for the genesis.json file")
 	cmd.Flags().StringSliceVar(&cfg.validators, validatorsFlag, nil, "public key, keyType and power of initial validator(s), may be specified multiple times") // accept: [hexpubkey1#keyType1:power1]
 	cmd.Flags().StringSliceVar(&cfg.allocs, allocsFlag, nil, "address and initial balance allocation(s) in the format id#keyType:amount")
+	bindNetworkParamsFlags(cmd, &cfg.networkParams)
+}
+
+func bindNetworkParamsFlags(cmd *cobra.Command, cfg *networkParams) {
 	cmd.Flags().BoolVar(&cfg.withGas, withGasFlag, false, "include gas costs in the genesis.json file")
 	cmd.Flags().StringVar(&cfg.leader, leaderFlag, "", "public key of the block proposer")
 	cmd.Flags().StringVar(&cfg.dbOwner, dbOwnerFlag, "", "owner of the database")
@@ -190,56 +198,70 @@ func mergeGenesisFlags(conf *config.GenesisConfig, cmd *cobra.Command, flagCfg *
 
 	if cmd.Flags().Changed(allocsFlag) {
 		conf.Allocs = nil
-		for _, a := range flagCfg.allocs {
-			parts := strings.Split(a, ":")
-			if len(parts) != 2 {
-				return nil, fmt.Errorf("invalid format for alloc, expected id#keyType:balance, received: %s", a)
-			}
-
-			// 0x addresses: <address>:<balance>
-			// others: <pubkey#keyType>:<balance>
-			keyParts := strings.Split(parts[0], "#")
-			var keyType crypto.KeyType
-			var keyStr string
-			var err error
-
-			if strings.HasPrefix(parts[1], "0x") {
-				if len(keyParts) != 1 {
-					return nil, fmt.Errorf("invalid address for alloc: %s, expected format <address:balance>", parts[0])
-				}
-				keyStr = strings.TrimPrefix(parts[0], "0x")
-				keyType = crypto.KeyTypeSecp256k1
-			} else {
-				if len(keyParts) != 2 {
-					return nil, fmt.Errorf("invalid address for alloc: %s, expected format <key#keyType:balance>", parts[0])
-				}
-				keyType, err = crypto.ParseKeyType(keyParts[1])
-				if err != nil {
-					return nil, fmt.Errorf("invalid key type for validator: %s", keyParts[1])
-				}
-				keyStr = keyParts[0]
-			}
-
-			balance, ok := new(big.Int).SetString(parts[1], 10)
-			if !ok {
-				return nil, fmt.Errorf("invalid balance for alloc: %s", parts[1])
-			}
-
-			id, err := hex.DecodeString(keyStr)
-			if err != nil {
-				return nil, fmt.Errorf("invalid hex address for alloc: %s", keyStr)
-			}
-
-			conf.Allocs = append(conf.Allocs, config.GenesisAlloc{
-				ID: config.KeyHexBytes{
-					HexBytes: id,
-				},
-				KeyType: keyType.String(),
-				Amount:  balance,
-			})
+		allocs, err := parseAllocs(flagCfg.allocs)
+		if err != nil {
+			return nil, err
 		}
+		conf.Allocs = append(conf.Allocs, allocs...)
 	}
 
+	return mergeNetworkParamFlags(conf, cmd, &flagCfg.networkParams)
+}
+
+func parseAllocs(allocs []string) ([]config.GenesisAlloc, error) {
+	var res []config.GenesisAlloc
+	for _, a := range allocs {
+		parts := strings.Split(a, ":")
+		if len(parts) != 2 {
+			return nil, fmt.Errorf("invalid format for alloc, expected id#keyType:balance, received: %s", a)
+		}
+
+		// 0x addresses: <address>:<balance>
+		// others: <pubkey#keyType>:<balance>
+		keyParts := strings.Split(parts[0], "#")
+		var keyType crypto.KeyType
+		var keyStr string
+		var err error
+
+		if strings.HasPrefix(parts[0], "0x") {
+			if len(keyParts) != 1 {
+				return nil, fmt.Errorf("invalid address for alloc: %s, expected format <address:balance>", parts[0])
+			}
+			keyStr = strings.TrimPrefix(parts[0], "0x")
+			keyType = crypto.KeyTypeSecp256k1
+		} else {
+			if len(keyParts) != 2 {
+				return nil, fmt.Errorf("invalid address for alloc: %s, expected format <key#keyType:balance>", parts[0])
+			}
+			keyType, err = crypto.ParseKeyType(keyParts[1])
+			if err != nil {
+				return nil, fmt.Errorf("invalid key type for validator: %s", keyParts[1])
+			}
+			keyStr = keyParts[0]
+		}
+
+		balance, ok := new(big.Int).SetString(parts[1], 10)
+		if !ok {
+			return nil, fmt.Errorf("invalid balance for alloc: %s", parts[1])
+		}
+
+		id, err := hex.DecodeString(keyStr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid hex address for alloc: %s", keyStr)
+		}
+
+		res = append(res, config.GenesisAlloc{
+			ID: config.KeyHexBytes{
+				HexBytes: id,
+			},
+			KeyType: keyType.String(),
+			Amount:  balance,
+		})
+	}
+	return res, nil
+}
+
+func mergeNetworkParamFlags(conf *config.GenesisConfig, cmd *cobra.Command, flagCfg *networkParams) (*config.GenesisConfig, error) {
 	if cmd.Flags().Changed(withGasFlag) {
 		conf.DisabledGasCosts = !flagCfg.withGas
 	}
