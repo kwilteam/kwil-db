@@ -680,13 +680,6 @@ func (i *interpreterPlanner) VisitLoopTermExpression(p0 *parse.LoopTermExpressio
 }
 
 func (i *interpreterPlanner) VisitLoopTermSQL(p0 *parse.LoopTermSQL) any {
-	// raw, err := p0.Statement.Raw()
-	// if err != nil {
-	// 	return err
-	// }
-
-	// ast1, err := parse.Parse(raw)
-
 	return loopTermFunc(func(exec *executionContext, fn func(value) error) error {
 		raw, err := p0.Statement.Raw()
 		if err != nil {
