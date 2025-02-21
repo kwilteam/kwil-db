@@ -18,7 +18,7 @@ type voteRecord struct {
 	SafeNonce   uint64 `json:"safe_nonce"`
 }
 
-// State is a naive kv impl used by singer rewardSigner.
+// State is a naive kv impl used by bridgeSigner.
 type State struct {
 	path string
 

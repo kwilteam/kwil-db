@@ -2,10 +2,17 @@ package signersvc
 
 import (
 	"context"
+	"fmt"
+	"math/big"
 
+	"github.com/samber/lo"
+
+	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/client"
-	clientTypes "github.com/kwilteam/kwil-db/core/client/types"
+	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	rpcclient "github.com/kwilteam/kwil-db/core/rpc/client"
 	"github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/node/types/sql"
 )
 
 type RewardInstanceInfo struct {
@@ -14,19 +21,19 @@ type RewardInstanceInfo struct {
 	EpochPeriod string
 	Erc20       string
 	Decimals    int64
-	Balance     string
+	Balance     *types.Decimal
 	Synced      bool
 	SyncedAt    int64
 	Enabled     bool
 }
 
 type Epoch struct {
-	ID             types.UUID
+	ID             *types.UUID
 	StartHeight    int64
 	StartTimestamp int64
 	EndHeight      int64
 	RewardRoot     []byte
-	RewardAmount   string
+	RewardAmount   *types.Decimal
 	EndBlockHash   []byte
 	Confirmed      bool
 	Voters         []string
@@ -39,121 +46,336 @@ type EpochReward struct {
 	Amount    string
 }
 
-// erc20ExtAPI defines the ERC20 reward extension API used by SignerSvc.
-type erc20ExtAPI interface {
-	GetTarget() string
-	SetTarget(ns string)
-	InstanceInfo(tx context.Context) (*RewardInstanceInfo, error)
-	GetActiveEpochs(ctx context.Context) ([]*Epoch, error)
-	GetEpochRewards(ctx context.Context, epochID types.UUID) ([]*EpochReward, error)
-	VoteEpoch(ctx context.Context, epochID types.UUID, safeNonce int64, signature []byte) (string, error)
+// bridgeSignerClient defines the ERC20 bridge extension client for signer service.
+type bridgeSignerClient interface {
+	InstanceInfo(tx context.Context, namespace string) (*RewardInstanceInfo, error)
+	GetActiveEpochs(ctx context.Context, namespace string) ([]*Epoch, error)
+	GetEpochRewards(ctx context.Context, namespace string, epochID *types.UUID) ([]*EpochReward, error)
+	VoteEpoch(ctx context.Context, namespace string, txSigner auth.Signer, epochID *types.UUID, safeNonce int64, signature []byte) (types.Hash, error)
 }
 
-type erc20rwExtApi struct {
-	clt       *client.Client
-	namespace string
+type txBcast interface {
+	BroadcastTx(ctx context.Context, tx *types.Transaction, sync uint8) (*types.ResultBroadcastTx, error)
 }
 
-var _ erc20ExtAPI = (*erc20rwExtApi)(nil)
+type engineCall interface {
+	CallWithoutEngineCtx(ctx context.Context, db sql.DB, namespace, action string, args []any, resultFn func(*common.Row) error) (*common.CallResult, error)
+}
 
-func newERC20RWExtAPI(clt *client.Client, ns string) *erc20rwExtApi {
-	return &erc20rwExtApi{
-		clt:       clt,
-		namespace: ns,
+type nodeApp interface {
+	AccountInfo(ctx context.Context, db sql.DB, account *types.AccountID, pending bool) (balance *big.Int, nonce int64, err error)
+	Price(ctx context.Context, dbTx sql.DB, tx *types.Transaction) (*big.Int, error)
+}
+
+type DB interface {
+	sql.ReadTxMaker
+	sql.DelayedReadTxMaker
+}
+
+type signerClient struct {
+	chainID  string
+	db       DB
+	call     engineCall
+	bcast    txBcast
+	kwilNode nodeApp
+}
+
+func NewSignerClient(chainID string, db DB, call engineCall, bcast txBcast, nodeApp nodeApp) *signerClient {
+	return &signerClient{
+		chainID:  chainID,
+		db:       db,
+		call:     call,
+		bcast:    bcast,
+		kwilNode: nodeApp,
 	}
 }
 
-func (k *erc20rwExtApi) GetTarget() string {
-	return k.namespace
-}
+func (k *signerClient) InstanceInfo(ctx context.Context, namespace string) (*RewardInstanceInfo, error) {
+	info := &RewardInstanceInfo{}
 
-func (k *erc20rwExtApi) SetTarget(ns string) {
-	k.namespace = ns
-}
+	readTx := k.db.BeginDelayedReadTx()
+	defer readTx.Rollback(ctx)
 
-func (k *erc20rwExtApi) InstanceInfo(ctx context.Context) (*RewardInstanceInfo, error) {
-	procedure := "info"
-	input := []any{}
+	_, err := k.call.CallWithoutEngineCtx(ctx, readTx, namespace, "info", []any{}, func(row *common.Row) error {
+		var ok bool
 
-	res, err := k.clt.Call(ctx, k.namespace, procedure, input)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(res.QueryResult.Values) == 0 {
-		return nil, nil
-	}
-
-	er := &RewardInstanceInfo{}
-	err = types.ScanTo(res.QueryResult.Values[0],
-		&er.Chain, &er.Escrow, &er.EpochPeriod, &er.Erc20, &er.Decimals, &er.Balance, &er.Synced, &er.SyncedAt, &er.Enabled)
-	if err != nil {
-		return nil, err
-	}
-
-	return er, nil
-}
-
-func (k *erc20rwExtApi) GetActiveEpochs(ctx context.Context) ([]*Epoch, error) {
-	procedure := "get_active_epochs"
-	input := []any{}
-
-	res, err := k.clt.Call(ctx, k.namespace, procedure, input)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(res.QueryResult.Values) == 0 {
-		return nil, nil
-	}
-
-	ers := make([]*Epoch, len(res.QueryResult.Values))
-	for i, v := range res.QueryResult.Values {
-		er := &Epoch{}
-		err = types.ScanTo(v, &er.ID, &er.StartHeight, &er.StartTimestamp, &er.EndHeight,
-			&er.RewardRoot, &er.RewardAmount, &er.EndBlockHash, &er.Confirmed, &er.Voters, &er.VoteNonces, &er.VoteSignatures)
-		if err != nil {
-			return nil, err
+		info.Chain, ok = row.Values[0].(string)
+		if !ok {
+			return fmt.Errorf("failed to get chain")
 		}
-		ers[i] = er
-	}
 
-	return ers, nil
-}
-func (k *erc20rwExtApi) GetEpochRewards(ctx context.Context, epochID types.UUID) ([]*EpochReward, error) {
-	procedure := "get_epoch_rewards"
-	input := []any{epochID}
-
-	res, err := k.clt.Call(ctx, k.namespace, procedure, input)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(res.QueryResult.Values) == 0 {
-		return nil, nil
-	}
-
-	ers := make([]*EpochReward, len(res.QueryResult.Values))
-	for i, v := range res.QueryResult.Values {
-		er := &EpochReward{}
-		err = types.ScanTo(v, &er.Recipient, &er.Amount)
-		if err != nil {
-			return nil, err
+		info.Escrow, ok = row.Values[1].(string)
+		if !ok {
+			return fmt.Errorf("failed to get escrow")
 		}
-		ers[i] = er
-	}
 
-	return ers, nil
+		info.EpochPeriod, ok = row.Values[2].(string)
+		if !ok {
+			return fmt.Errorf("failed to get epoch period")
+		}
+
+		info.Erc20, ok = row.Values[3].(string)
+		if !ok {
+			return fmt.Errorf("failed to get erc20")
+		}
+
+		info.Decimals, ok = row.Values[4].(int64)
+		if !ok {
+			return fmt.Errorf("failed to get decimals")
+		}
+
+		info.Balance, ok = row.Values[5].(*types.Decimal)
+		if !ok {
+			return fmt.Errorf("failed to get balance")
+		}
+
+		info.Synced, ok = row.Values[6].(bool)
+		if !ok {
+			return fmt.Errorf("failed to get synced")
+		}
+
+		info.SyncedAt, ok = row.Values[7].(int64)
+		if !ok {
+			return fmt.Errorf("failed to get synced at")
+		}
+
+		info.Enabled, ok = row.Values[8].(bool)
+		if !ok {
+			return fmt.Errorf("failed to get enabled")
+		}
+
+		return nil
+	})
+
+	return info, err
 }
 
-func (k *erc20rwExtApi) VoteEpoch(ctx context.Context, epochID types.UUID, safeNonce int64, signature []byte) (string, error) {
-	procedure := "vote_epoch"
-	input := [][]any{{epochID, safeNonce, signature}}
+func (k *signerClient) GetActiveEpochs(ctx context.Context, namespace string) ([]*Epoch, error) {
+	var epochs []*Epoch
 
-	res, err := k.clt.Execute(ctx, k.namespace, procedure, input, clientTypes.WithSyncBroadcast(true))
+	readTx := k.db.BeginDelayedReadTx()
+	defer readTx.Rollback(ctx)
+
+	_, err := k.call.CallWithoutEngineCtx(ctx, readTx, namespace, "get_active_epochs", []any{}, func(row *common.Row) error {
+		var ok bool
+		e := &Epoch{}
+
+		e.ID, ok = row.Values[0].(*types.UUID)
+		if !ok {
+			return fmt.Errorf("failed to get id")
+		}
+		e.StartHeight, ok = row.Values[1].(int64)
+		if !ok {
+			return fmt.Errorf("failed to get start height")
+		}
+		e.StartTimestamp, ok = row.Values[2].(int64)
+		if !ok {
+			return fmt.Errorf("failed to get start timestamp")
+		}
+
+		if row.Values[3] != nil {
+			e.EndHeight, ok = row.Values[3].(int64)
+			if !ok {
+				return fmt.Errorf("failed to get end height")
+			}
+		}
+
+		if row.Values[4] != nil {
+			e.RewardRoot, ok = row.Values[4].([]byte)
+			if !ok {
+				return fmt.Errorf("failed to get reward root")
+			}
+		}
+
+		if row.Values[5] != nil {
+			e.RewardAmount, ok = row.Values[5].(*types.Decimal)
+			if !ok {
+				return fmt.Errorf("failed to get reward amount")
+			}
+		}
+
+		if row.Values[6] != nil {
+			e.EndBlockHash, ok = row.Values[6].([]byte)
+			if !ok {
+				return fmt.Errorf("failed to get end block hash")
+			}
+		}
+
+		e.Confirmed, ok = row.Values[7].(bool)
+		if !ok {
+			return fmt.Errorf("failed to get confirmed")
+		}
+
+		if row.Values[8] != nil {
+			voters, ok := row.Values[8].([]*string)
+			if !ok {
+				return fmt.Errorf("failed to get voters")
+			}
+
+			e.Voters = lo.Map(voters, func(v *string, i int) string {
+				if v == nil {
+					return ""
+				}
+				return *v
+
+			})
+		}
+
+		if row.Values[9] != nil {
+			voteNonces, ok := row.Values[9].([]*int64)
+			if !ok {
+				return fmt.Errorf("failed to get vote nonces")
+			}
+
+			e.VoteNonces = lo.Map(voteNonces, func(v *int64, i int) int64 {
+				if v == nil {
+					return 0
+				}
+				return *v
+			})
+
+		}
+
+		if row.Values[10] != nil {
+			e.VoteSignatures, ok = row.Values[10].([][]byte)
+			if !ok {
+				return fmt.Errorf("failed to get vote signatures")
+			}
+		}
+
+		epochs = append(epochs, e)
+		return nil
+	})
+
+	return epochs, err
+}
+
+func (k *signerClient) GetEpochRewards(ctx context.Context, namespace string, epochID *types.UUID) ([]*EpochReward, error) {
+	var rewards []*EpochReward
+
+	readTx := k.db.BeginDelayedReadTx()
+	defer readTx.Rollback(ctx)
+
+	_, err := k.call.CallWithoutEngineCtx(ctx, readTx, namespace, "get_epoch_rewards", []any{epochID}, func(row *common.Row) error {
+		var ok bool
+		e := &EpochReward{}
+
+		e.Recipient, ok = row.Values[0].(string)
+		if !ok {
+			return fmt.Errorf("failed to get recipient")
+		}
+
+		e.Amount, ok = row.Values[1].(string)
+		if !ok {
+			return fmt.Errorf("failed to get amount")
+		}
+
+		rewards = append(rewards, e)
+
+		return nil
+	})
+
+	return rewards, err
+}
+
+func (k *signerClient) VoteEpoch(ctx context.Context, namespace string, txSigner auth.Signer, epochID *types.UUID, safeNonce int64, signature []byte) (types.Hash, error) {
+	inputs := [][]any{{epochID, safeNonce, signature}}
+	res, err := k.execute(ctx, namespace, txSigner, "vote_epoch", inputs)
 	if err != nil {
-		return "", err
+		return types.Hash{}, err
 	}
 
-	return res.String(), nil
+	return res, nil
 }
+
+func (k *signerClient) estimatePrice(ctx context.Context, tx *types.Transaction) (*big.Int, error) {
+	readTx := k.db.BeginDelayedReadTx()
+	defer readTx.Rollback(ctx)
+
+	return k.kwilNode.Price(ctx, readTx, tx)
+
+}
+
+func (k *signerClient) accountNonce(ctx context.Context, acc *types.AccountID) (uint64, error) {
+	readTx := k.db.BeginDelayedReadTx()
+	defer readTx.Rollback(ctx)
+
+	_, nonce, err := k.kwilNode.AccountInfo(ctx, readTx, acc, true)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get account info: %w", err)
+	}
+
+	return uint64(nonce), nil
+}
+
+// execute mimics client.Client.Execute, without client options.
+func (k *signerClient) execute(ctx context.Context, namespace string, txSigner auth.Signer, action string, tuples [][]any) (types.Hash, error) {
+	encodedTuples := make([][]*types.EncodedValue, len(tuples))
+	for i, tuple := range tuples {
+		encoded, err := client.EncodeInputs(tuple)
+		if err != nil {
+			return types.Hash{}, err
+		}
+		encodedTuples[i] = encoded
+	}
+
+	executionBody := &types.ActionExecution{
+		Action:    action,
+		Namespace: namespace,
+		Arguments: encodedTuples,
+	}
+
+	tx, err := k.newTx(ctx, executionBody, txSigner)
+	if err != nil {
+		return types.Hash{}, fmt.Errorf("failed to create tx: %w", err)
+	}
+
+	res, err := k.bcast.BroadcastTx(ctx, tx, uint8(rpcclient.BroadcastWaitCommit))
+	if err != nil {
+		return types.Hash{}, fmt.Errorf("failed to broadcast tx: %w", err)
+	}
+
+	return res.Hash, nil
+}
+
+// newTx mimics client.Client.newTx to create a new tx, without tx options.
+func (k *signerClient) newTx(ctx context.Context, data types.Payload, txSigner auth.Signer) (*types.Transaction, error) {
+	// Get the latest nonce for the account, if it exists.
+	ident, err := types.GetSignerAccount(txSigner)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get signer account: %w", err)
+	}
+
+	nonce, err := k.accountNonce(ctx, ident)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get account nonce: %w", err)
+	}
+
+	// whether account gets balance or not
+	nonce += 1
+
+	// build transaction
+	tx, err := types.CreateTransaction(data, k.chainID, nonce)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create transaction: %w", err)
+	}
+
+	// estimate price
+	price, err := k.estimatePrice(ctx, tx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to estimate price: %w", err)
+	}
+
+	// set fee
+	tx.Body.Fee = price
+
+	// sign transaction
+	err = tx.Sign(txSigner)
+	if err != nil {
+		return nil, fmt.Errorf("failed to sign transaction: %w", err)
+	}
+
+	return tx, nil
+}
+
+var _ bridgeSignerClient = (*signerClient)(nil)
