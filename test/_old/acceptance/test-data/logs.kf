@@ -1,7 +1,0 @@
-database logs;
-
-procedure make_logs($arr text[]) public view {
-    for $log in $arr {
-        notice($log);
-    }
-}
