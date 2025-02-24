@@ -688,10 +688,12 @@ func (ce *ConsensusEngine) initializeState(ctx context.Context) (int64, int64, e
 		}
 
 		ce.setLastCommitInfo(appHeight, appHash, nil, nil)
-
+	} else if appHeight == 0 {
+		// appHeight = 0 indicates that the app bootstrapped with the genesis state, but shutdown before the first block
+		ce.setLastCommitInfo(appHeight, appHash, nil, nil)
 	} else {
 		// restart or statesync init or zdt init
-		if appHeight == storeHeight && appHeight != 0 && !bytes.Equal(appHash, storeAppHash[:]) {
+		if appHeight == storeHeight && !bytes.Equal(appHash, storeAppHash[:]) {
 			// This is not possible, PG mismatches with the Blockstore return error
 			return -1, -1, fmt.Errorf("AppHash mismatch, appHash: %x, storeAppHash: %v", appHash, storeAppHash)
 		}
