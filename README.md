@@ -72,7 +72,7 @@ easiest is to run our pre-configured Docker image:
 
 ```shell
 docker run -p 5432:5432 -v kwil-pg-demo:/var/lib/postgresql/data \
-    --shm-size 256m -e "POSTGRES_HOST_AUTH_METHOD=trust" \
+    --shm-size 512m -e "POSTGRES_HOST_AUTH_METHOD=trust" \
     --name kwil-pg-demo kwildb/postgres:latest
 ```
 

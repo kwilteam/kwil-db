@@ -1,9 +1,10 @@
 services:
   pg:
     container_name: postgres
-    image: kwildb/postgres:16.5-1
+    image: kwildb/postgres:16.8-1
     ports:
       - "5432:5432"
+    shm_size: "512m"
     restart: always
     environment:
       POSTGRES_HOST_AUTH_METHOD: trust
