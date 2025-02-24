@@ -60,6 +60,7 @@ func (mp *Mempool) Remove(txid types.Hash) {
 }
 
 func (mp *Mempool) remove(txid types.Hash) {
+	delete(mp.fetching, txid)
 	tx, have := mp.txns[txid]
 	if !have {
 		return

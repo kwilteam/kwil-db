@@ -128,17 +128,19 @@ func (ce *ConsensusEngine) recheckTx(ctx context.Context, tx *ktypes.Transaction
 // sync is set to 1, in which case the BroadcastTx returns only after it is
 // successfully executed in a committed block.
 func (ce *ConsensusEngine) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (types.Hash, *ktypes.TxResult, error) {
-	if err := ce.CheckTx(ctx, tx); err != nil {
-		return types.Hash{}, nil, err
-	}
-
 	rawTx := tx.Bytes()
 	txHash := types.HashBytes(rawTx)
 
-	// add the transaction to the mempool
+	// Add the transaction to the mempool. This must be done before CheckTx
+	// because it modifies pending account state in the case that it passes.
 	have, rejected := ce.mempool.Store(txHash, tx)
 	if rejected {
 		return txHash, nil, ktypes.ErrMempoolFull
+	}
+
+	if err := ce.CheckTx(ctx, tx); err != nil {
+		ce.mempool.Remove(txHash)
+		return types.Hash{}, nil, err
 	}
 
 	// Announce the transaction to the network only if not previously announced
