@@ -80,11 +80,9 @@ func (h *harness) underNonceLock(ctx context.Context, fn func(int64) error) erro
 			if errors.Is(err, types.ErrInvalidNonce) {
 				// Note: several goroutines may all try to do this if they all hit the nonce error
 				recoverNonce()
-				h.printf("error, nonce %d was wrong, reverted to %d\n", nonce, h.nonce)
+				h.printf("nonce %d was wrong, reverted to %d\n", nonce, h.nonce)
 				return err
 			}
-
-			h.printf("error broadcasting tx: %v", err)
 
 			// For other bcast errors like mempool full, the tx was rejected,
 			// but we already advanced nonce. Try to reset the nonce to what we
@@ -94,10 +92,11 @@ func (h *harness) underNonceLock(ctx context.Context, fn func(int64) error) erro
 			// detected, we'll recover the nonce from RPC.
 			h.nonceMtx.Lock()
 			if h.nonce == nonce0+1 { // lucky, we can just reset to the nonce we had before
-				h.nonce--
+				h.printf("resetting nonce to %d", nonce0)
+				h.nonce = nonce0
 			} else { // concurrent goroutines may have advanced the nonce
 				recoverNonce()
-				h.printf("error, nonce %d was wrong, reverted to %d", nonce, h.nonce)
+				h.printf("nonce %d was wrong, reverted to %d", nonce, h.nonce)
 			}
 			h.nonceMtx.Unlock()
 			return err
@@ -118,6 +117,7 @@ func (h *harness) underNonceLock(ctx context.Context, fn func(int64) error) erro
 			recoverNonce()
 			h.printf("RESET NONCE TO LATEST REPORTED (underNonceLock): %d", h.nonce)
 		}
+		h.nonce--
 		return err
 	}
 	return nil
