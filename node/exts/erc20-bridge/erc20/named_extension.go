@@ -1,4 +1,4 @@
-package erc20reward
+package erc20
 
 import (
 	"context"
@@ -41,7 +41,7 @@ func init() {
 		var distributionPeriod string
 		distributionPeriodAny, ok := metadata["distribution_period"]
 		if !ok {
-			distributionPeriod = "24h"
+			distributionPeriod = "24h" // 'h' is the highest units supported
 		} else {
 			distributionPeriod, ok = distributionPeriodAny.(string)
 			if !ok {
@@ -89,7 +89,7 @@ func init() {
 							{Name: "epoch_period", Type: types.TextType},
 							{Name: "erc20", Type: types.TextType, Nullable: true},
 							{Name: "decimals", Type: types.IntType, Nullable: true},
-							{Name: "balance", Type: types.TextType, Nullable: true}, // total unspent balance
+							{Name: "balance", Type: uint256Numeric, Nullable: true}, // total unspent balance
 							{Name: "synced", Type: types.BoolType},
 							{Name: "synced_at", Type: types.IntType, Nullable: true},
 							{Name: "enabled", Type: types.BoolType},
@@ -114,7 +114,7 @@ func init() {
 					Name: "issue",
 					Parameters: []precompiles.PrecompileValue{
 						{Name: "user", Type: types.TextType},
-						{Name: "amount", Type: types.TextType},
+						{Name: "amount", Type: uint256Numeric},
 					},
 					AccessModifiers: []precompiles.Modifier{precompiles.SYSTEM},
 					Handler:         makeMetaHandler("issue"),
@@ -123,7 +123,7 @@ func init() {
 					Name: "transfer",
 					Parameters: []precompiles.PrecompileValue{
 						{Name: "to", Type: types.TextType},
-						{Name: "amount", Type: types.TextType},
+						{Name: "amount", Type: uint256Numeric},
 					},
 					// anybody can call this as long as they have the tokens.
 					// There is no security risk if somebody calls this directly
@@ -133,7 +133,7 @@ func init() {
 				{
 					Name: "lock",
 					Parameters: []precompiles.PrecompileValue{
-						{Name: "amount", Type: types.TextType},
+						{Name: "amount", Type: uint256Numeric},
 					},
 					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
 					Handler:         makeMetaHandler("lock"),
@@ -142,7 +142,7 @@ func init() {
 					Name: "lock_admin",
 					Parameters: []precompiles.PrecompileValue{
 						{Name: "user", Type: types.TextType},
-						{Name: "amount", Type: types.TextType},
+						{Name: "amount", Type: uint256Numeric},
 					},
 					AccessModifiers: []precompiles.Modifier{precompiles.SYSTEM},
 					Handler:         makeMetaHandler("lock_admin"),
@@ -151,7 +151,7 @@ func init() {
 					Name: "unlock",
 					Parameters: []precompiles.PrecompileValue{
 						{Name: "user", Type: types.TextType},
-						{Name: "amount", Type: types.TextType},
+						{Name: "amount", Type: uint256Numeric},
 					},
 					AccessModifiers: []precompiles.Modifier{precompiles.SYSTEM},
 					Handler:         makeMetaHandler("unlock"),
@@ -164,27 +164,11 @@ func init() {
 					},
 					Returns: &precompiles.MethodReturn{
 						Fields: []precompiles.PrecompileValue{
-							{Name: "balance", Type: types.TextType},
+							{Name: "balance", Type: uint256Numeric},
 						},
 					},
 					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
 					Handler:         makeMetaHandler("balance"),
-				},
-				{
-					Name: "list_unconfirmed_epochs",
-					Returns: &precompiles.MethodReturn{
-						IsTable: true,
-						Fields: []precompiles.PrecompileValue{
-							{Name: "epoch_id", Type: types.UUIDType},
-							{Name: "start_height", Type: types.IntType},
-							{Name: "start_timestamp", Type: types.IntType},
-							{Name: "end_height", Type: types.IntType},
-							{Name: "reward_root", Type: types.ByteaType},
-							{Name: "end_block_hash", Type: types.ByteaType},
-						},
-					},
-					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
-					Handler:         makeMetaHandler("list_unconfirmed_epochs"),
 				},
 				{
 					Name: "decimals",
@@ -199,7 +183,7 @@ func init() {
 				{
 					Name: "scale_down",
 					Parameters: []precompiles.PrecompileValue{
-						{Name: "amount", Type: uint256Numeric},
+						{Name: "amount", Type: types.TextType},
 					},
 					Returns: &precompiles.MethodReturn{
 						Fields: []precompiles.PrecompileValue{
@@ -221,6 +205,100 @@ func init() {
 					},
 					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
 					Handler:         makeMetaHandler("scale_up"),
+				},
+				{
+					Name:       "get_active_epochs",
+					Parameters: []precompiles.PrecompileValue{},
+					Returns: &precompiles.MethodReturn{
+						IsTable: true,
+						Fields: []precompiles.PrecompileValue{
+							{Name: "id", Type: types.UUIDType},
+							{Name: "start_height", Type: types.IntType},
+							{Name: "start_timestamp", Type: types.IntType},
+							{Name: "end_height", Type: types.IntType, Nullable: true},
+							{Name: "reward_root", Type: types.ByteaType, Nullable: true},
+							{Name: "reward_amount", Type: uint256Numeric, Nullable: true},
+							{Name: "end_block_hash", Type: types.ByteaType, Nullable: true},
+							{Name: "confirmed", Type: types.BoolType},
+							{Name: "voters", Type: types.TextArrayType, Nullable: true},
+							{Name: "vote_nonces", Type: types.IntArrayType, Nullable: true},
+							{Name: "voter_signatures", Type: types.ByteaArrayType, Nullable: true},
+						},
+					},
+					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+					Handler:         makeMetaHandler("get_active_epochs"),
+				},
+				{
+					Name: "list_epochs",
+					Parameters: []precompiles.PrecompileValue{
+						{Name: "after", Type: types.IntType},
+						{Name: "limit", Type: types.IntType},
+					},
+					Returns: &precompiles.MethodReturn{
+						IsTable: true,
+						Fields: []precompiles.PrecompileValue{
+							{Name: "id", Type: types.UUIDType},
+							{Name: "start_height", Type: types.IntType},
+							{Name: "start_timestamp", Type: types.IntType},
+							{Name: "end_height", Type: types.IntType, Nullable: true},
+							{Name: "reward_root", Type: types.ByteaType, Nullable: true},
+							{Name: "reward_amount", Type: uint256Numeric, Nullable: true},
+							{Name: "end_block_hash", Type: types.ByteaType, Nullable: true},
+							{Name: "confirmed", Type: types.BoolType},
+							{Name: "voters", Type: types.TextArrayType, Nullable: true},
+							{Name: "vote_nonces", Type: types.IntArrayType, Nullable: true},
+							{Name: "voter_signatures", Type: types.ByteaArrayType, Nullable: true},
+						},
+					},
+					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+					Handler:         makeMetaHandler("list_epochs"),
+				},
+				{
+					Name: "get_epoch_rewards",
+					Parameters: []precompiles.PrecompileValue{
+						{Name: "epoch_id", Type: types.UUIDType},
+					},
+					Returns: &precompiles.MethodReturn{
+						IsTable: true,
+						Fields: []precompiles.PrecompileValue{
+							{Name: "recipient", Type: types.TextType},
+							{Name: "amount", Type: types.TextType},
+						},
+					},
+					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+					Handler:         makeMetaHandler("get_epoch_rewards"),
+				},
+				{
+					Name: "vote_epoch",
+					Parameters: []precompiles.PrecompileValue{
+						{Name: "epoch_id", Type: types.UUIDType},
+						{Name: "nonce", Type: types.IntType},
+						{Name: "signature", Type: types.ByteaType},
+					},
+					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
+					Handler:         makeMetaHandler("vote_epoch"),
+				},
+				{
+					Name: "list_wallet_rewards",
+					Parameters: []precompiles.PrecompileValue{
+						{Name: "wallet", Type: types.TextType}, // wallet address
+						{Name: "with_pending", Type: types.BoolType},
+					},
+					Returns: &precompiles.MethodReturn{
+						IsTable: true,
+						Fields: []precompiles.PrecompileValue{
+							{Name: "chain", Type: types.TextType},
+							{Name: "chain_id", Type: types.TextType},
+							{Name: "contract", Type: types.TextType},
+							{Name: "created_at", Type: types.IntType},
+							{Name: "param_recipient", Type: types.TextType},
+							{Name: "param_amount", Type: uint256Numeric},
+							{Name: "param_block_hash", Type: types.ByteaType},
+							{Name: "param_root", Type: types.ByteaType},
+							{Name: "param_proofs", Type: types.ByteaArrayType}},
+					},
+					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC, precompiles.VIEW},
+					Handler:         makeMetaHandler("list_wallet_rewards"),
 				},
 			},
 		}, nil

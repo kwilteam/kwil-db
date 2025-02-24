@@ -1,14 +1,16 @@
-package reward
+package utils
 
 import (
 	"encoding/hex"
+	"math/big"
 	"strings"
 	"testing"
 
 	"github.com/ethereum/go-ethereum/common/hexutil"
-	smt "github.com/kwilteam/openzeppelin-merkle-tree-go/standard_merkle_tree"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	smt "github.com/kwilteam/openzeppelin-merkle-tree-go/standard_merkle_tree"
 )
 
 func Map[T1, T2 any](s []T1, f func(T1) T2) []T2 {
@@ -43,11 +45,11 @@ func TestMerkleTree(t *testing.T) {
 			Map([]string{"100", "200", "100"}, smt.SolNumber), contract, b32Hash)
 		require.NoError(t, err)
 		require.Equal(t, expectRoot, hex.EncodeToString(root))
-		assert.JSONEq(t, treeLeafs3, mt)
+		assert.JSONEq(t, treeLeafs3, string(mt))
 		mtRoot, mtProof, mtLeaf, bh, amt, err := GetMTreeProof(mt, user2)
 		require.NoError(t, err)
 		require.Equal(t, expectRoot, hex.EncodeToString(mtRoot))
-		require.Equal(t, "200", amt)
+		require.Equal(t, big.NewInt(200), amt)
 		require.EqualValues(t, kwilBlockHashBytes, bh)
 		require.Len(t, mtProof, 2)
 		assert.Equal(t, "0x644f999664d65d1d2a3feefade54d643dc2b9696971e9070c36f0ec788e55f5b", hexutil.Encode(mtProof[0]))
@@ -61,11 +63,11 @@ func TestMerkleTree(t *testing.T) {
 			Map([]string{"100", "200", "100", "200"}, smt.SolNumber), contract, b32Hash)
 		require.NoError(t, err)
 		require.Equal(t, expectRoot, hex.EncodeToString(root))
-		assert.JSONEq(t, treeLeafs4, mt)
+		assert.JSONEq(t, treeLeafs4, string(mt))
 		mtRoot, mtProof, mtLeaf, bh, amt, err := GetMTreeProof(mt, user2)
 		require.NoError(t, err)
 		require.Equal(t, expectRoot, hex.EncodeToString(mtRoot))
-		require.Equal(t, "200", amt)
+		require.Equal(t, big.NewInt(200), amt)
 		require.EqualValues(t, kwilBlockHashBytes, bh)
 		require.Len(t, mtProof, 2)
 		assert.Equal(t, "0x644f999664d65d1d2a3feefade54d643dc2b9696971e9070c36f0ec788e55f5b", hexutil.Encode(mtProof[0]))
@@ -79,11 +81,11 @@ func TestMerkleTree(t *testing.T) {
 			Map([]string{"100", "200", "100", "200", "100"}, smt.SolNumber), contract, b32Hash)
 		require.NoError(t, err)
 		require.Equal(t, expectRoot, hex.EncodeToString(root))
-		assert.JSONEq(t, treeLeafs5, mt)
+		assert.JSONEq(t, treeLeafs5, string(mt))
 		mtRoot, mtProof, mtLeaf, bh, amt, err := GetMTreeProof(mt, user2)
 		require.NoError(t, err)
 		require.Equal(t, expectRoot, hex.EncodeToString(mtRoot))
-		require.Equal(t, "200", amt)
+		require.Equal(t, big.NewInt(200), amt)
 		require.EqualValues(t, kwilBlockHashBytes, bh)
 		require.Len(t, mtProof, 3)
 		assert.Equal(t, "0x644f999664d65d1d2a3feefade54d643dc2b9696971e9070c36f0ec788e55f5b", hexutil.Encode(mtProof[0]))
@@ -100,7 +102,7 @@ func TestMerkleTree(t *testing.T) {
 		mtRoot, mtProof, mtLeaf, bh, amt, err := GetMTreeProof(mt, user1)
 		require.NoError(t, err)
 		require.Equal(t, root, mtRoot)
-		require.Equal(t, "100", amt)
+		require.Equal(t, big.NewInt(100), amt)
 		require.EqualValues(t, kwilBlockHashBytes, bh)
 		require.Len(t, mtProof, 0)    // no proofs
 		assert.Equal(t, root, mtLeaf) // the leaf is the root

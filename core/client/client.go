@@ -241,7 +241,7 @@ func (c *Client) ChainInfo(ctx context.Context) (*types.ChainInfo, error) {
 func (c *Client) Execute(ctx context.Context, namespace string, action string, tuples [][]any, opts ...clientType.TxOpt) (types.Hash, error) {
 	encodedTuples := make([][]*types.EncodedValue, len(tuples))
 	for i, tuple := range tuples {
-		encoded, err := encodeTuple(tuple)
+		encoded, err := EncodeInputs(tuple)
 		if err != nil {
 			return types.Hash{}, err
 		}
@@ -303,7 +303,7 @@ func (c *Client) ExecuteSQL(ctx context.Context, stmt string, params map[string]
 
 // Call calls an action. It returns the result records.
 func (c *Client) Call(ctx context.Context, namespace string, action string, inputs []any) (*types.CallResult, error) {
-	encoded, err := encodeTuple(inputs)
+	encoded, err := EncodeInputs(inputs)
 	if err != nil {
 		return nil, err
 	}
@@ -374,8 +374,8 @@ func (c *Client) GetAccount(ctx context.Context, acctID *types.AccountID, status
 	return c.txClient.GetAccount(ctx, acctID, status)
 }
 
-// encodeTuple encodes a tuple for usage in a transaction.
-func encodeTuple(tup []any) ([]*types.EncodedValue, error) {
+// EncodeInputs encodes input(a tuple) for usage in a transaction.
+func EncodeInputs(tup []any) ([]*types.EncodedValue, error) {
 	encoded := make([]*types.EncodedValue, 0, len(tup))
 	for _, val := range tup {
 		ev, err := types.EncodeValue(val)
