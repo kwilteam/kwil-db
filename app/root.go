@@ -1,6 +1,7 @@
 package app
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 
@@ -35,6 +36,7 @@ var defaultRoot = func() string {
 	return filepath.Join(home, ".kwild")
 }()
 
+// RootCmd is the root cobra command for the application. See also [RunRootCmd].
 func RootCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:               custom.BinaryConfig.NodeCmd,
@@ -99,4 +101,23 @@ func RootCmd() *cobra.Command {
 	shared.ApplySanitizedHelpFuncRecursively(cmd)
 
 	return cmd
+}
+
+// RunRootCmd executes the root command with the provided context, which may be
+// the background context or a cancellable context such as one that listens for
+// interrupt signals. In a main function, a non-nil error typically results in a
+// non-zero exit code, but that is up to the application developer. There is no
+// need to print the error to stdout as the application will print all results,
+// including errors, according to the output format. See BindOutputFormatFlag.
+func RunRootCmd(ctx context.Context) error {
+	rootCmd := RootCmd()
+
+	if err := rootCmd.ExecuteContext(ctx); err != nil { // command syntax error
+		return err
+	}
+
+	// For a command / application error, which handles the output themselves,
+	// we detect those case where display.PrintErr() is called so that we can
+	// return a non-zero exit code, which is important for scripting etc.
+	return shared.CmdCtxErr(rootCmd)
 }
