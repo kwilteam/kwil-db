@@ -34,7 +34,7 @@
       retries: 10
 
   {{ .PGServicePrefix }}{{ .NodeNumber }}:
-    image: kwildb/postgres:16.5-1
+    image: kwildb/postgres:16.8-1
     ports:
       - "5432"
     restart: always
