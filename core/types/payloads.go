@@ -77,7 +77,7 @@ var payloadConcreteTypes = map[PayloadType]Payload{
 func UnmarshalPayload(payloadType PayloadType, payload []byte) (Payload, error) {
 	prototype, have := payloadConcreteTypes[payloadType]
 	if !have {
-		return nil, errors.New("unknown payload type")
+		return nil, ErrUnknownPayloadType
 	}
 
 	t := reflect.TypeOf(prototype).Elem() // deref ptr

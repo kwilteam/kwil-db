@@ -2,7 +2,6 @@ package mempool
 
 import (
 	"context"
-	"io"
 	"slices"
 	"sync"
 
@@ -61,6 +60,7 @@ func (mp *Mempool) Remove(txid types.Hash) {
 }
 
 func (mp *Mempool) remove(txid types.Hash) {
+	delete(mp.fetching, txid)
 	tx, have := mp.txns[txid]
 	if !have {
 		return
@@ -94,7 +94,7 @@ func (mp *Mempool) Store(txid types.Hash, tx *ktypes.Transaction) (found, reject
 		return true, false // already have it
 	}
 
-	sz, _ := tx.WriteTo(io.Discard) // TODO: make a SerializeSize method for Transaction
+	sz := tx.SerializeSize()
 
 	if mp.currentSize+sz > mp.maxSize {
 		return false, true

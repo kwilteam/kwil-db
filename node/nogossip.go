@@ -35,7 +35,7 @@ func (n *Node) txAnnStreamHandler(s network.Stream) {
 	var fetched bool
 	defer func() {
 		if !fetched { // release prefetch
-			n.mp.Store(txHash, nil)
+			n.mp.Remove(txHash)
 		}
 	}()
 
@@ -72,19 +72,22 @@ func (n *Node) txAnnStreamHandler(s network.Stream) {
 	// while we were fetching it
 
 	// store in mempool since it was not in tx index and thus not confirmed
+	_, rejected := n.mp.Store(txHash, &tx)
+	if rejected { // our mempool is full
+		return
+	}
+
 	ctx := context.Background()
 	if err := n.ce.CheckTx(ctx, &tx); err != nil {
 		n.log.Warnf("tx %v failed check: %v", txHash, err)
-	} else {
-		fetched = true
-		_, rejected := n.mp.Store(txHash, &tx)
-		if rejected { // our mempool is full
-			return
-		}
-
-		// re-announce
-		go n.announceTx(context.Background(), txHash, rawTx, s.Conn().RemotePeer())
+		return // must mempool.Remove (fetched must still be false here)
 	}
+
+	fetched = true // otherwise it will be removed on return
+
+	// re-announce
+	go n.announceTx(context.Background(), txHash, rawTx, s.Conn().RemotePeer())
+
 }
 
 func (n *Node) announceTx(ctx context.Context, txHash types.Hash, rawTx []byte, from peer.ID) {
