@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"sort"
 	"sync"
 
 	"github.com/kwilteam/kwil-db/common"
@@ -154,7 +153,7 @@ func NewGlobalContext(ctx context.Context, db sql.Executor, extensionInitializer
 	// we need to make sure schemas are ordered by their dependencies
 	// if one schema is dependent on another, it must be loaded after the other
 	// this is handled by the orderSchemas function
-	for _, schema := range orderSchemas(schemas) {
+	for _, schema := range schemas {
 		err := g.loadDataset(ctx, schema)
 		if err != nil {
 			return nil, fmt.Errorf("%w: schema (%s / %s / %s)", err, schema.Name, schema.DBID(), schema.Owner)
@@ -175,7 +174,7 @@ func (g *GlobalContext) Reload(ctx context.Context, db sql.Executor) error {
 		return err
 	}
 
-	for _, schema := range orderSchemas(schemas) {
+	for _, schema := range schemas {
 		err := g.loadDataset(ctx, schema)
 		if err != nil {
 			return err
@@ -454,52 +453,4 @@ func (g *GlobalContext) loadDataset(ctx context.Context, schema *types.Schema) e
 func (g *GlobalContext) unloadDataset(dbid string) {
 	delete(g.datasets, dbid)
 	delete(g.initializers, dbid)
-}
-
-// orderSchemas orders schemas based on their dependencies to other schemas.
-func orderSchemas(schemas []*types.Schema) []*types.Schema {
-	// Mapping from schema DBID to its extensions
-	schemaMap := make(map[string][]string)
-	for _, schema := range schemas {
-		var exts []string
-		for _, ext := range schema.Extensions {
-			exts = append(exts, ext.Name)
-		}
-		schemaMap[schema.DBID()] = exts
-	}
-
-	// Topological sort
-	var result []string
-	visited := make(map[string]bool)
-	var visitAll func(items []string)
-
-	visitAll = func(items []string) {
-		for _, item := range items {
-			if !visited[item] {
-				visited[item] = true
-				visitAll(schemaMap[item])
-				result = append(result, item)
-			}
-		}
-	}
-
-	keys := make([]string, 0, len(schemaMap))
-	for key := range schemaMap {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys) // sort the keys for deterministic output
-	visitAll(keys)
-
-	// Reorder schemas based on result
-	var orderedSchemas []*types.Schema
-	for _, dbid := range result {
-		for _, schema := range schemas {
-			if schema.DBID() == dbid {
-				orderedSchemas = append(orderedSchemas, schema)
-				break
-			}
-		}
-	}
-
-	return orderedSchemas
 }
