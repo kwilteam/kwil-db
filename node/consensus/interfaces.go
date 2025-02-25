@@ -28,6 +28,7 @@ type Mempool interface {
 	RecheckTxs(ctx context.Context, checkFn mempool.CheckFn)
 	Store(types.Hash, *ktypes.Transaction) (have, rejected bool)
 	TxsAvailable() bool
+	Size() (totalBytes, numTxns int)
 }
 
 // BlockStore includes both txns and blocks

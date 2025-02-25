@@ -138,6 +138,31 @@ func (ce *ConsensusEngine) QueueTx(ctx context.Context, tx *ktypes.Transaction) 
 		ce.mempool.Remove(txHash)
 		return err
 	}
+
+	// if the node is a leader, see if mempool has enough txs to fill the block
+	// and send a trigger to the CE if it's in the waiting state to start the new round.
+	if ce.role.Load() == types.RoleLeader {
+		ce.stateInfo.mtx.RLock()
+		status := ce.stateInfo.status
+		ce.stateInfo.mtx.RUnlock()
+
+		if status != Committed {
+			// send the mempoolReady trigger only during the
+			// newRound and waiting for blkProposal Timeout to elapse.
+			return nil
+		}
+
+		sz, _ := ce.mempool.Size()
+		if int64(sz) >= ce.ConsensusParams().MaxBlockSize {
+			full := ce.mempoolReady.Swap(true)
+			if !full {
+				ce.log.Debug("Mempool has enough txs to fill the block, sending trigger to the CE", "txsSize", sz)
+				// only signal leader's CE once when the mempool has enough txs to fill the block
+				ce.mempoolReadyChan <- struct{}{}
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -288,6 +313,13 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 
 	// recheck the transactions in the mempool
 	ce.mempool.RecheckTxs(ctx, ce.recheckTxFn(ce.lastBlockInternal()))
+
+	// should there be smaller limit to accommodate for the block serialization?
+	sz, _ := ce.mempool.Size()
+	if int64(sz) >= ce.ConsensusParams().MaxBlockSize {
+		// mempool has enough txs to fill the block
+		ce.mempoolReady.Store(true)
+	}
 
 	ce.log.Info("Committed Block", "height", height, "hash", blkProp.blkHash.String(),
 		"appHash", appHash.String(), "numTxs", blkProp.blk.Header.NumTxns)

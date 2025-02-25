@@ -116,6 +116,17 @@ type ConsensusEngine struct {
 	// the mempool while the block is being committed i.e while the accounts are
 	// being updated.
 	mempoolMtx sync.Mutex
+	// mempoolReady indicates consensus engine that has enough txs to propose a block
+	// CE can adjust it's wait times based on this flag.
+	// This flag tracks if the mempool filled enough between the commit and
+	// the blkProposal Timeout and expediate leader getting into the next round.
+	// Applicable only for the leader
+	mempoolReady atomic.Bool // shld it be a bool or a channel?
+	// queueTxs can send a trigger on this channel to notify the consensus engine that the mempool
+	// has enough txs to propose a block. This is only sent once when the mempoolReady
+	// flag is updated from false to true by the QueueTx method.
+	// Applicable only for the leader
+	mempoolReadyChan chan struct{}
 
 	// Broadcasters
 	proposalBroadcaster ProposalBroadcaster
@@ -339,6 +350,7 @@ func New(cfg *Config) (*ConsensusEngine, error) {
 		bestHeightCh:     make(chan *discoveryMsg, 1),
 		newRound:         make(chan struct{}, 1),
 		newBlockProposal: make(chan struct{}, 1),
+		mempoolReadyChan: make(chan struct{}, 1),
 
 		// interfaces
 		mempool:        cfg.Mempool,
