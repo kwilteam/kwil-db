@@ -9,6 +9,7 @@ import (
 	"github.com/kwilteam/kwil-db/app/custom"
 	"github.com/kwilteam/kwil-db/app/node/conf"
 	"github.com/kwilteam/kwil-db/app/shared/bind"
+	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/version"
 )
 
@@ -82,7 +83,11 @@ func StartCmd() *cobra.Command {
 				cfg.Consensus.EmptyBlockTimeout = cfg.Consensus.ProposeTimeout
 			}
 
-			return runNode(cmd.Context(), rootDir, cfg, autogen, dbOwner)
+			err = runNode(cmd.Context(), rootDir, cfg, autogen, dbOwner)
+			if err != nil {
+				return display.PrintErr(cmd, fmt.Errorf("node stopped with error: %w", err))
+			}
+			return nil
 		},
 	}
 

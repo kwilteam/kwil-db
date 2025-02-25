@@ -8,7 +8,6 @@ import (
 	"syscall"
 
 	"github.com/kwilteam/kwil-db/app"
-	"github.com/kwilteam/kwil-db/app/shared"
 )
 
 func main() {
@@ -21,16 +20,7 @@ func main() {
 		cancel()
 	}()
 
-	rootCmd := app.RootCmd()
-
-	if err := rootCmd.ExecuteContext(ctx); err != nil { // command syntax error
-		os.Exit(-1)
-	}
-
-	// For a command / application error, which handle the output themselves, we
-	// detect those case where display.PrintErr() is called so that we can
-	// return a non-zero exit code, which is important for scripting etc.
-	if err := shared.CmdCtxErr(rootCmd); err != nil {
+	if err := app.RunRootCmd(ctx); err != nil {
 		os.Exit(-1)
 	}
 
