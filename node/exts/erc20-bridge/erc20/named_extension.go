@@ -171,6 +171,14 @@ func init() {
 					Handler:         makeMetaHandler("balance"),
 				},
 				{
+					Name: "bridge",
+					Parameters: []precompiles.PrecompileValue{
+						{Name: "amount", Type: uint256Numeric},
+					},
+					AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
+					Handler:         makeMetaHandler("bridge"),
+				},
+				{
 					Name: "decimals",
 					Returns: &precompiles.MethodReturn{
 						Fields: []precompiles.PrecompileValue{

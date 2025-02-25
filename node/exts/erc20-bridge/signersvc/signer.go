@@ -30,14 +30,13 @@ import (
 
 // StateFilePath returns the state file.
 func StateFilePath(dir string) string {
-	return filepath.Join(dir, "erc20_signer_state.json")
+	return filepath.Join(dir, "erc20_bridge_vote.json")
 }
 
 // bridgeSigner handles the voting on one registered erc20 reward instance.
 type bridgeSigner struct {
-	target        string
-	lastVoteBlock int64
-	escrowAddr    ethCommon.Address
+	target     string
+	escrowAddr ethCommon.Address
 
 	kwil       bridgeSignerClient
 	txSigner   auth.Signer
@@ -56,26 +55,16 @@ func newBridgeSigner(kwil bridgeSignerClient, safe *Safe, target string, txSigne
 		logger = log.DiscardLogger
 	}
 
-	// overwrite configured lastVoteBlock with the value from state if exist
-	lastVoteBlock := int64(0)
-	lastVote := state.LastVote(target)
-	if lastVote != nil {
-		lastVoteBlock = lastVote.BlockHeight
-	}
-
-	logger.Info("will sync after last vote epoch", "height", lastVoteBlock)
-
 	return &bridgeSigner{
-		kwil:          kwil,
-		txSigner:      txSigner,
-		signerPk:      signerPk,
-		signerAddr:    signerAddr,
-		state:         state,
-		logger:        logger,
-		target:        target,
-		safe:          safe,
-		escrowAddr:    escrowAddr,
-		lastVoteBlock: lastVoteBlock,
+		kwil:       kwil,
+		txSigner:   txSigner,
+		signerPk:   signerPk,
+		signerAddr: signerAddr,
+		state:      state,
+		logger:     logger,
+		target:     target,
+		safe:       safe,
+		escrowAddr: escrowAddr,
 	}, nil
 }
 
@@ -169,10 +158,10 @@ func (s *bridgeSigner) vote(ctx context.Context, epoch *Epoch, safeMeta *safeMet
 	// NOTE: it's fine if s.kwil.VoteEpoch succeed, but s.state.UpdateLastVote failed,
 	// as the epoch will be fetched again and skipped
 	err = s.state.UpdateLastVote(s.target, &voteRecord{
-		RewardRoot:  epoch.RewardRoot,
-		BlockHeight: epoch.EndHeight,
-		BlockHash:   hex.EncodeToString(epoch.EndBlockHash),
-		SafeNonce:   safeMeta.nonce.Uint64(),
+		Epoch:      epoch.ID.String(),
+		RewardRoot: epoch.RewardRoot,
+		TxHash:     h.String(),
+		SafeNonce:  safeMeta.nonce.Uint64(),
 	})
 	if err != nil {
 		return err
@@ -188,7 +177,7 @@ func (s *bridgeSigner) vote(ctx context.Context, epoch *Epoch, safeMeta *safeMet
 // Since there could be the case that the target(namespace/or id) not exist for whatever reason,
 // this function won't return Error, and also won't log at Error level.
 func (s *bridgeSigner) sync(ctx context.Context) {
-	s.logger.Debug("polling epochs", "lastVoteBlock", s.lastVoteBlock)
+	s.logger.Debug("polling epochs")
 
 	epochs, err := s.kwil.GetActiveEpochs(ctx, s.target)
 	if err != nil {
@@ -221,7 +210,6 @@ func (s *bridgeSigner) sync(ctx context.Context) {
 
 	if s.canSkip(finalizedEpoch, safeMeta) {
 		s.logger.Info("skip epoch", "id", finalizedEpoch.ID.String(), "height", finalizedEpoch.EndHeight)
-		s.lastVoteBlock = finalizedEpoch.EndHeight // update since we can skip it
 		return
 	}
 
@@ -236,8 +224,6 @@ func (s *bridgeSigner) sync(ctx context.Context) {
 		s.logger.Warn("vote epoch", "id", finalizedEpoch.ID.String(), "height", finalizedEpoch.EndHeight, "error", err.Error())
 		return
 	}
-
-	s.lastVoteBlock = finalizedEpoch.EndHeight // update after all operations succeed
 }
 
 // getSigners verifies config and returns a list of signerSvc.

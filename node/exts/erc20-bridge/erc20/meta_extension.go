@@ -616,48 +616,7 @@ func init() {
 							user := inputs[1].(string)
 							amount := inputs[2].(*types.Decimal)
 
-							if amount.IsNegative() {
-								return fmt.Errorf("amount cannot be negative")
-							}
-
-							info, err := SINGLETON.getUsableInstance(id)
-							if err != nil {
-								return err
-							}
-							info.mu.RLock()
-							// we cannot defer an RUnlock here because we need to unlock
-							// the read lock before we can acquire the write lock, which
-							// we do at the end of this
-
-							newBal, err := types.DecimalSub(info.ownedBalance, amount)
-							if err != nil {
-								info.mu.RUnlock()
-								return err
-							}
-
-							if newBal.IsNegative() {
-								info.mu.RUnlock()
-								return fmt.Errorf("network does not enough balance to issue %s to %s", amount, user)
-							}
-
-							addr, err := ethAddressFromHex(user)
-							if err != nil {
-								info.mu.RUnlock()
-								return err
-							}
-
-							err = issueReward(ctx.TxContext.Ctx, app, id, info.currentEpoch.ID, addr, amount)
-							if err != nil {
-								info.mu.RUnlock()
-								return err
-							}
-
-							info.mu.RUnlock()
-							info.mu.Lock()
-							info.ownedBalance = newBal
-							info.mu.Unlock()
-
-							return nil
+							return SINGLETON.issueTokens(ctx.TxContext.Ctx, app, id, user, amount)
 						},
 					},
 					{
@@ -827,6 +786,44 @@ func init() {
 							}
 
 							return resultFn([]any{bal})
+						},
+					},
+					{
+						// bridge will 'issue' token to the caller, from its own balance
+						Name: "bridge",
+						Parameters: []precompiles.PrecompileValue{
+							{Name: "id", Type: types.UUIDType},
+							{Name: "amount", Type: uint256Numeric, Nullable: true},
+						},
+						AccessModifiers: []precompiles.Modifier{precompiles.PUBLIC},
+						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
+							id := inputs[0].(*types.UUID)
+
+							var err error
+							var amount *types.Decimal
+							// if 'amount' is omited, withdraw all balance
+							if inputs[1] == nil {
+								callerAddr, err := ethAddressFromHex(ctx.TxContext.Caller)
+								if err != nil {
+									return err
+								}
+
+								amount, err = balanceOf(ctx.TxContext.Ctx, app, id, callerAddr)
+								if err != nil {
+									return err
+								}
+							} else {
+								amount = inputs[1].(*types.Decimal)
+							}
+
+							// first, lock required 'amount' from caller to the network
+							err = SINGLETON.lockTokens(ctx.TxContext.Ctx, app, id, ctx.TxContext.Caller, amount)
+							if err != nil {
+								return err
+							}
+
+							// then issue to caller itself
+							return SINGLETON.issueTokens(ctx.TxContext.Ctx, app, id, ctx.TxContext.Caller, amount)
 						},
 					},
 					{
@@ -1377,8 +1374,8 @@ func (e *extensionInfo) lockTokens(ctx context.Context, app *common.App, id *typ
 		return err
 	}
 
-	if amount.IsNegative() {
-		return fmt.Errorf("amount cannot be negative")
+	if !amount.IsPositive() {
+		return fmt.Errorf("amount needs to be positive")
 	}
 
 	// we call getUsableInstance before transfer to ensure that the extension is active and synced.
@@ -1402,6 +1399,56 @@ func (e *extensionInfo) lockTokens(ctx context.Context, app *common.App, id *typ
 	if err != nil {
 		return err
 	}
+
+	return nil
+}
+
+// issueTokens issues tokens from network's balance.
+func (e *extensionInfo) issueTokens(ctx context.Context, app *common.App, id *types.UUID, to string, amount *types.Decimal) error {
+	if !amount.IsPositive() {
+		return fmt.Errorf("amount needs to be positive")
+	}
+
+	// then issue to caller itself
+	// because this is in one tx, we can be sure that the instance has enough balance to issue.
+	info, err := e.getUsableInstance(id)
+	if err != nil {
+		return err
+	}
+
+	info.mu.RLock()
+	// we cannot defer an RUnlock here because we need to unlock
+	// the read lock before we can acquire the write lock, which
+	// we do at the end of this
+
+	newBal, err := types.DecimalSub(info.ownedBalance, amount)
+	if err != nil {
+		info.mu.RUnlock()
+		return err
+	}
+
+	if newBal.IsNegative() {
+		info.mu.RUnlock()
+		return fmt.Errorf("network does not enough balance to issue %s to %s", amount, to)
+	}
+
+	addr, err := ethAddressFromHex(to)
+	if err != nil {
+		info.mu.RUnlock()
+		return err
+	}
+
+	err = issueReward(ctx, app, id, info.currentEpoch.ID, addr, amount)
+	if err != nil {
+		info.mu.RUnlock()
+		return err
+	}
+
+	info.mu.RUnlock()
+
+	info.mu.Lock()
+	info.ownedBalance = newBal
+	info.mu.Unlock()
 
 	return nil
 }
