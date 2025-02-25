@@ -11,11 +11,12 @@ import (
 	"sync"
 )
 
+// voteRecord holds the vote info of the epoch.
 type voteRecord struct {
-	RewardRoot  []byte `json:"reward_root"`
-	BlockHeight int64  `json:"block_height"`
-	BlockHash   string `json:"block_hash"`
-	SafeNonce   uint64 `json:"safe_nonce"`
+	Epoch      string `json:"epoch"`
+	RewardRoot []byte `json:"reward_root"`
+	TxHash     string `json:"tx_hash"`
+	SafeNonce  uint64 `json:"safe_nonce"`
 }
 
 // State is a naive kv impl used by bridgeSigner.
