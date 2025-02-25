@@ -1,4 +1,4 @@
-package reward_test
+package utils_test
 
 import (
 	"crypto/ecdsa"
@@ -12,7 +12,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 
-	"github.com/kwilteam/kwil-db/node/exts/erc20reward/reward"
+	"github.com/kwilteam/kwil-db/node/exts/erc20-bridge/utils"
 )
 
 func getSigner(t *testing.T) (*ecdsa.PrivateKey, *ecdsa.PublicKey) {
@@ -48,7 +48,7 @@ func TestSignHash(t *testing.T) {
 
 	// THIS is what we want, with V adjusted
 	gnosisAdjustedExpected := "8e7091f38dff5127c08580adaa07ab0b3ab5326beaca194f8703da1a31efdf735a4bddb505ec92ee52714a5591db71c9af57c5144458c5cc56098054e26ad44f1f"
-	gnosisAdjustedSig, err := reward.EthGnosisSign(safeTxHash, priKey)
+	gnosisAdjustedSig, err := utils.EthGnosisSign(safeTxHash, priKey)
 	require.NoError(t, err)
 	assert.Equal(t, gnosisAdjustedExpected, hex.EncodeToString(gnosisAdjustedSig))
 }
@@ -68,21 +68,21 @@ func TestGenSafeTx(t *testing.T) {
 	root, err := hex.DecodeString(rootHex)
 	require.NoError(t, err)
 
-	data, err := reward.GenPostRewardTxData(root, big.NewInt(21))
+	data, err := utils.GenPostRewardTxData(root, big.NewInt(21))
 	require.NoError(t, err)
 	fmt.Println("tx data:", hex.EncodeToString(data))
 
 	priKey, pubKey := getSigner(t)
 	sender := crypto.PubkeyToAddress(*pubKey)
 
-	_, safeTxHash, err := reward.GenGnosisSafeTx(rewardAddress, safeAddress, value, data, chainID, nonce)
+	_, safeTxHash, err := utils.GenGnosisSafeTx(rewardAddress, safeAddress, value, data, chainID, nonce)
 	require.NoError(t, err)
 	assert.Equal(t, expectedSafeTxHash, hex.EncodeToString(safeTxHash))
 
-	sig, err := reward.EthGnosisSign(safeTxHash, priKey)
+	sig, err := utils.EthGnosisSign(safeTxHash, priKey)
 	require.NoError(t, err)
 	assert.Equal(t, expectedSig, hex.EncodeToString(sig))
 
-	err = reward.EthGnosisVerify(sig, safeTxHash, sender.Bytes())
+	err = utils.EthGnosisVerify(sig, safeTxHash, sender.Bytes())
 	require.NoError(t, err)
 }

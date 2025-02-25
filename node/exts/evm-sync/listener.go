@@ -16,6 +16,7 @@ import (
 	"github.com/ethereum/go-ethereum/ethclient"
 
 	"github.com/kwilteam/kwil-db/common"
+	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/extensions/listeners"
 	"github.com/kwilteam/kwil-db/node/exts/evm-sync/chains"
@@ -104,29 +105,43 @@ func (c *syncConfig) load(m map[string]string) error {
 }
 
 // getChainConf gets the chain config from the node's local configuration.
-func getChainConf(m map[string]map[string]string, chain chains.Chain) (*chainConfig, error) {
-	var m2 map[string]string
+func getChainConf(cfg config.ERC20BridgeConfig, chain chains.Chain) (*chainConfig, error) {
+	err := cfg.Validate()
+	if err != nil {
+		return nil, err
+	}
+
 	var ok bool
+	var provider string
+	var syncChunk string
 	switch chain {
-	case chains.Ethereum:
-		m2, ok = m["ethereum_sync"]
+	case chains.Ethereum, chains.Sepolia:
+		provider, ok = cfg.RPC[chain.String()]
 		if !ok {
-			return nil, errors.New("local configuration does not have an ethereum_sync config")
+			return nil, fmt.Errorf("local configuration does not have an '%s' config", chain.String())
 		}
-	case chains.Sepolia:
-		m2, ok = m["sepolia_sync"]
+
+		syncChunk, ok = cfg.BlockSyncChuckSize[chains.Ethereum.String()]
 		if !ok {
-			return nil, errors.New("local configuration does not have a sepolia_sync config")
+			syncChunk = "1000000"
 		}
 	default:
 		// suggests an internal bug where we have not added a case for a new chain
 		return nil, fmt.Errorf("unknown chain %s", chain)
 	}
 
-	conf := &chainConfig{}
-	err := conf.load(m2)
+	blockSyncChunkSize, err := strconv.ParseInt(syncChunk, 10, 64)
 	if err != nil {
 		return nil, err
+	}
+
+	if blockSyncChunkSize <= 0 {
+		return nil, errors.New("block_sync_chunk_size must be greater than 0")
+	}
+
+	conf := &chainConfig{
+		BlockSyncChunkSize: blockSyncChunkSize,
+		Provider:           provider,
 	}
 
 	return conf, nil
@@ -141,33 +156,6 @@ type chainConfig struct {
 	// Provider is the URL of the RPC endpoint for the chain.
 	// It is required.
 	Provider string
-}
-
-// load loads the config into the struct from the node's local configuration
-func (c *chainConfig) load(m map[string]string) error {
-	if v, ok := m["block_sync_chunk_size"]; ok {
-		i, err := strconv.ParseInt(v, 10, 64)
-		if err != nil {
-			return err
-		}
-
-		if i <= 0 {
-			return errors.New("block_sync_chunk_size must be greater than 0")
-		}
-
-		c.BlockSyncChunkSize = i
-	} else {
-		c.BlockSyncChunkSize = 1000000
-	}
-
-	v, ok := m["provider"]
-	if !ok {
-		return errors.New("provider is required")
-	}
-
-	c.Provider = v
-
-	return nil
 }
 
 // individualListener is a singler configured client that is responsible for listening to a single set of contracts.
@@ -260,6 +248,7 @@ func (i *individualListener) listen(ctx context.Context, eventstore listeners.Ev
 
 func (i *individualListener) processEvents(ctx context.Context, from, to int64, eventStore listeners.EventStore, logger log.Logger) error {
 	logs, err := i.getLogsFunc(ctx, i.client.client, uint64(from), uint64(to), logger)
+	/// THIS IS WHERE I LEFT
 	if err != nil {
 		return err
 	}

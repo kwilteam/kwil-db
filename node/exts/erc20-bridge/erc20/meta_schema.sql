@@ -19,7 +19,8 @@ CREATE TABLE reward_instances (
     erc20_address BYTEA,
     erc20_decimals INT8,
     synced_at INT8, -- the unix timestamp (in seconds) when the reward was synced
-    balance NUMERIC(78, 0) NOT NULL DEFAULT 0 CHECK(balance >= 0) -- the total balance owned by the database that can be distributed
+    balance NUMERIC(78, 0) NOT NULL DEFAULT 0 CHECK(balance >= 0), -- the total balance owned by the database that can be distributed
+    UNIQUE (chain_id, escrow_address) -- unique per chain and escrow
 );
 
 -- balances tracks the balance of each user in a given reward instance.
@@ -39,15 +40,18 @@ CREATE TABLE balances (
 -- 3. Confirmed: the epoch has been confirmed on chain
 -- Ideally, Kwil would have a unique indexes on this table where "confirmed" is null (to enforce only one active epoch at a time),
 -- but this requires partial indexes which are not yet supported in Kwil
+-- We'll always have two active epochs at the same time(except the very first epoch),
+-- one is finalized and waiting to be confirmed, the other is collecting new rewards.
 CREATE TABLE epochs (
 	id UUID PRIMARY KEY,
     created_at_block INT8 NOT NULL, -- kwil block height
     created_at_unix INT8 NOT NULL, -- unix timestamp (in seconds)
     instance_id UUID NOT NULL REFERENCES reward_instances(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
 	reward_root BYTEA UNIQUE, -- the root of the merkle tree of rewards, it's unique per contract
+    reward_amount NUMERIC(78, 0), -- the total amount in current epoch
     ended_at INT8, -- kwil block height
     block_hash BYTEA, -- the hash of the block that is used in merkle tree leaf, which is the last block of the epoch
-    confirmed BOOLEAN -- whether the epoch has been confirmed on chain
+    confirmed BOOLEAN NOT NULL DEFAULT FALSE -- whether the epoch has been confirmed on chain
 );
 
 -- index helps us query for unconfirmed epochs, which is very common
@@ -63,6 +67,18 @@ CREATE TABLE epoch_rewards (
 
 CREATE INDEX idx_epoch_rewards_epoch_id ON epoch_rewards(epoch_id);
 
-CREATE TABLE meta (
+CREATE TABLE meta
+(
     version INT8 PRIMARY KEY
+);
+
+-- epoch_votes holds the votes from signer
+-- A signer can vote multiple times with different safe_nonce
+-- After an epoch is confirmed, we can delete all related votes.
+CREATE TABLE epoch_votes (
+    epoch_id UUID NOT NULL REFERENCES epochs(id) ON UPDATE RESTRICT ON DELETE RESTRICT,
+    voter BYTEA NOT NULL,
+    nonce INT8 NOT NULL, -- safe nonce; this helps to skip unnecessary dup votes
+    signature BYTEA NOT NULL,
+    PRIMARY KEY (epoch_id, voter, nonce)
 );
