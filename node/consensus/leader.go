@@ -153,7 +153,7 @@ func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 
 			// Recheck the transactions in the mempool
 			ce.mempoolMtx.Lock()
-			ce.mempool.RecheckTxs(ctx, ce.recheckTx)
+			ce.mempool.RecheckTxs(ctx, ce.recheckTxFn(ce.lastBlockInternal()))
 			ce.mempoolMtx.Unlock()
 
 			// signal ce to start a new round
@@ -190,6 +190,9 @@ func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 // This method orders the transactions in the nonce order and also
 // does basic gas and balance checks and enforces the block size limits.
 func (ce *ConsensusEngine) createBlockProposal(ctx context.Context) (*blockProposal, error) {
+	ce.mempoolMtx.Lock()
+	defer ce.mempoolMtx.Unlock()
+
 	totalTxSizeLimit := ce.ConsensusParams().MaxBlockSize
 	nTxs := ce.mempool.PeekN(maxNumTxnsInBlock, int(totalTxSizeLimit))
 	txns := make([]*ktypes.Transaction, len(nTxs))
@@ -488,7 +491,7 @@ func (ce *ConsensusEngine) CancelBlockExecution(height int64, txIDs []types.Hash
 	ce.cancelFnMtx.Lock()
 	defer ce.cancelFnMtx.Unlock()
 
-	ce.longRunningTxs = append([]ktypes.Hash{}, txIDs...)
+	ce.longRunningTxs = slices.Clone(txIDs)
 
 	if ce.blkExecCancelFn != nil {
 		ce.log.Info("Cancelling block execution", "height", height, "txIDs", txIDs)

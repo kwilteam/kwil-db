@@ -81,21 +81,21 @@ func (m *mempool) applyTransaction(ctx *common.TxContext, tx *types.Transaction,
 	if inMigration {
 		switch tx.Body.PayloadType {
 		case types.PayloadTypeValidatorJoin:
-			return errors.New("validator joins are not allowed during migration")
+			return fmt.Errorf("%w: validator join", types.ErrDisallowedInMigration)
 		case types.PayloadTypeValidatorLeave:
-			return errors.New("validator leaves are not allowed during migration")
+			return fmt.Errorf("%w: validator leave", types.ErrDisallowedInMigration)
 		case types.PayloadTypeValidatorApprove:
-			return errors.New("validator approvals are not allowed during migration")
+			return fmt.Errorf("%w: validator approve", types.ErrDisallowedInMigration)
 		case types.PayloadTypeValidatorRemove:
-			return errors.New("validator removals are not allowed during migration")
+			return fmt.Errorf("%w: validator remove", types.ErrDisallowedInMigration)
 		case types.PayloadTypeValidatorVoteIDs:
-			return errors.New("validator vote ids are not allowed during migration")
+			return fmt.Errorf("%w: validator vote ids", types.ErrDisallowedInMigration)
 		case types.PayloadTypeValidatorVoteBodies:
-			return errors.New("validator vote bodies are not allowed during migration")
+			return fmt.Errorf("%w: validator vote bodies", types.ErrDisallowedInMigration)
 		case types.PayloadTypeRawStatement:
-			return errors.New("raw statement transactions are not allowed during migration")
+			return fmt.Errorf("%w: raw statement", types.ErrDisallowedInMigration)
 		case types.PayloadTypeTransfer:
-			return errors.New("transfer transactions are not allowed during migration")
+			return fmt.Errorf("%w: transfer", types.ErrDisallowedInMigration)
 		}
 	}
 
@@ -106,7 +106,7 @@ func (m *mempool) applyTransaction(ctx *common.TxContext, tx *types.Transaction,
 			return err
 		}
 		if (activeMigration || genesisMigration) && res.Resolution.Type == voting.StartMigrationEventType {
-			return errors.New(" migration resolutions are not allowed during migration")
+			return fmt.Errorf("%w: migration resolutions", types.ErrDisallowedInMigration)
 		}
 	}
 
@@ -204,8 +204,9 @@ func (m *mempool) applyTransaction(ctx *common.TxContext, tx *types.Transaction,
 				return err
 			}
 		}
-		return fmt.Errorf("%w for account %s: got %d, expected %d", types.ErrInvalidNonce,
-			hex.EncodeToString(tx.Sender), tx.Body.Nonce, acct.Nonce+1)
+		return fmt.Errorf("%w for account %s: got %d, expected %d",
+			types.ErrInvalidNonce, hex.EncodeToString(tx.Sender),
+			tx.Body.Nonce, acct.Nonce+1)
 	}
 
 	spend := big.NewInt(0).Set(tx.Body.Fee) // NOTE: this could be the fee *limit*, but it depends on how the modules work

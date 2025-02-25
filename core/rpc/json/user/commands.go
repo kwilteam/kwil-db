@@ -54,9 +54,9 @@ type BroadcastSync uint8
 
 // These are the recognized BroadcastSync values used with BroadcastRequest.
 const (
-	// BroadcastSyncSync ensures the transaction is accepted to mempool before
+	// BroadcastSyncAccept ensures the transaction is accepted to mempool before
 	// responding. This is the default behavior.
-	BroadcastSyncSync BroadcastSync = 0
+	BroadcastSyncAccept BroadcastSync = 0
 	// BroadcastSyncCommit will wait for the transaction to be included in a
 	// block.
 	BroadcastSyncCommit BroadcastSync = 1

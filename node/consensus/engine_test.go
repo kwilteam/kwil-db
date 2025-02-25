@@ -938,7 +938,7 @@ func mockVoteBroadcaster(msg *types.AckRes) error {
 
 func mockBlkAnnouncer(_ context.Context, blk *ktypes.Block, ci *types.CommitInfo) {}
 
-func mockTxAnnouncer(ctx context.Context, txHash types.Hash, rawTx []byte) {}
+func mockTxAnnouncer(ctx context.Context, tx *ktypes.Transaction) {}
 
 func mockResetStateBroadcaster(_ int64, _ []ktypes.Hash) error {
 	return nil

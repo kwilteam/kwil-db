@@ -331,8 +331,8 @@ func (n *Node) Start(ctx context.Context) error {
 
 		broadcastFns := consensus.BroadcastFns{
 			ProposalBroadcaster: n.announceBlkProp,
-			TxAnnouncer: func(ctx context.Context, txHash types.Hash, rawTx []byte) {
-				n.announceTx(ctx, txHash, rawTx, n.host.ID())
+			TxAnnouncer: func(ctx context.Context, tx *ktypes.Transaction) {
+				n.announceTx(ctx, tx, n.host.ID())
 			},
 			BlkAnnouncer:        n.announceBlk,
 			AckBroadcaster:      n.sendACK,
@@ -512,15 +512,15 @@ func (n *Node) TxQuery(ctx context.Context, hash types.Hash, prove bool) (*ktype
 	}, nil
 }
 
-func (n *Node) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (*ktypes.ResultBroadcastTx, error) {
+func (n *Node) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (ktypes.Hash, *ktypes.TxResult, error) {
 	if n.ce.InCatchup() {
-		return nil, errors.New("node is catching up, cannot process transactions right now")
+		return ktypes.Hash{}, nil, errors.New("node is catching up, cannot process transactions right now")
 	}
 
 	// Do a TxQuery first maybe so as not to spam existing txns.
 	_, err := n.TxQuery(ctx, tx.Hash(), false)
 	if err == nil {
-		return nil, ErrTxAlreadyExists
+		return ktypes.Hash{}, nil, ErrTxAlreadyExists
 	}
 
 	return n.ce.BroadcastTx(ctx, tx, sync)

@@ -19,10 +19,10 @@ const (
 
 	// Application errors get the rest of the code space.
 
-	ErrorTxInternal       ErrorCode = -200 // any issue from txApp, cometbft, etc. in handling a tx
-	ErrorTxExecFailure    ErrorCode = -201 // txCode != transactions.CodeOk
-	ErrorTxNotFound       ErrorCode = -202 // abci.ErrTxNotFound
-	ErrorTxPayloadInvalid ErrorCode = -203
+	ErrorTxInternal        ErrorCode = -200 // any unspecified issue in handling a tx
+	ErrorBroadcastRejected ErrorCode = -201 // error data is BroadcastError
+	ErrorTxNotFound        ErrorCode = -202 // abci.ErrTxNotFound
+	ErrorTxPayloadInvalid  ErrorCode = -203
 
 	ErrorEngineInternal        ErrorCode = -300
 	ErrorEngineDatasetNotFound ErrorCode = -301

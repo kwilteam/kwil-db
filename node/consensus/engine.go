@@ -111,9 +111,10 @@ type ConsensusEngine struct {
 	blockStore     BlockStore
 	blockProcessor BlockProcessor
 
-	// protects the mempool access. Commit takes this lock to ensure that
-	// no new txs are added to the mempool while the block is being committed
-	// i.e while the accounts are being updated.
+	// protects the mempool access. Block commit and proposal creation, and
+	// QueueTx (external) take this lock to ensure that no new txs are added to
+	// the mempool while the block is being committed i.e while the accounts are
+	// being updated.
 	mempoolMtx sync.Mutex
 
 	// Broadcasters
@@ -204,7 +205,7 @@ type ProposalBroadcaster func(ctx context.Context, blk *ktypes.Block)
 type BlkAnnouncer func(ctx context.Context, blk *ktypes.Block, ci *types.CommitInfo)
 
 // TxAnnouncer broadcasts the new transaction to the network
-type TxAnnouncer func(ctx context.Context, txHash types.Hash, rawTx []byte)
+type TxAnnouncer func(ctx context.Context, tx *ktypes.Transaction)
 
 // AckBroadcaster gossips the ack/nack messages to the network
 // type AckBroadcaster func(ack bool, height int64, blkID types.Hash, appHash *types.Hash, Signature []byte) error
@@ -1047,7 +1048,7 @@ func (ce *ConsensusEngine) resetBlockProp(ctx context.Context, height int64, txI
 	// recheck txs in the mempool, if we have deleted any txs from the mempool
 	if len(txIDs) > 0 {
 		ce.mempoolMtx.Lock()
-		ce.mempool.RecheckTxs(ctx, ce.recheckTx)
+		ce.mempool.RecheckTxs(ctx, ce.recheckTxFn(ce.lastBlockInternal()))
 		ce.mempoolMtx.Unlock()
 	}
 }

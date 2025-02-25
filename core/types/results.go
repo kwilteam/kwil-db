@@ -15,14 +15,16 @@ type TxCode uint16
 const (
 	CodeOk                  TxCode = 0
 	CodeEncodingError       TxCode = 1
-	CodeInvalidTxType       TxCode = 2
+	CodeInvalidTxType       TxCode = 2 // ErrUnknownPayloadType
 	CodeInvalidSignature    TxCode = 3
 	CodeInvalidNonce        TxCode = 4
 	CodeWrongChain          TxCode = 5
 	CodeInsufficientBalance TxCode = 6
-	CodeInsufficientFee     TxCode = 7
+	CodeInsufficientFee     TxCode = 7 // tx fee set too low, unrelated to balance
 	CodeInvalidAmount       TxCode = 8
 	CodeInvalidSender       TxCode = 9
+	CodeTxTimeoutCommit     TxCode = 10
+	CodeMempoolFull         TxCode = 11
 
 	// engine-related error code
 	CodeInvalidSchema         TxCode = 100 // TODO: remove, as this is not applicable to the engine
@@ -31,20 +33,92 @@ const (
 	CodeInvalidResolutionType TxCode = 130
 
 	CodeNetworkInMigration TxCode = 200
+	CodeNetworkHalted      TxCode = 201
 
 	CodeUnknownError TxCode = math.MaxUint16
 )
 
 var (
-	// ErrTxNotFound is indicates when the a transaction was not found in the
+	// ErrTxNotFound indicates when the a transaction was not found in the
 	// nodes blocks or mempool.
-	ErrTxNotFound          = errors.New("transaction not found")
-	ErrWrongChain          = errors.New("wrong chain ID")
-	ErrInvalidNonce        = errors.New("invalid nonce")
-	ErrInvalidAmount       = errors.New("invalid amount")
-	ErrInsufficientBalance = errors.New("insufficient balance")
-	ErrMempoolFull         = errors.New("mempool is full")
+	ErrTxNotFound      = errors.New("transaction not found")
+	ErrTxAlreadyExists = errors.New("transaction already exists")
+
+	ErrMigrationComplete = errors.New("network is halted following migration")
+
+	// These errors indicate a problem with the transaction itself.
+	ErrWrongChain            = errors.New("wrong chain ID")
+	ErrInvalidNonce          = errors.New("invalid nonce")
+	ErrInvalidAmount         = errors.New("invalid amount")
+	ErrInsufficientBalance   = errors.New("insufficient balance for fee or transfer")
+	ErrInsufficientFee       = errors.New("insufficient fee set")
+	ErrTxTimeout             = errors.New("timed out waiting for tx to be included in a block")
+	ErrMempoolFull           = errors.New("mempool is full")
+	ErrUnknownPayloadType    = errors.New("unknown payload type")
+	ErrDisallowedInMigration = errors.New("transaction type not allowed during migration")
 )
+
+// BroadcastErrorToCode converts an error from a broadcast method to a TxCode.
+func BroadcastErrorToCode(err error) TxCode {
+	if errors.Is(err, ErrWrongChain) {
+		return CodeWrongChain
+	}
+	if errors.Is(err, ErrInvalidNonce) {
+		return CodeInvalidNonce
+	}
+	if errors.Is(err, ErrInvalidAmount) {
+		return CodeInvalidAmount
+	}
+	if errors.Is(err, ErrInsufficientBalance) {
+		return CodeInsufficientBalance
+	}
+	if errors.Is(err, ErrInsufficientFee) {
+		return CodeInsufficientFee
+	}
+	if errors.Is(err, ErrTxTimeout) {
+		return CodeTxTimeoutCommit
+	}
+	if errors.Is(err, ErrMempoolFull) {
+		return CodeMempoolFull
+	}
+	if errors.Is(err, ErrUnknownPayloadType) {
+		return CodeInvalidTxType
+	}
+	if errors.Is(err, ErrDisallowedInMigration) {
+		return CodeNetworkInMigration
+	}
+	if errors.Is(err, ErrMigrationComplete) {
+		return CodeNetworkHalted
+	}
+	return CodeUnknownError
+}
+
+// BroadcastCodeToError converts a TxCode to an error.
+func BroadcastCodeToError(code TxCode) error {
+	switch code {
+	case CodeWrongChain:
+		return ErrWrongChain
+	case CodeInvalidNonce:
+		return ErrInvalidNonce
+	case CodeInvalidAmount:
+		return ErrInvalidAmount
+	case CodeInsufficientBalance:
+		return ErrInsufficientBalance
+	case CodeInsufficientFee:
+		return ErrInsufficientFee
+	case CodeTxTimeoutCommit:
+		return ErrTxTimeout
+	case CodeMempoolFull:
+		return ErrMempoolFull
+	case CodeInvalidTxType:
+		return ErrUnknownPayloadType
+	case CodeNetworkInMigration:
+		return ErrDisallowedInMigration
+	case CodeNetworkHalted:
+		return ErrMigrationComplete
+	}
+	return nil
+}
 
 // TxResult is the result of a transaction execution on chain.
 type TxResult struct {
