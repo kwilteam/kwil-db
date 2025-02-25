@@ -240,7 +240,7 @@ func (n *Node) Start(ctx context.Context) error {
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	ps, err := pubsub.NewGossipSub(ctx, n.host)
+	ps, err := pubsub.NewGossipSub(ctx, n.host, pubsub.WithPeerExchange(n.P2PService.PEX()))
 	if err != nil {
 		return err
 	}

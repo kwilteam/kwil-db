@@ -23,9 +23,16 @@ import (
 // Higher level logic will be needed for the aggregation, and fallback to
 // next-best shapshots in the event that restore of the current best fails.
 
-func makeDHT(ctx context.Context, h host.Host, peers []peer.AddrInfo, mode dht.ModeOpt) (*dht.IpfsDHT, error) {
+func makeDHT(ctx context.Context, h host.Host, peers []peer.AddrInfo, mode dht.ModeOpt, pex bool) (*dht.IpfsDHT, error) {
 	// Create a DHT
-	kadDHT, err := dht.New(ctx, h, dht.BootstrapPeers(peers...), dht.Mode(mode))
+	opts := []dht.Option{
+		dht.BootstrapPeers(peers...),
+		dht.Mode(mode),
+	}
+	if !pex {
+		opts = append(opts, dht.DisableAutoRefresh()) // just use connected peers
+	}
+	kadDHT, err := dht.New(ctx, h, opts...)
 	if err != nil {
 		return nil, err
 	}

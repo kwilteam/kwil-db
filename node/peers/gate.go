@@ -36,6 +36,42 @@ func WithLogger(logger log.Logger) GateOpt {
 	}
 }
 
+var _ connmgr.ConnectionGater = (*OutboundWhitelistGater)(nil)
+
+// OutboundWhitelistGater is to prevent dialing out to peers that are not
+// explicitly allowed by an application provided filter function. This exists in
+// part to prevent other modules such as the DHT and gossipsub from dialing out
+// to peers that are not explicitly allowed (e.g. already connected or added by
+// the application).
+type OutboundWhitelistGater struct {
+	AllowedOutbound func(peer.ID) bool
+}
+
+// OUTBOUND
+
+func (g *OutboundWhitelistGater) InterceptPeerDial(p peer.ID) bool {
+	if g == nil || g.AllowedOutbound == nil {
+		return true
+	}
+	return g.AllowedOutbound(p)
+}
+
+func (g *OutboundWhitelistGater) InterceptAddrDial(p peer.ID, addr multiaddr.Multiaddr) bool {
+	return true
+}
+
+// INBOUND
+
+func (g *OutboundWhitelistGater) InterceptAccept(connAddrs network.ConnMultiaddrs) bool { return true }
+
+func (g *OutboundWhitelistGater) InterceptSecured(dir network.Direction, p peer.ID, conn network.ConnMultiaddrs) bool {
+	return true
+}
+
+func (g *OutboundWhitelistGater) InterceptUpgraded(conn network.Conn) (bool, control.DisconnectReason) {
+	return true, 0
+}
+
 func NewWhitelistGater(allowed []peer.ID, opts ...GateOpt) *WhitelistGater {
 	options := &gateOpts{
 		logger: log.DiscardLogger,
