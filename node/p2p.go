@@ -27,6 +27,8 @@ type P2PService struct {
 	dht       *dht.IpfsDHT
 	discovery discovery.Discovery
 
+	pex bool // pex enable in peerManager
+
 	log log.Logger
 }
 
@@ -60,7 +62,7 @@ func NewP2PService(ctx context.Context, cfg *P2PServiceConfig, host host.Host) (
 		wcg = peers.NewWhitelistGater(peerWhitelist, peers.WithLogger(logger.New("PEERFILT")))
 		// PeerMan adds more from address book.
 	}
-	cg := peers.ChainConnectionGaters(wcg) // pointless for one, but can be more
+	cg := peers.ChainConnectionGaters(wcg)
 
 	if host == nil {
 		ip, portStr, err := net.SplitHostPort(cfg.KwilCfg.P2P.ListenAddress)
@@ -100,7 +102,7 @@ func NewP2PService(ctx context.Context, cfg *P2PServiceConfig, host host.Host) (
 		Logger:            logger.New("PEERS"),
 		Host:              host,
 		ChainID:           cfg.ChainID,
-		TargetConnections: 20,
+		TargetConnections: cfg.KwilCfg.P2P.TargetConnections,
 		ConnGater:         wcg,
 		RequiredProtocols: RequiredStreamProtocols,
 	}
@@ -120,7 +122,7 @@ func NewP2PService(ctx context.Context, cfg *P2PServiceConfig, host host.Host) (
 	host.SetStreamHandler(pubsub.GossipSubID_v12, dummyStreamHandler)
 
 	mode := dht.ModeServer
-	dht, err := makeDHT(ctx, host, nil, mode)
+	dht, err := makeDHT(ctx, host, nil, mode, pmCfg.PEX)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create DHT: %w", err)
 	}
@@ -132,6 +134,7 @@ func NewP2PService(ctx context.Context, cfg *P2PServiceConfig, host host.Host) (
 		dht:       dht,
 		discovery: discoverer,
 		log:       logger,
+		pex:       cfg.KwilCfg.P2P.Pex,
 	}, nil
 }
 
@@ -213,4 +216,9 @@ func (p *P2PService) Host() host.Host {
 
 func (p *P2PService) Discovery() discovery.Discovery {
 	return p.discovery
+}
+
+// PEX indicates whether the peer manager is configured to use peer exchange (PEX).
+func (p *P2PService) PEX() bool {
+	return p.pex
 }

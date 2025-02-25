@@ -57,7 +57,7 @@ func newTestStatesyncer(ctx context.Context, t *testing.T, mn mock.Mocknet, root
 		return nil, nil, nil, nil, nil, err
 	}
 
-	dht, err := makeDHT(ctx, h, nil, dht.ModeServer)
+	dht, err := makeDHT(ctx, h, nil, dht.ModeServer, true)
 	if err != nil {
 		return nil, nil, nil, nil, nil, err
 	}

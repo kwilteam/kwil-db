@@ -316,7 +316,6 @@ func (pm *PeerMan) maintainMinPeers(ctx context.Context) {
 				} else {
 					pm.log.Infof("Connected to peer %s", peerIDStringer(pid))
 					added++
-
 				}
 			}
 
@@ -344,7 +343,9 @@ func (pm *PeerMan) startPex(ctx context.Context) {
 			go func() {
 				var count int
 				for peer := range peerChan {
+
 					if pm.addPeerAddrs(peer) {
+						pm.log.Info("Found new peer %v, connecting", peerIDStringer(peer.ID))
 						// TODO: connection manager, with limits
 						if err = pm.c.Connect(ctx, peer); err != nil {
 							pm.log.Warnf("Failed to connect to %s: %v", peerIDStringer(peer.ID), CompressDialError(err))
