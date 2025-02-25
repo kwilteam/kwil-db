@@ -24,10 +24,22 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 		return false
 	}
 
+	ce.log.Info("Accept proposal?", "height", height, "blockID", blkID, "prevHash", prevBlockID)
+
+	// check if the blkProposal is from the leader
+	valid, err := ce.leader.Verify(blkID[:], leaderSig)
+	if err != nil {
+		ce.log.Error("Error verifying leader signature", "error", err)
+		return false
+	}
+
+	if !valid {
+		ce.log.Info("Invalid leader signature, ignoring the block proposal msg: ", "height", height) // log possible attack spam
+		return false
+	}
+
 	ce.stateInfo.mtx.RLock()
 	defer ce.stateInfo.mtx.RUnlock()
-
-	ce.log.Info("Accept proposal?", "height", height, "blockID", blkID, "prevHash", prevBlockID)
 
 	// Check if the block is for an already committed height, but the blkID is different and newer.
 	if height < ce.stateInfo.lastCommit.height {
@@ -44,19 +56,6 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 
 		if blk.Header.Timestamp.UnixMilli() > timestamp {
 			// stale proposal, ignore
-			return false
-		}
-
-		// ensure that the proposal is sent by the leader, else it will unnecessarily
-		// trigger a catchup on the leader.
-		valid, err := ce.leader.Verify(blkID[:], leaderSig)
-		if err != nil {
-			ce.log.Error("Error verifying leader signature", "error", err)
-			return false
-		}
-
-		if !valid {
-			ce.log.Debug("Invalid leader signature, ignoring the block proposal msg: ", "height", height)
 			return false
 		}
 
@@ -95,18 +94,6 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 
 	if height != ce.stateInfo.height+1 {
 		ce.log.Debug("Block proposal is not for the next height", "blkPropHeight", height, "expected", ce.stateInfo.height+1)
-		return false
-	}
-
-	// check if the blkProposal is from the leader
-	valid, err := ce.leader.Verify(blkID[:], leaderSig)
-	if err != nil {
-		ce.log.Error("Error verifying leader signature", "error", err)
-		return false
-	}
-
-	if !valid {
-		ce.log.Debug("Invalid leader signature, ignoring the block proposal msg: ", "height", height)
 		return false
 	}
 
