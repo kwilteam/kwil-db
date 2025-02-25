@@ -69,7 +69,7 @@ func (n *Node) txAnnStreamHandler(s network.Stream) {
 	ctx := context.Background()
 	if err := n.ce.QueueTx(ctx, &tx); err != nil {
 		n.log.Warnf("tx %v failed check: %v", txHash, err)
-		return // must mempool.Remove (fetched must still be false here)
+		return
 	}
 
 	// re-announce

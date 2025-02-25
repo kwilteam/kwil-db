@@ -217,6 +217,12 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 		return
 	}
 
+	// This requires atomicity of AcceptProposal -> download -> NotifyBlockProposal.
+	// We also must not ignore any proposal messages since they may be real
+	// (signed by leader) leader while others may be spam.
+	n.blkPropHandlerMtx.Lock()
+	defer n.blkPropHandlerMtx.Unlock()
+
 	height := prop.Height
 
 	if !n.ce.AcceptProposal(height, prop.Hash, prop.PrevHash, prop.LeaderSig, prop.Stamp) {
@@ -261,6 +267,8 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 	n.log.Info("processing block proposal", "height", height, "hash", hash)
 
 	n.ce.NotifyBlockProposal(blk)
+	// valid new prop => reannounce
+	go n.announceBlkProp(context.Background(), blk)
 }
 
 // sendACK is a callback for the result of validator block execution/precommit.

@@ -136,6 +136,8 @@ type Node struct {
 	// from gossip, to consensus engine for calculating best height of the validators during blocksync.
 	// discResp chan types.DiscoveryResponse
 
+	blkPropHandlerMtx sync.Mutex // atomicity of proposal check and retrieval
+
 	wg  sync.WaitGroup
 	log log.Logger
 }
