@@ -5,7 +5,6 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"time"
 
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
@@ -246,7 +245,6 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 		return fmt.Errorf("error validating block: %w", err)
 	}
 	ce.state.blkProp = blkPropMsg
-	ce.state.tPropReceived = time.Now()
 	ce.state.blockRes = nil
 
 	// Update the stateInfo
@@ -412,7 +410,6 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Blo
 		blkHash: blkID,
 		blk:     blk,
 	}
-	ce.state.tPropReceived = time.Now()
 
 	// Update the stateInfo
 	ce.stateInfo.mtx.Lock()

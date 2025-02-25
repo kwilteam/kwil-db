@@ -120,7 +120,7 @@ func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txHash typ
 		return fmt.Errorf("txann failed to peer %s: %w", peerID, err)
 	}
 
-	// mets.ReannouncedTx(ctx, txHash, peerID)
+	mets.Advertised(ctx, string(ProtocolIDTxAnn))
 
 	// n.log.Infof("advertised tx content %s to peer %s", txid, peerID)
 
@@ -137,6 +137,7 @@ func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txHash typ
 			return
 		}
 		if nr == 0 /*&& errors.Is(err, io.EOF)*/ {
+			mets.AdvertiseRejected(ctx, string(ProtocolIDTxAnn))
 			return // they hung up, probably didn't want it
 		}
 		if getMsg != string(req) {
@@ -144,10 +145,10 @@ func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txHash typ
 			return
 		}
 
-		// mets.ReannouncedTxRequest(ctx, txHash, peerID)
-
 		s.SetWriteDeadline(time.Now().Add(txGetTimeout))
 		s.Write(rawTx)
+
+		mets.AdvertiseServed(ctx, string(ProtocolIDTxAnn), int64(len(rawTx)))
 	}()
 
 	return nil
@@ -203,6 +204,7 @@ func (n *Node) startTxAnns(ctx context.Context, reannouncePeriod time.Duration) 
 				}
 				n.log.Infof("re-announcing %d unconfirmed txns", len(txns))
 
+				var numSent, bytesSent int64
 				for _, nt := range txns {
 					rawTx := nt.Tx.Bytes()
 					n.announceRawTx(ctx, nt.Hash, rawTx, n.host.ID()) // response handling is async
@@ -210,7 +212,11 @@ func (n *Node) startTxAnns(ctx context.Context, reannouncePeriod time.Duration) 
 						n.log.Warn("interrupting long re-broadcast")
 						break
 					}
+					numSent++
+					bytesSent += int64(len(rawTx))
 				}
+
+				mets.TxnsReannounced(ctx, numSent, bytesSent)
 			}()
 		}
 	}()

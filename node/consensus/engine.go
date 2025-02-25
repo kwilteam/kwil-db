@@ -257,8 +257,7 @@ type StateInfo struct {
 type state struct {
 	mtx sync.RWMutex
 
-	tPropReceived time.Time
-	tExecuted     time.Time
+	tExecuted time.Time
 
 	blkProp  *blockProposal
 	blockRes *blockResult

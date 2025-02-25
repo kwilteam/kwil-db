@@ -63,8 +63,15 @@ var (
 	execCounter       metric.Int64Counter
 
 	// Node / p2p metrics
-	numPeersGauge           metric.Int64Gauge
-	downloadedBlocksCounter metric.Int64Counter
+	numPeersGauge            metric.Int64Gauge
+	downloadedBlocksCounter  metric.Int64Counter
+	servedBlocksCounter      metric.Int64Counter
+	servedBlockBytesCounter  metric.Int64Counter
+	advertisementCounter     metric.Int64Counter
+	advertiseRejectCounter   metric.Int64Counter
+	advertiseAcceptCounter   metric.Int64Counter
+	txReannounceCounter      metric.Int64Counter
+	txReannounceBytesCounter metric.Int64Counter
 
 	// Block store metrics
 	bsBlocksStoredCounter          metric.Int64Counter
@@ -117,7 +124,14 @@ func init() {
 	// Node metrics
 	nodeMeter := otel.Meter(NodeMeterName)
 	numPeersGauge, _ = nodeMeter.Int64Gauge("node.peers.total")
-	downloadedBlocksCounter, _ = nodeMeter.Int64Counter("node.blocks.downloaded")
+	downloadedBlocksCounter, _ = nodeMeter.Int64Counter("node.blocks_downloaded.count")
+	servedBlocksCounter, _ = nodeMeter.Int64Counter("node.blocks_served.count")
+	servedBlockBytesCounter, _ = nodeMeter.Int64Counter("node.blocks_served.bytes")
+	advertisementCounter, _ = nodeMeter.Int64Counter("node.advertisements_sent.count")
+	advertiseRejectCounter, _ = nodeMeter.Int64Counter("node.advertisements_sent.reject.count")
+	advertiseAcceptCounter, _ = nodeMeter.Int64Counter("node.advertisements_sent.accept.count")
+	txReannounceCounter, _ = nodeMeter.Int64Counter("node.tx_reannounce.count")
+	txReannounceBytesCounter, _ = nodeMeter.Int64Counter("node.tx_reannounce.bytes")
 	// rebroadcasts etc...
 
 	// Consensus metrics
@@ -169,6 +183,11 @@ func (storeMetrics) TransactionRetrieved(ctx context.Context) {
 type NodeMetrics interface {
 	PeerCount(ctx context.Context, numPeers int)
 	DownloadedBlock(ctx context.Context, blockHeight, size int64)
+	ServedBlock(ctx context.Context, blockHeight, size int64)
+	Advertised(ctx context.Context, protocol string)
+	AdvertiseRejected(ctx context.Context, protocol string)
+	AdvertiseServed(ctx context.Context, protocol string, contentLen int64)
+	TxnsReannounced(ctx context.Context, num, totalSize int64)
 }
 
 type nodeMetrics struct{}
@@ -182,6 +201,41 @@ func (nodeMetrics) DownloadedBlock(ctx context.Context, blockHeight, size int64)
 	downloadedBlocksCounter.Add(ctx, 1,
 		metric.WithAttributes(attribute.Int64("height", blockHeight), attribute.Int64("size", size)),
 	)
+}
+
+func (nodeMetrics) ServedBlock(ctx context.Context, blockHeight, size int64) {
+	servedBlocksCounter.Add(ctx, 1,
+		metric.WithAttributes(attribute.Int64("height", blockHeight), attribute.Int64("size", size)),
+	)
+	servedBlockBytesCounter.Add(ctx, size,
+		metric.WithAttributes(attribute.Int64("height", blockHeight)),
+	)
+}
+
+func (nodeMetrics) Advertised(ctx context.Context, protocol string) {
+	advertisementCounter.Add(ctx, 1,
+		metric.WithAttributes(attribute.String("proto", protocol)),
+	)
+}
+
+func (nodeMetrics) AdvertiseRejected(ctx context.Context, protocol string) {
+	advertiseRejectCounter.Add(ctx, 1,
+		metric.WithAttributes(attribute.String("proto", protocol)),
+	)
+}
+
+func (nodeMetrics) AdvertiseServed(ctx context.Context, protocol string, contentLen int64) {
+	advertiseAcceptCounter.Add(ctx, 1,
+		metric.WithAttributes(attribute.String("proto", protocol),
+			attribute.Int64("size", contentLen)),
+	)
+}
+
+func (nodeMetrics) TxnsReannounced(ctx context.Context, num, totalSize int64) {
+	txReannounceCounter.Add(ctx, num,
+		metric.WithAttributes(attribute.Int64("size", totalSize)),
+	)
+	txReannounceBytesCounter.Add(ctx, totalSize)
 }
 
 type DBMetrics interface {

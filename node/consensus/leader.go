@@ -106,7 +106,6 @@ func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 		return fmt.Errorf("block proposal failed internal validation: %w", err)
 	}
 	ce.state.blkProp = blkProp
-	ce.state.tPropReceived = time.Now()
 
 	// Broadcast the block proposal to the network
 	go ce.proposalBroadcaster(ctx, blkProp.blk)
