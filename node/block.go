@@ -48,6 +48,8 @@ func (n *Node) blkGetStreamHandler(s network.Stream) {
 		binary.Write(s, binary.LittleEndian, blk.Header.Height)
 		ktypes.WriteCompactBytes(s, ciBytes)
 		ktypes.WriteCompactBytes(s, rawBlk)
+
+		mets.ServedBlock(context.Background(), blk.Header.Height, int64(len(rawBlk)))
 	}
 }
 
@@ -83,6 +85,8 @@ func (n *Node) blkGetHeightStreamHandler(s network.Stream) {
 		ktypes.WriteCompactBytes(s, ciBytes)
 		ktypes.WriteCompactBytes(s, rawBlk)
 		binary.Write(s, binary.LittleEndian, bestHeight)
+
+		mets.ServedBlock(context.Background(), blk.Header.Height, int64(len(rawBlk)))
 	}
 }
 
@@ -311,6 +315,8 @@ func (n *Node) getBlk(ctx context.Context, blkHash types.Hash) (int64, []byte, *
 			continue
 		}
 
+		mets.DownloadedBlock(context.Background(), height, int64(len(rawBlk)))
+
 		return height, rawBlk, &ci, peer, nil
 	}
 	return 0, nil, nil, "", ErrBlkNotFound
@@ -506,6 +512,8 @@ func getBlkHeight(ctx context.Context, height int64, host host.Host, log log.Log
 				bestHeight = theirBest
 			}
 		}
+
+		mets.DownloadedBlock(context.Background(), height, int64(len(rawBlk)))
 
 		return hash, rawBlk, &ci, bestHeight, nil
 	}

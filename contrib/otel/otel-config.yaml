@@ -1,0 +1,28 @@
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: "0.0.0.0:4318"
+
+exporters:
+  prometheus:
+    endpoint: "0.0.0.0:9464"
+  influxdb:
+    endpoint: "http://localhost:8086"
+    org: "kwil"
+    bucket: "otel-metrics"
+    token: "my-secret-token"  # Set an authentication token
+  debug:
+    verbosity: detailed # Prints detailed telemetry to stdout
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp]
+      exporters: [debug]
+    metrics:
+      receivers: [otlp]
+      exporters: [debug,prometheus]
+    logs:
+      receivers: [otlp]
+      exporters: [debug]

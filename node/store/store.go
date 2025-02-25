@@ -2,6 +2,7 @@ package store
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -12,11 +13,14 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/log"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/node/metrics"
 	"github.com/kwilteam/kwil-db/node/types"
 
 	"github.com/dgraph-io/badger/v4"
 	boptions "github.com/dgraph-io/badger/v4/options"
 )
+
+var mets metrics.StoreMetrics = metrics.Store
 
 // This version of BlockStore has one badger DB. The block is one value.
 // Transaction gets seek into block.
@@ -368,6 +372,8 @@ func (bki *BlockStore) Store(blk *ktypes.Block, commitInfo *types.CommitInfo) er
 		return err
 	}
 
+	mets.BlockStored(context.Background(), height, int64(len(rawBlk)))
+
 	delete(bki.fetching, blkHash)
 	bki.idx[blkHash] = height
 	bki.hashes[height] = blockHashes{
@@ -419,6 +425,8 @@ func (bki *BlockStore) Get(blkHash types.Hash) (*ktypes.Block, *types.CommitInfo
 		return nil, nil, types.ErrNotFound
 	}
 
+	var blkSize int
+
 	var block *ktypes.Block
 	var ci types.CommitInfo
 	err := bki.db.View(func(txn *badger.Txn) error {
@@ -430,6 +438,7 @@ func (bki *BlockStore) Get(blkHash types.Hash) (*ktypes.Block, *types.CommitInfo
 		}
 
 		err = item.Value(func(val []byte) error {
+			blkSize = len(val)
 			block, err = ktypes.DecodeBlock(val)
 			return err
 		})
@@ -453,6 +462,8 @@ func (bki *BlockStore) Get(blkHash types.Hash) (*ktypes.Block, *types.CommitInfo
 	if errors.Is(err, badger.ErrKeyNotFound) {
 		return nil, nil, types.ErrNotFound
 	}
+
+	mets.BlockRetrieved(context.Background(), block.Header.Height, int64(blkSize))
 
 	return block, &ci, err
 }
@@ -555,6 +566,8 @@ func (bki *BlockStore) GetTx(txHash types.Hash) (tx *ktypes.Transaction, height 
 	if len(raw) == 0 {
 		return
 	}
+
+	mets.TransactionRetrieved(context.Background())
 
 	tx = new(ktypes.Transaction)
 	err = tx.UnmarshalBinary(raw)
