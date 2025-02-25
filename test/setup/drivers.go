@@ -38,7 +38,7 @@ func (c *ClientOptions) ensureDefaults() {
 		c.PrivateKey = pk
 	}
 	if c.ChainID == "" {
-		c.ChainID = "kwil-test-chain"
+		c.ChainID = "kwil-testnet"
 	}
 }
 
