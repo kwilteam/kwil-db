@@ -30,7 +30,7 @@ import (
 
 // StateFilePath returns the state file.
 func StateFilePath(dir string) string {
-	return filepath.Join(dir, "erc20_signer_state.json")
+	return filepath.Join(dir, "erc20_bridge_vote.json")
 }
 
 // bridgeSigner handles the voting on one registered erc20 reward instance.

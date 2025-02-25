@@ -199,6 +199,16 @@ func (d *Decimal) IsNegative() bool {
 	return d.dec.Negative
 }
 
+// IsZero returns true if the decimal is zero.
+func (d *Decimal) IsZero() bool {
+	return d.dec.IsZero()
+}
+
+// IsPositive returns true if the decimal is positive.
+func (d *Decimal) IsPositive() bool {
+	return !d.IsNegative() && !d.IsZero()
+}
+
 // String returns the string representation of the decimal.
 func (d *Decimal) String() string {
 	return d.dec.String()
