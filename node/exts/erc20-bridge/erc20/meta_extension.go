@@ -511,7 +511,7 @@ func init() {
 						},
 						Returns: &precompiles.MethodReturn{
 							Fields: []precompiles.PrecompileValue{
-								{Name: "chain_id", Type: types.TextType},
+								{Name: "chain", Type: types.TextType},
 								{Name: "escrow", Type: types.TextType},
 								{Name: "epoch_period", Type: types.TextType},
 								{Name: "erc20", Type: types.TextType, Nullable: true},

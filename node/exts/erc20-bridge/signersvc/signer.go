@@ -17,7 +17,6 @@ import (
 	"sync"
 	"time"
 
-	ethAccounts "github.com/ethereum/go-ethereum/accounts"
 	ethCommon "github.com/ethereum/go-ethereum/common"
 	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 
@@ -157,8 +156,7 @@ func (s *bridgeSigner) vote(ctx context.Context, epoch *Epoch, safeMeta *safeMet
 		return err
 	}
 
-	signHash := ethAccounts.TextHash(safeTxHash)
-	sig, err := utils.EthGnosisSignDigest(signHash, s.signerPk)
+	sig, err := utils.EthGnosisSign(safeTxHash, s.signerPk)
 	if err != nil {
 		return err
 	}

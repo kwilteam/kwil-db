@@ -107,7 +107,7 @@ func EthZeppelinSign(msg []byte, key *ecdsa.PrivateKey) ([]byte, error) {
 //		https://docs.safe.global/advanced/smart-account-signatures
 //	 SDK: safe-core-sdk/packages/protocol-kit/src/utils/signatures/utils.ts `adjustVInSignature`
 //
-// Since we use EIP-191, the V should be 31(0x1df) or 32(0x20).
+// Since we use EIP-191, the V should be 31(0x1f) or 32(0x20).
 func EthGnosisSign(msg []byte, key *ecdsa.PrivateKey) ([]byte, error) {
 	return EthGnosisSignDigest(ethAccounts.TextHash(msg), key)
 }
