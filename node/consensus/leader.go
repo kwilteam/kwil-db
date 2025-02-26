@@ -52,6 +52,21 @@ import (
 //    until one of these nodes gets majority of the validators to commit the block.
 
 func (ce *ConsensusEngine) newBlockRound(ctx context.Context) {
+	ce.log.Info("Starting a new consensus round", "height", ce.lastCommitHeight()+1)
+
+	// Leader can optimize this idle timeout of proposeTimeout duration to propose a block
+	// if there are enough transactions available in the mempool to fill the block.
+	// One problem with this might be is that if the validators are slow,
+	// leader might end up more time waiting for the acks and flood the network with rebroadcasts.
+	// but probably better than leader doing nothing???
+
+	if ce.mempoolReady.Load() { // set by recheckTxs after commit or by the QueueTx method
+		// mempool has enough transactions to fill the block, trigger the next round
+		ce.log.Debug("Mempool is ready with enough transactions to fill the block, initiating block proposal without waiting for the proposeTimeout")
+		ce.newBlockProposal <- struct{}{}
+		return
+	}
+
 	ticker := time.NewTicker(ce.proposeTimeout)
 	now := time.Now()
 
@@ -61,12 +76,15 @@ func (ce *ConsensusEngine) newBlockRound(ctx context.Context) {
 	// if EmptyBlockTimeout is not 0, leader will propose an empty block
 	// if no transactions or events are available for emptyBlockTimeout duration.
 	allowEmptyBlocks := ce.emptyBlockTimeout != 0
-	ce.log.Info("Starting a new consensus round", "height", ce.lastCommitHeight()+1)
 
 	for {
 		select {
 		case <-ctx.Done():
 			ce.log.Info("Context cancelled, stopping the new block round")
+			return
+		case <-ce.mempoolReadyChan:
+			// mempool has enough txs to fill the block, trigger the next round
+			ce.newBlockProposal <- struct{}{}
 			return
 		case <-ticker.C:
 			// check for the availability of transactions in the mempool or
@@ -82,6 +100,8 @@ func (ce *ConsensusEngine) newBlockRound(ctx context.Context) {
 				ce.newBlockProposal <- struct{}{}
 				return
 			}
+
+			ticker.Reset(200 * time.Millisecond)
 		}
 
 		// no transactions available, wait till the next tick to recheck the mempool
@@ -177,6 +197,9 @@ func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 		AckStatus: types.Agreed,
 		Signature: *sig,
 	}
+
+	// reset the mempool ready flag once the block is proposed
+	ce.mempoolReady.Store(false)
 
 	// We may be ready to commit if we're the only validator.
 	ce.processVotes(ctx)

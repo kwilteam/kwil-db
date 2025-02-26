@@ -132,7 +132,7 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 // 1. If the node is a sentry node and doesn't have the block.
 // 2. If the node is a validator and missed the block proposal message.
 func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, hdr *ktypes.BlockHeader, ci *types.CommitInfo, leaderSig []byte) bool {
-	if ce.stateInfo.hasBlock.Load() == height {
+	if ce.stateInfo.hasBlock.Load() == height { // ce is notified about the blkAnn message already
 		return false
 	}
 
@@ -140,6 +140,13 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, hdr *kty
 	defer ce.stateInfo.mtx.RUnlock()
 
 	ce.log.Infof("Accept commit? height: %d,  blockID: %s, appHash: %s, lastCommitHeight: %d", height, blkID, ci.AppHash, ce.stateInfo.height)
+
+	// check if we already downloaded the block through the block proposal message
+	if (ce.stateInfo.blkProp != nil && ce.stateInfo.blkProp.blkHash == blkID) && (ce.stateInfo.status == Proposed || ce.stateInfo.status == Executed) {
+		// block is already downloaded and/being processed, accept the commit, don't request the block again
+		go ce.NotifyBlockCommit(ce.stateInfo.blkProp.blk, ci, blkID, nil)
+		return false
+	}
 
 	if ce.stateInfo.height+1 != height {
 		return false
@@ -174,7 +181,6 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, hdr *kty
 	// In such cases, the old leader produces the block, but this node will not accept the blkAnn message
 	// from the old leader, as the node has a different leader now. So accept the committed block as
 	// long as the block is accepted by the majority of the validators.
-
 	return true
 }
 
