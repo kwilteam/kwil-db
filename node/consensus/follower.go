@@ -24,8 +24,6 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 		return false
 	}
 
-	ce.log.Info("Accept proposal?", "height", height, "blockID", blkID, "prevHash", prevBlockID)
-
 	// check if the blkProposal is from the leader
 	valid, err := ce.leader.Verify(blkID[:], leaderSig)
 	if err != nil {
@@ -119,14 +117,16 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 // 1. If the node is a sentry node and doesn't have the block.
 // 2. If the node is a validator and missed the block proposal message.
 func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, hdr *ktypes.BlockHeader, ci *types.CommitInfo, leaderSig []byte) bool {
-	if ce.stateInfo.hasBlock.Load() == height { // ce is notified about the blkAnn message already
-		return false
-	}
-
 	ce.stateInfo.mtx.RLock()
 	defer ce.stateInfo.mtx.RUnlock()
 
-	ce.log.Infof("Accept commit? height: %d,  blockID: %s, appHash: %s, lastCommitHeight: %d", height, blkID, ci.AppHash, ce.stateInfo.height)
+	if ce.stateInfo.hasBlock.Load() == height { // ce is notified about the blkAnn message already
+		// that we processed correct proposal
+		if ce.stateInfo.blkProp != nil && ce.stateInfo.blkProp.blkHash == blkID {
+			ce.log.Debug("Already processed the block proposal", "height", height, "blockID", blkID)
+			return false
+		}
+	}
 
 	// check if we already downloaded the block through the block proposal message
 	if (ce.stateInfo.blkProp != nil && ce.stateInfo.blkProp.blkHash == blkID) && (ce.stateInfo.status == Proposed || ce.stateInfo.status == Executed) {
@@ -176,6 +176,8 @@ func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, hdr *kty
 // report the result back to the leader.
 // Only accept the block proposals from the node that this node considers as a leader.
 func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg *blockProposal) error {
+	defer blkPropMsg.done()
+
 	if ce.role.Load() != types.RoleValidator {
 		ce.log.Warn("Only validators can process block proposals")
 		return nil
@@ -246,6 +248,9 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 	ce.stateInfo.blkProp = blkPropMsg
 	ce.stateInfo.mtx.Unlock()
 
+	// allow new proposals to be checked
+	blkPropMsg.done()
+
 	// execCtx is applicable only for the duration of the block execution
 	// This is used to react to the leader's reset message by cancelling the block execution.
 	execCtx, cancel := context.WithCancel(ctx)
@@ -294,16 +299,11 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 // If the validator node processed a different block, it should rollback and reprocess the block.
 // Validator nodes can skip the block execution and directly commit the block if they have already processed the block.
 // The nodes should only commit the block if the appHash is valid, else halt the node.
-func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, ci *types.CommitInfo, blkID types.Hash, doneFn func()) error {
+func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, ci *types.CommitInfo, blkID types.Hash, done func()) error {
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
-	defer func() {
-		if doneFn != nil && ce.state.lc.height == blk.Header.Height {
-			// Block has been committed, release the prefetch lock on the block
-			doneFn()
-		}
-	}()
+	defer done()
 
 	if ce.state.lc.height+1 != blk.Header.Height { // only accept/process the block if it is for the next height
 		return nil

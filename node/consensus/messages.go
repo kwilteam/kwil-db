@@ -26,6 +26,18 @@ type consensusMessage struct {
 	Sender  []byte
 	MsgType consensusMsgType
 	Msg     any
+
+	// done is a callback provided by the message sender to signal that the
+	// message has been handled. It is optional. Do NOT call directly; use
+	// Handled() instead.
+	done func()
+}
+
+func (msg *consensusMessage) Handled() {
+	if msg.done != nil {
+		msg.done()
+		msg.done = nil
+	}
 }
 
 func (ce *ConsensusEngine) sendConsensusMessage(msg *consensusMessage) {
@@ -39,6 +51,7 @@ type blockProposal struct {
 	height  int64
 	blkHash types.Hash
 	blk     *ktypes.Block
+	done    func()
 }
 
 func (bpm *blockProposal) Type() consensusMsgType {
@@ -104,21 +117,28 @@ func (ce *ConsensusEngine) sendResetMsg(msg *resetMsg) {
 
 // NotifyBlockProposal is used by the p2p stream handler to notify the consensus engine of a block proposal.
 // Only a validator should receive block proposals and notify the consensus engine, whereas others should ignore this message.
-func (ce *ConsensusEngine) NotifyBlockProposal(blk *ktypes.Block) {
+func (ce *ConsensusEngine) NotifyBlockProposal(blk *ktypes.Block, doneFn func()) {
 	if ce.role.Load() == types.RoleLeader {
 		return
+	}
+
+	done := doneFn
+	if done == nil {
+		done = func() {}
 	}
 
 	blkProp := &blockProposal{
 		height:  blk.Header.Height,
 		blkHash: blk.Header.Hash(),
 		blk:     blk,
+		done:    done, // to unblock at some earlier point
 	}
 
 	go ce.sendConsensusMessage(&consensusMessage{
 		MsgType: blkProp.Type(),
 		Msg:     blkProp,
 		Sender:  ce.leader.Bytes(),
+		done:    done,
 	})
 }
 
@@ -132,6 +152,11 @@ func (ce *ConsensusEngine) NotifyBlockCommit(blk *ktypes.Block, ci *types.Commit
 		ce.log.Info("Notifying consensus engine of block with leader update", "newLeader", hex.EncodeToString(leader.Bytes()), "blkHash", blk.Hash().String())
 	}
 
+	done := doneFn
+	if done == nil {
+		done = func() {}
+	}
+
 	// if leader receives a block announce message, with OfflineLeaderUpdate, let
 	// the leader process it and relinquish leadership to the new leader.
 	// AcceptCommit() already verified the correctness of the votes, no need to
@@ -140,7 +165,7 @@ func (ce *ConsensusEngine) NotifyBlockCommit(blk *ktypes.Block, ci *types.Commit
 		blk:   blk,
 		blkID: blkID,
 		ci:    ci,
-		done:  doneFn,
+		done:  done,
 	}
 
 	// only notify if the leader doesn't already know about the block
@@ -149,6 +174,7 @@ func (ce *ConsensusEngine) NotifyBlockCommit(blk *ktypes.Block, ci *types.Commit
 			MsgType: blkCommit.Type(),
 			Msg:     blkCommit,
 			Sender:  leader.Bytes(),
+			done:    done,
 		})
 	}
 }

@@ -10,6 +10,8 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"slices"
+	"sync"
 
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/peers"
@@ -160,7 +162,7 @@ func (bp *blockProp) WriteTo(w io.Writer) (int64, error) {
 	return n, nil*/
 }
 
-func (n *Node) announceBlkProp(ctx context.Context, blk *ktypes.Block) {
+func (n *Node) announceBlkProp(ctx context.Context, blk *ktypes.Block, skipPeers ...peer.ID) {
 	rawBlk := ktypes.EncodeBlock(blk)
 	blkHash := blk.Hash()
 	height := blk.Header.Height
@@ -174,9 +176,9 @@ func (n *Node) announceBlkProp(ctx context.Context, blk *ktypes.Block) {
 		return
 	}
 
-	me := n.host.ID()
+	skipPeers = append(skipPeers, n.host.ID()) // always skip self
 	for _, peerID := range peers {
-		if peerID == me {
+		if slices.Contains(skipPeers, peerID) {
 			continue
 		}
 		prop := blockProp{Height: height, Hash: blkHash, PrevHash: blk.Header.PrevHash,
@@ -217,13 +219,23 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 		return
 	}
 
+	height := prop.Height
+
 	// This requires atomicity of AcceptProposal -> download -> NotifyBlockProposal.
 	// We also must not ignore any proposal messages since they may be real
 	// (signed by leader) leader while others may be spam.
-	n.blkPropHandlerMtx.Lock()
-	defer n.blkPropHandlerMtx.Unlock()
+	n.blkPropHandling <- struct{}{} // block until it's our turn
+	done := func() { <-n.blkPropHandling }
+	var ceProcessing bool // true once we've handed off to CE to handle it and call when done
+	defer func() {
+		if !ceProcessing {
+			done()
+		}
+	}()
 
-	height := prop.Height
+	from := s.Conn().RemotePeer()
+	n.log.Info("Accept proposal?", "height", height, "blockID", prop.Hash, "prevHash", prop.PrevHash,
+		"from_peer", peers.PeerIDStringer(from))
 
 	if !n.ce.AcceptProposal(height, prop.Hash, prop.PrevHash, prop.LeaderSig, prop.Stamp) {
 		// NOTE: if this is ahead of our last commit height, we have to try to catch up
@@ -264,11 +276,15 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 		return
 	}
 
-	n.log.Info("processing block proposal", "height", height, "hash", hash)
+	n.log.Info("processing block proposal", "height", height, "hash", hash,
+		"from", peers.PeerIDStringer(from))
 
-	n.ce.NotifyBlockProposal(blk)
-	// valid new prop => reannounce
-	go n.announceBlkProp(context.Background(), blk)
+	ceProcessing = true // ce will call done now, neuter the defer
+
+	n.ce.NotifyBlockProposal(blk, sync.OnceFunc(func() { // make the callback idempotent, and trigger reannounce
+		done()
+		go n.announceBlkProp(context.Background(), blk, s.Conn().RemotePeer())
+	}))
 }
 
 // sendACK is a callback for the result of validator block execution/precommit.

@@ -18,7 +18,7 @@ type ConsensusEngine interface {
 	InCatchup() bool
 
 	AcceptProposal(height int64, blkID, prevBlkID types.Hash, leaderSig []byte, timestamp int64) bool
-	NotifyBlockProposal(blk *ktypes.Block)
+	NotifyBlockProposal(blk *ktypes.Block, done func())
 
 	AcceptCommit(height int64, blkID types.Hash, hdr *ktypes.BlockHeader, ci *types.CommitInfo, leaderSig []byte) bool
 	NotifyBlockCommit(blk *ktypes.Block, ci *types.CommitInfo, blkID types.Hash, doneFn func())

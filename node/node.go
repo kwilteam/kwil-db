@@ -142,7 +142,7 @@ type Node struct {
 	// from gossip, to consensus engine for calculating best height of the validators during blocksync.
 	// discResp chan types.DiscoveryResponse
 
-	blkPropHandlerMtx sync.Mutex // atomicity of proposal check and retrieval
+	blkPropHandling chan struct{}
 
 	wg  sync.WaitGroup
 	log log.Logger
@@ -178,6 +178,8 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 		resetMsg: make(chan ConsensusReset, 1),
 		// discReq:  make(chan types.DiscoveryRequest, 1),
 		// discResp: make(chan types.DiscoveryResponse, 1),
+
+		blkPropHandling: make(chan struct{}, 1),
 
 		P2PService: *cfg.P2PService,
 	}
@@ -338,7 +340,9 @@ func (n *Node) Start(ctx context.Context) error {
 		defer cancel()
 
 		broadcastFns := consensus.BroadcastFns{
-			ProposalBroadcaster: n.announceBlkProp,
+			ProposalBroadcaster: func(ctx context.Context, blk *ktypes.Block) {
+				n.announceBlkProp(ctx, blk, n.host.ID())
+			},
 			TxAnnouncer: func(ctx context.Context, tx *ktypes.Transaction) {
 				n.announceTx(ctx, tx, n.host.ID())
 			},
