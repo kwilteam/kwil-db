@@ -525,7 +525,7 @@ func TestOfflineMigrations(t *testing.T) {
 					},
 					DBOwner: OwnerAddress,
 					ConfigureGenesis: func(genDoc *config.GenesisConfig) {
-						genDoc.ChainID = "kwil-test-chain2"
+						genDoc.ChainID = "kwil-testnet2"
 						genDoc.StateHash = hash
 					},
 					GenesisSnapshot: filepath.Join(net1.TestDir(), "node0", "gensnaps", "snapshot.sql.gz"),
@@ -648,7 +648,7 @@ func TestLongRunningNetworkMigrations(t *testing.T) {
 					},
 					// DBOwner: OwnerAddress,
 					ConfigureGenesis: func(genDoc *config.GenesisConfig) {
-						genDoc.ChainID = "kwil-test-chain2"
+						genDoc.ChainID = "kwil-testnet2"
 					},
 				},
 				ContainerStartTimeout: 2 * time.Minute,
@@ -674,7 +674,7 @@ func TestLongRunningNetworkMigrations(t *testing.T) {
 			// ensure that all nodes are in sync
 			clt2 := net2.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
 				PrivateKey: UserPrivkey1,
-				ChainID:    "kwil-test-chain2",
+				ChainID:    "kwil-testnet2",
 			})
 			// Verify that the genesis state and the changesets are correctly applied
 			// on the new chain and the data is in sync with the old network
@@ -682,7 +682,7 @@ func TestLongRunningNetworkMigrations(t *testing.T) {
 
 			clt3 := net2.Nodes[2].JSONRPCClient(t, ctx, &setup.ClientOptions{
 				PrivateKey: UserPrivkey1,
-				ChainID:    "kwil-test-chain2",
+				ChainID:    "kwil-testnet2",
 			})
 
 			// Test that the statesync node is able to sync with the network
