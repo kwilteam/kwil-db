@@ -24,10 +24,10 @@ import (
 )
 
 // TODO:
-// - kgw tests
 // - log / "notice()" tests
 
 var dev = flag.Bool("dev", false, "run for development purpose (no tests)")
+var withKGW = flag.Bool("kgw", false, "test with kgw")
 
 func TestLocalDevSetup(t *testing.T) {
 	if !*dev {
@@ -44,7 +44,7 @@ func TestLocalDevSetup(t *testing.T) {
 		cancel()
 	}()
 
-	client := setupSingleNodeClient(t, ctx, setup.Go, false)
+	client := setupSingleNodeClient(t, ctx, setup.Go, *withKGW)
 	ci, err := client.ChainInfo(ctx)
 	if err != nil {
 		t.Fatal(err)
@@ -69,16 +69,33 @@ var (
 		}
 		return privk
 	}()
+
+	kgwSvc = &setup.CustomService{
+		ServiceName:  "kgw",
+		DockerImage:  "kgw:latest",
+		Command:      `--log-level debug --log-outputs stdout /app/kgw.log --cors-allow-origins * --backends node0:8484 node1:8484 --domain http://localhost:8090 --statement 'Trust me ok?' --session-secret 'kgwtest' --chain-id kwil-testnet --allow-adhoc-query --devmode`,
+		ExposedPort:  "8090",
+		InternalPort: "8090",
+		ServiceProto: "http",
+		WaitMsg:      "KGW Server started",
+		DependsOn:    "node0",
+	}
 )
 
-// setupSingleNodeClient creates a single node network for testing,
-// and returns the client
-func setupSingleNodeClient(t *testing.T, ctx context.Context, d setup.ClientDriver, usingKGW bool) setup.JSONRPCClient {
+// setupSingleNodeClient creates a single node network for testing, and returns the client.
+// If useKGW=true, a KGW node will be created, the returned client will talk to KGW instead of the kwild node.
+func setupSingleNodeClient(t *testing.T, ctx context.Context, d setup.ClientDriver, useKGW bool) setup.JSONRPCClient {
 	t.Helper()
 
 	signer := auth.GetUserSigner(UserPrivkey1)
 	ident, err := auth.EthSecp256k1Authenticator{}.Identifier(signer.CompactID())
 	require.NoError(t, err)
+
+	var extraServices []*setup.CustomService
+
+	if useKGW {
+		extraServices = append(extraServices, kgwSvc)
+	}
 
 	testnet := setup.SetupTests(t, &setup.TestConfig{
 		ClientDriver: d,
@@ -87,12 +104,21 @@ func setupSingleNodeClient(t *testing.T, ctx context.Context, d setup.ClientDriv
 			Nodes: []*setup.NodeConfig{
 				setup.DefaultNodeConfig(),
 			},
+			ExtraServices: extraServices,
 		},
 	})
-	return testnet.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
-		UsingKGW:   usingKGW,
+
+	opts := &setup.ClientOptions{
 		PrivateKey: UserPrivkey1,
-	})
+	}
+
+	kgwNode, ok := testnet.SearchExtraNode("kgw")
+	if ok {
+		opts.UsingKGW = true
+		opts.Endpoint = kgwNode.ExposedChainRPC
+	}
+
+	return testnet.Nodes[0].JSONRPCClient(t, ctx, opts)
 }
 
 func Test_Transfer(t *testing.T) {
@@ -118,6 +144,11 @@ func Test_Transfer(t *testing.T) {
 				return val
 			}
 
+			var extraServices []*setup.CustomService
+			if *withKGW {
+				extraServices = append(extraServices, kgwSvc)
+			}
+
 			testnet := setup.SetupTests(t, &setup.TestConfig{
 				ClientDriver: driver,
 				Network: &setup.NetworkConfig{
@@ -134,14 +165,23 @@ func Test_Transfer(t *testing.T) {
 					Nodes: []*setup.NodeConfig{
 						setup.DefaultNodeConfig(),
 					},
-					DBOwner: stringAddress(userPrivateKey),
+					DBOwner:       stringAddress(userPrivateKey),
+					ExtraServices: extraServices,
 				},
 			})
 
-			// user 1 will send funds to user 2. User 2 will check that they received the funds
-			user1 := testnet.Nodes[0].JSONRPCClient(t, ctx, &setup.ClientOptions{
+			cltOpts := &setup.ClientOptions{
 				PrivateKey: userPrivateKey,
-			})
+			}
+
+			kgwNode, ok := testnet.SearchExtraNode("kgw")
+			if ok {
+				cltOpts.UsingKGW = true
+				cltOpts.Endpoint = kgwNode.ExposedChainRPC
+			}
+
+			// user 1 will send funds to user 2. User 2 will check that they received the funds
+			user1 := testnet.Nodes[0].JSONRPCClient(t, ctx, cltOpts)
 
 			// user 1 creates an action, which user 2 will call to test they have funds
 			tx, err := user1.ExecuteSQL(ctx, "CREATE ACTION do_something() public {}", nil, opts)
@@ -178,7 +218,7 @@ func Test_Engine(t *testing.T) {
 	for _, driver := range setup.AllDrivers {
 		t.Run("engine_"+driver.String(), func(t *testing.T) {
 			ctx := context.Background()
-			client := setupSingleNodeClient(t, ctx, driver, false)
+			client := setupSingleNodeClient(t, ctx, driver, *withKGW)
 
 			// deploy the schema
 			tx, err := client.ExecuteSQL(ctx, usersSchema, nil, opts)
@@ -237,7 +277,7 @@ func Test_Roundtrip(t *testing.T) {
 	for _, driver := range setup.AllDrivers {
 		t.Run("roundtrip_"+driver.String(), func(t *testing.T) {
 			ctx := context.Background()
-			client := setupSingleNodeClient(t, ctx, driver, false)
+			client := setupSingleNodeClient(t, ctx, driver, *withKGW)
 
 			// a table that stores all data types
 			tx, err := client.ExecuteSQL(ctx, `

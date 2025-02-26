@@ -166,13 +166,11 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache-kwild
           cache-to: type=local,dest=/tmp/.buildx-cache-kwild-new
 
-      # - name: Run acceptance test
-      #   run: |
-      #     testUserID=$(id -u)
-      #     testGroupID=$(id -g)
-      #     cp test/acceptance/docker-compose.override.yml.example test/acceptance/docker-compose.override.yml
-      #     sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/acceptance/docker-compose.override.yml
-      #     KACT_LOG_LEVEL=warn task test:act:nb
+      - name: Run acceptance test
+        run: |
+          testUserID=$(id -u)
+          testGroupID=$(id -g)
+          KACT_LOG_LEVEL=warn task test:act:nb -- -ugid "$testUserID:$testGroupID"
 
       # - name: Run integration test
       #   run: |

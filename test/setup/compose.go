@@ -120,7 +120,9 @@ func generateCompose(dockerNetwork string, testnetDir string, nodeConfs []*NodeC
 			Command:      svc.Command,
 			ExposedPort:  svc.ExposedPort,
 			InternalPort: svc.InternalPort,
+			DependsOn:    svc.DependsOn,
 		}
+
 		if userAndGroupIDs != nil {
 			svcTmpl.UserID = userAndGroupIDs[0]
 			svcTmpl.GroupID = userAndGroupIDs[1]
@@ -180,6 +182,7 @@ type serviceTemplate struct {
 	// InternalPort is the port that the service is running on internally.
 	// It must be set if ExposedPort is set
 	InternalPort string
+	DependsOn    string
 }
 
 func (s *serviceTemplate) generate(r *bytes.Buffer) error {
@@ -200,6 +203,10 @@ type CustomService struct {
 	// OPTIONAL: InternalPort is the port that the service is running on internally.
 	// It must be set if ExposedPort is set
 	InternalPort string
+	// OPTIONAL: ServiceProto is the proto that the service use.
+	ServiceProto string
 	// OPTIONAL: WaitMsg is a log that Docker will wait for before considering the service to be up
 	WaitMsg string
+	// OPTIONAL: DependsOn specify a service that needs to be healthy
+	DependsOn string
 }

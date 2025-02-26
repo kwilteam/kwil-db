@@ -182,13 +182,11 @@ jobs:
         run: |
           task build:cli
 
-      - name: Run kgw integration test
+      - name: Run kgw acceptance test
         run: |
           testUserID=$(id -u)
           testGroupID=$(id -g)
-          cp test/integration/docker-compose.override.yml.example test/integration/docker-compose.override.yml
-          sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/integration/docker-compose.override.yml
-          KIT_LOG_LEVEL=warn go test -count=1 -timeout 0 ./test/integration -run ^TestKGW$ -v
+          KACT_LOG_LEVEL=warn task test:act:nb -- -kgw -ugid "$testUserID:$testGroupID"
 
       - name: Run kwil-js test against kwild & kgw
         run: |
@@ -214,7 +212,6 @@ jobs:
             -b "http://kwild:8484" \
             --chain-id $chain_id \
             --allow-adhoc-query \
-            --allow-deploy-db \
             --log-level debug
           echo "run KWIL-JS TEST against kwild(http://localhost:8484),  with $chain_id"
           PRIVATE_KEY=0000000000000000000000000000000000000000000000000000000000000001 CHAIN_ID=$chain_id GATEWAY_ON=false GAS_ON=false KWIL_PROVIDER=http://localhost:8484 npm run integration

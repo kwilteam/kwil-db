@@ -16,6 +16,8 @@ import (
 const (
 	jsonRPCPort = 8484
 	p2pPort     = 6600
+
+	kgwRPCPort = 8090
 )
 
 // EnsureNetworkExist creates a new docker network with a random UUID name.

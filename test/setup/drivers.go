@@ -24,6 +24,8 @@ type ClientOptions struct {
 	PrivateKey crypto.PrivateKey
 	// UsingKGW specifies whether to use the gateway client.
 	UsingKGW bool
+	// Endpoint specifies the endpoint to use. This is mostly for kgw.
+	Endpoint string
 	// ChainID is the chain ID to use.
 	ChainID string
 }
