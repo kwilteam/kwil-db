@@ -45,7 +45,7 @@ type Transaction struct {
 	Sender HexBytes `json:"sender"`
 
 	strictUnmarshal bool
-	// cachedHash      *Hash // maybe maybe maybe... this would require a mutex or careful use
+	cachedHash      *Hash // maybe maybe maybe... this would require a mutex or careful use
 }
 
 func (t *Transaction) StrictUnmarshal() {
@@ -57,6 +57,19 @@ func (t *Transaction) StrictUnmarshal() {
 func (t *Transaction) Hash() Hash {
 	raw := t.Bytes()
 	return HashBytes(raw)
+}
+
+// HashCache is like Hash, but caches the hash of the transaction. If it is
+// already cached, it is returned as is. Use this with caution:
+//  1. it is not safe for concurrent use
+//  2. the allocation and storage of the hash may potentially be undesirable
+//  3. the hash is not guaranteed to be valid if the transaction is modified
+func (t *Transaction) HashCache() Hash {
+	if t.cachedHash == nil {
+		hash := t.Hash()
+		t.cachedHash = &hash
+	}
+	return *t.cachedHash
 }
 
 // TransactionBody is the body of a transaction that gets included in the
@@ -264,10 +277,7 @@ func (t *TransactionBody) SerializeMsg(mst SignedMsgSerializationType) ([]byte, 
 
 	switch mst {
 	case SignedMsgDirect:
-		msg, err := t.MarshalBinary()
-		if err != nil {
-			return nil, fmt.Errorf("failed to serialize transaction body: %v", err)
-		}
+		msg := t.Bytes()
 		sigHash := HashBytes(msg) // could just be msg
 		return sigHash[:], nil
 	case SignedMsgConcat:

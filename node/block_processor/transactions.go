@@ -10,6 +10,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/types"
 	authExt "github.com/kwilteam/kwil-db/extensions/auth"
 	"github.com/kwilteam/kwil-db/node/txapp"
+	nodetypes "github.com/kwilteam/kwil-db/node/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )
 
@@ -66,7 +67,7 @@ type indexedTxn struct {
 // enforces block size limits, and applies the maxVotesPerTx limit for voteID transactions.
 // Additionally, it includes the ValidatorVoteBody transaction for unresolved events.
 // The final transaction order is: MempoolProposerTxns, ValidatorVoteBodyTx, Other MempoolTxns (Nonce ordered, stable sorted).
-func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs []*types.Transaction) (finalTxs []*types.Transaction, invalidTxs []*types.Transaction, err error) {
+func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs []*nodetypes.Tx) (finalTxs []*types.Transaction, invalidTxs []*types.Transaction, err error) {
 	// Unmarshal and index the transactions.
 	var okTxns []*indexedTxn
 	invalidTxs = make([]*types.Transaction, 0, len(txs))
@@ -74,7 +75,7 @@ func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs []*t
 
 	for is, tx := range txs {
 		rawTx := tx.Bytes()
-		okTxns = append(okTxns, &indexedTxn{i, tx, len(rawTx), types.HashBytes(rawTx), is})
+		okTxns = append(okTxns, &indexedTxn{i, tx.Transaction, len(rawTx), tx.Hash(), is})
 		i++
 	}
 
@@ -103,7 +104,7 @@ func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs []*t
 	// Enfore nonce ordering and remove transactions from the unfunded accounts
 	for _, tx := range okTxns {
 		if i > 0 && tx.Body.Nonce == nonces[i-1] && bytes.Equal(tx.Sender, okTxns[i-1].Sender) {
-			invalidTxs = append(invalidTxs, txs[tx.is])
+			invalidTxs = append(invalidTxs, txs[tx.is].Transaction)
 			bp.log.Warn("Transaction has a duplicate nonce", "tx", tx)
 			continue
 		}

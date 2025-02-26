@@ -5,17 +5,15 @@ import (
 	"slices"
 	"sync"
 
-	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
 )
 
 // Mempool maintains a thread-safe pool of unconfirmed transactions with size limits.
 type Mempool struct {
-	mtx      sync.RWMutex
-	txns     map[types.Hash]*sizedTx
-	txQ      []types.NamedTx
-	fetching map[types.Hash]bool
-	// acctTxns map[string][]types.NamedTx
+	mtx         sync.RWMutex
+	txns        map[types.Hash]*sizedTx
+	txQ         []*types.Tx
+	fetching    map[types.Hash]bool
 	currentSize int64 // bytes
 
 	maxSize int64 // bytes
@@ -23,7 +21,7 @@ type Mempool struct {
 }
 
 type sizedTx struct {
-	*ktypes.Transaction
+	*types.Tx
 	size int64
 }
 
@@ -69,26 +67,24 @@ func (mp *Mempool) remove(txid types.Hash) {
 
 	delete(mp.txns, txid)
 
-	idx := slices.IndexFunc(mp.txQ, func(a types.NamedTx) bool {
-		return a.Hash == txid
+	idx := slices.IndexFunc(mp.txQ, func(a *types.Tx) bool {
+		return a.Hash() == txid
 	})
 	if idx != -1 {
 		mp.txQ = slices.Delete(mp.txQ, idx, idx+1) // remove txQ[idx]
 	} // else there's a bug!
 }
 
-// Store adds a transaction to the mempool. Returns (found, rejected) where found indicates
-// if the tx was already present, and rejected indicates if it was rejected due to size limits.
-func (mp *Mempool) Store(txid types.Hash, tx *ktypes.Transaction) (found, rejected bool) {
+// Store adds a transaction to the mempool. Returns (found, rejected) where
+// found indicates if the tx was already present, and rejected indicates if it
+// was rejected due to size limits. To remove a transaction, use [Remove]; this
+// will panic with a nil pointer.
+func (mp *Mempool) Store(tx *types.Tx) (found, rejected bool) {
 	mp.mtx.Lock()
 	defer mp.mtx.Unlock()
 
+	txid := tx.Hash()
 	delete(mp.fetching, txid)
-
-	if tx == nil { // legacy semantics for removal
-		mp.remove(txid)
-		return false, false
-	}
 
 	if _, ok := mp.txns[txid]; ok {
 		return true, false // already have it
@@ -103,13 +99,10 @@ func (mp *Mempool) Store(txid types.Hash, tx *ktypes.Transaction) (found, reject
 	mp.currentSize += sz
 
 	mp.txns[txid] = &sizedTx{
-		Transaction: tx,
-		size:        sz,
-	}
-	mp.txQ = append(mp.txQ, types.NamedTx{
-		Hash: txid,
 		Tx:   tx,
-	})
+		size: sz,
+	}
+	mp.txQ = append(mp.txQ, tx)
 	return false, false
 }
 
@@ -142,30 +135,30 @@ func (mp *Mempool) Size() (totalBytes, numTxns int) {
 }
 
 // Get retrieves a transaction by its hash, returns nil if not found.
-func (mp *Mempool) Get(txid types.Hash) *ktypes.Transaction {
+func (mp *Mempool) Get(txid types.Hash) *types.Tx {
 	mp.mtx.RLock()
 	defer mp.mtx.RUnlock()
 	tx, have := mp.txns[txid]
 	if !have {
 		return nil
 	}
-	return tx.Transaction
+	return tx.Tx
 }
 
 // ReapN removes and returns up to n transactions from the front of the queue.
-func (mp *Mempool) ReapN(n int) []types.NamedTx {
+func (mp *Mempool) ReapN(n int) []*types.Tx {
 	mp.mtx.Lock()
 	defer mp.mtx.Unlock()
 	n = min(n, len(mp.txQ))
 	txns := slices.Clone(mp.txQ[:n])
 	mp.txQ = mp.txQ[n:]
 	for _, tx := range txns {
-		szTx := mp.txns[tx.Hash]
+		szTx := mp.txns[tx.Hash()]
 		if szTx == nil {
 			continue // bug, don't crash
 		}
 		mp.currentSize -= szTx.size
-		delete(mp.txns, tx.Hash)
+		delete(mp.txns, tx.Hash())
 	}
 	return txns
 }
@@ -173,15 +166,15 @@ func (mp *Mempool) ReapN(n int) []types.NamedTx {
 // PeekN returns up to n transactions from the front of the queue without
 // removing them, the number of transactions returned may be less than n if the
 // total size in bytes of the transactions exceeds szLimit.
-func (mp *Mempool) PeekN(n, szLimit int) []types.NamedTx {
+func (mp *Mempool) PeekN(n, szLimit int) []*types.Tx {
 	mp.mtx.RLock()
 	defer mp.mtx.RUnlock()
 	n = min(n, len(mp.txns))
 	var totalPickedSz int
-	txns := make([]types.NamedTx, 0, n)
+	txns := make([]*types.Tx, 0, n)
 	for _, tx := range mp.txQ[:n] {
 		if szLimit > 0 {
-			txSz := int(tx.Tx.SerializeSize())
+			txSz := int(tx.SerializeSize())
 			if txSz+totalPickedSz > szLimit {
 				break // no more checks since we are trying to keep order
 			}
@@ -193,7 +186,7 @@ func (mp *Mempool) PeekN(n, szLimit int) []types.NamedTx {
 }
 
 // CheckFn is a function type for validating transactions.
-type CheckFn func(ctx context.Context, tx *ktypes.Transaction) error
+type CheckFn func(ctx context.Context, tx *types.Tx) error
 
 // RecheckTxs validates all transactions in the mempool using the provided check
 // function, removing any that fail validation. This function will check the
@@ -208,8 +201,8 @@ func (mp *Mempool) RecheckTxs(ctx context.Context, fn CheckFn) {
 	}
 	var toRemove []indexedTx
 	for idx, tx := range mp.txQ { // must check in order
-		if err := fn(ctx, tx.Tx); err != nil {
-			toRemove = append(toRemove, indexedTx{idx: idx, txid: tx.Hash})
+		if err := fn(ctx, tx); err != nil {
+			toRemove = append(toRemove, indexedTx{idx: idx, txid: tx.Hash()})
 		}
 	}
 

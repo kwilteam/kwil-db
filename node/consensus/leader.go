@@ -217,11 +217,7 @@ func (ce *ConsensusEngine) createBlockProposal(ctx context.Context) (*blockPropo
 	defer ce.mempoolMtx.Unlock()
 
 	totalTxSizeLimit := ce.ConsensusParams().MaxBlockSize
-	nTxs := ce.mempool.PeekN(maxNumTxnsInBlock, int(totalTxSizeLimit))
-	txns := make([]*ktypes.Transaction, len(nTxs))
-	for i, ntx := range nTxs {
-		txns[i] = ntx.Tx
-	}
+	txns := ce.mempool.PeekN(maxNumTxnsInBlock, int(totalTxSizeLimit))
 
 	finalTxs, invalidTxs, err := ce.blockProcessor.PrepareProposal(ctx, txns)
 	if err != nil {

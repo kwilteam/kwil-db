@@ -31,8 +31,8 @@ type ConsensusEngine interface {
 
 	Start(ctx context.Context, fns consensus.BroadcastFns, peerFns consensus.WhitelistFns) error
 
-	QueueTx(ctx context.Context, tx *ktypes.Transaction) error
-	BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (ktypes.Hash, *ktypes.TxResult, error)
+	QueueTx(ctx context.Context, tx *types.Tx) error
+	BroadcastTx(ctx context.Context, tx *types.Tx, sync uint8) (ktypes.Hash, *ktypes.TxResult, error)
 
 	ConsensusParams() *ktypes.NetworkParameters
 	CancelBlockExecution(height int64, txIDs []types.Hash) error

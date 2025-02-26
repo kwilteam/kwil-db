@@ -222,8 +222,9 @@ func (bp *BlockProcessor) loadNetworkParams(ctx context.Context, readTx sql.Tx) 
 	return networkParams, nil
 }
 
-func (bp *BlockProcessor) CheckTx(ctx context.Context, tx *ktypes.Transaction, height int64, blockTime time.Time, recheck bool) error {
-	txHash := tx.Hash()
+func (bp *BlockProcessor) CheckTx(ctx context.Context, ntx *types.Tx, height int64, blockTime time.Time, recheck bool) error {
+	tx := ntx.Transaction
+	txHash := ntx.Hash()
 
 	// If the network is halted for migration, we reject all transactions.
 	if bp.chainCtx.NetworkParameters.MigrationStatus == ktypes.MigrationCompleted {
@@ -678,7 +679,7 @@ func (bp *BlockProcessor) Commit(ctx context.Context, req *ktypes.CommitRequest)
 // that consensus limits such as the maximum block size, maxVotesPerTx are met. It also adds
 // validator vote transactions for events observed by the leader. This function is
 // used exclusively by the leader node to prepare the proposal block.
-func (bp *BlockProcessor) PrepareProposal(ctx context.Context, txs []*ktypes.Transaction) (finalTxs []*ktypes.Transaction, invalidTxs []*ktypes.Transaction, err error) {
+func (bp *BlockProcessor) PrepareProposal(ctx context.Context, txs []*types.Tx) (finalTxs []*ktypes.Transaction, invalidTxs []*ktypes.Transaction, err error) {
 	// unmarshal and index the transactions
 	return bp.prepareBlockTransactions(ctx, txs)
 }

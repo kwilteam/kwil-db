@@ -104,13 +104,11 @@ func (n *Node) txGetStreamHandler(s network.Stream) {
 	}
 
 	// first check mempool
-	tx := n.mp.Get(req.Hash)
-	if tx != nil {
-		tx.WriteTo(s)
+	ntx := n.mp.Get(req.Hash)
+	if ntx != nil {
+		ntx.Transaction.WriteTo(s)
 		return
 	}
-
-	// this is racy, and should be different in product
 
 	// then confirmed tx index
 	tx, _, _, _, err := n.bki.GetTx(req.Hash)

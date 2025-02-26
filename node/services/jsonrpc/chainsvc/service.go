@@ -44,7 +44,7 @@ type Node interface {
 	BlockResultByHash(hash ktypes.Hash) ([]ktypes.TxResult, error)
 	ChainTx(hash ktypes.Hash) (*chaintypes.Tx, error)
 	BlockHeight() int64
-	ChainUnconfirmedTx(limit int) (int, []nodetypes.NamedTx)
+	ChainUnconfirmedTx(limit int) (int, []*nodetypes.Tx)
 	ConsensusParams() *ktypes.NetworkParameters
 }
 
@@ -287,15 +287,15 @@ func (svc *Service) UnconfirmedTxs(_ context.Context, req *chainjson.Unconfirmed
 	}, nil
 }
 
-// The admin Service must be usable as a Svc registered with a JSON-RPC Server.
+// The chain Service must be usable as a Svc registered with a JSON-RPC Server.
 var _ rpcserver.Svc = (*Service)(nil)
 
-func convertNamedTxs(txs []nodetypes.NamedTx) []chaintypes.NamedTx {
+func convertNamedTxs(txs []*nodetypes.Tx) []chaintypes.NamedTx {
 	res := make([]chaintypes.NamedTx, len(txs))
 	for i, tx := range txs {
 		res[i] = chaintypes.NamedTx{
-			Hash: tx.Hash,
-			Tx:   tx.Tx,
+			Hash: tx.Hash(),
+			Tx:   tx.Transaction,
 		}
 	}
 	return res
