@@ -42,6 +42,7 @@ func getFlagUserGroupID() (ids *[2]string, err error) {
 		return ids, fmt.Errorf("invalid user id and group id format: %s", *userGroupID)
 	}
 
+	ids = new([2]string)
 	ids[0] = segs[0]
 	ids[1] = segs[1]
 	return ids, nil
