@@ -88,7 +88,7 @@ func (b *Block) Hash() Hash {
 	return b.Header.Hash()
 }
 
-func (b *Block) MerkleRoot() Hash {
+func (b *Block) CalcMerkleRoot() Hash {
 	txHashes := make([]Hash, len(b.Txns))
 	for i, tx := range b.Txns {
 		txHashes[i] = tx.HashCache()

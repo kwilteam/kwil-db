@@ -34,7 +34,7 @@ func (ce *ConsensusEngine) validateBlock(blk *ktypes.Block) error {
 	}
 
 	// Verify the merkle root of the block transactions
-	merkleRoot := blk.MerkleRoot()
+	merkleRoot := blk.CalcMerkleRoot() // NOTE: this expects CalcMerkleRoot to use tx.HashCache() to prepare the Transaction's internal hash cache
 	if merkleRoot != blk.Header.MerkleRoot {
 		return fmt.Errorf("merkleroot mismatch, expected %v, got %v", merkleRoot, blk.Header.MerkleRoot)
 	}
