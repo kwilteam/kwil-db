@@ -4,6 +4,9 @@
     image: {{ .DockerImage }}
     {{ if .ExposedPort }}ports:
       - "{{ .ExposedPort }}:{{ .InternalPort }}" {{ end }}
+    {{ if .DependsOn }}depends_on:
+      {{ .DependsOn }}:
+        condition: service_healthy{{ end }}
     networks:
       - {{ .Network }}
     {{ if .Command }}command: |
