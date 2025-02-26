@@ -21,6 +21,6 @@ code:
   - added|modified: 'core/gatewayclient/!(*.md)'
   - added|modified: 'core/gatewayclient/!(example/**)/**'
   - added|modified: 'parse/**'
-  - added|modified: 'test/**/*'
-  - 'test/!(stress/**)/**'
+  - added|modified: 'test/**/**'
+  - added|modified: 'test/!(stress/**)/**'
   - 'parse/!(grammar)/**'
