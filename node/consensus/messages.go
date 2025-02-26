@@ -44,6 +44,19 @@ func (ce *ConsensusEngine) sendConsensusMessage(msg *consensusMessage) {
 	ce.msgChan <- *msg
 }
 
+func (cm *consensusMessage) String() string {
+	switch v := cm.Msg.(type) {
+	case *blockProposal:
+		return cm.Msg.(*blockProposal).String()
+	case *blockAnnounce:
+		return cm.Msg.(*blockAnnounce).String()
+	case *vote:
+		return cm.Msg.(*vote).String()
+	default:
+		return fmt.Sprintf("Unknown message type: %T", v)
+	}
+}
+
 // BlockProposal is a message that is sent to the consensus engine to notify
 // that a new block proposal has been received from the leader.
 // Ensure that the source of the block proposal is the leader.

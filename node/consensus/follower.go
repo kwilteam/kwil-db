@@ -202,9 +202,10 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 			return nil
 		}
 
-		ce.log.Info("Aborting execution of stale block proposal", "height", blkPropMsg.height, "blockID", ce.state.blkProp.blkHash)
+		blkHash := ce.state.blkProp.blkHash
+		ce.log.Info("Aborting execution of stale block proposal", "height", blkPropMsg.height, "blockID", blkHash)
 		if err := ce.rollbackState(ctx); err != nil {
-			ce.log.Error("Error aborting execution of block", "height", blkPropMsg.height, "blockID", ce.state.blkProp.blkHash, "error", err)
+			ce.log.Error("Error aborting execution of block", "height", blkPropMsg.height, "blockID", blkHash, "error", err)
 			return err
 		}
 	}

@@ -318,7 +318,7 @@ func DefaultConfig() *Config {
 		Extensions: make(map[string]map[string]string),
 		Checkpoint: Checkpoint{
 			Height: 0,
-			Hash:   types.Hash{},
+			Hash:   "",
 		},
 		Erc20Bridge: ERC20BridgeConfig{
 			RPC:                make(map[string]string),
@@ -467,8 +467,8 @@ type MigrationConfig struct {
 
 type Checkpoint struct {
 	// Height 0 indicates no checkpoint is set. The leader will attempt regular block sync.
-	Height int64      `toml:"height" comment:"checkpoint height for the leader. If the leader is behind this height, it will sync to this height before attempting to propose a new block."`
-	Hash   types.Hash `toml:"hash" comment:"checkpoint block hash."`
+	Height int64  `toml:"height" comment:"checkpoint height for the leader. If the leader is behind this height, it will sync to this height before attempting to propose a new block"`
+	Hash   string `toml:"hash" comment:"checkpoint block hash"`
 }
 
 type ERC20BridgeConfig struct {

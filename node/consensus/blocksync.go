@@ -49,7 +49,7 @@ func (ce *ConsensusEngine) doBlockSync(ctx context.Context) error {
 func (ce *ConsensusEngine) VerifyCheckpoint() error {
 	// verify the checkpoint hash and height. If the checkpoints
 	// are not set, return
-	if ce.checkpoint.Height == 0 {
+	if ce.checkpoint.height == 0 {
 		return nil
 	}
 
@@ -58,12 +58,12 @@ func (ce *ConsensusEngine) VerifyCheckpoint() error {
 
 	height, hash := ce.stateInfo.lastCommit.height, ce.stateInfo.lastCommit.blkHash
 
-	if height < ce.checkpoint.Height {
-		return fmt.Errorf("checkpoint verification failed: height: %d [expected: %d]", height, ce.checkpoint.Height)
+	if height < ce.checkpoint.height {
+		return fmt.Errorf("checkpoint verification failed: height: %d [expected: %d]", height, ce.checkpoint.height)
 	}
 
-	if height == ce.checkpoint.Height && hash != ce.checkpoint.Hash {
-		return fmt.Errorf("checkpoint verification failed: height: %d hash: [expected: %s, curr: %s]", ce.checkpoint.Height, ce.checkpoint.Hash, hash)
+	if height == ce.checkpoint.height && hash != ce.checkpoint.hash {
+		return fmt.Errorf("checkpoint verification failed: height: %d hash: [expected: %s, curr: %s]", ce.checkpoint.height, ce.checkpoint.hash, hash)
 	}
 
 	return nil
@@ -73,7 +73,7 @@ func (ce *ConsensusEngine) leaderBlockSync(ctx context.Context) error {
 	startHeight := ce.lastCommitHeight()
 	ce.log.Info("Starting block sync", "height", startHeight+1)
 
-	checkpoint := ce.checkpoint.Height
+	checkpoint := ce.checkpoint.height
 	if checkpoint <= startHeight {
 		ce.log.Info("Leader is synced to the checkpoint", "height", startHeight)
 		return nil
