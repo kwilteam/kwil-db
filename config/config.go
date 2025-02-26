@@ -232,7 +232,7 @@ func LoadGenesisConfig(filename string) (*GenesisConfig, error) {
 
 func DefaultGenesisConfig() *GenesisConfig {
 	return &GenesisConfig{
-		ChainID:       "kwil-test-chain",
+		ChainID:       "kwil-testnet",
 		InitialHeight: 0,
 		DBOwner:       "",
 		Validators:    nil,
