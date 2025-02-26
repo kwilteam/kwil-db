@@ -801,7 +801,7 @@ func init() {
 
 							var err error
 							var amount *types.Decimal
-							// if 'amount' is omited, withdraw all balance
+							// if 'amount' is omitted, withdraw all balance
 							if inputs[1] == nil {
 								callerAddr, err := ethAddressFromHex(ctx.TxContext.Caller)
 								if err != nil {
