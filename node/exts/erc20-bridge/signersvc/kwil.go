@@ -55,7 +55,7 @@ type bridgeSignerClient interface {
 }
 
 type txBcast interface {
-	BroadcastTx(ctx context.Context, tx *types.Transaction, sync uint8) (*types.ResultBroadcastTx, error)
+	BroadcastTx(ctx context.Context, tx *types.Transaction, sync uint8) (types.Hash, *types.TxResult, error)
 }
 
 type engineCall interface {
@@ -330,12 +330,13 @@ func (k *signerClient) execute(ctx context.Context, namespace string, txSigner a
 		return types.Hash{}, fmt.Errorf("failed to create tx: %w", err)
 	}
 
-	res, err := k.bcast.BroadcastTx(ctx, tx, uint8(rpcclient.BroadcastWaitCommit))
+	// since we wait for commit, res won't be nil
+	txHash, _, err := k.bcast.BroadcastTx(ctx, tx, uint8(rpcclient.BroadcastWaitCommit))
 	if err != nil {
 		return types.Hash{}, fmt.Errorf("failed to broadcast tx: %w", err)
 	}
 
-	return res.Hash, nil
+	return txHash, nil
 }
 
 // newTx mimics client.Client.newTx to create a new tx, without tx options.
