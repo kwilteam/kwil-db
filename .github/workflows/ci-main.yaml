@@ -121,13 +121,13 @@ jobs:
           task build:cli
           task build:kwild
 
-      # - name: compile the core/client/example app
-      #   run: go build -o /dev/null
-      #   working-directory: core/client/example
+      - name: compile the core/client/example app
+        run: go build -o /dev/null
+        working-directory: core/client/example
 
-      # - name: compile the core/gatewayclient/example app
-      #   run: go build -o /dev/null
-      #   working-directory: core/gatewayclient/example
+      - name: compile the core/gatewayclient/example app
+        run: go build -o /dev/null
+        working-directory: core/gatewayclient/example
 
       - name: Generate go vendor
         if: false
@@ -188,10 +188,10 @@ jobs:
           rm -rf /tmp/.buildx-cache-kwild
           mv /tmp/.buildx-cache-kwild-new /tmp/.buildx-cache-kwild
 
-      # - name: Prune Docker
-      #   if: ${{ always() }}
-      #   run: docker rm $(docker ps -a -q) -f ; docker network prune -f ; docker volume prune -f || true
+      - name: Prune Docker
+        if: ${{ always() }}
+        run: docker rm $(docker ps -a -q) -f ; docker network prune -f ; docker volume prune -f || true
 
-      # - name: Show error log
-      #   if: ${{ failure() }}
-      #   run: grep -C 20 -s -i -r -e 'kwild version' -e 'error' -e 'warn'  /tmp/TestKwilAct*/*.log  /tmp/TestKwilInt*/*.log /tmp/TestKwilInt*/*/*.log
+      - name: Show error log
+        if: ${{ failure() }}
+        run: grep -C 20 -s -i -r -e 'kwild version' -e 'error' -e 'warn'  /tmp/TestKwilAct*/*.log  /tmp/TestKwilInt*/*.log /tmp/TestKwilInt*/*/*.log
