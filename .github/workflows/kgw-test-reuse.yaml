@@ -190,7 +190,7 @@ jobs:
 
       - name: Run kwil-js test against kwild & kgw
         run: |
-          cd deployments/compose/kwil
+          cd contrib/docker/compose/kwil
           echo "run kwild in docker"
           docker compose up -d
           # clone kwil-js
