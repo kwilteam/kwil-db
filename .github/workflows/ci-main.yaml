@@ -130,16 +130,13 @@ jobs:
 #        working-directory: core/gatewayclient/example
 
       - name: Generate go vendor
-        if: false
         run: |
           task vendor
 
       - name: Set up Docker Buildx
-        if: false
         uses: docker/setup-buildx-action@v3
 
       - name: Cache Docker layers for kwild # both restore and save
-        if: false
         uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache-kwild
@@ -148,7 +145,6 @@ jobs:
             ${{ runner.os }}-buildx-kwild
 
       - name: Build kwild image
-        if: false
         id: docker_build_kwild
         uses: docker/build-push-action@v6
         with:
@@ -183,7 +179,6 @@ jobs:
       #     KIT_LOG_LEVEL=warn task test:it:nb
 
       - name: Move cache
-        if: false
         run: |
           rm -rf /tmp/.buildx-cache-kwild
           mv /tmp/.buildx-cache-kwild-new /tmp/.buildx-cache-kwild
