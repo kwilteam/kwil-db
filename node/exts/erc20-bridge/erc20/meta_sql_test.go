@@ -1,9 +1,9 @@
-package erc20reward
+package erc20
 
 import (
 	"context"
+	"math/big"
 	"testing"
-	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/stretchr/testify/require"
@@ -98,7 +98,7 @@ func TestCreateNewRewardInstance(t *testing.T) {
 	pending := &PendingEpoch{
 		ID:          newUUID(),
 		StartHeight: 10,
-		StartTime:   time.Unix(100, 0),
+		StartTime:   100,
 	}
 	err = createEpoch(ctx, app, pending, id)
 	require.NoError(t, err)
@@ -136,8 +136,9 @@ func TestCreateNewRewardInstance(t *testing.T) {
 	require.Equal(t, int64(18), rewards[0].syncedRewardData.Erc20Decimals)
 
 	root := []byte{0x03, 0x04}
+	amt, _ := erc20ValueFromBigInt(big.NewInt(100))
 	// finalize the epoch
-	err = finalizeEpoch(ctx, app, pending.ID, 20, []byte{0x01, 0x02}, root)
+	err = finalizeEpoch(ctx, app, pending.ID, 20, []byte{0x01, 0x02}, root, amt)
 	require.NoError(t, err)
 
 	// confirm the epoch

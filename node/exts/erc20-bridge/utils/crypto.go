@@ -1,4 +1,4 @@
-package reward
+package utils
 
 import (
 	"bytes"
@@ -6,36 +6,32 @@ import (
 	"fmt"
 	"math/big"
 	"slices"
-	"strings"
 
 	ethAccounts "github.com/ethereum/go-ethereum/accounts"
-	ethAbi "github.com/ethereum/go-ethereum/accounts/abi"
 	ethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/common/math"
 	ethCrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/signer/core"
 	"github.com/ethereum/go-ethereum/signer/core/apitypes"
+
+	"github.com/kwilteam/kwil-db/node/exts/erc20-bridge/abigen"
 )
 
-// ContractABI defines the ABI for the reward contract.
-const ContractABI = `[{"name":"postReward","type":"function","inputs":[{"name":"rewardRoot","type":"bytes32"},{"name":"rewardAmount","type":"uint256"}],"outputs":[]},
-{"name":"updatePosterFee","type":"function","inputs":[{"name":"newFee","type":"uint256"}],"outputs":[]},
-{"name":"rewardPoster","type":"function","inputs":[{"name":"root","type":"bytes32"}],"outputs":[{"name":"","type":"address"}]}]`
+const GnosisSafeSigLength = ethCrypto.SignatureLength
 
 func GenPostRewardTxData(root []byte, amount *big.Int) ([]byte, error) {
-	// Parse the ABI
-	parsedABI, err := ethAbi.JSON(strings.NewReader(ContractABI))
-	if err != nil {
-		return nil, fmt.Errorf("failed to parse ABI: %v", err)
-	}
-
 	// Convert the root to a common.Hash type (because it's bytes32 in Ethereum)
 	//rootHash := ethCommon.HexToHash(root)
 	rootHash := ethCommon.BytesToHash(root)
 
+	rdABI, err := abigen.RewardDistributorMetaData.GetAbi()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ABI: %v", err)
+	}
+
 	// Encode the "postReward" function call with the given parameters
-	data, err := parsedABI.Pack("postReward", rootHash, amount)
+	data, err := rdABI.Pack("postReward", rootHash, amount)
 	if err != nil {
 		return nil, fmt.Errorf("failed to encode function call: %v", err)
 	}
@@ -45,7 +41,7 @@ func GenPostRewardTxData(root []byte, amount *big.Int) ([]byte, error) {
 
 // GenGnosisSafeTx returns a safe tx, and the tx hash to be used to generate signature.
 // More info: https://docs.safe.global/sdk/protocol-kit/guides/signatures/transactions
-// Since Gnosis 1.3.0, ChainId is a part of the EIP-712 domain.
+// Since Gnosis 1.3.0, ChainID is a part of the EIP-712 domain.
 func GenGnosisSafeTx(to, safe string, value int64, data hexutil.Bytes, chainID int64,
 	nonce int64) (*core.GnosisSafeTx, []byte, error) {
 	gnosisSafeTx := core.GnosisSafeTx{
@@ -111,7 +107,7 @@ func EthZeppelinSign(msg []byte, key *ecdsa.PrivateKey) ([]byte, error) {
 //		https://docs.safe.global/advanced/smart-account-signatures
 //	 SDK: safe-core-sdk/packages/protocol-kit/src/utils/signatures/utils.ts `adjustVInSignature`
 //
-// Since we use EIP-191, the V should be 31(0x1df) or 32(0x20).
+// Since we use EIP-191, the V should be 31(0x1f) or 32(0x20).
 func EthGnosisSign(msg []byte, key *ecdsa.PrivateKey) ([]byte, error) {
 	return EthGnosisSignDigest(ethAccounts.TextHash(msg), key)
 }
@@ -136,9 +132,9 @@ func EthGnosisSignDigest(digest []byte, key *ecdsa.PrivateKey) ([]byte, error) {
 
 func EthGnosisVerifyDigest(sig []byte, digest []byte, address []byte) error {
 	// signature is 65 bytes, [R || S || V] format
-	if len(sig) != ethCrypto.SignatureLength {
+	if len(sig) != GnosisSafeSigLength {
 		return fmt.Errorf("invalid signature length: expected %d, received %d",
-			ethCrypto.SignatureLength, len(sig))
+			GnosisSafeSigLength, len(sig))
 	}
 
 	if sig[ethCrypto.RecoveryIDOffset] != 31 && sig[ethCrypto.RecoveryIDOffset] != 32 {
@@ -164,9 +160,9 @@ func EthGnosisVerifyDigest(sig []byte, digest []byte, address []byte) error {
 
 func EthGnosisRecoverSigner(sig []byte, digest []byte) (*ethCommon.Address, error) {
 	// signature is 65 bytes, [R || S || V] format
-	if len(sig) != ethCrypto.SignatureLength {
+	if len(sig) != GnosisSafeSigLength {
 		return nil, fmt.Errorf("invalid signature length: expected %d, received %d",
-			ethCrypto.SignatureLength, len(sig))
+			GnosisSafeSigLength, len(sig))
 	}
 
 	if sig[ethCrypto.RecoveryIDOffset] != 31 && sig[ethCrypto.RecoveryIDOffset] != 32 {

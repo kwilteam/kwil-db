@@ -1,11 +1,10 @@
-package erc20reward
+package erc20
 
 import (
 	"context"
 	_ "embed"
 	"errors"
 	"fmt"
-	"time"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 
@@ -54,34 +53,39 @@ func createEpoch(ctx context.Context, app *common.App, epoch *PendingEpoch, inst
 	)`, map[string]any{
 		"id":               epoch.ID,
 		"created_at_block": epoch.StartHeight,
-		"created_at_unix":  epoch.StartTime.Unix(),
+		"created_at_unix":  epoch.StartTime,
 		"instance_id":      instanceID,
 	}, nil)
 }
 
 // finalizeEpoch finalizes an epoch.
 // It sets the end height, block hash, and reward root
-func finalizeEpoch(ctx context.Context, app *common.App, epochID *types.UUID, endHeight int64, blockHash []byte, root []byte) error {
+func finalizeEpoch(ctx context.Context, app *common.App, epochID *types.UUID, endHeight int64, blockHash []byte, root []byte, total *types.Decimal) error {
 	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
 	{kwil_erc20_meta}UPDATE epochs
 	SET ended_at = $ended_at,
 		block_hash = $block_hash,
-		reward_root = $reward_root
+		reward_root = $reward_root,
+        reward_amount = $reward_amount
 	WHERE id = $id
 	`, map[string]any{
-		"id":          epochID,
-		"ended_at":    endHeight,
-		"block_hash":  blockHash,
-		"reward_root": root,
+		"id":            epochID,
+		"ended_at":      endHeight,
+		"block_hash":    blockHash,
+		"reward_root":   root,
+		"reward_amount": total,
 	}, nil)
 }
 
-// confirmEpoch confirms an epoch was received on-chain
+// confirmEpoch confirms an epoch was received on-chain, also delete all the votes
+// associated with the epoch.
 func confirmEpoch(ctx context.Context, app *common.App, root []byte) error {
 	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
 	{kwil_erc20_meta}UPDATE epochs
 	SET confirmed = true
-	WHERE reward_root = $root
+	WHERE reward_root = $root;
+
+    {kwil_erc20_meta}DELETE FROM epoch_votes where epoch_id=(SELECT id FROM epochs WHERE reward_root = $root);
 	`, map[string]any{
 		"root": root,
 	}, nil)
@@ -104,7 +108,8 @@ func setRewardSynced(ctx context.Context, app *common.App, id *types.UUID, synce
 	}, nil)
 }
 
-// getStoredRewardInstances gets all stored reward instances.
+// getStoredRewardInstances gets all stored reward instances. Also returns the
+// current epoch(not finalized) that is being used.
 func getStoredRewardInstances(ctx context.Context, app *common.App) ([]*rewardExtensionInfo, error) {
 	var rewards []*rewardExtensionInfo
 	err := app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
@@ -112,7 +117,7 @@ func getStoredRewardInstances(ctx context.Context, app *common.App) ([]*rewardEx
 		r.erc20_address, r.erc20_decimals, r.synced_at, r.balance, e.id AS epoch_id,
 		e.created_at_block AS epoch_created_at_block, e.created_at_unix AS epoch_created_at_seconds
 	FROM reward_instances r
-	LEFT JOIN epochs e on r.id = e.instance_id AND e.confirmed IS NULL
+	LEFT JOIN epochs e on r.id = e.instance_id AND e.confirmed IS NOT TRUE AND e.ended_at IS NULL
 	`, nil, func(row *common.Row) error {
 		if len(row.Values) != 13 {
 			return fmt.Errorf("expected 13 values, got %d", len(row.Values))
@@ -154,7 +159,7 @@ func getStoredRewardInstances(ctx context.Context, app *common.App) ([]*rewardEx
 		reward.currentEpoch = &PendingEpoch{
 			ID:          epochID,
 			StartHeight: epochCreatedAtBlock,
-			StartTime:   time.Unix(epochCreatedAtUnix, 0),
+			StartTime:   epochCreatedAtUnix,
 		}
 
 		if !reward.synced {
@@ -193,7 +198,7 @@ func bytesToEthAddress(bts []byte) (ethcommon.Address, error) {
 
 // creditBalance credits a balance to a user.
 // The rewardId is the ID of the reward instance.
-// It if is negative, it will subtract.
+// If it is negative, it will subtract.
 func creditBalance(ctx context.Context, app *common.App, rewardId *types.UUID, user ethcommon.Address, amount *types.Decimal) error {
 	balanceId := userBalanceID(rewardId, user)
 	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
@@ -233,18 +238,20 @@ func createSchema(ctx context.Context, app *common.App) error {
 }
 
 // issueReward issues a reward to a user.
-func issueReward(ctx context.Context, app *common.App, epochID *types.UUID, user ethcommon.Address, amount *types.Decimal) error {
+func issueReward(ctx context.Context, app *common.App, instanceId *types.UUID, epochID *types.UUID, user ethcommon.Address, amount *types.Decimal) error {
 	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
 	{kwil_erc20_meta}UPDATE reward_instances
-	SET balance = balance - $amount;
+	SET balance = balance - $amount
+    WHERE id = $instance_id;
 
 	{kwil_erc20_meta}INSERT INTO epoch_rewards(epoch_id, recipient, amount)
-	VALUES ($id, $reward_id, $user, $amount)
-	ON CONFLICT (id, recipient) DO UPDATE SET amount = epoch_rewards.amount + $amount;
+	VALUES ($epoch_id, $user, $amount)
+	ON CONFLICT (epoch_id, recipient) DO UPDATE SET amount = epoch_rewards.amount + $amount;
 	`, map[string]any{
-		"id":     epochID,
-		"user":   user.Bytes(),
-		"amount": amount,
+		"instance_id": instanceId,
+		"epoch_id":    epochID,
+		"user":        user.Bytes(),
+		"amount":      amount,
 	}, nil)
 }
 
@@ -328,9 +335,8 @@ func balanceOf(ctx context.Context, app *common.App, rewardID *types.UUID, user 
 }
 
 // getRewardsForEpoch gets all rewards for an epoch.
-func getRewardsForEpoch(ctx context.Context, app *common.App, epochID *types.UUID) ([]*EpochReward, error) {
-	var rewards []*EpochReward
-	err := app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
+func getRewardsForEpoch(ctx context.Context, app *common.App, epochID *types.UUID, fn func(reward *EpochReward) error) error {
+	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
 	{kwil_erc20_meta}SELECT recipient, amount
 	FROM epoch_rewards
 	WHERE epoch_id = $epoch_id
@@ -346,49 +352,172 @@ func getRewardsForEpoch(ctx context.Context, app *common.App, epochID *types.UUI
 			return err
 		}
 
-		rewards = append(rewards, &EpochReward{
+		return fn(&EpochReward{
 			Recipient: recipient,
 			Amount:    row.Values[1].(*types.Decimal),
 		})
-		return nil
 	})
-	if err != nil {
-		return nil, err
-	}
-	return rewards, nil
 }
 
-// getUnconfirmedEpochs gets all unconfirmed epochs.
-func getUnconfirmedEpochs(ctx context.Context, app *common.App, instanceID *types.UUID, fn func(*Epoch) error) error {
-	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
-	SELECT id, created_at_block, created_at_unix, ended_at, block_hash, reward_root
-	FROM epochs
-	WHERE instance_id = $instance_id AND confirmed IS FALSE
-	ORDER BY ended_at ASC
-	`, map[string]any{
+// previousEpochConfirmed return whether previous exists and confirmed.
+func previousEpochConfirmed(ctx context.Context, app *common.App, instanceID *types.UUID, endBlock int64) (exist bool, confirmed bool, err error) {
+	err = app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
+    {kwil_erc20_meta}SELECT confirmed from epochs
+    WHERE instance_id = $instance_id AND ended_at = $end_block
+    `, map[string]any{
 		"instance_id": instanceID,
+		"end_block":   endBlock,
 	}, func(r *common.Row) error {
-		if len(r.Values) != 6 {
-			return fmt.Errorf("expected 6 values, got %d", len(r.Values))
+		// might be not necessary
+		if exist {
+			return fmt.Errorf("internal bug: expected single record")
+		}
+		exist = true
+
+		if len(r.Values) != 1 {
+			return fmt.Errorf("expected 1 values, got %d", len(r.Values))
 		}
 
-		id := r.Values[0].(*types.UUID)
-		createdAtBlock := r.Values[1].(int64)
-		createdAtUnix := r.Values[2].(int64)
-		endedAt := r.Values[3].(int64)
-		blockHash := r.Values[4].([]byte)
-		rewardRoot := r.Values[5].([]byte)
+		confirmed = r.Values[0].(bool)
+		return nil
+	})
 
-		return fn(&Epoch{
-			PendingEpoch: PendingEpoch{
-				ID:          id,
-				StartHeight: createdAtBlock,
-				StartTime:   time.Unix(createdAtUnix, 0),
-			},
-			EndHeight: &endedAt,
-			BlockHash: blockHash,
-			Root:      rewardRoot,
-		})
+	return exist, confirmed, err
+}
+
+func rowToEpoch(r *common.Row) (*Epoch, error) {
+	if len(r.Values) != 11 {
+		return nil, fmt.Errorf("expected 11 values, got %d", len(r.Values))
+	}
+
+	id := r.Values[0].(*types.UUID)
+	createdAtBlock := r.Values[1].(int64)
+	createdAtUnix := r.Values[2].(int64)
+
+	var rewardRoot []byte
+	if r.Values[3] != nil {
+		rewardRoot = r.Values[3].([]byte)
+	}
+
+	var rewardAmount *types.Decimal
+	if r.Values[4] != nil {
+		rewardAmount = r.Values[4].(*types.Decimal)
+	}
+
+	var endedAt int64
+	if r.Values[5] != nil {
+		endedAt = r.Values[5].(int64)
+	}
+
+	var blockHash []byte
+	if r.Values[6] != nil {
+		blockHash = r.Values[6].([]byte)
+	}
+
+	confirmed := r.Values[7].(bool)
+
+	// NOTE: empty value is [[]]
+	// values[8]-values[10] will all be empty if any, from the SQL;
+	var voters []ethcommon.Address
+	if r.Values[8] != nil {
+		rawVoters := r.Values[8].([][]byte)
+		// empty value is [[]], cannot use make(), otherwise we'll have a empty `ethcommon.Address`
+		for _, rawVoter := range rawVoters {
+			if len(rawVoter) == 0 {
+				continue
+			}
+			voter, err := bytesToEthAddress(rawVoter)
+			if err != nil {
+				return nil, err
+			}
+			voters = append(voters, voter)
+		}
+	}
+
+	// NOTE: empty value is [<nil>]
+	var voteNonces []int64
+	if r.Values[9] != nil {
+		rawNonces := r.Values[9].([]*int64)
+		for _, rawNonce := range rawNonces {
+			if rawNonce != nil {
+				// NOTE: this is probably problematic, since we can messup the index
+				// If we don't skip, return -1 ?
+				voteNonces = append(voteNonces, *rawNonce)
+			}
+		}
+	}
+
+	// NOTE: empty value is [[]]
+	var signatures [][]byte
+	if r.Values[10] != nil {
+		// we skip the empty value, otherwise after conversion, [<nil>] will be returned
+		for _, rawSig := range r.Values[10].([][]byte) {
+			if len(rawSig) != 0 {
+				signatures = append(signatures, rawSig)
+			}
+		}
+	}
+
+	return &Epoch{
+		PendingEpoch: PendingEpoch{
+			ID:          id,
+			StartHeight: createdAtBlock,
+			StartTime:   createdAtUnix,
+		},
+		EndHeight: &endedAt,
+		BlockHash: blockHash,
+		Root:      rewardRoot,
+		Total:     rewardAmount,
+		Confirmed: confirmed,
+		EpochVoteInfo: EpochVoteInfo{
+			Voters:     voters,
+			VoteSigs:   signatures,
+			VoteNonces: voteNonces,
+		},
+	}, nil
+}
+
+// getActiveEpochs get current active epochs, at most two:
+// one collects all new rewards, and one waits to be confirmed.
+func getActiveEpochs(ctx context.Context, app *common.App, instanceID *types.UUID, fn func(*Epoch) error) error {
+	query := `
+    {kwil_erc20_meta}SELECT e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.reward_amount, e.ended_at, e.block_hash, e.confirmed, array_agg(v.voter) as voters, array_agg(v.nonce) as nonces, array_agg(v.signature) as signatures
+	FROM epochs AS e
+	LEFT JOIN epoch_votes AS v ON v.epoch_id = e.id
+	WHERE e.instance_id = $instance_id AND e.confirmed IS NOT true
+    GROUP BY e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.reward_amount, e.ended_at, e.block_hash, e.confirmed
+    ORDER BY e.created_at_block ASC `
+	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, query, map[string]any{
+		"instance_id": instanceID,
+	}, func(r *common.Row) error {
+		epoch, err := rowToEpoch(r)
+		if err != nil {
+			return err
+		}
+		return fn(epoch)
+	})
+}
+
+// getEpochs gets epochs.
+func getEpochs(ctx context.Context, app *common.App, instanceID *types.UUID, after int64, limit int64, fn func(*Epoch) error) error {
+	query := `
+    {kwil_erc20_meta}SELECT e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.reward_amount, e.ended_at, e.block_hash, e.confirmed, array_agg(v.voter) as voters, array_agg(v.nonce) as nonces, array_agg(v.signature) as signatures
+	FROM epochs AS e
+	LEFT JOIN epoch_votes AS v ON v.epoch_id = e.id
+	WHERE e.instance_id = $instance_id AND e.created_at_block > $after
+    GROUP BY e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.reward_amount, e.ended_at, e.block_hash, e.confirmed
+    ORDER BY e.ended_at ASC LIMIT $limit`
+
+	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, query, map[string]any{
+		"instance_id": instanceID,
+		"after":       after,
+		"limit":       limit,
+	}, func(r *common.Row) error {
+		epoch, err := rowToEpoch(r)
+		if err != nil {
+			return err
+		}
+		return fn(epoch)
 	})
 }
 
@@ -434,4 +563,71 @@ func setVersionToCurrent(ctx context.Context, app *common.App) error {
 	`, map[string]any{
 		"version": currentVersion,
 	}, nil)
+}
+
+// canVoteEpoch returns a bool indicate whether an epoch can be voted.
+func canVoteEpoch(ctx context.Context, app *common.App, epochID *types.UUID) (ok bool, err error) {
+	// get epoch that is finalized, but not confirmed.
+	err = app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
+	{kwil_erc20_meta}SELECT confirmed
+    FROM epochs WHERE id = $id AND ended_at IS NOT NULL AND confirmed IS NOT true;
+    `, map[string]any{
+		"id": epochID,
+	}, func(row *common.Row) error {
+		if len(row.Values) != 1 {
+			return fmt.Errorf("expected 1 value, got %d", len(row.Values))
+		}
+
+		ok = true
+		return nil
+	})
+
+	if err != nil {
+		return false, err
+	}
+
+	return ok, nil
+}
+
+// voteEpoch vote an epoch by submitting signature.
+func voteEpoch(ctx context.Context, app *common.App, epochID *types.UUID,
+	voter ethcommon.Address, nonce int64, signature []byte) error {
+	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
+	{kwil_erc20_meta}INSERT into epoch_votes(epoch_id, voter, nonce, signature)
+    VALUES ($epoch_id, $voter, $nonce, $signature);
+	`, map[string]any{
+		"epoch_id":  epochID,
+		"voter":     voter.Bytes(),
+		"signature": signature,
+		"nonce":     nonce,
+	}, nil)
+}
+
+// getWalletEpochs returns all confirmed epochs that the given wallet has reward in.
+// If pending=true, return all finalized epochs(no necessary confirmed).
+func getWalletEpochs(ctx context.Context, app *common.App, instanceID *types.UUID,
+	wallet ethcommon.Address, pending bool, fn func(*Epoch) error) error {
+
+	// WE don't need vote info, we just return empty arrays instead of JOIN
+	query := `
+	{kwil_erc20_meta}SELECT e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.reward_amount, e.ended_at, e.block_hash, e.confirmed, ARRAY[]::BYTEA[] as voters, ARRAY[]::INT8[] as nonces, ARRAY[]::BYTEA[] as signatures
+	FROM epoch_rewards AS r
+	JOIN epochs AS e ON r.epoch_id = e.id
+	WHERE recipient = $wallet AND e.instance_id = $instance_id AND e.ended_at IS NOT NULL` // at least finalized
+	if !pending {
+		query += ` AND e.confirmed IS true`
+	}
+
+	query += ";"
+	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, query,
+		map[string]any{
+			"wallet":      wallet.Bytes(),
+			"instance_id": instanceID,
+		}, func(r *common.Row) error {
+			epoch, err := rowToEpoch(r)
+			if err != nil {
+				return err
+			}
+			return fn(epoch)
+		})
 }

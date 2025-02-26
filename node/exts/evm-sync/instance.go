@@ -205,7 +205,7 @@ type listenerInfo struct {
 func (l *listenerInfo) listen(ctx context.Context, service *common.Service, eventstore listeners.EventStore, syncConf *syncConfig) {
 	logger := service.Logger.New(l.uniqueName + "." + string(l.chain.Name))
 
-	chainConf, err := getChainConf(service.LocalConfig.Extensions, l.chain.Name)
+	chainConf, err := getChainConf(service.LocalConfig.Erc20Bridge, l.chain.Name)
 	if err != nil {
 		logger.Error("failed to get chain config", "err", err)
 		return
