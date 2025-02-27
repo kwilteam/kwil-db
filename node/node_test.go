@@ -340,7 +340,7 @@ func (ce *dummyCE) NotifyResetState(height int64, txIDs []types.Hash, sender []b
 	}
 }
 
-func (ce *dummyCE) NotifyBlockProposal(blk *ktypes.Block) {
+func (ce *dummyCE) NotifyBlockProposal(blk *ktypes.Block, _ func()) {
 	if ce.blockPropHandler != nil {
 		ce.blockPropHandler(blk)
 		return

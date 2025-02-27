@@ -114,7 +114,11 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 		n.log.Warn("invalid height in blk ann request", "height", height)
 		return
 	}
-	n.log.Debug("blk announcement received", "blockID", blkid, "height", height)
+
+	peerID := s.Conn().RemotePeer()
+
+	n.log.Info("Accept commit?", "height", height, "blockID", blkid, "appHash", ci.AppHash,
+		"from_peer", peers.PeerIDStringer(peerID))
 
 	// If we are a validator and this is the commit ann for a proposed block
 	// that we already started executing, consensus engine will handle it.
@@ -133,11 +137,15 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 		n.log.Debug("ALREADY HAVE OR FETCHING BLOCK")
 		return // we have or are currently fetching it, do nothing, assuming we have already re-announced
 	}
+	var ceProcessing bool
+	defer func() {
+		if !ceProcessing {
+			done() // we did not hand off to CE, release the pre-fetch lock
+		}
+	}()
 
 	n.log.Debug("retrieving new block", "blockID", blkid)
 	t0 := time.Now()
-
-	peerID := s.Conn().RemotePeer()
 
 	// First try to get from this stream.
 	rawBlk, err := request(s, []byte(getMsg), blkReadLimit)
@@ -151,17 +159,14 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 		gotHeight, rawBlk, gotCI, id, err = n.getBlkWithRetry(ctx, blkHash, 500*time.Millisecond, 10)
 		if err != nil {
 			n.log.Errorf("unable to retrieve tx %v: %v", blkid, err)
-			done()
 			return
 		}
 		if gotHeight != height {
 			n.log.Errorf("getblk response had unexpected height: wanted %d, got %d", height, gotHeight)
-			done()
 			return
 		}
 		if gotCI != nil && gotCI.AppHash != ci.AppHash {
 			n.log.Errorf("getblk response had unexpected appHash: wanted %v, got %v", ci.AppHash, gotCI.AppHash)
-			done()
 			return
 		}
 		// Ensure that the peerID from which the block was downloaded is a valid one.
@@ -176,23 +181,21 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 	blk, err := ktypes.DecodeBlock(rawBlk)
 	if err != nil {
 		n.log.Infof("decodeBlock failed for %v: %v", blkid, err)
-		done()
 		return
 	}
 	if blk.Header.Height != height {
 		n.log.Infof("getblk response had unexpected height: wanted %d, got %d", height, blk.Header.Height)
-		done()
 		return
 	}
 	gotBlkHash := blk.Header.Hash()
 	if gotBlkHash != blkHash {
 		n.log.Infof("invalid block hash: wanted %v, got %x", blkHash, gotBlkHash)
-		done()
 		return
 	}
 
 	// re-announce
 	n.log.Infof("downloaded block %v of height %d from %v, notifying ce of the block", blkid, height, peerID)
+	ceProcessing = true // neuter the deferred done, CE will call it now
 	n.ce.NotifyBlockCommit(blk, ci, blkHash, done)
 	go func() {
 		n.announceRawBlk(context.Background(), blkHash, height, rawBlk, blk.Header, ci, peerID, reqMsg.LeaderSig) // re-announce with the leader's signature

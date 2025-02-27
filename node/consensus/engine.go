@@ -577,6 +577,8 @@ func (ce *ConsensusEngine) resetEventLoop(ctx context.Context) {
 func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg consensusMessage) {
 	ce.log.Info("Consensus message received", "type", msg.MsgType, "sender", hex.EncodeToString(msg.Sender))
 
+	defer msg.Handled()
+
 	switch v := msg.Msg.(type) {
 	case *blockProposal:
 		if err := ce.processBlockProposal(ctx, v); err != nil {
