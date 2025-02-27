@@ -353,11 +353,11 @@ func (ce *dummyCE) Role() types.Role {
 	return types.RoleLeader
 }
 
-func (ce *dummyCE) QueueTx(ctx context.Context, tx *ktypes.Transaction) error {
+func (ce *dummyCE) QueueTx(ctx context.Context, tx *types.Tx) error {
 	return nil
 }
 
-func (ce *dummyCE) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uint8) (ktypes.Hash, *ktypes.TxResult, error) {
+func (ce *dummyCE) BroadcastTx(ctx context.Context, tx *types.Tx, sync uint8) (ktypes.Hash, *ktypes.TxResult, error) {
 	return types.Hash{}, nil, nil
 }
 

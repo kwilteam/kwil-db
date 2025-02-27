@@ -63,7 +63,7 @@ func NewBlock(height int64, prevHash, appHash, valSetHash, paramsHash Hash, stam
 	numTxns := len(txns)
 	txHashes := make([]Hash, numTxns)
 	for i, tx := range txns {
-		txHashes[i] = tx.Hash()
+		txHashes[i] = tx.HashCache()
 	}
 	merkelRoot := CalcMerkleRoot(txHashes)
 	hdr := &BlockHeader{
@@ -88,10 +88,10 @@ func (b *Block) Hash() Hash {
 	return b.Header.Hash()
 }
 
-func (b *Block) MerkleRoot() Hash {
+func (b *Block) CalcMerkleRoot() Hash {
 	txHashes := make([]Hash, len(b.Txns))
 	for i, tx := range b.Txns {
-		txHashes[i] = tx.Hash()
+		txHashes[i] = tx.HashCache()
 	}
 	return CalcMerkleRoot(txHashes)
 }

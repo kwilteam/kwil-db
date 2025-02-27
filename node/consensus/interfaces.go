@@ -23,10 +23,10 @@ type DB interface {
 }
 
 type Mempool interface {
-	PeekN(maxTxns, totalSizeLimit int) []types.NamedTx
+	PeekN(maxTxns, totalSizeLimit int) []*types.Tx
 	Remove(txid types.Hash)
 	RecheckTxs(ctx context.Context, checkFn mempool.CheckFn)
-	Store(types.Hash, *ktypes.Transaction) (have, rejected bool)
+	Store(*types.Tx) (have, rejected bool)
 	TxsAvailable() bool
 	Size() (totalBytes, numTxns int)
 }
@@ -44,13 +44,13 @@ type BlockProcessor interface {
 	InitChain(ctx context.Context) (int64, []byte, error)
 	SetCallbackFns(applyBlockFn blockprocessor.BroadcastTxFn, addPeer, removePeer func(string) error)
 
-	PrepareProposal(ctx context.Context, txs []*ktypes.Transaction) (finalTxs []*ktypes.Transaction, invalidTxs []*ktypes.Transaction, err error)
+	PrepareProposal(ctx context.Context, txs []*types.Tx) (finalTxs []*ktypes.Transaction, invalidTxs []*ktypes.Transaction, err error)
 	ExecuteBlock(ctx context.Context, req *ktypes.BlockExecRequest) (*ktypes.BlockExecResult, error)
 	Commit(ctx context.Context, req *ktypes.CommitRequest) error
 	Rollback(ctx context.Context, height int64, appHash ktypes.Hash) error
 	Close() error
 
-	CheckTx(ctx context.Context, tx *ktypes.Transaction, height int64, blockTime time.Time, recheck bool) error
+	CheckTx(ctx context.Context, tx *types.Tx, height int64, blockTime time.Time, recheck bool) error
 
 	GetValidators() []*ktypes.Validator
 	ConsensusParams() *ktypes.NetworkParameters

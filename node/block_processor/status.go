@@ -42,7 +42,7 @@ func (bp *BlockProcessor) BlockExecutionStatus() *ktypes.BlockExecutionStatus {
 func (bp *BlockProcessor) initBlockExecutionStatus(blk *ktypes.Block) []ktypes.Hash {
 	txIDs := make([]ktypes.Hash, len(blk.Txns))
 	for i, tx := range blk.Txns {
-		txID := tx.Hash()
+		txID := tx.HashCache()
 		txIDs[i] = txID
 	}
 	bp.statusMu.Lock()

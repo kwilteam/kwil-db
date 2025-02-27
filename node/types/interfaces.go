@@ -66,11 +66,10 @@ type TxGetter interface {
 
 type MemPool interface {
 	Size() (count, bts int)
-	ReapN(int) []NamedTx
-	Get(Hash) *types.Transaction
+	Get(Hash) *Tx
 	Remove(Hash)
-	Store(Hash, *types.Transaction) (found, rejected bool)
-	PeekN(maxNumTxns, maxTotalTxBytes int) []NamedTx
+	Store(*Tx) (found, rejected bool)
+	PeekN(maxNumTxns, maxTotalTxBytes int) []*Tx
 	PreFetch(txid Hash) (ok bool, done func()) // should be app level instead
 }
 
@@ -79,9 +78,4 @@ type QualifiedBlock struct { // basically just caches the hash
 	Hash     Hash
 	Proposed bool
 	AppHash  *Hash
-}
-
-type NamedTx struct {
-	Hash Hash
-	Tx   *types.Transaction
 }

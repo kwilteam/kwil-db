@@ -18,8 +18,8 @@ const (
 	mempoolSz = 200_000_000 // 200MB
 )
 
-func newTx(nonce uint64, sender string) *ktypes.Transaction {
-	return &ktypes.Transaction{
+func newTx(nonce uint64, sender string) *types.Tx {
+	return types.NewTx(&ktypes.Transaction{
 		Signature: &auth.Signature{},
 		Body: &ktypes.TransactionBody{
 			Description: "test",
@@ -28,32 +28,26 @@ func newTx(nonce uint64, sender string) *ktypes.Transaction {
 			Nonce:       nonce,
 		},
 		Sender: []byte(sender),
-	}
+	})
 }
 
 func Test_MempoolRemove(t *testing.T) {
 	m := New(mempoolSz)
 
 	// Setup test transactions
-	tx1 := types.NamedTx{
-		Hash: types.Hash{1, 2, 3},
-		Tx:   newTx(1, "A"),
-	}
-	tx2 := types.NamedTx{
-		Hash: types.Hash{4, 5, 6},
-		Tx:   newTx(2, "B"),
-	}
+	tx1 := newTx(1, "A")
+	tx2 := newTx(2, "B")
 
 	// Add transactions to mempool
-	m.Store(tx1.Hash, tx1.Tx)
-	m.Store(tx2.Hash, tx2.Tx)
+	m.Store(tx1)
+	m.Store(tx2)
 
 	// Test removing existing transaction
-	m.Remove(tx1.Hash)
+	m.Remove(tx1.Hash())
 	require.Len(t, m.txQ, 1)
 	require.Len(t, m.txns, 1)
-	assert.Equal(t, m.txQ[0].Hash, tx2.Hash)
-	_, exists := m.txns[tx1.Hash]
+	assert.Equal(t, m.txQ[0].Hash(), tx2.Hash())
+	_, exists := m.txns[tx1.Hash()]
 	assert.False(t, exists)
 
 	// Test removing non-existent transaction
@@ -61,10 +55,10 @@ func Test_MempoolRemove(t *testing.T) {
 	m.Remove(nonExistentHash)
 	require.Len(t, m.txQ, 1)
 	require.Len(t, m.txns, 1)
-	assert.Equal(t, m.txQ[0].Hash, tx2.Hash)
+	assert.Equal(t, m.txQ[0].Hash(), tx2.Hash())
 
 	// Test removing last transaction
-	m.Remove(tx2.Hash)
+	m.Remove(tx2.Hash())
 	assert.Empty(t, m.txQ)
 	assert.Empty(t, m.txns)
 }
@@ -73,54 +67,45 @@ func Test_MempoolReapN(t *testing.T) {
 	m := New(mempoolSz)
 
 	// Setup test transactions
-	tx1 := types.NamedTx{
-		Hash: types.Hash{1, 2, 3},
-		Tx:   newTx(1, "A"),
-	}
-	tx2 := types.NamedTx{
-		Hash: types.Hash{4, 5, 6},
-		Tx:   newTx(2, "B"),
-	}
-	tx3 := types.NamedTx{
-		Hash: types.Hash{7, 8, 9},
-		Tx:   newTx(3, "C"),
-	}
+	tx1 := newTx(1, "A")
+	tx2 := newTx(2, "B")
+	tx3 := newTx(3, "C")
 
 	// Test reaping from empty mempool
 	emptyReap := m.ReapN(1)
 	assert.Empty(t, emptyReap)
 
 	// Add transactions to mempool
-	m.Store(tx1.Hash, tx1.Tx)
-	m.Store(tx2.Hash, tx2.Tx)
-	m.Store(tx3.Hash, tx3.Tx)
+	m.Store(tx1)
+	m.Store(tx2)
+	m.Store(tx3)
 
 	// Test reaping more transactions than available
 	overReap := m.ReapN(5)
 	require.Len(t, overReap, 3)
-	assert.Equal(t, overReap[0].Hash, tx1.Hash)
-	assert.Equal(t, overReap[1].Hash, tx2.Hash)
-	assert.Equal(t, overReap[2].Hash, tx3.Hash)
+	assert.Equal(t, overReap[0].Hash(), tx1.Hash())
+	assert.Equal(t, overReap[1].Hash(), tx2.Hash())
+	assert.Equal(t, overReap[2].Hash(), tx3.Hash())
 	assert.Empty(t, m.txQ)
 	assert.Empty(t, m.txns)
 
 	// Refill mempool
-	m.Store(tx1.Hash, tx1.Tx)
-	m.Store(tx2.Hash, tx2.Tx)
-	m.Store(tx3.Hash, tx3.Tx)
+	m.Store(tx1)
+	m.Store(tx2)
+	m.Store(tx3)
 
 	// Test partial reaping
 	partialReap := m.ReapN(2)
 	require.Len(t, partialReap, 2)
-	assert.Equal(t, partialReap[0].Hash, tx1.Hash)
-	assert.Equal(t, partialReap[1].Hash, tx2.Hash)
+	assert.Equal(t, partialReap[0].Hash(), tx1.Hash())
+	assert.Equal(t, partialReap[1].Hash(), tx2.Hash())
 	assert.Len(t, m.txQ, 1)
 	assert.Len(t, m.txns, 1)
 
 	// Test reaping remaining transaction
 	finalReap := m.ReapN(1)
 	require.Len(t, finalReap, 1)
-	assert.Equal(t, finalReap[0].Hash, tx3.Hash)
+	assert.Equal(t, finalReap[0].Hash(), tx3.Hash())
 	assert.Empty(t, m.txQ)
 	assert.Empty(t, m.txns)
 
@@ -136,8 +121,7 @@ func TestMempool_Size(t *testing.T) {
 		// Create a test transaction
 		tx := newTx(1, "A")
 
-		txHash := tx.Hash()
-		found, rejected := mp.Store(txHash, tx)
+		found, rejected := mp.Store(tx)
 
 		if found || rejected {
 			t.Fatal("transaction should be neither found nor rejected")
@@ -160,8 +144,8 @@ func TestMempool_Size(t *testing.T) {
 		tx1 := newTx(1, "A")
 		tx2 := newTx(2, "B")
 
-		mp.Store(tx1.Hash(), tx1)
-		mp.Store(tx2.Hash(), tx2)
+		mp.Store(tx1)
+		mp.Store(tx2)
 
 		byteSize, count := mp.Size()
 		expectedByteSize1 := tx1.SerializeSize()
@@ -179,9 +163,9 @@ func TestMempool_Size(t *testing.T) {
 	t.Run("size tracking with duplicate txid", func(t *testing.T) {
 		mp := New(mempoolSz)
 		tx1 := newTx(1, "A")
-		found, _ := mp.Store(tx1.Hash(), tx1)
+		found, _ := mp.Store(tx1)
 		require.False(t, found)
-		found, _ = mp.Store(tx1.Hash(), tx1)
+		found, _ = mp.Store(tx1)
 		require.True(t, found)
 	})
 
@@ -190,7 +174,7 @@ func TestMempool_Size(t *testing.T) {
 		mp := New(mempoolSz)
 		mp.SetMaxSize(20)
 		tx1 := newTx(1, "abcdefghijklmnopqrstuvwxyz")
-		_, rejected := mp.Store(tx1.Hash(), tx1)
+		_, rejected := mp.Store(tx1)
 		require.True(t, rejected)
 	})
 }
@@ -203,13 +187,12 @@ func TestMempool_SizeWithRemove(t *testing.T) {
 	tx2 := newTx(2, "B")
 
 	hash1 := tx1.Hash()
-	hash2 := tx2.Hash()
 
-	found, rejected := mp.Store(hash1, tx1)
+	found, rejected := mp.Store(tx1)
 	if found || rejected {
 		t.Fatal("transaction should be neither found nor rejected")
 	}
-	found, rejected = mp.Store(hash2, tx2)
+	found, rejected = mp.Store(tx2)
 	if found || rejected {
 		t.Fatal("transaction should be neither found nor rejected")
 	}
@@ -242,12 +225,12 @@ func TestMempool_RecheckTxs(t *testing.T) {
 		tx1 := newTx(1, "A")
 		tx2 := newTx(2, "B")
 
-		mp.Store(tx1.Hash(), tx1)
-		mp.Store(tx2.Hash(), tx2)
+		mp.Store(tx1)
+		mp.Store(tx2)
 
 		initialSize, initialCount := mp.Size()
 
-		checkFn := func(ctx context.Context, tx *ktypes.Transaction) error {
+		checkFn := func(ctx context.Context, tx *types.Tx) error {
 			return nil
 		}
 
@@ -263,10 +246,10 @@ func TestMempool_RecheckTxs(t *testing.T) {
 		tx1 := newTx(1, "A")
 		tx2 := newTx(2, "B")
 
-		mp.Store(tx1.Hash(), tx1)
-		mp.Store(tx2.Hash(), tx2)
+		mp.Store(tx1)
+		mp.Store(tx2)
 
-		checkFn := func(ctx context.Context, tx *ktypes.Transaction) error {
+		checkFn := func(ctx context.Context, tx *types.Tx) error {
 			return errors.New("invalid transaction")
 		}
 
@@ -285,11 +268,11 @@ func TestMempool_RecheckTxs(t *testing.T) {
 		tx2 := newTx(2, "B")
 		tx3 := newTx(3, "C")
 
-		mp.Store(tx1.Hash(), tx1)
-		mp.Store(tx2.Hash(), tx2)
-		mp.Store(tx3.Hash(), tx3)
+		mp.Store(tx1)
+		mp.Store(tx2)
+		mp.Store(tx3)
 
-		checkFn := func(ctx context.Context, tx *ktypes.Transaction) error {
+		checkFn := func(ctx context.Context, tx *types.Tx) error {
 			if string(tx.Sender) == "B" {
 				return errors.New("invalid transaction")
 			}
@@ -325,18 +308,18 @@ func TestMempool_RecheckTxs(t *testing.T) {
 		tx9 := newTx(9, "I")
 		tx10 := newTx(10, "J")
 
-		mp.Store(tx1.Hash(), tx1)
-		mp.Store(tx2.Hash(), tx2)
-		mp.Store(tx3.Hash(), tx3)
-		mp.Store(tx4.Hash(), tx4)
-		mp.Store(tx5.Hash(), tx5)
-		mp.Store(tx6.Hash(), tx6)
-		mp.Store(tx7.Hash(), tx7)
-		mp.Store(tx8.Hash(), tx8)
-		mp.Store(tx9.Hash(), tx9)
-		mp.Store(tx10.Hash(), tx10)
+		mp.Store(tx1)
+		mp.Store(tx2)
+		mp.Store(tx3)
+		mp.Store(tx4)
+		mp.Store(tx5)
+		mp.Store(tx6)
+		mp.Store(tx7)
+		mp.Store(tx8)
+		mp.Store(tx9)
+		mp.Store(tx10)
 
-		checkFn := func(ctx context.Context, tx *ktypes.Transaction) error {
+		checkFn := func(ctx context.Context, tx *types.Tx) error {
 			switch string(tx.Sender) {
 			case "B", "D", "F", "H", "J": // 2, 4, 6, 8, 10
 				return errors.New("invalid transaction")
@@ -378,12 +361,12 @@ func TestMempool_RecheckTxs(t *testing.T) {
 	t.Run("recheck with canceled context", func(t *testing.T) {
 		mp := New(mempoolSz)
 		tx1 := newTx(1, "A")
-		mp.Store(tx1.Hash(), tx1)
+		mp.Store(tx1)
 
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		checkFn := func(ctx context.Context, tx *ktypes.Transaction) error {
+		checkFn := func(ctx context.Context, tx *types.Tx) error {
 			if ctx.Err() != nil {
 				return ctx.Err()
 			}
@@ -405,15 +388,15 @@ func TestMempool_PeekN(t *testing.T) {
 		tx2 := newTx(2, strings.Repeat("B", 1000)) // large tx
 		tx3 := newTx(3, "C")                       // small tx
 
-		mp.Store(tx1.Hash(), tx1)
-		mp.Store(tx2.Hash(), tx2)
-		mp.Store(tx3.Hash(), tx3)
+		mp.Store(tx1)
+		mp.Store(tx2)
+		mp.Store(tx3)
 
 		// Set size limit to allow only first two transactions
 		txns := mp.PeekN(3, int(tx1.SerializeSize()+tx2.SerializeSize()))
 		require.Len(t, txns, 2)
-		assert.Equal(t, tx1.Hash(), txns[0].Hash)
-		assert.Equal(t, tx2.Hash(), txns[1].Hash)
+		assert.Equal(t, tx1.Hash(), txns[0].Hash())
+		assert.Equal(t, tx2.Hash(), txns[1].Hash())
 
 		// Verify original mempool is unchanged
 		size, count := mp.Size()
@@ -426,23 +409,23 @@ func TestMempool_PeekN(t *testing.T) {
 		tx1 := newTx(1, "A")
 		tx2 := newTx(2, "B")
 
-		mp.Store(tx1.Hash(), tx1)
-		mp.Store(tx2.Hash(), tx2)
+		mp.Store(tx1)
+		mp.Store(tx2)
 
 		txns := mp.PeekN(2, 0)
 		require.Len(t, txns, 2)
-		assert.Equal(t, tx1.Hash(), txns[0].Hash)
-		assert.Equal(t, tx2.Hash(), txns[1].Hash)
+		assert.Equal(t, tx1.Hash(), txns[0].Hash())
+		assert.Equal(t, tx2.Hash(), txns[1].Hash())
 	})
 
 	t.Run("peek with n greater than available txs", func(t *testing.T) {
 		mp := New(mempoolSz)
 		tx1 := newTx(1, "A")
-		mp.Store(tx1.Hash(), tx1)
+		mp.Store(tx1)
 
 		txns := mp.PeekN(5, 1000)
 		require.Len(t, txns, 1)
-		assert.Equal(t, tx1.Hash(), txns[0].Hash)
+		assert.Equal(t, tx1.Hash(), txns[0].Hash())
 	})
 
 	t.Run("peek with empty mempool", func(t *testing.T) {
@@ -456,19 +439,19 @@ func TestMempool_PeekN(t *testing.T) {
 		tx1 := newTx(1, "A")
 		tx2 := newTx(2, "B")
 
-		mp.Store(tx1.Hash(), tx1)
-		mp.Store(tx2.Hash(), tx2)
+		mp.Store(tx1)
+		mp.Store(tx2)
 
 		txns := mp.PeekN(2, -1)
 		require.Len(t, txns, 2)
-		assert.Equal(t, tx1.Hash(), txns[0].Hash)
-		assert.Equal(t, tx2.Hash(), txns[1].Hash)
+		assert.Equal(t, tx1.Hash(), txns[0].Hash())
+		assert.Equal(t, tx2.Hash(), txns[1].Hash())
 	})
 
 	t.Run("peek with zero n", func(t *testing.T) {
 		mp := New(mempoolSz)
 		tx1 := newTx(1, "A")
-		mp.Store(tx1.Hash(), tx1)
+		mp.Store(tx1)
 
 		txns := mp.PeekN(0, 1000)
 		assert.Empty(t, txns)

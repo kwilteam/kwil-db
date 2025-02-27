@@ -490,7 +490,7 @@ func (n *Node) Status(ctx context.Context) (*adminTypes.Status, error) {
 func (n *Node) TxQuery(ctx context.Context, hash types.Hash, prove bool) (*ktypes.TxQueryResponse, error) {
 	if tx := n.mp.Get(hash); tx != nil {
 		return &ktypes.TxQueryResponse{
-			Tx:     tx,
+			Tx:     tx.Transaction,
 			Hash:   hash,
 			Height: -1,
 		}, nil
@@ -519,13 +519,15 @@ func (n *Node) BroadcastTx(ctx context.Context, tx *ktypes.Transaction, sync uin
 		return ktypes.Hash{}, nil, errors.New("node is catching up, cannot process transactions right now")
 	}
 
+	ntx := types.NewTx(tx) // create the immutable transaction with stored hash for CE
+
 	// Do a TxQuery first maybe so as not to spam existing txns.
-	_, err := n.TxQuery(ctx, tx.Hash(), false)
+	_, err := n.TxQuery(ctx, ntx.Hash(), false)
 	if err == nil {
 		return ktypes.Hash{}, nil, ErrTxAlreadyExists
 	}
 
-	return n.ce.BroadcastTx(ctx, tx, sync)
+	return n.ce.BroadcastTx(ctx, ntx, sync)
 }
 
 // ChainTx return tx info that is used in Chain rpc.
@@ -552,7 +554,7 @@ func (n *Node) ChainTx(hash types.Hash) (*chainTypes.Tx, error) {
 }
 
 // ChainUnconfirmedTx return unconfirmed tx info that is used in Chain rpc.
-func (n *Node) ChainUnconfirmedTx(limit int) (int, []types.NamedTx) {
+func (n *Node) ChainUnconfirmedTx(limit int) (int, []*types.Tx) {
 	total, _ := n.mp.Size()
 	if limit <= 0 {
 		return total, nil

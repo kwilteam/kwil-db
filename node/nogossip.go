@@ -61,13 +61,20 @@ func (n *Node) txAnnStreamHandler(s network.Stream) {
 		return
 	}
 
+	// Ensure the received transaction is the one requested by hash.
+	ntx := types.NewTx(&tx) // the immutable tx for CE with Hash stored
+	if txHash != ntx.Hash() {
+		n.log.Errorf("tx hash mismatch: %v != %v", txHash, ntx.Hash())
+		return
+	}
+
 	// n.log.Infof("obtained content for tx %q in %v", txid, time.Since(t0))
 
 	// here we could check tx index again in case a block was mined with it
 	// while we were fetching it
 
 	ctx := context.Background()
-	if err := n.ce.QueueTx(ctx, &tx); err != nil {
+	if err := n.ce.QueueTx(ctx, ntx); err != nil {
 		n.log.Warnf("tx %v failed check: %v", txHash, err)
 		return
 	}
@@ -228,9 +235,9 @@ func (n *Node) startTxAnns(ctx context.Context, reannouncePeriod time.Duration) 
 				}
 				n.log.Infof("re-announcing %d unconfirmed txns", len(txns))
 
-				for _, nt := range txns {
-					rawTx := nt.Tx.Bytes()
-					n.announceRawTx(ctx, nt.Hash, rawTx, n.host.ID()) // response handling is async
+				for _, tx := range txns {
+					rawTx := tx.Bytes()
+					n.announceRawTx(ctx, tx.Hash(), rawTx, n.host.ID()) // response handling is async
 					if ctx.Err() != nil {
 						n.log.Warn("interrupting long re-broadcast")
 						break

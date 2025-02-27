@@ -16,6 +16,7 @@ import (
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/txapp"
+	nodetypes "github.com/kwilteam/kwil-db/node/types"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )
 
@@ -237,7 +238,12 @@ func TestPrepareMempoolTxns(t *testing.T) {
 
 			chainCtx.NetworkParameters.DisabledGasCosts = !tt.gas
 
-			got, invalids, err := bp.prepareBlockTransactions(ctx, tt.txs)
+			ntxs := make([]*nodetypes.Tx, len(tt.txs))
+			for i, tx := range tt.txs {
+				ntxs[i] = nodetypes.NewTx(tx)
+			}
+
+			got, invalids, err := bp.prepareBlockTransactions(ctx, ntxs)
 			require.NoError(t, err)
 
 			if len(got) != len(tt.want) {

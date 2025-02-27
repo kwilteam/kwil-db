@@ -316,7 +316,7 @@ func (bki *BlockStore) Store(blk *ktypes.Block, commitInfo *types.CommitInfo) er
 
 	txHashes := make([]ktypes.Hash, blk.Header.NumTxns)
 	for i, tx := range blk.Txns {
-		txHashes[i] = tx.Hash()
+		txHashes[i] = tx.HashCache()
 	}
 
 	txn := bki.db.NewTransaction(true)
