@@ -2,21 +2,19 @@ module github.com/kwilteam/kwil-db/test
 
 go 1.23.0
 
-toolchain go1.24.0
-
 replace (
 	github.com/kwilteam/kwil-db => ../
 	github.com/kwilteam/kwil-db/core => ../core
 )
 
 require (
-	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.3.0
+	github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0
 	github.com/docker/docker v27.5.1+incompatible
 	github.com/docker/go-connections v0.5.0
 	github.com/drhodes/golorem v0.0.0-20220328165741-da82e5b29246
 	github.com/ethereum/go-ethereum v1.14.13
-	github.com/kwilteam/kwil-db v0.10.0-beta-1.0.20250206163524-8a93bec07044
-	github.com/kwilteam/kwil-db/core v0.4.0-beta.2
+	github.com/kwilteam/kwil-db v0.10.0-beta-1.0.20250227174801-ad4ee84cc97d
+	github.com/kwilteam/kwil-db/core v0.4.0-beta.2.0.20250227174801-ad4ee84cc97d
 	github.com/stretchr/testify v1.10.0
 	github.com/testcontainers/testcontainers-go v0.35.0
 	github.com/testcontainers/testcontainers-go/modules/compose v0.34.0
@@ -79,7 +77,7 @@ require (
 	github.com/deckarep/golang-set/v2 v2.7.0 // indirect
 	github.com/decred/dcrd/certgen v1.2.0 // indirect
 	github.com/decred/dcrd/container/lru v1.0.0 // indirect
-	github.com/decred/dcrd/crypto/rand v1.0.0 // indirect
+	github.com/decred/dcrd/crypto/rand v1.0.1 // indirect
 	github.com/decred/slog v1.2.0 // indirect
 	github.com/dgraph-io/badger/v4 v4.5.1 // indirect
 	github.com/dgraph-io/ristretto/v2 v2.1.0 // indirect
@@ -295,7 +293,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
-	github.com/spf13/cobra v1.8.1 // indirect
+	github.com/spf13/cobra v1.9.1 // indirect
 	github.com/spf13/pflag v1.0.6 // indirect
 	github.com/status-im/keycard-go v0.2.0 // indirect
 	github.com/supranational/blst v0.3.13 // indirect

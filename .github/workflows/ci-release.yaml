@@ -98,7 +98,7 @@ jobs:
           go build -mod=readonly ./... ./core/... ./test/specifications/
 
       - name: Lint
-        uses: golangci/golangci-lint-action@v6.1.0
+        uses: golangci/golangci-lint-action@v6.5.0
         with:
           install-mode: "binary"
           version: "latest"

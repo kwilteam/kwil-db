@@ -30,7 +30,7 @@ For more information on kwil-db, check out the [Kwil node documentation](https:/
 
 To build Kwil, you will need to install:
 
-1. [Go](https://golang.org/doc/install) 1.22 or 1.23
+1. [Go](https://golang.org/doc/install) 1.23 or 1.24
 2. (optional) [Taskfile](https://taskfile.dev/installation)
 
     ```shell

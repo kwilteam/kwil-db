@@ -96,7 +96,7 @@ jobs:
           go build -mod=readonly ./... ./core/...
 
       - name: Lint
-        uses: golangci/golangci-lint-action@v6.1.1
+        uses: golangci/golangci-lint-action@v6.5.0
         with:
           install-mode: "binary"
           version: "latest"
@@ -124,9 +124,9 @@ jobs:
           task build:cli
           task build:kwild
 
-#      - name: compile the core/client/example app
-#        run: go build -o /dev/null
-#        working-directory: core/client/example
+      - name: compile the core/client/example app
+        run: go build -o /dev/null
+        working-directory: core/client/example
 #
 #      - name: compile the core/gatewayclient/example app
 #        run: go build -o /dev/null
