@@ -19,7 +19,7 @@ require (
 	github.com/knadh/koanf/providers/posflag v0.1.0
 	github.com/knadh/koanf/providers/structs v0.1.0
 	github.com/knadh/koanf/v2 v2.1.2
-	github.com/kwilteam/kwil-db/core v0.4.0-beta.2
+	github.com/kwilteam/kwil-db/core v0.4.0-rc.1
 	github.com/kwilteam/openzeppelin-merkle-tree-go v0.0.0-20250128210530-6c29061dd35f // tmp hacky fix branch
 	github.com/libp2p/go-libp2p v0.38.2
 	github.com/libp2p/go-libp2p-kad-dht v0.29.0
