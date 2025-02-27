@@ -8,10 +8,13 @@ import (
 	"sync"
 
 	"github.com/kwilteam/kwil-db/core/utils/random"
+	"github.com/kwilteam/kwil-db/node/metrics"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 
 	"github.com/jackc/pgx/v5"
 )
+
+var mets metrics.DBMetrics = metrics.DB
 
 // DB is a session-aware wrapper that creates and stores a write Tx on request,
 // and provides top level Exec/Set methods that error if no Tx exists. This

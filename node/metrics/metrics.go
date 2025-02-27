@@ -313,10 +313,3 @@ func (rpcMetrics) RecordRequest(ctx context.Context, method string, status int, 
 		metric.WithAttributes(attribute.String("method", method)),
 	)
 }
-
-// RecordLatency logs a request latency
-/*func (rpcMetrics) RecordLatency(ctx context.Context, method string, latency time.Duration) {
-	latencyHist.Record(ctx, 1000*latency.Seconds(),
-		metric.WithAttributes(attribute.String("method", method)),
-	)
-}*/

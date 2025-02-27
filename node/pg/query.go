@@ -169,6 +169,8 @@ func query(ctx context.Context, oidToDataType map[uint32]*datatype, cq connQuery
 		}
 	}
 
+	t0 := time.Now()
+
 	rows, err := q(ctx, stmt, args...)
 	if err != nil {
 		if sql.IsFatalDBError(err) {
@@ -202,20 +204,28 @@ func query(ctx context.Context, oidToDataType map[uint32]*datatype, cq connQuery
 		}
 		return decodeFromPG(pgxVals, oids, oidToDataType)
 	})
+
+	ctag := rows.CommandTag()
+	mets.RecordQuery(ctx, ctag.String(), time.Since(t0))
+
 	if sql.IsFatalDBError(err) {
 		err = errors.Join(err, sql.ErrDBFailure)
 	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, sql.ErrNoRows
 	}
-	ctag := rows.CommandTag()
+
 	resSet.Status = sql.CommandTag{
 		Text:         ctag.String(),
 		RowsAffected: ctag.RowsAffected(),
 	}
 
-	// if err != nil { fmt.Printf("**** query error\n\n%v\n\n%v\n", stmt, err) }
-	return resSet, err
+	if err != nil {
+		mets.RecordQueryFailure(ctx, ctag.String(), err)
+		return nil, err
+	}
+
+	return resSet, nil
 }
 
 type txBeginner interface {
