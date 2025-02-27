@@ -5,9 +5,11 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"flag"
 	"fmt"
 	"os"
 	"slices"
+	"strings"
 	"testing"
 	"time"
 
@@ -23,6 +25,28 @@ import (
 	"github.com/testcontainers/testcontainers-go/modules/compose"
 	"github.com/testcontainers/testcontainers-go/wait"
 )
+
+var userGroupID = flag.String("ugid", "", "user id and group id to use for the test containers; format: <user_id>:<group_id>")
+
+func getFlagUserGroupID() (ids *[2]string, err error) {
+	if *userGroupID == "" {
+		return ids, nil
+	}
+
+	if !strings.Contains(*userGroupID, ":") {
+		return ids, fmt.Errorf("invalid user id and group id format: %s", *userGroupID)
+	}
+
+	segs := strings.Split(*userGroupID, ":")
+	if len(segs) != 2 {
+		return ids, fmt.Errorf("invalid user id and group id format: %s", *userGroupID)
+	}
+
+	ids = new([2]string)
+	ids[0] = segs[0]
+	ids[1] = segs[1]
+	return ids, nil
+}
 
 // TestConfig is the configuration for the test
 type TestConfig struct {
@@ -132,10 +156,29 @@ func CustomNodeConfig(f func(*NodeConfig)) *NodeConfig {
 	return cfg
 }
 
+type ExtraNode struct {
+	ServiceName       string
+	ExposedChainRPC   string
+	UnexposedChainRPC string
+}
+
 type Testnet struct {
 	Nodes   []KwilNode
 	testCtx *testingContext
 	EthNode *EthNode
+
+	// include kgw
+	// TODO: merge EthNode
+	ExtraNodes []*ExtraNode
+}
+
+func (t *Testnet) SearchExtraNode(name string) (*ExtraNode, bool) {
+	for _, node := range t.ExtraNodes {
+		if node.ServiceName == name {
+			return node, true
+		}
+	}
+	return nil, false
 }
 
 func (t *Testnet) TestDir() string {
@@ -193,7 +236,11 @@ func DeployETHNode(t *testing.T, ctx context.Context, dockerName string, privKey
 	}
 	services := []*CustomService{hardHatService}
 
-	composePath, _, err := generateCompose(dockerName, tmpDir, nil, services, nil, "", 0)
+	ugids, err := getFlagUserGroupID()
+	require.NoError(t, err)
+	t.Logf("user group id: %v", *ugids)
+
+	composePath, _, err := generateCompose(dockerName, tmpDir, nil, services, ugids, "", 0)
 	require.NoError(t, err)
 
 	testCtx := &testingContext{
@@ -262,7 +309,11 @@ func SetupTests(t *testing.T, testConfig *TestConfig) *Testnet {
 		dockerNetworkName = testConfig.DockerNetwork
 	}
 
-	composePath, nodeInfo, err := generateCompose(dockerNetworkName, tmpDir, testConfig.Network.Nodes, testConfig.Network.ExtraServices, nil, testConfig.ServicesPrefix, testConfig.PortOffset) //TODO: need user id and groups
+	ugids, err := getFlagUserGroupID()
+	require.NoError(t, err)
+	t.Logf("user group id: %v", ugids)
+
+	composePath, nodeInfo, err := generateCompose(dockerNetworkName, tmpDir, testConfig.Network.Nodes, testConfig.Network.ExtraServices, ugids, testConfig.ServicesPrefix, testConfig.PortOffset) //TODO: need user id and groups
 	require.NoError(t, err)
 
 	require.Equal(t, len(testConfig.Network.Nodes), len(nodeInfo)) // ensure that the number of nodes is the same as the number of node info
@@ -398,6 +449,22 @@ func SetupTests(t *testing.T, testConfig *TestConfig) *Testnet {
 	for _, node := range generatedNodes {
 		node.testCtx = testCtx
 		tp.Nodes = append(tp.Nodes, node)
+	}
+
+	for _, svc := range testConfig.Network.ExtraServices {
+		// check if that service is running
+		ctr, ok := testCtx.containers[svc.ServiceName]
+		require.True(t, ok, "%s service not found", svc.ServiceName)
+
+		// get the endpoint for the hardhat service
+		exposedChainRPC, unexposedChainRPC, err := getEndpoints(ctr, ctx, nat.Port(svc.InternalPort), svc.ServiceProto)
+		require.NoError(t, err, "failed to get endpoints for hardhat service")
+
+		tp.ExtraNodes = append(tp.ExtraNodes, &ExtraNode{
+			ServiceName:       svc.ServiceName,
+			ExposedChainRPC:   exposedChainRPC,
+			UnexposedChainRPC: unexposedChainRPC,
+		})
 	}
 
 	return tp
@@ -627,6 +694,10 @@ func (k *kwilNode) JSONRPCClient(t *testing.T, ctx context.Context, opts *Client
 
 	endpoint, _, err := kwildJSONRPCEndpoints(container, ctx)
 	require.NoError(t, err)
+
+	if opts != nil && opts.Endpoint != "" {
+		endpoint = opts.Endpoint
+	}
 
 	client, err := getNewClientFn(k.testCtx.config.ClientDriver)(ctx, endpoint, t.Logf, k.testCtx, opts)
 	require.NoError(t, err)

@@ -121,25 +121,22 @@ jobs:
           task build:cli
           task build:kwild
 
-      # - name: compile the core/client/example app
-      #   run: go build -o /dev/null
-      #   working-directory: core/client/example
-
-      # - name: compile the core/gatewayclient/example app
-      #   run: go build -o /dev/null
-      #   working-directory: core/gatewayclient/example
+#      - name: compile the core/client/example app
+#        run: go build -o /dev/null
+#        working-directory: core/client/example
+#
+#      - name: compile the core/gatewayclient/example app
+#        run: go build -o /dev/null
+#        working-directory: core/gatewayclient/example
 
       - name: Generate go vendor
-        if: false
         run: |
           task vendor
 
       - name: Set up Docker Buildx
-        if: false
         uses: docker/setup-buildx-action@v3
 
       - name: Cache Docker layers for kwild # both restore and save
-        if: false
         uses: actions/cache@v4
         with:
           path: /tmp/.buildx-cache-kwild
@@ -148,7 +145,6 @@ jobs:
             ${{ runner.os }}-buildx-kwild
 
       - name: Build kwild image
-        if: false
         id: docker_build_kwild
         uses: docker/build-push-action@v6
         with:
@@ -166,13 +162,11 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache-kwild
           cache-to: type=local,dest=/tmp/.buildx-cache-kwild-new
 
-      # - name: Run acceptance test
-      #   run: |
-      #     testUserID=$(id -u)
-      #     testGroupID=$(id -g)
-      #     cp test/acceptance/docker-compose.override.yml.example test/acceptance/docker-compose.override.yml
-      #     sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/acceptance/docker-compose.override.yml
-      #     KACT_LOG_LEVEL=warn task test:act:nb
+      - name: Run acceptance test
+        run: |
+          testUserID=$(id -u)
+          testGroupID=$(id -g)
+          KACT_LOG_LEVEL=warn task test:act:nb -- -ugid "$testUserID:$testGroupID"
 
       # - name: Run integration test
       #   run: |
@@ -185,15 +179,14 @@ jobs:
       #     KIT_LOG_LEVEL=warn task test:it:nb
 
       - name: Move cache
-        if: false
         run: |
           rm -rf /tmp/.buildx-cache-kwild
           mv /tmp/.buildx-cache-kwild-new /tmp/.buildx-cache-kwild
 
-      # - name: Prune Docker
-      #   if: ${{ always() }}
-      #   run: docker rm $(docker ps -a -q) -f ; docker network prune -f ; docker volume prune -f || true
+      - name: Prune Docker
+        if: ${{ always() }}
+        run: docker rm $(docker ps -a -q) -f ; docker network prune -f ; docker volume prune -f || true
 
-      # - name: Show error log
-      #   if: ${{ failure() }}
-      #   run: grep -C 20 -s -i -r -e 'kwild version' -e 'error' -e 'warn'  /tmp/TestKwilAct*/*.log  /tmp/TestKwilInt*/*.log /tmp/TestKwilInt*/*/*.log
+      - name: Show error log
+        if: ${{ failure() }}
+        run: grep -C 20 -s -i -r -e 'kwild version' -e 'error' -e 'warn'  /tmp/TestKwilAct*/*.log  /tmp/TestKwilInt*/*.log /tmp/TestKwilInt*/*/*.log
