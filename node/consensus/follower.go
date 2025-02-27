@@ -221,7 +221,7 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 		}
 	}
 
-	ce.log.Info("Processing block proposal", "height", blkPropMsg.blk.Header.Height, "header", blkPropMsg.blk.Header)
+	ce.log.Debug("Processing block proposal", "height", blkPropMsg.blk.Header.Height, "blkID", blkPropMsg.blkHash, "numTxs", blkPropMsg.blk.Header.NumTxns)
 
 	if err := ce.validateBlock(blkPropMsg.blk); err != nil {
 		sig, err := types.SignVote(blkPropMsg.blkHash, false, nil, ce.privKey)

@@ -738,9 +738,9 @@ func (bp *BlockProcessor) nextAppHash(sh stateHashes) types.Hash {
 	hasher.Write(sh.paramUpdates[:])
 
 	bp.log.Info("AppState updates: ",
-		"prevAppHash", sh.prevApp, "changesetsHash", sh.changeset,
-		"valUpdatesHash", sh.valUpdates, "accountsHash", sh.accounts,
-		"txResultsHash", sh.txResults, "paramUpdatesHash", sh.paramUpdates)
+		"prevAppHash", sh.prevApp[:8], "changesets", sh.changeset[:8],
+		"validatorset", sh.valUpdates[:8], "accounts", sh.accounts[:8],
+		"txResults", sh.txResults[:8], "params", sh.paramUpdates[:8])
 
 	return hasher.Sum(nil)
 }

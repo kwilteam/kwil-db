@@ -119,7 +119,7 @@ func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 		return fmt.Errorf("error creating block proposal: %w", err)
 	}
 
-	ce.log.Info("Created a new block proposal", "height", blkProp.height, "hash", blkProp.blkHash)
+	ce.log.Info("Created block proposal", "height", blkProp.height, "hash", blkProp.blkHash)
 
 	// Validate the block proposal before announcing it to the network
 	if err := ce.validateBlock(blkProp.blk); err != nil {
@@ -203,6 +203,10 @@ func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 
 	// We may be ready to commit if we're the only validator.
 	ce.processVotes(ctx)
+
+	if len(ce.validatorSet) > 1 { // or can check if the proposal is committed: ce.blkProp == nil
+		ce.log.Info("Waiting for votes from the validators", "height", blkProp.height, "hash", blkProp.blkHash)
+	}
 
 	return nil
 }
@@ -408,7 +412,6 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) {
 
 	if !ce.hasMajorityCeil(acks) {
 		// No majority yet, wait for more votes
-		ce.log.Info("Waiting for votes from the validators", "height", blkProp.height, "hash", blkProp.blkHash)
 		return
 	}
 
@@ -446,7 +449,7 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) {
 		return
 	}
 
-	ce.log.Infoln("Announce committed block", blkProp.blk.Header.Height, blkProp.blkHash, blkRes.paramUpdates)
+	ce.log.Debugln("Announce committed block", blkProp.blk.Header.Height, blkProp.blkHash, blkRes.paramUpdates)
 
 	// Broadcast the blockAnn message
 	go ce.blkAnnouncer(ctx, blkProp.blk, ce.state.lc.commitInfo)
