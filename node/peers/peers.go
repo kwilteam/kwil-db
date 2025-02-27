@@ -14,6 +14,7 @@ import (
 
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/utils/random"
+	"github.com/kwilteam/kwil-db/node/metrics"
 
 	"github.com/libp2p/go-libp2p/core/discovery"
 	"github.com/libp2p/go-libp2p/core/event"
@@ -25,6 +26,8 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/protocol/identify"
 	"github.com/multiformats/go-multiaddr"
 )
+
+var mets metrics.NodeMetrics = metrics.Node
 
 const (
 	maxRetries      = 500
@@ -871,8 +874,14 @@ func (p peerIDStringer) String() string {
 	return pid.String()
 }
 
+func (pm *PeerMan) numConnectedPeers() int {
+	return len(pm.h.Network().Peers())
+}
+
 // Connected is triggered when a peer is connected (inbound or outbound).
 func (pm *PeerMan) Connected(net network.Network, conn network.Conn) {
+	defer mets.PeerCount(context.Background(), pm.numConnectedPeers())
+
 	peerID := conn.RemotePeer()
 	addr := conn.RemoteMultiaddr()
 	pm.log.Infof("Connected to peer (%s) %s @ %v", conn.Stat().Direction, peerIDStringer(peerID), addr)
@@ -962,6 +971,8 @@ const kicked = "kicked"
 
 // Disconnected is triggered when a peer disconnects
 func (pm *PeerMan) Disconnected(net network.Network, conn network.Conn) {
+	defer mets.PeerCount(context.Background(), pm.numConnectedPeers())
+
 	if _, wasKicked := conn.Stat().Extra[kicked]; wasKicked {
 		pm.log.Info("KICKED PEER")
 		return // do not initiate reconnect loop

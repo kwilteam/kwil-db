@@ -237,6 +237,7 @@ func (ce *ConsensusEngine) ConsensusParams() *ktypes.NetworkParameters {
 // executeBlock uses the block processor to execute the block and stores the
 // results in the state field.
 func (ce *ConsensusEngine) executeBlock(ctx context.Context, blkProp *blockProposal) error {
+	t0 := time.Now()
 	defer func() {
 		ce.stateInfo.mtx.Lock()
 		ce.stateInfo.status = Executed
@@ -253,6 +254,9 @@ func (ce *ConsensusEngine) executeBlock(ctx context.Context, blkProp *blockPropo
 	if err != nil {
 		return err
 	}
+
+	ce.state.tExecuted = time.Now()
+	mets.RecordExecuted(ctx, ce.state.tExecuted.Sub(t0), blkProp.blk.Header.Height, int64(blkProp.blk.Header.NumTxns))
 
 	ce.state.blockRes = &blockResult{
 		ack:       true,
@@ -311,6 +315,8 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 			subChan <- txRes
 		}
 	}
+
+	mets.RecordCommit(ctx, time.Since(ce.state.tExecuted), height) // keep this before nextState()
 
 	// recheck the transactions in the mempool
 	ce.mempool.RecheckTxs(ctx, ce.recheckTxFn(ce.lastBlockInternal()))

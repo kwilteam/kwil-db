@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
+	"time"
 
 	jsonrpc "github.com/kwilteam/kwil-db/core/rpc/json"
 	"github.com/kwilteam/kwil-db/node/services/jsonrpc/openrpc"
@@ -153,5 +154,15 @@ func (s *Server) handleMethod(ctx context.Context, method jsonrpc.Method, params
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, err.Error(), nil)
 	}
 
-	return handler()
+	t0 := time.Now()
+	var reqStatus int
+
+	res, jsonRPCErr := handler()
+	if jsonRPCErr != nil {
+		reqStatus = int(jsonRPCErr.Code)
+	}
+
+	mets.RecordRequest(ctx, string(method), reqStatus, time.Since(t0))
+
+	return res, jsonRPCErr
 }

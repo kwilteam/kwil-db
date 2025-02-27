@@ -127,6 +127,8 @@ func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txHash typ
 		return fmt.Errorf("txann failed to peer %s: %w", peerID, err)
 	}
 
+	mets.Advertised(ctx, string(ProtocolIDTxAnn))
+
 	// n.log.Infof("advertised tx content %s to peer %s", txid, peerID)
 
 	// Keep the stream open for potential content requests
@@ -142,6 +144,7 @@ func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txHash typ
 			return
 		}
 		if nr == 0 /*&& errors.Is(err, io.EOF)*/ {
+			mets.AdvertiseRejected(ctx, string(ProtocolIDTxAnn))
 			return // they hung up, probably didn't want it
 		}
 		if getMsg != string(req) {
@@ -151,6 +154,8 @@ func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txHash typ
 
 		s.SetWriteDeadline(time.Now().Add(txGetTimeout))
 		s.Write(rawTx)
+
+		mets.AdvertiseServed(ctx, string(ProtocolIDTxAnn), int64(len(rawTx)))
 	}()
 
 	return nil
@@ -183,35 +188,6 @@ func randBytes(n int) []byte {
 // startTxAnns handles periodic reannouncement. It can also be modified to
 // regularly create dummy transactions.
 func (n *Node) startTxAnns(ctx context.Context, reannouncePeriod time.Duration) {
-	/*signer := secp256k1Signer()
-	if signer == nil {
-		panic("failed to create secp256k1 signer")
-	}
-
-	n.wg.Add(1)
-	go func() {
-		defer n.wg.Done()
-
-		for {
-			select {
-			case <-ctx.Done():
-				return
-			case <-time.After(newPeriod):
-			}
-
-			rawTx, err := randomTx(sz, signer)
-			if err != nil {
-				n.log.Warnf("failed to create random tx: %v", err)
-				continue
-			}
-			txHash := types.HashBytes(rawTx)
-			n.mp.Store(txHash, rawTx)
-
-			// n.log.Infof("announcing txid %v", txid)
-			n.announceTx(ctx, txHash, rawTx, n.host.ID())
-		}
-	}()*/
-
 	n.wg.Add(1)
 	go func() {
 		defer n.wg.Done()
@@ -235,6 +211,7 @@ func (n *Node) startTxAnns(ctx context.Context, reannouncePeriod time.Duration) 
 				}
 				n.log.Infof("re-announcing %d unconfirmed txns", len(txns))
 
+				var numSent, bytesSent int64
 				for _, tx := range txns {
 					rawTx := tx.Bytes()
 					n.announceRawTx(ctx, tx.Hash(), rawTx, n.host.ID()) // response handling is async
@@ -242,7 +219,11 @@ func (n *Node) startTxAnns(ctx context.Context, reannouncePeriod time.Duration) 
 						n.log.Warn("interrupting long re-broadcast")
 						break
 					}
+					numSent++
+					bytesSent += int64(len(rawTx))
 				}
+
+				mets.TxnsReannounced(ctx, numSent, bytesSent)
 			}()
 		}
 	}()
