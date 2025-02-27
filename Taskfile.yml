@@ -7,7 +7,7 @@ tasks:
 
   work:
     cmds:
-      - cmd: go work init . ./core ./test
+      - cmd: go work init . ./core ./test ./core/client/example
         ignore_error: true
     generates:
       - go.work
@@ -18,7 +18,7 @@ tasks:
       - task: linter
     desc: Install tools required to build this app
     cmds:
-      - go install "golang.org/x/tools/cmd/goimports@v0.29.0"
+      - go install "golang.org/x/tools/cmd/goimports@v0.30.0"
 
   fmt:
     desc: Format the code
@@ -39,7 +39,7 @@ tasks:
         (cd core; go mod tidy)
         go mod tidy
         (cd test; go mod tidy)
-      #  (cd core/client/example; go mod tidy)
+        (cd core/client/example; go mod tidy)
       #  (cd core/gatewayclient/example; go mod tidy)
 
   lint:
@@ -51,7 +51,7 @@ tasks:
   linter:
     desc: Install the linter # not for CI which has an action for this
     cmds:
-      - go install "github.com/golangci/golangci-lint/cmd/golangci-lint@v1.63.4"
+      - go install "github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.5"
 
   build:
     desc: Build kwil-cli and kwild
