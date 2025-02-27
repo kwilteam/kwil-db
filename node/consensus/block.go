@@ -269,7 +269,7 @@ func (ce *ConsensusEngine) executeBlock(ctx context.Context, blkProp *blockPropo
 	// reset the catchup timer as we have successfully processed a new block proposal
 	ce.catchupTicker.Reset(ce.catchupTimeout)
 
-	ce.log.Info("Executed block", "height", blkProp.height, "blockID", blkProp.blkHash, "numTxs", blkProp.blk.Header.NumTxns, "appHash", results.AppHash.String())
+	ce.log.Info("Executed block", "height", blkProp.height, "blockID", blkProp.blkHash, "appHash", results.AppHash.String(), "numTxs", blkProp.blk.Header.NumTxns)
 	return nil
 }
 

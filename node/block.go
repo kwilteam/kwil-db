@@ -118,7 +118,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 	peerID := s.Conn().RemotePeer()
 
 	n.log.Info("Accept commit?", "height", height, "blockID", blkid, "appHash", ci.AppHash,
-		"from_peer", peers.PeerIDStringer(peerID))
+		"from_peer", peers.PeerIDStringer(peerID)) // maybe debug level
 
 	// If we are a validator and this is the commit ann for a proposed block
 	// that we already started executing, consensus engine will handle it.
