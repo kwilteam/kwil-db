@@ -73,7 +73,7 @@ var (
 	kgwSvc = &setup.CustomService{
 		ServiceName:  "kgw",
 		DockerImage:  "kgw:latest",
-		Command:      `--log-level debug --log-outputs stdout /app/kgw.log --cors-allow-origins * --backends node0:8484 node1:8484 --domain http://localhost:8090 --statement 'Trust me ok?' --session-secret 'kgwtest' --chain-id kwil-testnet --allow-adhoc-query --devmode`,
+		Command:      `--log-level debug --log-outputs stdout --cors-allow-origins * --backends node0:8484 node1:8484 --domain http://localhost:8090 --statement 'Trust me ok?' --session-secret 'kgwtest' --chain-id kwil-testnet --allow-adhoc-query --devmode`,
 		ExposedPort:  "8090",
 		InternalPort: "8090",
 		ServiceProto: "http",

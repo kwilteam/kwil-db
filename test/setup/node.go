@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/docker/go-connections/nat"
+
 	"github.com/kwilteam/kwil-db/app/setup"
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/crypto"

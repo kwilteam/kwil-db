@@ -90,59 +90,12 @@ jobs:
           go version
           task vendor
 
+      - name: Build cli binaries
+        run: |
+          task build:cli
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-
-      - name: Cache Docker layers for kgw # both restore and save
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.buildx-cache-kgw
-          key: ${{ runner.os }}-buildx-kgw-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-kgw
-
-      - name: Pull kgw repo & create vendor
-        shell: bash
-        env:
-          GH_ACCESS_TOKEN: ${{ secrets.kgw-access-token }}
-        # vendor is used to bypass private repo issues;
-        # if kgw on non-release branches, we want to use go workspace, so that kgw
-        # always uses the latest version of kwil-db/core
-        # when build in workspace, the dockerfile requires kgw and kwild in same folder.
-        run: |
-          kdbDir=$(pwd)
-          echo "KDB_DIR=$(pwd)" >> $GITHUB_ENV
-          echo "current dir: " $kdbDir
-          cd ..
-          rm -rf ./kgw
-          git config --global url."https://${GH_ACCESS_TOKEN}:x-oauth-basic@github.com/kwilteam/".insteadOf "https://github.com/kwilteam/"
-          git clone -b ${{ inputs.kgw-ref }}  https://github.com/kwilteam/kgw.git ./kgw
-          rm -rf ~/.gitconfig
-          cd ./kgw
-          echo "KGW_DIR=$(pwd)" >> $GITHUB_ENV
-          if [[ ${{ inputs.kgw-ref }} == release-* ]]; then
-            go mod vendor
-          else
-            # non release branch, use go workspace to always use the latest version of kwil-db/core
-            test -f go.work || go work init . ../kwil-db/core
-            go work vendor
-          fi
-          cd -
-          cd $kdbDir
-          echo "current dir: " $pwd
-
-      - name: Build kgw image
-        id: docker_build_kgw
-        uses: docker/build-push-action@v6
-        with:
-          context: ${{ env.KGW_DIR }}/..
-          load: true
-          builder: ${{ steps.buildx.outputs.name }}
-          file: ${{ env.KGW_DIR }}/Dockerfile.workspace
-          push: false
-          tags: kgw:latest
-          cache-from: type=local,src=/tmp/.buildx-cache-kgw
-          cache-to: type=local,dest=/tmp/.buildx-cache-kgw-new
 
       - name: Cache Docker layers for kwild # both restore and save
         uses: actions/cache@v4
@@ -179,9 +132,57 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache-kwild
           cache-to: type=local,dest=/tmp/.buildx-cache-kwild-new
 
-      - name: Build cli binaries
+      - name: Cache Docker layers for kgw # both restore and save
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache-kgw
+          key: ${{ runner.os }}-buildx-kgw-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-kgw
+
+      - name: Pull kgw repo & create vendor
+        shell: bash
+        env:
+          GH_ACCESS_TOKEN: ${{ secrets.kgw-access-token }}
+        # vendor is used to bypass private repo issues;
+        # if kgw on non-release branches, we want to use go workspace, so that kgw
+        # always uses the latest version of kwil-db/core
+        # when build in workspace, the dockerfile requires kgw and kwild in same folder.
         run: |
-          task build:cli
+          kdbDir=$(pwd)
+          echo "KDB_DIR=$(pwd)" >> $GITHUB_ENV
+          echo "current dir: " $kdbDir
+          rm -rf go.work
+          cd ..
+          rm -rf ./kgw
+          git config --global url."https://${GH_ACCESS_TOKEN}:x-oauth-basic@github.com/kwilteam/".insteadOf "https://github.com/kwilteam/"
+          git clone -b ${{ inputs.kgw-ref }}  https://github.com/kwilteam/kgw.git ./kgw
+          rm -rf ~/.gitconfig
+          cd ./kgw
+          echo "KGW_DIR=$(pwd)" >> $GITHUB_ENV
+          if [[ ${{ inputs.kgw-ref }} == release-* ]]; then
+            go mod vendor
+          else
+            # non release branch, use go workspace to always use the latest version of kwil-db/core
+            test -f go.work || go work init . ../kwil-db/core
+            go work vendor
+          fi
+          cd -
+          cd $kdbDir
+          echo "current dir: " $pwd
+
+      - name: Build kgw image
+        id: docker_build_kgw
+        uses: docker/build-push-action@v6
+        with:
+          context: ${{ env.KGW_DIR }}/..
+          load: true
+          builder: ${{ steps.buildx.outputs.name }}
+          file: ${{ env.KGW_DIR }}/Dockerfile.workspace
+          push: false
+          tags: kgw:latest
+          cache-from: type=local,src=/tmp/.buildx-cache-kgw
+          cache-to: type=local,dest=/tmp/.buildx-cache-kgw-new
 
       - name: Run kgw acceptance test
         run: |
