@@ -70,7 +70,7 @@ type ConsensusEngine struct {
 	broadcastTxTimeout time.Duration
 
 	// checkpoint is the initial checkpoint for the leader to sync to the network.
-	checkpoint config.Checkpoint
+	checkpoint checkpoint
 
 	genesisHeight int64                       // height of the genesis block
 	leader        crypto.PublicKey            // TODO: update with network param updates touching it
@@ -149,6 +149,11 @@ type ConsensusEngine struct {
 
 	catchupTicker  *time.Ticker
 	catchupTimeout time.Duration
+}
+
+type checkpoint struct {
+	height int64
+	hash   types.Hash
 }
 
 type leaderUpdate struct {
@@ -329,7 +334,6 @@ func New(cfg *Config) (*ConsensusEngine, error) {
 		blkProposalInterval: cfg.BlockProposalInterval,
 		blkAnnInterval:      cfg.BlockAnnInterval,
 		broadcastTxTimeout:  cfg.BroadcastTxTimeout,
-		checkpoint:          cfg.Checkpoint,
 		db:                  cfg.DB,
 		leaderUpdates:       nil,
 		leaderFile:          config.LeaderUpdatesFilePath(cfg.RootDir),
@@ -376,6 +380,16 @@ func New(cfg *Config) (*ConsensusEngine, error) {
 
 	if ce.proposeTimeout == 0 { // can't be zero
 		ce.proposeTimeout = defaultProposeTimeout
+	}
+
+	ce.checkpoint.height = cfg.Checkpoint.Height
+	ce.checkpoint.hash = zeroHash
+	if cfg.Checkpoint.Hash != "" {
+		hash, err := ktypes.NewHashFromString(cfg.Checkpoint.Hash)
+		if err != nil {
+			return nil, fmt.Errorf("invalid checkpoint hash: %w", err)
+		}
+		ce.checkpoint.hash = hash
 	}
 
 	// load the leader updates from the file if any
@@ -575,7 +589,7 @@ func (ce *ConsensusEngine) resetEventLoop(ctx context.Context) {
 
 // handleConsensusMessages handles the consensus messages based on the message type.
 func (ce *ConsensusEngine) handleConsensusMessages(ctx context.Context, msg consensusMessage) {
-	ce.log.Info("Consensus message received", "type", msg.MsgType, "sender", hex.EncodeToString(msg.Sender))
+	ce.log.Debug("Consensus message received", "msg", msg.String(), "sender", hex.EncodeToString(msg.Sender))
 
 	defer msg.Handled()
 
@@ -964,23 +978,24 @@ func (ce *ConsensusEngine) processCurrentBlock(ctx context.Context) error {
 
 	// Fetch the block at this height and commit it, if it's the right one,
 	// otherwise rollback.
-	blkHash, rawBlk, ci, err := ce.getBlock(ctx, ce.state.blkProp.height)
+	height := ce.state.blkProp.height
+	blkHash, rawBlk, ci, err := ce.getBlock(ctx, height)
 	if err != nil {
 		return err
 	}
 
 	if blkHash != ce.state.blkProp.blkHash { // processed incorrect block
 		if err := ce.rollbackState(ctx); err != nil {
-			return fmt.Errorf("error aborting incorrect block execution: height: %d, blockID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
+			return fmt.Errorf("error aborting incorrect block execution: height: %d, blockID: %v, error: %w", height, blkHash, err)
 		}
 
 		blk, err := ktypes.DecodeBlock(rawBlk)
 		if err != nil {
-			return fmt.Errorf("failed to decode the block, blkHeight: %d, blockID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
+			return fmt.Errorf("failed to decode the block, blkHeight: %d, blockID: %v, error: %w", height, blkHash, err)
 		}
 
 		if err := ce.processAndCommit(ctx, blk, ci, blkHash); err != nil {
-			return fmt.Errorf("failed to replay the block: blkHeight: %d, blockID: %v, error: %w", ce.state.blkProp.height, blkHash, err)
+			return fmt.Errorf("failed to replay the block: blkHeight: %d, blockID: %v, error: %w", height, blkHash, err)
 		}
 		// recovered to the correct block -> continue to replay blocks from network
 		return nil
@@ -995,11 +1010,11 @@ func (ce *ConsensusEngine) processCurrentBlock(ctx context.Context) error {
 
 	// All correct! Commit the block.
 	if err := ce.acceptCommitInfo(ci, blkHash); err != nil {
-		return fmt.Errorf("failed to validate the commit info: height: %d, error: %w", ce.state.blkProp.height, err)
+		return fmt.Errorf("failed to validate the commit info: height: %d, error: %w", height, err)
 	}
 
 	if err := ce.commit(ctx); err != nil {
-		return fmt.Errorf("failed to commit the block: height: %d, error: %w", ce.state.blkProp.height, err)
+		return fmt.Errorf("failed to commit the block: height: %d, error: %w", height, err)
 	}
 
 	return ctx.Err()
