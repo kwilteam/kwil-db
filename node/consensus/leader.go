@@ -172,7 +172,7 @@ func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 			}
 
 			// Recheck the transactions in the mempool
-			ce.mempoolMtx.Lock()
+			ce.mempoolMtx.PriorityLock()
 			ce.mempool.RecheckTxs(ctx, ce.recheckTxFn(ce.lastBlockInternal()))
 			ce.mempoolMtx.Unlock()
 
@@ -217,7 +217,7 @@ func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 // This method orders the transactions in the nonce order and also
 // does basic gas and balance checks and enforces the block size limits.
 func (ce *ConsensusEngine) createBlockProposal(ctx context.Context) (*blockProposal, error) {
-	ce.mempoolMtx.Lock()
+	ce.mempoolMtx.PriorityLock()
 	defer ce.mempoolMtx.Unlock()
 
 	totalTxSizeLimit := ce.ConsensusParams().MaxBlockSize
