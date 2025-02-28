@@ -118,7 +118,7 @@ type ConsensusEngine struct {
 	// QueueTx (external) take this lock to ensure that no new txs are added to
 	// the mempool while the block is being committed i.e while the accounts are
 	// being updated.
-	mempoolMtx sync.Mutex
+	mempoolMtx PriorityLockQueue
 	// mempoolReady indicates consensus engine that has enough txs to propose a block
 	// CE can adjust it's wait times based on this flag.
 	// This flag tracks if the mempool filled enough between the commit and
@@ -1081,7 +1081,7 @@ func (ce *ConsensusEngine) resetBlockProp(ctx context.Context, height int64, txI
 
 	// recheck txs in the mempool, if we have deleted any txs from the mempool
 	if len(txIDs) > 0 {
-		ce.mempoolMtx.Lock()
+		ce.mempoolMtx.PriorityLock()
 		ce.mempool.RecheckTxs(ctx, ce.recheckTxFn(ce.lastBlockInternal()))
 		ce.mempoolMtx.Unlock()
 	}
