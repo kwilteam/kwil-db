@@ -120,6 +120,12 @@ func (ce *ConsensusEngine) lastBlock() (int64, types.Hash, time.Time) {
 func (ce *ConsensusEngine) QueueTx(ctx context.Context, tx *types.Tx) error {
 	height, _, timestamp := ce.lastBlock()
 
+	// contention on mempoolMtx is high, between here and commit().
+	// We do not want to delay commit() under any circumstances... so...
+
+	// commit can claim priority any time, while QueueTx must sit in a queue
+	// unless commit is not already running.
+
 	ce.mempoolMtx.Lock()
 	defer ce.mempoolMtx.Unlock()
 
@@ -276,7 +282,7 @@ func (ce *ConsensusEngine) executeBlock(ctx context.Context, blkProp *blockPropo
 // Commit method commits the block to the blockstore and postgres database.
 // It also updates the txIndexer and mempool with the transactions in the block.
 func (ce *ConsensusEngine) commit(ctx context.Context) error {
-	ce.mempoolMtx.Lock()
+	ce.mempoolMtx.PriorityLock()
 	defer ce.mempoolMtx.Unlock()
 
 	if ce.state.blockRes == nil {
