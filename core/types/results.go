@@ -229,7 +229,8 @@ func (e *Event) UnmarshalBinary(data []byte) error {
 // CallResult is the result of an action call.
 type CallResult struct {
 	QueryResult *QueryResult `json:"query_result"`
-	Logs        []string     `json:"logs"`
+	Logs        string       `json:"logs"`
+	Error       *string      `json:"error"`
 }
 
 // QueryResult is the result of a SQL query or action.

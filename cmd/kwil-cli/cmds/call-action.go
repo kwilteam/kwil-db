@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/app/shared/display"
 	"github.com/kwilteam/kwil-db/cmd/kwil-cli/client"
@@ -176,21 +177,23 @@ func getStringRows(v [][]any) [][]string {
 }
 
 func (r *respCall) MarshalText() (text []byte, err error) {
-	if !r.PrintLogs {
-		return display.FormatTable(r.cmd, r.Data.QueryResult.ColumnNames, getStringRows(r.Data.QueryResult.Values))
-	}
-
 	bts, err := display.FormatTable(r.cmd, r.Data.QueryResult.ColumnNames, getStringRows(r.Data.QueryResult.Values))
 	if err != nil {
 		return nil, err
 	}
 
-	if len(r.Data.Logs) > 0 {
-		bts = append(bts, []byte("\n\nLogs:")...)
-		for _, log := range r.Data.Logs {
-			bts = append(bts, []byte("\n  "+log)...)
-		}
+	str := string(bts)
+	if r.Data.Error != nil {
+		str += "\n\nError: " + *r.Data.Error
 	}
 
-	return bts, nil
+	if !r.PrintLogs {
+		return []byte(str), nil
+	}
+
+	if len(r.Data.Logs) > 0 {
+		str += "\nLogs:\n  " + strings.ReplaceAll(r.Data.Logs, "\n", "\n  ")
+	}
+
+	return []byte(str), nil
 }

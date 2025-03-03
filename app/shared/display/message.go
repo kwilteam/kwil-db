@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/kwilteam/kwil-db/core/types"
 )
@@ -33,15 +34,7 @@ func (h *TxHashAndExecResponse) UnmarshalJSON(b []byte) error {
 // the JSON marshalling that is meant to be a composition of both RespTxHash and
 // RespTxQuery.
 func (h TxHashAndExecResponse) MarshalText() ([]byte, error) {
-	return []byte(fmt.Sprintf(`TxHash: %s
-Status: %s
-Height: %d
-Log: %s`, hex.EncodeToString(h.Res.Hash[:]),
-		heightStatus(h.Res),
-		h.Res.Height,
-		h.Res.Result.Log,
-	),
-	), nil
+	return []byte(formatTxQueryResponseToText(h.Res)), nil
 }
 
 var _ MsgFormatter = (*TxHashAndExecResponse)(nil)
@@ -158,18 +151,7 @@ func heightStatus(res *types.TxQueryResponse) string {
 }
 
 func (r *RespTxQuery) MarshalText() ([]byte, error) {
-	msg := fmt.Sprintf(`Transaction ID: %s
-Status: %s
-Height: %d`,
-		r.Msg.Hash.String(),
-		heightStatus(r.Msg),
-		r.Msg.Height,
-	)
-
-	// result can be nil if it is still pending
-	if r.Msg.Result != nil {
-		msg += fmt.Sprintf("\nLog: %s", r.Msg.Result.Log)
-	}
+	msg := formatTxQueryResponseToText(r.Msg)
 
 	// Always try to serialize to verify hash, but only show raw if requested.
 	if r.Msg.Tx == nil {
@@ -188,4 +170,22 @@ Height: %d`,
 	}
 
 	return []byte(msg), nil
+}
+
+func formatTxQueryResponseToText(r *types.TxQueryResponse) string {
+	msg := fmt.Sprintf(`Transaction ID: %s
+Status: %s
+Height: %d`,
+		r.Hash.String(),
+		heightStatus(r),
+		r.Height,
+	)
+
+	// result can be nil if it is still pending
+	if r.Result != nil && r.Result.Log != "" {
+		msg += "\nLogs:"
+		msg += "\n  " + strings.ReplaceAll(r.Result.Log, "\n", "\n  ")
+	}
+
+	return msg
 }

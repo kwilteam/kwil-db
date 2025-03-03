@@ -138,9 +138,7 @@ func (r *respCall) MarshalText() (text []byte, err error) {
 
 	if len(r.Data.Logs) > 0 {
 		bts = append(bts, []byte("\n\nLogs:")...)
-		for _, log := range r.Data.Logs {
-			bts = append(bts, []byte("\n  "+log)...)
-		}
+		bts = append(bts, []byte(r.Data.Logs)...)
 	}
 
 	return bts, nil

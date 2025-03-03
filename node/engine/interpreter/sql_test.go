@@ -1278,9 +1278,25 @@ func Test_Transactionality(t *testing.T) {
 	`, nil, nil)
 	require.NoError(t, err)
 
-	_, err = interp.Call(newInvalidEngineCtx(ctx), tx, "", "test_act", nil, nil)
+	res, err := interp.Call(newInvalidEngineCtx(ctx), tx, "", "test_act", nil, nil)
+	require.NoError(t, err)
+	require.Error(t, res.Error)
+	require.Contains(t, res.Error.Error(), "rollback")
+
+	// check that the counter was not incremented
+	if cache.counter != 0 {
+		t.Fatalf("expected counter to be 0, got %d", cache.counter)
+	}
+
+	// we will also test a proper execution error, like a bad return type
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `
+	CREATE ACTION bad_return() public returns (id int) {
+		return 'hello';
+	};`, nil, nil)
+	require.NoError(t, err)
+
+	_, err = interp.Call(newInvalidEngineCtx(ctx), tx, "", "bad_return", nil, nil)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "rollback")
 
 	// check that the counter was not incremented
 	if cache.counter != 0 {
