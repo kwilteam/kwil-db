@@ -314,6 +314,7 @@ func DefaultConfig() *Config {
 			Enable:           false,
 			DiscoveryTimeout: types.Duration(15 * time.Second),
 			MaxRetries:       3,
+			PsqlPath:         "psql",
 		},
 		Extensions: make(map[string]map[string]string),
 		Checkpoint: Checkpoint{
@@ -325,6 +326,8 @@ func DefaultConfig() *Config {
 			BlockSyncChuckSize: make(map[string]string),
 			Signer:             make(map[string]string),
 		},
+		SkipDependencyVerification: false,
+		PGDumpPath:                 "pg_dump",
 	}
 }
 
@@ -353,6 +356,10 @@ type Config struct {
 	Migrations   MigrationConfig              `toml:"migrations" comment:"zero downtime migration configuration"`
 	Checkpoint   Checkpoint                   `toml:"checkpoint" comment:"checkpoint info for the leader to sync to before proposing a new block"`
 	Erc20Bridge  ERC20BridgeConfig            `toml:"erc20_bridge" comment:"ERC20 bridge configuration"`
+
+	SkipDependencyVerification bool `toml:"skip_dependency_verification" comment:"skip runtime dependency verification (the pg_dump and psql binaries)"`
+	// PGDump: used by the snapshot and the migration module for producing snapshots.
+	PGDumpPath string `toml:"pg_dump_path" comment:"path to the pg_dump binary for taking snapshots"`
 }
 
 type Telemetry struct {
@@ -458,6 +465,7 @@ type StateSyncConfig struct {
 
 	DiscoveryTimeout types.Duration `toml:"discovery_time" comment:"how long to discover snapshots before selecting one to use"`
 	MaxRetries       uint64         `toml:"max_retries" comment:"how many times to try after failing to apply a snapshot before switching to blocksync"`
+	PsqlPath         string         `toml:"psql_path" comment:"path to the PSQL binary for applying snapshots"`
 }
 
 type MigrationConfig struct {
