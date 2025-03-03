@@ -700,15 +700,21 @@ func buildJRPCAdminServer(d *coreDependencies) *rpcserver.Server {
 //     All nodes in the network must have 16.x version to produce consistent and deterministic snapshots.
 //   - psql: required for state-sync to restore the state from a snapshot. Required version is 16.x.
 func verifyDependencies(d *coreDependencies) {
-	// Check if pg_dump is installed, which is necessary for snapshotting during migrations and when snapshots are enabled. Ensure that the version is 16.x
-	if err := checkVersion("pg_dump", 16); err != nil {
-		failBuild(err, "pg_dump version is not 16.x. Please install the correct version.")
+	if d.cfg.SkipDependencyVerification {
+		d.logger.Warn("Skipping runtime dependency verification of pg_dump and psql binaries")
+		return
+	}
+
+	// Check if pg_dump is installed, which is necessary for snapshotting during migrations
+	// and when snapshots are enabled. Ensure that the version is 16.x
+	if err := checkVersion(d.cfg.PGDumpPath, 16); err != nil {
+		failBuild(err, "pg_dump version check failure. Please ensure that 16.x version is installed")
 	}
 
 	if d.cfg.StateSync.Enable {
 		// Check if psql is installed and is on version 16.x, which is required for state-sync
-		if err := checkVersion("psql", 16); err != nil {
-			failBuild(err, "psql version is not 16.x. Please install the correct version.")
+		if err := checkVersion(d.cfg.StateSync.PsqlPath, 16); err != nil {
+			failBuild(err, "psql version check failure. Please ensure that 16.x version is installed")
 		}
 	}
 }
@@ -781,7 +787,7 @@ func tlsConfig(d *coreDependencies, withTransportClientAuth bool) *tls.Config {
 		}
 		d.logger.Info("generated admin service client CAs file", "file", clientsFile)
 	} else {
-		d.logger.Info("No admin client CAs file. Use 'kwild admin gen-auth-key' to generate.")
+		d.logger.Info("No admin client CAs file. Use 'kwild admin gen-auth-key' to generate")
 	}
 
 	if len(clientsCerts) > 0 && !caCertPool.AppendCertsFromPEM(clientsCerts) {
