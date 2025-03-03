@@ -116,8 +116,9 @@ func (h *harness) underNonceLock(ctx context.Context, fn func(int64) error) erro
 			// again shortly if there are others already in mempool.
 			recoverNonce()
 			h.printf("RESET NONCE TO LATEST REPORTED (underNonceLock): %d", h.nonce)
+		} else {
+			h.nonce--
 		}
-		h.nonce--
 		return err
 	}
 	return nil
