@@ -941,7 +941,7 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 
 	startHeight := ce.lastCommitHeight()
 	if err := ce.processCurrentBlock(ctx); err != nil {
-		if errors.Is(err, types.ErrBlkNotFound) || errors.Is(err, types.ErrNotFound) {
+		if errors.Is(err, types.ErrBlkNotFound) || errors.Is(err, types.ErrNotFound) || errors.Is(err, types.ErrPeersNotFound) {
 			return nil // retry again next tick
 		}
 		ce.log.Error("error during block processing in catchup", "height", startHeight+1, "error", err)
