@@ -381,37 +381,43 @@ func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service, acc
 
 // newUserDefinedErr makes an error that was returned from user-defined code using the ERROR function.
 func newUserDefinedErr(e error) error {
-	return userDefinedErr{err: e}
+	return &userDefinedErr{err: e}
 }
 
 type userDefinedErr struct {
 	err error
 }
 
-func (u userDefinedErr) Error() string {
+func (u *userDefinedErr) Error() string {
 	return u.err.Error()
 }
 
 // unwrapExecutionErr unwraps an error that was returned from user-defined code using the ERROR function, or an error
 // that is the result of user logic / data (e.g. a Postgres primary key violation).
 // The error can either come from an action call to ERROR() or from Kwil's custom ERROR() postgres function.
-// It returns the error, and whether it was a user-defined error. If it was user-defined, it unwraps it.
-func unwrapExecutionErr(err error) (error, bool) {
-	if err == nil {
+// It returns the error, and whether it was a user logic error or something more serious.
+// If it is a user-defined error, it will be unwrapped and returned as the error.
+func unwrapExecutionErr(e error) (err error, isUserLogicErr bool) {
+	if e == nil {
 		return nil, false
 	}
-
-	if u, ok := err.(userDefinedErr); ok {
-		return u.err, true
+	as := new(userDefinedErr)
+	if errors.As(e, &as) {
+		return e, true
 	}
 
-	if strings.Contains(err.Error(), "SQLSTATE") {
-		return err, true
+	// if it is a SQL error, it might be a basic integrity constraint violation,
+	// which we should leave as-is but mark as a user logic error.
+	if allowedSQLSTATEErrRegex.MatchString(e.Error()) {
+		return e, true
 	}
 
-	// TODO: detect pg error
-	return err, false
+	return e, false
 }
+
+// checks for 22xxx and 23xxx SQLSTATE errors, or P0001 (raise_exception)
+// https://www.postgresql.org/docs/current/errcodes-appendix.html
+var allowedSQLSTATEErrRegex = regexp.MustCompile(`\(SQLSTATE ((23|22)\d{3}\)|P0001)`)
 
 // funcDefToExecutable converts a Postgres function definition to an executable.
 // This allows built-in Postgres functions to be used within the interpreter.

@@ -221,7 +221,7 @@ func Test_TxHashAndExecResponse(t *testing.T) {
 		Res: qr,
 	}
 	expectJSON := `{"tx_hash":"0102030405000000000000000000000000000000000000000000000000000000","height":10,"tx":{"signature":{"sig":"yz/tf2/zblkFTASoMbIV5RQFJ1PuNT5v4x1LTvc2rNYVUSfbVV0wBroU/LTHm7rVbI5juBqYljGbsFOp4lNHWAA=","type":"secp256k1_ep"},"body":{"desc":"This is a test transaction for cli","payload":"AAA5AAAAeGY2MTdhZjFjYTc3NGViYmQ2ZDIzZThmZTEyYzU2ZDQxZDI1YTIyZDgxZTg4ZjY3YzZjNmVlMGQ0CwAAAGNyZWF0ZV91c2VyAQABAB4AAAAAAA8AAAAAAAAAAAR0ZXh0AAAAAAABAAMAAABmb28=","type":"execute","fee":"100","nonce":10,"chain_id":"asdf"},"serialization":"concat","sender":null},"tx_result":{"code":0,"gas":10,"log":"This is log","events":null}}`
-	expectText := "TxHash: 0102030405000000000000000000000000000000000000000000000000000000\nStatus: success\nHeight: 10\nLog: This is log"
+	expectText := "Transaction ID: 0102030405000000000000000000000000000000000000000000000000000000\nStatus: success\nHeight: 10\nLogs:\n  This is log"
 
 	outText, err := resp.MarshalText()
 	assert.NoError(t, err, "MarshalText should not return error")
@@ -251,7 +251,7 @@ func TestRespTxQuery_MarshalText(t *testing.T) {
 					},
 				},
 			},
-			expected: "Transaction ID: 0100000000000000000000000000000000000000000000000000000000000000\nStatus: success\nHeight: 100\nLog: transaction successful",
+			expected: "Transaction ID: 0100000000000000000000000000000000000000000000000000000000000000\nStatus: success\nHeight: 100\nLogs:\n  transaction successful",
 		},
 		{
 			name: "failed status",
@@ -265,7 +265,7 @@ func TestRespTxQuery_MarshalText(t *testing.T) {
 					},
 				},
 			},
-			expected: "Transaction ID: 0200000000000000000000000000000000000000000000000000000000000000\nStatus: failed\nHeight: 50\nLog: transaction failed",
+			expected: "Transaction ID: 0200000000000000000000000000000000000000000000000000000000000000\nStatus: failed\nHeight: 50\nLogs:\n  transaction failed",
 		},
 		{
 			name: "pending status",
@@ -279,7 +279,7 @@ func TestRespTxQuery_MarshalText(t *testing.T) {
 					},
 				},
 			},
-			expected: "Transaction ID: 0300000000000000000000000000000000000000000000000000000000000000\nStatus: pending\nHeight: -1\nLog: transaction pending",
+			expected: "Transaction ID: 0300000000000000000000000000000000000000000000000000000000000000\nStatus: pending\nHeight: -1\nLogs:\n  transaction pending",
 		},
 		{
 			name: "pending status",
@@ -303,7 +303,7 @@ func TestRespTxQuery_MarshalText(t *testing.T) {
 					},
 				},
 			},
-			expected: "Transaction ID: 1f456bec9c3819f077a7aafce25cf43ad9ab0a264cbae6efeaa8b92ec0bf4b47\nStatus: pending\nHeight: -1\nLog: transaction pending",
+			expected: "Transaction ID: 1f456bec9c3819f077a7aafce25cf43ad9ab0a264cbae6efeaa8b92ec0bf4b47\nStatus: pending\nHeight: -1\nLogs:\n  transaction pending",
 		},
 	}
 
