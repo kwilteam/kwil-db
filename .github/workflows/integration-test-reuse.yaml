@@ -1,0 +1,141 @@
+name: integration-test-reuse
+
+on:
+  workflow_call:
+    inputs:
+      # for logging purpose, if kdb-ref is from PR.
+      kdb-repo:
+        type: string
+      # for workflow_run trigger, we need to check out to the SHA, bcz most of
+      # the pr come from forked repo, and we can't access the branch, but we can
+      # access the sha(i.e, pull/xxx/head)
+      # In that case, use SHA as the input.
+      kdb-ref: # can be branch/tag/SHA
+        required: true
+        type: string
+
+jobs:
+  # JOB to run change detection
+  changes:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    # Set job outputs to values from filter step
+    outputs:
+      run: ${{ steps.filter.outputs.code }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # This may save additional git fetch roundtrip if
+          # merge-base is found within latest 20 commits
+          fetch-depth: 20
+      - uses: dorny/paths-filter@v3.0.2
+        id: filter
+        with:
+          filters: .github/filters.yaml
+          #predicate-quantifier: 'every'
+
+  integration-test:
+    needs: changes
+    #  only run only if there are changes, or manually triggered
+    if: ${{ needs.changes.outputs.run == 'true' || github.event_name == 'workflow_dispatch'}}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show references
+        run: |
+          echo "====== integration test references ======"
+          echo "kdb repo: ${{ inputs.kdb-repo }}"
+          echo "kdb reference: ${{ inputs.kdb-ref }}"
+
+      - name: checkout kwil-db using ref from input
+        if: ${{ inputs.kdb-ref != '' }}
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.kdb-ref }}
+          submodules: true
+
+      - name: checkout kwil-db using the reference or SHA for this event
+        if: ${{ inputs.kdb-ref == '' }}
+        uses: actions/checkout@v4
+        with:
+          submodules: true
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+          check-latest: true
+
+      - name: Install Taskfile
+        uses: arduino/setup-task@v2
+
+      - name: Init workspace
+        run: |
+          task work
+
+      - name: Generate go vendor
+        run: |
+          go version
+          task vendor
+
+      - name: Build cli binaries
+        run: |
+          task build:cli
+          task build:kwild
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers for kwild # both restore and save
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache-kwild
+          key: ${{ runner.os }}-buildx-kwild-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-kwild
+
+      - name: manual git tag
+        run: |
+          version=`echo ${{ github.sha }} | cut -c 1-7`
+          echo "GIT_TAG=$version" >> $GITHUB_ENV
+
+      - name: manual build time
+        run: |
+          build_time=`TZ=UTC date -u --date="@${SOURCE_DATE_EPOCH:-$(date +%s)}" +"%Y-%m-%dT%H:%M:%SZ"`
+          echo "BUILD_TIME=$build_time" >> $GITHUB_ENV
+
+      - name: Build kwild image
+        id: docker_build_kwild
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          load: true
+          builder: ${{ steps.buildx.outputs.name }}
+          build-args: |
+            git_commit=${{ github.sha }}
+            version=${{ env.GIT_TAG }}
+            build_time=${{ env.BUILD_TIME }}
+          file: ./contrib/docker/kwild.dockerfile
+          push: false
+          tags: kwild:latest
+          cache-from: type=local,src=/tmp/.buildx-cache-kwild
+          cache-to: type=local,dest=/tmp/.buildx-cache-kwild-new
+
+      - name: Run integration test
+        run: |
+          testUserID=$(id -u)
+          testGroupID=$(id -g)
+          KINT_LOG_LEVEL=warn task test:it:nb -- -ugid "$testUserID:$testGroupID"
+
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache-kwild
+          mv /tmp/.buildx-cache-kwild-new /tmp/.buildx-cache-kwild
+
+      - name: Prune Docker
+        if: ${{ always() }}
+        run: docker rm $(docker ps -a -q) -f ; docker network prune -f ; docker volume prune -f || true
+
+      - name: Show error log
+        if: ${{ failure() }}
+        run: grep -C 20 -s -i -r -e 'kwild version' -e 'error' -e 'warn'  /tmp/TestKwil*/*.log /tmp/TestKwil*/*/*.log

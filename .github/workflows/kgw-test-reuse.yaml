@@ -83,7 +83,7 @@ jobs:
 
       - name: Init workspace
         run: |
-          go work init . ./test ./core
+          task work
 
       - name: Generate go vendor
         run: |
@@ -227,6 +227,8 @@ jobs:
 
       - name: Move cache
         run: |
+          rm -rf /tmp/.buildx-cache-kwild
+          mv /tmp/.buildx-cache-kwild-new /tmp/.buildx-cache-kwild
           rm -rf /tmp/.buildx-cache-kgw
           mv /tmp/.buildx-cache-kgw-new /tmp/.buildx-cache-kgw
 
@@ -236,4 +238,4 @@ jobs:
 
       - name: Show error log
         if: ${{ failure() }}
-        run: grep -C 20 -s -i -r -e 'kwild version' -e 'error' -e 'warn'  /tmp/TestKwilInt*/*.log /tmp/TestKwilInt*/*/*.log
+        run: grep -C 20 -s -i -r -e 'kwild version' -e 'error' -e 'warn'  /tmp/TestKwil*/*.log /tmp/TestKwil*/*/*.log

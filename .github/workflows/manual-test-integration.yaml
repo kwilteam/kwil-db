@@ -1,0 +1,18 @@
+# manual-test-integration.yaml run integration test with manual inputs: kdb-ref.
+name: manual-test-kgw
+
+on:
+  workflow_dispatch:
+    inputs:
+      kdb-ref:
+        description: 'kwil-db branch/tag/SHA to be tested'
+        required: true
+        type: string
+        default: 'main'
+
+jobs:
+  integration-test-manual:
+    name: Run manual integration test
+    uses: ./.github/workflows/manual-test-integration.yaml
+    with:
+      kdb-ref: ${{ github.event.inputs.kdb-ref }}
