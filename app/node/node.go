@@ -61,7 +61,7 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config, autogen bo
 
 	for _, logFile := range cfg.LogOutput {
 		rootedLogFile := rootedPath(logFile, rootDir)
-		rot, err := log.NewRotatorWriter(rootedLogFile, 10_000, 0)
+		rot, err := log.NewRotatorWriter(rootedLogFile, cfg.LogFileRollSize, cfg.LogRetainMaxRolls)
 		if err != nil {
 			return fmt.Errorf("failed to create log rotator: %w", err)
 		}

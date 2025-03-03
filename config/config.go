@@ -254,9 +254,11 @@ func DefaultGenesisConfig() *GenesisConfig {
 // DefaultConfig generates an instance of the default config.
 func DefaultConfig() *Config {
 	return &Config{
-		LogLevel:  log.LevelInfo,
-		LogFormat: log.FormatUnstructured,
-		LogOutput: []string{"stdout", "kwild.log"},
+		LogLevel:          log.LevelInfo,
+		LogFormat:         log.FormatUnstructured,
+		LogOutput:         []string{"stdout", "kwild.log"},
+		LogFileRollSize:   10_000, // KB
+		LogRetainMaxRolls: 0,      // retain all archived logs
 		Telemetry: Telemetry{
 			Enable:       false,
 			OTLPEndpoint: "127.0.0.1:4318",
@@ -333,9 +335,11 @@ func DefaultConfig() *Config {
 
 // Config is the node's config.
 type Config struct {
-	LogLevel  log.Level  `toml:"log_level" comment:"log level\npossible values: 'debug', 'info', 'warn', and 'error'"`
-	LogFormat log.Format `toml:"log_format" comment:"log format\npossible values: 'json', 'text' (kv), and 'plain' (fmt-style)"`
-	LogOutput []string   `toml:"log_output" comment:"output paths for the log"`
+	LogLevel          log.Level  `toml:"log_level" comment:"log level\npossible values: 'debug', 'info', 'warn', and 'error'"`
+	LogFormat         log.Format `toml:"log_format" comment:"log format\npossible values: 'json', 'text' (kv), and 'plain' (fmt-style)"`
+	LogOutput         []string   `toml:"log_output" comment:"output paths for the log"`
+	LogFileRollSize   int64      `toml:"log_file_roll_size" comment:"threshold in KB at which the log file rolls over and archives the current one"`
+	LogRetainMaxRolls int        `toml:"log_retain_max_rolls" comment:"retention limit on the number of archived log files to keep (0 meaning retain all)"`
 
 	ProfileMode string `toml:"profile_mode,commented" comment:"profile mode (http, cpu, mem, mutex, or block)"`
 	ProfileFile string `toml:"profile_file,commented" comment:"profile output file path (e.g. cpu.pprof)"`
