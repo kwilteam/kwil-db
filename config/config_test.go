@@ -52,8 +52,10 @@ func TestConfigSaveAndLoad(t *testing.T) {
 		{
 			name: "valid config",
 			config: Config{
-				LogLevel:  log.LevelDebug,
-				LogFormat: log.FormatJSON,
+				Log: Logging{
+					Level:  log.LevelDebug,
+					Format: log.FormatJSON,
+				},
 				P2P: PeerConfig{
 					ListenAddress: "0.0.0.0:6600",
 					Pex:           false,
@@ -74,8 +76,10 @@ func TestConfigSaveAndLoad(t *testing.T) {
 		{
 			name: "empty config",
 			config: Config{
-				LogLevel:  log.LevelInfo,
-				LogFormat: log.FormatUnstructured,
+				Log: Logging{
+					Level:  log.LevelInfo,
+					Format: log.FormatUnstructured,
+				},
 			},
 			wantErr: false,
 		},
@@ -96,11 +100,11 @@ func TestConfigSaveAndLoad(t *testing.T) {
 			}
 
 			if !tt.wantErr {
-				if loaded.LogLevel != tt.config.LogLevel {
-					t.Errorf("LogLevel mismatch: got %v, want %v", loaded.LogLevel, tt.config.LogLevel)
+				if loaded.Log.Level != tt.config.Log.Level {
+					t.Errorf("LogLevel mismatch: got %v, want %v", loaded.Log.Level, tt.config.Log.Level)
 				}
-				if loaded.LogFormat != tt.config.LogFormat {
-					t.Errorf("LogFormat mismatch: got %v, want %v", loaded.LogFormat, tt.config.LogFormat)
+				if loaded.Log.Format != tt.config.Log.Format {
+					t.Errorf("LogFormat mismatch: got %v, want %v", loaded.Log.Format, tt.config.Log.Format)
 				}
 				if loaded.P2P.ListenAddress != tt.config.P2P.ListenAddress {
 					t.Errorf("P2P.ListenAddress mismatch: got %v, want %v", loaded.P2P.ListenAddress, tt.config.P2P.ListenAddress)
@@ -264,9 +268,10 @@ func TestDisallowUnknownFields(t *testing.T) {
 		{
 			name: "unknown field present",
 			input: `
-				log_level = "debug"
+                [log]
+				level = "debug"
 				unknown_field = "value"
-				log_format = "json"
+				format = "json"
 			`,
 			wantErr: true,
 		},
@@ -291,8 +296,9 @@ func TestDisallowUnknownFields(t *testing.T) {
 		{
 			name: "valid config no unknown fields",
 			input: `
-				log_level = "debug"
-				log_format = "json"
+                [log]
+				level = "debug"
+				format = "json"
 				[p2p]
 				listen = "0.0.0.0:6600"
 			`,
@@ -327,12 +333,15 @@ func TestConfigFromTOML(t *testing.T) {
 		{
 			name: "minimal valid config",
 			input: `
-				log_level = "info"
-				log_format = "plain"
+                [log]
+				level = "info"
+				format = "plain"
 			`,
 			want: Config{
-				LogLevel:  log.LevelInfo,
-				LogFormat: log.FormatUnstructured,
+				Log: Logging{
+					Level:  log.LevelInfo,
+					Format: log.FormatUnstructured,
+				},
 			},
 			wantErr: false,
 		},
@@ -345,23 +354,26 @@ func TestConfigFromTOML(t *testing.T) {
 		{
 			name: "invalid TOML syntax",
 			input: `
-				log_level = "debug"
-				log_format = ["invalid"
+                [log]
+				level = "debug"
+				format = ["invalid"
 			`,
 			wantErr: true,
 		},
 		{
 			name: "invalid log level value",
 			input: `
-				log_level = "invalid"
-				log_format = "json"
+                [log]
+				level = "invalid"
+				format = "json"
 			`,
 			wantErr: true,
 		},
 		{
 			name: "config with missing struct fields",
 			input: `
-				log_format = "json"
+                [log]
+				format = "json"
 				[p2p]
 				listen_address = "0.0.0.0:6600"
 				pex = true
@@ -380,8 +392,9 @@ func TestConfigFromTOML(t *testing.T) {
 		{
 			name: "full config with all fields and correct names",
 			input: `
-				log_level = "debug"
-				log_format = "json"
+                [log]
+				level = "debug"
+				format = "json"
 				[p2p]
 				listen = "0.0.0.0:6600"
 				pex = true
@@ -396,8 +409,10 @@ func TestConfigFromTOML(t *testing.T) {
 				max_connections = 20
 			`,
 			want: Config{
-				LogLevel:  log.LevelDebug,
-				LogFormat: log.FormatJSON,
+				Log: Logging{
+					Level:  log.LevelDebug,
+					Format: log.FormatJSON,
+				},
 				P2P: PeerConfig{
 					ListenAddress: "0.0.0.0:6600",
 					Pex:           true,
@@ -444,8 +459,8 @@ func TestConfigFromTOML(t *testing.T) {
 			require.NoError(t, err)
 
 			if !tt.wantErr {
-				require.Equal(t, tt.want.LogLevel, cfg.LogLevel)
-				require.Equal(t, tt.want.LogFormat, cfg.LogFormat)
+				require.Equal(t, tt.want.Log.Level, cfg.Log.Level)
+				require.Equal(t, tt.want.Log.Format, cfg.Log.Format)
 				require.Equal(t, tt.want.P2P.ListenAddress, cfg.P2P.ListenAddress)
 				require.Equal(t, tt.want.P2P.Pex, cfg.P2P.Pex)
 				require.Equal(t, tt.want.P2P.BootNodes, cfg.P2P.BootNodes)

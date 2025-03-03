@@ -51,8 +51,8 @@ services:
       start
       --autogen
       --root=/app/.kwild
-      --log-format=plain
-      --log-level=debug
+      --log.format=plain
+      --log.level=debug
       --admin.listen=/tmp/kwild.socket
       --rpc.listen=0.0.0.0:8484
       --p2p.listen=0.0.0.0:6600

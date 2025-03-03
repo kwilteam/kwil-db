@@ -48,20 +48,20 @@ type server struct {
 }
 
 func runNode(ctx context.Context, rootDir string, cfg *config.Config, autogen bool, dbOwner string) (err error) {
-	logOutputPaths := slices.Clone(cfg.LogOutput)
+	logOutputPaths := slices.Clone(cfg.Log.Output)
 	var logWriters []io.Writer
-	if idx := slices.Index(cfg.LogOutput, "stdout"); idx != -1 {
+	if idx := slices.Index(cfg.Log.Output, "stdout"); idx != -1 {
 		logWriters = append(logWriters, os.Stdout)
-		cfg.LogOutput = slices.Delete(cfg.LogOutput, idx, idx+1)
+		cfg.Log.Output = slices.Delete(cfg.Log.Output, idx, idx+1)
 	}
-	if idx := slices.Index(cfg.LogOutput, "stderr"); idx != -1 {
+	if idx := slices.Index(cfg.Log.Output, "stderr"); idx != -1 {
 		logWriters = append(logWriters, os.Stderr)
-		cfg.LogOutput = slices.Delete(cfg.LogOutput, idx, idx+1)
+		cfg.Log.Output = slices.Delete(cfg.Log.Output, idx, idx+1)
 	}
 
-	for _, logFile := range cfg.LogOutput {
+	for _, logFile := range cfg.Log.Output {
 		rootedLogFile := rootedPath(logFile, rootDir)
-		rot, err := log.NewRotatorWriter(rootedLogFile, cfg.LogFileRollSize, cfg.LogRetainMaxRolls)
+		rot, err := log.NewRotatorWriter(rootedLogFile, cfg.Log.FileRollSize, cfg.Log.RetainMaxRolls)
 		if err != nil {
 			return fmt.Errorf("failed to create log rotator: %w", err)
 		}
@@ -77,7 +77,7 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config, autogen bo
 	if len(logWriters) > 0 {
 		logWriter := io.MultiWriter(logWriters...)
 
-		logger = log.New(log.WithLevel(cfg.LogLevel), log.WithFormat(cfg.LogFormat),
+		logger = log.New(log.WithLevel(cfg.Log.Level), log.WithFormat(cfg.Log.Format),
 			log.WithName("KWILD"), log.WithWriter(logWriter))
 		// NOTE: level and name can be set independently for different systems
 	}
@@ -146,7 +146,7 @@ func runNode(ctx context.Context, rootDir string, cfg *config.Config, autogen bo
 
 		if !fileExists(tomlFile) {
 			logger.Infof("Writing config file to %s", tomlFile)
-			cfg.LogOutput = logOutputPaths // restore log output paths before writing toml file
+			cfg.Log.Output = logOutputPaths // restore log output paths before writing toml file
 			if err := cfg.SaveAs(tomlFile); err != nil {
 				return fmt.Errorf("failed to write config file: %w", err)
 			}

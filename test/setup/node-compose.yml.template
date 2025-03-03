@@ -19,7 +19,7 @@
     command: |
       start
       --root=/app/kwil
-      --log-format=plain
+      --log.format=plain
       --admin.listen=/tmp/kwild.socket
       --rpc.listen=0.0.0.0:8484
       --p2p.listen=0.0.0.0:6600
