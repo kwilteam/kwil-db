@@ -144,9 +144,19 @@ type Node struct {
 
 	blkPropHandling chan struct{}
 
+	txQueue chan orderedTxn // enforces ordering in the tx broadcasts to the network.
+
 	wg  sync.WaitGroup
 	log log.Logger
 }
+
+type orderedTxn struct {
+	txID  types.Hash
+	rawtx []byte
+	from  peer.ID
+}
+
+const txQueueSize = 1000 // rare to have a really long queue of unbroadcasted txns
 
 // NewNode creates a new node. The config struct is for required configuration,
 // and the functional options for optional settings, like dependency overrides.
@@ -174,11 +184,9 @@ func NewNode(cfg *Config, opts ...Option) (*Node, error) {
 		ss:      cfg.Snapshotter,
 		bp:      cfg.BlockProc,
 
-		ackChan:  make(chan AckRes, 1),
-		resetMsg: make(chan ConsensusReset, 1),
-		// discReq:  make(chan types.DiscoveryRequest, 1),
-		// discResp: make(chan types.DiscoveryResponse, 1),
-
+		ackChan:         make(chan AckRes, 1),
+		resetMsg:        make(chan ConsensusReset, 1),
+		txQueue:         make(chan orderedTxn, txQueueSize),
 		blkPropHandling: make(chan struct{}, 1),
 
 		P2PService: *cfg.P2PService,
@@ -315,6 +323,8 @@ func (n *Node) Start(ctx context.Context) error {
 		return err
 	}
 
+	n.startOrderedTxQueueAnns(ctx)
+
 	/*
 		if err := n.startDiscoveryRequestGossip(ctx, ps); err != nil {
 			cancel()
@@ -343,15 +353,14 @@ func (n *Node) Start(ctx context.Context) error {
 			ProposalBroadcaster: func(ctx context.Context, blk *ktypes.Block) {
 				n.announceBlkProp(ctx, blk, n.host.ID())
 			},
-			TxAnnouncer: func(ctx context.Context, tx *ktypes.Transaction) {
-				n.announceTx(ctx, tx, n.host.ID())
+			TxAnnouncer: func(ctx context.Context, tx *ktypes.Transaction, txID types.Hash) {
+				n.announceTx(ctx, tx, txID, n.host.ID())
 			},
 			BlkAnnouncer:        n.announceBlk,
 			AckBroadcaster:      n.sendACK,
 			BlkRequester:        n.getBlkHeight,
 			RstStateBroadcaster: n.sendReset,
-			// DiscoveryReqBroadcaster: n.sendDiscoveryRequest,
-			TxBroadcaster: n.BroadcastTx,
+			TxBroadcaster:       n.BroadcastTx,
 		}
 
 		whitelistFns := consensus.WhitelistFns{

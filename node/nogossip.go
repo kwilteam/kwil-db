@@ -80,7 +80,17 @@ func (n *Node) txAnnStreamHandler(s network.Stream) {
 	}
 
 	// re-announce
-	go n.announceRawTx(context.Background(), txHash, rawTx, s.Conn().RemotePeer())
+	n.queueTxn(txHash, rawTx, s.Conn().RemotePeer())
+}
+
+func (n *Node) queueTxn(txID types.Hash, rawTx []byte, from peer.ID) {
+	tx := orderedTxn{txID: txID, rawtx: rawTx, from: from}
+
+	select {
+	case n.txQueue <- tx:
+	default:
+		n.log.Warnf("tx queue full, dropping tx %v", txID)
+	}
 }
 
 func (n *Node) announceRawTx(ctx context.Context, txHash types.Hash, rawTx []byte, from peer.ID) {
@@ -103,11 +113,10 @@ func (n *Node) announceRawTx(ctx context.Context, txHash types.Hash, rawTx []byt
 	}
 }
 
-func (n *Node) announceTx(ctx context.Context, tx *ktypes.Transaction, from peer.ID) {
-	rawTx := tx.Bytes()
-	txHash := tx.Hash()
-
-	n.announceRawTx(ctx, txHash, rawTx, from)
+func (n *Node) announceTx(_ context.Context, _ *ktypes.Transaction, txID types.Hash, from peer.ID) {
+	// Storing nil for the raw transaction as it is already in the mempool and can be retrieved
+	// when dequeued. This helps in reducing the memory footprint of the queue.
+	n.queueTxn(txID, nil, from)
 }
 
 // advertiseTxToPeer sends a lightweight advertisement to a connected peer.
@@ -161,30 +170,6 @@ func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txHash typ
 	return nil
 }
 
-/*func randomTx(size int, signer auth.Signer) ([]byte, error) {
-	payload := &ktypes.KVPayload{
-		Key:   randBytes(32),
-		Value: randBytes(size),
-	}
-
-	tx, err := ktypes.CreateTransaction(payload, "test-chain", 1)
-	if err != nil {
-		return nil, err
-	}
-
-	if err := tx.Sign(signer); err != nil {
-		return nil, err
-	}
-
-	return tx.MarshalBinary()
-}
-
-func randBytes(n int) []byte {
-	b := make([]byte, n)
-	rand.Read(b)
-	return b
-}*/
-
 // startTxAnns handles periodic reannouncement. It can also be modified to
 // regularly create dummy transactions.
 func (n *Node) startTxAnns(ctx context.Context, reannouncePeriod time.Duration) {
@@ -229,17 +214,30 @@ func (n *Node) startTxAnns(ctx context.Context, reannouncePeriod time.Duration) 
 	}()
 }
 
-/*func secp256k1Signer() *auth.EthPersonalSigner {
-	privKey, _, err := crypto.GenerateSecp256k1Key(nil)
-	if err != nil {
-		return nil
-	}
+// startOrderedTxQueueAnns ensures that transaction announcements are broadcasted
+// in the order they are received, maintaining FIFO order for nonce consistency.
+func (n *Node) startOrderedTxQueueAnns(ctx context.Context) {
+	n.wg.Add(1)
+	go func() {
+		defer n.wg.Done()
 
-	privKeyBytes := privKey.Bytes()
-	k, err := crypto.UnmarshalSecp256k1PrivateKey(privKeyBytes)
-	if err != nil {
-		return nil
-	}
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case txn := <-n.txQueue:
+				rawTx := txn.rawtx
+				if txn.rawtx == nil {
+					// fetch the raw tx from the mempool
+					tx := n.mp.Get(txn.txID)
+					if tx == nil {
+						continue // tx was removed from mempool
+					}
+					rawTx = tx.Bytes()
+				}
 
-	return &auth.EthPersonalSigner{Key: *k}
-}*/
+				n.announceRawTx(ctx, txn.txID, rawTx, txn.from)
+			}
+		}
+	}()
+}

@@ -224,7 +224,7 @@ type ProposalBroadcaster func(ctx context.Context, blk *ktypes.Block)
 type BlkAnnouncer func(ctx context.Context, blk *ktypes.Block, ci *types.CommitInfo)
 
 // TxAnnouncer broadcasts the new transaction to the network
-type TxAnnouncer func(ctx context.Context, tx *ktypes.Transaction)
+type TxAnnouncer func(ctx context.Context, tx *ktypes.Transaction, txID types.Hash)
 
 // AckBroadcaster gossips the ack/nack messages to the network
 // type AckBroadcaster func(ack bool, height int64, blkID types.Hash, appHash *types.Hash, Signature []byte) error
