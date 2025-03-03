@@ -7,7 +7,6 @@ on:
 
 jobs:
   kgw-test-main:
-    if: false
     name: Run KGW test on main
     uses: ./.github/workflows/kgw-test-reuse.yaml
     with:

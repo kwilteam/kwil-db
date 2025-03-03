@@ -41,7 +41,7 @@ jobs:
     if: ${{ needs.changes.outputs.run == 'true' && !github.event.pull_request.draft}}
     runs-on: ubuntu-latest
 
-    services:
+    services: # for unit test
       postgres:
         image: kwildb/postgres:16.8-1
         env:
@@ -171,15 +171,7 @@ jobs:
           testGroupID=$(id -g)
           KACT_LOG_LEVEL=warn task test:act:nb -- -ugid "$testUserID:$testGroupID"
 
-      # - name: Run integration test
-      #   run: |
-      #     testUserID=$(id -u)
-      #     testGroupID=$(id -g)
-      #     cp test/integration/docker-compose.override.yml.example test/integration/docker-compose.override.yml
-      #     cp test/integration/docker-compose-migration.override.yml.example test/integration/docker-compose-migration.override.yml
-      #     sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/integration/docker-compose.override.yml
-      #     sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/integration/docker-compose-migration.override.yml
-      #     KIT_LOG_LEVEL=warn task test:it:nb
+      # integration tests take too long, we only manually trigger it
 
       - name: Move cache
         run: |
@@ -192,4 +184,4 @@ jobs:
 
       - name: Show error log
         if: ${{ failure() }}
-        run: grep -C 20 -s -i -r -e 'kwild version' -e 'error' -e 'warn'  /tmp/TestKwilAct*/*.log  /tmp/TestKwilInt*/*.log /tmp/TestKwilInt*/*/*.log
+        run: grep -C 20 -s -i -r -e 'kwild version' -e 'error' -e 'warn'  /tmp/TestKwil*/*.log /tmp/TestKwil*/*/*.log

@@ -35,17 +35,17 @@ jobs:
           filters: .github/filters-old.yaml
           #predicate-quantifier: 'every' # check dorny/paths-filter#225
 
+
   test:
     needs: changes
     #  only run only if there are changes and non-draft PRs
     if: ${{ needs.changes.outputs.run == 'true' && !github.event.pull_request.draft}}
     runs-on: ubuntu-latest
 
-    services:
+    services: # for unit test
       postgres:
         image: kwildb/postgres:16.8-1
         env:
-          POSTGRES_PORT: 5432
           POSTGRES_HOST_AUTH_METHOD: trust
         options: >-
           --health-cmd pg_isready
@@ -64,6 +64,9 @@ jobs:
 
       - name: Install Taskfile
         uses: arduino/setup-task@v2
+        with:
+          # higher Github API rate limiting
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
 
       #ubuntu-latest has go 1.21 installed https://github.com/actions/runner-images/blob/main/images/ubuntu/Ubuntu2204-Readme.md#go
       #self-hosted also has go 1.21 installed
@@ -75,34 +78,28 @@ jobs:
           check-latest: true
           #cache: false
 
-      - name: Install dependencies
+      - name: Install tools
         run: |
           go version
-          task install:deps
+          task tools
 
       # checks
-      - name: Check tidiness of go.mod and go.sum
-        run: |
-          ./scripts/mods/check_tidy
+      #- name: Ensure generate antlr Go code is up-to-date
+      #  run: |
+      #    ./scripts/kuneiform/check_tidy
 
-      - name: Ensure generate antlr Go code is up-to-date
-        run: |
-          ./scripts/kuneiform/check_tidy
-
-      - name: Initialize Go workspace
-        run: |
-          task work
+      # NOTE: we don't want to use workspace when test release
 
       - name: Compile packages, apps, and specs
         run: |
-          go build -mod=readonly ./... ./core/... ./test/specifications/
+          go build -mod=readonly ./... ./core/...
 
       - name: Lint
         uses: golangci/golangci-lint-action@v6.5.0
         with:
           install-mode: "binary"
           version: "latest"
-          args: ./... ./core/... ./test/... --timeout=10m --config=.golangci.yml
+          args: ./... ./core/... --timeout=10m --config=.golangci.yml
 
       # unit test
       - name: Run unit test
@@ -110,22 +107,6 @@ jobs:
           task test:unit
 
       # integration test
-      - name: Generate go vendor
-        #for faster builds and private repos, need to run this after pb:compile:v1
-        run: |
-          task vendor
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Cache Docker layers for kwild # both restore and save
-        uses: actions/cache@v4
-        with:
-          path: /tmp/.buildx-cache-kwild
-          key: ${{ runner.os }}-buildx-kwild-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-kwild
-
       - name: manual git tag
         run: |
           version=`echo ${{ github.sha }} | cut -c 1-7`
@@ -140,19 +121,34 @@ jobs:
       - name: Build cli binaries
         run: |
           task build:cli
-          task build:admin
+          task build:kwild
 
       - name: compile the core/client/example app
         run: go build -o /dev/null
         working-directory: core/client/example
+      #
+      #      - name: compile the core/gatewayclient/example app
+      #        run: go build -o /dev/null
+      #        working-directory: core/gatewayclient/example
 
-      - name: compile the core/gatewayclient/example app
-        run: go build -o /dev/null
-        working-directory: core/gatewayclient/example
+      - name: Generate go vendor
+        run: |
+          task vendor
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Cache Docker layers for kwild # both restore and save
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache-kwild
+          key: ${{ runner.os }}-buildx-kwild-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-buildx-kwild
 
       - name: Build kwild image
         id: docker_build_kwild
-        uses: docker/build-push-action@v5
+        uses: docker/build-push-action@v6
         with:
           context: .
           load: true
@@ -162,7 +158,7 @@ jobs:
             version=${{ env.GIT_TAG }}
             build_time=${{ env.BUILD_TIME }}
           #  go_race=-race
-          file: ./build/package/docker/kwild.dockerfile
+          file: ./contrib/docker/kwild.dockerfile
           push: false
           tags: kwild:latest
           cache-from: type=local,src=/tmp/.buildx-cache-kwild
@@ -172,19 +168,9 @@ jobs:
         run: |
           testUserID=$(id -u)
           testGroupID=$(id -g)
-          cp test/acceptance/docker-compose.override.yml.example test/acceptance/docker-compose.override.yml
-          sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/acceptance/docker-compose.override.yml
-          KACT_LOG_LEVEL=warn task test:act:nb
+          KACT_LOG_LEVEL=warn task test:act:nb -- -ugid "$testUserID:$testGroupID"
 
-      - name: Run integration test
-        run: |
-          testUserID=$(id -u)
-          testGroupID=$(id -g)
-          cp test/integration/docker-compose.override.yml.example test/integration/docker-compose.override.yml
-          cp test/integration/docker-compose-migration.override.yml.example test/integration/docker-compose-migration.override.yml
-          sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/integration/docker-compose.override.yml
-          sed -i "s/\${UID}:\${GID}/${testUserID}:${testGroupID}/g" test/integration/docker-compose-migration.override.yml
-          KIT_LOG_LEVEL=warn task test:it:nb
+      # integration tests take too long, we only manually trigger it
 
       - name: Move cache
         run: |
@@ -197,4 +183,4 @@ jobs:
 
       - name: Show error log
         if: ${{ failure() }}
-        run: grep -C 20 -s -i -r -e 'kwild version' -e 'error' -e 'warn'  /tmp/TestKwilAct*/*.log  /tmp/TestKwilInt*/*.log /tmp/TestKwilInt*/*/*.log
+        run: grep -C 20 -s -i -r -e 'kwild version' -e 'error' -e 'warn'  /tmp/TestKwil*/*.log /tmp/TestKwil*/*/*.log
