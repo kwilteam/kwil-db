@@ -21,6 +21,12 @@ type AccountResponse struct {
 	ID      *types.AccountID `json:"id,omitempty"`
 	Balance string           `json:"balance"`
 	Nonce   int64            `json:"nonce"`
+	Height  int64            `json:"height"`
+}
+
+type NumAccountsResponse struct {
+	Count  int64 `json:"count"`
+	Height int64 `json:"height"`
 }
 
 // BroadcastResponse contains the response object for MethodBroadcast.

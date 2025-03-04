@@ -47,6 +47,7 @@ type TxApp interface {
 
 	Price(ctx context.Context, dbTx sql.DB, tx *ktypes.Transaction, chainContext *common.ChainContext) (*big.Int, error)
 	AccountInfo(ctx context.Context, dbTx sql.DB, identifier *ktypes.AccountID, pending bool) (balance *big.Int, nonce int64, err error)
+	NumAccounts(ctx context.Context, dbTx sql.Executor) (int64, error)
 }
 
 // Question:
@@ -101,5 +102,5 @@ type MigratorModule interface {
 }
 
 type BlockStore interface {
-	GetByHeight(height int64) (types.Hash, *ktypes.Block, *types.CommitInfo, error)
+	GetByHeight(height int64) (types.Hash, *ktypes.Block, *ktypes.CommitInfo, error)
 }

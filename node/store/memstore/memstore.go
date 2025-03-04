@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	ktypes "github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/node/types"
+	"github.com/kwilteam/kwil-db/core/types"
+	ntypes "github.com/kwilteam/kwil-db/node/types"
 )
 
 type blockHashes struct { // meta
@@ -21,9 +21,9 @@ type MemBS struct {
 	mtx        sync.RWMutex
 	idx        map[types.Hash]int64
 	hashes     map[int64]blockHashes
-	blocks     map[types.Hash]*ktypes.Block
+	blocks     map[types.Hash]*types.Block
 	commitInfo map[types.Hash]*types.CommitInfo
-	txResults  map[types.Hash][]ktypes.TxResult
+	txResults  map[types.Hash][]types.TxResult
 	txIds      map[types.Hash]types.Hash // tx hash -> block hash
 	fetching   map[types.Hash]bool       // TODO: remove, app concern
 }
@@ -32,17 +32,25 @@ func NewMemBS() *MemBS {
 	return &MemBS{
 		idx:        make(map[types.Hash]int64),
 		hashes:     make(map[int64]blockHashes),
-		blocks:     make(map[types.Hash]*ktypes.Block),
-		txResults:  make(map[types.Hash][]ktypes.TxResult),
+		blocks:     make(map[types.Hash]*types.Block),
+		txResults:  make(map[types.Hash][]types.TxResult),
 		txIds:      make(map[types.Hash]types.Hash),
 		fetching:   make(map[types.Hash]bool),
 		commitInfo: make(map[types.Hash]*types.CommitInfo),
 	}
 }
 
-var _ types.BlockStore = &MemBS{}
+var _ ntypes.BlockStore = &MemBS{}
 
-func (bs *MemBS) Get(hash types.Hash) (*ktypes.Block, *types.CommitInfo, error) {
+func (bs *MemBS) GetRaw(hash types.Hash) ([]byte, *types.CommitInfo, error) {
+	blk, ci, err := bs.Get(hash)
+	if err != nil {
+		return nil, nil, err
+	}
+	return blk.Bytes(), ci, nil
+}
+
+func (bs *MemBS) Get(hash types.Hash) (*types.Block, *types.CommitInfo, error) {
 	bs.mtx.RLock()
 	defer bs.mtx.RUnlock()
 	blk, have := bs.blocks[hash]
@@ -56,7 +64,15 @@ func (bs *MemBS) Get(hash types.Hash) (*ktypes.Block, *types.CommitInfo, error) 
 	return blk, ci, nil
 }
 
-func (bs *MemBS) GetByHeight(height int64) (types.Hash, *ktypes.Block, *types.CommitInfo, error) {
+func (bs *MemBS) GetRawByHeight(height int64) (types.Hash, []byte, *types.CommitInfo, error) {
+	hash, blk, ci, err := bs.GetByHeight(height)
+	if err != nil {
+		return types.Hash{}, nil, nil, err
+	}
+	return hash, blk.Bytes(), ci, nil
+}
+
+func (bs *MemBS) GetByHeight(height int64) (types.Hash, *types.Block, *types.CommitInfo, error) {
 	// time.Sleep(100 * time.Millisecond) // wtf where is there a logic race in CE?
 	bs.mtx.RLock()
 	defer bs.mtx.RUnlock()
@@ -82,7 +98,7 @@ func (bs *MemBS) Have(blkid types.Hash) bool {
 	return have
 }
 
-func (bs *MemBS) Store(block *ktypes.Block, ci *types.CommitInfo) error {
+func (bs *MemBS) Store(block *types.Block, ci *types.CommitInfo) error {
 	if ci == nil {
 		return fmt.Errorf("commit info is nil")
 	}
@@ -104,14 +120,14 @@ func (bs *MemBS) Store(block *ktypes.Block, ci *types.CommitInfo) error {
 	return nil
 }
 
-func (bs *MemBS) StoreResults(hash types.Hash, results []ktypes.TxResult) error {
+func (bs *MemBS) StoreResults(hash types.Hash, results []types.TxResult) error {
 	bs.mtx.Lock()
 	defer bs.mtx.Unlock()
 	bs.txResults[hash] = results
 	return nil
 }
 
-func (bs *MemBS) Results(hash types.Hash) ([]ktypes.TxResult, error) {
+func (bs *MemBS) Results(hash types.Hash) ([]types.TxResult, error) {
 	bs.mtx.RLock()
 	defer bs.mtx.RUnlock()
 	res, have := bs.txResults[hash]
@@ -121,7 +137,7 @@ func (bs *MemBS) Results(hash types.Hash) ([]ktypes.TxResult, error) {
 	return res, nil
 }
 
-func (bs *MemBS) Result(hash types.Hash, idx uint32) (*ktypes.TxResult, error) {
+func (bs *MemBS) Result(hash types.Hash, idx uint32) (*types.TxResult, error) {
 	bs.mtx.RLock()
 	defer bs.mtx.RUnlock()
 	res, have := bs.txResults[hash]
@@ -170,7 +186,7 @@ func (bs *MemBS) PreFetch(blkid types.Hash) (bool, func()) {
 
 func (bs *MemBS) Close() error { return nil }
 
-func (bs *MemBS) GetTx(txHash types.Hash) (tx *ktypes.Transaction, height int64, hash types.Hash, idx uint32, err error) {
+func (bs *MemBS) GetTx(txHash types.Hash) (tx *types.Transaction, height int64, hash types.Hash, idx uint32, err error) {
 	bs.mtx.RLock()
 	defer bs.mtx.RUnlock()
 	// check the tx index, pull the block and then search for the tx with the expected hash

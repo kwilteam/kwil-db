@@ -30,6 +30,8 @@ const (
 		WHERE identifier = $3 AND id_type = $4`
 
 	sqlGetAccount = `SELECT balance, nonce FROM ` + schemaName + `.accounts WHERE identifier = $1 AND id_type = $2`
+
+	sqlNumAccounts = `SELECT COUNT(1) FROM ` + schemaName + `.accounts`
 )
 
 func initTables(ctx context.Context, tx sql.DB) error {
@@ -52,6 +54,24 @@ func updateAccount(ctx context.Context, db sql.Executor, acctID []byte, acctType
 func createAccount(ctx context.Context, db sql.Executor, acctID []byte, acctType uint32, amt *big.Int, nonce int64) error {
 	_, err := db.Execute(ctx, sqlCreateAccount, acctID, acctType, amt.String(), nonce)
 	return err
+}
+
+func numAccounts(ctx context.Context, db sql.Executor) (int64, error) {
+	results, err := db.Execute(ctx, sqlNumAccounts)
+	if err != nil {
+		return 0, err
+	}
+	if len(results.Rows) != 1 {
+		return 0, fmt.Errorf("expected 1 row, got %d", len(results.Rows))
+	}
+	if len(results.Rows[0]) != 1 {
+		return 0, fmt.Errorf("expected 1 column, got %d", len(results.Rows[0]))
+	}
+	count, ok := results.Rows[0][0].(int64)
+	if !ok { // bug
+		return 0, errors.New("failed to convert account count to int64")
+	}
+	return count, nil
 }
 
 // getAccount retrieves an account from the database.

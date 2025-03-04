@@ -124,8 +124,8 @@ func BroadcastCodeToError(code TxCode) error {
 type TxResult struct {
 	Code   uint32  `json:"code"`
 	Gas    int64   `json:"gas"`
-	Log    string  `json:"log"`
-	Events []Event `json:"events"`
+	Log    string  `json:"log,omitempty"`
+	Events []Event `json:"events,omitempty"`
 }
 
 // txResultsVer is the results structure or serialization version known presently

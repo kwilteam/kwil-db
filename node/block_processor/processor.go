@@ -421,7 +421,7 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 				}
 
 				txResult.Log += resErr
-				bp.log.Info("Failed to execute transaction", "tx", txHash, "err", res.Error)
+				bp.log.Info("failed transaction", "tx", txHash, "err", res.Error)
 			}
 
 			txResults[i] = txResult
@@ -880,6 +880,20 @@ func (bp *BlockProcessor) Price(ctx context.Context, dbTx sql.DB, tx *ktypes.Tra
 
 func (bp *BlockProcessor) AccountInfo(ctx context.Context, db sql.DB, identifier *ktypes.AccountID, pending bool) (balance *big.Int, nonce int64, err error) {
 	return bp.txapp.AccountInfo(ctx, db, identifier, pending)
+}
+
+// Height is provided to obtain the current height atomically with a call to
+// another method such as AccountInfo via a single database transaction.
+func (bp *BlockProcessor) Height(ctx context.Context, db sql.Executor) (int64, error) {
+	height, _, _, err := meta.GetChainState(ctx, db)
+	if err != nil {
+		return 0, fmt.Errorf("failed to get chain state: %w", err)
+	}
+	return height, nil
+}
+
+func (bp *BlockProcessor) NumAccounts(ctx context.Context, db sql.Executor) (int64, error) {
+	return bp.txapp.NumAccounts(ctx, db)
 }
 
 func (bp *BlockProcessor) GetValidators() []*ktypes.Validator {

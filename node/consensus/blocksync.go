@@ -160,7 +160,7 @@ func (ce *ConsensusEngine) syncBlock(ctx context.Context, height int64) error {
 	return ce.applyBlock(ctx, rawblk, ci, blkID)
 }
 
-func (ce *ConsensusEngine) applyBlock(ctx context.Context, rawBlk []byte, ci *types.CommitInfo, blkID types.Hash) error {
+func (ce *ConsensusEngine) applyBlock(ctx context.Context, rawBlk []byte, ci *ktypes.CommitInfo, blkID types.Hash) error {
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
@@ -176,7 +176,7 @@ func (ce *ConsensusEngine) applyBlock(ctx context.Context, rawBlk []byte, ci *ty
 	return nil
 }
 
-func (ce *ConsensusEngine) getBlock(ctx context.Context, height int64) (blkID types.Hash, rawBlk []byte, ci *types.CommitInfo, err error) {
+func (ce *ConsensusEngine) getBlock(ctx context.Context, height int64) (blkID types.Hash, rawBlk []byte, ci *ktypes.CommitInfo, err error) {
 	err = blkRetrier(ctx, 15, func() error {
 		blkID, rawBlk, ci, _, err = ce.blkRequester(ctx, height)
 		return err

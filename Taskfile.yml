@@ -46,7 +46,7 @@ tasks:
     desc: Lint with golangci-lint
     cmds:
       # skip-dirs only works in .yaml
-      - golangci-lint run ./... -c .golangci.yml
+      - golangci-lint run ./... ./core/... -c .golangci.yml
 
   linter:
     desc: Install the linter # not for CI which has an action for this

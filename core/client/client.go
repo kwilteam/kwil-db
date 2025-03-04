@@ -55,6 +55,11 @@ func (c *Client) SvcClient() user.TxSvcClient {
 	return c.txClient
 }
 
+// ChainClient is a trapdoor to access the underlying core/rpc/client/chain.Client.
+func (c *Client) ChainClient() chainrpc.Client {
+	return c.txClient
+}
+
 var _ clientType.Client = (*Client)(nil)
 
 // NewClient creates a Kwil client. The target should be a URL (for an
@@ -388,6 +393,10 @@ func (c *Client) Ping(ctx context.Context) (string, error) {
 // If status is AccountStatusPending, it will include the pending info.
 func (c *Client) GetAccount(ctx context.Context, acctID *types.AccountID, status types.AccountStatus) (*types.Account, error) {
 	return c.txClient.GetAccount(ctx, acctID, status)
+}
+
+func (c *Client) GetNumAccounts(ctx context.Context) (count, height int64, err error) {
+	return c.txClient.GetNumAccounts(ctx)
 }
 
 // EncodeInputs encodes input(a tuple) for usage in a transaction.

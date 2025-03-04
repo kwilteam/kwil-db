@@ -285,7 +285,7 @@ type dummyCE struct {
 	rejectACK    bool
 
 	ackHandler         func(validatorPK []byte, ack types.AckRes)
-	blockCommitHandler func(blk *ktypes.Block, ci *types.CommitInfo, blkID types.Hash)
+	blockCommitHandler func(blk *ktypes.Block, ci *ktypes.CommitInfo, blkID types.Hash)
 	blockPropHandler   func(blk *ktypes.Block)
 	resetStateHandler  func(height int64, txIDs []types.Hash)
 
@@ -304,19 +304,19 @@ func (ce *dummyCE) AcceptProposal(height int64, blkID, prevBlkID types.Hash, lea
 	return !ce.rejectProp
 }
 
-func (ce *dummyCE) AcceptCommit(height int64, blkID types.Hash, hdr *ktypes.BlockHeader, ci *types.CommitInfo, leaderSig []byte) bool {
+func (ce *dummyCE) AcceptCommit(height int64, blkID types.Hash, hdr *ktypes.BlockHeader, ci *ktypes.CommitInfo, leaderSig []byte) bool {
 	return !ce.rejectCommit
 }
 
-func (ce *dummyCE) NotifyBlockCommit(blk *ktypes.Block, ci *types.CommitInfo, blkID types.Hash, _ func()) {
+func (ce *dummyCE) NotifyBlockCommit(blk *ktypes.Block, ci *ktypes.CommitInfo, blkID types.Hash, _ func()) {
 	if ce.blockCommitHandler != nil {
 		ce.blockCommitHandler(blk, ci, blkID)
 		return
 	}
 }
 
-func (ce *dummyCE) Status() *types.NodeStatus {
-	return &types.NodeStatus{}
+func (ce *dummyCE) Status() *ktypes.NodeStatus {
+	return &ktypes.NodeStatus{}
 }
 
 func (ce *dummyCE) NotifyACK(validatorPK []byte, ack types.AckRes) {
@@ -411,7 +411,7 @@ func (f *faker) RequestBlock(ctx context.Context, height int64) {
 	f.blkRequester(ctx, height)
 }
 
-func (f *faker) AnnounceBlock(ctx context.Context, blk *ktypes.Block, ci *types.CommitInfo) {
+func (f *faker) AnnounceBlock(ctx context.Context, blk *ktypes.Block, ci *ktypes.CommitInfo) {
 	f.blkAnnouncer(ctx, blk, ci)
 }
 
@@ -427,7 +427,7 @@ func (f *faker) SetACKHandler(ackHandler func(validatorPK []byte, ack types.AckR
 	f.ackHandler = ackHandler
 }
 
-func (f *faker) SetBlockCommitHandler(blockCommitHandler func(blk *ktypes.Block, ci *types.CommitInfo, blkID types.Hash)) {
+func (f *faker) SetBlockCommitHandler(blockCommitHandler func(blk *ktypes.Block, ci *ktypes.CommitInfo, blkID types.Hash)) {
 	f.blockCommitHandler = blockCommitHandler
 }
 
@@ -448,7 +448,7 @@ func TestStreamsBlockFetch(t *testing.T) {
 
 	// to n1's block store, one block at height 1 with 2 txns
 	blk1, appHash1 := createTestBlock(1, 2)
-	n1.bki.Store(blk1, &types.CommitInfo{AppHash: appHash1})
+	n1.bki.Store(blk1, &ktypes.CommitInfo{AppHash: appHash1})
 
 	startNodes(t, nodes)
 

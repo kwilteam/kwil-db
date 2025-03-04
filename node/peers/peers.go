@@ -306,6 +306,7 @@ func (pm *PeerMan) maintainMinPeers(ctx context.Context) {
 				}
 				if !bk.try() {
 					if bk.maxedOut() {
+						pm.log.Warnf("Failed to connect to peer %s (%v) after %d attempts", peerIDStringer(pid), pid, bk.attempts)
 						pm.removePeer(pid)
 					}
 					continue
@@ -346,9 +347,8 @@ func (pm *PeerMan) startPex(ctx context.Context) {
 			go func() {
 				var count int
 				for peer := range peerChan {
-
 					if pm.addPeerAddrs(peer) {
-						pm.log.Info("Found new peer %v, connecting", peerIDStringer(peer.ID))
+						pm.log.Infof("Found new peer %v, connecting", peerIDStringer(peer.ID))
 						// TODO: connection manager, with limits
 						if err = pm.c.Connect(ctx, peer); err != nil {
 							pm.log.Warnf("Failed to connect to %s: %v", peerIDStringer(peer.ID), CompressDialError(err))
@@ -825,6 +825,7 @@ func (pm *PeerMan) Disallow(p peer.ID) {
 	pm.wlMtx.Unlock()
 	if pm.cg.Disallow(p) {
 		// Disconnect the peer if it is connected
+		pm.log.Infof("Removing disallowed peer %s (%v)", peerIDStringer(p), p)
 		pm.removePeer(p)
 	}
 }
@@ -989,12 +990,15 @@ func (pm *PeerMan) Disconnected(net network.Network, conn network.Conn) {
 			return
 		}
 	}
+
 	if len(pm.ps.Addrs(peerID)) == 0 { // we explicitly removed it
+		pm.log.Warnf("Disconnected from peer %v with no addresses.", peerIDStringer(peerID))
 		pm.ps.RemovePeer(peerID) // forget peer ID, and also remove metadata and keys
 		return
 	}
 
 	pm.log.Infof("Disconnected from peer %v", peerIDStringer(peerID))
+
 	// Store disconnection timestamp
 	pm.mtx.Lock()
 	defer pm.mtx.Unlock()

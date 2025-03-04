@@ -27,6 +27,7 @@ const HashLen = types.HashLen
 type Hash = types.Hash
 type BlockStore interface {
 	BlockGetter
+	RawGetter
 	BlockStorer
 	TxGetter
 	BlockResultsStorer
@@ -40,17 +41,17 @@ type BlockStore interface {
 
 type BlockGetter interface {
 	Have(Hash) bool
-	Get(Hash) (*types.Block, *CommitInfo, error)
-	GetByHeight(int64) (Hash, *types.Block, *CommitInfo, error) // note: we can impl GetBlockHeader easily too
+	Get(Hash) (*types.Block, *types.CommitInfo, error)
+	GetByHeight(int64) (Hash, *types.Block, *types.CommitInfo, error) // note: we can impl GetBlockHeader easily too
 }
 
 type RawGetter interface {
-	GetRaw(Hash) ([]byte, error)
-	GetRawByHeight(int64) (Hash, []byte)
+	GetRaw(Hash) ([]byte, *types.CommitInfo, error)
+	GetRawByHeight(int64) (Hash, []byte, *types.CommitInfo, error)
 }
 
 type BlockStorer interface {
-	Store(*types.Block, *CommitInfo) error
+	Store(*types.Block, *types.CommitInfo) error
 }
 
 type BlockResultsStorer interface {

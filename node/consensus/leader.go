@@ -187,14 +187,14 @@ func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 	}
 
 	// Add its own vote to the votes map
-	sig, err := types.SignVote(blkProp.blkHash, true, &ce.state.blockRes.appHash, ce.privKey)
+	sig, err := ktypes.SignVote(blkProp.blkHash, true, &ce.state.blockRes.appHash, ce.privKey)
 	if err != nil {
 		return fmt.Errorf("error signing the vote: %w", err)
 	}
 
-	ce.state.votes[string(ce.pubKey.Bytes())] = &types.VoteInfo{
+	ce.state.votes[string(ce.pubKey.Bytes())] = &ktypes.VoteInfo{
 		AppHash:   &ce.state.blockRes.appHash,
-		AckStatus: types.Agreed,
+		AckStatus: ktypes.AckAgree,
 		Signature: *sig,
 	}
 
@@ -350,18 +350,18 @@ func (ce *ConsensusEngine) addVote(ctx context.Context, voteMsg *vote, sender st
 	ce.log.Info("Adding vote", "height", vote.Height, "blkHash", vote.BlkHash, "appHash", vote.AppHash, "sender", sender)
 	if _, ok := ce.state.votes[sender]; !ok {
 		// verify the vote signature, before accepting the vote from the validator if ack is true
-		var ackStatus types.AckStatus
+		var ackStatus ktypes.AckStatus
 		var appHash *types.Hash
 
 		if vote.ACK {
-			ackStatus = types.Agreed
+			ackStatus = ktypes.AckAgree
 			if *vote.AppHash != ce.state.blockRes.appHash {
-				ackStatus = types.Forked
+				ackStatus = ktypes.AckForked
 				appHash = vote.AppHash
 			}
 		}
 
-		voteInfo := &types.VoteInfo{
+		voteInfo := &ktypes.VoteInfo{
 			Signature: *vote.Signature,
 			AckStatus: ackStatus,
 			AppHash:   appHash,
@@ -397,7 +397,7 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) {
 	// Count the votes
 	var acks, nacks int
 	for _, vote := range ce.state.votes {
-		if vote.AckStatus == types.Agreed {
+		if vote.AckStatus == ktypes.AckAgree {
 			acks++
 		} else {
 			nacks++
@@ -418,11 +418,11 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) {
 	ce.log.Info("Majority of the validators have accepted the block, proceeding to commit the block",
 		"height", blkProp.blk.Header.Height, "hash", blkProp.blkHash, "acks", acks, "nacks", nacks)
 
-	votes := make([]*types.VoteInfo, 0, len(ce.state.votes))
+	votes := make([]*ktypes.VoteInfo, 0, len(ce.state.votes))
 	for _, v := range ce.state.votes {
 		votes = append(votes, v)
 	}
-	slices.SortFunc(votes, func(a, b *types.VoteInfo) int {
+	slices.SortFunc(votes, func(a, b *ktypes.VoteInfo) int {
 		if diff := bytes.Compare(a.Signature.PubKey, b.Signature.PubKey); diff != 0 {
 			return diff
 		}
@@ -436,7 +436,7 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) {
 	// it from the param updates (also update the hash)
 
 	// Set the commit info for the accepted block
-	ce.state.commitInfo = &types.CommitInfo{
+	ce.state.commitInfo = &ktypes.CommitInfo{
 		AppHash:          blkRes.appHash,
 		Votes:            votes,
 		ParamUpdates:     blkRes.paramUpdates,

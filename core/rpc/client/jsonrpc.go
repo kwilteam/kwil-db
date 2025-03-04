@@ -219,7 +219,8 @@ func clientError(jsonRPCErr *jsonrpc.Error) error {
 	err := errors.Join(jsonRPCErr, rpcErr)
 
 	switch jsonRPCErr.Code {
-	case jsonrpc.ErrorEngineDatasetNotFound, jsonrpc.ErrorTxNotFound, jsonrpc.ErrorValidatorNotFound:
+	case jsonrpc.ErrorEngineDatasetNotFound, jsonrpc.ErrorTxNotFound, jsonrpc.ErrorValidatorNotFound,
+		jsonrpc.ErrorBlkNotFound:
 		return errors.Join(ErrNotFound, err)
 	case jsonrpc.ErrorUnknownMethod:
 		return errors.Join(ErrMethodNotFound, err)

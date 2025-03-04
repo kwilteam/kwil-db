@@ -59,7 +59,7 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 
 		// send a nack to the leader
 		status := types.NackStatusOutOfSync
-		sig, err := types.SignVote(blkID, false, nil, ce.privKey)
+		sig, err := ktypes.SignVote(blkID, false, nil, ce.privKey)
 		if err != nil {
 			ce.log.Error("Error signing the voteInfo", "error", err)
 			return false
@@ -116,7 +116,7 @@ func (ce *ConsensusEngine) AcceptProposal(height int64, blkID, prevBlockID types
 // This also checks if the node should request the block from its peers. This can happen
 // 1. If the node is a sentry node and doesn't have the block.
 // 2. If the node is a validator and missed the block proposal message.
-func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, hdr *ktypes.BlockHeader, ci *types.CommitInfo, leaderSig []byte) bool {
+func (ce *ConsensusEngine) AcceptCommit(height int64, blkID types.Hash, hdr *ktypes.BlockHeader, ci *ktypes.CommitInfo, leaderSig []byte) bool {
 	ce.stateInfo.mtx.RLock()
 	defer ce.stateInfo.mtx.RUnlock()
 
@@ -224,7 +224,7 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 	ce.log.Debug("Processing block proposal", "height", blkPropMsg.blk.Header.Height, "blkID", blkPropMsg.blkHash, "numTxs", blkPropMsg.blk.Header.NumTxns)
 
 	if err := ce.validateBlock(blkPropMsg.blk); err != nil {
-		sig, err := types.SignVote(blkPropMsg.blkHash, false, nil, ce.privKey)
+		sig, err := ktypes.SignVote(blkPropMsg.blkHash, false, nil, ce.privKey)
 		if err != nil {
 			return fmt.Errorf("error signing the voteInfo: %w", err)
 		}
@@ -274,7 +274,7 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 	ce.log.Info("Sending ack to the leader", "height", blkPropMsg.height,
 		"hash", blkPropMsg.blkHash, "appHash", ce.state.blockRes.appHash)
 
-	signature, err := types.SignVote(blkPropMsg.blkHash, true, &ce.state.blockRes.appHash, ce.privKey)
+	signature, err := ktypes.SignVote(blkPropMsg.blkHash, true, &ce.state.blockRes.appHash, ce.privKey)
 	if err != nil {
 		ce.log.Error("Error signing the voteInfo", "error", err)
 		return err
@@ -300,7 +300,7 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 // If the validator node processed a different block, it should rollback and reprocess the block.
 // Validator nodes can skip the block execution and directly commit the block if they have already processed the block.
 // The nodes should only commit the block if the appHash is valid, else halt the node.
-func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, ci *types.CommitInfo, blkID types.Hash, done func()) error {
+func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, ci *ktypes.CommitInfo, blkID types.Hash, done func()) error {
 	ce.state.mtx.Lock()
 	defer ce.state.mtx.Unlock()
 
@@ -371,7 +371,7 @@ func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, c
 
 // processAndCommit: used by the sentry nodes and slow validators to process and commit the block.
 // This is used when the acks are not required to be sent back to the leader, essentially in catchup mode.
-func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Block, ci *types.CommitInfo, blkID types.Hash, syncing bool) error {
+func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Block, ci *ktypes.CommitInfo, blkID types.Hash, syncing bool) error {
 	if ci == nil {
 		return fmt.Errorf("commitInfo is nil")
 	}
@@ -442,7 +442,7 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Blo
 	return nil
 }
 
-func (ce *ConsensusEngine) acceptCommitInfo(ci *types.CommitInfo, blkID ktypes.Hash) error {
+func (ce *ConsensusEngine) acceptCommitInfo(ci *ktypes.CommitInfo, blkID ktypes.Hash) error {
 	if ci == nil {
 		return fmt.Errorf("commitInfo is nil")
 	}
@@ -461,7 +461,7 @@ func (ce *ConsensusEngine) acceptCommitInfo(ci *types.CommitInfo, blkID ktypes.H
 	return nil
 }
 
-func (ce *ConsensusEngine) verifyVotes(ci *types.CommitInfo, blkID ktypes.Hash) error {
+func (ce *ConsensusEngine) verifyVotes(ci *ktypes.CommitInfo, blkID ktypes.Hash) error {
 	// Validate CommitInfo
 	var acks int
 	for _, vote := range ci.Votes {
@@ -476,7 +476,7 @@ func (ce *ConsensusEngine) verifyVotes(ci *types.CommitInfo, blkID ktypes.Hash) 
 			return fmt.Errorf("error verifying vote: %w", err)
 		}
 
-		if vote.AckStatus == types.Agreed {
+		if vote.AckStatus == ktypes.AckAgree {
 			acks++
 		}
 	}

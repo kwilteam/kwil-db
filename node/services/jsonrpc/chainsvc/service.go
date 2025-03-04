@@ -3,6 +3,7 @@ package chainsvc
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/config"
@@ -39,8 +40,10 @@ var (
 // Node specifies the methods required for chain service to interact with the blockchain.
 type Node interface {
 	// BlockByHeight returns block info at height. If height=0, the latest block will be returned.
-	BlockByHeight(height int64) (ktypes.Hash, *ktypes.Block, *nodetypes.CommitInfo, error)
-	BlockByHash(hash ktypes.Hash) (*ktypes.Block, *nodetypes.CommitInfo, error)
+	BlockByHeight(height int64) (ktypes.Hash, *ktypes.Block, *ktypes.CommitInfo, error)
+	BlockByHash(hash ktypes.Hash) (*ktypes.Block, *ktypes.CommitInfo, error)
+	RawBlockByHeight(height int64) (ktypes.Hash, []byte, *ktypes.CommitInfo, error)
+	RawBlockByHash(hash ktypes.Hash) ([]byte, *ktypes.CommitInfo, error)
 	BlockResultByHash(hash ktypes.Hash) ([]ktypes.TxResult, error)
 	ChainTx(hash ktypes.Hash) (*chaintypes.Tx, error)
 	BlockHeight() int64
@@ -54,15 +57,38 @@ type Validators interface {
 
 type Service struct {
 	log        log.Logger
-	genesisCfg *config.GenesisConfig
+	genesisCfg *chainjson.GenesisResponse
 	voting     Validators
 	blockchain Node // node is the local node that can accept transactions.
 }
 
 func NewService(log log.Logger, blockchain Node, voting Validators, genesisCfg *config.GenesisConfig) *Service {
+	// Prepare the static Genesis config response.
+	var allocs []chaintypes.GenesisAlloc
+	for _, alloc := range genesisCfg.Allocs {
+		allocs = append(allocs, chaintypes.GenesisAlloc{
+			ID:      alloc.ID.HexBytes,
+			KeyType: alloc.KeyType,
+			Amount:  alloc.Amount.String(),
+		})
+	}
+	genCfg := &chainjson.GenesisResponse{
+		ChainID:          genesisCfg.ChainID,
+		InitialHeight:    genesisCfg.InitialHeight,
+		DBOwner:          genesisCfg.DBOwner,
+		Leader:           genesisCfg.Leader,
+		Validators:       genesisCfg.Validators,
+		StateHash:        genesisCfg.StateHash,
+		Allocs:           allocs,
+		MaxBlockSize:     genesisCfg.MaxBlockSize,
+		JoinExpiry:       genesisCfg.JoinExpiry,
+		DisabledGasCosts: genesisCfg.DisabledGasCosts,
+		MaxVotesPerTx:    genesisCfg.MaxVotesPerTx,
+	}
+
 	return &Service{
 		log:        log,
-		genesisCfg: genesisCfg,
+		genesisCfg: genCfg,
 		voting:     voting,
 		blockchain: blockchain,
 	}
@@ -146,39 +172,44 @@ func (svc *Service) Block(_ context.Context, req *chainjson.BlockRequest) (*chai
 		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "height cannot be negative", nil)
 	}
 
+	var rawBlock []byte
+	var commitInfo *ktypes.CommitInfo
+	var err error
+	blkHash := req.Hash
+
 	// prioritize req.Hash over req.Height
-	if !req.Hash.IsZero() {
-		block, commitInfo, err := svc.blockchain.BlockByHash(req.Hash)
-		if err != nil {
-			svc.log.Error("block by hash", "hash", req.Hash, "error", err)
-			return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to get block", nil)
-		}
-
-		if commitInfo == nil {
-			return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "commit info is empty", nil)
-		}
-
-		return &chainjson.BlockResponse{
-			Header:    (*chaintypes.BlockHeader)(block.Header),
-			Txns:      block.Txns,
-			Signature: block.Signature,
-			Hash:      req.Hash,
-			AppHash:   commitInfo.AppHash,
-		}, nil
+	if req.Hash.IsZero() {
+		blkHash, rawBlock, commitInfo, err = svc.blockchain.RawBlockByHeight(req.Height)
+	} else {
+		rawBlock, commitInfo, err = svc.blockchain.RawBlockByHash(req.Hash)
 	}
 
-	blockHash, block, commitInfo, err := svc.blockchain.BlockByHeight(req.Height)
-	svc.log.Error("block by height", "height", req.Height, "hash", req.Hash, "error", err)
 	if err != nil {
+		if errors.Is(err, nodetypes.ErrBlkNotFound) || errors.Is(err, nodetypes.ErrNotFound) {
+			return nil, jsonrpc.NewError(jsonrpc.ErrorBlkNotFound, "block not found", nil)
+		}
+		svc.log.Error("block request", "height", req.Height, "hash", req.Hash, "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to get block", nil)
 	}
 
+	if req.Raw {
+		return &chainjson.BlockResponse{
+			Hash:       blkHash,
+			RawBlock:   rawBlock,
+			CommitInfo: commitInfo,
+		}, nil
+	}
+
+	block, err := ktypes.DecodeBlock(rawBlock)
+	if err != nil {
+		svc.log.Error("failed to decode block", "height", req.Height, "hash", req.Hash, "error", err)
+		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to decode block", nil)
+	}
+
 	return &chainjson.BlockResponse{
-		Header:    (*chaintypes.BlockHeader)(block.Header),
-		Txns:      block.Txns,
-		Signature: block.Signature,
-		Hash:      blockHash,
-		AppHash:   commitInfo.AppHash,
+		Hash:       blkHash,
+		Block:      block,
+		CommitInfo: commitInfo,
 	}, nil
 }
 
@@ -190,14 +221,21 @@ func (svc *Service) BlockResult(_ context.Context, req *chainjson.BlockResultReq
 	}
 
 	if !req.Hash.IsZero() {
-		block, _, err := svc.blockchain.BlockByHash(req.Hash)
+		// TODO: commit info for valudator updates
+		block, _ /*commitInfo*/, err := svc.blockchain.BlockByHash(req.Hash)
 		if err != nil {
+			if errors.Is(err, nodetypes.ErrBlkNotFound) || errors.Is(err, nodetypes.ErrNotFound) {
+				return nil, jsonrpc.NewError(jsonrpc.ErrorBlkNotFound, "block not found", nil)
+			}
 			svc.log.Error("block by hash", "hash", req.Hash, "error", err)
 			return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to get block: "+err.Error(), nil)
 		}
 
 		txResults, err := svc.blockchain.BlockResultByHash(req.Hash)
 		if err != nil {
+			if errors.Is(err, nodetypes.ErrBlkNotFound) || errors.Is(err, nodetypes.ErrNotFound) {
+				return nil, jsonrpc.NewError(jsonrpc.ErrorBlkNotFound, "block not found", nil)
+			}
 			svc.log.Error("block result by hash", "hash", req.Hash, "error", err)
 			return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to get block result: "+err.Error(), nil)
 		}
@@ -210,13 +248,19 @@ func (svc *Service) BlockResult(_ context.Context, req *chainjson.BlockResultReq
 	}
 
 	blockHash, block, _, err := svc.blockchain.BlockByHeight(req.Height)
-	svc.log.Error("block by height", "height", req.Height, "hash", req.Hash, "error", err)
 	if err != nil {
+		if errors.Is(err, nodetypes.ErrBlkNotFound) || errors.Is(err, nodetypes.ErrNotFound) {
+			return nil, jsonrpc.NewError(jsonrpc.ErrorBlkNotFound, "block not found", nil)
+		}
+		svc.log.Error("block by height", "height", req.Height, "hash", req.Hash, "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to get block", nil)
 	}
 
 	txResults, err := svc.blockchain.BlockResultByHash(blockHash)
 	if err != nil {
+		if errors.Is(err, nodetypes.ErrBlkNotFound) || errors.Is(err, nodetypes.ErrNotFound) {
+			return nil, jsonrpc.NewError(jsonrpc.ErrorBlkNotFound, "block not found", nil)
+		}
 		svc.log.Error("block result by hash", "hash", req.Hash, "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to get block result: "+err.Error(), nil)
 	}
@@ -236,6 +280,9 @@ func (svc *Service) Tx(_ context.Context, req *chainjson.TxRequest) (*chainjson.
 
 	tx, err := svc.blockchain.ChainTx(req.Hash)
 	if err != nil {
+		if errors.Is(err, nodetypes.ErrTxNotFound) || errors.Is(err, nodetypes.ErrNotFound) {
+			return nil, jsonrpc.NewError(jsonrpc.ErrorTxNotFound, "transaction not found", nil)
+		}
 		svc.log.Error("tx by hash", "hash", req.Hash, "error", err)
 		return nil, jsonrpc.NewError(jsonrpc.ErrorNodeInternal, "failed to get tx: "+err.Error(), nil)
 	}
@@ -244,22 +291,14 @@ func (svc *Service) Tx(_ context.Context, req *chainjson.TxRequest) (*chainjson.
 }
 
 func (svc *Service) Genesis(ctx context.Context, _ *chainjson.GenesisRequest) (*chainjson.GenesisResponse, *jsonrpc.Error) {
-	return &chainjson.GenesisResponse{
-		ChainID: svc.genesisCfg.ChainID,
-		// Leader:           svc.genesisCfg.Leader,
-		Validators:       svc.genesisCfg.Validators,
-		MaxBlockSize:     svc.genesisCfg.MaxBlockSize,
-		JoinExpiry:       svc.genesisCfg.JoinExpiry,
-		DisabledGasCosts: svc.genesisCfg.DisabledGasCosts,
-		MaxVotesPerTx:    svc.genesisCfg.MaxVotesPerTx,
-	}, nil
+	return svc.genesisCfg, nil
 }
 
 func (svc *Service) ConsensusParams(_ context.Context, _ *chainjson.ConsensusParamsRequest) (*chainjson.ConsensusParamsResponse, *jsonrpc.Error) {
 	return svc.blockchain.ConsensusParams(), nil
 }
 
-// Validators returns validator set at certain height. Default to latest height.
+// Validators returns validator set at the current height.
 func (svc *Service) Validators(_ context.Context, _ *chainjson.ValidatorsRequest) (*chainjson.ValidatorsResponse, *jsonrpc.Error) {
 	// NOTE: should be able to get validator set at req.Height
 	vals := svc.voting.GetValidators()

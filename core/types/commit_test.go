@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"testing"
 
-	"github.com/kwilteam/kwil-db/core/crypto"
-	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/stretchr/testify/require"
+
+	"github.com/kwilteam/kwil-db/core/crypto"
 )
 
 func TestSignature(t *testing.T) {
@@ -64,7 +64,7 @@ func TestVoteInfo(t *testing.T) {
 				PubKey:     []byte("public-key"),
 				PubKeyType: crypto.KeyTypeSecp256k1,
 			},
-			AckStatus: Rejected,
+			AckStatus: AckReject,
 		}
 
 		data, err := vote.MarshalBinary()
@@ -90,7 +90,7 @@ func TestVoteInfo(t *testing.T) {
 				PubKey:     []byte("public-key"),
 				PubKeyType: crypto.KeyTypeSecp256k1,
 			},
-			AckStatus: Rejected,
+			AckStatus: AckReject,
 		}
 		data, err := vote.MarshalBinary()
 		require.NoError(t, err)
@@ -107,7 +107,7 @@ func TestVoteInfo(t *testing.T) {
 				PubKey:     []byte("public-key"),
 				PubKeyType: crypto.KeyTypeSecp256k1,
 			},
-			AckStatus: Rejected,
+			AckStatus: AckReject,
 		}
 
 		data, err := vote.MarshalBinary()
@@ -121,14 +121,14 @@ func TestVoteInfo(t *testing.T) {
 		require.Error(t, err)
 	})
 
-	t.Run("AckStatus Agreed", func(t *testing.T) {
+	t.Run("AckStatus AckAgree", func(t *testing.T) {
 		vote := &VoteInfo{
 			Signature: Signature{
 				Data:       []byte("signature"),
 				PubKey:     []byte("public-key"),
 				PubKeyType: crypto.KeyTypeSecp256k1,
 			},
-			AckStatus: Agreed,
+			AckStatus: AckAgree,
 		}
 
 		data, err := vote.MarshalBinary()
@@ -148,7 +148,7 @@ func TestVoteInfo(t *testing.T) {
 				PubKey:     []byte("public-key"),
 				PubKeyType: crypto.KeyTypeSecp256k1,
 			},
-			AckStatus: Forked,
+			AckStatus: AckForked,
 			AppHash:   &hash,
 		}
 
@@ -168,7 +168,7 @@ func TestVoteInfo(t *testing.T) {
 				PubKey:     []byte("public-key"),
 				PubKeyType: crypto.KeyTypeSecp256k1,
 			},
-			AckStatus: Forked,
+			AckStatus: AckForked,
 		}
 
 		_, err := vote.MarshalBinary()
@@ -192,7 +192,7 @@ func TestSignAndVerifyVote(t *testing.T) {
 
 		vote := &VoteInfo{
 			Signature: *sig,
-			AckStatus: Agreed,
+			AckStatus: AckAgree,
 		}
 		valid := vote.Verify(blkID, appHash)
 		require.NoError(t, valid)
@@ -214,7 +214,7 @@ func TestSignAndVerifyVote(t *testing.T) {
 
 		vote := &VoteInfo{
 			Signature: *sig,
-			AckStatus: Forked,
+			AckStatus: AckForked,
 		}
 		// Vote is missing AppHash
 		valid := vote.Verify(blkID, appHash)
@@ -227,7 +227,7 @@ func TestSignAndVerifyVote(t *testing.T) {
 
 		vote := &VoteInfo{
 			Signature: *sig,
-			AckStatus: Rejected, // Disagreed vote should be signed with Ack = false and without AppHash
+			AckStatus: AckReject, // Disagreed vote should be signed with Ack = false and without AppHash
 		}
 
 		valid := vote.Verify(blkID, appHash)
@@ -240,7 +240,7 @@ func TestSignAndVerifyVote(t *testing.T) {
 
 		vote := &VoteInfo{
 			Signature: *sig,
-			AckStatus: Rejected,
+			AckStatus: AckReject,
 		}
 		// Vote is missing AppHash
 		valid := vote.Verify(blkID, appHash)
@@ -253,7 +253,7 @@ func TestSignAndVerifyVote(t *testing.T) {
 
 		vote := &VoteInfo{
 			Signature: *sig,
-			AckStatus: Rejected,
+			AckStatus: AckReject,
 		}
 		// Vote is missing AppHash
 		valid := vote.Verify(blkID, appHash)
@@ -267,7 +267,7 @@ func TestSignAndVerifyVote(t *testing.T) {
 
 		vote := &VoteInfo{
 			Signature: *sig,
-			AckStatus: Rejected,
+			AckStatus: AckReject,
 		}
 
 		// Verify with different key
@@ -292,8 +292,8 @@ func TestCommitInfo(t *testing.T) {
 		commit := &CommitInfo{
 			AppHash:          appHash,
 			Votes:            make([]*VoteInfo, 0),
-			ParamUpdates:     types.ParamUpdates{},
-			ValidatorUpdates: make([]*types.Validator, 0),
+			ParamUpdates:     ParamUpdates{},
+			ValidatorUpdates: make([]*Validator, 0),
 		}
 		data, err := commit.MarshalBinary()
 		require.NoError(t, err)
@@ -307,8 +307,8 @@ func TestCommitInfo(t *testing.T) {
 	t.Run("Zero Votes Without AppHash", func(t *testing.T) {
 		commit := &CommitInfo{
 			Votes:            make([]*VoteInfo, 0),
-			ParamUpdates:     types.ParamUpdates{},
-			ValidatorUpdates: make([]*types.Validator, 0),
+			ParamUpdates:     ParamUpdates{},
+			ValidatorUpdates: make([]*Validator, 0),
 		}
 		data, err := commit.MarshalBinary()
 		require.NoError(t, err)
@@ -325,14 +325,14 @@ func TestCommitInfo(t *testing.T) {
 
 		vote := &VoteInfo{
 			Signature: *sig,
-			AckStatus: Agreed,
+			AckStatus: AckAgree,
 		}
 
 		commitInfo := &CommitInfo{
 			AppHash:          appHash,
 			Votes:            make([]*VoteInfo, 0),
-			ParamUpdates:     types.ParamUpdates{},
-			ValidatorUpdates: make([]*types.Validator, 0),
+			ParamUpdates:     ParamUpdates{},
+			ValidatorUpdates: make([]*Validator, 0),
 		}
 		commitInfo.Votes = append(commitInfo.Votes, vote)
 
@@ -354,19 +354,19 @@ func TestCommitInfo(t *testing.T) {
 
 		vote1 := &VoteInfo{
 			Signature: *sig1,
-			AckStatus: Agreed,
+			AckStatus: AckAgree,
 		}
 
 		vote2 := &VoteInfo{
 			Signature: *sig2,
-			AckStatus: Rejected,
+			AckStatus: AckReject,
 		}
 
 		commitInfo := &CommitInfo{
 			AppHash:          appHash,
 			Votes:            make([]*VoteInfo, 0),
-			ParamUpdates:     types.ParamUpdates{},
-			ValidatorUpdates: make([]*types.Validator, 0),
+			ParamUpdates:     ParamUpdates{},
+			ValidatorUpdates: make([]*Validator, 0),
 		}
 		commitInfo.Votes = append(commitInfo.Votes, vote1, vote2)
 
@@ -383,17 +383,17 @@ func TestCommitInfo(t *testing.T) {
 		commit := &CommitInfo{
 			AppHash:      appHash,
 			Votes:        make([]*VoteInfo, 0),
-			ParamUpdates: types.ParamUpdates{},
-			ValidatorUpdates: []*types.Validator{
+			ParamUpdates: ParamUpdates{},
+			ValidatorUpdates: []*Validator{
 				{
-					AccountID: types.AccountID{
+					AccountID: AccountID{
 						Identifier: []byte("validator-1"),
 						KeyType:    crypto.KeyTypeEd25519,
 					},
 					Power: 200,
 				},
 				{
-					AccountID: types.AccountID{
+					AccountID: AccountID{
 						Identifier: []byte("validator-1"),
 						KeyType:    crypto.KeyTypeEd25519,
 					},

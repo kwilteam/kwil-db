@@ -58,7 +58,7 @@ type SnapshotConfig struct {
 }
 
 type BlockStore interface {
-	GetByHeight(height int64) (types.Hash, *ktypes.Block, *types.CommitInfo, error)
+	GetByHeight(height int64) (types.Hash, *ktypes.Block, *ktypes.CommitInfo, error)
 	Best() (height int64, blkHash, appHash types.Hash, stamp time.Time)
 }
 

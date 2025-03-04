@@ -110,7 +110,7 @@ type AckRes struct {
 	OutOfSyncProof *OutOfSyncProof
 
 	// Signature
-	Signature *Signature
+	Signature *types.Signature
 }
 
 func (ar AckRes) ack() string {
@@ -274,8 +274,8 @@ func (ar *AckRes) UnmarshalBinary(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("failed to read signature in AckRes: %v", err)
 	}
-	sig, err := DecodeSignature(sigBts)
-	if err != nil {
+	sig := &types.Signature{}
+	if _, err := sig.ReadFrom(bytes.NewReader(sigBts)); err != nil {
 		return fmt.Errorf("failed to decode signature in AckRes: %v", err)
 	}
 	ar.Signature = sig

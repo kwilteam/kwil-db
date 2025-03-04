@@ -15,6 +15,7 @@ type Accounts interface {
 	Credit(ctx context.Context, tx sql.Executor, acctID *types.AccountID, amount *big.Int) error
 	Transfer(ctx context.Context, tx sql.TxMaker, from, to *types.AccountID, amount *big.Int) error
 	GetAccount(ctx context.Context, tx sql.Executor, acctID *types.AccountID) (*types.Account, error)
+	NumAccounts(ctx context.Context, tx sql.Executor) (int64, error)
 	ApplySpend(ctx context.Context, tx sql.Executor, acctID *types.AccountID, amount *big.Int, nonce int64) error
 	Commit() error
 	Rollback()

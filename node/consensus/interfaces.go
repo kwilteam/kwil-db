@@ -34,9 +34,9 @@ type Mempool interface {
 // BlockStore includes both txns and blocks
 type BlockStore interface {
 	Best() (height int64, blkHash, appHash types.Hash, stamp time.Time)
-	Store(block *ktypes.Block, commitInfo *types.CommitInfo) error
-	Get(blkid types.Hash) (*ktypes.Block, *types.CommitInfo, error)
-	GetByHeight(height int64) (types.Hash, *ktypes.Block, *types.CommitInfo, error)
+	Store(block *ktypes.Block, commitInfo *ktypes.CommitInfo) error
+	Get(blkid types.Hash) (*ktypes.Block, *ktypes.CommitInfo, error)
+	GetByHeight(height int64) (types.Hash, *ktypes.Block, *ktypes.CommitInfo, error)
 	StoreResults(hash types.Hash, results []ktypes.TxResult) error
 	Results(hash types.Hash) ([]ktypes.TxResult, error)
 }

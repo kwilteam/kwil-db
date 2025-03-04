@@ -153,6 +153,11 @@ func (v *Validator) String() string {
 	return fmt.Sprintf("Validator{pubkey = %x, keyType = %s, power = %d}", v.Identifier, v.KeyType, v.Power)
 }
 
+func (v *Validator) Bytes() []byte {
+	bts, _ := v.MarshalBinary() // does not error
+	return bts
+}
+
 func (v *Validator) MarshalBinary() ([]byte, error) {
 	buf := new(bytes.Buffer)
 

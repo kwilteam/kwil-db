@@ -31,28 +31,38 @@ func (c *Client) Version(ctx context.Context) (string, error) {
 	return res.KwilVersion, err
 }
 
-func (c *Client) BlockByHeight(ctx context.Context, height int64) (*chaintypes.Block, error) {
+func (c *Client) BlockByHeight(ctx context.Context, height int64) (*chaintypes.Block, *chaintypes.CommitInfo, error) {
 	req := &chainjson.BlockRequest{
 		Height: height,
+		Raw:    true, // we'll decode
 	}
 	res := &chainjson.BlockResponse{}
 	err := c.CallMethod(ctx, string(chainjson.MethodBlock), req, res)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return (*chaintypes.Block)(res), nil
+	block, err := types.DecodeBlock(res.RawBlock)
+	if err != nil {
+		return nil, nil, err
+	}
+	return block, res.CommitInfo, nil
 }
 
-func (c *Client) BlockByHash(ctx context.Context, hash types.Hash) (*chaintypes.Block, error) {
+func (c *Client) BlockByHash(ctx context.Context, hash types.Hash) (*chaintypes.Block, *chaintypes.CommitInfo, error) {
 	req := &chainjson.BlockRequest{
 		Hash: hash,
+		Raw:  true, // we'll decode
 	}
 	res := &chainjson.BlockResponse{}
 	err := c.CallMethod(ctx, string(chainjson.MethodBlock), req, res)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return (*chaintypes.Block)(res), nil
+	block, err := types.DecodeBlock(res.RawBlock)
+	if err != nil {
+		return nil, nil, err
+	}
+	return block, res.CommitInfo, nil
 }
 
 func (c *Client) BlockResultByHeight(ctx context.Context, height int64) (*chaintypes.BlockResult, error) {
@@ -98,7 +108,7 @@ func (c *Client) Genesis(ctx context.Context) (*chaintypes.Genesis, error) {
 	if err != nil {
 		return nil, err
 	}
-	return (*chaintypes.Genesis)(res), err
+	return res, err
 }
 
 func (c *Client) ConsensusParams(ctx context.Context) (*types.NetworkParameters, error) {

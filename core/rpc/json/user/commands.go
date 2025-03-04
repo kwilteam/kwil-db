@@ -30,6 +30,8 @@ type AccountRequest struct {
 	Status *AccountStatus   `json:"status,omitempty" desc:"blockchain status (confirmed or unconfirmed)"` // Mapped to URL query parameter `status`.
 }
 
+type NumAccountsRequest struct{}
+
 // AccountStatus is the type used to enumerate the different account status
 // options recognized in AccountRequest.
 type AccountStatus = types.AccountStatus

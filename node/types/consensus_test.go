@@ -137,7 +137,7 @@ func TestConsensusReset_Bytes(t *testing.T) {
 func TestAckRes_MarshalUnmarshal(t *testing.T) {
 	invalidBlock := NackStatusInvalidBlock
 	OutOfSyncStatus := NackStatusOutOfSync
-	signature := Signature{
+	signature := types.Signature{
 		Data:       []byte{4, 5, 6},
 		PubKeyType: crypto.KeyTypeSecp256k1,
 		PubKey:     []byte{1, 2, 3},

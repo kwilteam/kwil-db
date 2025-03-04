@@ -127,17 +127,21 @@ func (cl *Client) GetAccount(ctx context.Context, account *types.AccountID, stat
 		return nil, fmt.Errorf("failed to parse balance to big.Int. received: %s", res.Balance)
 	}
 
-	// I'm not sure about nonce yet, could be string could be *big.Int.
-	// parsedNonce, err := strconv.ParseInt(res.Account.Nonce, 10, 64)
-	// if err != nil {
-	// 	return nil, err
-	// }
-
 	return &types.Account{
 		ID:      res.ID, // WARNING: may be nil if account is not found
 		Balance: balance,
 		Nonce:   res.Nonce,
 	}, nil
+}
+
+func (cl *Client) GetNumAccounts(ctx context.Context) (count, height int64, err error) {
+	cmd := &userjson.NumAccountsRequest{}
+	res := &userjson.NumAccountsResponse{}
+	err = cl.CallMethod(ctx, string(userjson.MethodNumAccounts), cmd, res)
+	if err != nil {
+		return 0, 0, err
+	}
+	return res.Count, res.Height, nil
 }
 
 func (cl *Client) Query(ctx context.Context, query string, params map[string]*types.EncodedValue) (*types.QueryResult, error) {

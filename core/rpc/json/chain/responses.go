@@ -12,46 +12,23 @@ type HealthResponse struct {
 	Healthy bool   `json:"healthy"`
 }
 
-// BlockResponse is the block information
-type BlockResponse chaintypes.Block
+// BlockResponse is the block information. Either the block or raw_block fields
+// may be set depending on if the decoded or raw block was requested.
+type BlockResponse struct {
+	Hash       types.Hash             `json:"hash"`
+	Block      *chaintypes.Block      `json:"block,omitempty"`
+	RawBlock   []byte                 `json:"raw_block,omitempty"`
+	CommitInfo *chaintypes.CommitInfo `json:"commit_info"`
+}
 
 type BlockResultResponse chaintypes.BlockResult
 
 type TxResponse chaintypes.Tx
 
 // GenesisResponse is the same as kwil-db/config.GenesisConfig, with JSON tags.
-type GenesisResponse chaintypes.Genesis
+type GenesisResponse = chaintypes.Genesis
 
 type ConsensusParamsResponse = types.NetworkParameters
-
-/*func (r ConsensusParamsResponse) MarshalJSON() ([]byte, error) {
-	return json.Marshal(&struct {
-		// MaxBlockSize is the maximum size of a block in bytes.
-		MaxBlockSize int64 `json:"max_block_size"`
-		// JoinExpiry is the number of blocks after which the validators
-		// join request expires if not approved.
-		JoinExpiry int64 `json:"join_expiry"`
-		// VoteExpiry is the default number of blocks after which the validators
-		// vote expires if not approved.
-		VoteExpiry int64 `json:"vote_expiry"`
-		// DisabledGasCosts dictates whether gas costs are disabled.
-		DisabledGasCosts bool `json:"disabled_gas_costs"`
-
-		// MigrationStatus determines the status of the migration.
-		MigrationStatus string `json:"migration_status"`
-
-		// MaxVotesPerTx is the maximum number of votes that can be included in a
-		// single transaction.
-		MaxVotesPerTx int64 `json:"max_votes_per_tx"`
-	}{
-		MaxBlockSize:     r.MaxBlockSize,
-		JoinExpiry:       r.JoinExpiry,
-		VoteExpiry:       r.VoteExpiry,
-		DisabledGasCosts: r.DisabledGasCosts,
-		MigrationStatus:  string(r.MigrationStatus),
-		MaxVotesPerTx:    r.MaxVotesPerTx,
-	})
-}*/
 
 type ValidatorsResponse struct {
 	Height     int64              `json:"height"`

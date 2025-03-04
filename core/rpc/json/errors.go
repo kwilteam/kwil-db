@@ -21,8 +21,9 @@ const (
 
 	ErrorTxInternal        ErrorCode = -200 // any unspecified issue in handling a tx
 	ErrorBroadcastRejected ErrorCode = -201 // error data is BroadcastError
-	ErrorTxNotFound        ErrorCode = -202 // abci.ErrTxNotFound
+	ErrorTxNotFound        ErrorCode = -202
 	ErrorTxPayloadInvalid  ErrorCode = -203
+	ErrorBlkNotFound       ErrorCode = -204
 
 	ErrorEngineInternal        ErrorCode = -300
 	ErrorEngineDatasetNotFound ErrorCode = -301
