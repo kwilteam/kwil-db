@@ -1,10 +1,8 @@
 package setup
 
 import (
-	"crypto/sha256"
-	"encoding/binary"
+	"crypto/rand"
 	"fmt"
-	"math/rand/v2"
 	"net"
 	"os"
 	"path/filepath"
@@ -130,7 +128,6 @@ type ConfigOpts struct {
 	DnsHost bool
 }
 
-// TODO: once changes to the tests are complete, this may not be needed
 func GenerateTestnetConfigs(cfg *TestnetConfig, opts *ConfigOpts, gencfg *config.GenesisConfig) error {
 	if len(cfg.Hostnames) > 0 && len(cfg.Hostnames) != cfg.NumVals+cfg.NumNVals {
 		return fmt.Errorf("if set, the number of hostnames %d must be equal to number of validators + number of non-validators %d",
@@ -148,15 +145,18 @@ func GenerateTestnetConfigs(cfg *TestnetConfig, opts *ConfigOpts, gencfg *config
 		return err
 	}
 
-	var keys []*crypto.Secp256k1PrivateKey
 	// generate the configuration for the nodes
-	for i := range cfg.NumVals + cfg.NumNVals {
-		// generate Keys, so that the connection strings and the validator set can be generated before the node config files are generated
+
+	// generate Keys, so that the connection strings and the validator set can be generated before the node config files are generated
+	var keys []*crypto.Secp256k1PrivateKey
+	for range cfg.NumVals + cfg.NumNVals {
+		/*  NOTE: this is a deterministic way to generate keys, but it is not used in the code
 		var seed [32]byte
 		binary.LittleEndian.PutUint64(seed[:], cfg.StartingPort+uint64(i))
 		seed = sha256.Sum256(seed[:])
 		rr := rand.NewChaCha8(seed)
-		priv := node.NewKey(&deterministicPRNG{ChaCha8: rr})
+		*/
+		priv := node.NewKey(rand.Reader) //&deterministicPRNG{ChaCha8: rr})
 		keys = append(keys, priv)
 	}
 
@@ -291,6 +291,7 @@ func GenerateNodeRoot(ncfg *NodeGenConfig) error {
 	return GenerateNodeDir(ncfg.RootDir, ncfg.Genesis, cfg, ncfg.NodeKey, "")
 }
 
+/*
 type deterministicPRNG struct {
 	readBuf [8]byte
 	readLen int // 0 <= readLen <= 8
@@ -317,6 +318,7 @@ func (dr *deterministicPRNG) Read(p []byte) (n int, err error) {
 	}
 	return n, nil
 }
+*/
 
 type TestnetNodeConfig struct {
 	// Config is the node configuration.
