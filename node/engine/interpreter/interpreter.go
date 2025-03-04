@@ -3,6 +3,7 @@ package interpreter
 import (
 	"context"
 	_ "embed"
+	"errors"
 	"fmt"
 	"maps"
 	"regexp"
@@ -378,6 +379,46 @@ func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service, acc
 	return threadSafe, nil
 }
 
+// newUserDefinedErr makes an error that was returned from user-defined code using the ERROR function.
+func newUserDefinedErr(e error) error {
+	return &userDefinedErr{err: e}
+}
+
+type userDefinedErr struct {
+	err error
+}
+
+func (u *userDefinedErr) Error() string {
+	return u.err.Error()
+}
+
+// unwrapExecutionErr unwraps an error that was returned from user-defined code using the ERROR function, or an error
+// that is the result of user logic / data (e.g. a Postgres primary key violation).
+// The error can either come from an action call to ERROR() or from Kwil's custom ERROR() postgres function.
+// It returns the error, and whether it was a user logic error or something more serious.
+// If it is a user-defined error, it will be unwrapped and returned as the error.
+func unwrapExecutionErr(e error) (err error, isUserLogicErr bool) {
+	if e == nil {
+		return nil, false
+	}
+	as := new(userDefinedErr)
+	if errors.As(e, &as) {
+		return e, true
+	}
+
+	// if it is a SQL error, it might be a basic integrity constraint violation,
+	// which we should leave as-is but mark as a user logic error.
+	if allowedSQLSTATEErrRegex.MatchString(e.Error()) {
+		return e, true
+	}
+
+	return e, false
+}
+
+// checks for 22xxx and 23xxx SQLSTATE errors, or P0001 (raise_exception)
+// https://www.postgresql.org/docs/current/errcodes-appendix.html
+var allowedSQLSTATEErrRegex = regexp.MustCompile(`\(SQLSTATE ((23|22)\d{3}\)|P0001)`)
+
 // funcDefToExecutable converts a Postgres function definition to an executable.
 // This allows built-in Postgres functions to be used within the interpreter.
 // This inconveniently requires a roundtrip to the database, but it is necessary
@@ -407,7 +448,7 @@ func funcDefToExecutable(funcName string, funcDef *engine.ScalarFunctionDefiniti
 			}
 
 			// if the function name is notice, then we need to get write the notice to our logs locally,
-			// instead of executing a query. This is the functional eqauivalent of Kwil's console.log().
+			// instead of executing a query. This is the functional equivalent of Kwil's console.log().
 			if funcName == "notice" {
 				var log string
 				if !args[0].Null() {
@@ -422,7 +463,7 @@ func funcDefToExecutable(funcName string, funcDef *engine.ScalarFunctionDefiniti
 				if !args[0].Null() {
 					msg = args[0].RawValue().(string)
 				}
-				return fmt.Errorf("error raised while executing: %s", msg)
+				return newUserDefinedErr(errors.New(msg))
 			}
 
 			zeroVal, err := newZeroValue(retTyp)
@@ -633,6 +674,9 @@ func (i *baseInterpreter) call(ctx *common.EngineContext, db sql.DB, namespace, 
 			err = fmt.Errorf("panic: %v", r)
 			noErrOrPanic = false
 		}
+		if callRes != nil && callRes.Error != nil {
+			noErrOrPanic = false
+		}
 
 		if noErrOrPanic {
 			i.syncNamespaceManager()
@@ -715,13 +759,21 @@ func (i *baseInterpreter) call(ctx *common.EngineContext, db sql.DB, namespace, 
 	err = exec.Func(execCtx, argVals, func(row *row) error {
 		return resultFn(rowToCommonRow(row))
 	})
-	if err != nil {
-		return nil, err
+
+	// if the error is an execution error,
+	// then it should be part of the CallResult,
+	// and not returned as a top-level error.
+	err, ok = unwrapExecutionErr(err)
+	if ok {
+		return &common.CallResult{
+			Logs:  *execCtx.logs,
+			Error: err,
+		}, nil
 	}
 
 	return &common.CallResult{
 		Logs: *execCtx.logs,
-	}, nil
+	}, err
 }
 
 // rowToCommonRow converts a row to a common.Row.

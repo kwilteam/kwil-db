@@ -723,6 +723,17 @@ func Test_SQL(t *testing.T) {
 			results:        [][]any{{[]*string{}}},
 			skipInitTables: true,
 		},
+		{
+			// a regression test that tests for a few cases.
+			// 1. it tests for ERROR working properly within queries.
+			// 2. it tests that we can order by ERROR. Since ERROR returns void,
+			// Postgres cannot order it, so we cast it to text.
+			// 3. Since the result is casted to text, Postgres complains that it cannot
+			// return either text or int, so we type cast it.
+			name:        "select error",
+			execSQL:     `SELECT case when false then 1 else error('a')::INT end;`,
+			errContains: "ERROR: a (SQLSTATE P0001)",
+		},
 	}
 
 	db := newTestDB(t, nil, nil)
@@ -1142,6 +1153,9 @@ func Test_Actions(t *testing.T) {
 		err error
 		// errContains is a string that should be contained in the error message
 		errContains string
+		// executionErrContains is a string that should be contained in the error message
+		// raised by the action execution (e.g. from ERROR(), a primary key violation, etc.)
+		executionErrContains string
 		// caller to use for the action, will default to defaultCaller
 		caller string
 	}
@@ -1958,8 +1972,8 @@ func Test_Actions(t *testing.T) {
 					error(format('this is an error with a format %s', $a));
 				}`,
 			},
-			action:      "format_error",
-			errContains: "this is an error with a format SomeValue",
+			action:               "format_error",
+			executionErrContains: "this is an error with a format SomeValue",
 		},
 		{
 			name: "remove call from default role",
@@ -2003,6 +2017,29 @@ func Test_Actions(t *testing.T) {
 			action: "smth",
 			values: []any{[]*types.Decimal{}},
 		},
+		{
+			name: "select error",
+			stmt: []string{
+				`CREATE ACTION select_error() public view {
+					SELECT error('abcdef_unique');
+				}`,
+			},
+			action:               "select_error",
+			executionErrContains: "abcdef_unique",
+		},
+		{
+			name: "primary key conflict",
+			stmt: []string{
+				`CREATE TABLE t (a int PRIMARY KEY);`,
+				`CREATE ACTION insert_conflict($a int) public {
+					INSERT INTO t (a) VALUES ($a);
+					INSERT INTO t (a) VALUES ($a);
+				}`,
+			},
+			action:               "insert_conflict",
+			values:               []any{1},
+			executionErrContains: "duplicate key value violates unique constraint",
+		},
 	}
 
 	db := newTestDB(t, nil, nil)
@@ -2017,7 +2054,7 @@ func Test_Actions(t *testing.T) {
 			interp := newTestInterp(t, tx, test.stmt, true)
 
 			var results [][]any
-			_, err = interp.Call(newEngineCtx(test.caller), tx, test.namespace, test.action, test.values, func(v *common.Row) error {
+			res, err := interp.Call(newEngineCtx(test.caller), tx, test.namespace, test.action, test.values, func(v *common.Row) error {
 				results = append(results, v.Values)
 				return nil
 			})
@@ -2029,6 +2066,11 @@ func Test_Actions(t *testing.T) {
 				require.Contains(t, err.Error(), test.errContains)
 			} else {
 				require.NoError(t, err)
+			}
+
+			if test.executionErrContains != "" {
+				require.NotNil(t, res.Error)
+				require.Contains(t, res.Error.Error(), test.executionErrContains)
 			}
 
 			require.Equal(t, len(test.results), len(results))

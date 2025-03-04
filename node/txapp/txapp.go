@@ -155,7 +155,7 @@ func (r *TxApp) Execute(ctx *common.TxContext, db sql.DB, tx *types.Transaction)
 	// RegisterRoute call is not concurrent
 	route, ok := routes[tx.Body.PayloadType.String()]
 	if !ok {
-		return txRes(nil, types.CodeInvalidTxType, fmt.Errorf("%w: %s", types.ErrUnknownPayloadType, tx.Body.PayloadType.String()))
+		return txRes(nil, types.CodeInvalidTxType, "", fmt.Errorf("%w: %s", types.ErrUnknownPayloadType, tx.Body.PayloadType.String()))
 	}
 
 	r.service.Logger.Debug("executing transaction", "tx", tx)
@@ -468,6 +468,9 @@ type TxResponse struct {
 	// Spend is the amount of tokens spent by the transaction
 	Spend int64
 
+	// Log is a formatted log message from the DB that is associated with the transaction
+	Log string
+
 	// Error is the error returned by the transaction, if any
 	Error error
 }
@@ -475,7 +478,7 @@ type TxResponse struct {
 // txRes wraps a spend, tx code, and error into a tx response.
 // the spend amount is included because an error can occur after the tokens
 // are spent.
-func txRes(spend *big.Int, code types.TxCode, err error) *TxResponse {
+func txRes(spend *big.Int, code types.TxCode, log string, err error) *TxResponse {
 	if spend == nil {
 		spend = big.NewInt(0)
 	}
@@ -483,6 +486,7 @@ func txRes(spend *big.Int, code types.TxCode, err error) *TxResponse {
 	return &TxResponse{
 		ResponseCode: code,
 		Spend:        spend.Int64(),
+		Log:          log,
 		Error:        err,
 	}
 }

@@ -136,7 +136,7 @@ func (d *baseRoute) Price(ctx context.Context, router *TxApp, db sql.DB, tx *typ
 func (d *baseRoute) Execute(ctx *common.TxContext, router *TxApp, db sql.DB, tx *types.Transaction) *TxResponse {
 	dbTx, err := db.BeginTx(ctx.Ctx)
 	if err != nil {
-		return txRes(nil, types.CodeUnknownError, err)
+		return txRes(nil, types.CodeUnknownError, "", err)
 	}
 
 	spend, code, err := router.checkAndSpend(ctx, tx, d, dbTx)
@@ -147,7 +147,7 @@ func (d *baseRoute) Execute(ctx *common.TxContext, router *TxApp, db sql.DB, tx 
 		default:
 			logErr(router.service.Logger, dbTx.Rollback(ctx.Ctx))
 		}
-		return txRes(spend, code, err)
+		return txRes(spend, code, "", err)
 	}
 	defer func() {
 		// Always Commit the outer transaction to ensure account updates.
@@ -163,12 +163,12 @@ func (d *baseRoute) Execute(ctx *common.TxContext, router *TxApp, db sql.DB, tx 
 
 	code, err = d.PreTx(ctx, svc, tx)
 	if err != nil {
-		return txRes(spend, code, err)
+		return txRes(spend, code, "", err)
 	}
 
 	tx2, err := dbTx.BeginTx(ctx.Ctx)
 	if err != nil {
-		return txRes(spend, types.CodeUnknownError, err)
+		return txRes(spend, types.CodeUnknownError, "", err)
 	}
 	defer tx2.Rollback(ctx.Ctx) // no-op if Commit succeeded
 
@@ -180,17 +180,17 @@ func (d *baseRoute) Execute(ctx *common.TxContext, router *TxApp, db sql.DB, tx 
 		Validators: router.Validators,
 	}
 
-	code, err = d.InTx(ctx, app, tx)
+	code, log, err := d.InTx(ctx, app, tx)
 	if err != nil {
-		return txRes(spend, code, err)
+		return txRes(spend, code, log, err)
 	}
 
 	err = tx2.Commit(ctx.Ctx)
 	if err != nil {
-		return txRes(spend, types.CodeUnknownError, err)
+		return txRes(spend, types.CodeUnknownError, log, err)
 	}
 
-	return txRes(spend, types.CodeOk, nil)
+	return txRes(spend, types.CodeOk, log, nil)
 }
 
 // ========================== route implementations ==========================
@@ -249,15 +249,15 @@ func (d *rawStatementRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx
 	return 0, nil
 }
 
-func (d *rawStatementRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
+func (d *rawStatementRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, string, error) {
 	err := app.Engine.Execute(makeEngineCtx(ctx), app.DB, d.statement, d.params, func(r *common.Row) error {
 		// we throw away all results for raw statements in a block
 		return nil
 	})
 	if err != nil {
-		return codeForEngineError(err), err
+		return codeForEngineError(err), "", err
 	}
-	return 0, nil
+	return 0, "", nil
 }
 
 func makeEngineCtx(ctx *common.TxContext) *common.EngineContext {
@@ -314,19 +314,33 @@ func (d *executeActionRoute) PreTx(ctx *common.TxContext, svc *common.Service, t
 	return 0, nil
 }
 
-func (d *executeActionRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
+func (d *executeActionRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, string, error) {
+	var logs string
 	for i := range d.args {
-		// TODO: once we are able to store execution logs in the block store, we should propagate the discarded
-		// return value here.
-		_, err := app.Engine.Call(makeEngineCtx(ctx), app.DB, d.namespace, d.action, d.args[i], func(r *common.Row) error {
+		res, err := app.Engine.Call(makeEngineCtx(ctx), app.DB, d.namespace, d.action, d.args[i], func(r *common.Row) error {
 			// we throw away all results for execute actions
 			return nil
 		})
+
+		// res can be nil if an error is returned, but it might be
+		// non nil if there was an error and logs were triggered prior
+		// to the error
+		if res != nil && len(res.Logs) > 0 {
+			if len(logs) > 0 {
+				logs += "\n"
+			}
+			logs += res.FormatLogs()
+		}
+
 		if err != nil {
-			return codeForEngineError(err), err
+			return codeForEngineError(err), logs, err
+		}
+
+		if res.Error != nil {
+			return types.CodeUnknownError, logs, res.Error
 		}
 	}
-	return 0, nil
+	return 0, logs, nil
 }
 
 type transferRoute struct {
@@ -369,23 +383,23 @@ func (d *transferRoute) PreTx(ctx *common.TxContext, svc *common.Service, tx *ty
 	return 0, nil
 }
 
-func (d *transferRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
+func (d *transferRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, string, error) {
 	sender, err := TxSenderAcctID(tx)
 	if err != nil {
-		return types.CodeInvalidSender, err
+		return types.CodeInvalidSender, "", err
 	}
 
 	err = app.Accounts.Transfer(ctx.Ctx, app.DB, sender, d.to, d.amt)
 	if err != nil {
 		if errors.Is(err, accounts.ErrInsufficientFunds) {
-			return types.CodeInsufficientBalance, err
+			return types.CodeInsufficientBalance, "", err
 		}
 		if errors.Is(err, accounts.ErrNegativeBalance) {
-			return types.CodeInvalidAmount, err
+			return types.CodeInvalidAmount, "", err
 		}
-		return types.CodeUnknownError, err
+		return types.CodeUnknownError, "", err
 	}
-	return 0, nil
+	return 0, "", nil
 }
 
 type validatorJoinRoute struct {
@@ -418,29 +432,29 @@ func (d *validatorJoinRoute) PreTx(ctx *common.TxContext, svc *common.Service, t
 	return 0, nil
 }
 
-func (d *validatorJoinRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
+func (d *validatorJoinRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, string, error) {
 	// ensure this candidate is not already a validator
 	keyType, err := authExt.GetAuthenticatorKeyType(tx.Signature.Type)
 	if err != nil {
-		return types.CodeInvalidSender, fmt.Errorf("failed to parse key type: %w", err)
+		return types.CodeInvalidSender, "", fmt.Errorf("failed to parse key type: %w", err)
 	}
 
 	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender, keyType)
 	if err != nil {
-		return types.CodeUnknownError, err
+		return types.CodeUnknownError, "", err
 	}
 	if power > 0 {
-		return types.CodeInvalidSender, ErrCallerIsValidator
+		return types.CodeInvalidSender, "", ErrCallerIsValidator
 	}
 
 	// we first need to ensure that this validator does not have a pending join request
 	// if it does, we should not allow it to join again
 	pending, err := getResolutionsByTypeAndProposer(ctx.Ctx, app.DB, voting.ValidatorJoinEventType, tx.Sender, keyType)
 	if err != nil {
-		return types.CodeUnknownError, err
+		return types.CodeUnknownError, "", err
 	}
 	if len(pending) > 0 {
-		return types.CodeInvalidSender, errors.New("validator already has a pending join request")
+		return types.CodeInvalidSender, "", errors.New("validator already has a pending join request")
 	}
 
 	// there are no pending join requests, so we can create a new one
@@ -451,7 +465,7 @@ func (d *validatorJoinRoute) InTx(ctx *common.TxContext, app *common.App, tx *ty
 	}
 	bts, err := joinReq.MarshalBinary()
 	if err != nil {
-		return types.CodeUnknownError, err
+		return types.CodeUnknownError, "", err
 	}
 
 	event := &types.VotableEvent{
@@ -463,10 +477,10 @@ func (d *validatorJoinRoute) InTx(ctx *common.TxContext, app *common.App, tx *ty
 	expiry := ctx.BlockContext.Timestamp + int64(joinExpiry)
 	err = createResolution(ctx.Ctx, app.DB, event, expiry, tx.Sender, keyType)
 	if err != nil {
-		return types.CodeUnknownError, err
+		return types.CodeUnknownError, "", err
 	}
 	// we do not approve, because a joiner is presumably not a voter
-	return 0, nil
+	return 0, "", nil
 }
 
 type validatorApproveRoute struct {
@@ -506,41 +520,41 @@ func (d *validatorApproveRoute) PreTx(ctx *common.TxContext, svc *common.Service
 	return 0, nil
 }
 
-func (d *validatorApproveRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
+func (d *validatorApproveRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, string, error) {
 	// each pending validator can only have one active join request at a time
 	// we need to retrieve the join request and ensure that it is still pending
 	pending, err := getResolutionsByTypeAndProposer(ctx.Ctx, app.DB, voting.ValidatorJoinEventType, d.candidate, d.keyType)
 	if err != nil {
-		return types.CodeUnknownError, err
+		return types.CodeUnknownError, "", err
 	}
 	if len(pending) == 0 {
-		return types.CodeInvalidSender, errors.New("validator does not have a pending join request")
+		return types.CodeInvalidSender, "", errors.New("validator does not have a pending join request")
 	}
 	if len(pending) > 1 {
 		// this should never happen, but if it does, we should not allow it
-		return types.CodeUnknownError, errors.New("validator has more than one pending join request. this is an internal bug")
+		return types.CodeUnknownError, "", errors.New("validator has more than one pending join request. this is an internal bug")
 	}
 
 	keyType, err := authExt.GetAuthenticatorKeyType(tx.Signature.Type)
 	if err != nil {
-		return types.CodeUnknownError, fmt.Errorf("failed to parse key type: %w", err)
+		return types.CodeUnknownError, "", fmt.Errorf("failed to parse key type: %w", err)
 	}
 
 	// ensure that sender is a validator
 	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender, keyType)
 	if err != nil {
-		return types.CodeUnknownError, err
+		return types.CodeUnknownError, "", err
 	}
 	if power <= 0 {
-		return types.CodeInvalidSender, ErrCallerNotValidator
+		return types.CodeInvalidSender, "", ErrCallerNotValidator
 	}
 
 	err = approveResolution(ctx.Ctx, app.DB, pending[0], tx.Sender, keyType)
 	if err != nil {
-		return types.CodeUnknownError, err
+		return types.CodeUnknownError, "", err
 	}
 
-	return 0, nil
+	return 0, "", nil
 }
 
 type validatorRemoveRoute struct {
@@ -576,7 +590,7 @@ func (d *validatorRemoveRoute) PreTx(ctx *common.TxContext, svc *common.Service,
 	return 0, nil
 }
 
-func (d *validatorRemoveRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
+func (d *validatorRemoveRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, string, error) {
 	removeReq := &voting.UpdatePowerRequest{
 		PubKey:     d.target,
 		PubKeyType: d.keyType,
@@ -584,12 +598,12 @@ func (d *validatorRemoveRoute) InTx(ctx *common.TxContext, app *common.App, tx *
 	}
 
 	if bytes.Equal(removeReq.PubKey, ctx.BlockContext.Proposer.Bytes()) {
-		return types.CodeInvalidSender, errors.New("leader cannot be removed from validator set")
+		return types.CodeInvalidSender, "", errors.New("leader cannot be removed from validator set")
 	}
 
 	bts, err := removeReq.MarshalBinary()
 	if err != nil {
-		return types.CodeUnknownError, err
+		return types.CodeUnknownError, "", err
 	}
 
 	event := &types.VotableEvent{
@@ -599,25 +613,25 @@ func (d *validatorRemoveRoute) InTx(ctx *common.TxContext, app *common.App, tx *
 
 	senderKeyType, err := authExt.GetAuthenticatorKeyType(tx.Signature.Type)
 	if err != nil {
-		return types.CodeUnknownError, fmt.Errorf("failed to parse key type: %w", err)
+		return types.CodeUnknownError, "", fmt.Errorf("failed to parse key type: %w", err)
 	}
 
 	// ensure the sender is a validator
 	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender, senderKeyType)
 	if err != nil {
-		return types.CodeUnknownError, err
+		return types.CodeUnknownError, "", err
 	}
 	if power <= 0 {
-		return types.CodeInvalidSender, ErrCallerNotValidator
+		return types.CodeInvalidSender, "", ErrCallerNotValidator
 	}
 
 	// ensure that the target is a validator
 	power, err = app.Validators.GetValidatorPower(ctx.Ctx, d.target, d.keyType)
 	if err != nil {
-		return types.CodeUnknownError, err
+		return types.CodeUnknownError, "", err
 	}
 	if power <= 0 {
-		return types.CodeInvalidSender, ErrTargetNotValidator
+		return types.CodeInvalidSender, "", ErrTargetNotValidator
 	}
 
 	// we should try to create the resolution, since validator removals are never
@@ -626,7 +640,7 @@ func (d *validatorRemoveRoute) InTx(ctx *common.TxContext, app *common.App, tx *
 	// and if it does, approve it, otherwise create and approve it.
 	exists, err := resolutionExists(ctx.Ctx, app.DB, event.ID())
 	if err != nil {
-		return types.CodeUnknownError, err
+		return types.CodeUnknownError, "", err
 	}
 
 	// if the resolution does not exist, create it
@@ -635,17 +649,17 @@ func (d *validatorRemoveRoute) InTx(ctx *common.TxContext, app *common.App, tx *
 		expiry := ctx.BlockContext.Timestamp + int64(joinExpiry)
 		err = createResolution(ctx.Ctx, app.DB, event, expiry, tx.Sender, senderKeyType)
 		if err != nil {
-			return types.CodeUnknownError, err
+			return types.CodeUnknownError, "", err
 		}
 	}
 
 	// we need to approve the resolution as well
 	err = approveResolution(ctx.Ctx, app.DB, event.ID(), tx.Sender, senderKeyType)
 	if err != nil {
-		return types.CodeUnknownError, err
+		return types.CodeUnknownError, "", err
 	}
 
-	return 0, nil
+	return 0, "", nil
 }
 
 type validatorLeaveRoute struct{}
@@ -668,32 +682,32 @@ func (d *validatorLeaveRoute) PreTx(ctx *common.TxContext, svc *common.Service, 
 	return 0, nil // no payload to decode or validate for this route
 }
 
-func (d *validatorLeaveRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
+func (d *validatorLeaveRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, string, error) {
 	if bytes.Equal(tx.Sender, ctx.BlockContext.Proposer.Bytes()) {
-		return types.CodeInvalidSender, errors.New("leader cannot leave validator set")
+		return types.CodeInvalidSender, "", errors.New("leader cannot leave validator set")
 	}
 
 	keyType, err := authExt.GetAuthenticatorKeyType(tx.Signature.Type)
 	if err != nil {
-		return types.CodeInvalidSender, fmt.Errorf("failed to parse key type: %w", err)
+		return types.CodeInvalidSender, "", fmt.Errorf("failed to parse key type: %w", err)
 	}
 
 	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender, keyType)
 	if err != nil {
-		return types.CodeUnknownError, err
+		return types.CodeUnknownError, "", err
 	}
 	if power <= 0 {
-		return types.CodeInvalidSender, ErrCallerNotValidator
+		return types.CodeInvalidSender, "", ErrCallerNotValidator
 	}
 
 	const noPower = 0
 
 	err = app.Validators.SetValidatorPower(ctx.Ctx, app.DB, tx.Sender, keyType, noPower)
 	if err != nil {
-		return types.CodeUnknownError, err
+		return types.CodeUnknownError, "", err
 	}
 
-	return 0, nil
+	return 0, "", nil
 }
 
 // validatorVoteIDsRoute is a route for approving a set of votes based on their IDs.
@@ -723,31 +737,31 @@ func (d *validatorVoteIDsRoute) PreTx(ctx *common.TxContext, svc *common.Service
 	return 0, nil
 }
 
-func (d *validatorVoteIDsRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
+func (d *validatorVoteIDsRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, string, error) {
 	// if the caller has 0 power, they are not a validator, and should not be able to vote
 	keyType, err := authExt.GetAuthenticatorKeyType(tx.Signature.Type)
 	if err != nil {
-		return types.CodeInvalidSender, fmt.Errorf("failed to parse key type: %w", err)
+		return types.CodeInvalidSender, "", fmt.Errorf("failed to parse key type: %w", err)
 	}
 
 	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender, keyType)
 	if err != nil {
-		return types.CodeUnknownError, err
+		return types.CodeUnknownError, "", err
 	}
 	if power == 0 {
-		return types.CodeInvalidSender, ErrCallerNotValidator
+		return types.CodeInvalidSender, "", ErrCallerNotValidator
 	}
 
 	approve := &types.ValidatorVoteIDs{}
 	err = approve.UnmarshalBinary(tx.Body.Payload)
 	if err != nil {
-		return types.CodeEncodingError, err
+		return types.CodeEncodingError, "", err
 	}
 
 	// filter out the vote IDs that have already been processed
 	ids, err := voting.FilterNotProcessed(ctx.Ctx, app.DB, approve.ResolutionIDs)
 	if err != nil {
-		return types.CodeUnknownError, err
+		return types.CodeUnknownError, "", err
 	}
 
 	fromLocalValidator := bytes.Equal(tx.Sender, app.Service.Identity)
@@ -755,14 +769,14 @@ func (d *validatorVoteIDsRoute) InTx(ctx *common.TxContext, app *common.App, tx 
 	for _, voteID := range ids {
 		err = approveResolution(ctx.Ctx, app.DB, voteID, tx.Sender, keyType)
 		if err != nil {
-			return types.CodeUnknownError, err
+			return types.CodeUnknownError, "", err
 		}
 
 		// if from local validator, delete the event now that we have voted on it and network already has the event body
 		if fromLocalValidator {
 			err = deleteEvent(ctx.Ctx, app.DB, voteID)
 			if err != nil {
-				return types.CodeUnknownError, err
+				return types.CodeUnknownError, "", err
 			}
 		}
 	}
@@ -771,7 +785,7 @@ func (d *validatorVoteIDsRoute) InTx(ctx *common.TxContext, app *common.App, tx 
 		app.Service.Logger.Warn("vote contains resolution IDs that are already done. too late, no refund!", "numTooLate", tooLate)
 	}
 
-	return 0, nil
+	return 0, "", nil
 }
 
 // validatorVoteIDsRoute is a route for approving a set of votes based on their IDs.
@@ -823,7 +837,7 @@ func (d *validatorVoteBodiesRoute) PreTx(ctx *common.TxContext, _ *common.Servic
 	return 0, nil
 }
 
-func (d *validatorVoteBodiesRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
+func (d *validatorVoteBodiesRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, string, error) {
 	fromLocalValidator := bytes.Equal(tx.Sender, app.Service.Identity)
 
 	// Expectation:
@@ -832,7 +846,7 @@ func (d *validatorVoteBodiesRoute) InTx(ctx *common.TxContext, app *common.App, 
 	for _, event := range d.events {
 		resCfg, err := resolutions.GetResolution(event.Type)
 		if err != nil {
-			return types.CodeUnknownError, err
+			return types.CodeUnknownError, "", err
 		}
 
 		ev := &types.VotableEvent{
@@ -842,32 +856,32 @@ func (d *validatorVoteBodiesRoute) InTx(ctx *common.TxContext, app *common.App, 
 
 		keyType, err := authExt.GetAuthenticatorKeyType(tx.Signature.Type)
 		if err != nil {
-			return types.CodeInvalidSender, fmt.Errorf("failed to parse key type: %w", err)
+			return types.CodeInvalidSender, "", fmt.Errorf("failed to parse key type: %w", err)
 		}
 
 		expiryHeight := ctx.BlockContext.Timestamp + int64(resCfg.ExpirationPeriod.Seconds())
 		err = createResolution(ctx.Ctx, app.DB, ev, expiryHeight, tx.Sender, keyType)
 		if err != nil {
-			return types.CodeUnknownError, err
+			return types.CodeUnknownError, "", err
 		}
 
 		// since the vote body proposer is implicitly voting for the event,
 		// we need to approve the newly created vote body here
 		err = approveResolution(ctx.Ctx, app.DB, ev.ID(), tx.Sender, keyType)
 		if err != nil {
-			return types.CodeUnknownError, err
+			return types.CodeUnknownError, "", err
 		}
 
 		// If the local validator is the proposer, then we should delete the event from the event store.
 		if fromLocalValidator {
 			err = deleteEvent(ctx.Ctx, app.DB, ev.ID())
 			if err != nil {
-				return types.CodeUnknownError, err
+				return types.CodeUnknownError, "", err
 			}
 		}
 	}
 
-	return 0, nil
+	return 0, "", nil
 }
 
 type createResolutionRoute struct {
@@ -926,37 +940,37 @@ func (d *createResolutionRoute) PreTx(ctx *common.TxContext, svc *common.Service
 	return 0, nil
 }
 
-func (d *createResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
+func (d *createResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, string, error) {
 	// ensure the sender is a validator
 	// only validators can create resolutions
 
 	keyType, err := authExt.GetAuthenticatorKeyType(tx.Signature.Type)
 	if err != nil {
-		return types.CodeInvalidSender, err
+		return types.CodeInvalidSender, "", err
 	}
 
 	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender, keyType)
 	if err != nil {
-		return types.CodeUnknownError, err
+		return types.CodeUnknownError, "", err
 	}
 	if power <= 0 {
-		return types.CodeInvalidSender, ErrCallerNotValidator
+		return types.CodeInvalidSender, "", ErrCallerNotValidator
 	}
 
 	// create the resolution
 	// if resolution already exists, it will return an error
 	err = createResolution(ctx.Ctx, app.DB, d.resolution, d.expiry, tx.Sender, keyType)
 	if err != nil {
-		return types.CodeUnknownError, err
+		return types.CodeUnknownError, "", err
 	}
 
 	// approve the resolution
 	err = approveResolution(ctx.Ctx, app.DB, d.resolution.ID(), tx.Sender, keyType)
 	if err != nil {
-		return types.CodeUnknownError, err
+		return types.CodeUnknownError, "", err
 	}
 
-	return 0, nil
+	return 0, "", nil
 }
 
 type approveResolutionRoute struct {
@@ -989,44 +1003,44 @@ func (d *approveResolutionRoute) PreTx(ctx *common.TxContext, svc *common.Servic
 	return 0, nil
 }
 
-func (d *approveResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
+func (d *approveResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, string, error) {
 	// ensure the sender is a validator
 
 	keyType, err := authExt.GetAuthenticatorKeyType(tx.Signature.Type)
 	if err != nil {
-		return types.CodeInvalidSender, err
+		return types.CodeInvalidSender, "", err
 	}
 
 	power, err := app.Validators.GetValidatorPower(ctx.Ctx, tx.Sender, keyType)
 	if err != nil {
-		return types.CodeUnknownError, err
+		return types.CodeUnknownError, "", err
 	}
 	if power <= 0 {
-		return types.CodeInvalidSender, ErrCallerNotValidator
+		return types.CodeInvalidSender, "", ErrCallerNotValidator
 	}
 
 	// Check if the resolution exists and is still pending
 	// You can only vote on a resolution that already exists
 	resolution, err := resolutionByID(ctx.Ctx, app.DB, d.resolutionID)
 	if err != nil {
-		return types.CodeUnknownError, err
+		return types.CodeUnknownError, "", err
 	}
 	if resolution == nil {
-		return types.CodeInvalidResolutionType, fmt.Errorf("resolution with ID %s does not exist", d.resolutionID)
+		return types.CodeInvalidResolutionType, "", fmt.Errorf("resolution with ID %s does not exist", d.resolutionID)
 	}
 
 	if ctx.BlockContext.ChainContext.NetworkParameters.MigrationStatus.Active() &&
 		resolution.Type == voting.StartMigrationEventType {
-		return types.CodeNetworkInMigration, errors.New("migration is about to start, cannot accept new migration proposals")
+		return types.CodeNetworkInMigration, "", errors.New("migration is about to start, cannot accept new migration proposals")
 	}
 
 	// vote on the resolution
 	err = approveResolution(ctx.Ctx, app.DB, d.resolutionID, tx.Sender, keyType)
 	if err != nil {
-		return types.CodeUnknownError, err
+		return types.CodeUnknownError, "", err
 	}
 
-	return 0, nil
+	return 0, "", nil
 }
 
 /* enable and test this in the future
@@ -1062,7 +1076,7 @@ func (d *deleteResolutionRoute) PreTx(ctx *common.TxContext, svc *common.Service
 }
 
 // deleteResolutionRoute is a route for deleting a resolution.
-func (d *deleteResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, error) {
+func (d *deleteResolutionRoute) InTx(ctx *common.TxContext, app *common.App, tx *types.Transaction) (types.TxCode, string, error) {
 	// ensure the sender is a validator
 	power, err := app.Validators.GetValidatorPower(ctx.Ctx, app.DB, tx.Sender)
 	if err != nil {

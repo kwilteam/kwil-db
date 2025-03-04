@@ -432,6 +432,50 @@ func Test_Roundtrip(t *testing.T) {
 	}
 }
 
+// Test_Notice tests that Kwil properly handles NOTICE messages
+func Test_Notice(t *testing.T) {
+	expectedErrMsg := `custom error`
+	expectedCallLogs := `1. hello world`
+	// the tx execution result adds any error encountered as the final log.
+	// Call split them.
+	expectedTxLogs := expectedCallLogs + "\nERROR: " + expectedErrMsg
+
+	for _, driver := range setup.AllDrivers {
+		t.Run("notice_"+driver.String(), func(t *testing.T) {
+			ctx := context.Background()
+			client := setupSingleNodeClient(t, ctx, driver, *withKGW)
+
+			tx, err := client.ExecuteSQL(ctx, `
+			CREATE ACTION notice_test() public view {
+				NOTICE('hello world');
+				ERROR('custom error');
+			}
+			`, nil, opts)
+			require.NoError(t, err)
+			test.ExpectTxSuccess(t, client, ctx, tx)
+
+			// we will both execute it against consensus and call
+
+			// first, execute it against consensus
+			tx, err = client.Execute(ctx, "", "notice_test", nil, opts)
+			require.NoError(t, err)
+			test.ExpectTxError(t, client, ctx, tx, "custom error")
+
+			txRes, err := client.TxQuery(ctx, tx)
+			require.NoError(t, err)
+
+			require.Equal(t, expectedTxLogs, txRes.Result.Log)
+
+			// then, call it
+			res, err := client.Call(ctx, "", "notice_test", nil)
+			require.NoError(t, err)
+			require.NotNil(t, res.Error)
+			require.Equal(t, expectedErrMsg, *res.Error)
+			require.Equal(t, expectedCallLogs, res.Logs)
+		})
+	}
+}
+
 // p makes a pointer to a value
 func p[T any](v T) *T {
 	return &v

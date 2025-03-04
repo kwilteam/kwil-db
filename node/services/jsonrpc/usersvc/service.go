@@ -686,9 +686,16 @@ func (svc *Service) Call(ctx context.Context, req *userjson.CallRequest) (*userj
 		return nil, engineError(err)
 	}
 
+	var execErr *string
+	if callRes.Error != nil {
+		e2 := callRes.Error.Error()
+		execErr = &e2
+	}
+
 	return &userjson.CallResponse{
 		QueryResult: &r.qr,
-		Logs:        callRes.Logs,
+		Logs:        callRes.FormatLogs(),
+		Error:       execErr,
 	}, nil
 }
 

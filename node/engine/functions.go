@@ -33,11 +33,18 @@ var (
 					return nil, wrapErrArgumentType(types.TextType, args[0])
 				}
 
-				// technically error returns nothing, but for backwards compatibility with SELECT CASE we return null.
-				// It doesn't really matter, since error will cancel execution anyways.
-				return types.NullType, nil
+				// technically error returns nothing, but to allow it to be used in the query planner
+				// we have it return text. It doesn't really matter because it will cancel action execution.
+				return types.TextType, nil
 			},
-			PGFormatFunc: defaultFormat("error"),
+			PGFormatFunc: func(inputs []string) (string, error) {
+				def, err := defaultFormat("error")(inputs)
+				if err != nil {
+					return "", err
+				}
+
+				return def + "::text", nil
+			},
 		},
 		"parse_unix_timestamp": &ScalarFunctionDefinition{
 			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
@@ -92,7 +99,7 @@ var (
 				return types.NullType, nil
 			},
 			PGFormatFunc: func(inputs []string) (string, error) {
-				return "", fmt.Errorf("%w: notice cannot be used in SQL statements", ErrIllegalFunctionUsage)
+				return "", fmt.Errorf(`%w: "notice" cannot be used in SQL statements`, ErrIllegalFunctionUsage)
 			},
 		},
 		"uuid_generate_v5": &ScalarFunctionDefinition{
