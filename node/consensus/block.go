@@ -212,7 +212,7 @@ func (ce *ConsensusEngine) BroadcastTx(ctx context.Context, tx *types.Tx, sync u
 	if ce.txAnnouncer != nil {
 		// We can't use parent context 'cause it's canceled in the caller, which
 		// could be the RPC request. handler.  This shouldn't be CE's problem...
-		go ce.txAnnouncer(context.Background(), tx.Transaction)
+		ce.txAnnouncer(context.Background(), tx.Transaction, txHash)
 	}
 
 	// If sync is set to 1, wait for the transaction to be committed in a block.
