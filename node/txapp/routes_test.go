@@ -300,6 +300,10 @@ func (a *mockAccount) GetAccount(_ context.Context, _ sql.Executor, acctID *type
 	}, nil
 }
 
+func (a *mockAccount) NumAccounts(ctx context.Context, tx sql.Executor) (int64, error) {
+	return 1, nil
+}
+
 func (a *mockAccount) Spend(_ context.Context, _ sql.Executor, acctID *types.AccountID, amount *big.Int, nonce int64) error {
 	return nil
 }

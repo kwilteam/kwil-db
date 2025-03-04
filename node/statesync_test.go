@@ -199,11 +199,11 @@ func TestStateSyncService(t *testing.T) {
 type mockBS struct {
 }
 
-func (m *mockBS) GetByHeight(height int64) (types.Hash, *ktypes.Block, *types.CommitInfo, error) {
-	return types.Hash{}, nil, &types.CommitInfo{AppHash: types.Hash{}}, nil
+func (m *mockBS) GetByHeight(height int64) (types.Hash, *ktypes.Block, *ktypes.CommitInfo, error) {
+	return types.Hash{}, nil, &ktypes.CommitInfo{AppHash: types.Hash{}}, nil
 }
 
-func (m *mockBS) Store(*ktypes.Block, *types.CommitInfo) error {
+func (m *mockBS) Store(*ktypes.Block, *ktypes.CommitInfo) error {
 	return nil
 }
 

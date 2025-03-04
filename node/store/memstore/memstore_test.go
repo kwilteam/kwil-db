@@ -9,18 +9,17 @@ import (
 	"time"
 
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
-	ktypes "github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/node/types"
+	"github.com/kwilteam/kwil-db/core/types"
 )
 
 func fakeAppHash(height int64) types.Hash {
 	return types.HashBytes(binary.LittleEndian.AppendUint64(nil, uint64(height)))
 }
 
-func newTx(nonce uint64, sender string) *ktypes.Transaction {
-	return &ktypes.Transaction{
+func newTx(nonce uint64, sender string) *types.Transaction {
+	return &types.Transaction{
 		Signature: &auth.Signature{},
-		Body: &ktypes.TransactionBody{
+		Body: &types.TransactionBody{
 			Description: "test",
 			Payload:     []byte(`random payload`),
 			Fee:         big.NewInt(0),
@@ -30,8 +29,8 @@ func newTx(nonce uint64, sender string) *ktypes.Transaction {
 	}
 }
 
-func createTestBlock(_ *testing.T, height int64, numTxns int) (*ktypes.Block, types.Hash) {
-	txs := make([]*ktypes.Transaction, numTxns)
+func createTestBlock(_ *testing.T, height int64, numTxns int) (*types.Block, types.Hash) {
+	txs := make([]*types.Transaction, numTxns)
 	txns := make([][]byte, numTxns)
 	for i := range numTxns {
 		tx := newTx(uint64(i)+uint64(height), "sender")
@@ -43,7 +42,7 @@ func createTestBlock(_ *testing.T, height int64, numTxns int) (*ktypes.Block, ty
 		txs[i] = tx
 		txns[i] = rawTx
 	}
-	blk := ktypes.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5},
+	blk := types.NewBlock(height, types.Hash{2, 3, 4}, types.Hash{6, 7, 8}, types.Hash{5, 5, 5},
 		types.Hash{5, 5, 5}, time.Unix(1729723553+height, 0), txs)
 	return blk, fakeAppHash(height)
 }
@@ -75,10 +74,10 @@ func TestMemBS_StoreAndGet(t *testing.T) {
 func TestMemBS_GetByHeight(t *testing.T) {
 	bs := NewMemBS()
 
-	blocks := []*ktypes.Block{
-		{Header: &ktypes.BlockHeader{Height: 1}},
-		{Header: &ktypes.BlockHeader{Height: 2}},
-		{Header: &ktypes.BlockHeader{Height: 3}},
+	blocks := []*types.Block{
+		{Header: &types.BlockHeader{Height: 1}},
+		{Header: &types.BlockHeader{Height: 2}},
+		{Header: &types.BlockHeader{Height: 3}},
 	}
 
 	for i, block := range blocks {
@@ -109,10 +108,10 @@ func TestMemBS_GetByHeight(t *testing.T) {
 func TestMemBS_Best(t *testing.T) {
 	bs := NewMemBS()
 
-	blocks := []*ktypes.Block{
-		{Header: &ktypes.BlockHeader{Height: 1}},
-		{Header: &ktypes.BlockHeader{Height: 3}},
-		{Header: &ktypes.BlockHeader{Height: 2}},
+	blocks := []*types.Block{
+		{Header: &types.BlockHeader{Height: 1}},
+		{Header: &types.BlockHeader{Height: 3}},
+		{Header: &types.BlockHeader{Height: 2}},
 	}
 
 	for i, block := range blocks {
@@ -186,7 +185,7 @@ func TestMemBS_StoreAndGetTx(t *testing.T) {
 
 func TestMemBS_PreFetch(t *testing.T) {
 	bs := NewMemBS()
-	block := &ktypes.Block{Header: &ktypes.BlockHeader{Height: 1}}
+	block := &types.Block{Header: &types.BlockHeader{Height: 1}}
 
 	if err := bs.Store(block, &types.CommitInfo{AppHash: types.Hash{}}); err != nil {
 		t.Fatal(err)

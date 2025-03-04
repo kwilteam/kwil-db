@@ -92,7 +92,7 @@ func TestBlockStore_StoreAndGet(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
 	block, appHash, _ := createTestBlock(t, 1, 2)
-	err := bs.Store(block, &types.CommitInfo{AppHash: appHash})
+	err := bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,7 +134,7 @@ func TestBlockStore_GetByHeight(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
 	block, appHash, _ := createTestBlock(t, 1, 2)
-	bs.Store(block, &types.CommitInfo{AppHash: appHash})
+	bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 
 	gotHash, blk, ci, err := bs.GetByHeight(1)
 	if err != nil {
@@ -167,7 +167,7 @@ func TestBlockStore_Have(t *testing.T) {
 		t.Error("Block should not exist before storing")
 	}
 
-	bs.Store(block, &types.CommitInfo{AppHash: appHash})
+	bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 
 	if !bs.Have(hash) {
 		t.Error("Block should exist after storing")
@@ -180,7 +180,7 @@ func TestBlockStore_GetTx(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
 	block, appHash, _ := createTestBlock(t, 1, 3)
-	bs.Store(block, &types.CommitInfo{AppHash: appHash})
+	bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 
 	for _, tx := range block.Txns {
 		txHash := tx.Hash()
@@ -216,7 +216,7 @@ func TestBlockStore_HaveTx(t *testing.T) {
 		t.Error("Transaction should not exist before storing block")
 	}
 
-	bs.Store(block, &types.CommitInfo{AppHash: appHash})
+	bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 
 	if !bs.HaveTx(txHash) {
 		t.Error("Transaction should exist after storing block")
@@ -244,7 +244,7 @@ func TestBlockStore_StoreWithNoTransactions(t *testing.T) {
 		types.Hash{5, 5, 5}, time.Unix(1729723553, 0), []*ktypes.Transaction{})
 	appHash := fakeAppHash(1)
 
-	err := bs.Store(block, &types.CommitInfo{AppHash: appHash})
+	err := bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -270,7 +270,7 @@ func TestBlockStore_StoreConcurrent(t *testing.T) {
 		go func(start int) {
 			for j := range blockCount {
 				block, appHash, _ := createTestBlock(t, int64(start*blockCount+j), 2)
-				err := bs.Store(block, &types.CommitInfo{AppHash: appHash})
+				err := bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 				if err != nil {
 					t.Error(err)
 				}
@@ -304,12 +304,12 @@ func TestBlockStore_StoreDuplicateBlock(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 	block, appHash, _ := createTestBlock(t, 1, 2)
 
-	err := bs.Store(block, &types.CommitInfo{AppHash: appHash})
+	err := bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	err = bs.Store(block, &types.CommitInfo{AppHash: appHash})
+	err = bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -351,7 +351,7 @@ func TestBlockStore_StoreWithLargeTransactions(t *testing.T) {
 		types.Hash{5, 5, 5}, time.Unix(1729723553, 0), []*ktypes.Transaction{largeTx, otherTx})
 	appHash := fakeAppHash(1)
 
-	err = bs.Store(block, &types.CommitInfo{AppHash: appHash})
+	err = bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -467,7 +467,7 @@ func testLargeBlockStore(t *testing.T, compress bool) {
 		// Create and store block
 		block := ktypes.NewBlock(height, prevHash, prevAppHash, types.Hash{}, types.Hash{}, time.Now(), txns)
 		appHash := types.HashBytes([]byte(fmt.Sprintf("app-%d", height)))
-		err = bs.Store(block, &types.CommitInfo{AppHash: appHash})
+		err = bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -542,7 +542,7 @@ func TestBlockStore_StoreAndGetResults(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
 	block, appHash, _ := createTestBlock(t, 1, 3)
-	err := bs.Store(block, &types.CommitInfo{AppHash: appHash})
+	err := bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -584,7 +584,7 @@ func TestBlockStore_StoreResultsEmptyBlock(t *testing.T) {
 		types.Hash{5, 5, 5}, time.Unix(1729723553, 0), []*ktypes.Transaction{})
 	appHash := fakeAppHash(1)
 
-	err := bs.Store(block, &types.CommitInfo{AppHash: appHash})
+	err := bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -619,7 +619,7 @@ func TestBlockStore_StoreResultsLargeData(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
 	block, appHash, _ := createTestBlock(t, 1, 2)
-	err := bs.Store(block, &types.CommitInfo{AppHash: appHash})
+	err := bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -655,7 +655,7 @@ func TestBlockStore_StoreResultsMismatchedCount(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
 	block, appHash, _ := createTestBlock(t, 1, 2)
-	err := bs.Store(block, &types.CommitInfo{AppHash: appHash})
+	err := bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -682,7 +682,7 @@ func TestBlockStore_Result(t *testing.T) {
 	bs, _ := setupTestBlockStore(t)
 
 	block, appHash, _ := createTestBlock(t, 1, 3)
-	err := bs.Store(block, &types.CommitInfo{AppHash: appHash})
+	err := bs.Store(block, &ktypes.CommitInfo{AppHash: appHash})
 	if err != nil {
 		t.Fatal(err)
 	}

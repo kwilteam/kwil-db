@@ -541,3 +541,80 @@ func TestBlock_Size(t *testing.T) {
 		require.EqualValues(t, encSize, blockSize)
 	})
 }
+
+func TestBlockHeader_JSON(t *testing.T) {
+	t.Run("marshal and unmarshal with all fields", func(t *testing.T) {
+		_, pubKey, err := crypto.GenerateSecp256k1Key(nil)
+		require.NoError(t, err)
+
+		original := &BlockHeader{
+			Version:           2,
+			Height:            12345,
+			NumTxns:           67,
+			PrevHash:          Hash{1, 2, 3, 4},
+			PrevAppHash:       Hash{5, 6, 7, 8},
+			Timestamp:         time.Now().UTC().Truncate(time.Millisecond),
+			MerkleRoot:        Hash{9, 10, 11, 12},
+			ValidatorSetHash:  Hash{13, 14, 15, 16},
+			NetworkParamsHash: Hash{17, 18, 19, 20},
+			NewLeader:         pubKey,
+		}
+
+		data, err := original.MarshalJSON()
+		require.NoError(t, err)
+
+		var decoded BlockHeader
+		err = decoded.UnmarshalJSON(data)
+		require.NoError(t, err)
+		require.Equal(t, original, &decoded)
+	})
+
+	t.Run("marshal and unmarshal with zero values", func(t *testing.T) {
+		original := &BlockHeader{}
+
+		data, err := original.MarshalJSON()
+		require.NoError(t, err)
+
+		var decoded BlockHeader
+		err = decoded.UnmarshalJSON(data)
+		require.NoError(t, err)
+		require.Equal(t, original, &decoded)
+	})
+
+	t.Run("unmarshal invalid json", func(t *testing.T) {
+		invalidJSON := []byte(`{"height": "not a number"}`)
+		var bh BlockHeader
+		err := bh.UnmarshalJSON(invalidJSON)
+		require.Error(t, err)
+	})
+
+	t.Run("timestamp precision", func(t *testing.T) {
+		original := &BlockHeader{
+			Timestamp: time.Now().UTC().Add(time.Microsecond * 123),
+		}
+
+		data, err := original.MarshalJSON()
+		require.NoError(t, err)
+
+		var decoded BlockHeader
+		err = decoded.UnmarshalJSON(data)
+		require.NoError(t, err)
+
+		// Should only preserve millisecond precision
+		require.Equal(t, original.Timestamp.UnixMilli(), decoded.Timestamp.UnixMilli())
+	})
+
+	t.Run("negative timestamp", func(t *testing.T) {
+		original := &BlockHeader{
+			Timestamp: time.Unix(-1000, 0),
+		}
+
+		data, err := original.MarshalJSON()
+		require.NoError(t, err)
+
+		var decoded BlockHeader
+		err = decoded.UnmarshalJSON(data)
+		require.NoError(t, err)
+		require.Equal(t, original.Timestamp.UnixMilli(), decoded.Timestamp.UnixMilli())
+	})
+}

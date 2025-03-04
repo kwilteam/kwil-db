@@ -221,7 +221,7 @@ type WhitelistFns struct {
 type ProposalBroadcaster func(ctx context.Context, blk *ktypes.Block)
 
 // BlkAnnouncer broadcasts the new committed block to the network using the blockAnn message
-type BlkAnnouncer func(ctx context.Context, blk *ktypes.Block, ci *types.CommitInfo)
+type BlkAnnouncer func(ctx context.Context, blk *ktypes.Block, ci *ktypes.CommitInfo)
 
 // TxAnnouncer broadcasts the new transaction to the network
 type TxAnnouncer func(ctx context.Context, tx *ktypes.Transaction, txID types.Hash)
@@ -231,7 +231,7 @@ type TxAnnouncer func(ctx context.Context, tx *ktypes.Transaction, txID types.Ha
 type AckBroadcaster func(msg *types.AckRes) error
 
 // BlkRequester requests the block from the network based on the height
-type BlkRequester func(ctx context.Context, height int64) (types.Hash, []byte, *types.CommitInfo, int64, error)
+type BlkRequester func(ctx context.Context, height int64) (types.Hash, []byte, *ktypes.CommitInfo, int64, error)
 
 type ResetStateBroadcaster func(height int64, txIDs []ktypes.Hash) error
 
@@ -281,9 +281,9 @@ type state struct {
 
 	// Votes: Applicable only to the leader
 	// These are the Acks received from the validators.
-	votes map[string]*types.VoteInfo
+	votes map[string]*ktypes.VoteInfo
 
-	commitInfo *types.CommitInfo
+	commitInfo *ktypes.CommitInfo
 
 	// Promoted leader uses these updates to distinguish the leader updates occurred due to
 	// "replace-leader" admin command vs the leader updates due to parameter updates
@@ -309,7 +309,7 @@ type lastCommit struct {
 	appHash types.Hash
 
 	blk        *ktypes.Block // for reannounce and other status getters
-	commitInfo *types.CommitInfo
+	commitInfo *ktypes.CommitInfo
 }
 
 // New creates a new consensus engine.
@@ -345,7 +345,7 @@ func New(cfg *Config) (*ConsensusEngine, error) {
 				blkHash: zeroHash,
 				appHash: zeroHash,
 			},
-			votes: make(map[string]*types.VoteInfo),
+			votes: make(map[string]*ktypes.VoteInfo),
 		},
 		stateInfo: StateInfo{
 			height:  0,
@@ -471,7 +471,7 @@ func (ce *ConsensusEngine) close() {
 	}
 }
 
-func (ce *ConsensusEngine) Status() *types.NodeStatus {
+func (ce *ConsensusEngine) Status() *ktypes.NodeStatus {
 	params := ce.blockProcessor.ConsensusParams()
 	ce.stateInfo.mtx.RLock()
 	defer ce.stateInfo.mtx.RUnlock()
@@ -480,7 +480,7 @@ func (ce *ConsensusEngine) Status() *types.NodeStatus {
 	if lc.blk != nil {
 		hdr = lc.blk.Header
 	}
-	return &types.NodeStatus{
+	return &ktypes.NodeStatus{
 		Role:            ce.role.Load().(types.Role).String(),
 		CatchingUp:      ce.inSync.Load(),
 		CommittedHeader: hdr,
@@ -823,7 +823,7 @@ func (ce *ConsensusEngine) updateRole() {
 	}
 }
 
-func (ce *ConsensusEngine) setLastCommitInfo(height int64, appHash []byte, blk *ktypes.Block, ci *types.CommitInfo) {
+func (ce *ConsensusEngine) setLastCommitInfo(height int64, appHash []byte, blk *ktypes.Block, ci *ktypes.CommitInfo) {
 	var blkHash types.Hash
 	if blk != nil {
 		blkHash = blk.Header.Hash()

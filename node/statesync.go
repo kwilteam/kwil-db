@@ -39,9 +39,9 @@ type snapshotReq = snapshotter.SnapshotReq
 type snapshotChunkReq = snapshotter.SnapshotChunkReq
 
 type blockStore interface {
-	GetByHeight(height int64) (types.Hash, *ktypes.Block, *types.CommitInfo, error)
+	GetByHeight(height int64) (types.Hash, *ktypes.Block, *ktypes.CommitInfo, error)
 	Best() (height int64, blkHash, appHash types.Hash, stamp time.Time)
-	Store(*ktypes.Block, *types.CommitInfo) error
+	Store(*ktypes.Block, *ktypes.CommitInfo) error
 }
 
 type StatesyncConfig struct {

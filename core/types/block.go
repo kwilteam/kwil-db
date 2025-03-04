@@ -3,6 +3,7 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -18,13 +19,14 @@ const (
 
 var ErrNotFound = errors.New("not found")
 
+// BlockHeader is the header of a block.
 type BlockHeader struct {
 	Version  uint16
 	Height   int64
 	NumTxns  uint32
-	PrevHash Hash // previous block's hash
-	// app hash after last block.
-	// calculated based on updates to the PG state, accounts, validators, chain state and txResults.
+	PrevHash Hash // PrevHash is previous block's hash
+	// PrevAppHash is the app hash from the execution of the previous block,
+	// which corresponds to the app hash in CommitInfo for the previous block.
 	PrevAppHash Hash
 	Timestamp   time.Time
 	MerkleRoot  Hash // Merkle tree reference to hash of all transactions for the block
@@ -53,10 +55,81 @@ type BlockHeader struct {
 	NewLeader crypto.PublicKey
 }
 
+// JSON marshalling is customized:
+// - Timestamp is (un)marshalled as a unix millisecond timestamp.
+// - NewLeader may be nil when marshalling, and null or omitted when unmarshalling.
+
+type jsonBlockHeader struct {
+	Version     uint16 `json:"version"`
+	Height      int64  `json:"height"`
+	NumTxns     uint32 `json:"num_txns"`
+	PrevHash    Hash   `json:"prev_hash"`
+	PrevAppHash Hash   `json:"prev_app_hash"`
+	// Timestamp is the unix millisecond timestamp
+	Timestamp         int64           `json:"stamp_ms"`
+	MerkleRoot        Hash            `json:"merkle_root"`
+	ValidatorSetHash  Hash            `json:"vals_hash"`
+	NetworkParamsHash Hash            `json:"params_hash"`
+	NewLeader         json.RawMessage `json:"new_leader,omitempty"`
+}
+
+func (bh BlockHeader) MarshalJSON() ([]byte, error) {
+	//  In other contexts core/types.PublicKey will error if marshalling nil (or
+	//  unmarshalling from JSON null). In this context, we allow it.
+	var newLeader json.RawMessage // default: null => omitted
+	if bh.NewLeader != nil {
+		var err error
+		newLeader, err = json.Marshal(PublicKey{bh.NewLeader})
+		if err != nil {
+			return nil, err
+		}
+	}
+	return json.Marshal(&jsonBlockHeader{
+		Version:           bh.Version,
+		Height:            bh.Height,
+		NumTxns:           bh.NumTxns,
+		PrevHash:          bh.PrevHash,
+		PrevAppHash:       bh.PrevAppHash,
+		Timestamp:         bh.Timestamp.UnixMilli(),
+		MerkleRoot:        bh.MerkleRoot,
+		ValidatorSetHash:  bh.ValidatorSetHash,
+		NetworkParamsHash: bh.NetworkParamsHash,
+		NewLeader:         newLeader,
+	})
+}
+
+func (bh *BlockHeader) UnmarshalJSON(b []byte) error {
+	var jbh jsonBlockHeader
+	if err := json.Unmarshal(b, &jbh); err != nil {
+		return err
+	}
+	var newLeader crypto.PublicKey // default: omitted or null => nil
+	if len(jbh.NewLeader) > 0 && string(jbh.NewLeader) != ` null` {
+		var pk PublicKey
+		if err := json.Unmarshal(jbh.NewLeader, &pk); err != nil {
+			return err
+		}
+		newLeader = pk.PublicKey
+	}
+	*bh = BlockHeader{
+		Version:           jbh.Version,
+		Height:            jbh.Height,
+		NumTxns:           jbh.NumTxns,
+		PrevHash:          jbh.PrevHash,
+		PrevAppHash:       jbh.PrevAppHash,
+		Timestamp:         time.UnixMilli(jbh.Timestamp).UTC(),
+		MerkleRoot:        jbh.MerkleRoot,
+		ValidatorSetHash:  jbh.ValidatorSetHash,
+		NetworkParamsHash: jbh.NetworkParamsHash,
+		NewLeader:         newLeader,
+	}
+	return nil
+}
+
 type Block struct {
-	Header    *BlockHeader
-	Txns      []*Transaction
-	Signature []byte // Signature is the block producer's signature (leader in our model)
+	Header    *BlockHeader   `json:"header"`
+	Txns      []*Transaction `json:"txns"`
+	Signature []byte         `json:"sig"` // Signature is the block producer's signature (leader in our model)
 }
 
 func NewBlock(height int64, prevHash, appHash, valSetHash, paramsHash Hash, stamp time.Time, txns []*Transaction) *Block {

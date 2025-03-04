@@ -10,6 +10,7 @@ type BlockRequest struct {
 	Height int64 `json:"height"`
 	// Hash is the block hash. If both Height and Hash are provided, hash will be used
 	Hash types.Hash `json:"hash"`
+	Raw  bool       `json:"raw"`
 }
 
 type BlockResultRequest struct {
@@ -24,9 +25,7 @@ type TxRequest struct {
 
 type GenesisRequest struct{}
 type ConsensusParamsRequest struct{}
-type ValidatorsRequest struct {
-	Height int64 `json:"height"`
-}
+type ValidatorsRequest struct{}
 type UnconfirmedTxsRequest struct {
 	Limit int `json:"limit"`
 }

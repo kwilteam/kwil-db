@@ -166,8 +166,8 @@ type blockAnnMsg struct {
 	Hash       types.Hash
 	Height     int64
 	Header     *ktypes.BlockHeader
-	CommitInfo *types.CommitInfo // commit sigs of validators attest to the block and app hash
-	LeaderSig  []byte            // to avoid having to get the block to realize if it is fake (spam)
+	CommitInfo *ktypes.CommitInfo // commit sigs of validators attest to the block and app hash
+	LeaderSig  []byte             // to avoid having to get the block to realize if it is fake (spam)
 }
 
 var _ encoding.BinaryMarshaler = blockAnnMsg{}
@@ -264,7 +264,7 @@ func (m *blockAnnMsg) ReadFrom(r io.Reader) (int64, error) {
 		return cr.ReadCount(), err
 	}
 
-	var ci types.CommitInfo
+	var ci ktypes.CommitInfo
 	if err := ci.UnmarshalBinary(ciBts); err != nil {
 		return cr.ReadCount(), err
 	}

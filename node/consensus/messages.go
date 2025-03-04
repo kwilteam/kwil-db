@@ -101,7 +101,7 @@ func (vm *vote) OutOfSync() (*types.OutOfSyncProof, bool) {
 type blockAnnounce struct {
 	blk   *ktypes.Block
 	blkID types.Hash
-	ci    *types.CommitInfo
+	ci    *ktypes.CommitInfo
 	// doneFn is a callback function that is called after the block has been processed
 	// and committed. This notifies the node to release the prefetch lock on this block.
 	done func()
@@ -156,7 +156,7 @@ func (ce *ConsensusEngine) NotifyBlockProposal(blk *ktypes.Block, doneFn func())
 }
 
 // NotifyBlockCommit is used by the p2p stream handler to notify the consensus engine of a committed block.
-func (ce *ConsensusEngine) NotifyBlockCommit(blk *ktypes.Block, ci *types.CommitInfo, blkID types.Hash, doneFn func()) {
+func (ce *ConsensusEngine) NotifyBlockCommit(blk *ktypes.Block, ci *ktypes.CommitInfo, blkID types.Hash, doneFn func()) {
 	leaderU, ok := ci.ParamUpdates[ktypes.ParamNameLeader]
 	leader := ce.leader
 

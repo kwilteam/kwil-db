@@ -726,7 +726,17 @@ func (s *Server) handleJSONRPCRequest(ctx context.Context, req *jsonrpc.Request)
 	// call the method with the params
 	result, rpcErr := s.handleMethod(ctx, jsonrpc.Method(req.Method), req.Params)
 	if rpcErr != nil {
-		s.log.Info("request failure", "method", req.Method,
+		level := log.LevelInfo
+		switch rpcErr.Code {
+		case jsonrpc.ErrorInvalidParams, jsonrpc.ErrorInvalidRequest,
+			jsonrpc.ErrorParse, jsonrpc.ErrorUnknownMethod,
+			jsonrpc.ErrorTxNotFound, jsonrpc.ErrorBlkNotFound,
+			jsonrpc.ErrorEngineDatasetNotFound:
+			level = log.LevelDebug
+		case jsonrpc.ErrorInternal, jsonrpc.ErrorTimeout, jsonrpc.ErrorResultEncoding:
+			level = log.LevelWarn
+		}
+		s.log.Log(level, "request failure", "method", req.Method,
 			"elapsed", time.Since(t0), "code", rpcErr.Code,
 			"message", rpcErr.Message)
 

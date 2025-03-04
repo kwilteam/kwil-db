@@ -47,7 +47,9 @@ type BlockchainTransactor interface {
 }
 
 type NodeApp interface {
+	Height(context.Context, sql.Executor) (int64, error)
 	AccountInfo(ctx context.Context, db sql.DB, account *types.AccountID, pending bool) (balance *big.Int, nonce int64, err error)
+	NumAccounts(ctx context.Context, db sql.Executor) (int64, error)
 	Price(ctx context.Context, dbTx sql.DB, tx *types.Transaction) (*big.Int, error)
 	GetMigrationMetadata(ctx context.Context) (*types.MigrationMetadata, error)
 }
@@ -295,6 +297,11 @@ func (svc *Service) Methods() map[jsonrpc.Method]rpcserver.MethodDef {
 			svc.Account,
 			"get an account's status",
 			"balance and nonce of an accounts",
+		),
+		userjson.MethodNumAccounts: rpcserver.MakeMethodDef(
+			svc.NumAccounts,
+			"get the current number of accounts on the DB node",
+			"the number of accounts",
 		),
 		userjson.MethodBroadcast: rpcserver.MakeMethodDef(
 			svc.Broadcast,
@@ -609,6 +616,11 @@ func (svc *Service) Account(ctx context.Context, req *userjson.AccountRequest) (
 	readTx := svc.db.BeginDelayedReadTx()
 	defer readTx.Rollback(ctx)
 
+	height, err := svc.nodeApp.Height(ctx, readTx)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorAccountInternal, "failed to get height", nil)
+	}
+
 	balance, nonce, err := svc.nodeApp.AccountInfo(ctx, readTx, req.ID, uncommitted)
 	if err != nil {
 		return nil, jsonrpc.NewError(jsonrpc.ErrorAccountInternal, "account info error", nil)
@@ -624,6 +636,25 @@ func (svc *Service) Account(ctx context.Context, req *userjson.AccountRequest) (
 		ID:      ident, // nil for non-existent account
 		Nonce:   nonce,
 		Balance: balance.String(),
+		Height:  height,
+	}, nil
+}
+
+func (svc *Service) NumAccounts(ctx context.Context, req *userjson.NumAccountsRequest) (*userjson.NumAccountsResponse, *jsonrpc.Error) {
+	readTx := svc.db.BeginDelayedReadTx()
+	defer readTx.Rollback(ctx)
+	height, err := svc.nodeApp.Height(ctx, readTx)
+	if err != nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorAccountInternal, "failed to get height", nil)
+	}
+	num, err := svc.nodeApp.NumAccounts(ctx, readTx)
+	if err != nil {
+		svc.log.Error("failed to count accounts", "error", err)
+		return nil, jsonrpc.NewError(jsonrpc.ErrorAccountInternal, "failed to count accounts", nil)
+	}
+	return &userjson.NumAccountsResponse{
+		Count:  num,
+		Height: height,
 	}, nil
 }
 

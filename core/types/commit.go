@@ -3,34 +3,31 @@ package types
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 
 	"github.com/kwilteam/kwil-db/core/crypto"
-	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/utils"
 )
 
-var (
-	SerializationByteOrder = types.SerializationByteOrder
-)
-
 type NodeStatus struct {
-	Role            string                   `json:"role"`
-	CatchingUp      bool                     `json:"catching_up"`
-	CommittedHeader *types.BlockHeader       `json:"committed_header"`
-	CommitInfo      *CommitInfo              `json:"commit_info"`
-	Params          *types.NetworkParameters `json:"params"`
+	Role            string             `json:"role"`
+	CatchingUp      bool               `json:"catching_up"`
+	CommittedHeader *BlockHeader       `json:"committed_header"`
+	CommitInfo      *CommitInfo        `json:"commit_info"`
+	Params          *NetworkParameters `json:"params"`
 }
 
 // CommitInfo includes the information about the commit of the block.
-// Such as the signatures of the validators aggreeing to the block.
+// Such as the signatures of the validators agreeing to the block.
 type CommitInfo struct {
-	AppHash          Hash
-	Votes            []*VoteInfo
-	ParamUpdates     types.ParamUpdates
-	ValidatorUpdates []*types.Validator
+	AppHash          Hash         `json:"app_hash"`
+	Votes            []*VoteInfo  `json:"votes"`
+	ParamUpdates     ParamUpdates `json:"param_updates,omitempty"`
+	ValidatorUpdates []*Validator `json:"validator_updates,omitempty"`
 }
 
 type AckStatus int
@@ -41,35 +38,39 @@ type AckStatus int
 // Ack + different AppHash -- Forked
 
 const (
-	// Rejected means the validator did not accept the proposed block and
+	// AckReject means the validator did not accept the proposed block and
 	// responded with a NACK. This can occur due to issues like apphash mismatch,
 	// validator set mismatch, consensus params mismatch, merkle root mismatch, etc.
-	Rejected AckStatus = iota
-	// Agreed means the validator accepted the proposed block and
+	AckReject AckStatus = iota
+	// AckAgree means the validator accepted the proposed block and
 	// computed the same AppHash as the leader after processing the block.
-	Agreed
-	// Forked means the validator accepted the proposed block and
+	AckAgree
+	// AckForked means the validator accepted the proposed block and
 	// successfully processed it, but diverged after processing the block.
 	// The leader identifies this from the app hash mismatch in the vote.
-	Forked
+	AckForked
 )
 
 func (ack *AckStatus) String() string {
 	switch *ack {
-	case Rejected:
+	case AckReject:
 		return "rejected"
-	case Agreed:
+	case AckAgree:
 		return "agreed"
-	case Forked:
+	case AckForked:
 		return "forked"
 	default:
 		return "unknown"
 	}
 }
 
+// WasAck indicates if the validator's ACK bool is true or false. In other
+// words, if the AckStatus is AckReject. Either AckAgree or AckForked indicate
+// that the validator accepted the block; the difference is if the app hash was
+// the same as the leader's.
 func (ack AckStatus) WasAck() bool {
 	switch ack {
-	case Agreed, Forked:
+	case AckAgree, AckForked:
 		return true
 	default: // Rejected
 		return false
@@ -82,16 +83,17 @@ func (ack AckStatus) WasAck() bool {
 // Validators and sentry nodes use this information from the CommitInfo to verify that the
 // committed block state was agreed upon by the majority of the validators from the validator set.
 type VoteInfo struct {
-	// VoteSignature is the signature of the blkHash + nack | blkHash + ack + appHash
-	Signature Signature
-
 	// Ack is set to true if the validator agrees with the block
 	// in terms of the AppHash, ValidatorSet, MerkleRoot of Txs etc.
-	AckStatus AckStatus
-	// AppHash is optional, it set only if the AckStatus is AckStatusDivereged.
+	AckStatus AckStatus `json:"ack"`
+
+	// AppHash is optional, it set only if the AckStatus is AckStatusDiverged.
 	// AppHash is implied to be the AppHash in the CommitInfo if the AckStatus is AckStatusAgree.
 	// AppHash is nil if the AckStatus is AckStatusDisagree.
-	AppHash *Hash
+	AppHash *Hash `json:"app_hash,omitempty"`
+
+	// VoteSignature is the signature of the blkHash + nack | blkHash + ack + appHash
+	Signature Signature `json:"sig"`
 }
 
 type Signature struct {
@@ -101,18 +103,48 @@ type Signature struct {
 	Data []byte
 }
 
+type sigJSON struct {
+	PubKey     string `json:"key"`
+	PubKeyType string `json:"key_type"`
+	Data       string `json:"sig"`
+}
+
+func (sig Signature) MarshalJSON() ([]byte, error) {
+	return json.Marshal(sigJSON{
+		PubKeyType: sig.PubKeyType.String(),
+		PubKey:     hex.EncodeToString(sig.PubKey),
+		Data:       hex.EncodeToString(sig.Data),
+	})
+}
+
+// UnmarshalJSON
+func (sig *Signature) UnmarshalJSON(data []byte) error {
+	var s sigJSON
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	var err error
+	sig.PubKeyType, err = crypto.ParseKeyType(s.PubKeyType)
+	if err != nil {
+		return err
+	}
+	sig.PubKey, err = hex.DecodeString(s.PubKey)
+	if err != nil {
+		return err
+	}
+	dat, err := hex.DecodeString(s.Data)
+	if err != nil {
+		return err
+	}
+	sig.Data = dat
+	return nil
+
+}
+
 func (sig *Signature) Bytes() []byte {
 	var buf bytes.Buffer
 	sig.WriteTo(&buf)
 	return buf.Bytes()
-}
-
-func DecodeSignature(data []byte) (*Signature, error) {
-	sig := &Signature{}
-	if _, err := sig.ReadFrom(bytes.NewReader(data)); err != nil {
-		return nil, err
-	}
-	return sig, nil
 }
 
 func (s *Signature) WriteTo(w io.Writer) (int64, error) {
@@ -123,12 +155,12 @@ func (s *Signature) WriteTo(w io.Writer) (int64, error) {
 	}
 
 	// PubKey Length
-	if err := types.WriteCompactBytes(cw, s.PubKey); err != nil {
+	if err := WriteCompactBytes(cw, s.PubKey); err != nil {
 		return cw.Written(), err
 	}
 
 	// Signature Data Length
-	if err := types.WriteCompactBytes(cw, s.Data); err != nil {
+	if err := WriteCompactBytes(cw, s.Data); err != nil {
 		return cw.Written(), err
 	}
 
@@ -145,13 +177,13 @@ func (s *Signature) ReadFrom(r io.Reader) (int64, error) {
 	}
 	s.PubKeyType = kt
 
-	pubKey, err := types.ReadCompactBytes(cr)
+	pubKey, err := ReadCompactBytes(cr)
 	if err != nil {
 		return cr.ReadCount(), fmt.Errorf("failed to read public key: %w", err)
 	}
 	s.PubKey = pubKey
 
-	sig, err := types.ReadCompactBytes(cr)
+	sig, err := ReadCompactBytes(cr)
 	if err != nil {
 		return cr.ReadCount(), fmt.Errorf("failed to read signature: %w", err)
 	}
@@ -172,7 +204,7 @@ func (v *VoteInfo) MarshalBinary() ([]byte, error) {
 		return nil, fmt.Errorf("failed to write ack status: %w", err)
 	}
 
-	if v.AckStatus == Forked {
+	if v.AckStatus == AckForked {
 		if v.AppHash == nil {
 			return nil, errors.New("missing app hash for diverged vote")
 		}
@@ -199,7 +231,7 @@ func (v *VoteInfo) UnmarshalBinary(data []byte) error {
 	}
 	v.AckStatus = AckStatus(status)
 
-	if v.AckStatus == Forked {
+	if v.AckStatus == AckForked {
 		var appHash Hash
 		if _, err := io.ReadFull(rd, appHash[:]); err != nil {
 			return fmt.Errorf("failed to read app hash: %w", err)
@@ -220,16 +252,16 @@ func (v *VoteInfo) Verify(blkID Hash, appHash Hash) error {
 	buf.Write(blkID[:])
 
 	switch v.AckStatus {
-	case Forked:
+	case AckForked:
 		if v.AppHash == nil {
 			return errors.New("missing app hash for diverged vote")
 		}
 		binary.Write(&buf, binary.LittleEndian, true)
 		buf.Write((*v.AppHash)[:])
-	case Agreed:
+	case AckAgree:
 		binary.Write(&buf, binary.LittleEndian, true)
 		buf.Write(appHash[:])
-	case Rejected:
+	case AckReject:
 		binary.Write(&buf, binary.LittleEndian, false)
 	}
 
@@ -245,6 +277,7 @@ func (v *VoteInfo) Verify(blkID Hash, appHash Hash) error {
 	return nil
 }
 
+// SignVote signs a vote for the given block ID. This should probably go to node/types.
 func SignVote(blkID Hash, ack bool, appHash *Hash, privKey crypto.PrivateKey) (*Signature, error) {
 	if privKey == nil {
 		return nil, errors.New("nil private key")
@@ -289,7 +322,7 @@ func (ci *CommitInfo) MarshalBinary() ([]byte, error) {
 			return nil, fmt.Errorf("failed to marshal vote: %w", err)
 		}
 
-		if err := types.WriteCompactBytes(&buf, voteBytes); err != nil {
+		if err := WriteCompactBytes(&buf, voteBytes); err != nil {
 			return nil, fmt.Errorf("failed to write vote: %w", err)
 		}
 	}
@@ -299,7 +332,7 @@ func (ci *CommitInfo) MarshalBinary() ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal param updates: %w", err)
 	}
-	if err := types.WriteCompactBytes(&buf, puBts); err != nil {
+	if err := WriteCompactBytes(&buf, puBts); err != nil {
 		return nil, fmt.Errorf("failed to write param updates: %w", err)
 	}
 
@@ -312,7 +345,7 @@ func (ci *CommitInfo) MarshalBinary() ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to marshal validator: %w", err)
 		}
-		if err := types.WriteCompactBytes(&buf, valBts); err != nil {
+		if err := WriteCompactBytes(&buf, valBts); err != nil {
 			return nil, fmt.Errorf("failed to write validator: %w", err)
 		}
 	}
@@ -334,7 +367,7 @@ func (ci *CommitInfo) UnmarshalBinary(data []byte) error {
 
 	ci.Votes = make([]*VoteInfo, voteCount)
 	for i := range ci.Votes {
-		voteBytes, err := types.ReadCompactBytes(rd)
+		voteBytes, err := ReadCompactBytes(rd)
 		if err != nil {
 			return fmt.Errorf("failed to read vote: %w", err)
 		}
@@ -347,7 +380,7 @@ func (ci *CommitInfo) UnmarshalBinary(data []byte) error {
 		ci.Votes[i] = &vote
 	}
 
-	puBts, err := types.ReadCompactBytes(rd)
+	puBts, err := ReadCompactBytes(rd)
 	if err != nil {
 		return fmt.Errorf("failed to read param updates: %w", err)
 	}
@@ -359,14 +392,14 @@ func (ci *CommitInfo) UnmarshalBinary(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("failed to read validator update count: %w", err)
 	}
-	ci.ValidatorUpdates = make([]*types.Validator, valCount)
+	ci.ValidatorUpdates = make([]*Validator, valCount)
 	for i := range ci.ValidatorUpdates {
-		valBts, err := types.ReadCompactBytes(rd)
+		valBts, err := ReadCompactBytes(rd)
 		if err != nil {
 			return fmt.Errorf("failed to read validator: %w", err)
 		}
 
-		val := &types.Validator{}
+		val := &Validator{}
 		if err := val.UnmarshalBinary(valBts); err != nil {
 			return fmt.Errorf("failed to unmarshal validator: %w", err)
 		}

@@ -626,6 +626,10 @@ func (r *TxApp) AccountInfo(ctx context.Context, db sql.DB, acctID *types.Accoun
 	return a.Balance, a.Nonce, nil
 }
 
+func (r *TxApp) NumAccounts(ctx context.Context, db sql.Executor) (int64, error) {
+	return r.Accounts.NumAccounts(ctx, db)
+}
+
 // UpdateValidator updates a validator's power.
 // It can only be called in between Begin and Finalize.
 // The value passed as power will simply replace the current power.

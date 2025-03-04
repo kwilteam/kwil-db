@@ -230,26 +230,26 @@ func TestMain(m *testing.M) {
 	m.Run()
 }
 
-func addVotes(t *testing.T, blkHash, appHash ktypes.Hash, n1, n2 *ConsensusEngine) *types.CommitInfo {
-	ci := &types.CommitInfo{
+func addVotes(t *testing.T, blkHash, appHash ktypes.Hash, n1, n2 *ConsensusEngine) *ktypes.CommitInfo {
+	ci := &ktypes.CommitInfo{
 		AppHash: appHash,
-		Votes:   make([]*types.VoteInfo, 0),
+		Votes:   make([]*ktypes.VoteInfo, 0),
 	}
 
-	sig1, err := types.SignVote(blkHash, true, &appHash, n1.privKey)
+	sig1, err := ktypes.SignVote(blkHash, true, &appHash, n1.privKey)
 	require.NoError(t, err)
 
-	ci.Votes = append(ci.Votes, &types.VoteInfo{
+	ci.Votes = append(ci.Votes, &ktypes.VoteInfo{
 		Signature: *sig1,
-		AckStatus: types.Agreed,
+		AckStatus: ktypes.AckAgree,
 	})
 
-	sig2, err := types.SignVote(blkHash, true, &appHash, n2.privKey)
+	sig2, err := ktypes.SignVote(blkHash, true, &appHash, n2.privKey)
 	require.NoError(t, err)
 
-	ci.Votes = append(ci.Votes, &types.VoteInfo{
+	ci.Votes = append(ci.Votes, &ktypes.VoteInfo{
 		Signature: *sig2,
-		AckStatus: types.Agreed,
+		AckStatus: ktypes.AckAgree,
 	})
 
 	return ci
@@ -315,7 +315,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "commit(InvalidAppHash)",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.NotifyBlockCommit(blkProp1.blk, &types.CommitInfo{AppHash: ktypes.Hash{}}, blkProp1.blkHash, nil)
+						val.NotifyBlockCommit(blkProp1.blk, &ktypes.CommitInfo{AppHash: ktypes.Hash{}}, blkProp1.blkHash, nil)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						if val.lastCommitHeight() != 0 {
@@ -628,7 +628,7 @@ func TestValidatorStateMachine(t *testing.T) {
 						rawBlk := ktypes.EncodeBlock(blkProp2.blk)
 						cnt := 0
 						bestHeight := blkProp2.height + 10 // TODO: update test when this is used
-						val.blkRequester = func(ctx context.Context, height int64) (types.Hash, []byte, *types.CommitInfo, int64, error) {
+						val.blkRequester = func(ctx context.Context, height int64) (types.Hash, []byte, *ktypes.CommitInfo, int64, error) {
 							defer func() { cnt += 1 }()
 
 							if cnt < 1 {
@@ -666,7 +666,7 @@ func TestValidatorStateMachine(t *testing.T) {
 
 						rawBlk := ktypes.EncodeBlock(blkProp2.blk)
 						bestHeight := blkProp2.height + 10 // TODO: update test when this is used
-						val.blkRequester = func(ctx context.Context, height int64) (types.Hash, []byte, *types.CommitInfo, int64, error) {
+						val.blkRequester = func(ctx context.Context, height int64) (types.Hash, []byte, *ktypes.CommitInfo, int64, error) {
 							return blkProp2.blkHash, rawBlk, ci, bestHeight, nil
 						}
 						val.doCatchup(context.Background())
@@ -825,7 +825,7 @@ func TestCELeaderTwoNodesMajorityAcks(t *testing.T) {
 	require.NotNil(t, blProp)
 
 	// node2 should send a vote to node1
-	sig, err := types.SignVote(blProp.blkHash, true, &blockAppHash, ceConfigs[1].PrivateKey)
+	sig, err := ktypes.SignVote(blProp.blkHash, true, &blockAppHash, ceConfigs[1].PrivateKey)
 	assert.NoError(t, err)
 
 	vote := &vote{
@@ -891,10 +891,10 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 	assert.NotNil(t, b)
 	nextAppHash := nextAppHash(nextAppHash(zeroHash))
 
-	sig1, err := types.SignVote(b.blkHash, true, &nextAppHash, ceConfigs[1].PrivateKey)
+	sig1, err := ktypes.SignVote(b.blkHash, true, &nextAppHash, ceConfigs[1].PrivateKey)
 	assert.NoError(t, err)
 
-	sig2, err := types.SignVote(b.blkHash, true, &nextAppHash, ceConfigs[2].PrivateKey)
+	sig2, err := ktypes.SignVote(b.blkHash, true, &nextAppHash, ceConfigs[2].PrivateKey)
 	assert.NoError(t, err)
 
 	// node2 should send a vote to node1
@@ -926,7 +926,7 @@ func TestCELeaderTwoNodesMajorityNacks(t *testing.T) {
 }
 
 // MockBroadcasters
-func mockBlkRequester(ctx context.Context, height int64) (types.Hash, []byte, *types.CommitInfo, int64, error) {
+func mockBlkRequester(ctx context.Context, height int64) (types.Hash, []byte, *ktypes.CommitInfo, int64, error) {
 	return types.Hash{}, nil, nil, 0, types.ErrBlkNotFound
 }
 
@@ -936,7 +936,7 @@ func mockVoteBroadcaster(msg *types.AckRes) error {
 	return nil
 }
 
-func mockBlkAnnouncer(_ context.Context, blk *ktypes.Block, ci *types.CommitInfo) {}
+func mockBlkAnnouncer(_ context.Context, blk *ktypes.Block, ci *ktypes.CommitInfo) {}
 
 func mockTxAnnouncer(ctx context.Context, tx *ktypes.Transaction, txID types.Hash) {}
 
@@ -986,6 +986,9 @@ func (d *dummyTxApp) GenesisInit(ctx context.Context, db sql.DB, _ *config.Genes
 }
 func (d *dummyTxApp) AccountInfo(ctx context.Context, dbTx sql.DB, identifier *ktypes.AccountID, pending bool) (balance *big.Int, nonce int64, err error) {
 	return big.NewInt(0), 0, nil
+}
+func (a *dummyTxApp) NumAccounts(ctx context.Context, tx sql.Executor) (int64, error) {
+	return 1, nil
 }
 
 func (d *dummyTxApp) ApplyMempool(ctx *common.TxContext, db sql.DB, tx *ktypes.Transaction) error {

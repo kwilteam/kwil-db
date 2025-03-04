@@ -124,6 +124,10 @@ func InitializeAccountStore(ctx context.Context, db sql.DB, logger log.Logger) (
 	}, nil
 }
 
+func (*Accounts) NumAccounts(ctx context.Context, tx sql.Executor) (int64, error) {
+	return numAccounts(ctx, tx)
+}
+
 // GetAccount retrieves the account with the given identifier. If the account does not exist,
 // it will return an account with a balance of 0 and a nonce of 0.
 func (a *Accounts) GetAccount(ctx context.Context, tx sql.Executor, account *types.AccountID) (*types.Account, error) {

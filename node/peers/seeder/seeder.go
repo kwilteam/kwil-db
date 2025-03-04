@@ -38,6 +38,10 @@ type Config struct {
 }
 
 func NewSeeder(cfg *Config) (*Seeder, error) {
+	logger := cfg.Logger
+	if logger == nil {
+		logger = log.DiscardLogger
+	}
 	if err := os.MkdirAll(cfg.Dir, 0755); err != nil {
 		return nil, err
 	}
@@ -49,7 +53,7 @@ func NewSeeder(cfg *Config) (*Seeder, error) {
 	if err != nil {
 		return nil, err
 	}
-	host, err := newHost(addr, port, cfg.ChainID, cfg.PeerKey, cfg.Logger)
+	host, err := newHost(addr, port, cfg.ChainID, cfg.PeerKey, logger)
 	if err != nil {
 		return nil, err
 	}
@@ -59,7 +63,7 @@ func NewSeeder(cfg *Config) (*Seeder, error) {
 		ChainID:           cfg.ChainID,
 		SeedMode:          true,
 		AddrBook:          addrBook,
-		Logger:            cfg.Logger.New("PEERS"),
+		Logger:            logger.New("PEERS"),
 		Host:              host,
 		ConnGater:         nil,
 		RequiredProtocols: node.RequiredStreamProtocols,
@@ -68,11 +72,6 @@ func NewSeeder(cfg *Config) (*Seeder, error) {
 	pm, err := peers.NewPeerMan(pmCfg)
 	if err != nil {
 		return nil, err
-	}
-
-	logger := log.DiscardLogger
-	if cfg.Logger != nil {
-		logger = cfg.Logger
 	}
 
 	return &Seeder{
@@ -103,6 +102,11 @@ func (s *Seeder) Start(ctx context.Context, bootpeers ...string) error {
 	}
 
 	return s.pm.Start(ctx)
+}
+
+func (s *Seeder) NumKnownPeers() int {
+	all, _, _ := s.pm.KnownPeers()
+	return len(all)
 }
 
 func makePeerAddrInfo(addr string) (*peer.AddrInfo, error) {

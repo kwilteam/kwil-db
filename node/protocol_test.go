@@ -26,14 +26,14 @@ func TestBlockAnnMsg_MarshalUnmarshal(t *testing.T) {
 			name: "empty message without commitInfo",
 			msg: &blockAnnMsg{
 				Header:     nil,
-				CommitInfo: &types.CommitInfo{},
+				CommitInfo: &ktypes.CommitInfo{},
 			},
 			wantErr: true,
 		},
 		{
 			name: "empty message with commitInfo, without header",
 			msg: &blockAnnMsg{
-				CommitInfo: &types.CommitInfo{},
+				CommitInfo: &ktypes.CommitInfo{},
 			},
 			wantErr: true,
 		},
@@ -41,7 +41,7 @@ func TestBlockAnnMsg_MarshalUnmarshal(t *testing.T) {
 			name: "empty message with header and commitInfo",
 			msg: &blockAnnMsg{
 				Header:     &ktypes.BlockHeader{},
-				CommitInfo: &types.CommitInfo{},
+				CommitInfo: &ktypes.CommitInfo{},
 			},
 			wantErr: false,
 		},
@@ -61,7 +61,7 @@ func TestBlockAnnMsg_MarshalUnmarshal(t *testing.T) {
 				Height: 100,
 				Hash:   [32]byte{1, 2, 3},
 				Header: &ktypes.BlockHeader{},
-				CommitInfo: &types.CommitInfo{
+				CommitInfo: &ktypes.CommitInfo{
 					AppHash: ktypes.Hash{1, 2, 3},
 				},
 				LeaderSig: []byte{7, 8, 9},
@@ -73,7 +73,7 @@ func TestBlockAnnMsg_MarshalUnmarshal(t *testing.T) {
 			msg: &blockAnnMsg{
 				Height: 100,
 				Hash:   [32]byte{1, 2, 3},
-				CommitInfo: &types.CommitInfo{
+				CommitInfo: &ktypes.CommitInfo{
 					AppHash: ktypes.Hash{1, 2, 3},
 				},
 				Header: &ktypes.BlockHeader{},
@@ -93,7 +93,7 @@ func TestBlockAnnMsg_MarshalUnmarshal(t *testing.T) {
 					ValidatorSetHash:  ktypes.Hash{1, 2, 3},
 					NetworkParamsHash: ktypes.Hash{1, 2, 3},
 				},
-				CommitInfo: &types.CommitInfo{
+				CommitInfo: &ktypes.CommitInfo{
 					AppHash: ktypes.Hash{1, 2, 3},
 				},
 				LeaderSig: []byte{7, 8, 9},

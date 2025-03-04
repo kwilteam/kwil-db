@@ -8,6 +8,7 @@ const (
 	MethodPing                  jsonrpc.Method = "user.ping"
 	MethodChainInfo             jsonrpc.Method = "user.chain_info"
 	MethodAccount               jsonrpc.Method = "user.account"
+	MethodNumAccounts           jsonrpc.Method = "user.num_accounts"
 	MethodBroadcast             jsonrpc.Method = "user.broadcast"
 	MethodCall                  jsonrpc.Method = "user.call"
 	MethodDatabases             jsonrpc.Method = "user.databases"
