@@ -130,7 +130,7 @@ configuration changes. Start it by running the following from the
 
 ```sh
 cd contrib/docker/compose/kwil
-docker compose up --build -d
+KWIL_DB_OWNER=YOUR_ETH_ADDRESS docker compose up --build -d
 ```
 
 With the `-d` option, the service(s) will be started as background processes. To

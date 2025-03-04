@@ -50,6 +50,7 @@ services:
     command: |
       start
       --autogen
+      --db-owner=$KWIL_DB_OWNER
       --root=/app/.kwild
       --log.format=plain
       --log.level=debug

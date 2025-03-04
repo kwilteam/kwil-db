@@ -215,7 +215,7 @@ func CreateDockerNetwork(ctx context.Context, t *testing.T) (*testcontainers.Doc
 }
 
 func DeployETHNode(t *testing.T, ctx context.Context, dockerName string, privKey *crypto.Secp256k1PrivateKey) *EthNode {
-	tmpDir, err := os.MkdirTemp("", "TestKwilInt")
+	tmpDir, err := os.MkdirTemp("", "TestKwil")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -286,7 +286,7 @@ func SetupTests(t *testing.T, testConfig *TestConfig) *Testnet {
 	testConfig.ensureDefaults(t)
 
 	// we create a temporary directory to store the testnet configs
-	tmpDir, err := os.MkdirTemp("", "TestKwilInt")
+	tmpDir, err := os.MkdirTemp("", "TestKwil")
 	if err != nil {
 		t.Fatal(err)
 	}
