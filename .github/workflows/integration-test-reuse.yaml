@@ -81,7 +81,6 @@ jobs:
       - name: Build cli binaries
         run: |
           task build:cli
-          task build:kwild
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3

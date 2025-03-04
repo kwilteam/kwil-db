@@ -1,5 +1,5 @@
 # manual-test-integration.yaml run integration test with manual inputs: kdb-ref.
-name: manual-test-kgw
+name: manual-test-integration
 
 on:
   workflow_dispatch:

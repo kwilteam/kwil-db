@@ -1,10 +1,10 @@
-name: CI
+name: PR
 
 on:
   pull_request:
     types: [ opened, synchronize, reopened, ready_for_review ]
     branches:
-      - release*
+      - main
   # path filter won't work bcz PR status check will be 'pending' if workflow is
   # skipped due to path filtering, i.e. blocked
   #paths:
@@ -32,9 +32,8 @@ jobs:
         id: filter
         with:
           # Path to file where filters are defined
-          filters: .github/filters-old.yaml
+          filters: .github/filters.yaml
           #predicate-quantifier: 'every' # check dorny/paths-filter#225
-
 
   test:
     needs: changes
@@ -88,7 +87,9 @@ jobs:
       #  run: |
       #    ./scripts/kuneiform/check_tidy
 
-      # NOTE: we don't want to use workspace when test release
+      - name: Initialize Go workspace
+        run: |
+          task work
 
       - name: Compile packages, apps, and specs
         run: |
@@ -106,7 +107,7 @@ jobs:
         run: |
           task test:unit
 
-      # integration test
+      # acceptance test
       - name: manual git tag
         run: |
           version=`echo ${{ github.sha }} | cut -c 1-7`
@@ -126,10 +127,10 @@ jobs:
       - name: compile the core/client/example app
         run: go build -o /dev/null
         working-directory: core/client/example
-      #
-      #      - name: compile the core/gatewayclient/example app
-      #        run: go build -o /dev/null
-      #        working-directory: core/gatewayclient/example
+#
+#      - name: compile the core/gatewayclient/example app
+#        run: go build -o /dev/null
+#        working-directory: core/gatewayclient/example
 
       - name: Generate go vendor
         run: |
