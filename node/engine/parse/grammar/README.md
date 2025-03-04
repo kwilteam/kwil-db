@@ -6,4 +6,4 @@ To generate the diagrams:
 - run `cat ./KuneiformParser.g4 > /tmp/grammar.g4 && sed -n -e '10,200p' ./KuneiformLexer.g4 >> /tmp/grammar.g4`, this will generate a combined `/tmp/grammar.g4` file.
 - go to https://www.bottlecaps.de/ebnf-convert/, paste the content of `/tmp/grammar.g4` and click on `Convert`.
 - the grammar should be converted without errors, then click on `View Diagrams`.
-- from that page, you can change the grammars, colors(#118ea0), etc. and download the diagrams(HTML+SVG+embedded).
+- from that page, you can change the grammars, colors(#3860e2), etc. and download the diagrams(HTML+SVG+embedded). Replace `rrdiagrams.html` with the downloaded file.
