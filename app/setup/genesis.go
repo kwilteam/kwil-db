@@ -167,13 +167,7 @@ func mergeGenesisFlags(conf *config.GenesisConfig, cmd *cobra.Command, flagCfg *
 		for _, v := range flagCfg.validators {
 			parts := strings.Split(v, ":")
 			if len(parts) != 2 {
-				return nil, fmt.Errorf("invalid format for validator, expected key:power, received: %s", v)
-			}
-
-			keyParts := strings.Split(parts[0], "#")
-			hexPub, err := hex.DecodeString(keyParts[0])
-			if err != nil {
-				return nil, fmt.Errorf("invalid public key for validator: %s", parts[0])
+				return nil, fmt.Errorf("invalid format for validator, expected key#keyType:power, received: %s", v)
 			}
 
 			power, err := strconv.ParseInt(parts[1], 10, 64)
@@ -181,9 +175,26 @@ func mergeGenesisFlags(conf *config.GenesisConfig, cmd *cobra.Command, flagCfg *
 				return nil, fmt.Errorf("invalid power for validator: %s", parts[1])
 			}
 
-			keyType, err := crypto.ParseKeyType(keyParts[1])
+			keyType := crypto.KeyTypeSecp256k1
+			keyParts := strings.Split(parts[0], "#")
+
+			if len(keyParts) > 2 {
+				return nil, fmt.Errorf("invalid format for validator, expected key#keyType:power, received: %s", v)
+			} else if len(keyParts) == 2 {
+				keyType, err = crypto.ParseKeyType(keyParts[1])
+				if err != nil {
+					return nil, fmt.Errorf("invalid key type for validator: %s", keyParts[1])
+				}
+			}
+
+			hexPub, err := hex.DecodeString(keyParts[0])
 			if err != nil {
-				return nil, fmt.Errorf("invalid key type for validator: %s", keyParts[1])
+				return nil, fmt.Errorf("invalid public key for validator: %s", parts[0])
+			}
+
+			_, err = crypto.UnmarshalPublicKey(hexPub, keyType)
+			if err != nil {
+				return nil, fmt.Errorf("invalid public key for validator: %s", parts[0])
 			}
 
 			conf.Validators = append(conf.Validators, &types.Validator{

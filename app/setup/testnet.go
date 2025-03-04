@@ -1,10 +1,8 @@
 package setup
 
 import (
-	"crypto/sha256"
-	"encoding/binary"
+	"crypto/rand"
 	"fmt"
-	"math/rand/v2"
 	"net"
 	"os"
 	"path/filepath"
@@ -130,7 +128,6 @@ type ConfigOpts struct {
 	DnsHost bool
 }
 
-// TODO: once changes to the tests are complete, this may not be needed
 func GenerateTestnetConfigs(cfg *TestnetConfig, opts *ConfigOpts, gencfg *config.GenesisConfig) error {
 	if len(cfg.Hostnames) > 0 && len(cfg.Hostnames) != cfg.NumVals+cfg.NumNVals {
 		return fmt.Errorf("if set, the number of hostnames %d must be equal to number of validators + number of non-validators %d",
@@ -148,15 +145,10 @@ func GenerateTestnetConfigs(cfg *TestnetConfig, opts *ConfigOpts, gencfg *config
 		return err
 	}
 
+	// generate Keys, so that the connection strings and the validator set can be generated before the node config files are generated
 	var keys []*crypto.Secp256k1PrivateKey
-	// generate the configuration for the nodes
-	for i := range cfg.NumVals + cfg.NumNVals {
-		// generate Keys, so that the connection strings and the validator set can be generated before the node config files are generated
-		var seed [32]byte
-		binary.LittleEndian.PutUint64(seed[:], cfg.StartingPort+uint64(i))
-		seed = sha256.Sum256(seed[:])
-		rr := rand.NewChaCha8(seed)
-		priv := node.NewKey(&deterministicPRNG{ChaCha8: rr})
+	for range cfg.NumVals + cfg.NumNVals {
+		priv := node.NewKey(rand.Reader)
 		keys = append(keys, priv)
 	}
 
@@ -289,33 +281,6 @@ func GenerateNodeRoot(ncfg *NodeGenConfig) error {
 	cfg.Admin.ListenAddress = net.JoinHostPort("127.0.0.1", strconv.FormatUint(uint64(8584+ncfg.PortOffset), 10))
 
 	return GenerateNodeDir(ncfg.RootDir, ncfg.Genesis, cfg, ncfg.NodeKey, "")
-}
-
-type deterministicPRNG struct {
-	readBuf [8]byte
-	readLen int // 0 <= readLen <= 8
-	*rand.ChaCha8
-}
-
-// Read is a bad replacement for the actual Read method added in Go 1.23
-func (dr *deterministicPRNG) Read(p []byte) (n int, err error) {
-	// fill p by calling Uint64 in a loop until we have enough bytes
-	if dr.readLen > 0 {
-		n = copy(p, dr.readBuf[len(dr.readBuf)-dr.readLen:])
-		dr.readLen -= n
-		p = p[n:]
-	}
-	for len(p) >= 8 {
-		binary.LittleEndian.PutUint64(p, dr.ChaCha8.Uint64())
-		p = p[8:]
-		n += 8
-	}
-	if len(p) > 0 {
-		binary.LittleEndian.PutUint64(dr.readBuf[:], dr.Uint64())
-		n += copy(p, dr.readBuf[:])
-		dr.readLen = 8 - len(p)
-	}
-	return n, nil
 }
 
 type TestnetNodeConfig struct {

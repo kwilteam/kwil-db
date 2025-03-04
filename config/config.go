@@ -133,6 +133,18 @@ func (gc *GenesisConfig) SanityChecks() error {
 		if val.Power <= 0 {
 			return fmt.Errorf("Genesis validators should have non-zero power")
 		}
+
+		// ensure that the key type is valid
+		_, ok := crypto.KeyTypeDefinition(val.KeyType)
+		if !ok {
+			return fmt.Errorf("invalid key type: %s", val.KeyType)
+		}
+
+		// ensure that the pubkey is valid
+		_, err := crypto.UnmarshalPublicKey(val.Identifier, val.KeyType)
+		if err != nil {
+			return fmt.Errorf("invalid public key: %s error: %s", val.Identifier, err)
+		}
 	}
 
 	if gc.InitialHeight < 0 {
