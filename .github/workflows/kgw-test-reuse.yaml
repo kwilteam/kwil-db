@@ -194,7 +194,8 @@ jobs:
         run: |
           cd contrib/docker/compose/kwil
           echo "run kwild in docker"
-          docker compose up -d
+          # NOTE: we use the default hardhat signer address
+          KWIL_DB_OWNER=0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266 docker compose up -d
           # clone kwil-js
           git clone https://github.com/kwilteam/kwil-js.git /tmp/kwil-js
           cd /tmp/kwil-js
@@ -214,12 +215,14 @@ jobs:
             -b "http://kwild:8484" \
             --chain-id $chain_id \
             --allow-adhoc-query \
-            --log-level debug
+            --log-level debug \
+            --ip-request-rate-authn 0
           echo "run KWIL-JS TEST against kwild(http://localhost:8484),  with $chain_id"
-          PRIVATE_KEY=0000000000000000000000000000000000000000000000000000000000000001 CHAIN_ID=$chain_id GATEWAY_ON=false GAS_ON=false KWIL_PROVIDER=http://localhost:8484 npm run integration
+          # NOTE: we use the default hardhat private key
+          PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 CHAIN_ID=$chain_id KWIL_PROVIDER=http://localhost:8484 npm run integration
           echo "run KWIL-JS TEST against kgw(http://localhost:8090),  with $chain_id"
           # assume the test above will drop the database, so we can deploy again
-          PRIVATE_KEY=0000000000000000000000000000000000000000000000000000000000000001 CHAIN_ID=$chain_id GATEWAY_ON=true GAS_ON=false KWIL_PROVIDER=http://localhost:8090 npm run integration
+          PRIVATE_KEY=ac0974bec39a17e36ba4a6b4d238ff944bacb478cbed5efcae784d7bf4f2ff80 CHAIN_ID=$chain_id GATEWAY_ON=TRUE KWIL_PROVIDER=http://localhost:8090 npm run integration
           echo "stop running kwild & kgw"
           docker rm -f kgwcontainer
           cd -
