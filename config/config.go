@@ -254,9 +254,13 @@ func DefaultGenesisConfig() *GenesisConfig {
 // DefaultConfig generates an instance of the default config.
 func DefaultConfig() *Config {
 	return &Config{
-		LogLevel:  log.LevelInfo,
-		LogFormat: log.FormatUnstructured,
-		LogOutput: []string{"stdout", "kwild.log"},
+		Log: Logging{
+			Level:          log.LevelInfo,
+			Format:         log.FormatUnstructured,
+			Output:         []string{"stdout", "kwild.log"},
+			FileRollSize:   10_000, // KB
+			RetainMaxRolls: 0,      // retain all archived logs
+		},
 		Telemetry: Telemetry{
 			Enable:       false,
 			OTLPEndpoint: "127.0.0.1:4318",
@@ -333,9 +337,7 @@ func DefaultConfig() *Config {
 
 // Config is the node's config.
 type Config struct {
-	LogLevel  log.Level  `toml:"log_level" comment:"log level\npossible values: 'debug', 'info', 'warn', and 'error'"`
-	LogFormat log.Format `toml:"log_format" comment:"log format\npossible values: 'json', 'text' (kv), and 'plain' (fmt-style)"`
-	LogOutput []string   `toml:"log_output" comment:"output paths for the log"`
+	Log Logging `toml:"log" comment:"logging configuration"`
 
 	ProfileMode string `toml:"profile_mode,commented" comment:"profile mode (http, cpu, mem, mutex, or block)"`
 	ProfileFile string `toml:"profile_file,commented" comment:"profile output file path (e.g. cpu.pprof)"`
@@ -360,6 +362,14 @@ type Config struct {
 	SkipDependencyVerification bool `toml:"skip_dependency_verification" comment:"skip runtime dependency verification (the pg_dump and psql binaries)"`
 	// PGDump: used by the snapshot and the migration module for producing snapshots.
 	PGDumpPath string `toml:"pg_dump_path" comment:"path to the pg_dump binary for taking snapshots"`
+}
+
+type Logging struct {
+	Level          log.Level  `toml:"level" comment:"log level\npossible values: 'debug', 'info', 'warn', and 'error'"`
+	Format         log.Format `toml:"format" comment:"log format\npossible values: 'json', 'text' (kv), and 'plain' (fmt-style)"`
+	Output         []string   `toml:"output" comment:"output paths for the log"`
+	FileRollSize   int64      `toml:"file_roll_size" comment:"threshold in KB at which the log file rolls over and archives the current one"`
+	RetainMaxRolls int        `toml:"retain_max_rolls" comment:"retention limit on the number of archived log files to keep (0 meaning retain all)"`
 }
 
 type Telemetry struct {
