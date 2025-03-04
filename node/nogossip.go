@@ -75,7 +75,7 @@ func (n *Node) txAnnStreamHandler(s network.Stream) {
 
 	ctx := context.Background()
 	if err := n.ce.QueueTx(ctx, ntx); err != nil {
-		n.log.Warnf("tx %v failed check: %v", txHash, err)
+		n.log.Warnf("tx %v failed check: %v from peer: %s", txHash, err, s.Conn().RemotePeer())
 		return
 	}
 
@@ -188,7 +188,7 @@ func (n *Node) startTxAnns(ctx context.Context, reannouncePeriod time.Duration) 
 				ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 				defer cancel()
 
-				const sendN = 20
+				const sendN = 200
 				const sendBtsLimit = 8_000_000
 				txns := n.mp.PeekN(sendN, sendBtsLimit)
 				if len(txns) == 0 {
@@ -199,7 +199,7 @@ func (n *Node) startTxAnns(ctx context.Context, reannouncePeriod time.Duration) 
 				var numSent, bytesSent int64
 				for _, tx := range txns {
 					rawTx := tx.Bytes()
-					n.announceRawTx(ctx, tx.Hash(), rawTx, n.host.ID()) // response handling is async
+					n.queueTxn(tx.Hash(), rawTx, n.host.ID()) // response handling is async
 					if ctx.Err() != nil {
 						n.log.Warn("interrupting long re-broadcast")
 						break
