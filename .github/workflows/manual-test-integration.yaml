@@ -13,6 +13,6 @@ on:
 jobs:
   integration-test-manual:
     name: Run manual integration test
-    uses: ./.github/workflows/manual-test-integration.yaml
+    uses: ./.github/workflows/integration-test-reuse.yaml
     with:
       kdb-ref: ${{ github.event.inputs.kdb-ref }}
