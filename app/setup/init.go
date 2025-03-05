@@ -105,13 +105,6 @@ func InitCmd() *cobra.Command {
 				return display.PrintErr(cmd, fmt.Errorf("propose timeout must be at least %s", config.MinProposeTimeout.String()))
 			}
 
-			if !cmd.Flags().Changed(emptyBlockTimeoutFlag) {
-				// Set the empty block timeout to the propose timeout if not set
-				// So that the blocks mine at the same rate as the propose timeout
-				// irrespective of the availability of transactions.
-				cfg.Consensus.EmptyBlockTimeout = cfg.Consensus.ProposeTimeout
-			}
-
 			// if the user has specified genesis state, copy it to the new directory
 			if cmd.Flags().Changed("genesis-state") {
 				genesisState := cfg.GenesisState
