@@ -678,23 +678,23 @@ func Test_Metadata(t *testing.T) {
 	// the role_privileges table has columns "role_name", "privilege", "namespace"
 	assertQuery(`SELECT * FROM role_privileges`, [][]any{
 		// default has select and call
-		{"default", "CALL", nil},
-		{"default", "SELECT", nil},
+		{"default", "CALL", nil, true},
+		{"default", "SELECT", nil, true},
 
 		// owner has all privileges on all/nil namespaces
-		{"owner", "ALTER", nil},
-		{"owner", "CALL", nil},
-		{"owner", "CREATE", nil},
-		{"owner", "DELETE", nil},
-		{"owner", "DROP", nil},
-		{"owner", "INSERT", nil},
-		{"owner", "ROLES", nil},
-		{"owner", "SELECT", nil},
-		{"owner", "UPDATE", nil},
-		{"owner", "USE", nil},
+		{"owner", "ALTER", nil, true},
+		{"owner", "CALL", nil, true},
+		{"owner", "CREATE", nil, true},
+		{"owner", "DELETE", nil, true},
+		{"owner", "DROP", nil, true},
+		{"owner", "INSERT", nil, true},
+		{"owner", "ROLES", nil, true},
+		{"owner", "SELECT", nil, true},
+		{"owner", "UPDATE", nil, true},
+		{"owner", "USE", nil, true},
 
-		{"some_perms", "INSERT", nil},
-		{"some_perms", "SELECT", "info"},
+		{"some_perms", "INSERT", nil, true},
+		{"some_perms", "SELECT", "info", true},
 	})
 
 	// 2.4 Extensions

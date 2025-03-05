@@ -113,7 +113,9 @@ CREATE TABLE IF NOT EXISTS kwild_engine.role_privileges (
     id BIGSERIAL PRIMARY KEY,
     privilege_type kwild_engine.privilege_type NOT NULL,
     namespace_id INT8 REFERENCES kwild_engine.namespaces(id) ON UPDATE CASCADE ON DELETE CASCADE, -- the namespace it is targeting. Can be null if it is a global privilege
-    role_id INT8 NOT NULL REFERENCES kwild_engine.roles(id) ON UPDATE CASCADE ON DELETE CASCADE
+    role_id INT8 NOT NULL REFERENCES kwild_engine.roles(id) ON UPDATE CASCADE ON DELETE CASCADE,
+    granted BOOLEAN DEFAULT TRUE, -- if false, it is explicitly denied. otherwise, it is only granted if the user has it globally
+    UNIQUE (privilege_type, namespace_id, role_id)
 );
 
 -- user_roles is a table that stores all users who have been assigned roles
@@ -499,7 +501,8 @@ CREATE VIEW info.role_privileges AS
 SELECT 
     r.name AS role_name,
     p.privilege_type::text AS privilege,
-    n.name AS namespace
+    n.name AS namespace,
+    p.granted AS granted
 FROM
     kwild_engine.role_privileges p
 JOIN
@@ -509,7 +512,7 @@ LEFT JOIN
     kwild_engine.namespaces n
     ON p.namespace_id = n.id
 ORDER BY
-    1, 2, 3;
+    1, 2, 3, 4;
 
 CREATE VIEW info.extensions AS
 SELECT 

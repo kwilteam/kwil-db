@@ -154,6 +154,17 @@ func (cl *Client) Query(ctx context.Context, query string, params map[string]*ty
 	return (*types.QueryResult)(res), nil
 }
 
+func (cl *Client) AuthenticatedQuery(ctx context.Context, msg *types.AuthenticatedQuery) (*types.QueryResult, error) {
+	cmd := msg
+	res := &userjson.QueryResponse{}
+	err := cl.CallMethod(ctx, string(userjson.MethodAuthenticatedQuery), cmd, res)
+	if err != nil {
+		return nil, err
+	}
+
+	return (*types.QueryResult)(res), nil
+}
+
 func (cl *Client) TxQuery(ctx context.Context, txHash types.Hash) (*types.TxQueryResponse, error) {
 	cmd := &userjson.TxQueryRequest{
 		TxHash: txHash,

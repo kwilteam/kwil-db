@@ -65,6 +65,9 @@ const (
 // CallRequest contains the request parameters for MethodCall.
 type CallRequest = types.CallMessage
 
+// AuthenticatedQueryRequest contains the request parameters for MethodAuthenticatedQuery.
+type AuthenticatedQueryRequest = types.AuthenticatedQuery
+
 // ChainInfoRequest contains the request parameters for MethodChainInfo.
 type ChainInfoRequest struct{}
 

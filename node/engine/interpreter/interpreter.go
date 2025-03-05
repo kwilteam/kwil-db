@@ -19,6 +19,7 @@ import (
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/engine/parse"
+	"github.com/kwilteam/kwil-db/node/pg"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )
 
@@ -231,32 +232,7 @@ func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service, acc
 		nsr = nilNamespaceRegister{}
 	}
 
-	var exists bool
-	count := 0
-	// we need to check if it is initialized. We will do this by checking if the schema kwild_engine exists
-	err := queryRowFunc(ctx, db, "SELECT EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'kwild_engine')", []any{&exists}, func() error {
-		count++
-		return nil
-	})
-	if err != nil {
-		return nil, err
-	}
-
-	switch count {
-	case 0:
-		return nil, fmt.Errorf("could not determine if the database is initialized")
-	case 1:
-		if !exists {
-			err = initSQL(ctx, db)
-			if err != nil {
-				return nil, err
-			}
-		}
-	default:
-		return nil, fmt.Errorf("unexpected number of rows returned")
-	}
-
-	namespaces, err := listNamespaces(ctx, db)
+	err := initSQLIfNotInitialized(ctx, db)
 	if err != nil {
 		return nil, err
 	}
@@ -268,7 +244,8 @@ func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service, acc
 		accounts:          accounts,
 		namespaceRegister: nsr,
 	}
-	interpreter.accessController, err = newAccessController(ctx, db)
+
+	namespaces, err := listNamespaces(ctx, db)
 	if err != nil {
 		return nil, err
 	}
@@ -303,7 +280,6 @@ func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service, acc
 			onDeploy:           func(ctx *executionContext) error { return nil },
 			onUndeploy:         func(ctx *executionContext) error { return nil },
 		}
-		interpreter.accessController.registerNamespace(ns.Name)
 	}
 
 	// we need to add the tables of the info schema manually, since they are not stored in the database
@@ -347,7 +323,11 @@ func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service, acc
 		}
 
 		interpreter.namespaces[ext.Alias] = namespace
-		interpreter.accessController.registerNamespace(ext.Alias)
+	}
+
+	interpreter.accessController, err = newAccessController(ctx, db)
+	if err != nil {
+		return nil, err
 	}
 
 	threadSafe := &ThreadSafeInterpreter{i: interpreter}
@@ -377,6 +357,36 @@ func NewInterpreter(ctx context.Context, db sql.DB, service *common.Service, acc
 	}
 
 	return threadSafe, nil
+}
+
+// initSQLIfNotInitialized initializes the SQL database if it is not already initialized.
+func initSQLIfNotInitialized(ctx context.Context, db sql.DB) error {
+	var exists bool
+	count := 0
+	// we need to check if it is initialized. We will do this by checking if the schema kwild_engine exists
+	err := queryRowFunc(ctx, db, "SELECT EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'kwild_engine')", []any{&exists}, func() error {
+		count++
+		return nil
+	})
+	if err != nil {
+		return err
+	}
+
+	switch count {
+	case 0:
+		return fmt.Errorf("could not determine if the database is initialized")
+	case 1:
+		if !exists {
+			err = pg.Exec(ctx, db, schemaInitSQL)
+			if err != nil {
+				return err
+			}
+		}
+	default:
+		return fmt.Errorf("unexpected number of rows returned")
+	}
+
+	return nil
 }
 
 // newUserDefinedErr makes an error that was returned from user-defined code using the ERROR function.

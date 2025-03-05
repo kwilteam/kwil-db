@@ -13,6 +13,7 @@ const (
 	MethodDatabases             jsonrpc.Method = "user.databases"
 	MethodPrice                 jsonrpc.Method = "user.estimate_price"
 	MethodQuery                 jsonrpc.Method = "user.query"
+	MethodAuthenticatedQuery    jsonrpc.Method = "user.authenticated_query"
 	MethodTxQuery               jsonrpc.Method = "user.tx_query"
 	MethodSchema                jsonrpc.Method = "user.schema"
 	MethodUpdateProposalStatus  jsonrpc.Method = "user.update_proposal_status"
