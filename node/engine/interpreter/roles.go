@@ -35,64 +35,68 @@ func newAccessController(ctx context.Context, db sql.DB) (*accessController, err
 		knownNamespaces: make(map[string]struct{}),
 	}
 
-	getRolesStmt := `SELECT r.name, array_agg(rp.privilege_type::text), array_agg(n.name)
+	// register all namespaces
+	namespaceList, err := listNamespaces(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, ns := range namespaceList {
+		ac.registerNamespace(ns.Name)
+	}
+
+	// we order global privileges first so that they get applied,
+	// and then we apply more specific privileges on top of that.
+	getRolesStmt := `SELECT r.name,
+		array_agg(rp.privilege_type::text order by rp.namespace_id nulls first),
+		array_agg(n.name order by rp.namespace_id nulls first),
+		array_agg(rp.granted order by rp.namespace_id nulls first)
 	FROM kwild_engine.roles r
 	LEFT JOIN kwild_engine.role_privileges rp ON rp.role_id = r.id
 	LEFT JOIN kwild_engine.namespaces n ON rp.namespace_id = n.id
-	GROUP BY r.name
-	ORDER BY 1,2,3`
+	GROUP BY r.id
+	ORDER BY 1,2,3,4`
 
 	// list all roles, their perms, and users
 	var roleName string
 	var privileges []*string
 	var namespaces []*string
-	err := queryRowFunc(ctx, db, getRolesStmt, []any{&roleName, &privileges, &namespaces}, func() error {
-		perm := &perms{
-			namespacePrivileges: make(map[string]map[privilege]struct{}),
-			globalPrivileges:    make(map[privilege]struct{}),
-		}
+	var granted []*bool
+	err = queryRowFunc(ctx, db, getRolesStmt, []any{&roleName, &privileges, &namespaces, &granted}, func() error {
+		perm := ac.newPerm()
 
 		if len(privileges) != len(namespaces) {
 			return fmt.Errorf(`unexpected error: length of privileges and namespaces do not match. this is an internal bug`)
 		}
+		if len(privileges) != len(granted) {
+			return fmt.Errorf(`unexpected error: length of privileges and granted do not match. this is an internal bug`)
+		}
 
-		for i, priv := range privileges {
-			if priv == nil {
-				// priv can be nil if the role has no privileges
-				if len(namespaces) != 1 {
-					return fmt.Errorf(`unexpected error: nil privilege in non-nil list of privileges. this is an internal bug`)
-				}
-				if namespaces[i] != nil {
-					return fmt.Errorf(`unexpected error: nil privilege in non-nil list of namespaces. this is an internal bug`)
-				}
+		for i, p := range privileges {
+			// can be nil if the role has no privileges
+			if p == nil {
 				continue
 			}
 
-			// check that the privilege exists
-			// This should never not be the case, but it is good to check
-			_, ok := privilegeNames[privilege(*priv)]
+			// should never happen, but it is good to check in case
+			// we make a mistake in the future
+			_, ok := privilegeNames[privilege(*p)]
 			if !ok {
-				return fmt.Errorf(`unknown privilege "%s" stored in DB`, *priv)
+				return fmt.Errorf(`unknown privilege "%s" stored in DB`, *p)
 			}
 
-			// if namespace is nil, then it is a global privilege
-			// We still register all global privileges with each namespace
-			if namespaces[i] == nil {
-				perm.globalPrivileges[privilege(*priv)] = struct{}{}
+			namespace := namespaces[i]
+			granted := granted[i]
+			if granted == nil {
+				// unsure if this can happen
+				panic("unexpected error: granted is nil")
+			}
 
-				for nsPriv, np := range perm.namespacePrivileges {
-					np[privilege(*priv)] = struct{}{}
-
-					perm.namespacePrivileges[nsPriv] = np
-				}
+			if *granted {
+				perm.grant(namespace, privilege(*p))
 			} else {
-				if _, ok := perm.namespacePrivileges[*namespaces[i]]; !ok {
-					perm.namespacePrivileges[*namespaces[i]] = make(map[privilege]struct{})
-				}
-
-				perm.namespacePrivileges[*namespaces[i]][privilege(*priv)] = struct{}{}
+				perm.revoke(namespace, privilege(*p))
 			}
-
 		}
 
 		ac.roles[roleName] = perm
@@ -171,17 +175,23 @@ func (a *accessController) CreateRole(ctx context.Context, db sql.DB, role strin
 		return err
 	}
 
+	a.roles[role] = a.newPerm()
+
+	return nil
+}
+
+// newPerm creates a new permission struct. It fills it with all known namespaces.
+func (a *accessController) newPerm() *perms {
 	p := &perms{
 		namespacePrivileges: make(map[string]map[privilege]struct{}),
 		globalPrivileges:    make(map[privilege]struct{}),
 	}
+
 	for ns := range a.knownNamespaces {
 		p.namespacePrivileges[ns] = make(map[privilege]struct{})
 	}
 
-	a.roles[role] = p
-
-	return nil
+	return p
 }
 
 func (a *accessController) DeleteRole(ctx context.Context, db sql.DB, role string) error {
@@ -482,15 +492,21 @@ func grantPrivilegesSQL(ctx context.Context, db sql.DB, roleName string, privile
 
 	if namespace == nil {
 		err := execute(ctx, db, `INSERT INTO kwild_engine.role_privileges (role_id, privilege_type)
-		SELECT r.id, unnest($2::text[])::kwild_engine.privilege_type FROM kwild_engine.roles r WHERE r.name = $1`, roleName, privStrs)
+		SELECT r.id, unnest($2::kwild_engine.privilege_type[]) FROM kwild_engine.roles r WHERE r.name = $1`, roleName, privStrs)
 		return err
 	}
 
-	err := execute(ctx, db, `INSERT INTO kwild_engine.role_privileges (role_id, namespace_id, privilege_type)
-	SELECT r.id, n.id, unnest($3::text[])::kwild_engine.privilege_type FROM kwild_engine.roles r
+	// there are two cases to account for here.
+	// Either the privilege was disallowed globally, or it was specifically revoked
+	// for this namespace. If it was revoked for this namespace, we need to update the row
+	// to say that it has been granted. If it is not allowed globally, we need to insert a new row.
+	// Therefore, we use ON CONFLICT to handle both cases.
+
+	return execute(ctx, db, `INSERT INTO kwild_engine.role_privileges (role_id, namespace_id, privilege_type, granted)
+	SELECT r.id, n.id, unnest($3::kwild_engine.privilege_type[]), true FROM kwild_engine.roles r
 	JOIN kwild_engine.namespaces n ON n.name = $2
-	WHERE r.name = $1`, roleName, *namespace, privStrs)
-	return err
+	WHERE r.name = $1
+	ON CONFLICT (role_id, namespace_id, privilege_type) DO UPDATE SET granted = true`, roleName, *namespace, privStrs)
 }
 
 // revokePrivilegesSQL revokes privileges from a role.
@@ -505,15 +521,19 @@ func revokePrivilegesSQL(ctx context.Context, db sql.DB, roleName string, privil
 
 	if namespace == nil {
 		err := execute(ctx, db, `DELETE FROM kwild_engine.role_privileges
-	WHERE role_id = (SELECT id FROM kwild_engine.roles WHERE name = $1) AND privilege_type::text = ANY($2::text[])`, roleName, privStrs)
+	WHERE role_id = (SELECT id FROM kwild_engine.roles WHERE name = $1) AND privilege_type = ANY($2::kwild_engine.privilege_type[])`, roleName, privStrs)
 		return err
 	}
 
-	err := execute(ctx, db, `DELETE FROM kwild_engine.role_privileges
-	WHERE role_id = (SELECT id FROM kwild_engine.roles WHERE name = $1)
-	AND namespace_id = (SELECT id FROM kwild_engine.namespaces WHERE name = $2)
-	AND privilege_type::text = ANY($3::text[])`, roleName, *namespace, privStrs)
-	return err
+	// there are two cases to account for when a namespace is provided:
+	// either it was epxlicitly granted to the namespace before, or it was granted globally.
+	// Therefore, what we do is insert into the table to say that it has been revoked (which will succeed
+	// if it was granted globally), and if there is a conflict (which means it was explicitly granted
+	// to this namespace), we will update the row to say that it has been revoked.
+
+	return execute(ctx, db, `INSERT INTO kwild_engine.role_privileges (role_id, namespace_id, privilege_type, granted)
+	VALUES ((SELECT id FROM kwild_engine.roles WHERE name = $1), (SELECT id FROM kwild_engine.namespaces WHERE name = $2), unnest($3::kwild_engine.privilege_type[]), false)
+	ON CONFLICT (role_id, namespace_id, privilege_type) DO UPDATE SET granted = false`, roleName, *namespace, privStrs)
 }
 
 // assignRole assigns a role to a user.
@@ -638,7 +658,7 @@ func (p *perms) grant(namespace *string, privs ...privilege) {
 	} else {
 		np, ok := p.namespacePrivileges[*namespace]
 		if !ok {
-			panic("unexpected error: namespace does not exist")
+			panic("unexpected error: namespace does not exist: " + *namespace)
 		}
 
 		for _, priv := range privs {

@@ -44,7 +44,8 @@ type Client struct {
 
 	noWarnings bool // silence warning logs
 
-	authCallRPC bool
+	// nodeRequiresAuth is true if the remote node requires authenticated call RPCs.
+	nodeRequiresAuth bool
 }
 
 // SvcClient is a trapdoor to access the underlying
@@ -118,7 +119,7 @@ func WrapClient(ctx context.Context, client RPCClient, options *clientType.Optio
 		// NOTE: we ignore all errors from c.Health call since we ignore health check
 		if err == nil {
 			// this is v09 API, we just take the result.
-			c.authCallRPC = health.Mode == types.ModePrivate
+			c.nodeRequiresAuth = health.Mode == types.ModePrivate
 			remoteChainID = health.ChainID
 
 			// NOTE: since original health check only log, why not ?
@@ -144,7 +145,7 @@ func WrapClient(ctx context.Context, client RPCClient, options *clientType.Optio
 			c.logger.Warnf("node reports that it is not healthy: %v", health)
 		}
 
-		c.authCallRPC = health.Mode == types.ModePrivate
+		c.nodeRequiresAuth = health.Mode == types.ModePrivate
 		remoteChainID = health.ChainID
 	}
 
@@ -173,7 +174,7 @@ func WrapClient(ctx context.Context, client RPCClient, options *clientType.Optio
 // addition, queries are expected to be denied, and no verbose transaction
 // information will returned with a transaction status query.
 func (c *Client) PrivateMode() bool {
-	return c.authCallRPC
+	return c.nodeRequiresAuth
 }
 
 // Signer returns the signer used by the client.
@@ -317,7 +318,7 @@ func (c *Client) Call(ctx context.Context, namespace string, action string, inpu
 	// If using authenticated call RPCs, request a challenge to include in the
 	// signed message text.
 	var challenge []byte
-	if c.authCallRPC {
+	if c.nodeRequiresAuth {
 		if c.Signer() == nil {
 			return nil, errors.New("a signer is required with authenticated call RPCs")
 		}
@@ -344,6 +345,21 @@ func (c *Client) Call(ctx context.Context, namespace string, action string, inpu
 func (c *Client) Query(ctx context.Context, query string, params map[string]any) (*types.QueryResult, error) {
 	if params == nil {
 		params = make(map[string]any)
+	}
+
+	// if a private key is configured, we should automatically authenticate.
+	if c.Signer() != nil {
+		challenge, err := c.challenge(ctx)
+		if err != nil {
+			return nil, err
+		}
+
+		msg, err := types.CreateAuthenticatedQuery(query, params, challenge, c.signer)
+		if err != nil {
+			return nil, fmt.Errorf("create signed message: %w", err)
+		}
+
+		return c.txClient.AuthenticatedQuery(ctx, msg)
 	}
 
 	encodedParams := make(map[string]*types.EncodedValue)

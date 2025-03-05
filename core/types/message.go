@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
+	"github.com/kwilteam/kwil-db/core/utils/order"
 )
 
 // CallMessageBody is the body of a call message. The serialization of this body
@@ -58,20 +59,6 @@ func CallSigText(namespace, action string, payload []byte, challenge []byte) str
 	return fmt.Sprintf(callMsgToSignTmplV0, namespace, action, digest[:20], challenge)
 }
 
-// TODO: support authentication on execute SQL (ad hoc querys)
-// kgw client must use StmtSigText
-
-const stmtMsgToSignTmplV0 = `Kwil SQL statement.
-
-Statement: %s
-Digest: %x
-Challenge: %x
-`
-
-func StmtSigText(stmt string, digest []byte, challenge []byte) string {
-	return fmt.Sprintf(stmtMsgToSignTmplV0, stmt, digest[:20], challenge)
-}
-
 // CreateCallMessage creates a new call message from a ActionCall payload. If a
 // signer is provided, the sender and authenticator type are set. If a challenge
 // is also provided, it will also sign a serialization of the request that
@@ -109,4 +96,98 @@ func CreateCallMessage(ac *ActionCall, challenge []byte, signer auth.Signer) (*C
 	}
 
 	return msg, nil
+}
+
+// TODO:  in the future, kgw will support authentication for queries.
+// It will use the below message, which will be displayed to users.
+
+const stmtMsgToSignTmplV0 = `Kwil SQL statement.
+
+Statement: %s
+Digest: %x
+Challenge: %x
+`
+
+func StmtSigText(stmt string, payload []byte, challenge []byte) string {
+	digest := sha256.Sum256(payload)
+	return fmt.Sprintf(stmtMsgToSignTmplV0, stmt, digest[:20], challenge)
+}
+
+// CreateAuthenticatedQuery creates a new authenticated query message from a
+// statement. The statement is signed by the signer, and the challenge is
+// included in the signature for replay protection.
+func CreateAuthenticatedQuery(stmt string, params map[string]any, challenge []byte, signer auth.Signer) (*AuthenticatedQuery, error) {
+	var values []*NamedValue
+	// we start by converting the map to a deterministic set of NamedValues
+	for _, kv := range order.OrderMap(params) {
+		encoded, err := EncodeValue(kv.Value)
+		if err != nil {
+			return nil, err
+		}
+		values = append(values, &NamedValue{
+			Name:  kv.Key,
+			Value: encoded,
+		})
+	}
+
+	// then we create the raw statement
+	body := RawStatement{
+		Statement:  stmt,
+		Parameters: values,
+	}
+
+	bts, err := body.MarshalBinary()
+	if err != nil {
+		return nil, err
+	}
+
+	if len(challenge) == 0 {
+		return nil, fmt.Errorf("challenge is required for authenticated query")
+	}
+
+	sigText := StmtSigText(stmt, bts, challenge)
+	sig, err := signer.Sign([]byte(sigText))
+	if err != nil {
+		return nil, err
+	}
+
+	return &AuthenticatedQuery{
+		Body:          &body,
+		Challenge:     challenge,
+		AuthType:      signer.AuthType(),
+		Sender:        signer.CompactID(),
+		SignatureData: sig.Data,
+	}, nil
+}
+
+// AuthenticatedQuery represents a message that can be used to execute a SELECT query.
+// It can be signed like a transaction or call message, however unlike a CallMessage,
+// it MUST be signed.
+type AuthenticatedQuery struct {
+	// Body is the body of the actual message
+	Body *RawStatement `json:"body"`
+
+	// Challenge is a random value for call authentication with replay
+	Challenge []byte
+
+	// the type of authenticator, which will be used to derive 'identifier'
+	// from the 'sender`
+	AuthType string `json:"auth_type"`
+
+	// Sender is the public key of the sender
+	Sender HexBytes `json:"sender"`
+
+	// SignatureData is the content of is the sender's signature of the
+	// serialized call body. This is ALWAYS set for authenticated queries.
+	SignatureData []byte `json:"signature"`
+}
+
+// SigText returns the text that should be signed by the signer.
+func (a *AuthenticatedQuery) SigText() (string, error) {
+	bts, err := a.Body.MarshalBinary()
+	if err != nil {
+		return "", err
+	}
+
+	return StmtSigText(a.Body.Statement, bts, a.Challenge), nil
 }

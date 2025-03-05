@@ -20,6 +20,7 @@ type TxSvcClient interface {
 	GetAccount(ctx context.Context, identifier *types.AccountID, status types.AccountStatus) (*types.Account, error)
 	Ping(ctx context.Context) (string, error)
 	Query(ctx context.Context, query string, params map[string]*types.EncodedValue) (*types.QueryResult, error)
+	AuthenticatedQuery(ctx context.Context, msg *types.AuthenticatedQuery) (*types.QueryResult, error)
 	TxQuery(ctx context.Context, txHash types.Hash) (*types.TxQueryResponse, error)
 
 	// Migration methods

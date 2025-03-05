@@ -23,11 +23,6 @@ var (
 	schemaInitSQL string
 )
 
-// initSQL initializes the SQL schema.
-func initSQL(ctx context.Context, db sql.DB) error {
-	return pg.Exec(ctx, db, schemaInitSQL)
-}
-
 // queryOneInt64 queries for a single int64 value.
 func queryOneInt64(ctx context.Context, db sql.DB, query string, args ...any) (int64, error) {
 	var res *int64
