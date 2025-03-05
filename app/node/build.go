@@ -123,12 +123,18 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	if err != nil {
 		failBuild(err, "unable to create json-rpc server")
 	}
-	jsonRPCServer.RegisterSvc(jsonRPCTxSvc)
-	jsonRPCServer.RegisterSvc(&funcsvc.Service{})
+	if !d.cfg.RPC.ServiceDisabled(config.RPCNamespaceUser) {
+		jsonRPCServer.RegisterSvc(jsonRPCTxSvc)
+	}
+	if !d.cfg.RPC.ServiceDisabled(config.RPCNamespaceFunction) {
+		jsonRPCServer.RegisterSvc(&funcsvc.Service{})
+	}
 
 	chainRpcSvcLogger := d.logger.New("CHAIN")
 	jsonChainSvc := chainsvc.NewService(chainRpcSvcLogger, node, vs, d.genesisCfg)
-	jsonRPCServer.RegisterSvc(jsonChainSvc)
+	if !d.cfg.RPC.ServiceDisabled(config.RPCNamespaceChain) {
+		jsonRPCServer.RegisterSvc(jsonChainSvc)
+	}
 
 	var jsonRPCAdminServer *rpcserver.Server
 	if d.cfg.Admin.Enable {

@@ -38,6 +38,25 @@ const (
 	MinProposeTimeout = types.Duration(500 * time.Millisecond)
 )
 
+// These are the recognized RPC services, which may be used in the
+// RPC.DisableServices config field.
+const (
+	RPCNamespaceUser     = "user"
+	RPCNamespaceChain    = "chain"
+	RPCNamespaceFunction = "function"
+	RPCNamespaceAdmin    = "admin"
+)
+
+func isValidRPCNamespace(ns string) bool {
+	switch ns {
+	case RPCNamespaceUser, RPCNamespaceFunction, RPCNamespaceChain,
+		RPCNamespaceAdmin:
+		return true
+	default:
+		return false
+	}
+}
+
 type GenesisAlloc struct {
 	ID      KeyHexBytes `json:"id"`
 	KeyType string      `json:"key_type"`
@@ -312,14 +331,13 @@ func DefaultConfig() *Config {
 			Private:            false,
 			ChallengeExpiry:    types.Duration(30 * time.Second),
 			ChallengeRateLimit: 10,
+			DisableServices:    []string{}, // e.g. "chain", see ServiceDisabled
 		},
 		Admin: AdminConfig{
 			Enable:        true,
 			ListenAddress: DefaultAdminRPCAddr,
 			Pass:          "",
 			NoTLS:         false,
-			// TLSCertFile:   AdminCertName,
-			// TLSKeyFile:    "admin.key",
 		},
 		Snapshots: SnapshotConfig{
 			Enable:          false,
@@ -464,6 +482,13 @@ type RPCConfig struct {
 	Compression        bool           `toml:"compression" comment:"use compression in RPC responses"`
 	ChallengeExpiry    types.Duration `toml:"challenge_expiry" comment:"lifetime of a server-generated challenge"`
 	ChallengeRateLimit float64        `toml:"challenge_rate_limit" comment:"maximum number of challenges per second that a user can request"`
+	DisableServices    []string       `toml:"disabled_services" comment:"services to disable on the RPC server e.g. 'chain'"`
+}
+
+func (c *RPCConfig) ServiceDisabled(svc string) bool {
+	return slices.ContainsFunc(c.DisableServices, func(s string) bool {
+		return strings.EqualFold(s, svc)
+	})
 }
 
 type AdminConfig struct {
@@ -471,8 +496,6 @@ type AdminConfig struct {
 	ListenAddress string `toml:"listen" comment:"address in host:port format or UNIX socket path on which the admin RPC server will listen"`
 	Pass          string `toml:"pass" comment:"optional password for the admin service"`
 	NoTLS         bool   `toml:"notls" comment:"disable TLS when the listen address is not a loopback IP or UNIX socket"`
-	// TLSCertFile   string `toml:"cert" comment:"TLS certificate for use with a non-loopback listen address when notls is not true"`
-	// TLSKeyFile    string `toml:"key" comment:"TLS key for use with a non-loopback listen address when notls is not true"`
 }
 
 type SnapshotConfig struct {
@@ -587,6 +610,13 @@ func LoadConfig(filename string) (*Config, error) {
 	var nc Config
 	if err := nc.fromTOML(fid); err != nil {
 		return nil, err
+	}
+
+	// Validate DisableServices
+	for _, ns := range nc.RPC.DisableServices {
+		if !isValidRPCNamespace(ns) {
+			return nil, fmt.Errorf("rpc.disable_services: invalid namespace %s", ns)
+		}
 	}
 
 	return &nc, nil
