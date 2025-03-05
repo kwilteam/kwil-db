@@ -2,6 +2,7 @@ package types
 
 import (
 	"crypto/sha256"
+	"database/sql/driver"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -54,6 +55,33 @@ func NewHasher() Hasher {
 // String returns the hexadecimal representation of the hash (always 64 characters)
 func (h Hash) String() string {
 	return hex.EncodeToString(h[:])
+}
+
+// Scan implements the database/sql.Scanner interface.
+func (h *Hash) Scan(src any) error {
+	switch src := src.(type) {
+	case []byte:
+		h0, err := NewHashFromBytes(src)
+		if err != nil {
+			return err
+		}
+		*h = h0
+		return nil
+	case string:
+		h0, err := NewHashFromString(src)
+		if err != nil {
+			return err
+		}
+		*h = h0
+		return nil
+	default:
+		return fmt.Errorf("unsupported type: %T", src)
+	}
+}
+
+// Value implements the database/sql/driver.Valuer interface.
+func (h Hash) Value() (driver.Value, error) {
+	return h[:], nil
 }
 
 // func (h Hash) Hex() string {
