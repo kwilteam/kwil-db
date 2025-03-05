@@ -566,7 +566,7 @@ func revokePrivilegesSQL(ctx context.Context, db sql.DB, roleName string, privil
 	// there are two cases to account for when a namespace is provided:
 	// either it was epxlicitly granted to the namespace before, or it was granted globally.
 	// Therefore, what we do is insert into the table to say that it has been revoked (which will succeed
-	// if it was granted globally), and if there is a conflict (which means it was explicity granted
+	// if it was granted globally), and if there is a conflict (which means it was explicitly granted
 	// to this namespace), we will update the row to say that it has been revoked.
 
 	return execute(ctx, db, `INSERT INTO kwild_engine.role_privileges (role_id, namespace_id, privilege_type, granted)
