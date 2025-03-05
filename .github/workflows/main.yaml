@@ -6,9 +6,8 @@ on:
       - main
 
 jobs:
-  kgw-test-main:
-    if: false
-    name: Run KGW test on main
+  main-kgw-test:
+    name: Run acceptance test (with KGW)
     uses: ./.github/workflows/kgw-test-reuse.yaml
     with:
       kdb-ref: main
@@ -16,3 +15,10 @@ jobs:
       kjs-ref: main
     secrets:
       kgw-access-token: ${{ secrets.KGW_MACH_SECRET_FOR_KWILDB }}
+
+#UNCOMMENT this to enable integration test on main branch update
+#  main-integration-test:
+#    name: Run integration test
+#    uses: ./.github/workflows/integration-test-reuse.yaml
+#    with:
+#      kdb-ref: main
