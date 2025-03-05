@@ -72,44 +72,6 @@ func newAccessController(ctx context.Context, db sql.DB) (*accessController, err
 			return fmt.Errorf(`unexpected error: length of privileges and granted do not match. this is an internal bug`)
 		}
 
-		// for i, priv := range privileges {
-		// 	if priv == nil {
-		// 		// priv can be nil if the role has no privileges
-		// 		if len(namespaces) != 1 {
-		// 			return fmt.Errorf(`unexpected error: nil privilege in non-nil list of privileges. this is an internal bug`)
-		// 		}
-		// 		if namespaces[i] != nil {
-		// 			return fmt.Errorf(`unexpected error: nil privilege in non-nil list of namespaces. this is an internal bug`)
-		// 		}
-		// 		continue
-		// 	}
-
-		// 	// check that the privilege exists
-		// 	// This should never not be the case, but it is good to check
-		// 	_, ok := privilegeNames[privilege(*priv)]
-		// 	if !ok {
-		// 		return fmt.Errorf(`unknown privilege "%s" stored in DB`, *priv)
-		// 	}
-
-		// 	// if namespace is nil, then it is a global privilege
-		// 	// We still register all global privileges with each namespace
-		// 	if namespaces[i] == nil {
-		// 		perm.globalPrivileges[privilege(*priv)] = struct{}{}
-
-		// 		for nsPriv, np := range perm.namespacePrivileges {
-		// 			np[privilege(*priv)] = struct{}{}
-
-		// 			perm.namespacePrivileges[nsPriv] = np
-		// 		}
-		// 	} else {
-		// 		if _, ok := perm.namespacePrivileges[*namespaces[i]]; !ok {
-		// 			perm.namespacePrivileges[*namespaces[i]] = make(map[privilege]struct{})
-		// 		}
-
-		// 		perm.namespacePrivileges[*namespaces[i]][privilege(*priv)] = struct{}{}
-		// 	}
-		// }
-
 		for i, p := range privileges {
 			// can be nil if the role has no privileges
 			if p == nil {
