@@ -255,6 +255,96 @@ func addVotes(t *testing.T, blkHash, appHash ktypes.Hash, n1, n2 *ConsensusEngin
 	return ci
 }
 
+func TestMajorityFuncs(t *testing.T) {
+	testcases := []struct {
+		name        string
+		valCnt      int
+		acks        int
+		nacks       int
+		majority    bool
+		enoughNacks bool
+	}{
+		{
+			name:        "Majority(2, 2, 0)",
+			valCnt:      2,
+			acks:        2,
+			nacks:       0,
+			majority:    true,
+			enoughNacks: false,
+		},
+		{
+			name:        "Majority(2, 1, 0)",
+			valCnt:      2,
+			acks:        1,
+			nacks:       0,
+			majority:    false,
+			enoughNacks: false,
+		},
+		{
+			name:        "Majority(2, 1, 1)",
+			valCnt:      2,
+			acks:        1,
+			nacks:       1,
+			majority:    false,
+			enoughNacks: true,
+		},
+		{
+			name:        "Majority(2, 0, 2)",
+			valCnt:      2,
+			acks:        0,
+			nacks:       2,
+			majority:    false,
+			enoughNacks: true,
+		},
+		{
+			name:        "Majority(3, 3, 0)",
+			valCnt:      3,
+			acks:        3,
+			nacks:       0,
+			majority:    true,
+			enoughNacks: false,
+		},
+		{
+			name:        "Majority(3, 2, 1)",
+			valCnt:      3,
+			acks:        2,
+			nacks:       1,
+			majority:    true,
+			enoughNacks: false,
+		},
+		{
+			name:        "Majority(3, 1, 1)",
+			valCnt:      3,
+			acks:        1,
+			nacks:       1,
+			majority:    false,
+			enoughNacks: false,
+		},
+		{
+			name:        "Majority(3, 0, 2)",
+			valCnt:      3,
+			acks:        0,
+			nacks:       2,
+			majority:    false,
+			enoughNacks: true,
+		},
+	}
+
+	ce := &ConsensusEngine{}
+	for _, tc := range testcases {
+		t.Run(tc.name, func(t *testing.T) {
+			ce.validatorSet = make(map[string]ktypes.Validator)
+			for i := range tc.valCnt {
+				ce.validatorSet[fmt.Sprintf("val%d", i)] = ktypes.Validator{}
+			}
+
+			assert.Equal(t, tc.majority, ce.hasMajority(tc.acks))
+			assert.Equal(t, tc.enoughNacks, ce.hasEnoughNacks(tc.nacks))
+		})
+	}
+
+}
+
 func TestValidatorStateMachine(t *testing.T) {
 	// t.Parallel()
 	type action struct {

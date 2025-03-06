@@ -481,7 +481,7 @@ func (ce *ConsensusEngine) verifyVotes(ci *ktypes.CommitInfo, blkID ktypes.Hash)
 		}
 	}
 
-	if !ce.hasMajorityCeil(acks) {
+	if !ce.hasMajority(acks) {
 		return fmt.Errorf("invalid blkAnn message, not enough acks in the commitInfo, leader misbehavior: %d", acks)
 	}
 
