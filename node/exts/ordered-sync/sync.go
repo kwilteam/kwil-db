@@ -247,7 +247,6 @@ func (r *ResolutionMessage) UnmarshalBinary(data []byte) error {
 // It should be called by other extensions that want to inform
 // orderedsync of a new topic they will be publishing for.
 // It should be called every time the engine starts.
-// It is idempotent.
 func registerTopic(ctx context.Context, db sql.DB, eng common.Engine, topic, resolveFn string) error {
 	return eng.ExecuteWithoutEngineCtx(ctx, db,
 		fmt.Sprintf(`{%s}INSERT INTO topics (id, name, last_processed_point, resolve_func) VALUES (
@@ -255,7 +254,7 @@ func registerTopic(ctx context.Context, db sql.DB, eng common.Engine, topic, res
 		$name,
 		null,
 		$resolve_func
-		) ON CONFLICT DO NOTHING`, ExtensionName),
+        )`, ExtensionName),
 		map[string]any{
 			"name":         topic,
 			"resolve_func": resolveFn,

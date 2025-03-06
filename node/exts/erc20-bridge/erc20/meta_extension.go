@@ -272,7 +272,7 @@ func init() {
 			// we need to unlock before we call start because it
 			// will acquire the write lock
 			info.mu.Unlock()
-			return info.startTransferListener(ctx, app)
+			return info.startTransferListener(ctx, app, false)
 		}
 
 		info.mu.Unlock()
@@ -309,7 +309,7 @@ func init() {
 						// transfer listener. Otherwise, we should start the state poller
 						if instance.active {
 							if instance.synced {
-								err = instance.startTransferListener(ctx, app)
+								err = instance.startTransferListener(ctx, app, false)
 								if err != nil {
 									return err
 								}
@@ -395,7 +395,8 @@ func init() {
 									// if it is already synced, we should just make sure to start listening
 									// to transfer events and activate it
 
-									err = setActiveStatus(ctx.TxContext.Ctx, app, &id, true)
+									// period could be updated when re-use extension
+									err = reuseRewardInstance(ctx.TxContext.Ctx, app, &id, int64(dur.Seconds()))
 									if err != nil {
 										info.mu.RUnlock()
 										return err
@@ -404,12 +405,13 @@ func init() {
 									info.mu.RUnlock()
 									info.mu.Lock()
 									info.active = true
+									info.DistributionPeriod = int64(dur.Seconds())
 									info.mu.Unlock()
 
 									info.mu.RLock()
 									defer info.mu.RUnlock()
 
-									err = info.startTransferListener(ctx.TxContext.Ctx, app)
+									err = info.startTransferListener(ctx.TxContext.Ctx, app, true)
 									if err != nil {
 										return err
 									}
@@ -1719,7 +1721,7 @@ func (r *rewardExtensionInfo) startStatePoller() error {
 }
 
 // startTransferListener starts an event listener that listens for Transfer events
-func (r *rewardExtensionInfo) startTransferListener(ctx context.Context, app *common.App) error {
+func (r *rewardExtensionInfo) startTransferListener(ctx context.Context, app *common.App, reuseTopic bool) error {
 	// I'm not sure if copies are needed because the values should never be modified,
 	// but just in case, I copy them to be used in GetLogs, which runs outside of consensus
 	escrowCopy := r.EscrowAddress
@@ -1782,13 +1784,17 @@ func (r *rewardExtensionInfo) startTransferListener(ctx context.Context, app *co
 
 			return logs, nil
 		},
-		Resolve: transferEventResolutionName,
+		Resolve:     transferEventResolutionName,
+		TopicExists: reuseTopic,
 	})
 }
 
 // stopAllListeners stops all event listeners for the reward extension.
 // If it is synced, this means it must have an active Transfer listener.
 // If it is not synced, it must have an active state poller.
+// NOTE: UnregisterListener doesn't unregister the topic because the reward
+// instance will not be deleted when `unuse`/`disable`, we need to keep the
+// topics to make sure we don't lose events.
 func (r *rewardExtensionInfo) stopAllListeners() error {
 	if r.synced {
 		return evmsync.EventSyncer.UnregisterListener(transferListenerUniqueName(*r.ID))
