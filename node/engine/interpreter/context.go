@@ -3,8 +3,8 @@ package interpreter
 import (
 	"fmt"
 	"strings"
-	"sync"
 
+	"github.com/decred/dcrd/container/lru"
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
@@ -362,51 +362,26 @@ type preparedStatement struct {
 // statementCache caches parsed statements.
 // It is reloaded when schema changes are made to the namespace
 type preparedStatements struct {
-	mu sync.RWMutex
-	// statements maps a namespace to a map of statements to two parsed forms.
-	statements map[string]map[string]*preparedStatement
+	cache *lru.Map[[2]string, *preparedStatement]
 }
 
 // get gets a prepared statement from the cache.
 func (p *preparedStatements) get(namespace, query string) (*preparedStatement, bool) {
-	p.mu.RLock()
-	defer p.mu.RUnlock()
-
-	ns, ok := p.statements[namespace]
-	if !ok {
-		return nil, false
-	}
-
-	stmt, ok := ns[query]
-	if !ok {
-		return nil, false
-	}
-
-	return stmt, true
+	return p.cache.Get([2]string{namespace, query})
 }
 
 // set sets a prepared statement in the cache.
 func (p *preparedStatements) set(namespace, query string, stmt *preparedStatement) {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	if _, ok := p.statements[namespace]; !ok {
-		p.statements[namespace] = make(map[string]*preparedStatement)
-	}
-
-	p.statements[namespace][query] = stmt
+	p.cache.Put([2]string{namespace, query}, stmt)
 }
 
 // clear clears the cache namespace.
 func (p *preparedStatements) clear() {
-	p.mu.Lock()
-	defer p.mu.Unlock()
-
-	p.statements = make(map[string]map[string]*preparedStatement)
+	p.cache.Clear()
 }
 
 var statementCache = &preparedStatements{
-	statements: make(map[string]map[string]*preparedStatement),
+	cache: lru.NewMap[[2]string, *preparedStatement](1000),
 }
 
 // executable is the interface and function to call a built-in Postgres function,

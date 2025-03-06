@@ -11,6 +11,8 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/decred/dcrd/container/lru"
+
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/core/types/validation"
@@ -570,6 +572,28 @@ func (i *baseInterpreter) apply(copied *baseInterpreter) {
 	i.accounts = copied.accounts
 }
 
+// adhocParseCache is an lru cache for statements that are parsed ad-hoc.
+var adhocParseCache = lru.NewMap[string, []parse.TopLevelStatement](100)
+
+// parseAdhoc parses an ad-hoc Kwil SQL statement.
+// It uses an LRU cache to avoid re-parsing the same statement if it is commonly used
+// (e.g. in extensions).
+func parseAdhoc(statement string) ([]parse.TopLevelStatement, error) {
+	res, ok := adhocParseCache.Get(statement)
+	if ok {
+		return res, nil
+	}
+
+	ast, err := parse.Parse(statement)
+	if err != nil {
+		return nil, err
+	}
+
+	adhocParseCache.Put(statement, ast)
+
+	return ast, nil
+}
+
 // Execute executes a statement against the database.
 func (i *baseInterpreter) execute(ctx *common.EngineContext, db sql.DB, statement string, params map[string]any, fn func(*common.Row) error, toplevel bool) (err error) {
 	copied := i.copy()
@@ -602,7 +626,7 @@ func (i *baseInterpreter) execute(ctx *common.EngineContext, db sql.DB, statemen
 	}
 
 	// parse the statement
-	ast, err := parse.Parse(statement)
+	ast, err := parseAdhoc(statement)
 	if err != nil {
 		return fmt.Errorf("%w: error in top-level statement %s: %w", engine.ErrParse, statement, err)
 	}
