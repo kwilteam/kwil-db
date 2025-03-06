@@ -44,9 +44,10 @@ type BlockProcessor struct {
 
 	mtx sync.RWMutex // mutex to protect the consensus params
 	// consensus params
-	appHash  ktypes.Hash
-	height   atomic.Int64
-	chainCtx *common.ChainContext
+	appHash     ktypes.Hash
+	height      atomic.Int64
+	chainCtx    *common.ChainContext
+	stateHashes *StateHashes
 
 	status   *blockExecStatus
 	statusMu sync.RWMutex // very granular mutex to protect access to the block execution status
@@ -322,7 +323,7 @@ func (bp *BlockProcessor) InitChain(ctx context.Context) (int64, []byte, error) 
 	return genCfg.InitialHeight, genCfg.StateHash, nil
 }
 
-func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExecRequest) (blkResult *ktypes.BlockExecResult, err error) {
+func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExecRequest, syncing bool) (blkResult *ktypes.BlockExecResult, err error) {
 	bp.mtx.Lock()
 	defer bp.mtx.Unlock()
 
@@ -517,14 +518,24 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 		return nil, fmt.Errorf("failed to compute the consensus updates hash: %w", err)
 	}
 
-	nextHash := bp.nextAppHash(stateHashes{
+	sh := &StateHashes{
 		prevApp:      bp.appHash,
 		changeset:    types.Hash(changesetID),
 		accounts:     accountsHash,
 		valUpdates:   valUpdatesHash,
 		txResults:    txResultsHash,
 		paramUpdates: paramUpdatesHash,
-	})
+	}
+
+	nextHash := bp.nextAppHash(sh)
+
+	if !syncing {
+		bp.log.Info("AppState updates: ",
+			"prevAppHash", sh.prevApp[:8], "changesets", sh.changeset[:8],
+			"validatorset", sh.valUpdates[:8], "accounts", sh.accounts[:8],
+			"txResults", sh.txResults[:8], "params", sh.paramUpdates[:8])
+	}
+	bp.stateHashes = sh
 
 	if inMigration && !haltNetwork {
 		// wait for the migrator to finish storing the changesets
@@ -727,7 +738,7 @@ func (bp *BlockProcessor) snapshotDB(ctx context.Context, height int64, syncing 
 	return nil
 }
 
-type stateHashes struct {
+type StateHashes struct {
 	prevApp      types.Hash
 	changeset    types.Hash
 	valUpdates   types.Hash
@@ -736,9 +747,14 @@ type stateHashes struct {
 	paramUpdates types.Hash
 }
 
+func (sh *StateHashes) String() string {
+	return fmt.Sprintf("prevApp: %s, changeset: %s, valUpdates: %s, accounts: %s, txResults: %s, paramUpdates: %s",
+		sh.prevApp, sh.changeset, sh.valUpdates, sh.accounts, sh.txResults, sh.paramUpdates)
+}
+
 // nextAppHash calculates the appHash that encapsulates the state changes occurred during the block execution.
 // sha256(prevAppHash || changesetHash || valUpdatesHash || accountsHash || txResultsHash)
-func (bp *BlockProcessor) nextAppHash(sh stateHashes) types.Hash {
+func (bp *BlockProcessor) nextAppHash(sh *StateHashes) types.Hash {
 	hasher := ktypes.NewHasher()
 
 	hasher.Write(sh.prevApp[:])
@@ -747,11 +763,6 @@ func (bp *BlockProcessor) nextAppHash(sh stateHashes) types.Hash {
 	hasher.Write(sh.accounts[:])
 	hasher.Write(sh.txResults[:])
 	hasher.Write(sh.paramUpdates[:])
-
-	bp.log.Info("AppState updates: ",
-		"prevAppHash", sh.prevApp[:8], "changesets", sh.changeset[:8],
-		"validatorset", sh.valUpdates[:8], "accounts", sh.accounts[:8],
-		"txResults", sh.txResults[:8], "params", sh.paramUpdates[:8])
 
 	return hasher.Sum(nil)
 }
@@ -894,4 +905,11 @@ func (bp *BlockProcessor) GetMigrationMetadata(ctx context.Context) (*ktypes.Mig
 
 	status := networkParams.MigrationStatus
 	return bp.migrator.GetMigrationMetadata(ctx, status)
+}
+
+func (bp *BlockProcessor) StateHashes() *StateHashes {
+	bp.mtx.RLock()
+	defer bp.mtx.RUnlock()
+
+	return bp.stateHashes
 }

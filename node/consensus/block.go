@@ -242,7 +242,7 @@ func (ce *ConsensusEngine) ConsensusParams() *ktypes.NetworkParameters {
 
 // executeBlock uses the block processor to execute the block and stores the
 // results in the state field.
-func (ce *ConsensusEngine) executeBlock(ctx context.Context, blkProp *blockProposal) error {
+func (ce *ConsensusEngine) executeBlock(ctx context.Context, blkProp *blockProposal, syncing bool) error {
 	t0 := time.Now()
 	defer func() {
 		ce.stateInfo.mtx.Lock()
@@ -256,7 +256,7 @@ func (ce *ConsensusEngine) executeBlock(ctx context.Context, blkProp *blockPropo
 		BlockID:  blkProp.blkHash,
 		Proposer: ce.leader,
 	}
-	results, err := ce.blockProcessor.ExecuteBlock(ctx, req)
+	results, err := ce.blockProcessor.ExecuteBlock(ctx, req, syncing)
 	if err != nil {
 		return err
 	}
@@ -275,13 +275,15 @@ func (ce *ConsensusEngine) executeBlock(ctx context.Context, blkProp *blockPropo
 	// reset the catchup timer as we have successfully processed a new block proposal
 	ce.catchupTicker.Reset(ce.catchupTimeout)
 
-	ce.log.Info("Executed block", "height", blkProp.height, "blockID", blkProp.blkHash, "appHash", results.AppHash.String(), "numTxs", blkProp.blk.Header.NumTxns)
+	if !syncing { // ignore these logs during syncing
+		ce.log.Info("Executed block", "height", blkProp.height, "blockID", blkProp.blkHash, "appHash", results.AppHash.String(), "numTxs", blkProp.blk.Header.NumTxns)
+	}
 	return nil
 }
 
 // Commit method commits the block to the blockstore and postgres database.
 // It also updates the txIndexer and mempool with the transactions in the block.
-func (ce *ConsensusEngine) commit(ctx context.Context) error {
+func (ce *ConsensusEngine) commit(ctx context.Context, syncing bool) error {
 	ce.mempoolMtx.PriorityLock()
 	defer ce.mempoolMtx.Unlock()
 
@@ -334,8 +336,10 @@ func (ce *ConsensusEngine) commit(ctx context.Context) error {
 		ce.mempoolReady.Store(true)
 	}
 
-	ce.log.Info("Committed Block", "height", height, "hash", blkProp.blkHash.String(),
-		"appHash", appHash.String(), "numTxs", blkProp.blk.Header.NumTxns)
+	if !syncing {
+		ce.log.Info("Committed Block", "height", height, "hash", blkProp.blkHash.String(),
+			"appHash", appHash.String(), "numTxs", blkProp.blk.Header.NumTxns)
+	}
 
 	// update and reset the state fields
 	ce.nextState()

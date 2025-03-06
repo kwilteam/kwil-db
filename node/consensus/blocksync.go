@@ -90,7 +90,13 @@ func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context, requester
 	startHeight = ce.lastCommitHeight() + 1
 	height = startHeight
 	t0 := time.Now()
+	tI := t0
 
+	ce.inSync.Store(true) // set inSync to true to indicate that the node is syncing with the network and not accept txs till the sync is complete
+	defer ce.inSync.Store(false)
+	cnt := 0
+
+	ce.log.Info("Starting block sync...", "height", startHeight)
 	for {
 		if err := requester(ctx, height); err != nil {
 			if errors.Is(err, context.Canceled) {
@@ -101,6 +107,12 @@ func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context, requester
 			}
 			ce.log.Warn("unexpected error requesting block from the network", "height", height, "error", err)
 			return err
+		}
+		cnt++
+		if cnt == 100 {
+			now := time.Now()
+			ce.log.Info("Downloaded blocks", "from", height-100, "to", height, "duration", now.Sub(tI))
+			cnt, tI = 0, now
 		}
 		height++
 	}
@@ -157,7 +169,7 @@ func (ce *ConsensusEngine) applyBlock(ctx context.Context, rawBlk []byte, ci *ty
 		return fmt.Errorf("failed to decode block: %w", err)
 	}
 
-	if err := ce.processAndCommit(ctx, blk, ci, blkID); err != nil {
+	if err := ce.processAndCommit(ctx, blk, ci, blkID, true); err != nil {
 		return fmt.Errorf("failed to apply block: %w", err)
 	}
 

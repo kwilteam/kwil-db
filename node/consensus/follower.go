@@ -262,7 +262,7 @@ func (ce *ConsensusEngine) processBlockProposal(ctx context.Context, blkPropMsg 
 	ce.blkExecCancelFn = cancel
 	ce.cancelFnMtx.Unlock()
 
-	if err := ce.executeBlock(execCtx, blkPropMsg); err != nil {
+	if err := ce.executeBlock(execCtx, blkPropMsg, false); err != nil {
 		if errors.Is(err, context.Canceled) {
 			ce.log.Info("Block execution cancelled", "height", blkPropMsg.height)
 			return nil
@@ -318,12 +318,12 @@ func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, c
 	// - Incorrect AppHash: Halt the node.
 
 	if ce.role.Load() == types.RoleSentry {
-		return ce.processAndCommit(ctx, blk, ci, blkID)
+		return ce.processAndCommit(ctx, blk, ci, blkID, false)
 	}
 
 	// You are a validator
 	if ce.state.blkProp == nil {
-		return ce.processAndCommit(ctx, blk, ci, blkID)
+		return ce.processAndCommit(ctx, blk, ci, blkID, false)
 	}
 
 	if ce.state.blkProp.blkHash != blkID {
@@ -335,7 +335,7 @@ func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, c
 			return fmt.Errorf("error aborting execution of incorrect block proposal: %w", err)
 		}
 
-		return ce.processAndCommit(ctx, blk, ci, blkID)
+		return ce.processAndCommit(ctx, blk, ci, blkID, false)
 	}
 
 	// The block is already processed, just validate the appHash and commit the block if valid.
@@ -362,7 +362,7 @@ func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, c
 	}
 
 	// Commit the block
-	if err := ce.commit(ctx); err != nil {
+	if err := ce.commit(ctx, false); err != nil {
 		ce.log.Errorf("Error committing block: height: %d, error: %v", blk.Header.Height, err)
 		return err
 	}
@@ -371,12 +371,14 @@ func (ce *ConsensusEngine) commitBlock(ctx context.Context, blk *ktypes.Block, c
 
 // processAndCommit: used by the sentry nodes and slow validators to process and commit the block.
 // This is used when the acks are not required to be sent back to the leader, essentially in catchup mode.
-func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Block, ci *types.CommitInfo, blkID types.Hash) error {
+func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Block, ci *types.CommitInfo, blkID types.Hash, syncing bool) error {
 	if ci == nil {
 		return fmt.Errorf("commitInfo is nil")
 	}
 
-	ce.log.Info("Processing committed block", "height", blk.Header.Height, "blockID", blkID, "appHash", ci.AppHash)
+	if !syncing {
+		ce.log.Info("Processing committed block", "height", blk.Header.Height, "blockID", blkID, "appHash", ci.AppHash)
+	}
 
 	// set the hasBlock to the height of the block
 	oldH := ce.stateInfo.hasBlock.Swap(blk.Header.Height)
@@ -411,7 +413,7 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Blo
 	ce.stateInfo.blkProp = ce.state.blkProp
 	ce.stateInfo.mtx.Unlock()
 
-	if err := ce.executeBlock(ctx, ce.state.blkProp); err != nil {
+	if err := ce.executeBlock(ctx, ce.state.blkProp, syncing); err != nil {
 		return fmt.Errorf("error executing block: %w", err)
 	}
 
@@ -423,12 +425,18 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Blo
 
 	// Commit the block if the appHash and commitInfo is valid
 	if ce.state.blockRes.appHash != ci.AppHash {
+		// dump the statehashes from the block processor for debugging
+		sh := ce.blockProcessor.StateHashes()
+		if syncing {
+			ce.log.Info("AppState updates", "updates", sh.String())
+		}
+
 		haltR := fmt.Sprintf("processAndCommit: AppHash mismatch, halting the node. expected: %s, received: %s", ce.state.blockRes.appHash, ci.AppHash)
 		ce.sendHalt(haltR)
 		return errors.New(haltR)
 	}
 
-	if err := ce.commit(ctx); err != nil {
+	if err := ce.commit(ctx, syncing); err != nil {
 		return fmt.Errorf("error committing block: %w", err)
 	}
 	return nil
