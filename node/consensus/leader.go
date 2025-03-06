@@ -151,7 +151,7 @@ func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 	ce.cancelFnMtx.Unlock()
 
 	// Execute the block and generate the appHash
-	if err := ce.executeBlock(execCtx, blkProp); err != nil {
+	if err := ce.executeBlock(execCtx, blkProp, false); err != nil {
 		// check if the error is due to context cancellation
 		if errors.Is(err, context.Canceled) && reset { // NOTE: if not reset, then it's parent ctx cancellation i.e. a normal shutdown
 			ce.log.Warn("Block execution cancelled by the leader", "height", blkProp.height, "hash", blkProp.blkHash)
@@ -444,7 +444,7 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) {
 	}
 
 	// Commit the block and broadcast the blockAnn message
-	if err := ce.commit(ctx); err != nil {
+	if err := ce.commit(ctx, false); err != nil {
 		ce.sendHalt(fmt.Sprintf("Error committing block %v: %v", blkProp.blkHash, err))
 		return
 	}

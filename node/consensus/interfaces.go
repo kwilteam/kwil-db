@@ -46,7 +46,7 @@ type BlockProcessor interface {
 	SetCallbackFns(applyBlockFn blockprocessor.BroadcastTxFn, addPeer, removePeer func(string) error)
 
 	PrepareProposal(ctx context.Context, txs []*types.Tx) (finalTxs []*ktypes.Transaction, invalidTxs []*ktypes.Transaction, err error)
-	ExecuteBlock(ctx context.Context, req *ktypes.BlockExecRequest) (*ktypes.BlockExecResult, error)
+	ExecuteBlock(ctx context.Context, req *ktypes.BlockExecRequest, syncing bool) (*ktypes.BlockExecResult, error)
 	Commit(ctx context.Context, req *ktypes.CommitRequest) error
 	Rollback(ctx context.Context, height int64, appHash ktypes.Hash) error
 	Close() error
@@ -58,4 +58,5 @@ type BlockProcessor interface {
 
 	BlockExecutionStatus() *ktypes.BlockExecutionStatus
 	HasEvents() bool
+	StateHashes() *blockprocessor.StateHashes
 }

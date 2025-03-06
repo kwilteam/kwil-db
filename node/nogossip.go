@@ -18,6 +18,10 @@ import (
 func (n *Node) txAnnStreamHandler(s network.Stream) {
 	defer s.Close()
 
+	if n.InCatchup() { // we are in catchup, don't accept new txs
+		return
+	}
+
 	s.SetDeadline(time.Now().Add(txGetTimeout))
 
 	var ann txHashAnn
@@ -226,6 +230,11 @@ func (n *Node) startOrderedTxQueueAnns(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case txn := <-n.txQueue:
+				// skip if node is still catching up
+				if n.InCatchup() {
+					continue
+				}
+
 				rawTx := txn.rawtx
 				if txn.rawtx == nil {
 					// fetch the raw tx from the mempool

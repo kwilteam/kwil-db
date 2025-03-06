@@ -212,6 +212,11 @@ func (n *Node) announceBlkProp(ctx context.Context, blk *ktypes.Block, skipPeers
 func (n *Node) blkPropStreamHandler(s network.Stream) {
 	defer s.Close()
 
+	if n.InCatchup() { // we are catching up, ignore all proposals
+		n.log.Debug("ignoring block proposal while catching up")
+		return
+	}
+
 	var prop blockProp
 	_, err := prop.ReadFrom(s)
 	if err != nil {
