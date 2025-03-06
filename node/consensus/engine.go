@@ -1091,15 +1091,20 @@ func (ce *ConsensusEngine) Role() types.Role {
 	return ce.role.Load().(types.Role)
 }
 
-func (ce *ConsensusEngine) hasMajorityCeil(cnt int) bool {
-	threshold := len(ce.validatorSet)/2 + 1 // majority votes required
+func (ce *ConsensusEngine) hasMajority(cnt int) bool { // majority: > 50%
+	threshold := len(ce.validatorSet)/2 + 1
 	return cnt >= threshold
 }
 
-// func (ce *ConsensusEngine) hasMajorityFloor(cnt int) bool {
-// 	threshold := len(ce.validatorSet) / 2
-// 	return cnt >= threshold
-// }
+// hasEnoughNacks checks if the network has received enough Nacks for network to never make progress
+func (ce *ConsensusEngine) hasEnoughNacks(cnt int) bool {
+	threshold := ceilDiv(len(ce.validatorSet), 2)
+	return cnt >= threshold
+}
+
+func ceilDiv(a, b int) int {
+	return (a + b - 1) / b
+}
 
 func (ce *ConsensusEngine) InCatchup() bool {
 	return ce.inSync.Load()

@@ -347,7 +347,6 @@ func (ce *ConsensusEngine) addVote(ctx context.Context, voteMsg *vote, sender st
 		return nil
 	}
 
-	ce.log.Info("Adding vote", "height", vote.Height, "blkHash", vote.BlkHash, "appHash", vote.AppHash, "sender", sender)
 	if _, ok := ce.state.votes[sender]; !ok {
 		// verify the vote signature, before accepting the vote from the validator if ack is true
 		var ackStatus ktypes.AckStatus
@@ -371,6 +370,14 @@ func (ce *ConsensusEngine) addVote(ctx context.Context, voteMsg *vote, sender st
 		if err := voteInfo.Verify(vote.BlkHash, ce.state.blockRes.appHash); err != nil {
 			ce.log.Errorf("Error verifying the vote signature: %v", err)
 			return fmt.Errorf("error verifying the vote signature: %w", err)
+		}
+
+		if voteInfo.AckStatus == ktypes.AckAgree {
+			ce.log.Info("Adding vote", "height", vote.Height, "blkHash", vote.BlkHash, "appHash", vote.AppHash, "sender", sender)
+		} else if voteInfo.AckStatus == ktypes.AckForked {
+			ce.log.Warn("Adding vote with apphash mismatch", "height", vote.Height, "blkHash", vote.BlkHash, "appHash", vote.AppHash, "sender", sender)
+		} else {
+			ce.log.Info("Adding nack vote", "height", vote.Height, "blkHash", vote.BlkHash, "sender", sender)
 		}
 
 		ce.state.votes[sender] = voteInfo
@@ -404,13 +411,13 @@ func (ce *ConsensusEngine) processVotes(ctx context.Context) {
 		}
 	}
 
-	if ce.hasMajorityCeil(nacks) {
-		haltReason := fmt.Sprintf("Majority of the validators have rejected the block, halting the network: %d acks, %d nacks", acks, nacks)
+	if ce.hasEnoughNacks(nacks) {
+		haltReason := fmt.Sprintf("at least half the validators have rejected the block, preventing network progress. Halting the network: %d acks, %d nacks", acks, nacks)
 		ce.sendHalt(haltReason)
 		return
 	}
 
-	if !ce.hasMajorityCeil(acks) {
+	if !ce.hasMajority(acks) {
 		// No majority yet, wait for more votes
 		return
 	}
