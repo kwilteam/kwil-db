@@ -281,12 +281,28 @@ func TestMajorityFuncs(t *testing.T) {
 			enoughNacks: false,
 		},
 		{
+			name:        "Majority(2, 1, 1)",
+			valCnt:      2,
+			acks:        1,
+			nacks:       1,
+			majority:    false,
+			enoughNacks: true,
+		},
+		{
 			name:        "Majority(2, 0, 2)",
 			valCnt:      2,
 			acks:        0,
 			nacks:       2,
 			majority:    false,
 			enoughNacks: true,
+		},
+		{
+			name:        "Majority(3, 3, 0)",
+			valCnt:      3,
+			acks:        3,
+			nacks:       0,
+			majority:    true,
+			enoughNacks: false,
 		},
 		{
 			name:        "Majority(3, 2, 1)",
