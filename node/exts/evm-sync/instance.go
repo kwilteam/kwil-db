@@ -130,7 +130,7 @@ func (l *globalListenerManager) RegisterNewListener(ctx context.Context, db sql.
 
 // UnregisterListener unregisters a listener.
 // It should be called when an extension gets unused
-func (l *globalListenerManager) UnregisterListener(uniqueName string) error {
+func (l *globalListenerManager) UnregisterListener(ctx context.Context, db sql.DB, eng common.Engine, uniqueName string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
@@ -141,6 +141,11 @@ func (l *globalListenerManager) UnregisterListener(uniqueName string) error {
 
 	close(info.done)
 	delete(l.listeners, uniqueName)
+
+	err := orderedsync.Synchronizer.UnregisterTopic(ctx, db, eng, uniqueName)
+	if err != nil {
+		return err
+	}
 
 	return nil
 }

@@ -366,7 +366,7 @@ func (m *ServiceMgr) Start(ctx context.Context) error {
 		go func() {
 			defer wg.Done()
 
-			s.logger.Info("start watching erc20 reward epoches")
+			s.logger.Info("start watching erc20 bridge epoches")
 			tick := time.NewTicker(m.syncInterval)
 
 			for {
@@ -374,7 +374,7 @@ func (m *ServiceMgr) Start(ctx context.Context) error {
 
 				select {
 				case <-ctx.Done():
-					s.logger.Info("stop watching erc20 reward epoches")
+					s.logger.Info("stop watching erc20 bridge epoches")
 					return
 				case <-tick.C:
 				}

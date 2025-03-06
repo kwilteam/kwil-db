@@ -395,7 +395,8 @@ func init() {
 									// if it is already synced, we should just make sure to start listening
 									// to transfer events and activate it
 
-									err = setActiveStatus(ctx.TxContext.Ctx, app, &id, true)
+									// period could be updated when re-use extension
+									err = reuseRewardInstance(ctx.TxContext.Ctx, app, &id, int64(dur.Seconds()))
 									if err != nil {
 										info.mu.RUnlock()
 										return err
@@ -404,6 +405,7 @@ func init() {
 									info.mu.RUnlock()
 									info.mu.Lock()
 									info.active = true
+									info.DistributionPeriod = int64(dur.Seconds())
 									info.mu.Unlock()
 
 									info.mu.RLock()
@@ -489,7 +491,7 @@ func init() {
 								return err
 							}
 
-							err = info.stopAllListeners()
+							err = info.stopAllListeners(ctx.TxContext.Ctx, app.DB, app.Engine)
 							if err != nil {
 								info.mu.RUnlock()
 								return err
@@ -1789,9 +1791,9 @@ func (r *rewardExtensionInfo) startTransferListener(ctx context.Context, app *co
 // stopAllListeners stops all event listeners for the reward extension.
 // If it is synced, this means it must have an active Transfer listener.
 // If it is not synced, it must have an active state poller.
-func (r *rewardExtensionInfo) stopAllListeners() error {
+func (r *rewardExtensionInfo) stopAllListeners(ctx context.Context, db sql.DB, eng common.Engine) error {
 	if r.synced {
-		return evmsync.EventSyncer.UnregisterListener(transferListenerUniqueName(*r.ID))
+		return evmsync.EventSyncer.UnregisterListener(ctx, db, eng, transferListenerUniqueName(*r.ID))
 	}
 	return evmsync.StatePoller.UnregisterPoll(statePollerUniqueName(*r.ID))
 }

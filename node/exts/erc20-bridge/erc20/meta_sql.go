@@ -219,6 +219,20 @@ func userBalanceID(rewardID *types.UUID, user ethcommon.Address) *types.UUID {
 	return &id
 }
 
+// reuseRewardInstance reuse existing synced reward instance, set active status to true,
+// and update the distribution period.
+// This should be only called when re-use an extension.
+func reuseRewardInstance(ctx context.Context, app *common.App, id *types.UUID, distributionPeriod int64) error {
+	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
+    {kwil_erc20_meta}UPDATE reward_instances
+    SET distribution_period = $distribution_period, active = true
+    WHERE id = $id;
+    `, map[string]any{
+		"id":                  id,
+		"distribution_period": distributionPeriod,
+	}, nil)
+}
+
 // setActiveStatus sets the active status of a reward.
 func setActiveStatus(ctx context.Context, app *common.App, id *types.UUID, active bool) error {
 	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
