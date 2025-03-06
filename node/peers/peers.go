@@ -551,7 +551,7 @@ func (pm *PeerMan) ConnectedPeers() []PeerInfo {
 		}
 		peerInfo, err := pm.peerInfo(peerID)
 		if err != nil {
-			pm.log.Warnf("(ConnectedPeers) peerInfo for %v: %v", peerID, err)
+			pm.log.Warnf("(ConnectedPeers) peerInfo for %v: %v", peerIDStringer(peerID), err)
 			continue
 		}
 
@@ -582,7 +582,7 @@ func (pm *PeerMan) KnownPeers() (all, connected, disconnected []PeerInfo) {
 		}
 		peerInfo, err := pm.peerInfo(peerID)
 		if err != nil {
-			pm.log.Warnf("(other peers) peerInfo for %v: %v", peerID, err)
+			pm.log.Warnf("(other peers) peerInfo for %v: %v", peerIDStringer(peerID), err)
 			continue
 		}
 
@@ -628,12 +628,12 @@ func RequirePeerProtos(ctx context.Context, ps peerstore.Peerstore, peer peer.ID
 func (pm *PeerMan) peerInfo(peerID peer.ID) (*PeerInfo, error) {
 	addrs := pm.ps.Addrs(peerID)
 	if len(addrs) == 0 {
-		return nil, fmt.Errorf("no addresses for peer %v", peerID)
+		return nil, errors.New("no addresses for peer")
 	}
 
 	supportedProtos, err := pm.ps.GetProtocols(peerID)
 	if err != nil {
-		return nil, fmt.Errorf("GetProtocols for %v: %w", peerID, err)
+		return nil, fmt.Errorf("GetProtocols failed: %w", err)
 	}
 
 	return &PeerInfo{
