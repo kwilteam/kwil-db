@@ -410,7 +410,7 @@ func (ce *ConsensusEngine) Start(ctx context.Context, fns BroadcastFns, peerFns 
 
 	ce.blockProcessor.SetCallbackFns(fns.TxBroadcaster, peerFns.AddPeer, peerFns.RemovePeer)
 	// Catchup timeout should be atleast greater than the emptyBlockTimeout
-	ce.catchupTimeout = max(5*time.Second, ce.emptyBlockTimeout+ce.blkProposalInterval)
+	ce.catchupTimeout = max(5*time.Second, ce.emptyBlockTimeout+ce.proposeTimeout)
 	ce.catchupTicker = time.NewTicker(ce.catchupTimeout)
 
 	ce.log.Info("Starting the consensus engine")
@@ -937,7 +937,7 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 		return nil
 	}
 
-	ce.log.Info("No consensus messages received recently, initiating network catchup.")
+	ce.log.Infof("No consensus messages received for %s, initiating network catchup.", ce.catchupTimeout)
 
 	startHeight := ce.lastCommitHeight()
 	if err := ce.processCurrentBlock(ctx); err != nil {
