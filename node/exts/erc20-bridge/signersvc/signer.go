@@ -353,7 +353,10 @@ func (m *ServiceMgr) Start(ctx context.Context) error {
 		}
 
 		m.logger.Warn("failed to initialize erc20 bridge signer, will retry", "error", err.Error())
-		time.Sleep(time.Second * 3)
+		select {
+		case <-time.After(time.Second * 30):
+		case <-ctx.Done():
+		}
 	}
 
 	wg := &sync.WaitGroup{}

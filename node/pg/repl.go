@@ -16,7 +16,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"hash"
@@ -26,8 +25,6 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/jackc/pgx/v5/pgtype"
-
-	"github.com/kwilteam/kwil-db/core/log"
 )
 
 // replConn creates a new connection to a postgres host with the
@@ -128,7 +125,9 @@ func createRepl(ctx context.Context, conn *pgconn.PgConn, publicationName, slotN
 	return sysident.XLogPos, nil
 }
 
-var zeroHash, _ = hex.DecodeString("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+// For reference, if there is nothing going into the commit hash, the result
+// will be this "zeroHash":
+//  var zeroHash, _ = hex.DecodeString("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
 
 // captureRepl begins receiving and decoding messages. Consider the conn to be
 // hijacked after calling captureRepl, and do not use it or the stream can be
@@ -272,11 +271,7 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64, comm
 					return errors.New("commit hash channel full")
 				}
 
-				lvl := log.LevelDebug
-				if !bytes.Equal(cHash, zeroHash) {
-					lvl = log.LevelInfo
-				}
-				logger.Logf(lvl, "Commit hash %x, seq %d, LSN %v (%d) delta %d",
+				logger.Debugf("Commit hash %x, seq %d, LSN %v (%d) delta %d",
 					cHash, seq, xld.WALStart, xld.WALStart, lsnDelta)
 
 				logger.Debug("wal commit stats", "inserts", stats.inserts, "updates", stats.updates,

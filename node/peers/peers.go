@@ -27,6 +27,12 @@ import (
 	"github.com/multiformats/go-multiaddr"
 )
 
+// ErrNoRecordedAddress is returned when a peer is known or even connected, but
+// there are no addresses available for it. This can be case when an incoming
+// connection is established from a peer that does not have a routable IP
+// address on which they can accept incoming connections.
+var ErrNoRecordedAddress = errors.New("no address for peer in peerstore")
+
 var mets metrics.NodeMetrics = metrics.Node
 
 const (
@@ -551,7 +557,9 @@ func (pm *PeerMan) ConnectedPeers() []PeerInfo {
 		}
 		peerInfo, err := pm.peerInfo(peerID)
 		if err != nil {
-			pm.log.Warnf("(ConnectedPeers) peerInfo for %v: %v", peerIDStringer(peerID), err)
+			if !errors.Is(err, ErrNoRecordedAddress) {
+				pm.log.Warnf("(ConnectedPeers) peerInfo for %v: %v", peerIDStringer(peerID), err)
+			}
 			continue
 		}
 
@@ -582,7 +590,9 @@ func (pm *PeerMan) KnownPeers() (all, connected, disconnected []PeerInfo) {
 		}
 		peerInfo, err := pm.peerInfo(peerID)
 		if err != nil {
-			pm.log.Warnf("(other peers) peerInfo for %v: %v", peerIDStringer(peerID), err)
+			if !errors.Is(err, ErrNoRecordedAddress) {
+				pm.log.Warnf("(other peers) peerInfo for %v: %v", peerIDStringer(peerID), err)
+			}
 			continue
 		}
 
@@ -628,7 +638,13 @@ func RequirePeerProtos(ctx context.Context, ps peerstore.Peerstore, peer peer.ID
 func (pm *PeerMan) peerInfo(peerID peer.ID) (*PeerInfo, error) {
 	addrs := pm.ps.Addrs(peerID)
 	if len(addrs) == 0 {
-		return nil, errors.New("no addresses for peer")
+		// They are not in our *peerstore*, but they may be connected, such as
+		// if they lack a routable IP address to which others may connect.
+		if conns := pm.h.Network().ConnsToPeer(peerID); len(conns) > 0 {
+			ma := conns[0].RemoteMultiaddr()
+			return nil, fmt.Errorf("%w but connected from %v", ErrNoRecordedAddress, ma)
+		}
+		return nil, ErrNoRecordedAddress
 	}
 
 	supportedProtos, err := pm.ps.GetProtocols(peerID)
