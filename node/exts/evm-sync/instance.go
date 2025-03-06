@@ -76,41 +76,30 @@ type EVMEventListenerConfig struct {
 	Chain chains.Chain
 	// GetLogs is a function that queries logs to be synced from the chain.
 	GetLogs GetBlockLogsFunc
-	// Resolve is the function that will be called the Kwil network
-	// has confirmed events from Ethereum.
-	Resolve string
-	// TopicExists indicate whether the targeting topic exists.
-	// This is useful for erc20-bridge, we never delete the topics.
-	TopicExists bool
+}
+
+// RegisterNewTopic registers a new topic.
+// RegisterNewTopic should be called when a new topic is created.
+// It should be inside of an OnUse method.
+func (l *globalListenerManager) RegisterNewTopic(ctx context.Context, db sql.DB, eng common.Engine, uniqueName, resolveFuncName string) error {
+	_, ok := registeredResolutions[resolveFuncName]
+	if !ok {
+		return fmt.Errorf("resolve function %s not registered", resolveFuncName)
+	}
+
+	return orderedsync.Synchronizer.RegisterTopic(ctx, db, eng, uniqueName, resolveFuncName)
 }
 
 // RegisterListener registers a new listener.
 // It should be called when a node starts up (e.g. on a precompile's
 // OnStart method), or when a new extension is added.
-func (l *globalListenerManager) RegisterNewListener(ctx context.Context, db sql.DB, eng common.Engine, conf EVMEventListenerConfig) error {
+func (l *globalListenerManager) RegisterNewListener(conf EVMEventListenerConfig) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-
-	_, ok := registeredResolutions[conf.Resolve]
-	if !ok {
-		return fmt.Errorf("resolve function %s not registered", conf.Resolve)
-	}
-
-	_, ok = l.listeners[conf.UniqueName]
-	if ok {
-		return fmt.Errorf("listener with name %s already registered", conf.UniqueName)
-	}
 
 	chainInfo, ok := chains.GetChainInfo(conf.Chain)
 	if !ok {
 		return fmt.Errorf("chain %s not found", conf.Chain)
-	}
-
-	if !conf.TopicExists {
-		err := orderedsync.Synchronizer.RegisterTopic(ctx, db, eng, conf.UniqueName, conf.Resolve)
-		if err != nil {
-			return err
-		}
 	}
 
 	doneCh := make(chan struct{})
