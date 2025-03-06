@@ -23,7 +23,7 @@ import (
 //     as evidence, including the BlockHeader and the leader's signature of the block the validator is on.
 //     This forces the leader to catch up to the validator's block height before proposing blocks again.
 func (ce *ConsensusEngine) doBlockSync(ctx context.Context) error {
-	if ce.role.Load() == types.RoleLeader {
+	if ce.role.Load() == types.RoleLeader { // no-op if no checkpoint set
 		if err := ce.leaderBlockSync(ctx); err != nil {
 			// not checking for BlockNotAvailable error here, as the leader
 			// has to sync till the checkpoint height mandatorily. If blocks are
@@ -43,7 +43,7 @@ func (ce *ConsensusEngine) doBlockSync(ctx context.Context) error {
 	// Validators and sentry nodes should perform a best effort block sync
 	// to start the consensus engine at the most recent height. If they
 	// are lagging, they can catch up while processing blocks.
-	return ce.replayBlockFromNetwork(ctx, ce.syncBlock)
+	return ce.replayBlockFromNetwork(ctx)
 }
 
 func (ce *ConsensusEngine) VerifyCheckpoint() error {
@@ -69,6 +69,7 @@ func (ce *ConsensusEngine) VerifyCheckpoint() error {
 	return nil
 }
 
+// leaderBlockSync is responsible for synchronizing the leader to the checkpoint height.
 func (ce *ConsensusEngine) leaderBlockSync(ctx context.Context) error {
 	startHeight := ce.lastCommitHeight()
 	ce.log.Info("Starting block sync", "height", startHeight+1)
@@ -85,39 +86,74 @@ func (ce *ConsensusEngine) leaderBlockSync(ctx context.Context) error {
 
 // replayBlockFromNetwork attempts to synchronize the local node with the network by fetching
 // and processing blocks from peers.
-func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context, requester func(context.Context, int64) error) error {
+func (ce *ConsensusEngine) replayBlockFromNetwork(ctx context.Context) error {
 	var startHeight, height int64
 	startHeight = ce.lastCommitHeight() + 1
 	height = startHeight
 	t0 := time.Now()
 	tI := t0
 
-	ce.inSync.Store(true) // set inSync to true to indicate that the node is syncing with the network and not accept txs till the sync is complete
-	defer ce.inSync.Store(false)
-	cnt := 0
+	var cnt int64 // count the number of blocks synced since last log
 
-	ce.log.Info("Starting block sync...", "height", startHeight)
+	ce.log.Info("Starting block sync...", "height", startHeight-1) // -1 to agree with "from" in progress log, which is half open: (start,end]
+SYNC:
 	for {
-		if err := requester(ctx, height); err != nil {
+		retrier := &backoff.Backoff{
+			Min:    250 * time.Millisecond,
+			Max:    30 * time.Second,
+			Factor: 2,
+			Jitter: true,
+		}
+
+		var blkID ktypes.Hash
+		var rawBlk []byte
+		var ci *ktypes.CommitInfo
+	RETRY:
+		for {
+			var err error
+			blkID, rawBlk, ci, _, err = ce.blkRequester(ctx, height)
+			if err == nil {
+				break RETRY // fetch success => applyBlock
+			}
+
 			if errors.Is(err, context.Canceled) {
 				return err
 			}
-			if errors.Is(err, types.ErrBlkNotFound) || errors.Is(err, types.ErrNotFound) || errors.Is(err, types.ErrPeersNotFound) {
-				break // no peers have this block, assume block sync is complete, continue with consensus
+
+			if errors.Is(err, types.ErrBlkNotFound) || errors.Is(err, types.ErrNotFound) {
+				break SYNC // no peers have this block, assume block sync is complete, continue with consensus
 			}
-			ce.log.Warn("unexpected error requesting block from the network", "height", height, "error", err)
-			return err
+
+			// If I'm leader and no peers, then break sync (consider single node network).
+			if ce.role.Load() == types.RoleLeader && errors.Is(err, types.ErrPeersNotFound) {
+				break SYNC
+			}
+
+			// retry indefinitely until context is canceled
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(retrier.Duration()):
+			}
 		}
+
+		err := ce.applyBlock(ctx, rawBlk, ci, blkID) // fatal
+		if err != nil {
+			return fmt.Errorf("failed to apply block: %w", err)
+		}
+
 		cnt++
-		if cnt == 100 {
+		if height%100 == 0 && height > 0 {
 			now := time.Now()
-			ce.log.Info("Downloaded blocks", "from", height-100, "to", height, "duration", now.Sub(tI))
+			since := now.Sub(tI)
+			ce.log.Info("Processed blocks", "from", height-cnt, "to", height, "elapsed", since.Truncate(time.Millisecond),
+				"rate", fmt.Sprintf("%.04f", float64(cnt)/since.Seconds()))
 			cnt, tI = 0, now
 		}
 		height++
 	}
 
-	ce.log.Info("Block sync completed", "startHeight", startHeight, "endHeight", height, "duration", time.Since(t0))
+	ce.log.Info("Block sync completed", "startHeight", startHeight, "endHeight", height, "elapsed", time.Since(t0))
 	return nil
 }
 
@@ -134,15 +170,16 @@ func (ce *ConsensusEngine) syncBlocksUntilHeight(ctx context.Context, startHeigh
 		height++
 	}
 
-	ce.log.Info("Block sync completed", "startHeight", startHeight, "endHeight", endHeight, "duration", time.Since(t0))
+	ce.log.Info("Block sync completed", "startHeight", startHeight, "endHeight", endHeight, "elapsed", time.Since(t0))
 
 	return nil
 }
 
-// syncBlockWithRetry fetches the specified block from the network and keeps retrying until
-// the block is successfully retrieved from the network.
+// syncBlockWithRetry fetches the specified block from the network, retrying a
+// certain number of times (getBlockReties) until the block is successfully
+// retrieved from the network. It then applies (executes and commits) the block.
 func (ce *ConsensusEngine) syncBlockWithRetry(ctx context.Context, height int64) error {
-	blkID, rawBlk, ci, err := ce.getBlock(ctx, height)
+	blkID, rawBlk, ci, err := ce.getBlockWithRetry(ctx, height)
 	if err != nil {
 		return fmt.Errorf("failed to get block from the network: %w", err)
 	}
@@ -151,14 +188,14 @@ func (ce *ConsensusEngine) syncBlockWithRetry(ctx context.Context, height int64)
 }
 
 // syncBlock fetches the specified block from the network
-func (ce *ConsensusEngine) syncBlock(ctx context.Context, height int64) error {
+/*func (ce *ConsensusEngine) syncBlock(ctx context.Context, height int64) error {
 	blkID, rawblk, ci, _, err := ce.blkRequester(ctx, height)
 	if err != nil {
 		return fmt.Errorf("failed to get block from the network: %w", err)
 	}
 
 	return ce.applyBlock(ctx, rawblk, ci, blkID)
-}
+}*/
 
 func (ce *ConsensusEngine) applyBlock(ctx context.Context, rawBlk []byte, ci *ktypes.CommitInfo, blkID types.Hash) error {
 	ce.state.mtx.Lock()
@@ -176,8 +213,10 @@ func (ce *ConsensusEngine) applyBlock(ctx context.Context, rawBlk []byte, ci *kt
 	return nil
 }
 
-func (ce *ConsensusEngine) getBlock(ctx context.Context, height int64) (blkID types.Hash, rawBlk []byte, ci *ktypes.CommitInfo, err error) {
-	err = blkRetrier(ctx, 15, func() error {
+const getBlockReties = 30 // what else are we going to do, shutdown the node because of a network outage?
+
+func (ce *ConsensusEngine) getBlockWithRetry(ctx context.Context, height int64) (blkID types.Hash, rawBlk []byte, ci *ktypes.CommitInfo, err error) {
+	err = blkRetrier(ctx, getBlockReties, func() error { // until no error or ErrBlkNotFound
 		blkID, rawBlk, ci, _, err = ce.blkRequester(ctx, height)
 		return err
 	})
@@ -185,11 +224,13 @@ func (ce *ConsensusEngine) getBlock(ctx context.Context, height int64) (blkID ty
 	return blkID, rawBlk, ci, err
 }
 
-// retry will retry the function until it is successful, or reached the max retries
+// retry will retry the function until one of: (1) it is successful, (2) reaches
+// the max retries, (3) the function returns either types.ErrBlkNotFound or
+// types.ErrPeersNotFound, or (4) the context is canceled.
 func blkRetrier(ctx context.Context, maxRetries int64, fn func() error) error {
 	retrier := &backoff.Backoff{
-		Min:    100 * time.Millisecond,
-		Max:    500 * time.Millisecond,
+		Min:    250 * time.Millisecond,
+		Max:    30 * time.Second,
 		Factor: 2,
 		Jitter: true,
 	}
@@ -200,7 +241,7 @@ func blkRetrier(ctx context.Context, maxRetries int64, fn func() error) error {
 			return nil
 		}
 
-		if errors.Is(err, types.ErrBlkNotFound) {
+		if errors.Is(err, types.ErrBlkNotFound) || errors.Is(err, types.ErrNotFound) {
 			return err
 		}
 

@@ -122,7 +122,7 @@ func (n *Node) blkAnnStreamHandler(s network.Stream) {
 
 	peerID := s.Conn().RemotePeer()
 
-	n.log.Info("Accept commit?", "height", height, "blockID", blkid, "appHash", ci.AppHash,
+	n.log.Debug("Accept commit?", "height", height, "blockID", blkid, "appHash", ci.AppHash,
 		"from_peer", peers.PeerIDStringer(peerID)) // maybe debug level
 
 	// If we are a validator and this is the commit ann for a proposed block
@@ -436,19 +436,20 @@ func getBlkHeight(ctx context.Context, height int64, host host.Host, log log.Log
 	// to help determine if the block has not been committed yet and stop
 	// requesting the block from other peers if enough peers indicate that the
 	// block is not available.
-	bestHCnt := 0
+	var bestHCount, notFoundCount int
 	var bestHeight int64
 
 	for _, peer := range availablePeers {
-		if bestHCnt == 5 {
+		if bestHCount == 5 {
 			// stop requesting the block if there is an indication that
-			// the block is not made yet.
+			// the block does not exist. i.e. 5 peers indicate that they don't have it
 			break
 		}
 
 		t0 := time.Now()
 		resp, err := requestBlockHeight(ctx, host, peer, height, blkReadLimit)
 		if errors.Is(err, ErrNotFound) || errors.Is(err, ErrBlkNotFound) {
+			notFoundCount++
 			be := new(ErrNotFoundWithBestHeight)
 			if errors.As(err, &be) {
 				theirBest := be.BestHeight
@@ -456,7 +457,7 @@ func getBlkHeight(ctx context.Context, height int64, host host.Host, log log.Log
 					bestHeight = theirBest
 				}
 				if theirBest == height-1 {
-					bestHCnt++
+					bestHCount++
 				}
 				log.Infof("block %d not found on peer %s; their best height is %d", height, peer, theirBest)
 			} else {
@@ -472,6 +473,7 @@ func getBlkHeight(ctx context.Context, height int64, host host.Host, log log.Log
 			return types.Hash{}, nil, nil, 0, err
 		}
 		if err != nil {
+			// e.g. "i/o deadline reached", probably network error
 			log.Warnf("unexpected error from %v: %v", peer, err)
 			continue
 		}
@@ -524,6 +526,18 @@ func getBlkHeight(ctx context.Context, height int64, host host.Host, log log.Log
 		mets.DownloadedBlock(context.Background(), height, int64(len(rawBlk)))
 
 		return hash, rawBlk, &ci, bestHeight, nil
+	}
+
+	// Being here, we did not find the block on any peer, either because of
+	// unexpected errors (network issues) or the peer(s) said "not found".
+
+	if notFoundCount == 0 {
+		// We got through the loop without a single definitive "not found"
+		// response, which indicates that we hit a continue statement (error)
+		// for each peer. Do NOT signal down the call stack that we believe the
+		// block does not exist, as this may direct logic as if we are fully
+		// synchronized, when in reality we should keep trying.
+		return types.Hash{}, nil, nil, 0, errors.New("all peers failed")
 	}
 
 	err := ErrBlkNotFound

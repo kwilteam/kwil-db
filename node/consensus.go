@@ -239,8 +239,8 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 	}()
 
 	from := s.Conn().RemotePeer()
-	n.log.Info("Accept proposal?", "height", height, "blockID", prop.Hash, "prevHash", prop.PrevHash,
-		"from_peer", peers.PeerIDStringer(from)) // maybe debug level?
+	n.log.Debug("Accept proposal?", "height", height, "blockID", prop.Hash, "prevHash", prop.PrevHash,
+		"from_peer", peers.PeerIDStringer(from))
 
 	if !n.ce.AcceptProposal(height, prop.Hash, prop.PrevHash, prop.LeaderSig, prop.Stamp) {
 		// NOTE: if this is ahead of our last commit height, we have to try to catch up
