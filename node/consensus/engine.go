@@ -755,6 +755,11 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 		return err
 	}
 
+	// set inSync to true to indicate that the node is syncing with the network
+	// and not accept txs till the sync is complete.
+	ce.inSync.Store(true) // across replay from block store and network
+	defer ce.inSync.Store(false)
+
 	// Replay the blocks from the blockstore if the app hasn't played all the blocks yet.
 	if appHeight < storeHeight {
 		if err := ce.replayFromBlockStore(ctx, appHeight+1, storeHeight); err != nil {
@@ -763,14 +768,7 @@ func (ce *ConsensusEngine) catchup(ctx context.Context) error {
 	}
 
 	// Sync with the network using the blocksync
-	if err := ce.doBlockSync(ctx); err != nil {
-		return err
-	}
-
-	// Done with the catchup
-	ce.inSync.Store(false)
-
-	return nil
+	return ce.doBlockSync(ctx)
 }
 
 // updateValidatorSetAndRole updates the validator set and the role of the node based on
@@ -913,7 +911,7 @@ func (ce *ConsensusEngine) rebroadcastBlkProposal(ctx context.Context) {
 	defer ce.state.mtx.RUnlock()
 
 	if ce.role.Load() == types.RoleLeader && ce.state.blkProp != nil {
-		ce.log.Info("Rebroadcasting block proposal", "height", ce.state.blkProp.height)
+		ce.log.Debug("Rebroadcasting block proposal", "height", ce.state.blkProp.height)
 		go ce.proposalBroadcaster(ctx, ce.state.blkProp.blk)
 	}
 }
@@ -938,6 +936,8 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 	}
 
 	ce.log.Infof("No consensus messages received for %s, initiating network catchup.", ce.catchupTimeout)
+	ce.inSync.Store(true)
+	defer ce.inSync.Store(false) // going back to consensusEventLoop
 
 	startHeight := ce.lastCommitHeight()
 	if err := ce.processCurrentBlock(ctx); err != nil {
@@ -948,7 +948,7 @@ func (ce *ConsensusEngine) doCatchup(ctx context.Context) error {
 		return err
 	}
 
-	err := ce.replayBlockFromNetwork(ctx, ce.syncBlockWithRetry)
+	err := ce.replayBlockFromNetwork(ctx)
 	if err != nil {
 		return err
 	}
@@ -979,7 +979,7 @@ func (ce *ConsensusEngine) processCurrentBlock(ctx context.Context) error {
 	// Fetch the block at this height and commit it, if it's the right one,
 	// otherwise rollback.
 	height := ce.state.blkProp.height
-	blkHash, rawBlk, ci, err := ce.getBlock(ctx, height)
+	blkHash, rawBlk, ci, err := ce.getBlockWithRetry(ctx, height)
 	if err != nil {
 		return err
 	}

@@ -231,11 +231,6 @@ func (n *Node) startOrderedTxQueueAnns(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case txn := <-n.txQueue:
-				// skip if node is still catching up
-				if n.InCatchup() {
-					continue
-				}
-
 				rawTx := txn.rawtx
 				if txn.rawtx == nil {
 					// fetch the raw tx from the mempool
