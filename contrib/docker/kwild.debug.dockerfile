@@ -15,6 +15,8 @@ RUN chmod 777 /var/run/kwil
 
 COPY . .
 
+RUN rm -f go.work && go work init . ./core ./test
+
 RUN GIT_VERSION=$version GIT_COMMIT=$git_commit BUILD_TIME=$build_time GO_GCFLAGS="all=-N -l" CGO_ENABLED=0 TARGET="/app/dist" GO_BUILDTAGS=$go_build_tags GO_RACEFLAG=$go_race ./contrib/scripts/build/binary kwild
 RUN GIT_VERSION=$version GIT_COMMIT=$git_commit BUILD_TIME=$build_time CGO_ENABLED=0 TARGET="/app/dist" GO_RACEFLAG=$go_race ./contrib/scripts/build/binary kwil-cli
 RUN chmod +x /app/dist/kwild /app/dist/kwil-cli
