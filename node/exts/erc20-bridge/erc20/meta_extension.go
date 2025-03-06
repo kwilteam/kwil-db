@@ -272,7 +272,7 @@ func init() {
 			// we need to unlock before we call start because it
 			// will acquire the write lock
 			info.mu.Unlock()
-			return info.startTransferListener(ctx, app, false)
+			return info.startTransferListener(ctx, app)
 		}
 
 		info.mu.Unlock()
@@ -309,7 +309,7 @@ func init() {
 						// transfer listener. Otherwise, we should start the state poller
 						if instance.active {
 							if instance.synced {
-								err = instance.startTransferListener(ctx, app, false)
+								err = instance.startTransferListener(ctx, app)
 								if err != nil {
 									return err
 								}
@@ -411,7 +411,7 @@ func init() {
 									info.mu.RLock()
 									defer info.mu.RUnlock()
 
-									err = info.startTransferListener(ctx.TxContext.Ctx, app, true)
+									err = info.startTransferListener(ctx.TxContext.Ctx, app)
 									if err != nil {
 										return err
 									}
@@ -422,6 +422,11 @@ func init() {
 								}
 								// do nothing, we will proceed below to start the state poller
 							} else {
+								err = evmsync.EventSyncer.RegisterNewTopic(ctx.TxContext.Ctx, db, app.Engine, transferListenerUniqueName(id), transferEventResolutionName)
+								if err != nil {
+									return err
+								}
+
 								firstEpoch := newPendingEpoch(&id, ctx.TxContext.BlockContext)
 								// if not synced, register the new reward extension
 								info = &rewardExtensionInfo{
@@ -1721,14 +1726,14 @@ func (r *rewardExtensionInfo) startStatePoller() error {
 }
 
 // startTransferListener starts an event listener that listens for Transfer events
-func (r *rewardExtensionInfo) startTransferListener(ctx context.Context, app *common.App, reuseTopic bool) error {
+func (r *rewardExtensionInfo) startTransferListener(ctx context.Context, app *common.App) error {
 	// I'm not sure if copies are needed because the values should never be modified,
 	// but just in case, I copy them to be used in GetLogs, which runs outside of consensus
 	escrowCopy := r.EscrowAddress
 	erc20Copy := r.Erc20Address
 
 	// we now register synchronization of the Transfer event
-	return evmsync.EventSyncer.RegisterNewListener(ctx, app.DB, app.Engine, evmsync.EVMEventListenerConfig{
+	return evmsync.EventSyncer.RegisterNewListener(evmsync.EVMEventListenerConfig{
 		UniqueName: transferListenerUniqueName(*r.ID),
 		Chain:      r.ChainInfo.Name,
 		GetLogs: func(ctx context.Context, client *ethclient.Client, startBlock, endBlock uint64, logger log.Logger) ([]*evmsync.EthLog, error) {
@@ -1784,8 +1789,6 @@ func (r *rewardExtensionInfo) startTransferListener(ctx context.Context, app *co
 
 			return logs, nil
 		},
-		Resolve:     transferEventResolutionName,
-		TopicExists: reuseTopic,
 	})
 }
 
