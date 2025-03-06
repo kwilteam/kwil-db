@@ -694,11 +694,25 @@ func newHost(cfg *hostConfig) (host.Host, error) {
 
 	var externalMultiAddr multiaddr.Multiaddr
 	if cfg.externalAddress != "" {
-		ip, ipv, err := peers.ResolveHost(cfg.externalAddress)
+		ePort := cfg.port // fallback if none given
+		eHost, ePortStr, err := net.SplitHostPort(cfg.externalAddress)
+		if err != nil {
+			if !strings.Contains(err.Error(), "missing port") {
+				return nil, fmt.Errorf("invalid external address: %w", err)
+			}
+			// no port given => use port from listen address
+			eHost = cfg.externalAddress
+		} else { // full host:port given => use port from external address
+			ePort, err = strconv.ParseUint(ePortStr, 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("invalid external address: %w", err)
+			}
+		}
+		ip, ipv, err := peers.ResolveHost(eHost)
 		if err != nil {
 			return nil, fmt.Errorf("unable to resolve %v: %w", ip, err)
 		}
-		externalMultiAddr, err = multiaddr.NewMultiaddr(fmt.Sprintf("/%s/%s/tcp/%d", ipv, ip, cfg.port))
+		externalMultiAddr, err = multiaddr.NewMultiaddr(fmt.Sprintf("/%s/%s/tcp/%d", ipv, ip, ePort))
 		if err != nil {
 			return nil, fmt.Errorf("invalid external address: %w", err)
 		}
