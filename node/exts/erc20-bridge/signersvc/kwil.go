@@ -114,19 +114,25 @@ func (k *signerClient) InstanceInfo(ctx context.Context, namespace string) (*Rew
 			return fmt.Errorf("failed to get epoch period")
 		}
 
-		info.Erc20, ok = row.Values[3].(string)
-		if !ok {
-			return fmt.Errorf("failed to get erc20")
+		if row.Values[3] != nil {
+			info.Erc20, ok = row.Values[3].(string)
+			if !ok {
+				return fmt.Errorf("failed to get erc20")
+			}
 		}
 
-		info.Decimals, ok = row.Values[4].(int64)
-		if !ok {
-			return fmt.Errorf("failed to get decimals")
+		if row.Values[4] != nil {
+			info.Decimals, ok = row.Values[4].(int64)
+			if !ok {
+				return fmt.Errorf("failed to get decimals")
+			}
 		}
 
-		info.Balance, ok = row.Values[5].(*types.Decimal)
-		if !ok {
-			return fmt.Errorf("failed to get balance")
+		if row.Values[5] != nil {
+			info.Balance, ok = row.Values[5].(*types.Decimal)
+			if !ok {
+				return fmt.Errorf("failed to get balance")
+			}
 		}
 
 		info.Synced, ok = row.Values[6].(bool)
@@ -134,9 +140,11 @@ func (k *signerClient) InstanceInfo(ctx context.Context, namespace string) (*Rew
 			return fmt.Errorf("failed to get synced")
 		}
 
-		info.SyncedAt, ok = row.Values[7].(int64)
-		if !ok {
-			return fmt.Errorf("failed to get synced at")
+		if row.Values[7] != nil {
+			info.SyncedAt, ok = row.Values[7].(int64)
+			if !ok {
+				return fmt.Errorf("failed to get synced at")
+			}
 		}
 
 		info.Enabled, ok = row.Values[8].(bool)
