@@ -93,6 +93,11 @@ func (n *Node) blkGetHeightStreamHandler(s network.Stream) {
 func (n *Node) blkAnnStreamHandler(s network.Stream) {
 	defer s.Close()
 
+	if n.InCatchup() { // we are in catchup, don't accept new blocks
+		n.log.Debug("in catchup, not accepting new block announcement messages")
+		return
+	}
+
 	s.SetDeadline(time.Now().Add(blkGetTimeout + annRespTimeout + annWriteTimeout)) // combined
 	ctx, cancel := context.WithTimeout(context.Background(), blkGetTimeout)
 	defer cancel()
@@ -476,7 +481,7 @@ func getBlkHeight(ctx context.Context, height int64, host host.Host, log log.Log
 			continue
 		}
 
-		log.Info("obtained block contents", "height", height, "elapsed", time.Since(t0))
+		log.Debug("obtained block contents", "height", height, "elapsed", time.Since(t0))
 
 		rd := bytes.NewReader(resp)
 		var hash types.Hash

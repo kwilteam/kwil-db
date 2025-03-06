@@ -870,7 +870,7 @@ func (ce *ConsensusEngine) replayFromBlockStore(ctx context.Context, startHeight
 			return nil // no more blocks to replay
 		}
 
-		err = ce.processAndCommit(ctx, blk, ci, blk.Hash())
+		err = ce.processAndCommit(ctx, blk, ci, blk.Hash(), true)
 		if err != nil {
 			return fmt.Errorf("failed replaying block: %w", err)
 		}
@@ -994,7 +994,7 @@ func (ce *ConsensusEngine) processCurrentBlock(ctx context.Context) error {
 			return fmt.Errorf("failed to decode the block, blkHeight: %d, blockID: %v, error: %w", height, blkHash, err)
 		}
 
-		if err := ce.processAndCommit(ctx, blk, ci, blkHash); err != nil {
+		if err := ce.processAndCommit(ctx, blk, ci, blkHash, false); err != nil {
 			return fmt.Errorf("failed to replay the block: blkHeight: %d, blockID: %v, error: %w", height, blkHash, err)
 		}
 		// recovered to the correct block -> continue to replay blocks from network
@@ -1013,7 +1013,7 @@ func (ce *ConsensusEngine) processCurrentBlock(ctx context.Context) error {
 		return fmt.Errorf("failed to validate the commit info: height: %d, error: %w", height, err)
 	}
 
-	if err := ce.commit(ctx); err != nil {
+	if err := ce.commit(ctx, false); err != nil {
 		return fmt.Errorf("failed to commit the block: height: %d, error: %w", height, err)
 	}
 
