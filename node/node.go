@@ -694,7 +694,7 @@ func newHost(cfg *hostConfig) (host.Host, error) {
 
 	var externalMultiAddr multiaddr.Multiaddr
 	if cfg.externalAddress != "" {
-		ip, ipv, err := peers.ResolveHost(cfg.ip)
+		ip, ipv, err := peers.ResolveHost(cfg.externalAddress)
 		if err != nil {
 			return nil, fmt.Errorf("unable to resolve %v: %w", ip, err)
 		}
@@ -702,6 +702,7 @@ func newHost(cfg *hostConfig) (host.Host, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid external address: %w", err)
 		}
+		cfg.logger.Infof("Using external address %v: %v", cfg.externalAddress, externalMultiAddr)
 	}
 
 	// listenAddrs := libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/0", "/ip4/0.0.0.0/tcp/0/ws")
