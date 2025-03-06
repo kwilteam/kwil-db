@@ -150,13 +150,14 @@ func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txHash typ
 
 		s.SetReadDeadline(time.Now().Add(txAnnRespTimeout))
 
+		// wait to hear for a get request, otherwise peer will simply hang up
 		req := make([]byte, len(getMsg))
 		nr, err := s.Read(req)
-		if err != nil && !errors.Is(err, io.EOF) {
+		if err != nil && !(errors.Is(err, io.EOF) || errors.Is(err, network.ErrReset)) {
 			n.log.Warn("bad get tx req", "error", err)
 			return
 		}
-		if nr == 0 /*&& errors.Is(err, io.EOF)*/ {
+		if nr == 0 {
 			mets.AdvertiseRejected(ctx, string(ProtocolIDTxAnn))
 			return // they hung up, probably didn't want it
 		}
