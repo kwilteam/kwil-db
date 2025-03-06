@@ -79,9 +79,9 @@ type EVMEventListenerConfig struct {
 	// Resolve is the function that will be called the Kwil network
 	// has confirmed events from Ethereum.
 	Resolve string
-	// ReuseTopic indicate whether to use the existing topic.
+	// TopicExists indicate whether the targeting topic exists.
 	// This is useful for erc20-bridge, we never delete the topics.
-	ReuseTopic bool
+	TopicExists bool
 }
 
 // RegisterListener registers a new listener.
@@ -106,7 +106,7 @@ func (l *globalListenerManager) RegisterNewListener(ctx context.Context, db sql.
 		return fmt.Errorf("chain %s not found", conf.Chain)
 	}
 
-	if !conf.ReuseTopic {
+	if !conf.TopicExists {
 		err := orderedsync.Synchronizer.RegisterTopic(ctx, db, eng, conf.UniqueName, conf.Resolve)
 		if err != nil {
 			return err
@@ -133,8 +133,9 @@ func (l *globalListenerManager) RegisterNewListener(ctx context.Context, db sql.
 	return nil
 }
 
-// UnregisterListener unregisters a listener in manger, BUT not the topic.
+// UnregisterListener unregisters a listener.
 // It should be called when an extension gets unused
+// NOTE: this doesn't unregister the related topic, for now.
 func (l *globalListenerManager) UnregisterListener(uniqueName string) error {
 	l.mu.Lock()
 	defer l.mu.Unlock()

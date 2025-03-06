@@ -1784,16 +1784,17 @@ func (r *rewardExtensionInfo) startTransferListener(ctx context.Context, app *co
 
 			return logs, nil
 		},
-		Resolve:    transferEventResolutionName,
-		ReuseTopic: reuseTopic,
+		Resolve:     transferEventResolutionName,
+		TopicExists: reuseTopic,
 	})
 }
 
 // stopAllListeners stops all event listeners for the reward extension.
 // If it is synced, this means it must have an active Transfer listener.
 // If it is not synced, it must have an active state poller.
-// NOTE: because the reward instance will not be deleted when `unuse`/`disable`,
-// we need to keep the topics to make sure we don't lose events.
+// NOTE: UnregisterListener doesn't unregister the topic because the reward
+// instance will not be deleted when `unuse`/`disable`, we need to keep the
+// topics to make sure we don't lose events.
 func (r *rewardExtensionInfo) stopAllListeners() error {
 	if r.synced {
 		return evmsync.EventSyncer.UnregisterListener(transferListenerUniqueName(*r.ID))
