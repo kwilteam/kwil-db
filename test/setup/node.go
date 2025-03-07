@@ -239,7 +239,6 @@ func DeployETHNode(t *testing.T, ctx context.Context, dockerName string, privKey
 
 	ugids, err := getFlagUserGroupID()
 	require.NoError(t, err)
-	t.Logf("user group id: %v", *ugids)
 
 	composePath, _, err := generateCompose(dockerName, tmpDir, nil, services, ugids, "", 0)
 	require.NoError(t, err)
@@ -312,7 +311,6 @@ func SetupTests(t *testing.T, testConfig *TestConfig) *Testnet {
 
 	ugids, err := getFlagUserGroupID()
 	require.NoError(t, err)
-	t.Logf("user group id: %v", ugids)
 
 	composePath, nodeInfo, err := generateCompose(dockerNetworkName, tmpDir, testConfig.Network.Nodes, testConfig.Network.ExtraServices, ugids, testConfig.ServicesPrefix, testConfig.PortOffset) //TODO: need user id and groups
 	require.NoError(t, err)
