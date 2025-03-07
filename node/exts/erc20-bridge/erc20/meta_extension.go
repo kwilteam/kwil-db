@@ -205,12 +205,12 @@ func init() {
 			if bytes.Equal(log.Metadata, logTypeTransfer) {
 				err := applyTransferLog(ctx, app, id, *log.Log)
 				if err != nil {
-					return err
+					return fmt.Errorf("apply tansfer log: %w", err)
 				}
 			} else if bytes.Equal(log.Metadata, logTypeConfirmedEpoch) {
 				err := applyConfirmedEpochLog(ctx, app, *log.Log)
 				if err != nil {
-					return err
+					return fmt.Errorf("apply confirmed epoch log: %w", err)
 				}
 			} else {
 				return fmt.Errorf("unknown log type %x", log.Metadata)
@@ -249,7 +249,7 @@ func init() {
 		err = setRewardSynced(ctx, app, id, block.Height, &data)
 		if err != nil {
 			info.mu.RUnlock()
-			return err
+			return fmt.Errorf("set reward instance synced: %w", err)
 		}
 
 		info.mu.RUnlock()
@@ -263,7 +263,7 @@ func init() {
 		err = evmsync.StatePoller.UnregisterPoll(uniqueName)
 		if err != nil {
 			info.mu.Unlock()
-			return err
+			return fmt.Errorf("unregister pool :%w", err)
 		}
 
 		// if active, we should start the transfer listener
@@ -399,7 +399,7 @@ func init() {
 									err = reuseRewardInstance(ctx.TxContext.Ctx, app, &id, int64(dur.Seconds()))
 									if err != nil {
 										info.mu.RUnlock()
-										return err
+										return fmt.Errorf("reuse reward instance %w", err)
 									}
 
 									info.mu.RUnlock()
@@ -413,7 +413,7 @@ func init() {
 
 									err = info.startTransferListener(ctx.TxContext.Ctx, app)
 									if err != nil {
-										return err
+										return fmt.Errorf("start transfer listener: %w", err)
 									}
 
 									return resultFn([]any{id})
@@ -424,7 +424,7 @@ func init() {
 							} else {
 								err = evmsync.EventSyncer.RegisterNewTopic(ctx.TxContext.Ctx, db, app.Engine, transferListenerUniqueName(id), transferEventResolutionName)
 								if err != nil {
-									return err
+									return fmt.Errorf("register transfer topic: %w", err)
 								}
 
 								firstEpoch := newPendingEpoch(&id, ctx.TxContext.BlockContext)
@@ -445,19 +445,19 @@ func init() {
 
 								err = createNewRewardInstance(ctx.TxContext.Ctx, app, &info.userProvidedData)
 								if err != nil {
-									return err
+									return fmt.Errorf("create new reward instance: %w", err)
 								}
 
 								// create the first epoch
 								err = createEpoch(ctx.TxContext.Ctx, app, firstEpoch, &id)
 								if err != nil {
-									return err
+									return fmt.Errorf("create first epoch: %w", err)
 								}
 							}
 
 							err = info.startStatePoller()
 							if err != nil {
-								return err
+								return fmt.Errorf("start state poller: %w", err)
 							}
 
 							// we wait until here to add it in case there is an error
