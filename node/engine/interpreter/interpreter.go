@@ -478,6 +478,10 @@ func funcDefToExecutable(funcName string, funcDef *engine.ScalarFunctionDefiniti
 				return newUserDefinedErr(errors.New(msg))
 			}
 
+			if e.queryActive {
+				return fmt.Errorf(`%w: cannot execute function "%s" while a query is active`, engine.ErrQueryActive, funcName)
+			}
+
 			zeroVal, err := newZeroValue(retTyp)
 			if err != nil {
 				return err

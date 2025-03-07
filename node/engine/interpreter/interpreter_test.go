@@ -2040,6 +2040,18 @@ func Test_Actions(t *testing.T) {
 			values:               []any{1},
 			executionErrContains: "duplicate key value violates unique constraint",
 		},
+		{
+			name: "call function in loop",
+			stmt: []string{
+				`CREATE ACTION call_function_in_loop() public view {
+					for $i in select 1 as a {
+						$a := abs($i.a);
+					}
+				}`,
+			},
+			action: "call_function_in_loop",
+			err:    engine.ErrQueryActive,
+		},
 	}
 
 	db := newTestDB(t, nil, nil)
