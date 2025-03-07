@@ -738,7 +738,7 @@ func TestKwildPrivateNetworks(t *testing.T) {
 			})
 
 			// bringup node1 and node2
-			msgStr := "Block sync completed"
+			msgStr := "Initial Node state"
 			p.RunServices(t, context.Background(), []*setup.ServiceDefinition{
 				{Name: "node1", WaitMsg: &msgStr},
 				{Name: "node2", WaitMsg: &msgStr},
