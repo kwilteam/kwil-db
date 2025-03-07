@@ -342,6 +342,11 @@ func Test_PgGenerate(t *testing.T) {
 			sql:  `DROP INDEX IF EXISTS idx_department_name_id;`,
 			want: `DROP INDEX IF EXISTS kwil.idx_department_name_id;`,
 		},
+		{
+			name: "window function",
+			sql:  `SELECT col1, col2, row_number() OVER (PARTITION BY col1 ORDER BY col2) FROM tbl;`,
+			want: `SELECT col1, col2, row_number() OVER (PARTITION BY col1 ORDER BY col2 ASC NULLS LAST) FROM tbl;`,
+		},
 	}
 
 	for _, tt := range tests {

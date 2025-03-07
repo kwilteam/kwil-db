@@ -92,6 +92,8 @@ func (s *sqlGenerator) VisitExpressionFunctionCall(p0 *parse.ExpressionFunctionC
 		pgFmt, err = fn.PGFormatFunc(args)
 	case *engine.AggregateFunctionDefinition:
 		pgFmt, err = fn.PGFormatFunc(args, p0.Distinct)
+	case *engine.WindowFunctionDefinition:
+		pgFmt, err = fn.PGFormatFunc(args)
 	default:
 		panic("unknown function type " + fmt.Sprintf("%T", fn))
 	}
