@@ -604,6 +604,7 @@ func canVoteEpoch(ctx context.Context, app *common.App, epochID *types.UUID) (ok
 }
 
 // voteEpoch vote an epoch by submitting signature.
+// This is idempotent.
 func voteEpoch(ctx context.Context, app *common.App, epochID *types.UUID,
 	voter ethcommon.Address, nonce int64, signature []byte) error {
 	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
