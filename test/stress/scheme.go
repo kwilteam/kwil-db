@@ -96,7 +96,7 @@ func (asc *actSchemaClient) getOrCreateUserProfile(ctx context.Context, namespac
 			username := row[0].(string)
 			if username != "" {
 				asc.username = username
-				h.logger.Info(fmt.Sprintf("Found me in list_users: %v", asc.username))
+				h.printf("Found me in list_users: %v", asc.username)
 				return nil
 			}
 		}
@@ -120,7 +120,7 @@ func (asc *actSchemaClient) getOrCreateUserProfile(ctx context.Context, namespac
 	if err != nil {
 		return fmt.Errorf("failed to parse UUID: %w", err)
 	}
-	h.logger.Info(fmt.Sprintf("Added me to users table: %v / %v", userUUID, asc.username))
+	h.printf("Added me to users table: %v / %v", userUUID, asc.username)
 
 	return nil
 }

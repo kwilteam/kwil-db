@@ -83,6 +83,9 @@ func (h *harness) underNonceLock(ctx context.Context, fn func(int64) error) erro
 				h.printf("nonce %d was wrong, reverted to %d\n", nonce, h.nonce)
 				return err
 			}
+			if errors.Is(err, context.Canceled) {
+				return err
+			}
 
 			// For other bcast errors like mempool full, the tx was rejected,
 			// but we already advanced nonce. Try to reset the nonce to what we
