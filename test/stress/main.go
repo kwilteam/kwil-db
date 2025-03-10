@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strconv"
 	"sync"
 	"syscall"
 	"time"
@@ -19,8 +20,9 @@ import (
 var (
 	host            string
 	gatewayProvider bool
-	key             string
 	quiet           bool
+
+	numClients int
 
 	// namespace is the existing namespace to use (no need to be DB owner),
 	// otherwise deploy a new one (requires DB owner key)
@@ -55,10 +57,13 @@ var (
 )
 
 func main() {
+	var key string
+
 	flag.StringVar(&host, "host", "http://127.0.0.1:8484", "provider's http url, schema is required")
 	flag.BoolVar(&gatewayProvider, "gw", false, "gateway provider instead of vanilla provider, "+
 		"need to make sure host is same as gateway's domain")
-	flag.StringVar(&key, "key", "", "existing key to use instead of generating a new one")
+	flag.StringVar(&key, "key", "", "existing key to use instead of generating a new one, only applies to the first client")
+	flag.IntVar(&numClients, "cl", 1, "number of simulated clients (with unique keys)")
 	flag.StringVar(&namespace, "ns", "", "existing namespace to use instead of deploying a new one, which would require DB owner key")
 	flag.BoolVar(&quiet, "q", false, "only print errors")
 
@@ -100,14 +105,46 @@ func main() {
 		cancel()
 	}()
 
+	errChan := make(chan error, 1)
+	dbReady := make(chan struct{})
+
+	var wg sync.WaitGroup
+	for i := range numClients {
+		wg.Add(1)
+		go func(key string) {
+			defer wg.Done()
+			errChan <- hammer(ctx, key, strconv.Itoa(i), dbReady)
+		}(key)
+
+		if key != "" {
+			key = ""
+		}
+
+		if i == 0 {
+			select {
+			case <-dbReady:
+				dbReady = nil // ready for additional clients
+			case err := <-errChan:
+				fmt.Println(err) // setup failed
+				os.Exit(1)
+			}
+		}
+	}
+
+	go func() {
+		wg.Wait()
+		close(errChan)
+	}()
+
 	var exitCode int
-	if err := hammer(ctx); err != nil {
-		fmt.Fprintln(os.Stderr, err.Error())
-		exitCode = 1
+	for err := range errChan {
+		if err != nil && !errors.Is(err, complete) {
+			fmt.Println(err)
+			exitCode = 1
+		}
 	}
 
 	cancel()
-	wg.Wait()
 
 	os.Exit(exitCode)
 }

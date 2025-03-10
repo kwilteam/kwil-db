@@ -50,7 +50,7 @@ func runLooped(ctx context.Context, fn func() error, name string, every time.Dur
 // actions and make requests with a Kwil new user (unless key is specified),
 // using freshly deployed toy datasets that are embedded into this tool. We may
 // want to run multiple of these in concurrent goroutines in the future.
-func hammer(ctx context.Context) error {
+func hammer(ctx context.Context, key string, tag string, dbReady chan struct{}) error {
 	var err error
 	var priv *crypto.Secp256k1PrivateKey
 	if key == "" { // only useful with no gas or when spamming non-tx/view calls
@@ -59,7 +59,7 @@ func hammer(ctx context.Context) error {
 			return err
 		}
 		priv = pk.(*crypto.Secp256k1PrivateKey)
-		fmt.Printf("Generated new key: %x\n\n", priv.Bytes())
+		fmt.Printf("Generated new key: %x\n", priv.Bytes())
 	} else {
 		keyBts, err := hex.DecodeString(key)
 		if err != nil {
@@ -78,10 +78,10 @@ func hammer(ctx context.Context) error {
 	fmt.Println("Identity:", acctID)
 
 	logger := log.New(log.WithFormat(log.FormatUnstructured),
-		log.WithLevel(log.LevelInfo), log.WithName("STRESS"),
+		log.WithLevel(log.LevelInfo), log.WithName("STRESS"+tag),
 		log.WithWriter(os.Stdout))
 
-	trLogger := logger.New("client")
+	trLogger := logger.New("client" + tag)
 	var kwilClt clientType.Client
 	if gatewayProvider {
 		kwilClt, err = gatewayclient.NewClient(ctx, host, &gatewayclient.GatewayOptions{
@@ -149,12 +149,18 @@ func hammer(ctx context.Context) error {
 	exists := res.Values[0][0].(bool)
 	if exists {
 		h.printf("act schema: namespace %q already exists, using it", namespace)
+	} else if key == "" {
+		return fmt.Errorf("namespace %q does not exist, and not DB owner", namespace)
 	} else {
 		err = asc.deployDB(ctx)
 		if err != nil {
 			return err
 		}
 		h.printf("act schema: deployed namespace %q", namespace)
+	}
+
+	if dbReady != nil {
+		close(dbReady)
 	}
 
 	err = asc.getOrCreateUserProfile(ctx, namespace)
