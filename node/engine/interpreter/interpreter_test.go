@@ -2111,7 +2111,7 @@ func Test_Actions(t *testing.T) {
 			for i, row := range results {
 				require.Equal(t, len(test.results[i]), len(row))
 				for j, val := range row {
-					require.EqualValues(t, test.results[i][j], val)
+					colEq(t, test.results[i][j], val)
 				}
 			}
 		})
