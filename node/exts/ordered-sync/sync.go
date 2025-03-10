@@ -300,6 +300,7 @@ func storeDataPoint(ctx context.Context, db sql.DB, eng common.Engine, dp *Resol
 // getFinalizedDataPoints gets all finalized data points from the engine.
 // It returns them first ordered by name, then by point in time.
 func getFinalizedDataPoints(ctx context.Context, db sql.DB, eng common.Engine) ([]*ResolutionMessage, error) {
+	return nil, nil // TODO: remove this line
 	var res []*ResolutionMessage
 	err := eng.ExecuteWithoutEngineCtx(ctx, db, getFinalizedDataPointsSQL, nil, func(r *common.Row) error {
 		// query returns 5 rows:
