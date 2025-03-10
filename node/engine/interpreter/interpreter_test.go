@@ -765,21 +765,25 @@ func Test_SQL(t *testing.T) {
 			for i, row := range values {
 				require.Equal(t, len(test.results[i]), len(row))
 				for j, val := range row {
-					// if it is a numeric, we should do a special comparison
-					if test.results[i][j] != nil {
-						if decVal, ok := test.results[i][j].(*types.Decimal); ok {
-							cmp, err := decVal.Cmp(val.(*types.Decimal))
-							require.NoError(t, err)
-
-							require.Equal(t, 0, cmp)
-						}
-					}
-
-					require.EqualValues(t, test.results[i][j], val)
+					colEq(t, test.results[i][j], val)
 				}
 			}
 		})
 	}
+}
+
+func colEq(t *testing.T, a, b any) {
+	// if it is a numeric, we should do a special comparison
+	if a != nil {
+		if decVal, ok := a.(*types.Decimal); ok {
+			cmp, err := decVal.Cmp(b.(*types.Decimal))
+			require.NoError(t, err)
+
+			require.Equal(t, 0, cmp)
+		}
+	}
+
+	require.EqualValues(t, a, b)
 }
 
 func ptrArr[T any](a ...T) []*T {
@@ -2052,6 +2056,24 @@ func Test_Actions(t *testing.T) {
 			action: "call_function_in_loop",
 			err:    engine.ErrQueryActive,
 		},
+		{
+			// regression test from a bug hit by Usher Labs.
+			// I'm not totally sure what caused this bug, but it was fixed by cloning
+			// slices that were passed to resultFn.
+			name: "returning a table of decimals",
+			stmt: []string{
+				`CREATE TABLE data (id int primary key, value numeric(10,5));`,
+				`INSERT INTO data (id, value) VALUES (1, 1.0::numeric(10,5)), (2, 2.0::numeric(10,5));`,
+				`CREATE ACTION test() public view returns table(id int, value numeric(10,5)) {
+					return SELECT * FROM data ORDER BY id asc;
+				}`,
+			},
+			action: "test",
+			results: [][]any{
+				{int64(1), mustExplicitDecimal("1.00000", 10, 5)},
+				{int64(2), mustExplicitDecimal("2.00000", 10, 5)},
+			},
+		},
 	}
 
 	db := newTestDB(t, nil, nil)
@@ -2089,7 +2111,7 @@ func Test_Actions(t *testing.T) {
 			for i, row := range results {
 				require.Equal(t, len(test.results[i]), len(row))
 				for j, val := range row {
-					require.EqualValues(t, test.results[i][j], val)
+					colEq(t, test.results[i][j], val)
 				}
 			}
 		})

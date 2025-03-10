@@ -2,6 +2,7 @@ package interpreter
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/decred/dcrd/container/lru"
@@ -187,7 +188,7 @@ func (e *executionContext) query(sql string, fn func(*row) error) error {
 
 		return fn(&row{
 			columns: cols,
-			Values:  scanValues,
+			Values:  slices.Clone(scanValues),
 		})
 	}, args)
 }
