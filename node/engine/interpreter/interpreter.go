@@ -498,7 +498,7 @@ func funcDefToExecutable(funcName string, funcDef *engine.ScalarFunctionDefiniti
 			// Since for now we are more concerned about expanding functionality than scalability,
 			// we will use the roundtrip.
 			iters := 0
-			err = query(e.engineCtx.TxContext.Ctx, e.db, "SELECT "+pgFormat+";", []value{zeroVal}, func() error {
+			err = query(e.engineCtx.TxContext.Ctx, e.db, "SELECT "+pgFormat+";", []any{zeroVal}, func() error {
 				iters++
 				return nil
 			}, args)

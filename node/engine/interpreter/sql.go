@@ -555,18 +555,14 @@ func getTypeMetadata(t *types.DataType) []byte {
 // query executes a SQL query with the given values.
 // It is a utility function to help reduce boilerplate when executing
 // SQL with Value types.
-func query(ctx context.Context, db sql.DB, query string, scanVals []value, fn func() error, args []value) error {
+func query(ctx context.Context, db sql.DB, query string, scanVals []any, fn func() error, args []value) error {
 	argVals := make([]any, len(args))
 	for i, v := range args {
 		argVals[i] = v
 	}
 
-	recVals := make([]any, len(scanVals))
-	for i := range scanVals {
-		recVals[i] = scanVals[i]
-	}
-
-	return queryRowFunc(ctx, db, query, recVals, fn, argVals...)
+	// The scanVals slice must be the same slice used in the caller's fn.
+	return queryRowFunc(ctx, db, query, scanVals, fn, argVals...)
 }
 
 // queryRowFunc executes a SQL query with the given values.
