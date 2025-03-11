@@ -3,7 +3,6 @@ package interpreter
 import (
 	"context"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/kwilteam/kwil-db/common"
@@ -104,7 +103,7 @@ func initializeExtension(ctx context.Context, svc *common.Service, db sql.DB, i 
 
 					return fn(&row{
 						columns: colNames, // it is ok if this is nil
-						Values:  slices.Clone(returnVals),
+						Values:  returnVals,
 					})
 				})
 			},

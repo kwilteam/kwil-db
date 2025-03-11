@@ -2,7 +2,6 @@ package interpreter
 
 import (
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/decred/dcrd/container/lru"
@@ -160,7 +159,7 @@ func (e *executionContext) query(sql string, fn func(*row) error) error {
 	}
 
 	// get the scan values as well:
-	var scanValues []value
+	var scanValues []any
 	for _, field := range analyzed.Plan.Relation().Fields {
 		scalar, err := field.Scalar()
 		if err != nil {
@@ -186,11 +185,30 @@ func (e *executionContext) query(sql string, fn func(*row) error) error {
 			return fmt.Errorf("node bug: scan values and columns are not the same length")
 		}
 
+		vals, err := fromScanValues(scanValues)
+		if err != nil {
+			return err
+		}
+
+		// fn will Cast each of Values, modifying each element in place, so this
+		// should not be scanValues used by queryRowFunc.
 		return fn(&row{
 			columns: cols,
-			Values:  slices.Clone(scanValues),
+			Values:  vals,
 		})
 	}, args)
+}
+
+func fromScanValues(scanVals []any) ([]value, error) {
+	scanValues := make([]value, len(scanVals))
+	for i, val := range scanVals {
+		var ok bool
+		scanValues[i], ok = val.(value)
+		if !ok {
+			return nil, fmt.Errorf("node bug: scan value is not a value")
+		}
+	}
+	return scanValues, nil
 }
 
 // getValues gets values of the names
