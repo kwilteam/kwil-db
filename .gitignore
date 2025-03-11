@@ -9,6 +9,7 @@
 **/.kwal/
 cmd/kwild/kwild
 cmd/kwil-cli/kwil-cli
+cmd/kwil-admin/kwil-admin
 keys/cosmos
 keys/ethereum.pem
 .kwilbadger/
