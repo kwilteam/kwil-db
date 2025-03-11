@@ -81,7 +81,7 @@ func KwildJSONRPCEndpoints(ctr *testcontainers.DockerContainer, ctx context.Cont
 }
 
 func KwildAdminEndpoints(ctr *testcontainers.DockerContainer, ctx context.Context) (string, string, error) {
-	return getEndpoints(ctr, ctx, "8584", "http") // unused because we are using kwil-admin inside the container with a unix socket
+	return getEndpoints(ctr, ctx, "8584", "http") // unused because we are using kwil admin commands inside the container with a unix socket
 }
 
 func KwildP2pEndpoints(ctr *testcontainers.DockerContainer, ctx context.Context) (string, string, error) {

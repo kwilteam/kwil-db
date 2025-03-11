@@ -106,7 +106,7 @@ func getTLSFlags(cmd *cobra.Command) (kwildTLSCertFile, clientTLSKeyFile, client
 }
 
 // nodeCert is the struct that holds the TLS certificate and key files for
-// kwil-admin to use when connecting to the remote node.
+// kwil admin commands to use when connecting to the remote node.
 type nodeCert struct {
 	KwildTLSCertFile  string
 	ClientTLSKeyFile  string // default: auth.key

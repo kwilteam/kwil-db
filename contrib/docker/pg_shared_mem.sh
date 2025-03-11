@@ -3,6 +3,8 @@
 # TIP: set password with env:
 #  PGPASSWORD="kwild" DB_PORT=5454 ./pg_shared_mem.sh
 
+set -e
+
 # Database connection details (adjust as needed)
 DB_HOST="${DB_HOST:-localhost}"
 DB_PORT="${DB_PORT:-5432}"

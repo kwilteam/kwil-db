@@ -12,7 +12,7 @@ The database for Web3.
 [![Go-Report-Card](https://goreportcard.com/badge/github.com/kwilteam/kwil-db)](https://goreportcard.com/report/github.com/kwilteam/kwil-db)
 [![Discord](https://img.shields.io/discord/819855804554543114?logo=discord)](https://discord.com/invite/HzRPZ59Kay)
 
-Kwil is the node software for Kwil Networks. Built with [PostgreSQL](https://www.postgresql.org/) and [CometBFT](https://github.com/cometbft/cometbft), Kwil enables byzantine fault tolerant networks to be built on top of relational databases.
+Kwil is the node software for Kwil Networks. Built with [PostgreSQL](https://www.postgresql.org/), Kwil enables scalable and high-integrity networks for web3 to be built on top of relational databases.
 
 ## Overview
 
@@ -59,10 +59,10 @@ go build
 Or without even cloning the source repository:
 
 ```shell
-go install github.com/kwilteam/kwil-db/cmd/kwild@v0.9.0
+go install github.com/kwilteam/kwil-db/cmd/kwild@v0.10.0
 ```
 
-Just replace `v0.9.0` with the desired version or `latest`.
+Just replace `v0.10.0` with the desired version or `latest`.
 
 ### Running `kwild`
 

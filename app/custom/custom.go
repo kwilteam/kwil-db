@@ -1,5 +1,5 @@
 // package custom allows for the creation of a custom-branded CLI that packages
-// together the kwil-cli, kwil-admin, and kwild CLIs.
+// together the kwil-cli and kwild CLIs.
 package custom
 
 import "github.com/kwilteam/kwil-db/config"
