@@ -1,12 +1,12 @@
 package chainsvc
 
-import (
-	"github.com/kwilteam/kwil-db/node/services/jsonrpc/openrpc"
-)
+//go:generate go run genopenrpcspec.go
+
+import "github.com/kwilteam/kwil-db/node/services/jsonrpc/openrpc"
 
 var (
 	SpecInfo = openrpc.Info{
-		Title:       "Kwil DB Chain service",
+		Title:       "Kwil DB chain service",
 		Description: `The JSON-RPC chain service for Kwil DB.`,
 		License: &openrpc.License{ // the spec file's license
 			Name: "CC0-1.0",

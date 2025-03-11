@@ -12,7 +12,7 @@ import (
 	"os"
 
 	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
-	"github.com/kwilteam/kwil-db/node/services/jsonrpc/usersvc"
+	"github.com/kwilteam/kwil-db/node/services/jsonrpc/chainsvc"
 )
 
 func main() {
@@ -24,9 +24,9 @@ func main() {
 }
 
 func writeSpec() error {
-	spec := rpcserver.MakeOpenRPCSpec(&usersvc.Service{}, usersvc.SpecInfo)
+	spec := rpcserver.MakeOpenRPCSpec(&chainsvc.Service{}, chainsvc.SpecInfo)
 
-	out, err := os.Create("user.openrpc.json")
+	out, err := os.Create("chain.openrpc.json")
 	if err != nil {
 		return err
 	}
