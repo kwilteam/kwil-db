@@ -312,7 +312,7 @@ func (e *TestCase) runExecution(ctx context.Context, platform *Platform) error {
 	platform.Logger.Logf(`executing action "%s" against namespace "%s"`, e.Action, e.Namespace)
 
 	var results [][]any
-	_, err := platform.Engine.Call(&common.EngineContext{
+	res, err := platform.Engine.Call(&common.EngineContext{
 		TxContext: &common.TxContext{
 			Ctx:    ctx,
 			Signer: []byte(caller),
@@ -332,6 +332,11 @@ func (e *TestCase) runExecution(ctx context.Context, platform *Platform) error {
 		return nil
 	})
 	if err != nil {
+		return err
+	}
+
+	// check for an execution error
+	if res.Error != nil {
 		// if error is not nil, the test should only pass if either
 		// Err or ErrMsg or both is set
 		expectsErr := false
