@@ -7,7 +7,7 @@
       "name": "CC0-1.0",
       "url": "https://creativecommons.org/publicdomain/zero/1.0/legalcode"
     },
-    "version": "0.1.0"
+    "version": "0.2.0"
   },
   "methods": [
     {
@@ -15,9 +15,10 @@
       "description": "get an account's status",
       "params": [
         {
-          "name": "identifier",
+          "name": "id",
           "schema": {
-            "type": "string"
+            "type": "object",
+            "$ref": "#/components/schemas/accountID"
           },
           "required": true
         },
@@ -36,7 +37,59 @@
           "$ref": "#/components/schemas/accountResponse"
         },
         "description": "balance and nonce of an accounts"
-      }
+      },
+      "paramStructure": "by-name"
+    },
+    {
+      "name": "user.authenticated_query",
+      "description": "perform an authenticated ad-hoc SQL query",
+      "params": [
+        {
+          "name": "Challenge",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "auth_type",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "body",
+          "schema": {
+            "type": "object",
+            "$ref": "#/components/schemas/rawStatement"
+          },
+          "required": true
+        },
+        {
+          "name": "sender",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        },
+        {
+          "name": "signature",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "queryResponse",
+        "schema": {
+          "type": "object",
+          "$ref": "#/components/schemas/queryResponse"
+        },
+        "description": "the result of the query as a collection of records"
+      },
+      "paramStructure": "by-name"
     },
     {
       "name": "user.broadcast",
@@ -65,10 +118,12 @@
           "$ref": "#/components/schemas/broadcastResponse"
         },
         "description": "the hash of the transaction"
-      }
+      },
+      "paramStructure": "by-name"
     },
     {
       "name": "user.call",
+      "description": "call an action",
       "params": [
         {
           "name": "auth_type",
@@ -91,6 +146,13 @@
             "type": "string"
           },
           "required": true
+        },
+        {
+          "name": "signature",
+          "schema": {
+            "type": "string"
+          },
+          "required": true
         }
       ],
       "result": {
@@ -98,41 +160,93 @@
         "schema": {
           "type": "object",
           "$ref": "#/components/schemas/callResponse"
-        }
-      }
+        },
+        "description": "the result of the action call as a encoded records"
+      },
+      "paramStructure": "by-name"
     },
     {
       "name": "user.chain_info",
+      "description": "get current blockchain info",
       "params": [],
       "result": {
         "name": "chainInfo",
         "schema": {
           "type": "object",
           "$ref": "#/components/schemas/chainInfo"
-        }
-      }
+        },
+        "description": "chain info including chain ID and best block"
+      },
+      "paramStructure": "by-name"
     },
     {
-      "name": "user.databases",
+      "name": "user.challenge",
+      "description": "request a call challenge",
+      "params": [],
+      "result": {
+        "name": "challengeResponse",
+        "schema": {
+          "type": "object",
+          "$ref": "#/components/schemas/challengeResponse"
+        },
+        "description": "the challenge value for the client to include in a call request signature"
+      },
+      "paramStructure": "by-name"
+    },
+    {
+      "name": "user.changeset",
+      "description": "load a changeset for a given height and index",
       "params": [
         {
-          "name": "owner",
+          "name": "height",
           "schema": {
-            "type": "string"
+            "type": "integer"
           },
-          "required": false
+          "required": true
+        },
+        {
+          "name": "index",
+          "schema": {
+            "type": "integer"
+          },
+          "required": true
         }
       ],
       "result": {
-        "name": "listDatabasesResponse",
+        "name": "changesetsResponse",
         "schema": {
           "type": "object",
-          "$ref": "#/components/schemas/listDatabasesResponse"
+          "$ref": "#/components/schemas/changesetsResponse"
+        },
+        "description": "the changeset for the given height and index"
+      },
+      "paramStructure": "by-name"
+    },
+    {
+      "name": "user.changeset_metadata",
+      "description": "get the changeset metadata for a given height",
+      "params": [
+        {
+          "name": "height",
+          "schema": {
+            "type": "integer"
+          },
+          "required": true
         }
-      }
+      ],
+      "result": {
+        "name": "changesetMetadataResponse",
+        "schema": {
+          "type": "object",
+          "$ref": "#/components/schemas/changesetMetadataResponse"
+        },
+        "description": "the changesets metadata for the given height"
+      },
+      "paramStructure": "by-name"
     },
     {
       "name": "user.estimate_price",
+      "description": "estimate the price of a transaction",
       "params": [
         {
           "name": "tx",
@@ -148,11 +262,127 @@
         "schema": {
           "type": "object",
           "$ref": "#/components/schemas/estimatePriceResponse"
+        },
+        "description": "balance and nonce of an accounts"
+      },
+      "paramStructure": "by-name"
+    },
+    {
+      "name": "user.health",
+      "description": "check the user service health",
+      "params": [],
+      "result": {
+        "name": "health",
+        "schema": {
+          "type": "object",
+          "$ref": "#/components/schemas/health"
+        },
+        "description": "the health status and other relevant of the services health"
+      },
+      "paramStructure": "by-name"
+    },
+    {
+      "name": "user.list_migrations",
+      "description": "list active migration resolutions",
+      "params": [],
+      "result": {
+        "name": "listMigrationsResponse",
+        "schema": {
+          "type": "object",
+          "$ref": "#/components/schemas/listMigrationsResponse"
+        },
+        "description": "the list of all the pending migration resolutions"
+      },
+      "paramStructure": "by-name"
+    },
+    {
+      "name": "user.list_update_proposals",
+      "description": "list active consensus parameter update proposals",
+      "params": [],
+      "result": {
+        "name": "listPendingConsensusUpdatesResponse",
+        "schema": {
+          "type": "object",
+          "$ref": "#/components/schemas/listPendingConsensusUpdatesResponse"
+        },
+        "description": "the list of all the active consensus parameter update proposals"
+      },
+      "paramStructure": "by-name"
+    },
+    {
+      "name": "user.migration_genesis_chunk",
+      "description": "get a genesis snapshot chunk of given idx",
+      "params": [
+        {
+          "name": "chunk_index",
+          "schema": {
+            "type": "integer"
+          },
+          "required": true
+        },
+        {
+          "name": "height",
+          "schema": {
+            "type": "integer"
+          },
+          "required": true
         }
-      }
+      ],
+      "result": {
+        "name": "migrationSnapshotChunkResponse",
+        "schema": {
+          "type": "object",
+          "$ref": "#/components/schemas/migrationSnapshotChunkResponse"
+        },
+        "description": "the genesis chunk for the given index"
+      },
+      "paramStructure": "by-name"
+    },
+    {
+      "name": "user.migration_metadata",
+      "description": "get the migration information",
+      "params": [],
+      "result": {
+        "name": "migrationMetadataResponse",
+        "schema": {
+          "type": "object",
+          "$ref": "#/components/schemas/migrationMetadataResponse"
+        },
+        "description": "the metadata for the given migration"
+      },
+      "paramStructure": "by-name"
+    },
+    {
+      "name": "user.migration_status",
+      "description": "get the migration status",
+      "params": [],
+      "result": {
+        "name": "migrationStatusResponse",
+        "schema": {
+          "type": "object",
+          "$ref": "#/components/schemas/migrationStatusResponse"
+        },
+        "description": "the status of the migration"
+      },
+      "paramStructure": "by-name"
+    },
+    {
+      "name": "user.num_accounts",
+      "description": "get the current number of accounts on the DB node",
+      "params": [],
+      "result": {
+        "name": "numAccountsResponse",
+        "schema": {
+          "type": "object",
+          "$ref": "#/components/schemas/numAccountsResponse"
+        },
+        "description": "the number of accounts"
+      },
+      "paramStructure": "by-name"
     },
     {
       "name": "user.ping",
+      "description": "ping the server",
       "params": [
         {
           "name": "message",
@@ -167,16 +397,20 @@
         "schema": {
           "type": "object",
           "$ref": "#/components/schemas/pingResponse"
-        }
-      }
+        },
+        "description": "a message back from the server"
+      },
+      "paramStructure": "by-name"
     },
     {
       "name": "user.query",
+      "description": "perform an ad-hoc SQL query",
       "params": [
         {
-          "name": "dbid",
+          "name": "params",
           "schema": {
-            "type": "string"
+            "type": "object",
+            "$ref": "#/components/schemas/"
           },
           "required": true
         },
@@ -193,35 +427,22 @@
         "schema": {
           "type": "object",
           "$ref": "#/components/schemas/queryResponse"
-        }
-      }
-    },
-    {
-      "name": "user.schema",
-      "params": [
-        {
-          "name": "dbid",
-          "schema": {
-            "type": "string"
-          },
-          "required": true
-        }
-      ],
-      "result": {
-        "name": "schemaResponse",
-        "schema": {
-          "type": "object",
-          "$ref": "#/components/schemas/schemaResponse"
-        }
-      }
+        },
+        "description": "the result of the query as a collection of records"
+      },
+      "paramStructure": "by-name"
     },
     {
       "name": "user.tx_query",
+      "description": "query for the status of a transaction",
       "params": [
         {
           "name": "tx_hash",
           "schema": {
-            "type": "string"
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
           },
           "required": true
         }
@@ -231,91 +452,92 @@
         "schema": {
           "type": "object",
           "$ref": "#/components/schemas/txQueryResponse"
-        }
-      }
+        },
+        "description": "the execution status of a transaction"
+      },
+      "paramStructure": "by-name"
+    },
+    {
+      "name": "user.update_proposal_status",
+      "description": "list active consensus parameter update proposals",
+      "params": [],
+      "result": {
+        "name": "listPendingConsensusUpdatesResponse",
+        "schema": {
+          "type": "object",
+          "$ref": "#/components/schemas/listPendingConsensusUpdatesResponse"
+        },
+        "description": "the list of all the active consensus parameter update proposals"
+      },
+      "paramStructure": "by-name"
     },
     {
       "name": "user.version",
+      "description": "retrieve the API version of the user service",
       "params": [],
       "result": {
         "name": "versionResponse",
         "schema": {
           "type": "object",
           "$ref": "#/components/schemas/versionResponse"
-        }
-      }
+        },
+        "description": "service info including semver and kwild version"
+      },
+      "paramStructure": "by-name"
     }
   ],
   "components": {
     "schemas": {
+      "accountID": {
+        "type": "object",
+        "properties": {
+          "identifier": {
+            "type": "string"
+          },
+          "key_type": {
+            "type": "string"
+          }
+        }
+      },
       "accountResponse": {
         "type": "object",
         "properties": {
           "balance": {
             "type": "string"
           },
-          "identifier": {
-            "type": "string"
+          "height": {
+            "type": "integer"
+          },
+          "id": {
+            "type": "object",
+            "$ref": "#/components/schemas/accountID"
           },
           "nonce": {
             "type": "integer"
           }
         }
       },
-      "action": {
-        "type": "object",
-        "properties": {
-          "annotations": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "body": {
-            "type": "string"
-          },
-          "modifiers": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "name": {
-            "type": "string"
-          },
-          "parameters": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "public": {
-            "type": "boolean"
-          }
-        }
-      },
-      "attribute": {
-        "type": "object",
-        "properties": {
-          "type": {
-            "type": "string"
-          },
-          "value": {
-            "type": "string"
-          }
-        }
-      },
       "broadcastResponse": {
         "type": "object",
         "properties": {
+          "result": {
+            "type": "object",
+            "$ref": "#/components/schemas/txResult"
+          },
           "tx_hash": {
-            "type": "string"
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
           }
         }
       },
       "callMessageBody": {
         "type": "object",
         "properties": {
+          "challenge": {
+            "type": "string"
+          },
           "payload": {
             "type": "string"
           }
@@ -324,8 +546,15 @@
       "callResponse": {
         "type": "object",
         "properties": {
-          "result": {
+          "error": {
             "type": "string"
+          },
+          "logs": {
+            "type": "string"
+          },
+          "query_result": {
+            "type": "object",
+            "$ref": "#/components/schemas/queryResult"
           }
         }
       },
@@ -333,32 +562,67 @@
         "type": "object",
         "properties": {
           "block_hash": {
-            "type": "string"
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
           },
           "block_height": {
             "type": "integer"
           },
           "chain_id": {
             "type": "string"
+          },
+          "gas": {
+            "type": "boolean"
           }
         }
       },
-      "column": {
+      "challengeResponse": {
         "type": "object",
         "properties": {
-          "attributes": {
+          "challenge": {
+            "type": "string"
+          }
+        }
+      },
+      "changesetMetadataResponse": {
+        "type": "object",
+        "properties": {
+          "changesets": {
+            "type": "integer"
+          },
+          "chunk_sizes": {
             "type": "array",
             "items": {
-              "type": "object",
-              "$ref": "#/components/schemas/attribute"
+              "type": "integer"
             }
           },
-          "name": {
+          "height": {
+            "type": "integer"
+          }
+        }
+      },
+      "changesetsResponse": {
+        "type": "object",
+        "properties": {
+          "changesets": {
+            "type": "string"
+          }
+        }
+      },
+      "consensusParamUpdateProposal": {
+        "type": "object",
+        "properties": {
+          "description": {
             "type": "string"
           },
-          "type": {
+          "id": {
+            "type": "string"
+          },
+          "updates": {
             "type": "object",
-            "$ref": "#/components/schemas/dataType"
+            "additionalProperties": true
           }
         }
       },
@@ -379,17 +643,18 @@
           }
         }
       },
-      "datasetIdentifier": {
+      "encodedValue": {
         "type": "object",
         "properties": {
-          "dbid": {
-            "type": "string"
+          "data": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
           },
-          "name": {
-            "type": "string"
-          },
-          "owner": {
-            "type": "string"
+          "type": {
+            "type": "object",
+            "$ref": "#/components/schemas/dataType"
           }
         }
       },
@@ -401,130 +666,201 @@
           }
         }
       },
-      "extension": {
+      "event": {
+        "type": "object"
+      },
+      "genesisInfo": {
         "type": "object",
         "properties": {
-          "alias": {
+          "app_hash": {
             "type": "string"
           },
-          "initialization": {
+          "validators": {
             "type": "array",
             "items": {
               "type": "object",
-              "$ref": "#/components/schemas/extensionConfig"
+              "$ref": "#/components/schemas/validator"
             }
-          },
-          "name": {
-            "type": "string"
           }
         }
       },
-      "extensionConfig": {
+      "health": {
         "type": "object",
         "properties": {
-          "name": {
-            "type": "string"
-          },
-          "value": {
-            "type": "string"
-          }
-        }
-      },
-      "foreignKey": {
-        "type": "object",
-        "properties": {
-          "actions": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "$ref": "#/components/schemas/foreignKeyAction"
-            }
-          },
-          "child_keys": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "parent_keys": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "parent_table": {
-            "type": "string"
-          }
-        }
-      },
-      "foreignKeyAction": {
-        "type": "object",
-        "properties": {
-          "do": {
-            "type": "string"
-          },
-          "on": {
-            "type": "string"
-          }
-        }
-      },
-      "foreignProcedure": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "parameters": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "$ref": "#/components/schemas/dataType"
-            }
-          },
-          "returns": {
+          "ChainInfo": {
             "type": "object",
-            "$ref": "#/components/schemas/procedureReturn"
-          }
-        }
-      },
-      "index": {
-        "type": "object",
-        "properties": {
-          "columns": {
+            "$ref": "#/components/schemas/chainInfo"
+          },
+          "app_hash": {
             "type": "array",
             "items": {
-              "type": "string"
+              "type": "integer"
             }
           },
-          "name": {
+          "block_age": {
+            "type": "integer"
+          },
+          "block_hash": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "block_height": {
+            "type": "integer"
+          },
+          "block_time": {
+            "type": "integer"
+          },
+          "chain_id": {
             "type": "string"
           },
-          "type": {
+          "gas": {
+            "type": "boolean"
+          },
+          "healthy": {
+            "type": "boolean"
+          },
+          "height": {
+            "type": "integer"
+          },
+          "mode": {
+            "type": "string"
+          },
+          "peer_count": {
+            "type": "integer"
+          },
+          "syncing": {
+            "type": "boolean"
+          },
+          "version": {
             "type": "string"
           }
         }
       },
-      "listDatabasesResponse": {
+      "listMigrationsResponse": {
         "type": "object",
         "properties": {
-          "databases": {
+          "migrations": {
             "type": "array",
             "items": {
               "type": "object",
-              "$ref": "#/components/schemas/datasetIdentifier"
+              "$ref": "#/components/schemas/migration"
             }
           }
         }
       },
-      "namedType": {
+      "listPendingConsensusUpdatesResponse": {
         "type": "object",
         "properties": {
-          "name": {
+          "proposals": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "$ref": "#/components/schemas/consensusParamUpdateProposal"
+            }
+          }
+        }
+      },
+      "migration": {
+        "type": "object",
+        "properties": {
+          "activation_height": {
+            "type": "integer"
+          },
+          "id": {
             "type": "string"
           },
-          "type": {
+          "migration_duration": {
+            "type": "integer"
+          },
+          "timestamp": {
+            "type": "string"
+          }
+        }
+      },
+      "migrationMetadata": {
+        "type": "object",
+        "properties": {
+          "genesis_info": {
             "type": "object",
-            "$ref": "#/components/schemas/dataType"
+            "$ref": "#/components/schemas/genesisInfo"
+          },
+          "migration_state": {
+            "type": "object",
+            "$ref": "#/components/schemas/migrationState"
+          },
+          "snapshot_metadata": {
+            "type": "string"
+          },
+          "version": {
+            "type": "integer"
+          }
+        }
+      },
+      "migrationMetadataResponse": {
+        "type": "object",
+        "properties": {
+          "metadata": {
+            "type": "object",
+            "$ref": "#/components/schemas/migrationMetadata"
+          }
+        }
+      },
+      "migrationSnapshotChunkResponse": {
+        "type": "object",
+        "properties": {
+          "chunk": {
+            "type": "string"
+          }
+        }
+      },
+      "migrationState": {
+        "type": "object",
+        "properties": {
+          "chain_height": {
+            "type": "integer"
+          },
+          "end_height": {
+            "type": "integer"
+          },
+          "start_height": {
+            "type": "integer"
+          },
+          "status": {
+            "type": "string"
+          }
+        }
+      },
+      "migrationStatusResponse": {
+        "type": "object",
+        "properties": {
+          "status": {
+            "type": "object",
+            "$ref": "#/components/schemas/migrationState"
+          }
+        }
+      },
+      "namedValue": {
+        "type": "object",
+        "properties": {
+          "Name": {
+            "type": "string"
+          },
+          "Value": {
+            "type": "object",
+            "$ref": "#/components/schemas/encodedValue"
+          }
+        }
+      },
+      "numAccountsResponse": {
+        "type": "object",
+        "properties": {
+          "count": {
+            "type": "integer"
+          },
+          "height": {
+            "type": "integer"
           }
         }
       },
@@ -536,130 +872,74 @@
           }
         }
       },
-      "procedure": {
-        "type": "object",
-        "properties": {
-          "annotations": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "body": {
-            "type": "string"
-          },
-          "modifiers": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "name": {
-            "type": "string"
-          },
-          "parameters": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "$ref": "#/components/schemas/procedureParameter"
-            }
-          },
-          "public": {
-            "type": "boolean"
-          },
-          "return_types": {
-            "type": "object",
-            "$ref": "#/components/schemas/procedureReturn"
-          }
-        }
-      },
-      "procedureParameter": {
-        "type": "object",
-        "properties": {
-          "name": {
-            "type": "string"
-          },
-          "type": {
-            "type": "object",
-            "$ref": "#/components/schemas/dataType"
-          }
-        }
-      },
-      "procedureReturn": {
-        "type": "object",
-        "properties": {
-          "fields": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "$ref": "#/components/schemas/namedType"
-            }
-          },
-          "is_table": {
-            "type": "boolean"
-          }
-        }
-      },
       "queryResponse": {
         "type": "object",
         "properties": {
-          "result": {
-            "type": "string"
-          }
-        }
-      },
-      "schema": {
-        "type": "object",
-        "properties": {
-          "actions": {
+          "column_names": {
             "type": "array",
             "items": {
-              "type": "object",
-              "$ref": "#/components/schemas/action"
+              "type": "string"
             }
           },
-          "extensions": {
+          "column_types": {
             "type": "array",
             "items": {
               "type": "object",
-              "$ref": "#/components/schemas/extension"
+              "$ref": "#/components/schemas/dataType"
             }
           },
-          "foreign_calls": {
+          "values": {
             "type": "array",
             "items": {
-              "type": "object",
-              "$ref": "#/components/schemas/foreignProcedure"
-            }
-          },
-          "name": {
-            "type": "string"
-          },
-          "owner": {
-            "type": "string"
-          },
-          "procedures": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "$ref": "#/components/schemas/procedure"
-            }
-          },
-          "tables": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "$ref": "#/components/schemas/table"
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              }
             }
           }
         }
       },
-      "schemaResponse": {
+      "queryResult": {
         "type": "object",
         "properties": {
-          "schema": {
-            "type": "object",
-            "$ref": "#/components/schemas/schema"
+          "column_names": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "column_types": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "$ref": "#/components/schemas/dataType"
+            }
+          },
+          "values": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        }
+      },
+      "rawStatement": {
+        "type": "object",
+        "properties": {
+          "Parameters": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "$ref": "#/components/schemas/namedValue"
+            }
+          },
+          "Statement": {
+            "type": "string"
           }
         }
       },
@@ -674,41 +954,18 @@
           }
         }
       },
-      "table": {
-        "type": "object",
-        "properties": {
-          "columns": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "$ref": "#/components/schemas/column"
-            }
-          },
-          "foreign_keys": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "$ref": "#/components/schemas/foreignKey"
-            }
-          },
-          "indexes": {
-            "type": "array",
-            "items": {
-              "type": "object",
-              "$ref": "#/components/schemas/index"
-            }
-          },
-          "name": {
-            "type": "string"
-          }
-        }
-      },
       "transaction": {
         "type": "object",
         "properties": {
           "body": {
             "type": "object",
             "$ref": "#/components/schemas/transactionBody"
+          },
+          "cachedHash": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
           },
           "sender": {
             "type": "string"
@@ -719,6 +976,9 @@
           "signature": {
             "type": "object",
             "$ref": "#/components/schemas/signature"
+          },
+          "strictUnmarshal": {
+            "type": "boolean"
           }
         }
       },
@@ -740,33 +1000,10 @@
           "payload": {
             "type": "string"
           },
+          "strictUnmarshal": {
+            "type": "boolean"
+          },
           "type": {
-            "type": "string"
-          }
-        }
-      },
-      "transactionResult": {
-        "type": "object",
-        "properties": {
-          "code": {
-            "type": "integer"
-          },
-          "data": {
-            "type": "string"
-          },
-          "events": {
-            "type": "array",
-            "items": {
-              "type": "string"
-            }
-          },
-          "gas_used": {
-            "type": "integer"
-          },
-          "gas_wanted": {
-            "type": "integer"
-          },
-          "log": {
             "type": "string"
           }
         }
@@ -774,9 +1011,6 @@
       "txQueryResponse": {
         "type": "object",
         "properties": {
-          "hash": {
-            "type": "string"
-          },
           "height": {
             "type": "integer"
           },
@@ -784,9 +1018,54 @@
             "type": "object",
             "$ref": "#/components/schemas/transaction"
           },
+          "tx_hash": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
           "tx_result": {
             "type": "object",
-            "$ref": "#/components/schemas/transactionResult"
+            "$ref": "#/components/schemas/txResult"
+          }
+        }
+      },
+      "txResult": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "$ref": "#/components/schemas/event"
+            }
+          },
+          "gas": {
+            "type": "integer"
+          },
+          "log": {
+            "type": "string"
+          }
+        }
+      },
+      "validator": {
+        "type": "object",
+        "properties": {
+          "AccountID": {
+            "type": "object",
+            "$ref": "#/components/schemas/accountID"
+          },
+          "identifier": {
+            "type": "string"
+          },
+          "key_type": {
+            "type": "string"
+          },
+          "power": {
+            "type": "integer"
           }
         }
       },

@@ -1,0 +1,770 @@
+{
+  "openrpc": "1.2.4",
+  "info": {
+    "title": "Kwil DB chain service",
+    "description": "The JSON-RPC chain service for Kwil DB.",
+    "license": {
+      "name": "CC0-1.0",
+      "url": "https://creativecommons.org/publicdomain/zero/1.0/legalcode"
+    },
+    "version": "0.1.0"
+  },
+  "methods": [
+    {
+      "name": "chain.block",
+      "description": "retrieve certain block info",
+      "params": [
+        {
+          "name": "hash",
+          "schema": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "required": true
+        },
+        {
+          "name": "height",
+          "schema": {
+            "type": "integer"
+          },
+          "required": true
+        },
+        {
+          "name": "raw",
+          "schema": {
+            "type": "boolean"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "blockResponse",
+        "schema": {
+          "type": "object",
+          "$ref": "#/components/schemas/blockResponse"
+        },
+        "description": "block information at a certain height"
+      },
+      "paramStructure": "by-name"
+    },
+    {
+      "name": "chain.block_result",
+      "description": "retrieve certain block result info",
+      "params": [
+        {
+          "name": "hash",
+          "schema": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "required": true
+        },
+        {
+          "name": "height",
+          "schema": {
+            "type": "integer"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "blockResultResponse",
+        "schema": {
+          "type": "object",
+          "$ref": "#/components/schemas/blockResultResponse"
+        },
+        "description": "block result information at a certain height"
+      },
+      "paramStructure": "by-name"
+    },
+    {
+      "name": "chain.consensus_params",
+      "description": "retrieve the consensus parameers",
+      "params": [],
+      "result": {
+        "name": "networkParameters",
+        "schema": {
+          "type": "object",
+          "$ref": "#/components/schemas/networkParameters"
+        },
+        "description": "consensus parameters"
+      },
+      "paramStructure": "by-name"
+    },
+    {
+      "name": "chain.genesis",
+      "description": "retrieve the genesis info",
+      "params": [],
+      "result": {
+        "name": "genesis",
+        "schema": {
+          "type": "object",
+          "$ref": "#/components/schemas/genesis"
+        },
+        "description": "genesis information"
+      },
+      "paramStructure": "by-name"
+    },
+    {
+      "name": "chain.health",
+      "description": "retrieve the health status of the chain service",
+      "params": [],
+      "result": {
+        "name": "healthResponse",
+        "schema": {
+          "type": "object",
+          "$ref": "#/components/schemas/healthResponse"
+        },
+        "description": "health status of the service"
+      },
+      "paramStructure": "by-name"
+    },
+    {
+      "name": "chain.tx",
+      "description": "retrieve certain transaction info",
+      "params": [
+        {
+          "name": "hash",
+          "schema": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "txResponse",
+        "schema": {
+          "type": "object",
+          "$ref": "#/components/schemas/txResponse"
+        },
+        "description": "transaction information at a certain hash"
+      },
+      "paramStructure": "by-name"
+    },
+    {
+      "name": "chain.unconfirmed_txs",
+      "description": "retrieve unconfirmed txs",
+      "params": [
+        {
+          "name": "limit",
+          "schema": {
+            "type": "integer"
+          },
+          "required": true
+        }
+      ],
+      "result": {
+        "name": "unconfirmedTxsResponse",
+        "schema": {
+          "type": "object",
+          "$ref": "#/components/schemas/unconfirmedTxsResponse"
+        },
+        "description": "unconfirmed txs"
+      },
+      "paramStructure": "by-name"
+    },
+    {
+      "name": "chain.validators",
+      "description": "retrieve validator info at certain height",
+      "params": [],
+      "result": {
+        "name": "validatorsResponse",
+        "schema": {
+          "type": "object",
+          "$ref": "#/components/schemas/validatorsResponse"
+        },
+        "description": "validator information at certain height"
+      },
+      "paramStructure": "by-name"
+    },
+    {
+      "name": "chain.version",
+      "description": "retrieve the API version of the chain service",
+      "params": [],
+      "result": {
+        "name": "versionResponse",
+        "schema": {
+          "type": "object",
+          "$ref": "#/components/schemas/versionResponse"
+        },
+        "description": "service info including semver and kwild version"
+      },
+      "paramStructure": "by-name"
+    }
+  ],
+  "components": {
+    "schemas": {
+      "accountID": {
+        "type": "object",
+        "properties": {
+          "identifier": {
+            "type": "string"
+          },
+          "key_type": {
+            "type": "string"
+          }
+        }
+      },
+      "block": {
+        "type": "object",
+        "properties": {
+          "header": {
+            "type": "object",
+            "$ref": "#/components/schemas/blockHeader"
+          },
+          "sig": {
+            "type": "string"
+          },
+          "txns": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "$ref": "#/components/schemas/transaction"
+            }
+          }
+        }
+      },
+      "blockHeader": {
+        "type": "object",
+        "properties": {
+          "Height": {
+            "type": "integer"
+          },
+          "MerkleRoot": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "NetworkParamsHash": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "NewLeader": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "NumTxns": {
+            "type": "integer"
+          },
+          "PrevAppHash": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "PrevHash": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "Timestamp": {
+            "type": "object",
+            "$ref": "#/components/schemas/time"
+          },
+          "ValidatorSetHash": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "Version": {
+            "type": "integer"
+          }
+        }
+      },
+      "blockResponse": {
+        "type": "object",
+        "properties": {
+          "block": {
+            "type": "object",
+            "$ref": "#/components/schemas/block"
+          },
+          "commit_info": {
+            "type": "object",
+            "$ref": "#/components/schemas/commitInfo"
+          },
+          "hash": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "raw_block": {
+            "type": "string"
+          }
+        }
+      },
+      "blockResultResponse": {
+        "type": "object",
+        "properties": {
+          "hash": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "height": {
+            "type": "integer"
+          },
+          "tx_results": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "$ref": "#/components/schemas/txResult"
+            }
+          }
+        }
+      },
+      "commitInfo": {
+        "type": "object",
+        "properties": {
+          "app_hash": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "param_updates": {
+            "type": "object",
+            "additionalProperties": true
+          },
+          "validator_updates": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "$ref": "#/components/schemas/validator"
+            }
+          },
+          "votes": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "$ref": "#/components/schemas/voteInfo"
+            }
+          }
+        }
+      },
+      "event": {
+        "type": "object"
+      },
+      "genesis": {
+        "type": "object",
+        "properties": {
+          "alloc": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "$ref": "#/components/schemas/genesisAlloc"
+            }
+          },
+          "chain_id": {
+            "type": "string"
+          },
+          "db_owner": {
+            "type": "string"
+          },
+          "disabled_gas_costs": {
+            "type": "boolean"
+          },
+          "initial_height": {
+            "type": "integer"
+          },
+          "join_expiry": {
+            "type": "integer"
+          },
+          "leader": {
+            "type": "object",
+            "$ref": "#/components/schemas/publicKey"
+          },
+          "max_block_size": {
+            "type": "integer"
+          },
+          "max_votes_per_tx": {
+            "type": "integer"
+          },
+          "state_hash": {
+            "type": "string"
+          },
+          "validators": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "$ref": "#/components/schemas/validator"
+            }
+          }
+        }
+      },
+      "genesisAlloc": {
+        "type": "object",
+        "properties": {
+          "amount": {
+            "type": "string"
+          },
+          "id": {
+            "type": "string"
+          },
+          "key_type": {
+            "type": "string"
+          }
+        }
+      },
+      "healthResponse": {
+        "type": "object",
+        "properties": {
+          "chain_id": {
+            "type": "string"
+          },
+          "healthy": {
+            "type": "boolean"
+          },
+          "height": {
+            "type": "integer"
+          }
+        }
+      },
+      "location": {
+        "type": "object",
+        "properties": {
+          "cacheEnd": {
+            "type": "integer"
+          },
+          "cacheStart": {
+            "type": "integer"
+          },
+          "cacheZone": {
+            "type": "object",
+            "$ref": "#/components/schemas/zone"
+          },
+          "extend": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "tx": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "$ref": "#/components/schemas/zoneTrans"
+            }
+          },
+          "zone": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "$ref": "#/components/schemas/zone"
+            }
+          }
+        }
+      },
+      "namedTx": {
+        "type": "object",
+        "properties": {
+          "hash": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "tx": {
+            "type": "object",
+            "$ref": "#/components/schemas/transaction"
+          }
+        }
+      },
+      "networkParameters": {
+        "type": "object",
+        "properties": {
+          "-": {
+            "type": "string"
+          },
+          "disabled_gas_costs": {
+            "type": "boolean"
+          },
+          "join_expiry": {
+            "type": "integer"
+          },
+          "leader": {
+            "type": "object",
+            "$ref": "#/components/schemas/publicKey"
+          },
+          "max_block_size": {
+            "type": "integer"
+          },
+          "max_votes_per_tx": {
+            "type": "integer"
+          }
+        }
+      },
+      "publicKey": {
+        "type": "object",
+        "properties": {
+          "PublicKey": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        }
+      },
+      "signature": {
+        "type": "object",
+        "properties": {
+          "Data": {
+            "type": "string"
+          },
+          "PubKey": {
+            "type": "string"
+          },
+          "PubKeyType": {
+            "type": "string"
+          }
+        }
+      },
+      "time": {
+        "type": "object",
+        "properties": {
+          "ext": {
+            "type": "integer"
+          },
+          "loc": {
+            "type": "object",
+            "$ref": "#/components/schemas/location"
+          },
+          "wall": {
+            "type": "integer"
+          }
+        }
+      },
+      "transaction": {
+        "type": "object",
+        "properties": {
+          "body": {
+            "type": "object",
+            "$ref": "#/components/schemas/transactionBody"
+          },
+          "cachedHash": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "sender": {
+            "type": "string"
+          },
+          "serialization": {
+            "type": "string"
+          },
+          "signature": {
+            "type": "object",
+            "$ref": "#/components/schemas/signature"
+          },
+          "strictUnmarshal": {
+            "type": "boolean"
+          }
+        }
+      },
+      "transactionBody": {
+        "type": "object",
+        "properties": {
+          "chain_id": {
+            "type": "string"
+          },
+          "desc": {
+            "type": "string"
+          },
+          "fee": {
+            "type": "string"
+          },
+          "nonce": {
+            "type": "integer"
+          },
+          "payload": {
+            "type": "string"
+          },
+          "strictUnmarshal": {
+            "type": "boolean"
+          },
+          "type": {
+            "type": "string"
+          }
+        }
+      },
+      "txResponse": {
+        "type": "object",
+        "properties": {
+          "hash": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "height": {
+            "type": "integer"
+          },
+          "index": {
+            "type": "integer"
+          },
+          "tx": {
+            "type": "object",
+            "$ref": "#/components/schemas/transaction"
+          },
+          "tx_result": {
+            "type": "object",
+            "$ref": "#/components/schemas/txResult"
+          }
+        }
+      },
+      "txResult": {
+        "type": "object",
+        "properties": {
+          "code": {
+            "type": "integer"
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "$ref": "#/components/schemas/event"
+            }
+          },
+          "gas": {
+            "type": "integer"
+          },
+          "log": {
+            "type": "string"
+          }
+        }
+      },
+      "unconfirmedTxsResponse": {
+        "type": "object",
+        "properties": {
+          "total": {
+            "type": "integer"
+          },
+          "txs": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "$ref": "#/components/schemas/namedTx"
+            }
+          }
+        }
+      },
+      "validator": {
+        "type": "object",
+        "properties": {
+          "AccountID": {
+            "type": "object",
+            "$ref": "#/components/schemas/accountID"
+          },
+          "identifier": {
+            "type": "string"
+          },
+          "key_type": {
+            "type": "string"
+          },
+          "power": {
+            "type": "integer"
+          }
+        }
+      },
+      "validatorsResponse": {
+        "type": "object",
+        "properties": {
+          "height": {
+            "type": "integer"
+          },
+          "validators": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "$ref": "#/components/schemas/validator"
+            }
+          }
+        }
+      },
+      "versionResponse": {
+        "type": "object",
+        "properties": {
+          "api_ver": {
+            "type": "string"
+          },
+          "kwil_ver": {
+            "type": "string"
+          },
+          "major": {
+            "type": "integer"
+          },
+          "minor": {
+            "type": "integer"
+          },
+          "patch": {
+            "type": "integer"
+          },
+          "service": {
+            "type": "string"
+          }
+        }
+      },
+      "voteInfo": {
+        "type": "object",
+        "properties": {
+          "ack": {
+            "type": "integer"
+          },
+          "app_hash": {
+            "type": "array",
+            "items": {
+              "type": "integer"
+            }
+          },
+          "sig": {
+            "type": "object",
+            "$ref": "#/components/schemas/signature"
+          }
+        }
+      },
+      "zone": {
+        "type": "object",
+        "properties": {
+          "isDST": {
+            "type": "boolean"
+          },
+          "name": {
+            "type": "string"
+          },
+          "offset": {
+            "type": "integer"
+          }
+        }
+      },
+      "zoneTrans": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "integer"
+          },
+          "isstd": {
+            "type": "boolean"
+          },
+          "isutc": {
+            "type": "boolean"
+          },
+          "when": {
+            "type": "integer"
+          }
+        }
+      }
+    }
+  }
+}
