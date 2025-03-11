@@ -349,7 +349,7 @@ func (e *TestCase) runExecution(ctx context.Context, platform *Platform) error {
 		}
 		if e.ErrMsg != "" {
 			expectsErr = true
-			if !strings.Contains(err.Error(), e.ErrMsg) {
+			if !strings.Contains(res.Error.Error(), e.ErrMsg) {
 				return fmt.Errorf(`expected error message to contain substring "%s", received error: %w`, e.ErrMsg, err)
 			}
 		}
