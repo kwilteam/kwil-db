@@ -206,10 +206,16 @@ func (i *individualListener) listen(ctx context.Context, eventstore listeners.Ev
 
 		err = i.processEvents(ctx, startBlock, toBlock, eventstore, logger)
 		if err != nil {
-			return err
+			// NOTE: this will cause the listener stops.
+			return fmt.Errorf("sync up blocks failed, %w", err)
 		}
 
 		startBlock = toBlock
+
+		// naive way to avoid reaching the RPC ratelimit, as most of them calculate limit(computing) by per second.
+		// depends on network and RPC service, this loop might easily reach provided RPC ratelimit
+		// for example, at the time of write, Arbitrum has 314m blocks, whereas Ethereum has 22m blocks.
+		time.Sleep(time.Millisecond * 500)
 	}
 
 	logger.Info(fmt.Sprintf("synced up to block %d", lastConfirmedBlock))
@@ -244,7 +250,6 @@ func (i *individualListener) listen(ctx context.Context, eventstore listeners.Ev
 
 func (i *individualListener) processEvents(ctx context.Context, from, to int64, eventStore listeners.EventStore, logger log.Logger) error {
 	logs, err := i.getLogsFunc(ctx, i.client.client, uint64(from), uint64(to), logger)
-	/// THIS IS WHERE I LEFT
 	if err != nil {
 		return err
 	}
