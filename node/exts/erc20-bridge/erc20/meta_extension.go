@@ -1284,7 +1284,7 @@ func init() {
 			}
 
 			// if previous epoch exists and not confirmed, we do nothing.
-			app.Service.Logger.Debug("log previous epoch is not confirmed yet, skip finalize current epoch")
+			app.Service.Logger.Debug("previous epoch is not confirmed yet, skip finalize current epoch")
 			return nil
 		})
 		if err != nil {

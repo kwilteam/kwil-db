@@ -191,7 +191,10 @@ func (s *bridgeSigner) sync(ctx context.Context) {
 	}
 
 	if len(epochs) == 1 {
-		// the very first round of epoch, we wait until there are 2 active epochs
+		// Two reasons there is only one active epoches
+		// 1. the very first epoch is just created
+		// 2. the previous epoch is confirmed, but currently there are no rewards/issuances in the current epoch
+		// In either case, we wait until there are 2 active epoches, which means the 1st one is ready to be voted.
 		return
 	}
 

@@ -111,23 +111,19 @@ func getChainConf(cfg config.ERC20BridgeConfig, chain chains.Chain) (*chainConfi
 		return nil, err
 	}
 
-	var ok bool
-	var provider string
-	var syncChunk string
-	switch chain {
-	case chains.Ethereum, chains.Sepolia:
-		provider, ok = cfg.RPC[chain.String()]
-		if !ok {
-			return nil, fmt.Errorf("local configuration does not have an '%s' config", chain.String())
-		}
+	err = chain.Valid()
+	if err != nil {
+		return nil, err
+	}
 
-		syncChunk, ok = cfg.BlockSyncChuckSize[chains.Ethereum.String()]
-		if !ok {
-			syncChunk = "1000000"
-		}
-	default:
-		// suggests an internal bug where we have not added a case for a new chain
-		return nil, fmt.Errorf("unknown chain %s", chain)
+	provider, ok := cfg.RPC[chain.String()]
+	if !ok {
+		return nil, fmt.Errorf("local configuration does not have an '%s' config", chain.String())
+	}
+
+	syncChunk, ok := cfg.BlockSyncChuckSize[chains.Ethereum.String()]
+	if !ok {
+		syncChunk = "1000000"
 	}
 
 	blockSyncChunkSize, err := strconv.ParseInt(syncChunk, 10, 64)
