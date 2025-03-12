@@ -505,9 +505,6 @@
           "balance": {
             "type": "string"
           },
-          "height": {
-            "type": "integer"
-          },
           "id": {
             "type": "object",
             "$ref": "#/components/schemas/accountID"
