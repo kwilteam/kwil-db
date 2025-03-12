@@ -119,6 +119,10 @@ type DelayedReadTxMaker interface {
 	BeginDelayedReadTx() OuterReadTx
 }
 
+type ReservedReadTxMaker interface {
+	BeginReservedReadTx(ctx context.Context) (Tx, error)
+}
+
 // PreparedTx is an outermost database transaction that uses two-phase commit
 // with the Precommit method.
 //

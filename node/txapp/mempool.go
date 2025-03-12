@@ -31,11 +31,6 @@ type mempool struct {
 
 // accountInfo retrieves the account info from the mempool state or the account store.
 func (m *mempool) accountInfo(ctx context.Context, tx sql.Executor, acctID *types.AccountID) (*types.Account, error) {
-	// idBts, err := acctID.Encode()
-	// if err != nil {
-	// 	return nil, err
-	// }
-	// id := string(idBts)
 	id, err := acctID.MarshalBinary()
 	if err != nil {
 		return nil, err
@@ -67,9 +62,6 @@ func (m *mempool) accountInfoSafe(ctx context.Context, tx sql.Executor, acctID *
 
 // applyTransaction validates account specific info and applies valid transactions to the mempool state.
 func (m *mempool) applyTransaction(ctx *common.TxContext, tx *types.Transaction, dbTx sql.Executor, rebroadcaster Rebroadcaster) error {
-	m.acctsMtx.Lock()
-	defer m.acctsMtx.Unlock()
-
 	// if the network is in a migration, there are numerous
 	// transaction types we must disallow.
 	// see [internal/migrations/migrations.go] for more info
@@ -116,12 +108,12 @@ func (m *mempool) applyTransaction(ctx *common.TxContext, tx *types.Transaction,
 			return err
 		}
 
-		// check if resolution is a migration resolution
 		resolution, err := resolutionByID(ctx.Ctx, dbTx, res.ResolutionID)
 		if err != nil {
 			return errors.New("migration proposal not found")
 		}
 
+		// check if resolution is a migration resolution
 		if (activeMigration || genesisMigration) && resolution.Type == voting.StartMigrationEventType {
 			return errors.New("approving migration resolutions are not allowed during migration")
 		}
@@ -166,6 +158,9 @@ func (m *mempool) applyTransaction(ctx *common.TxContext, tx *types.Transaction,
 		return err
 	}
 
+	m.acctsMtx.Lock()
+	defer m.acctsMtx.Unlock()
+
 	// get account info from mempool state or account store
 	acct, err := m.accountInfo(ctx.Ctx, dbTx, acctID)
 	if err != nil {
@@ -187,11 +182,10 @@ func (m *mempool) applyTransaction(ctx *common.TxContext, tx *types.Transaction,
 		// then mark the events for rebroadcast before discarding the transaction
 		// as the votes for these events are not yet received by the network.
 
-		// Check if the transaction is from the local node
-		fromLocalValidator := bytes.Equal(tx.Sender, m.nodeIdent.CompactID()) &&
-			tx.Signature.Type == m.nodeIdent.AuthType()
-
-		if tx.Body.PayloadType == types.PayloadTypeValidatorVoteIDs && fromLocalValidator {
+		// Check if the transaction is from the local node and is a ValidatorVoteIDs transaction
+		if tx.Body.PayloadType == types.PayloadTypeValidatorVoteIDs &&
+			tx.Signature.Type == m.nodeIdent.AuthType() &&
+			bytes.Equal(tx.Sender, m.nodeIdent.CompactID()) {
 			// Mark these ids for rebroadcast
 			voteID := &types.ValidatorVoteIDs{}
 			err = voteID.UnmarshalBinary(tx.Body.Payload)

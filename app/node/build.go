@@ -94,7 +94,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 	migrator := buildMigrator(d, ctx, db, accounts, vs)
 
 	// BlockProcessor
-	bp := buildBlockProcessor(ctx, d, db, txApp, accounts, vs, snapshotStore, es, migrator, bs)
+	bp := buildBlockProcessor(ctx, d, db, txApp, accounts, vs, snapshotStore, es, migrator, bs, mp)
 
 	// Consensus
 	ce := buildConsensusEngine(ctx, d, db, mp, bs, bp)
@@ -443,10 +443,10 @@ func buildTxApp(ctx context.Context, d *coreDependencies, db *pg.DB, accounts *a
 	return txapp
 }
 
-func buildBlockProcessor(ctx context.Context, d *coreDependencies, db *pg.DB, txapp *txapp.TxApp, accounts *accounts.Accounts, vs *voting.VoteStore, ss *snapshotter.SnapshotStore, es *voting.EventStore, migrator *migrations.Migrator, bs *store.BlockStore) *blockprocessor.BlockProcessor {
+func buildBlockProcessor(ctx context.Context, d *coreDependencies, db *pg.DB, txapp *txapp.TxApp, accounts *accounts.Accounts, vs *voting.VoteStore, ss *snapshotter.SnapshotStore, es *voting.EventStore, migrator *migrations.Migrator, bs *store.BlockStore, mp *mempool.Mempool) *blockprocessor.BlockProcessor {
 	signer := auth.GetNodeSigner(d.privKey)
 
-	bp, err := blockprocessor.NewBlockProcessor(ctx, db, txapp, accounts, vs, ss, es, migrator, bs, d.genesisCfg, signer, d.logger.New("BP"))
+	bp, err := blockprocessor.NewBlockProcessor(ctx, db, txapp, accounts, vs, ss, es, migrator, bs, mp, d.genesisCfg, signer, d.logger.New("BP"))
 	if err != nil {
 		failBuild(err, "failed to create block processor")
 	}

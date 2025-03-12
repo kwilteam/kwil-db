@@ -155,14 +155,15 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) ([]*Config, ma
 
 		ev := &mockEventStore{}
 		m := &mockMigrator{}
+		mp := mempool.New(mempoolSz)
 
-		bp, err := blockprocessor.NewBlockProcessor(ctx, db, txapp, accounts, v, ss, ev, m, bs, genCfg, signer, logger.New(fmt.Sprintf("BP%d", i)))
+		bp, err := blockprocessor.NewBlockProcessor(ctx, db, txapp, accounts, v, ss, ev, m, bs, mp, genCfg, signer, logger.New(fmt.Sprintf("BP%d", i)))
 		assert.NoError(t, err)
 
 		ceConfigs[i] = &Config{
 			PrivateKey:     privKeys[i],
 			Leader:         pubKeys[0],
-			Mempool:        mempool.New(mempoolSz),
+			Mempool:        mp,
 			BlockStore:     bs,
 			BlockProcessor: bp,
 			// ValidatorSet:          validatorSet,

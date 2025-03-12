@@ -5,7 +5,6 @@ import (
 	"time"
 
 	blockprocessor "github.com/kwilteam/kwil-db/node/block_processor"
-	"github.com/kwilteam/kwil-db/node/mempool"
 
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
@@ -25,7 +24,6 @@ type DB interface {
 type Mempool interface {
 	PeekN(maxTxns, totalSizeLimit int) []*types.Tx
 	Remove(txid types.Hash)
-	RecheckTxs(ctx context.Context, checkFn mempool.CheckFn)
 	Store(*types.Tx) (have, rejected bool)
 	TxsAvailable() bool
 	Size() (totalBytes, numTxns int)
@@ -52,6 +50,7 @@ type BlockProcessor interface {
 	Close() error
 
 	CheckTx(ctx context.Context, tx *types.Tx, height int64, blockTime time.Time, recheck bool) error
+	RecheckTxs(ctx context.Context, height int64, blockTime time.Time) error
 
 	GetValidators() []*ktypes.Validator
 	ConsensusParams() *ktypes.NetworkParameters

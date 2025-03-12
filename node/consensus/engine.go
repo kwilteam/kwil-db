@@ -416,6 +416,10 @@ func (ce *ConsensusEngine) Start(ctx context.Context, fns BroadcastFns, peerFns 
 	ce.log.Info("Starting the consensus engine")
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
+	defer func() {
+		ce.close() // Closes any consensus transactions opened either during catchup or during the regular consensus flow.
+		ce.log.Info("Consensus engine stopped")
+	}()
 
 	// Fast catchup the node with the network height
 	if err := ce.catchup(ctx); err != nil {
@@ -457,8 +461,6 @@ func (ce *ConsensusEngine) Start(ctx context.Context, fns BroadcastFns, peerFns 
 
 	ce.wg.Wait()
 
-	ce.close()
-	ce.log.Info("Consensus engine stopped")
 	return ceErr
 }
 
@@ -1082,7 +1084,8 @@ func (ce *ConsensusEngine) resetBlockProp(ctx context.Context, height int64, txI
 	// recheck txs in the mempool, if we have deleted any txs from the mempool
 	if len(txIDs) > 0 {
 		ce.mempoolMtx.PriorityLock()
-		ce.mempool.RecheckTxs(ctx, ce.recheckTxFn(ce.lastBlockInternal()))
+		lh, t := ce.lastBlockInternal()
+		ce.blockProcessor.RecheckTxs(ctx, lh, t)
 		ce.mempoolMtx.Unlock()
 	}
 }
