@@ -142,7 +142,7 @@ func (s *Safe) latestMetadata(ctx context.Context) (*safeMetadata, error) {
 }
 
 func (s *Safe) metadata(ctx context.Context, blockNumber *big.Int) (*safeMetadata, error) {
-	if IsMulticall3Deployed(s.chainID.Uint64(), blockNumber) {
+	if IsMulticall3Deployed(s.chainID.String(), blockNumber) {
 		return s.getSafeMetadata3(ctx, blockNumber)
 	}
 
@@ -175,7 +175,7 @@ func (s *Safe) getSafeMetadataSeq(ctx context.Context, blockNumber *big.Int) (*s
 
 // getSafeMetadata3 retrieves safe wallet metadata in one go, using multicall3
 func (s *Safe) getSafeMetadata3(ctx context.Context, blockNumber *big.Int) (*safeMetadata, error) {
-	res, err := Aggregate3(ctx, s.chainID.Uint64(), []abigen.Multicall3Call3{
+	res, err := Aggregate3(ctx, s.chainID.String(), []abigen.Multicall3Call3{
 		{
 			Target:       s.addr,
 			AllowFailure: false,

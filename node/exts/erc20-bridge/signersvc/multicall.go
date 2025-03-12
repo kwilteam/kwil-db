@@ -10,26 +10,28 @@ import (
 	"github.com/ethereum/go-ethereum/common"
 
 	"github.com/kwilteam/kwil-db/node/exts/erc20-bridge/abigen"
+	"github.com/kwilteam/kwil-db/node/exts/evm-sync/chains"
 )
 
 // Multicall https://github.com/mds1/multicall
 // https://etherscan.io/address/0xcA11bde05977b3631167028862bE2a173976CA11
 
-const (
-	EthNetworkMainnet = 1
-	EthNetworkSepolia = 11155111
-)
-
 var (
 	AddressMulticall3 = common.HexToAddress("0xcA11bde05977b3631167028862bE2a173976CA11")
+
+	chainEthereum, _    = chains.GetChainInfo(chains.Ethereum)
+	chainSepolia, _     = chains.GetChainInfo(chains.Sepolia)
+	chainBaseSepolia, _ = chains.GetChainInfo(chains.BaseSepolia)
 )
 
-var deployedAtMap = map[uint64]uint64{
-	EthNetworkMainnet: 14353601, // https://etherscan.io/tx/0x00d9fcb7848f6f6b0aae4fb709c133d69262b902156c85a473ef23faa60760bd
-	EthNetworkSepolia: 751532,   // https://sepolia.etherscan.io/tx/0x6313b2cee1ddd9a77a8a1edf93495a9eb3c51a4d85479f4f8fec0090ad82596b
+// Find multicall3 deployments on different networks: https://www.multicall3.com/deployments
+var deployedAtMap = map[string]uint64{
+	chainEthereum.ID:    14353601, // https://etherscan.io/tx/0x00d9fcb7848f6f6b0aae4fb709c133d69262b902156c85a473ef23faa60760bd
+	chainSepolia.ID:     751532,   // https://sepolia.etherscan.io/tx/0x6313b2cee1ddd9a77a8a1edf93495a9eb3c51a4d85479f4f8fec0090ad82596b
+	chainBaseSepolia.ID: 1059647,  // https://base-sepolia.blockscout.com/tx/0x07471adfe8f4ec553c1199f495be97fc8be8e0626ae307281c22534460184ed1
 }
 
-func IsMulticall3Deployed(chainID uint64, blockNumber *big.Int) bool {
+func IsMulticall3Deployed(chainID string, blockNumber *big.Int) bool {
 	deployedAt, exists := deployedAtMap[chainID]
 	if !exists {
 		return false
@@ -44,10 +46,10 @@ func IsMulticall3Deployed(chainID uint64, blockNumber *big.Int) bool {
 
 // Aggregate3 aggregates multicall result.
 // based on https://github.com/RSS3-Network/Node/blob/947b387f11857144c48250dd95804b5069731153/provider/ethereum/contract/multicall3/contract.go
-func Aggregate3(ctx context.Context, chainID uint64, calls []abigen.Multicall3Call3,
+func Aggregate3(ctx context.Context, chainID string, calls []abigen.Multicall3Call3,
 	blockNumber *big.Int, contractBackend bind.ContractCaller) ([]*abigen.Multicall3Result, error) {
 	if !IsMulticall3Deployed(chainID, blockNumber) {
-		return nil, fmt.Errorf("multicall3 is not deployed on chainID %d yet", chainID)
+		return nil, fmt.Errorf("multicall3 is not deployed on chainID %s yet", chainID)
 	}
 
 	abi, err := abigen.Multicall3MetaData.GetAbi()
