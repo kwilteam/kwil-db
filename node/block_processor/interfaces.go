@@ -53,7 +53,7 @@ type TxApp interface {
 
 	Price(ctx context.Context, dbTx sql.DB, tx *ktypes.Transaction, chainContext *common.ChainContext) (*big.Int, error)
 	AccountInfo(ctx context.Context, dbTx sql.DB, identifier *ktypes.AccountID, pending bool) (balance *big.Int, nonce int64, err error)
-	NumAccounts(ctx context.Context, dbTx sql.Executor) (int64, error)
+	NumAccounts(ctx context.Context, dbTx sql.Executor) (count, height int64, error error)
 }
 
 // Question:

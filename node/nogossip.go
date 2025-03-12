@@ -79,7 +79,7 @@ func (n *Node) txAnnStreamHandler(s network.Stream) {
 
 	ctx := context.Background()
 	if err := n.ce.QueueTx(ctx, ntx); err != nil {
-		n.log.Warnf("tx %v failed check: %v from peer: %s", txHash, err, s.Conn().RemotePeer())
+		n.log.Warnf("tx %v (sz %d) failed check: %v from peer: %s", txHash, len(rawTx), err, s.Conn().RemotePeer())
 		return
 	}
 

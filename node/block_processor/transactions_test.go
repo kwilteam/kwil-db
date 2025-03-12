@@ -681,8 +681,8 @@ func (m *mockTxApp) AccountInfo(ctx context.Context, db sql.DB, acctID *types.Ac
 	return accountBalance, 0, nil
 }
 
-func (a *mockTxApp) NumAccounts(ctx context.Context, tx sql.Executor) (int64, error) {
-	return 1, nil
+func (a *mockTxApp) NumAccounts(ctx context.Context, tx sql.Executor) (int64, int64, error) {
+	return 1, 1, nil
 }
 
 func (m *mockTxApp) ApplyMempool(ctx *common.TxContext, db sql.DB, tx *types.Transaction) error {
