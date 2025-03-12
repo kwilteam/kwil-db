@@ -1077,8 +1077,8 @@ func (d *dummyTxApp) GenesisInit(ctx context.Context, db sql.DB, _ *config.Genes
 func (d *dummyTxApp) AccountInfo(ctx context.Context, dbTx sql.DB, identifier *ktypes.AccountID, pending bool) (balance *big.Int, nonce int64, err error) {
 	return big.NewInt(0), 0, nil
 }
-func (a *dummyTxApp) NumAccounts(ctx context.Context, tx sql.Executor) (int64, error) {
-	return 1, nil
+func (a *dummyTxApp) NumAccounts(ctx context.Context, tx sql.Executor) (int64, int64, error) {
+	return 1, 1, nil
 }
 
 func (d *dummyTxApp) ApplyMempool(ctx *common.TxContext, db sql.DB, tx *ktypes.Transaction) error {

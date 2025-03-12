@@ -22,6 +22,7 @@ import (
 	"github.com/kwilteam/kwil-db/extensions/hooks"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
 	"github.com/kwilteam/kwil-db/node/accounts"
+	"github.com/kwilteam/kwil-db/node/meta"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/voting"
 )
@@ -626,8 +627,17 @@ func (r *TxApp) AccountInfo(ctx context.Context, db sql.DB, acctID *types.Accoun
 	return a.Balance, a.Nonce, nil
 }
 
-func (r *TxApp) NumAccounts(ctx context.Context, db sql.Executor) (int64, error) {
-	return r.Accounts.NumAccounts(ctx, db)
+func (r *TxApp) NumAccounts(ctx context.Context, db sql.Executor) (int64, int64, error) {
+	// TODO: provide a cache for this information so RPC doesn't have to hit DB.
+	count, err := r.Accounts.NumAccounts(ctx, db)
+	if err != nil {
+		return 0, 0, err
+	}
+	height, _, _, err := meta.GetChainState(ctx, db)
+	if err != nil {
+		return 0, 0, err
+	}
+	return count, height, nil
 }
 
 // UpdateValidator updates a validator's power.

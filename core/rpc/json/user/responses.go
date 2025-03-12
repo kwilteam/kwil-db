@@ -21,7 +21,6 @@ type AccountResponse struct {
 	ID      *types.AccountID `json:"id,omitempty"`
 	Balance string           `json:"balance"`
 	Nonce   int64            `json:"nonce"`
-	Height  int64            `json:"height"`
 }
 
 type NumAccountsResponse struct {

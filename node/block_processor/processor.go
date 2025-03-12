@@ -882,17 +882,7 @@ func (bp *BlockProcessor) AccountInfo(ctx context.Context, db sql.DB, identifier
 	return bp.txapp.AccountInfo(ctx, db, identifier, pending)
 }
 
-// Height is provided to obtain the current height atomically with a call to
-// another method such as AccountInfo via a single database transaction.
-func (bp *BlockProcessor) Height(ctx context.Context, db sql.Executor) (int64, error) {
-	height, _, _, err := meta.GetChainState(ctx, db)
-	if err != nil {
-		return 0, fmt.Errorf("failed to get chain state: %w", err)
-	}
-	return height, nil
-}
-
-func (bp *BlockProcessor) NumAccounts(ctx context.Context, db sql.Executor) (int64, error) {
+func (bp *BlockProcessor) NumAccounts(ctx context.Context, db sql.Executor) (count, height int64, err error) {
 	return bp.txapp.NumAccounts(ctx, db)
 }
 

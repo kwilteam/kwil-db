@@ -20,7 +20,7 @@ import (
 )
 
 const (
-	AccountsLRUCacheSize = 1000
+	AccountsLRUCacheSize = 4000
 )
 
 // Accounts represents an in-memory cache of accounts stored in a PostgreSQL database.
