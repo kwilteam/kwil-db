@@ -173,7 +173,8 @@ func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 
 			// Recheck the transactions in the mempool
 			ce.mempoolMtx.PriorityLock()
-			ce.mempool.RecheckTxs(ctx, ce.recheckTxFn(ce.lastBlockInternal()))
+			lh, t := ce.lastBlockInternal()
+			ce.blockProcessor.RecheckTxs(ctx, lh, t)
 			ce.mempoolMtx.Unlock()
 
 			// signal ce to start a new round

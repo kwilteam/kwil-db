@@ -55,7 +55,6 @@ type NodeApp interface {
 }
 
 type Validators interface {
-	SetValidatorPower(ctx context.Context, tx sql.Executor, pubKey []byte, pubKeyType crypto.KeyType, power int64) error
 	GetValidatorPower(ctx context.Context, pubKey []byte, pubKeyType crypto.KeyType) (int64, error)
 	GetValidators() []*types.Validator
 }

@@ -139,7 +139,7 @@ SYNC:
 
 		err := ce.applyBlock(ctx, rawBlk, ci, blkID) // fatal
 		if err != nil {
-			return fmt.Errorf("failed to apply block: %w", err)
+			return fmt.Errorf("failed to apply block at height: %d: error: %w", height, err)
 		}
 
 		cnt++
@@ -153,7 +153,7 @@ SYNC:
 		height++
 	}
 
-	ce.log.Info("Block sync completed", "startHeight", startHeight, "endHeight", height, "elapsed", time.Since(t0))
+	ce.log.Info("Block sync completed", "startHeight", startHeight, "endHeight", height-1, "elapsed", time.Since(t0))
 	return nil
 }
 
@@ -207,7 +207,7 @@ func (ce *ConsensusEngine) applyBlock(ctx context.Context, rawBlk []byte, ci *kt
 	}
 
 	if err := ce.processAndCommit(ctx, blk, ci, blkID, true); err != nil {
-		return fmt.Errorf("failed to apply block: %w", err)
+		return err
 	}
 
 	return nil

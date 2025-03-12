@@ -22,7 +22,7 @@ func (ce *ConsensusEngine) validateBlock(blk *ktypes.Block) error {
 	}
 
 	if ce.state.lc.blkHash != blk.Header.PrevHash {
-		return fmt.Errorf("prevBlockHash mismatch, expected %v, got %v", ce.state.lc.blkHash, blk.Header.PrevHash)
+		return fmt.Errorf("prevBlockHash mismatch, expected %v, got %v", blk.Header.PrevHash, ce.state.lc.blkHash)
 	}
 
 	if blk.Header.PrevAppHash != ce.state.lc.appHash {
@@ -184,16 +184,6 @@ func (ce *ConsensusEngine) lastBlockInternal() (int64, time.Time) {
 	return ce.state.lc.height, timestamp
 }
 
-// recheckTxFn creates a tx recheck function for the mempool that assumes the
-// provided height and timestamp for each call.
-func (ce *ConsensusEngine) recheckTxFn(height int64, timestamp time.Time) func(ctx context.Context, tx *types.Tx) error {
-	// height, _, timestamp := ce.lastBlock()
-	return func(ctx context.Context, tx *types.Tx) error {
-		const recheck = true
-		return ce.blockProcessor.CheckTx(ctx, tx, height, timestamp, recheck)
-	}
-}
-
 // BroadcastTx checks the transaction with the mempool and if the verification
 // is successful, broadcasts it to the network. The TxResult will be nil unless
 // sync is set to 1, in which case the BroadcastTx returns only after it is
@@ -256,6 +246,8 @@ func (ce *ConsensusEngine) executeBlock(ctx context.Context, blkProp *blockPropo
 		BlockID:  blkProp.blkHash,
 		Proposer: ce.leader,
 	}
+
+	now := time.Now()
 	results, err := ce.blockProcessor.ExecuteBlock(ctx, req, syncing)
 	if err != nil {
 		return err
@@ -276,7 +268,7 @@ func (ce *ConsensusEngine) executeBlock(ctx context.Context, blkProp *blockPropo
 	ce.catchupTicker.Reset(ce.catchupTimeout)
 
 	if !syncing { // ignore these logs during syncing
-		ce.log.Info("Executed block", "height", blkProp.height, "blockID", blkProp.blkHash, "appHash", results.AppHash.String(), "numTxs", blkProp.blk.Header.NumTxns)
+		ce.log.Info("Executed block", "height", blkProp.height, "blockID", blkProp.blkHash, "appHash", results.AppHash.String(), "numTxs", blkProp.blk.Header.NumTxns, "duration", time.Since(now))
 	}
 	return nil
 }
@@ -306,7 +298,7 @@ func (ce *ConsensusEngine) commit(ctx context.Context, syncing bool) error {
 		Height:  height,
 		AppHash: appHash,
 		// To indicate if the node is syncing, used by the blockprocessor to decide if it should create snapshots.
-		Syncing: ce.InCatchup(),
+		Syncing: ce.inSync.Load(),
 	}
 	if err := ce.blockProcessor.Commit(ctx, req); err != nil { // clears the mempool cache
 		return err
@@ -327,7 +319,8 @@ func (ce *ConsensusEngine) commit(ctx context.Context, syncing bool) error {
 	mets.RecordCommit(ctx, time.Since(ce.state.tExecuted), height) // keep this before nextState()
 
 	// recheck the transactions in the mempool
-	ce.mempool.RecheckTxs(ctx, ce.recheckTxFn(ce.lastBlockInternal()))
+	lh, time := ce.lastBlockInternal()
+	ce.blockProcessor.RecheckTxs(ctx, lh, time)
 
 	// should there be smaller limit to accommodate for the block serialization?
 	sz, _ := ce.mempool.Size()

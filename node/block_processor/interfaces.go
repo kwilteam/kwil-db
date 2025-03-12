@@ -7,6 +7,7 @@ import (
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/config"
 	ktypes "github.com/kwilteam/kwil-db/core/types"
+	"github.com/kwilteam/kwil-db/node/mempool"
 	"github.com/kwilteam/kwil-db/node/migrations"
 	"github.com/kwilteam/kwil-db/node/snapshotter"
 	"github.com/kwilteam/kwil-db/node/txapp"
@@ -24,6 +25,7 @@ type DB interface {
 	sql.ReadTxMaker
 	sql.SnapshotTxMaker
 	sql.DelayedReadTxMaker
+	sql.ReservedReadTxMaker
 }
 
 type Accounts interface {
@@ -34,6 +36,10 @@ type ValidatorModule interface {
 	GetValidators() []*ktypes.Validator
 	ValidatorUpdates() map[string]*ktypes.Validator
 	LoadValidatorSet(ctx context.Context, db sql.Executor) error
+}
+
+type Mempool interface {
+	RecheckTxs(ctx context.Context, checkFn mempool.CheckFn)
 }
 
 type TxApp interface {

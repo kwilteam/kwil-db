@@ -67,7 +67,7 @@ type indexedTxn struct {
 // enforces block size limits, and applies the maxVotesPerTx limit for voteID transactions.
 // Additionally, it includes the ValidatorVoteBody transaction for unresolved events.
 // The final transaction order is: MempoolProposerTxns, ValidatorVoteBodyTx, Other MempoolTxns (Nonce ordered, stable sorted).
-func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs []*nodetypes.Tx) (finalTxs []*types.Transaction, invalidTxs []*types.Transaction, err error) {
+func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, readTx sql.Tx, txs []*nodetypes.Tx) (finalTxs []*types.Transaction, invalidTxs []*types.Transaction, err error) {
 	// Unmarshal and index the transactions.
 	var okTxns []*indexedTxn
 	invalidTxs = make([]*types.Transaction, 0, len(txs))
@@ -94,12 +94,6 @@ func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs []*n
 	var propTxs, otherTxns []*indexedTxn
 	i = 0
 	proposerNonce := uint64(0)
-
-	readTx, err := bp.db.BeginReadTx(ctx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("failed to begin read transaction: %w", err)
-	}
-	defer readTx.Rollback(ctx)
 
 	// Enfore nonce ordering and remove transactions from the unfunded accounts
 	for _, tx := range okTxns {
@@ -172,8 +166,8 @@ func (bp *BlockProcessor) prepareBlockTransactions(ctx context.Context, txs []*n
 		finalTxs = append(finalTxs, tx.Transaction)
 	}
 
-	var voteBodyTx *types.Transaction // TODO: check proposerNonce value again
-	voteBodyTx, err = bp.prepareValidatorVoteBodyTx(ctx, int64(proposerNonce), maxTxBytes)
+	var voteBodyTx *types.Transaction
+	voteBodyTx, err = bp.prepareValidatorVoteBodyTx(ctx, readTx, int64(proposerNonce), maxTxBytes)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to prepare validator vote body transaction: %w", err)
 	}
@@ -222,13 +216,7 @@ func (bp *BlockProcessor) UpdateStats(delectCnt int64) {
 // The number of events to be included in a single transaction is limited either by MaxVotesPerTx or the maxTxSize
 // whichever is reached first. The estimated fee for validatorVOteBodies transaction is directly proportional to
 // the size of the event body. The transaction is signed by the leader and returned.
-func (bp *BlockProcessor) prepareValidatorVoteBodyTx(ctx context.Context, nonce int64, maxTxSize int64) (*types.Transaction, error) {
-	readTx, err := bp.db.BeginReadTx(ctx)
-	if err != nil {
-		return nil, err
-	}
-	defer readTx.Rollback(ctx)
-
+func (bp *BlockProcessor) prepareValidatorVoteBodyTx(ctx context.Context, readTx sql.Tx, nonce int64, maxTxSize int64) (*types.Transaction, error) {
 	acctID, err := types.GetSignerAccount(bp.signer)
 	if err != nil {
 		return nil, err

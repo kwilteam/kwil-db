@@ -243,7 +243,10 @@ func TestPrepareMempoolTxns(t *testing.T) {
 				ntxs[i] = nodetypes.NewTx(tx)
 			}
 
-			got, invalids, err := bp.prepareBlockTransactions(ctx, ntxs)
+			readTx, err := bp.db.BeginReadTx(ctx)
+			require.NoError(t, err)
+
+			got, invalids, err := bp.prepareBlockTransactions(ctx, readTx, ntxs)
 			require.NoError(t, err)
 
 			if len(got) != len(tt.want) {
@@ -500,6 +503,9 @@ func TestPrepareVoteBodyTx(t *testing.T) {
 		genesisParams: genCfg,
 	}
 
+	readTx, err := bp.db.BeginReservedReadTx(context.Background())
+	require.NoError(t, err)
+
 	testcases := []struct {
 		name    string
 		events  []*types.VotableEvent
@@ -510,7 +516,7 @@ func TestPrepareVoteBodyTx(t *testing.T) {
 			name:   "No events to broadcast(gasless mode)",
 			events: []*types.VotableEvent{},
 			fn: func(ctx context.Context, bp *BlockProcessor, es *mockEventStore) error {
-				tx, err := bp.prepareValidatorVoteBodyTx(ctx, 1, bp.chainCtx.NetworkParameters.MaxBlockSize)
+				tx, err := bp.prepareValidatorVoteBodyTx(ctx, readTx, 1, bp.chainCtx.NetworkParameters.MaxBlockSize)
 				require.NoError(t, err)
 				require.Nil(t, tx)
 
@@ -526,7 +532,7 @@ func TestPrepareVoteBodyTx(t *testing.T) {
 			fn: func(ctx context.Context, bp *BlockProcessor, es *mockEventStore) error {
 				bp.chainCtx.NetworkParameters.DisabledGasCosts = false
 
-				tx, err := bp.prepareValidatorVoteBodyTx(ctx, 1, bp.chainCtx.NetworkParameters.MaxBlockSize)
+				tx, err := bp.prepareValidatorVoteBodyTx(ctx, readTx, 1, bp.chainCtx.NetworkParameters.MaxBlockSize)
 				require.NoError(t, err)
 				require.Nil(t, tx)
 
@@ -537,7 +543,7 @@ func TestPrepareVoteBodyTx(t *testing.T) {
 			name:   "atleast 1 event to broadcast",
 			events: []*types.VotableEvent{evt1, evt2},
 			fn: func(ctx context.Context, bp *BlockProcessor, es *mockEventStore) error {
-				tx, err := bp.prepareValidatorVoteBodyTx(ctx, 1, bp.chainCtx.NetworkParameters.MaxBlockSize)
+				tx, err := bp.prepareValidatorVoteBodyTx(ctx, readTx, 1, bp.chainCtx.NetworkParameters.MaxBlockSize)
 				require.NoError(t, err)
 				require.NotNil(t, tx)
 
@@ -555,7 +561,7 @@ func TestPrepareVoteBodyTx(t *testing.T) {
 			fn: func(ctx context.Context, bp *BlockProcessor, es *mockEventStore) error {
 				bp.chainCtx.NetworkParameters.MaxVotesPerTx = 1
 
-				tx, err := bp.prepareValidatorVoteBodyTx(ctx, 1, bp.chainCtx.NetworkParameters.MaxBlockSize)
+				tx, err := bp.prepareValidatorVoteBodyTx(ctx, readTx, 1, bp.chainCtx.NetworkParameters.MaxBlockSize)
 				require.NoError(t, err)
 				require.NotNil(t, tx)
 
@@ -582,7 +588,7 @@ func TestPrepareVoteBodyTx(t *testing.T) {
 				txSize := emptyTxSize + int64(len(evt1.Body)+len(evt1.Type)+8)
 				bp.chainCtx.NetworkParameters.MaxBlockSize = txSize + 10 /* buffer */
 
-				tx, err := bp.prepareValidatorVoteBodyTx(ctx, 1, bp.chainCtx.NetworkParameters.MaxBlockSize)
+				tx, err := bp.prepareValidatorVoteBodyTx(ctx, readTx, 1, bp.chainCtx.NetworkParameters.MaxBlockSize)
 				require.NoError(t, err)
 				require.NotNil(t, tx)
 
@@ -606,7 +612,7 @@ func TestPrepareVoteBodyTx(t *testing.T) {
 				accountBalance = big.NewInt(0)
 				price = big.NewInt(1000)
 
-				tx, err := bp.prepareValidatorVoteBodyTx(ctx, 1, bp.chainCtx.NetworkParameters.MaxBlockSize)
+				tx, err := bp.prepareValidatorVoteBodyTx(ctx, readTx, 1, bp.chainCtx.NetworkParameters.MaxBlockSize)
 				require.NoError(t, err)
 				require.Nil(t, tx)
 
@@ -624,7 +630,7 @@ func TestPrepareVoteBodyTx(t *testing.T) {
 				accountBalance = big.NewInt(1000)
 				price = big.NewInt(1000)
 
-				tx, err := bp.prepareValidatorVoteBodyTx(ctx, 1, bp.chainCtx.NetworkParameters.MaxBlockSize)
+				tx, err := bp.prepareValidatorVoteBodyTx(ctx, readTx, 1, bp.chainCtx.NetworkParameters.MaxBlockSize)
 				require.NoError(t, err)
 				require.NotNil(t, tx)
 
@@ -743,6 +749,10 @@ func (m *mockDB) BeginReadTx(ctx context.Context) (sql.OuterReadTx, error) {
 
 func (m *mockDB) BeginSnapshotTx(ctx context.Context) (sql.Tx, string, error) {
 	return &mockTx{}, "", nil
+}
+
+func (m *mockDB) BeginReservedReadTx(ctx context.Context) (sql.Tx, error) {
+	return &mockTx{}, nil
 }
 
 func (m *mockDB) Execute(ctx context.Context, stmt string, args ...any) (*sql.ResultSet, error) {

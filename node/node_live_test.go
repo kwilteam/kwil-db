@@ -119,7 +119,7 @@ func TestSingleNodeMocknet(t *testing.T) {
 	require.NoError(t, err)
 
 	bpl := log.New(log.WithName("BP1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
-	bp, err := blockprocessor.NewBlockProcessor(ctx, db1, txapp, accounts, vsReal, ss, es, migrator, bs1, genCfg, signer1, bpl)
+	bp, err := blockprocessor.NewBlockProcessor(ctx, db1, txapp, accounts, vsReal, ss, es, migrator, bs1, mp1, genCfg, signer1, bpl)
 	require.NoError(t, err)
 
 	ceCfg1 := &consensus.Config{
@@ -280,7 +280,7 @@ func TestDualNodeMocknet(t *testing.T) {
 	require.NoError(t, err)
 
 	bpl1 := log.New(log.WithName("BP1"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
-	bp1, err := blockprocessor.NewBlockProcessor(ctx, db1, txapp1, accounts1, vstore1, ss, es1, migrator, bs1, genCfg, signer1, bpl1)
+	bp1, err := blockprocessor.NewBlockProcessor(ctx, db1, txapp1, accounts1, vstore1, ss, es1, migrator, bs1, mp1, genCfg, signer1, bpl1)
 	require.NoError(t, err)
 
 	ceCfg1 := &consensus.Config{
@@ -353,7 +353,7 @@ func TestDualNodeMocknet(t *testing.T) {
 	require.NoError(t, err)
 
 	bpl2 := log.New(log.WithName("BP2"), log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug), log.WithFormat(log.FormatUnstructured))
-	bp2, err := blockprocessor.NewBlockProcessor(ctx, db2, txapp2, accounts2, vstore2, ss, es2, migrator2, bs2, genCfg, signer2, bpl2)
+	bp2, err := blockprocessor.NewBlockProcessor(ctx, db2, txapp2, accounts2, vstore2, ss, es2, migrator2, bs2, mp2, genCfg, signer2, bpl2)
 	require.NoError(t, err)
 
 	ceCfg2 := &consensus.Config{

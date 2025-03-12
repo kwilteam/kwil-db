@@ -63,6 +63,7 @@ type BlockProcessor struct {
 	snapshotter SnapshotModule
 	events      EventStore
 	migrator    MigratorModule
+	mempool     Mempool // only for rechecks
 	log         log.Logger
 
 	// broadcast function to send transactions to the network
@@ -79,7 +80,7 @@ type BlockProcessor struct {
 type BroadcastTxFn func(ctx context.Context, tx *ktypes.Transaction, sync uint8) (ktypes.Hash, *ktypes.TxResult, error)
 
 func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Accounts, vs ValidatorModule,
-	sp SnapshotModule, es EventStore, migrator MigratorModule, bs BlockStore,
+	sp SnapshotModule, es EventStore, migrator MigratorModule, bs BlockStore, mp Mempool,
 	genesisCfg *config.GenesisConfig, signer auth.Signer, logger log.Logger) (*BlockProcessor, error) {
 	// get network parameters from the chain context
 	bp := &BlockProcessor{
@@ -90,6 +91,7 @@ func NewBlockProcessor(ctx context.Context, db DB, txapp TxApp, accounts Account
 		snapshotter: sp,
 		signer:      signer,
 		events:      es,
+		mempool:     mp,
 		migrator:    migrator,
 		log:         logger,
 	}
@@ -225,6 +227,13 @@ func (bp *BlockProcessor) loadNetworkParams(ctx context.Context, readTx sql.Tx) 
 }
 
 func (bp *BlockProcessor) CheckTx(ctx context.Context, ntx *types.Tx, height int64, blockTime time.Time, recheck bool) error {
+	readTx := bp.db.BeginDelayedReadTx()
+	defer readTx.Rollback(ctx)
+
+	return bp.checkTx(ctx, readTx, ntx, height, blockTime, recheck)
+}
+
+func (bp *BlockProcessor) checkTx(ctx context.Context, readTx sql.Tx, ntx *types.Tx, height int64, blockTime time.Time, recheck bool) error {
 	tx := ntx.Transaction
 	txHash := ntx.Hash()
 
@@ -249,9 +258,6 @@ func (bp *BlockProcessor) CheckTx(ctx context.Context, ntx *types.Tx, height int
 		}
 	}
 
-	readTx := bp.db.BeginDelayedReadTx()
-	defer readTx.Rollback(ctx)
-
 	ident, err := authExt.GetIdentifier(tx.Signature.Type, tx.Sender)
 	if err != nil {
 		return fmt.Errorf("failed to get tx sender identifier: %w", err)
@@ -270,6 +276,25 @@ func (bp *BlockProcessor) CheckTx(ctx context.Context, ntx *types.Tx, height int
 		Caller:        ident,
 		Authenticator: tx.Signature.Type,
 	}, readTx, tx)
+}
+
+// RecheckTxs revalidates all transactions in the mempool using the checkTx function.
+// It uses a reserved read transaction for DB access to avoid contention with non-consensus read requests.
+func (bp *BlockProcessor) RecheckTxs(ctx context.Context, height int64, timestamp time.Time) error {
+	bp.mtx.Lock()
+	defer bp.mtx.Unlock()
+
+	readTx, err := bp.db.BeginReservedReadTx(ctx)
+	if err != nil {
+		return fmt.Errorf("failed to start reserved read transaction for mempool rechecks: %w", err)
+	}
+	defer readTx.Rollback(ctx)
+
+	bp.mempool.RecheckTxs(ctx, func(ctx context.Context, tx *types.Tx) error {
+		return bp.checkTx(ctx, readTx, tx, height, timestamp, true)
+	})
+
+	return nil
 }
 
 // InitChain initializes the node with the genesis state. This included initializing the
@@ -327,10 +352,11 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 	bp.mtx.Lock()
 	defer bp.mtx.Unlock()
 
+	// TODO: TxApp.Begin is a no-op for now, un-comment when needed
 	// Begin the block execution session
-	if err = bp.txapp.Begin(ctx, req.Height); err != nil {
-		return nil, fmt.Errorf("failed to begin the block execution: %w", err)
-	}
+	// if err = bp.txapp.Begin(ctx, req.Height); err != nil {
+	// 	return nil, fmt.Errorf("failed to begin the block execution: %w", err)
+	// }
 
 	tx, err := bp.db.BeginPreparedTx(ctx)
 	if err != nil {
@@ -519,21 +545,21 @@ func (bp *BlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExe
 	}
 
 	sh := &StateHashes{
-		prevApp:      bp.appHash,
-		changeset:    types.Hash(changesetID),
-		accounts:     accountsHash,
-		valUpdates:   valUpdatesHash,
-		txResults:    txResultsHash,
-		paramUpdates: paramUpdatesHash,
+		PrevApp:      bp.appHash,
+		Changeset:    types.Hash(changesetID),
+		Accounts:     accountsHash,
+		ValUpdates:   valUpdatesHash,
+		TxResults:    txResultsHash,
+		ParamUpdates: paramUpdatesHash,
 	}
 
 	nextHash := bp.nextAppHash(sh)
 
 	if !syncing {
 		bp.log.Info("AppState updates: ",
-			"prevAppHash", sh.prevApp[:8], "changesets", sh.changeset[:8],
-			"validatorset", sh.valUpdates[:8], "accounts", sh.accounts[:8],
-			"txResults", sh.txResults[:8], "params", sh.paramUpdates[:8])
+			"prevAppHash", sh.PrevApp[:8], "changesets", sh.Changeset[:8],
+			"validatorset", sh.ValUpdates[:8], "accounts", sh.Accounts[:8],
+			"txResults", sh.TxResults[:8], "params", sh.ParamUpdates[:8])
 	}
 	bp.stateHashes = sh
 
@@ -702,8 +728,15 @@ func (bp *BlockProcessor) Commit(ctx context.Context, req *ktypes.CommitRequest)
 // validator vote transactions for events observed by the leader. This function is
 // used exclusively by the leader node to prepare the proposal block.
 func (bp *BlockProcessor) PrepareProposal(ctx context.Context, txs []*types.Tx) (finalTxs []*ktypes.Transaction, invalidTxs []*ktypes.Transaction, err error) {
-	// unmarshal and index the transactions
-	return bp.prepareBlockTransactions(ctx, txs)
+	// Use a reserved read transaction for any DB access, to prevent contention
+	// with rpc requests and other non-consensus operations.
+	readTx, err := bp.db.BeginReservedReadTx(ctx)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to begin reserved read transaction: %w", err)
+	}
+
+	defer readTx.Rollback(ctx)
+	return bp.prepareBlockTransactions(ctx, readTx, txs)
 }
 
 var (
@@ -739,17 +772,12 @@ func (bp *BlockProcessor) snapshotDB(ctx context.Context, height int64, syncing 
 }
 
 type StateHashes struct {
-	prevApp      types.Hash
-	changeset    types.Hash
-	valUpdates   types.Hash
-	accounts     types.Hash
-	txResults    types.Hash
-	paramUpdates types.Hash
-}
-
-func (sh *StateHashes) String() string {
-	return fmt.Sprintf("prevApp: %s, changeset: %s, valUpdates: %s, accounts: %s, txResults: %s, paramUpdates: %s",
-		sh.prevApp, sh.changeset, sh.valUpdates, sh.accounts, sh.txResults, sh.paramUpdates)
+	PrevApp      types.Hash
+	Changeset    types.Hash
+	ValUpdates   types.Hash
+	Accounts     types.Hash
+	TxResults    types.Hash
+	ParamUpdates types.Hash
 }
 
 // nextAppHash calculates the appHash that encapsulates the state changes occurred during the block execution.
@@ -757,12 +785,12 @@ func (sh *StateHashes) String() string {
 func (bp *BlockProcessor) nextAppHash(sh *StateHashes) types.Hash {
 	hasher := ktypes.NewHasher()
 
-	hasher.Write(sh.prevApp[:])
-	hasher.Write(sh.changeset[:])
-	hasher.Write(sh.valUpdates[:])
-	hasher.Write(sh.accounts[:])
-	hasher.Write(sh.txResults[:])
-	hasher.Write(sh.paramUpdates[:])
+	hasher.Write(sh.PrevApp[:])
+	hasher.Write(sh.Changeset[:])
+	hasher.Write(sh.ValUpdates[:])
+	hasher.Write(sh.Accounts[:])
+	hasher.Write(sh.TxResults[:])
+	hasher.Write(sh.ParamUpdates[:])
 
 	return hasher.Sum(nil)
 }
