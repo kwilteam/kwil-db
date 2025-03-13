@@ -315,13 +315,19 @@ func (ce *ConsensusEngine) commit(ctx context.Context, syncing bool) error {
 
 	mets.RecordCommit(ctx, time.Since(ce.state.tExecuted), height) // keep this before nextState()
 
+	maxBlockSize := ce.ConsensusParams().MaxBlockSize
+	// update the max block size in the mempool
+	// This can result in the eviction of previously accepted transactions
+	// to be rejected if the are larger than the new max block size.
+	ce.mempool.CapMaxTxSize(maxBlockSize)
+
 	// recheck the transactions in the mempool
 	lh, time := ce.lastBlockInternal()
 	ce.blockProcessor.RecheckTxs(ctx, lh, time)
 
 	// should there be smaller limit to accommodate for the block serialization?
 	sz, _ := ce.mempool.Size()
-	if int64(sz) >= ce.ConsensusParams().MaxBlockSize {
+	if int64(sz) >= maxBlockSize {
 		// mempool has enough txs to fill the block
 		ce.mempoolReady.Store(true)
 	}

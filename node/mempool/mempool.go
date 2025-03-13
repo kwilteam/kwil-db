@@ -17,9 +17,11 @@ type Mempool struct {
 	fetching    map[types.Hash]bool
 	currentSize int64 // bytes
 
-	maxSize   int64 // bytes
+	maxSize int64 // bytes
+
+	// maximum allowed transaction size in bytes
+	// Ensure that this value is less than the maximum block size.
 	maxTxSize int64 // bytes
-	// maxTxns int // number of transactions
 }
 
 type sizedTx struct {
@@ -50,6 +52,14 @@ func (mp *Mempool) SetMaxTxSize(maxBytes int64) {
 	mp.mtx.Lock()
 	defer mp.mtx.Unlock()
 	mp.maxTxSize = maxBytes
+}
+
+// CapMaxTxSize updates the maximum allowed transaction size based on the
+// network parameter maxBlockSize.
+func (mp *Mempool) CapMaxTxSize(maxBlockSize int64) {
+	mp.mtx.Lock()
+	defer mp.mtx.Unlock()
+	mp.maxTxSize = min(mp.maxTxSize, maxBlockSize)
 }
 
 // Have checks if a transaction with the given hash exists in the mempool.
@@ -215,6 +225,16 @@ func (mp *Mempool) RecheckTxs(ctx context.Context, fn CheckFn) {
 	}
 	var toRemove []indexedTx
 	for idx, tx := range mp.txQ { // must check in order
+		// remove transactions that don't pass the maxBlockSize check
+		rawTx, ok := mp.txns[tx.Hash()]
+		if !ok {
+			continue // bug, return or continue?
+		}
+		if rawTx.size > mp.maxTxSize {
+			toRemove = append(toRemove, indexedTx{idx: idx, txid: tx.Hash()})
+			continue
+		}
+
 		if err := fn(ctx, tx); err != nil {
 			toRemove = append(toRemove, indexedTx{idx: idx, txid: tx.Hash()})
 		}

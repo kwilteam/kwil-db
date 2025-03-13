@@ -29,6 +29,7 @@ type Mempool interface {
 	Store(*types.Tx) error
 	TxsAvailable() bool
 	Size() (totalBytes, numTxns int)
+	CapMaxTxSize(maxBytes int64)
 }
 
 // BlockStore includes both txns and blocks
