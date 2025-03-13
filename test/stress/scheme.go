@@ -101,7 +101,7 @@ func (asc *actSchemaClient) getOrCreateUserProfile(ctx context.Context, namespac
 			}
 		}
 		// boo, we didn't have a user name
-		asc.username = fmt.Sprintf("user_%v", rand.Intn(100000))
+		asc.username = fmt.Sprintf("user_%v", rand.Intn(10000000))
 	}
 
 	err := h.execute(ctx, namespace, actCreateUser, [][]any{{asc.username, molAge, "just a kwil user"}})
