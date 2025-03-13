@@ -34,7 +34,8 @@ const (
 
 	ProtocolIDBlockPropose protocol.ID = "/kwil/blkprop/1.0.0"
 	// ProtocolIDACKProposal  protocol.ID = "/kwil/blkack/1.0.0"
-	getMsg = "get" // context dependent, in open stream convo
+	getMsg   = "get" // context dependent, in open stream convo
+	gotItMsg = "gotit"
 )
 
 func requestFrom(ctx context.Context, host host.Host, peer peer.ID, resID []byte,

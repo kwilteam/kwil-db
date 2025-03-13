@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"io"
 	"sync"
@@ -47,7 +48,7 @@ func (n *Node) txAnnStreamHandler(s network.Stream) {
 	// t0 := time.Now(); log.Printf("retrieving new tx: %q", txid)
 
 	// First try to get from this stream.
-	rawTx, err := requestTx(s, []byte(getMsg))
+	rawTx, err := requestCurrentResource(s, txReadLimit)
 	if err != nil {
 		n.log.Warnf("announcer failed to provide %v due to error %v, trying other peers", txHash, err)
 		// Since we are aware, ask other peers. we could also put this in a goroutine
@@ -276,6 +277,7 @@ func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txHash typ
 		// we could queue at this level too
 
 		s.SetWriteDeadline(time.Now().Add(txGetTimeout))
+		s.Write(binary.BigEndian.AppendUint64(nil, uint64(len(rawTx))))
 		s.Write(rawTx)
 
 		mets.AdvertiseServed(ctx, string(ProtocolIDTxAnn), int64(len(rawTx)))

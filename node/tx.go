@@ -2,6 +2,7 @@ package node
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -41,16 +42,52 @@ func getTx(ctx context.Context, txHash types.Hash, peer peer.ID, host host.Host)
 	return rawTx, nil
 }
 
-func requestTx(rw io.ReadWriter, reqMsg []byte) ([]byte, error) {
-	content, err := request(rw, reqMsg, txReadLimit)
+func requestCurrentResource(s network.Stream, readLimit int64) ([]byte, error) {
+	// ask to send it
+	_, err := s.Write([]byte(getMsg))
 	if err != nil {
-		if errors.Is(err, ErrNotFound) {
-			return nil, ErrTxNotFound
-		}
-		return nil, fmt.Errorf("tx get request failed: %v", err)
+		return nil, fmt.Errorf("resource get request failed: %w", err)
 	}
-	return content, nil
+
+	// read the uint64 length
+	var lenBuf [8]byte
+	_, err = io.ReadFull(s, lenBuf[:])
+	if err != nil {
+		return nil, fmt.Errorf("failed to read resource length response: %w", err)
+	}
+	resLen := int64(binary.BigEndian.Uint64(lenBuf[:]))
+	if resLen == 0 {
+		return nil, ErrTxNotFound
+	}
+	if resLen > readLimit {
+		return nil, fmt.Errorf("tx too large: %d", resLen)
+	}
+
+	// read the contents
+	resource := make([]byte, resLen)
+	if n, err := io.ReadFull(s, resource); err != nil {
+		if n == 0 {
+			return nil, ErrNoResponse
+		}
+		return nil, fmt.Errorf("failed to read resource content response: %w", err)
+	}
+
+	// ack receipt
+	s.Write([]byte(gotItMsg)) // courtesy "got it" message, doesn't affect our retrieval though
+
+	return resource, nil
 }
+
+// func requestTx(rw io.ReadWriter, reqMsg []byte) ([]byte, error) {
+// 	content, err := request(rw, reqMsg, txReadLimit)
+// 	if err != nil {
+// 		if errors.Is(err, ErrNotFound) {
+// 			return nil, ErrTxNotFound
+// 		}
+// 		return nil, fmt.Errorf("tx get request failed: %v", err)
+// 	}
+// 	return content, nil
+// }
 
 func (n *Node) getTx(ctx context.Context, txHash types.Hash) ([]byte, error) {
 	for _, peer := range n.peers() {
