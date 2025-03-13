@@ -37,6 +37,7 @@ import (
 
 const (
 	mempoolSz = 200_000_000 // 200MB
+	maxTxSz   = 4_000_000   // 4MB
 )
 
 var blackholeIP6 = net.ParseIP("100::")
@@ -114,7 +115,7 @@ func makeTestHosts(t *testing.T, nNodes, nExtraHosts int, blockInterval time.Dur
 			// DB unused
 			DBConfig:    &defaultConfigSet.DB,
 			Statesync:   &defaultConfigSet.StateSync,
-			Mempool:     mempool.New(mempoolSz),
+			Mempool:     mempool.New(mempoolSz, maxTxSz),
 			BlockStore:  bs,
 			Snapshotter: newSnapshotStore(bs),
 			Consensus:   ce,

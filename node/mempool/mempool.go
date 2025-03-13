@@ -5,6 +5,7 @@ import (
 	"slices"
 	"sync"
 
+	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
 )
 
@@ -17,7 +18,10 @@ type Mempool struct {
 	currentSize int64 // bytes
 
 	maxSize int64 // bytes
-	// maxTxns int // number of transactions
+
+	// maximum allowed transaction size in bytes
+	// Ensure that this value is less than the maximum block size.
+	maxTxSize int64 // bytes
 }
 
 type sizedTx struct {
@@ -27,11 +31,12 @@ type sizedTx struct {
 
 // New creates a new Mempool instance with a default max size of 200MB.
 // See also SetMaxSize.
-func New(sz int64) *Mempool {
+func New(sz, txSz int64) *Mempool {
 	return &Mempool{
-		txns:     make(map[types.Hash]*sizedTx),
-		fetching: make(map[types.Hash]bool),
-		maxSize:  sz,
+		txns:      make(map[types.Hash]*sizedTx),
+		fetching:  make(map[types.Hash]bool),
+		maxSize:   sz,
+		maxTxSize: txSz,
 	}
 }
 
@@ -40,6 +45,21 @@ func (mp *Mempool) SetMaxSize(maxBytes int64) {
 	mp.mtx.Lock()
 	defer mp.mtx.Unlock()
 	mp.maxSize = maxBytes
+}
+
+// SetMaxSize updates the maximum allowed transaction size in bytes for the mempool.
+func (mp *Mempool) SetMaxTxSize(maxBytes int64) {
+	mp.mtx.Lock()
+	defer mp.mtx.Unlock()
+	mp.maxTxSize = maxBytes
+}
+
+// CapMaxTxSize updates the maximum allowed transaction size based on the
+// network parameter maxBlockSize.
+func (mp *Mempool) CapMaxTxSize(maxBlockSize int64) {
+	mp.mtx.Lock()
+	defer mp.mtx.Unlock()
+	mp.maxTxSize = min(mp.maxTxSize, maxBlockSize)
 }
 
 // Have checks if a transaction with the given hash exists in the mempool.
@@ -75,11 +95,11 @@ func (mp *Mempool) remove(txid types.Hash) {
 	} // else there's a bug!
 }
 
-// Store adds a transaction to the mempool. Returns (found, rejected) where
-// found indicates if the tx was already present, and rejected indicates if it
-// was rejected due to size limits. To remove a transaction, use [Remove]; this
-// will panic with a nil pointer.
-func (mp *Mempool) Store(tx *types.Tx) (found, rejected bool) {
+// Store adds a transaction to the mempool. It returns an error if the transaction
+// cannot be stored, such as if the transaction already exists, exceeds the maximum
+// allowed transaction size,or if the mempool is full.
+// To remove a transaction, use [Remove]; this will panic with a nil pointer.
+func (mp *Mempool) Store(tx *types.Tx) error {
 	mp.mtx.Lock()
 	defer mp.mtx.Unlock()
 
@@ -87,13 +107,17 @@ func (mp *Mempool) Store(tx *types.Tx) (found, rejected bool) {
 	delete(mp.fetching, txid)
 
 	if _, ok := mp.txns[txid]; ok {
-		return true, false // already have it
+		return ktypes.ErrTxAlreadyExists // already have it
 	}
 
 	sz := tx.SerializeSize()
 
+	if sz > mp.maxTxSize {
+		return ktypes.ErrTxTooLarge // too big
+	}
+
 	if mp.currentSize+sz > mp.maxSize {
-		return false, true
+		return ktypes.ErrMempoolFull // full
 	}
 
 	mp.currentSize += sz
@@ -103,7 +127,7 @@ func (mp *Mempool) Store(tx *types.Tx) (found, rejected bool) {
 		size: sz,
 	}
 	mp.txQ = append(mp.txQ, tx)
-	return false, false
+	return nil
 }
 
 // PreFetch marks a transaction as being fetched. Returns true if the tx should be fetched.
@@ -201,6 +225,16 @@ func (mp *Mempool) RecheckTxs(ctx context.Context, fn CheckFn) {
 	}
 	var toRemove []indexedTx
 	for idx, tx := range mp.txQ { // must check in order
+		// remove transactions that don't pass the maxBlockSize check
+		rawTx, ok := mp.txns[tx.Hash()]
+		if !ok {
+			continue // bug, return or continue?
+		}
+		if rawTx.size > mp.maxTxSize {
+			toRemove = append(toRemove, indexedTx{idx: idx, txid: tx.Hash()})
+			continue
+		}
+
 		if err := fn(ctx, tx); err != nil {
 			toRemove = append(toRemove, indexedTx{idx: idx, txid: tx.Hash()})
 		}

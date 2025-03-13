@@ -69,7 +69,7 @@ type MemPool interface {
 	Size() (count, bts int)
 	Get(Hash) *Tx
 	Remove(Hash)
-	Store(*Tx) (found, rejected bool)
+	Store(*Tx) error
 	PeekN(maxNumTxns, maxTotalTxBytes int) []*Tx
 	PreFetch(txid Hash) (ok bool, done func()) // should be app level instead
 }

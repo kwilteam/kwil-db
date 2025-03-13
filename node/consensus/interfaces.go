@@ -5,6 +5,7 @@ import (
 	"time"
 
 	blockprocessor "github.com/kwilteam/kwil-db/node/block_processor"
+	"github.com/kwilteam/kwil-db/node/mempool"
 
 	ktypes "github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node/types"
@@ -24,9 +25,11 @@ type DB interface {
 type Mempool interface {
 	PeekN(maxTxns, totalSizeLimit int) []*types.Tx
 	Remove(txid types.Hash)
-	Store(*types.Tx) (have, rejected bool)
+	RecheckTxs(ctx context.Context, checkFn mempool.CheckFn)
+	Store(*types.Tx) error
 	TxsAvailable() bool
 	Size() (totalBytes, numTxns int)
+	CapMaxTxSize(maxBytes int64)
 }
 
 // BlockStore includes both txns and blocks

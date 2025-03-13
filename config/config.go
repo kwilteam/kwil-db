@@ -309,7 +309,8 @@ func DefaultConfig() *Config {
 			BlockAnnInterval:      types.Duration(3 * time.Second),
 		},
 		Mempool: MempoolConfig{
-			MaxSize: 200_000_000, // 200MB
+			MaxSize:    200 * 1024 * 1024, // 200 MiB
+			MaxTxBytes: 4 * 1024 * 1024,   // 4 MiB
 		},
 		Store: StoreConfig{
 			Compression: true,
@@ -410,6 +411,9 @@ type Telemetry struct {
 type MempoolConfig struct {
 	// MaxSize is the maximum size of the mempool in bytes.
 	MaxSize int64 `toml:"max_size" comment:"maximum size of the mempool in bytes"`
+
+	// MaxTxBytes limits the size of any one transaction in mempool.
+	MaxTxBytes int64 `mapstructure:"max_tx_bytes"`
 }
 
 // PeerConfig corresponds to the [p2p] section of the config.

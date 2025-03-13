@@ -54,6 +54,7 @@ var (
 	ErrInsufficientFee       = errors.New("insufficient fee set")
 	ErrTxTimeout             = errors.New("timed out waiting for tx to be included in a block")
 	ErrMempoolFull           = errors.New("mempool is full")
+	ErrTxTooLarge            = errors.New("transaction size limit exceeded")
 	ErrUnknownPayloadType    = errors.New("unknown payload type")
 	ErrDisallowedInMigration = errors.New("transaction type not allowed during migration")
 )
