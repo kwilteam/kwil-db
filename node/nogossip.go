@@ -280,6 +280,12 @@ func (n *Node) advertiseTxToPeer(ctx context.Context, peerID peer.ID, txHash typ
 		s.Write(binary.BigEndian.AppendUint64(nil, uint64(len(rawTx))))
 		s.Write(rawTx)
 
+		// this is a hack to synchronize the full send fo the contents with our
+		// use of peerQueue (and outgoing tx send queue):
+		s.SetReadDeadline(time.Now().Add(txAnnRespTimeout))
+		fin := make([]byte, len(gotItMsg))
+		io.ReadFull(s, fin)
+
 		mets.AdvertiseServed(ctx, string(ProtocolIDTxAnn), int64(len(rawTx)))
 	}()
 }
