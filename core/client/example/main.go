@@ -84,7 +84,7 @@ func main() {
 	fmt.Printf("Account %s balance = %v, nonce = %d\n", acctID, acctInfo.Balance, acctInfo.Nonce)
 
 	// List previously deployed namespaces.
-	qr, err := cl.Query(ctx, "select name from info.namespaces", nil)
+	qr, err := cl.Query(ctx, "select name from info.namespaces", nil, true)
 	if err != nil {
 		log.Fatal(err)
 	}

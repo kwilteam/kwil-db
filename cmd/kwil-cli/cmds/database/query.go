@@ -28,6 +28,7 @@ kwil-cli database query "SELECT * FROM users WHERE age > 25" --namespace somedb`
 
 func queryCmd() *cobra.Command {
 	fmtConf := tableConfig{}
+	var noAuth bool
 	cmd := &cobra.Command{
 		Use:        `query <select_statement>`,
 		Short:      "Query a database using an ad-hoc SQL SELECT statement.",
@@ -53,7 +54,7 @@ func queryCmd() *cobra.Command {
 						}
 					}
 
-					data, err := client.Query(ctx, args[0], params)
+					data, err := client.Query(ctx, args[0], params, noAuth)
 					if err != nil {
 						return display.PrintErr(cmd, fmt.Errorf("error querying database: %w", err))
 					}
@@ -68,6 +69,7 @@ func queryCmd() *cobra.Command {
 		},
 	}
 
+	cmd.Flags().BoolVar(&noAuth, "no-auth", false, "Do not authenticate in query requests even if private key is configured.")
 	cmd.Flags().IntVarP(&fmtConf.width, "width", "w", 0, "Set the width of the table columns. Text beyond this width will be wrapped.")
 	cmd.Flags().BoolVar(&fmtConf.topAndBottomBorder, "row-border", false, "Show border lines between rows.")
 	cmd.Flags().IntVar(&fmtConf.maxRowWidth, "max-row-width", 0, "Set the maximum width of the row. Text beyond this width will be truncated.")

@@ -358,7 +358,7 @@ func Test_Roundtrip(t *testing.T) {
 
 				res, err := client.Query(ctx, `SELECT * FROM data_types WHERE id = $id`, map[string]any{
 					"id": id,
-				})
+				}, true)
 				require.NoError(t, err)
 				err = res.Scan(func() error { return nil }, &outID, &outText, &outTextArr, &outInt, &outIntArr, &outNum, &outNumArr, &outBool, &outBoolArr, &outBytes, &outBytesArr, &outUUID, &outUUIDArr)
 				require.NoError(t, err)

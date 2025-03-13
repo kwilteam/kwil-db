@@ -47,7 +47,7 @@ type ExecuteQueryDsl interface {
 	// ExecuteAction executes QUERY to a database
 	Execute(ctx context.Context, namespace string, actionName string, actionInputs [][]any, opts ...client.TxOpt) (types.Hash, error)
 	ExecuteSQL(ctx context.Context, sql string, params map[string]any, opts ...client.TxOpt) (types.Hash, error)
-	Query(ctx context.Context, query string, params map[string]any) (*types.QueryResult, error)
+	Query(ctx context.Context, query string, params map[string]any, auth bool) (*types.QueryResult, error)
 	// SupportBatch() bool
 }
 

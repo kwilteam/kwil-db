@@ -73,7 +73,7 @@ func AddUserSpecification(ctx context.Context, t *testing.T, execute ExecuteQuer
 }
 
 func ListUsersSpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl, expectFailure bool, numUsers int) {
-	res, err := execute.Query(ctx, fmt.Sprintf("{%s}SELECT * FROM users;", namespace), nil)
+	res, err := execute.Query(ctx, fmt.Sprintf("{%s}SELECT * FROM users;", namespace), nil, false)
 	if expectFailure {
 		require.Error(t, err)
 		return
@@ -87,7 +87,7 @@ func ListUsersSpecification(ctx context.Context, t *testing.T, execute ExecuteQu
 
 func ListUsersEventuallySpecification(ctx context.Context, t *testing.T, execute ExecuteQueryDsl, expectFailure bool, numUsers int) {
 	require.Eventually(t, func() bool {
-		res, err := execute.Query(ctx, fmt.Sprintf("{%s}SELECT * FROM users;", namespace), nil)
+		res, err := execute.Query(ctx, fmt.Sprintf("{%s}SELECT * FROM users;", namespace), nil, false)
 		return expectFailure && err != nil || res != nil && len(res.Values) == numUsers
 	}, 2*time.Minute, 1*time.Second)
 }

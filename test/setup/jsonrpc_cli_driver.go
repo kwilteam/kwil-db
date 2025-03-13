@@ -111,7 +111,7 @@ func (j *jsonRPCCLIDriver) Identifier() string {
 }
 
 func (j *jsonRPCCLIDriver) Call(ctx context.Context, namespace string, action string, inputs []any) (*types.CallResult, error) {
-	args := []string{"call-action", "--logs", "--rpc-auth"}
+	args := []string{"call-action", "--logs", "--rpc-auth"} // always assume private RPC mode
 	if j.usingGateway {
 		args = append(args, "--gateway-auth")
 	}
@@ -394,7 +394,7 @@ func (j *jsonRPCCLIDriver) Ping(ctx context.Context) (string, error) {
 	return r, err
 }
 
-func (j *jsonRPCCLIDriver) Query(ctx context.Context, query string, params map[string]any) (*types.QueryResult, error) {
+func (j *jsonRPCCLIDriver) Query(ctx context.Context, query string, params map[string]any, _ bool) (*types.QueryResult, error) {
 	args := []string{"query", query}
 	for k, v := range params {
 		encoded, err := types.EncodeValue(v)

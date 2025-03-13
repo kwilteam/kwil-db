@@ -139,7 +139,7 @@ func hammer(ctx context.Context, key string, tag string, dbReady chan struct{}) 
 	asc := newActSchemaClient(h, namespace)
 
 	// try to use this namespace if it exists, otherwise deploy a new one
-	res, err := h.Client.Query(ctx, fmt.Sprintf(`select exists (select 1 from info.namespaces where name = '%s');`, namespace), nil)
+	res, err := h.Client.Query(ctx, fmt.Sprintf(`select exists (select 1 from info.namespaces where name = '%s');`, namespace), nil, true)
 	if err != nil {
 		return err
 	}
