@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"encoding/hex"
 	"errors"
 	"fmt"
 	"math/big"
@@ -400,7 +399,7 @@ func (a *Accounts) Rollback() {
 }
 
 func acctMapKey(account *types.AccountID) string {
-	return hex.EncodeToString(account.Identifier) + "#" + account.KeyType.String()
+	return string(account.Identifier) + "#" + account.KeyType.String()
 }
 
 func (a *Accounts) createAccount(ctx context.Context, tx sql.Executor, account *types.AccountID, amt *big.Int, nonce int64) error {
