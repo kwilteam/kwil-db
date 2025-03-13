@@ -62,11 +62,11 @@ func (tc *timedClient) Ping(ctx context.Context) (string, error) {
 	return tc.Client.Ping(ctx)
 }
 
-func (tc *timedClient) Query(ctx context.Context, query string, params map[string]any) (*types.QueryResult, error) {
+func (tc *timedClient) Query(ctx context.Context, query string, params map[string]any, skipAuth bool) (*types.QueryResult, error) {
 	if tc.showReqDur {
 		defer tc.printDur(time.Now(), "Query")
 	}
-	return tc.Client.Query(ctx, query, params)
+	return tc.Client.Query(ctx, query, params, skipAuth)
 }
 
 func (tc *timedClient) TxQuery(ctx context.Context, hash types.Hash) (*types.TxQueryResponse, error) {

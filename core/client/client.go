@@ -347,13 +347,13 @@ func (c *Client) Call(ctx context.Context, namespace string, action string, inpu
 }
 
 // Query executes a query.
-func (c *Client) Query(ctx context.Context, query string, params map[string]any) (*types.QueryResult, error) {
+func (c *Client) Query(ctx context.Context, query string, params map[string]any, skipAuth bool) (*types.QueryResult, error) {
 	if params == nil {
 		params = make(map[string]any)
 	}
 
 	// if a private key is configured, we should automatically authenticate.
-	if c.Signer() != nil {
+	if !skipAuth && c.Signer() != nil {
 		challenge, err := c.challenge(ctx)
 		if err != nil {
 			return nil, err

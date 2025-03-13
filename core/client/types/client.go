@@ -23,7 +23,7 @@ type Client interface {
 	ExecuteSQL(ctx context.Context, sql string, params map[string]any, opts ...TxOpt) (types.Hash, error)
 	GetAccount(ctx context.Context, account *types.AccountID, status types.AccountStatus) (*types.Account, error)
 	Ping(ctx context.Context) (string, error)
-	Query(ctx context.Context, query string, params map[string]any) (*types.QueryResult, error)
+	Query(ctx context.Context, query string, params map[string]any, auth bool) (*types.QueryResult, error)
 	TxQuery(ctx context.Context, txHash types.Hash) (*types.TxQueryResponse, error)
 	WaitTx(ctx context.Context, txHash types.Hash, interval time.Duration) (*types.TxQueryResponse, error)
 	Transfer(ctx context.Context, to *types.AccountID, amount *big.Int, opts ...TxOpt) (types.Hash, error)

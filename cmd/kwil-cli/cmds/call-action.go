@@ -78,6 +78,10 @@ func callActionCmd() *cobra.Command {
 			}
 			if rpcAuth {
 				// if calling a kwil node, then we need to authenticate
+
+				// this dialFlag just asserts we need a private key if Client
+				// constructor detects private RPC mode server, it does not make
+				// the call use authentication. It does however make query authenticate.
 				dialFlags = dialFlags | client.AuthenticatedCalls
 			}
 			if dialFlags == 0 {
@@ -88,7 +92,9 @@ func callActionCmd() *cobra.Command {
 			return client.DialClient(cmd.Context(), cmd, dialFlags, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
 				// if named params are specified, we need to query the action to find their positions
 				if len(namedParams) > 0 {
-					paramList, err := GetParamList(ctx, cl.Query, namespace, args[0])
+					paramList, err := GetParamList(ctx, func(ctx context.Context, query string, args map[string]any) (*types.QueryResult, error) {
+						return cl.Query(ctx, query, args, !rpcAuth)
+					}, namespace, args[0])
 					if err != nil {
 						return display.PrintErr(cmd, err)
 					}

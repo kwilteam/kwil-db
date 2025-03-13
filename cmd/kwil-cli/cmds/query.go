@@ -82,7 +82,7 @@ func queryCmd() *cobra.Command {
 			}
 
 			return client.DialClient(cmd.Context(), cmd, dialFlags, func(ctx context.Context, cl clientType.Client, conf *config.KwilCliConfig) error {
-				res, err := cl.Query(ctx, sqlStmt, params)
+				res, err := cl.Query(ctx, sqlStmt, params, !rpcAuth)
 				if err != nil {
 					return display.PrintErr(cmd, err)
 				}
@@ -96,8 +96,8 @@ func queryCmd() *cobra.Command {
 	// this has to be StringArrayVar because if the user is passing an array, it will contain a comma, but it itself is a single parameter.
 	// If we use StringSliceVar, it will split the array into multiple parameters.
 	cmd.Flags().StringArrayVarP(&namedParams, "param", "p", nil, `named parameters that will be used in the query. format: "key:type=value"`)
-	cmd.Flags().BoolVar(&rpcAuth, "rpc-auth", false, "signals that the call is being made to a kwil node and should be authenticated with the private key")
-	cmd.Flags().BoolVar(&gwAuth, "gateway-auth", false, "signals that the call is being made to a gateway and should be authenticated with the private key")
+	cmd.Flags().BoolVar(&rpcAuth, "rpc-auth", false, "signals that the query is being made to a kwil node and should be authenticated with the private key")
+	cmd.Flags().BoolVar(&gwAuth, "gateway-auth", false, "signals that the query is being made to a gateway and should be authenticated with the private key")
 	display.BindTableFlags(cmd)
 	return cmd
 }
