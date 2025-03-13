@@ -1,4 +1,5 @@
-// TODO: add pg build tag
+//go:build pglive
+
 package testing
 
 import (
