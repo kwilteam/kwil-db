@@ -737,7 +737,8 @@ func init() {
 							// the read lock before we can acquire the write lock, which
 							// we do at the end of this
 
-							left, err := types.DecimalSub(info.ownedBalance, amount)
+							//NOTE: we don't want to use types.DecimalSub() since it will use max precision/scale
+							left, err := info.ownedBalance.Sub(info.ownedBalance, amount)
 							if err != nil {
 								info.mu.RUnlock()
 								return err
@@ -1436,7 +1437,7 @@ func (e *extensionInfo) issueTokens(ctx context.Context, app *common.App, id *ty
 	// the read lock before we can acquire the write lock, which
 	// we do at the end of this
 
-	newBal, err := types.DecimalSub(info.ownedBalance, amount)
+	newBal, err := info.ownedBalance.Sub(info.ownedBalance, amount)
 	if err != nil {
 		info.mu.RUnlock()
 		return err

@@ -212,7 +212,7 @@ func (s *bridgeSigner) sync(ctx context.Context) {
 	}
 
 	if s.canSkip(finalizedEpoch, safeMeta) {
-		s.logger.Info("skip epoch", "id", finalizedEpoch.ID.String(), "height", finalizedEpoch.EndHeight)
+		s.logger.Info("skip epoch", "id", finalizedEpoch.ID.String(), "height", finalizedEpoch.EndHeight, "nonce", safeMeta.nonce)
 		return
 	}
 
