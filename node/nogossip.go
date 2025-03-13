@@ -109,7 +109,7 @@ func (n *Node) announceRawTx(ctx context.Context, txHash types.Hash, rawTx []byt
 		if peerID == from {
 			continue
 		}
-		n.log.Infof("advertising tx %v (len %d) to peer %v", txHash, len(rawTx), peerID)
+		// n.log.Infof("advertising tx %v (len %d) to peer %v", txHash, len(rawTx), peerID)
 		n.advertiseTxToPeer(ctx, peerID, txHash, rawTx)
 	}
 }
