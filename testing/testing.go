@@ -37,6 +37,9 @@ func RunSchemaTest(t *testing.T, s SchemaTest, options *Options) {
 			Logger:           t,
 		}
 	}
+	if options.Logger == nil {
+		options.Logger = t
+	}
 
 	if s.Owner == "" {
 		s.Owner = string(deployer)
@@ -331,12 +334,20 @@ func (e *TestCase) runExecution(ctx context.Context, platform *Platform) error {
 		results = append(results, r.Values)
 		return nil
 	})
+
+	// the received error will usually be returns as part of res,
+	// but there are times where it might be returned as a separate error
+	// (e.g. in case of an extension erroring).
+	// Therefore, we need to check both.
+	var receivedErr error
 	if err != nil {
-		return err
+		receivedErr = err
+	} else if res.Error != nil {
+		receivedErr = res.Error
 	}
 
 	// check for an execution error
-	if res.Error != nil {
+	if receivedErr != nil {
 		// if error is not nil, the test should only pass if either
 		// Err or ErrMsg or both is set
 		expectsErr := false
@@ -349,7 +360,7 @@ func (e *TestCase) runExecution(ctx context.Context, platform *Platform) error {
 		}
 		if e.ErrMsg != "" {
 			expectsErr = true
-			if !strings.Contains(res.Error.Error(), e.ErrMsg) {
+			if !strings.Contains(receivedErr.Error(), e.ErrMsg) {
 				return fmt.Errorf(`expected error message to contain substring "%s", received error: %w`, e.ErrMsg, err)
 			}
 		}
