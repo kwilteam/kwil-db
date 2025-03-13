@@ -1403,6 +1403,20 @@ func (e *extensionInfo) lockTokens(ctx context.Context, app *common.App, id *typ
 		return err
 	}
 
+	bal, err := balanceOf(ctx, app, id, fromAddr)
+	if err != nil {
+		return err
+	}
+
+	cmp, err := bal.Cmp(amount)
+	if err != nil {
+		return err
+	}
+
+	if cmp < 0 {
+		return fmt.Errorf("insufficient balance")
+	}
+
 	err = transferTokensFromUserToNetwork(ctx, app, id, fromAddr, amount)
 	if err != nil {
 		return err
