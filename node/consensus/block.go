@@ -129,16 +129,13 @@ func (ce *ConsensusEngine) QueueTx(ctx context.Context, tx *types.Tx) error {
 	ce.mempoolMtx.Lock()
 	defer ce.mempoolMtx.Unlock()
 
-	have, rejected := ce.mempool.Store(tx)
-	if have {
-		return ktypes.ErrTxAlreadyExists
-	}
-	if rejected {
-		return ktypes.ErrMempoolFull
+	err := ce.mempool.Store(tx)
+	if err != nil {
+		return err
 	}
 
 	const recheck = false
-	err := ce.blockProcessor.CheckTx(ctx, tx, height, timestamp, recheck)
+	err = ce.blockProcessor.CheckTx(ctx, tx, height, timestamp, recheck)
 	if err != nil {
 		ce.mempool.Remove(tx.Hash())
 		return err

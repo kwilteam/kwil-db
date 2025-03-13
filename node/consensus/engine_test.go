@@ -43,6 +43,7 @@ import (
 
 const (
 	mempoolSz = 200_000_000 // 200MB
+	maxTxSz   = 1_000_000   // 1MB
 )
 
 var (
@@ -155,7 +156,7 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) ([]*Config, ma
 
 		ev := &mockEventStore{}
 		m := &mockMigrator{}
-		mp := mempool.New(mempoolSz)
+		mp := mempool.New(mempoolSz, maxTxSz)
 
 		bp, err := blockprocessor.NewBlockProcessor(ctx, db, txapp, accounts, v, ss, ev, m, bs, mp, genCfg, signer, logger.New(fmt.Sprintf("BP%d", i)))
 		assert.NoError(t, err)
