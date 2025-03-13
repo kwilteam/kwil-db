@@ -3,8 +3,11 @@ package erc20
 import (
 	"context"
 	_ "embed"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"strconv"
+	"strings"
 
 	ethcommon "github.com/ethereum/go-ethereum/common"
 
@@ -400,7 +403,7 @@ func previousEpochConfirmed(ctx context.Context, app *common.App, instanceID *ty
 }
 
 func rowToEpoch(r *common.Row) (*Epoch, error) {
-	if len(r.Values) != 11 {
+	if len(r.Values) != 9 {
 		return nil, fmt.Errorf("expected 11 values, got %d", len(r.Values))
 	}
 
@@ -430,45 +433,43 @@ func rowToEpoch(r *common.Row) (*Epoch, error) {
 
 	confirmed := r.Values[7].(bool)
 
-	// NOTE: empty value is [[]]
-	// values[8]-values[10] will all be empty if any, from the SQL;
 	var voters []ethcommon.Address
+	var voteNonces []int64
+	var signatures [][]byte
 	if r.Values[8] != nil {
-		rawVoters := r.Values[8].([][]byte)
-		// empty value is [[]], cannot use make(), otherwise we'll have a empty `ethcommon.Address`
-		for _, rawVoter := range rawVoters {
-			if len(rawVoter) == 0 {
+		rawVotes := r.Values[8].([]*string)
+		// NOTE: empty value is [<nil>]
+		for _, rawVote := range rawVotes {
+			if rawVote == nil { // only possible for empty votes
 				continue
 			}
-			voter, err := bytesToEthAddress(rawVoter)
+
+			segs := strings.Split(*rawVote, "-")
+			if len(segs) != 3 {
+				return nil, fmt.Errorf("invalid vote data: %s", *rawVote)
+			}
+
+			voterBytes, err := hex.DecodeString(segs[0][2:]) // remove '\x' prefix
 			if err != nil {
-				return nil, err
+				return nil, fmt.Errorf("decode voter address: %w", err)
 			}
+			voter, err := bytesToEthAddress(voterBytes)
+			if err != nil {
+				return nil, fmt.Errorf("parse voter address: %w", err)
+			}
+
+			nonce, err := strconv.ParseInt(segs[1], 10, 64)
+			if err != nil {
+				return nil, fmt.Errorf("parse nonce: %w", err)
+			}
+			sig, err := hex.DecodeString(segs[2][2:]) // remove '\x' prefix
+			if err != nil {
+				return nil, fmt.Errorf("parse signature: %w", err)
+			}
+
 			voters = append(voters, voter)
-		}
-	}
-
-	// NOTE: empty value is [<nil>]
-	var voteNonces []int64
-	if r.Values[9] != nil {
-		rawNonces := r.Values[9].([]*int64)
-		for _, rawNonce := range rawNonces {
-			if rawNonce != nil {
-				// NOTE: this is probably problematic, since we can messup the index
-				// If we don't skip, return -1 ?
-				voteNonces = append(voteNonces, *rawNonce)
-			}
-		}
-	}
-
-	// NOTE: empty value is [[]]
-	var signatures [][]byte
-	if r.Values[10] != nil {
-		// we skip the empty value, otherwise after conversion, [<nil>] will be returned
-		for _, rawSig := range r.Values[10].([][]byte) {
-			if len(rawSig) != 0 {
-				signatures = append(signatures, rawSig)
-			}
+			voteNonces = append(voteNonces, nonce)
+			signatures = append(signatures, sig)
 		}
 	}
 
@@ -495,7 +496,7 @@ func rowToEpoch(r *common.Row) (*Epoch, error) {
 // one collects all new rewards, and one waits to be confirmed.
 func getActiveEpochs(ctx context.Context, app *common.App, instanceID *types.UUID, fn func(*Epoch) error) error {
 	query := `
-    {kwil_erc20_meta}SELECT e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.reward_amount, e.ended_at, e.block_hash, e.confirmed, array_agg(v.voter) as voters, array_agg(v.nonce) as nonces, array_agg(v.signature) as signatures
+    {kwil_erc20_meta}SELECT e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.reward_amount, e.ended_at, e.block_hash, e.confirmed, array_agg(v.voter::text || '-' || v.nonce::text ||'-' || v.signature::text) as votes
 	FROM epochs AS e
 	LEFT JOIN epoch_votes AS v ON v.epoch_id = e.id
 	WHERE e.instance_id = $instance_id AND e.confirmed IS NOT true
@@ -514,13 +515,14 @@ func getActiveEpochs(ctx context.Context, app *common.App, instanceID *types.UUI
 
 // getEpochs gets epochs.
 func getEpochs(ctx context.Context, app *common.App, instanceID *types.UUID, after int64, limit int64, fn func(*Epoch) error) error {
+	// NOTE: we cannot use array_agg on multiple columns in engine, the result rows won't match
 	query := `
-    {kwil_erc20_meta}SELECT e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.reward_amount, e.ended_at, e.block_hash, e.confirmed, array_agg(v.voter) as voters, array_agg(v.nonce) as nonces, array_agg(v.signature) as signatures
+	{kwil_erc20_meta}SELECT e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.reward_amount, e.ended_at, e.block_hash, e.confirmed, array_agg(v.voter::text || '-' || v.nonce::text ||'-' || v.signature::text) as votes
 	FROM epochs AS e
 	LEFT JOIN epoch_votes AS v ON v.epoch_id = e.id
 	WHERE e.instance_id = $instance_id AND e.created_at_block > $after
-    GROUP BY e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.reward_amount, e.ended_at, e.block_hash, e.confirmed
-    ORDER BY e.ended_at ASC LIMIT $limit`
+	GROUP BY e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.reward_amount, e.ended_at, e.block_hash, e.confirmed
+	ORDER BY e.ended_at ASC LIMIT $limit`
 
 	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, query, map[string]any{
 		"instance_id": instanceID,
@@ -625,7 +627,7 @@ func getWalletEpochs(ctx context.Context, app *common.App, instanceID *types.UUI
 
 	// WE don't need vote info, we just return empty arrays instead of JOIN
 	query := `
-	{kwil_erc20_meta}SELECT e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.reward_amount, e.ended_at, e.block_hash, e.confirmed, ARRAY[]::BYTEA[] as voters, ARRAY[]::INT8[] as nonces, ARRAY[]::BYTEA[] as signatures
+	{kwil_erc20_meta}SELECT e.id, e.created_at_block, e.created_at_unix, e.reward_root, e.reward_amount, e.ended_at, e.block_hash, e.confirmed, ARRAY[]::TEXT[] as votes
 	FROM epoch_rewards AS r
 	JOIN epochs AS e ON r.epoch_id = e.id
 	WHERE recipient = $wallet AND e.instance_id = $instance_id AND e.ended_at IS NOT NULL` // at least finalized
