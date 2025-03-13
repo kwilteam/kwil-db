@@ -1353,7 +1353,7 @@ func genesisExec(ctx context.Context, app *common.App) error {
 func callPrepare(ctx *common.EngineContext, app *common.App, chain string, escrow string, period string) (*types.UUID, error) {
 	var id *types.UUID
 	count := 0
-	_, err := app.Engine.Call(ctx, app.DB, RewardMetaExtensionName, "prepare", []any{chain, escrow, period}, func(r *common.Row) error {
+	res, err := app.Engine.Call(ctx, app.DB, RewardMetaExtensionName, "prepare", []any{chain, escrow, period}, func(r *common.Row) error {
 		if count > 0 {
 			return fmt.Errorf("internal bug: expected only one result on prepare erc20")
 		}
@@ -1366,12 +1366,20 @@ func callPrepare(ctx *common.EngineContext, app *common.App, chain string, escro
 		count++
 		return nil
 	})
-	return id, err
+	if err != nil {
+		return nil, err
+	}
+
+	return id, res.Error
 }
 
 func callDisable(ctx *common.EngineContext, app *common.App, id *types.UUID) error {
-	_, err := app.Engine.Call(ctx, app.DB, RewardMetaExtensionName, "disable", []any{id}, nil)
-	return err
+	res, err := app.Engine.Call(ctx, app.DB, RewardMetaExtensionName, "disable", []any{id}, nil)
+	if err != nil {
+		return err
+	}
+
+	return res.Error
 }
 
 // lockTokens locks tokens from a user's balance and gives them to the network.

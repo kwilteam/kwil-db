@@ -55,10 +55,14 @@ func init() {
 		// It assumes the same function signature as the meta handler EXCEPT that the first argument is the id.
 		makeMetaHandler := func(method string) precompiles.HandlerFunc {
 			return func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
-				_, err2 := app.Engine.Call(ctx, app.DB, RewardMetaExtensionName, method, append([]any{&id}, inputs...), func(r *common.Row) error {
+				internalRes, err2 := app.Engine.Call(ctx, app.DB, RewardMetaExtensionName, method, append([]any{&id}, inputs...), func(r *common.Row) error {
 					return resultFn(r.Values)
 				})
-				return err2
+				if err2 != nil {
+					return err2
+				}
+
+				return internalRes.Error
 			}
 		}
 
