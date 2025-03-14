@@ -2074,6 +2074,34 @@ func Test_Actions(t *testing.T) {
 				{int64(2), mustExplicitDecimal("2.00000", 10, 5)},
 			},
 		},
+		rawTest("greatest, least, nullif", `
+		if greatest(1,2,3) != 3 {
+			error('greatest(1,2,3) is not 3');
+		}
+		if least(1,2,3) != 1 {
+			error('least(1,2,3) is not 1');
+		}
+
+		if nullif(1,1) is not null {
+			error('nullif(1,1) is not null');
+		}
+
+		if nullif(1,2) != 1 {
+			error('nullif(1,2) is not 1');
+		}
+
+		if nullif(2,1) != 2 {	
+			error('nullif(2,1) is not 2');
+		}
+
+		if nullif(null,1) is not null {
+			error('nullif(null,1) is not null');
+		}
+
+		if nullif(1,null) != 1 {
+			error('nullif(1,null) is not 1');
+		}
+		`),
 	}
 
 	db := newTestDB(t, nil, nil)
