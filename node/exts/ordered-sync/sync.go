@@ -74,7 +74,11 @@ func init() {
 				return err
 			}
 
-			app.Service.Logger.Info("YAIBA: store data point", "topic", res.Topic, "prePoint", res.PreviousPointInTime, "point", res.PointInTime, "data", res.Data)
+			if res.PreviousPointInTime != nil {
+				app.Service.Logger.Info("YAIBA: store data point", "topic", res.Topic, "prePoint", *res.PreviousPointInTime, "point", res.PointInTime, "data", res.Data)
+			} else {
+				app.Service.Logger.Info("YAIBA: store data point", "topic", res.Topic, "prePoint", res.PreviousPointInTime, "point", res.PointInTime, "data", res.Data)
+			}
 
 			return Synchronizer.storeDataPoint(ctx, app, res)
 		},
