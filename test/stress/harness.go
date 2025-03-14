@@ -183,6 +183,9 @@ func (h *harness) executeAsync(ctx context.Context, dbid, action string,
 		var err error
 		txHash, err = h.Execute(ctx, dbid, action, inputs,
 			clientType.WithNonce(nonce) /*, clientType.WithFee(&big.Int{})*/) // TODO: badFee mode
+		if err == nil {
+			h.printf("broadcasted tx %s, nonce %d", txHash, nonce)
+		}
 		return err
 	})
 	if err != nil {

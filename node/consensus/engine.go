@@ -223,8 +223,10 @@ type ProposalBroadcaster func(ctx context.Context, blk *ktypes.Block)
 // BlkAnnouncer broadcasts the new committed block to the network using the blockAnn message
 type BlkAnnouncer func(ctx context.Context, blk *ktypes.Block, ci *ktypes.CommitInfo)
 
-// TxAnnouncer broadcasts the new transaction to the network
-type TxAnnouncer func(ctx context.Context, tx *ktypes.Transaction, txID types.Hash)
+// TxAnnouncer broadcasts the new transaction to the network. The implementation
+// must have access to either mempool or block store for the transaction
+// contents.
+type TxAnnouncer func(ctx context.Context, txID types.Hash)
 
 // AckBroadcaster gossips the ack/nack messages to the network
 // type AckBroadcaster func(ack bool, height int64, blkID types.Hash, appHash *types.Hash, Signature []byte) error

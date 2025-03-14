@@ -146,6 +146,8 @@ type Node struct {
 
 	txQueue chan orderedTxn // enforces ordering in the tx broadcasts to the network.
 
+	sendQueue txSendQueue
+
 	wg  sync.WaitGroup
 	log log.Logger
 }
@@ -353,8 +355,8 @@ func (n *Node) Start(ctx context.Context) error {
 			ProposalBroadcaster: func(ctx context.Context, blk *ktypes.Block) {
 				n.announceBlkProp(ctx, blk, n.host.ID())
 			},
-			TxAnnouncer: func(ctx context.Context, tx *ktypes.Transaction, txID types.Hash) {
-				n.announceTx(ctx, tx, txID, n.host.ID())
+			TxAnnouncer: func(ctx context.Context, txID types.Hash) {
+				n.announceTx(ctx, txID, n.host.ID())
 			},
 			BlkAnnouncer:        n.announceBlk,
 			AckBroadcaster:      n.sendACK,
