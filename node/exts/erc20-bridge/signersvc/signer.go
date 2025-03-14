@@ -73,7 +73,8 @@ func newBridgeSigner(kwil bridgeSignerClient, safe *Safe, target string, txSigne
 // - signer has voted this epoch with the same nonce as current safe nonce
 func (s *bridgeSigner) canSkip(epoch *Epoch, safeMeta *safeMetadata) bool {
 	if !slices.Contains(safeMeta.owners, s.signerAddr) {
-		s.logger.Warn("signer is not safe owner", "signer", s.signerAddr.String(), "owners", safeMeta.owners)
+		s.logger.Info("skip voting epoch: signer is not safe owner", "id", epoch.ID.String(),
+			"signer", s.signerAddr.String(), "owners", safeMeta.owners)
 		return true
 	}
 
@@ -84,6 +85,7 @@ func (s *bridgeSigner) canSkip(epoch *Epoch, safeMeta *safeMetadata) bool {
 	for i, voter := range epoch.Voters {
 		if voter == s.signerAddr.String() &&
 			safeMeta.nonce.Cmp(big.NewInt(epoch.VoteNonces[i])) == 0 {
+			s.logger.Info("skip voting epoch: already voted", "id", epoch.ID.String(), "nonce", safeMeta.nonce)
 			return true
 		}
 	}
@@ -191,7 +193,10 @@ func (s *bridgeSigner) sync(ctx context.Context) {
 	}
 
 	if len(epochs) == 1 {
-		// the very first round of epoch, we wait until there are 2 active epochs
+		// Two reasons there is only one active epoches
+		// 1. the very first epoch is just created
+		// 2. the previous epoch is confirmed, but currently there are no rewards/issuances in the current epoch
+		// In either case, we wait until there are 2 active epoches; and the 1st one(finalized) is ready to be voted.
 		return
 	}
 
@@ -209,7 +214,6 @@ func (s *bridgeSigner) sync(ctx context.Context) {
 	}
 
 	if s.canSkip(finalizedEpoch, safeMeta) {
-		s.logger.Info("skip epoch", "id", finalizedEpoch.ID.String(), "height", finalizedEpoch.EndHeight)
 		return
 	}
 

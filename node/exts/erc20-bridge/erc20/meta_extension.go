@@ -737,7 +737,8 @@ func init() {
 							// the read lock before we can acquire the write lock, which
 							// we do at the end of this
 
-							left, err := types.DecimalSub(info.ownedBalance, amount)
+							//NOTE: we don't want to use types.DecimalSub() since it will use max precision/scale
+							left, err := info.ownedBalance.Sub(info.ownedBalance, amount)
 							if err != nil {
 								info.mu.RUnlock()
 								return err
@@ -1284,7 +1285,7 @@ func init() {
 			}
 
 			// if previous epoch exists and not confirmed, we do nothing.
-			app.Service.Logger.Debug("log previous epoch is not confirmed yet, skip finalize current epoch")
+			app.Service.Logger.Debug("previous epoch is not confirmed yet, skip finalize current epoch")
 			return nil
 		})
 		if err != nil {
@@ -1402,6 +1403,20 @@ func (e *extensionInfo) lockTokens(ctx context.Context, app *common.App, id *typ
 		return err
 	}
 
+	bal, err := balanceOf(ctx, app, id, fromAddr)
+	if err != nil {
+		return err
+	}
+
+	cmp, err := bal.Cmp(amount)
+	if err != nil {
+		return err
+	}
+
+	if cmp < 0 {
+		return fmt.Errorf("insufficient balance")
+	}
+
 	err = transferTokensFromUserToNetwork(ctx, app, id, fromAddr, amount)
 	if err != nil {
 		return err
@@ -1436,7 +1451,7 @@ func (e *extensionInfo) issueTokens(ctx context.Context, app *common.App, id *ty
 	// the read lock before we can acquire the write lock, which
 	// we do at the end of this
 
-	newBal, err := types.DecimalSub(info.ownedBalance, amount)
+	newBal, err := info.ownedBalance.Sub(info.ownedBalance, amount)
 	if err != nil {
 		info.mu.RUnlock()
 		return err
