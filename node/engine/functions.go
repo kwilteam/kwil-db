@@ -670,6 +670,71 @@ var (
 			},
 			PGFormatFunc: defaultFormat("coalesce"),
 		},
+		"greatest": &ScalarFunctionDefinition{
+			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
+				if len(args) == 0 {
+					return nil, fmt.Errorf("invalid number of arguments: expected at least 1, got 0")
+				}
+
+				if !args[0].IsNumeric() || !args[1].IsNumeric() {
+					return nil, fmt.Errorf("%w: expected both arguments to be numeric, got %s and %s", ErrType, args[0].String(), args[1].String())
+				}
+
+				// all arguments must be the same type
+				for i, arg := range args {
+					if !args[0].Equals(arg) {
+						return nil, fmt.Errorf("%w: all arguments must be the same type, but argument %d is %s and argument 1 is %s", ErrType, i+1, arg.String(), args[0].String())
+					}
+				}
+
+				return args[0], nil
+			},
+			PGFormatFunc: defaultFormat("greatest"),
+		},
+		"least": &ScalarFunctionDefinition{
+			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
+				if len(args) == 0 {
+					return nil, fmt.Errorf("invalid number of arguments: expected at least 1, got 0")
+				}
+
+				if !args[0].IsNumeric() || !args[1].IsNumeric() {
+					return nil, fmt.Errorf("%w: expected both arguments to be numeric, got %s and %s", ErrType, args[0].String(), args[1].String())
+				}
+
+				// all arguments must be the same type
+				for i, arg := range args {
+					if !args[0].Equals(arg) {
+						return nil, fmt.Errorf("%w: all arguments must be the same type, but argument %d is %s and argument 1 is %s", ErrType, i+1, arg.String(), args[0].String())
+					}
+				}
+
+				return args[0], nil
+			},
+			PGFormatFunc: defaultFormat("least"),
+		},
+		"nullif": &ScalarFunctionDefinition{
+			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {
+				if len(args) != 2 {
+					return nil, fmt.Errorf("invalid number of arguments: expected 2, got %d", len(args))
+				}
+
+				if !args[0].Equals(args[1]) {
+					return nil, fmt.Errorf("%w: both arguments must be the same type, but got %s and %s", ErrType, args[0].String(), args[1].String())
+				}
+
+				if args[0].EqualsStrict(types.NullType) && args[1].EqualsStrict(types.NullType) {
+					return nil, fmt.Errorf("%w: both arguments to NULLIF cannot be null", ErrType)
+				}
+
+				// the return type is the first type that is not null
+				if args[0].EqualsStrict(types.NullType) {
+					return args[1], nil
+				}
+
+				return args[0], nil
+			},
+			PGFormatFunc: defaultFormat("nullif"),
+		},
 		// Aggregate functions
 		"count": &AggregateFunctionDefinition{
 			ValidateArgsFunc: func(args []*types.DataType) (*types.DataType, error) {

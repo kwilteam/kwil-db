@@ -797,6 +797,9 @@ func (i *baseInterpreter) call(ctx *common.EngineContext, db sql.DB, namespace, 
 	err = exec.Func(execCtx, argVals, func(row *row) error {
 		return resultFn(rowToCommonRow(row))
 	})
+	if err != nil {
+		return nil, err
+	}
 
 	// if the error is an execution error,
 	// then it should be part of the CallResult,
