@@ -24,8 +24,8 @@ import (
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
-	"github.com/kwilteam/kwil-db/node/exts/erc20-bridge/utils"
-	"github.com/kwilteam/kwil-db/node/exts/evm-sync/chains"
+	"github.com/kwilteam/kwil-db/node/_exts/erc20-bridge/utils"
+	"github.com/kwilteam/kwil-db/node/_exts/evm-sync/chains"
 )
 
 // StateFilePath returns the state file.

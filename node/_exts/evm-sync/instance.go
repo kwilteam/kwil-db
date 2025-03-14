@@ -10,8 +10,8 @@ import (
 	ethtypes "github.com/ethereum/go-ethereum/core/types"
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/extensions/listeners"
-	"github.com/kwilteam/kwil-db/node/exts/evm-sync/chains"
-	orderedsync "github.com/kwilteam/kwil-db/node/exts/ordered-sync"
+	"github.com/kwilteam/kwil-db/node/_exts/evm-sync/chains"
+	orderedsync "github.com/kwilteam/kwil-db/node/_exts/ordered-sync"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )
 
@@ -198,33 +198,34 @@ type listenerInfo struct {
 // are fatal, and errors returned from this function are _very_ likely
 // due to network errors (e.g. with the target RPC).
 func (l *listenerInfo) listen(ctx context.Context, service *common.Service, eventstore listeners.EventStore, syncConf *syncConfig) {
-	logger := service.Logger.New(l.uniqueName + "." + string(l.chain.Name))
+	panic("bridging has not been enabled in the codebase")
+	// logger := service.Logger.New(l.uniqueName + "." + string(l.chain.Name))
 
-	chainConf, err := getChainConf(service.LocalConfig.Erc20Bridge, l.chain.Name)
-	if err != nil {
-		logger.Error("failed to get chain config", "err", err)
-		return
-	}
+	// chainConf, err := getChainConf(service.LocalConfig.Erc20Bridge, l.chain.Name)
+	// if err != nil {
+	// 	logger.Error("failed to get chain config", "err", err)
+	// 	return
+	// }
 
-	ethClient, err := newEthClient(ctx, chainConf.Provider, syncConf.MaxRetries, l.done, logger)
-	if err != nil {
-		logger.Error("failed to create evm client", "err", err)
-		return
-	}
+	// ethClient, err := newEthClient(ctx, chainConf.Provider, syncConf.MaxRetries, l.done, logger)
+	// if err != nil {
+	// 	logger.Error("failed to create evm client", "err", err)
+	// 	return
+	// }
 
-	indiv := &individualListener{
-		chain:            l.chain,
-		syncConf:         syncConf,
-		chainConf:        chainConf,
-		client:           ethClient,
-		orderedSyncTopic: l.uniqueName,
-		getLogsFunc:      l.getLogs,
-	}
+	// indiv := &individualListener{
+	// 	chain:            l.chain,
+	// 	syncConf:         syncConf,
+	// 	chainConf:        chainConf,
+	// 	client:           ethClient,
+	// 	orderedSyncTopic: l.uniqueName,
+	// 	getLogsFunc:      l.getLogs,
+	// }
 
-	err = indiv.listen(ctx, eventstore, logger)
-	if err != nil {
-		logger.Error("error listening", "err", err)
-	}
+	// err = indiv.listen(ctx, eventstore, logger)
+	// if err != nil {
+	// 	logger.Error("error listening", "err", err)
+	// }
 }
 
 // EthLog holds information about an Ethereum log.

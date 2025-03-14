@@ -26,8 +26,6 @@ import (
 	"github.com/kwilteam/kwil-db/node/consensus"
 	"github.com/kwilteam/kwil-db/node/engine"
 	"github.com/kwilteam/kwil-db/node/engine/interpreter"
-	_ "github.com/kwilteam/kwil-db/node/exts/erc20-bridge/erc20"
-	"github.com/kwilteam/kwil-db/node/exts/erc20-bridge/signersvc"
 	"github.com/kwilteam/kwil-db/node/listeners"
 	"github.com/kwilteam/kwil-db/node/mempool"
 	"github.com/kwilteam/kwil-db/node/meta"
@@ -154,7 +152,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 		jsonRPCAdminServer.RegisterSvc(jsonChainSvc)
 	}
 
-	erc20BridgeSignerMgr := buildErc20BridgeSignerMgr(d, db, e, node, bp)
+	// erc20BridgeSignerMgr := buildErc20BridgeSignerMgr(d, db, e, node, bp)
 
 	s := &server{
 		cfg:                d.cfg,
@@ -166,7 +164,7 @@ func buildServer(ctx context.Context, d *coreDependencies) *server {
 		jsonRPCAdminServer: jsonRPCAdminServer,
 		dbCtx:              db,
 		log:                d.logger,
-		erc20BridgeSigner:  erc20BridgeSignerMgr,
+		// erc20BridgeSigner:  erc20BridgeSignerMgr,
 	}
 
 	return s
@@ -516,28 +514,28 @@ func buildConsensusEngine(_ context.Context, d *coreDependencies, db *pg.DB,
 	return ce
 }
 
-func buildErc20BridgeSignerMgr(d *coreDependencies, db *pg.DB,
-	engine *interpreter.ThreadSafeInterpreter, node *node.Node,
-	bp *blockprocessor.BlockProcessor) *signersvc.ServiceMgr {
-	// create shared state
-	stateFile := signersvc.StateFilePath(d.rootDir)
+// func buildErc20BridgeSignerMgr(d *coreDependencies, db *pg.DB,
+// 	engine *interpreter.ThreadSafeInterpreter, node *node.Node,
+// 	bp *blockprocessor.BlockProcessor) *signersvc.ServiceMgr {
+// 	// create shared state
+// 	stateFile := signersvc.StateFilePath(d.rootDir)
 
-	if !fileExists(stateFile) {
-		emptyFile, err := os.Create(stateFile)
-		if err != nil {
-			failBuild(err, "Failed to create erc20 bridge signer state file")
-		}
-		_ = emptyFile.Close()
-	}
+// 	if !fileExists(stateFile) {
+// 		emptyFile, err := os.Create(stateFile)
+// 		if err != nil {
+// 			failBuild(err, "Failed to create erc20 bridge signer state file")
+// 		}
+// 		_ = emptyFile.Close()
+// 	}
 
-	state, err := signersvc.LoadStateFromFile(stateFile)
-	if err != nil {
-		failBuild(err, "Failed to load erc20 bridge signer state file")
-	}
+// 	state, err := signersvc.LoadStateFromFile(stateFile)
+// 	if err != nil {
+// 		failBuild(err, "Failed to load erc20 bridge signer state file")
+// 	}
 
-	return signersvc.NewServiceMgr(d.genesisCfg.ChainID, db, engine, node, bp,
-		d.cfg.Erc20Bridge, state, d.logger.New("EVMRW"))
-}
+// 	return signersvc.NewServiceMgr(d.genesisCfg.ChainID, db, engine, node, bp,
+// 		d.cfg.Erc20Bridge, state, d.logger.New("EVMRW"))
+// }
 
 func buildNode(d *coreDependencies, mp *mempool.Mempool, bs *store.BlockStore,
 	ce *consensus.ConsensusEngine, ss *snapshotter.SnapshotStore, db *pg.DB,
