@@ -175,8 +175,13 @@ func (c *cachedSync) resolve(ctx context.Context, app *common.App, block *common
 // It ensures that the point and previous point are not less than the previous point in time.
 func (c *cachedSync) storeDataPoint(ctx context.Context, app *common.App, dp *ResolutionMessage) error {
 	if dp.PreviousPointInTime != nil {
-		if dp.PointInTime <= *dp.PreviousPointInTime {
+		if dp.PointInTime < *dp.PreviousPointInTime {
 			return fmt.Errorf("point in time must be greater than previous point in time")
+		}
+		if dp.PointInTime == *dp.PreviousPointInTime {
+			logger := app.Service.Logger.New("orderedsync")
+			logger.Warn("point in time already exists, skip store", "topic", dp.Topic)
+			return nil
 		}
 	}
 
