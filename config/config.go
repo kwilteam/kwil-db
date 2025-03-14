@@ -15,12 +15,10 @@ import (
 
 	"github.com/pelletier/go-toml/v2"
 
-	ethCommon "github.com/ethereum/go-ethereum/common"
 	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/core/crypto/auth"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/node/exts/evm-sync/chains"
 )
 
 var (
@@ -356,11 +354,11 @@ func DefaultConfig() *Config {
 			Height: 0,
 			Hash:   "",
 		},
-		Erc20Bridge: ERC20BridgeConfig{
-			RPC:                make(map[string]string),
-			BlockSyncChuckSize: make(map[string]string),
-			Signer:             make(map[string]string),
-		},
+		// Erc20Bridge: ERC20BridgeConfig{
+		// 	RPC:                make(map[string]string),
+		// 	BlockSyncChuckSize: make(map[string]string),
+		// 	Signer:             make(map[string]string),
+		// },
 		SkipDependencyVerification: false,
 		PGDumpPath:                 "pg_dump",
 	}
@@ -388,7 +386,7 @@ type Config struct {
 	GenesisState string                       `toml:"genesis_state" comment:"path to the genesis state file, relative to the root directory"`
 	Migrations   MigrationConfig              `toml:"migrations" comment:"zero downtime migration configuration"`
 	Checkpoint   Checkpoint                   `toml:"checkpoint" comment:"checkpoint info for the leader to sync to before proposing a new block"`
-	Erc20Bridge  ERC20BridgeConfig            `toml:"erc20_bridge" comment:"ERC20 bridge configuration"`
+	// Erc20Bridge  ERC20BridgeConfig            `toml:"erc20_bridge" comment:"ERC20 bridge configuration"`
 
 	SkipDependencyVerification bool `toml:"skip_dependency_verification" comment:"skip runtime dependency verification (the pg_dump and psql binaries)"`
 	// PGDump: used by the snapshot and the migration module for producing snapshots.
@@ -534,30 +532,30 @@ type ERC20BridgeConfig struct {
 	Signer             map[string]string `toml:"signer" comment:"signer service configuration; format: ext_alias='file_path_to_private_key'"`
 }
 
-// Validate validates the bridge general config, other validations will be performed
-// when correspond components derive config from it.
-// BlockSyncChuckSize config will be validated by evm-sync listener.
-// Signer config will be validated by erc20 signerSvc.
-func (cfg ERC20BridgeConfig) Validate() error {
-	for chain, rpc := range cfg.RPC {
-		if err := chains.Chain(strings.ToLower(chain)).Valid(); err != nil {
-			return fmt.Errorf("erc20_bridge.rpc: %s", chain)
-		}
+// // Validate validates the bridge general config, other validations will be performed
+// // when correspond components derive config from it.
+// // BlockSyncChuckSize config will be validated by evm-sync listener.
+// // Signer config will be validated by erc20 signerSvc.
+// func (cfg ERC20BridgeConfig) Validate() error {
+// 	for chain, rpc := range cfg.RPC {
+// 		if err := chains.Chain(strings.ToLower(chain)).Valid(); err != nil {
+// 			return fmt.Errorf("erc20_bridge.rpc: %s", chain)
+// 		}
 
-		// enforce websocket
-		if !strings.HasPrefix(rpc, "wss://") && !strings.HasPrefix(rpc, "ws://") {
-			return fmt.Errorf("erc20_bridge.rpc: must start with wss:// or ws://")
-		}
-	}
+// 		// enforce websocket
+// 		if !strings.HasPrefix(rpc, "wss://") && !strings.HasPrefix(rpc, "ws://") {
+// 			return fmt.Errorf("erc20_bridge.rpc: must start with wss:// or ws://")
+// 		}
+// 	}
 
-	for _, pkPath := range cfg.Signer {
-		if !ethCommon.FileExist(pkPath) {
-			return fmt.Errorf("erc20_bridge.signer: private key file %s not found", pkPath)
-		}
-	}
+// 	for _, pkPath := range cfg.Signer {
+// 		if !ethCommon.FileExist(pkPath) {
+// 			return fmt.Errorf("erc20_bridge.signer: private key file %s not found", pkPath)
+// 		}
+// 	}
 
-	return nil
-}
+// 	return nil
+// }
 
 // ToTOML marshals the config to TOML. The `toml` struct field tag
 // specifies the field names. For example:

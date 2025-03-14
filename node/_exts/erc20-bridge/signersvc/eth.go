@@ -10,7 +10,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/kwilteam/kwil-db/node/exts/erc20-bridge/abigen"
+	"github.com/kwilteam/kwil-db/node/_exts/erc20-bridge/abigen"
 	"github.com/samber/lo"
 )
 
