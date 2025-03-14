@@ -73,7 +73,8 @@ func newBridgeSigner(kwil bridgeSignerClient, safe *Safe, target string, txSigne
 // - signer has voted this epoch with the same nonce as current safe nonce
 func (s *bridgeSigner) canSkip(epoch *Epoch, safeMeta *safeMetadata) bool {
 	if !slices.Contains(safeMeta.owners, s.signerAddr) {
-		s.logger.Warn("signer is not safe owner", "signer", s.signerAddr.String(), "owners", safeMeta.owners)
+		s.logger.Info("skip voting epoch: signer is not safe owner", "id", epoch.ID.String(),
+			"signer", s.signerAddr.String(), "owners", safeMeta.owners)
 		return true
 	}
 
@@ -84,6 +85,7 @@ func (s *bridgeSigner) canSkip(epoch *Epoch, safeMeta *safeMetadata) bool {
 	for i, voter := range epoch.Voters {
 		if voter == s.signerAddr.String() &&
 			safeMeta.nonce.Cmp(big.NewInt(epoch.VoteNonces[i])) == 0 {
+			s.logger.Info("skip voting epoch: already voted", "id", epoch.ID.String(), "nonce", safeMeta.nonce)
 			return true
 		}
 	}
@@ -212,7 +214,6 @@ func (s *bridgeSigner) sync(ctx context.Context) {
 	}
 
 	if s.canSkip(finalizedEpoch, safeMeta) {
-		s.logger.Info("skip epoch", "id", finalizedEpoch.ID.String(), "height", finalizedEpoch.EndHeight, "nonce", safeMeta.nonce)
 		return
 	}
 
