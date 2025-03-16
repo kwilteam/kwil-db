@@ -549,7 +549,7 @@ func getBlkHeight(ctx context.Context, height int64, host host.Host, log log.Log
 }
 
 // ErrNotFoundWithBestHeight is an error that contains a BestHeight field, which
-// is used when a block is not found, but the the negative responses from peers
+// is used when a block is not found, but the negative responses from peers
 // contained their best height.
 //
 // Use with errors.As.  For example:

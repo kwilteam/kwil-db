@@ -802,7 +802,7 @@ func encodePubKey(pubKey []byte, keyType crypto.KeyType) []byte {
 	return b
 }
 
-// decodePubKey decodes a byte slice into a public key and key type.
+// DecodePubKey decodes a byte slice into a public key and key type.
 func DecodePubKey(b []byte) ([]byte, crypto.KeyType, error) {
 	keyType, b, err := crypto.WireDecodeKeyType(b)
 	if err != nil {
