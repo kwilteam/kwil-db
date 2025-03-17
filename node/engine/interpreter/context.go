@@ -436,6 +436,9 @@ const (
 	executableTypePrecompile executableType = "precompile"
 )
 
+// execFunc is a block of code that can be called with a set of ordered inputs.
+// For example, built-in SQL functions like ABS() and FORMAT(), or user-defined
+// actions, all require arguments to be passed in a specific order.
 type execFunc func(exec *executionContext, args []value, returnFn resultFunc) error
 
 // setVariable sets a variable in the current scope.

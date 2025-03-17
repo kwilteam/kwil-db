@@ -644,6 +644,12 @@ func (i *baseInterpreter) execute(ctx *common.EngineContext, db sql.DB, statemen
 		return err
 	}
 
+	// we convert each param (which is a key-value pair) to a value
+	// and set it as a variable in the execution context.
+	// We use the order package to ensure that we iterate over the
+	// variables in a deterministic order. This is important because if
+	// there is an error thrown due to two or more variables, nodes might
+	// execute them in different orders, yielding different error messages.
 	for _, param := range order.OrderMap(params) {
 		val, err := newValue(param.Value)
 		if err != nil {
@@ -703,6 +709,10 @@ func isValidVarName(s string) error {
 func (i *baseInterpreter) call(ctx *common.EngineContext, db sql.DB, namespace, action string, args []any, resultFn func(*common.Row) error, toplevel bool) (callRes *common.CallResult, err error) {
 	copied := i.copy()
 	defer func() {
+		// if there is either an error or a panic, then we need
+		// to rollback the interpreter to its previous state.
+		// The database will rollback automatically, but there
+		// might be state that was changed in-memory that needs to be rolled back.
 		noErrOrPanic := true
 		if err != nil {
 			// rollback the interpreter

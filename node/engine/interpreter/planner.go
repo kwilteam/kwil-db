@@ -208,8 +208,15 @@ func (r *row) fillUnnamed() {
 	}
 }
 
+// resultFunc is a function that is passed as a callback to statements.
+// Results can be progressively written to this function.
 type resultFunc func(*row) error
 
+// stmtFunc is a block of code that executes a "statement" from the AST.
+// "statements" are language features such as:
+// - sql: INSERT/UPDATE/DELETE/SELECT
+// - ddl: CREATE/ALTER/DROP
+// - action logic: FOR loops / IF clauses / variable assignment
 type stmtFunc func(exec *executionContext, fn resultFunc) error
 
 func (i *interpreterPlanner) VisitActionStmtDeclaration(p0 *parse.ActionStmtDeclaration) any {
@@ -902,7 +909,9 @@ func cast(t parse.Typecasted, s exprFunc) exprFunc {
 	})
 }
 
-// exprFunc is a function that returns a value.
+// exprFunc is a function that returns a single value.
+// It is used to represent pieces of logic that should evaluate to
+// exactly one thing (e.g. arithmetic, comparison, etc.)
 type exprFunc func(exec *executionContext) (value, error)
 
 func (i *interpreterPlanner) VisitExpressionLiteral(p0 *parse.ExpressionLiteral) any {
