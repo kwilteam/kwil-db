@@ -119,7 +119,7 @@ func ParseURLWithDefaultScheme(u, defaultScheme string) (*URL, error) {
 	}, nil
 }
 
-// hasScheme returns true if the url has a known scheme.
+// HasScheme returns true if the url has a known scheme.
 func HasScheme(u string) (bool, error) {
 	parsed, err := url.Parse(u)
 	if err != nil { // errors on 127.0.0.1:8080 so return false with no error

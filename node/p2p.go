@@ -142,7 +142,7 @@ func dummyStreamHandler(s network.Stream) { s.Close() }
 
 // Start launches the P2P service, registering the network Notifiee, and
 // connecting to bootstrap peers. This method is NOT blocking. The context only
-// affects the the connection process, and does not shutdown the service after
+// affects the connection process, and does not shutdown the service after
 // this method has returned.
 func (p *P2PService) Start(ctx context.Context, bootpeers ...string) error {
 	ctx, cancel := context.WithCancel(ctx)

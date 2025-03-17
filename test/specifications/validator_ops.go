@@ -113,7 +113,7 @@ func RemoveNonValidatorSpecification(ctx context.Context, t *testing.T, netops V
 	assert.Equal(t, len(preVals), len(postVals))
 }
 
-// ValidatorNodeRemoveSpecificationN4R1 tests the validator remove process on a
+// ValidatorNodeRemoveSpecificationV4R1 tests the validator remove process on a
 // network with 4 validators, where 3 nodes target the last.
 func ValidatorNodeRemoveSpecificationV4R1(ctx context.Context, t *testing.T, n0, n1, n2 ValidatorRemoveDsl, targetKey crypto.PrivateKey) {
 	t.Log("Executing network node remove specification")

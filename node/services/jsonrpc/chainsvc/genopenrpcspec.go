@@ -1,6 +1,6 @@
 // This file is ignored in a regular package build. This is only used by go
 // generate to create an OpenRPC JSON specification file for a server that
-// providing the the user service.
+// providing the user service.
 
 //go:build ignore
 

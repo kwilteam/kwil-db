@@ -659,7 +659,7 @@ func validatorSetPower(validators []*types.Validator) int64 {
 	return totalPower
 }
 
-// validatorsPower returns the total power of the current validator set
+// validatorSetPower returns the total power of the current validator set
 // according to the DB.
 func (r *TxApp) validatorSetPower() int64 {
 	validators := r.Validators.GetValidators()
