@@ -36,6 +36,8 @@ type executionContext struct {
 	// This is used to prevent nested queries, which can cause
 	// a deadlock or unexpected behavior.
 	queryActive bool
+	// inAction is true if the execution is currently in an action.
+	inAction bool
 }
 
 // subscope creates a new subscope execution context.
@@ -51,6 +53,7 @@ func (e *executionContext) subscope(namespace string) *executionContext {
 		db:             e.db,
 		interpreter:    e.interpreter,
 		logs:           e.logs,
+		inAction:       true,
 	}
 }
 
@@ -58,6 +61,10 @@ func (e *executionContext) subscope(namespace string) *executionContext {
 // and returns an error if they do not.
 func (e *executionContext) checkPrivilege(priv privilege) error {
 	if e.engineCtx.OverrideAuthz {
+		return nil
+	}
+
+	if e.inAction {
 		return nil
 	}
 

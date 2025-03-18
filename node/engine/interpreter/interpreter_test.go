@@ -3195,3 +3195,26 @@ func Test_NamespaceDropsCache(t *testing.T) {
 	_, err = interp.CallWithoutEngineCtx(ctx, tx, "test_ns", "smthn", []any{"hello"}, nil)
 	require.NoError(t, err)
 }
+
+// There is a bug where an in-line select (a select used within an action that is not a standalone statement,
+// but rather part of a larger statement) does not work if the SELECT privileges are revoked. This is unexpected,
+// since privileges should not apply within actions.
+func Test_RevokedInlineSelectInAction(t *testing.T) {
+	db := newTestDB(t, nil, nil)
+
+	ctx := context.Background()
+	tx, err := db.BeginTx(ctx)
+	require.NoError(t, err)
+	defer tx.Rollback(ctx) // always rollback
+
+	interp := newTestInterp(t, tx, nil, true)
+
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `REVOKE SELECT FROM default`, nil, nil)
+	require.NoError(t, err)
+
+	err = interp.ExecuteWithoutEngineCtx(ctx, tx, `CREATE ACTION m() public view returns table(id int) { return SELECT 1 AS id; }`, nil, nil)
+	require.NoError(t, err)
+
+	_, err = interp.Call(newEngineCtx("some_caller"), tx, "", "m", nil, func(r *common.Row) error { return nil })
+	require.NoError(t, err)
+}
