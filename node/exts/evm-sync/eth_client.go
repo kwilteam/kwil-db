@@ -6,9 +6,8 @@ import (
 
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/ethclient"
-	"github.com/jpillora/backoff"
-
 	"github.com/kwilteam/kwil-db/core/log"
+	"github.com/kwilteam/kwil-db/node/exts/erc20-bridge/utils"
 )
 
 // ethClient is a client for interacting with the ethereum blockchain
@@ -29,7 +28,7 @@ func newEthClient(ctx context.Context, rpcurl string, maxRetries int64, done <-c
 	// the max retries are used for resubscribing to the blockchain
 	// if we fail 3 times here, it is likely a permanent error
 	count := 0
-	err := retry(ctx, maxRetries, func() error {
+	err := utils.Retry(ctx, maxRetries, func() error {
 		if count > 0 {
 			logger.Warn("Retrying initial client connection", "attempt", count)
 		}
@@ -54,7 +53,7 @@ func newEthClient(ctx context.Context, rpcurl string, maxRetries int64, done <-c
 // GetLatestBlock gets the latest block number from the ethereum blockchain
 func (ec *ethClient) GetLatestBlock(ctx context.Context) (int64, error) {
 	var blockNumber int64
-	err := retry(ctx, ec.maxRetries, func() error {
+	err := utils.Retry(ctx, ec.maxRetries, func() error {
 		block, err := ec.client.BlockNumber(ctx)
 		if err != nil {
 			ec.logger.Error("Failed to get latest block", "error", err)
@@ -85,7 +84,7 @@ func (ec *ethClient) ListenToBlocks(ctx context.Context, reconnectInterval time.
 		ec.logger.Warn("Resubscribing to Ethereum node", "attempt", retryCount) // anomalous
 		sub.Unsubscribe()
 
-		return retry(ctx, ec.maxRetries, func() error {
+		return utils.Retry(ctx, ec.maxRetries, func() error {
 			retryCount++
 			sub, err = ec.client.SubscribeNewHead(ctx, headers)
 			return err
@@ -131,32 +130,4 @@ func (ec *ethClient) ListenToBlocks(ctx context.Context, reconnectInterval time.
 // Close closes the ethereum client
 func (ec *ethClient) Close() {
 	ec.client.Close()
-}
-
-// retry will retry the function until it is successful, or reached the max retries
-func retry(ctx context.Context, maxRetries int64, fn func() error) error {
-	retrier := &backoff.Backoff{
-		Min:    1 * time.Second,
-		Max:    10 * time.Second,
-		Factor: 2,
-		Jitter: true,
-	}
-
-	for {
-		err := fn()
-		if err == nil {
-			return nil
-		}
-
-		// fail after maxRetries retries
-		if retrier.Attempt() > float64(maxRetries) {
-			return err
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(retrier.Duration()):
-		}
-	}
 }

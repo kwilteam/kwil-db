@@ -249,6 +249,7 @@ func (i *individualListener) listen(ctx context.Context, eventstore listeners.Ev
 }
 
 func (i *individualListener) processEvents(ctx context.Context, from, to int64, eventStore listeners.EventStore, logger log.Logger) error {
+	// NOTE: getLogsFunc should have retry machanism on evm RPC requests!
 	logs, err := i.getLogsFunc(ctx, i.client.client, uint64(from), uint64(to), logger)
 	if err != nil {
 		return err

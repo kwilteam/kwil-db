@@ -223,7 +223,7 @@ func (l *listenerInfo) listen(ctx context.Context, service *common.Service, even
 
 	err = indiv.listen(ctx, eventstore, logger)
 	if err != nil {
-		logger.Error("error listening", "err", err)
+		logger.Error("error listening", "chain", l.chain, "uniquename", l.uniqueName, "err", err)
 	}
 }
 

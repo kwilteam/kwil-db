@@ -1754,6 +1754,7 @@ func (r *rewardExtensionInfo) startTransferListener(ctx context.Context, app *co
 	// but just in case, I copy them to be used in GetLogs, which runs outside of consensus
 	escrowCopy := r.EscrowAddress
 	erc20Copy := r.Erc20Address
+	evmMaxRetries := int64(10) // retry on evm RPC request is curicial
 
 	// we now register synchronization of the Transfer event
 	return evmsync.EventSyncer.RegisterNewListener(evmsync.EVMEventListenerConfig{
@@ -1765,40 +1766,56 @@ func (r *rewardExtensionInfo) startTransferListener(ctx context.Context, app *co
 				return nil, fmt.Errorf("failed to bind to ERC20 filterer: %w", err)
 			}
 
-			iter, err := filt.FilterTransfer(&bind.FilterOpts{
-				Start:   startBlock,
-				End:     &endBlock,
-				Context: ctx,
-			}, nil, []ethcommon.Address{escrowCopy})
+			var transferIter *abigen.Erc20TransferIterator
+			err = utils.Retry(ctx, evmMaxRetries, func() error {
+				transferIter, err = filt.FilterTransfer(&bind.FilterOpts{
+					Start:   startBlock,
+					End:     &endBlock,
+					Context: ctx,
+				}, nil, []ethcommon.Address{escrowCopy})
+				if err != nil {
+					return fmt.Errorf("failed to get transfer logs: %w", err)
+				}
+				return nil
+			})
 			if err != nil {
-				return nil, fmt.Errorf("failed to get transfer logs: %w", err)
+				return nil, err
 			}
-			defer iter.Close()
+			defer transferIter.Close()
 
 			var logs []*evmsync.EthLog
-			for iter.Next() {
+			for transferIter.Next() {
 				logs = append(logs, &evmsync.EthLog{
 					Metadata: logTypeTransfer,
-					Log:      &iter.Event.Raw,
+					Log:      &transferIter.Event.Raw,
 				})
 			}
-			if err := iter.Error(); err != nil {
+			if err := transferIter.Error(); err != nil {
 				return nil, fmt.Errorf("failed to get transfer logs: %w", err)
 			}
 
+			// get RewardPosted logs
 			escrowFilt, err := abigen.NewRewardDistributorFilterer(escrowCopy, client)
 			if err != nil {
 				return nil, fmt.Errorf("failed to bind to RewardDistributor filterer: %w", err)
 			}
 
-			postIter, err := escrowFilt.FilterRewardPosted(&bind.FilterOpts{
-				Start:   startBlock,
-				End:     &endBlock,
-				Context: ctx,
+			var postIter *abigen.RewardDistributorRewardPostedIterator
+			err = utils.Retry(ctx, evmMaxRetries, func() error {
+				postIter, err = escrowFilt.FilterRewardPosted(&bind.FilterOpts{
+					Start:   startBlock,
+					End:     &endBlock,
+					Context: ctx,
+				})
+				if err != nil {
+					return fmt.Errorf("failed to get reward posted logs: %w", err)
+				}
+				return nil
 			})
 			if err != nil {
-				return nil, fmt.Errorf("failed to get reward posted logs: %w", err)
+				return nil, err
 			}
+			defer postIter.Close()
 
 			for postIter.Next() {
 				logs = append(logs, &evmsync.EthLog{
