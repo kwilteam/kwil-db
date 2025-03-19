@@ -19,8 +19,8 @@ import (
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/extensions/listeners"
-	"github.com/kwilteam/kwil-db/node/_exts/evm-sync/chains"
-	orderedsync "github.com/kwilteam/kwil-db/node/_exts/ordered-sync"
+	"github.com/kwilteam/kwil-db/node/exts/evm-sync/chains"
+	orderedsync "github.com/kwilteam/kwil-db/node/exts/ordered-sync"
 )
 
 func init() {

@@ -11,8 +11,8 @@ import (
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/log"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/node/_exts/evm-sync/chains"
 	"github.com/kwilteam/kwil-db/node/engine/interpreter"
+	"github.com/kwilteam/kwil-db/node/exts/evm-sync/chains"
 	"github.com/kwilteam/kwil-db/node/pg"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 )

@@ -15,8 +15,8 @@ import (
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/extensions/listeners"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
-	"github.com/kwilteam/kwil-db/node/_exts/evm-sync/chains"
-	"github.com/kwilteam/kwil-db/node/_exts/poll"
+	"github.com/kwilteam/kwil-db/node/exts/evm-sync/chains"
+	"github.com/kwilteam/kwil-db/node/exts/poll"
 )
 
 // this file implements functionality for getting state from Ethereum.
@@ -211,18 +211,17 @@ func (s *statePoller) runPollFuncs(ctx context.Context, service *common.Service,
 }
 
 func makeNewClient(ctx context.Context, service *common.Service, chain chains.Chain) (*ethclient.Client, error) {
-	panic("bridging has not been enabled in the codebase")
-	// chainConf, err := getChainConf(service.LocalConfig.Erc20Bridge, chain)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("failed to get chain config for %s: %v", chain, err)
-	// }
+	chainConf, err := getChainConf(service.LocalConfig.Erc20Bridge, chain)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get chain config for %s: %v", chain, err)
+	}
 
-	// client, err := ethclient.DialContext(ctx, chainConf.Provider)
-	// if err != nil {
-	// 	return nil, fmt.Errorf("failed to dial ethereum client for %s: %v", chain, err)
-	// }
+	client, err := ethclient.DialContext(ctx, chainConf.Provider)
+	if err != nil {
+		return nil, fmt.Errorf("failed to dial ethereum client for %s: %v", chain, err)
+	}
 
-	// return client, nil
+	return client, nil
 }
 
 type polledEvent struct {
