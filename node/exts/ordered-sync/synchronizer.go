@@ -90,7 +90,7 @@ func (c *cachedSync) readTopicInfoOnStartup(ctx context.Context, app *common.App
 	c.initialized = true
 
 	err := app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
-	SELECT name, resolve_func FROM topics
+	{kwil_ordered_sync}SELECT name, resolve_func FROM topics
 	`, nil, func(r *common.Row) error {
 		if len(r.Values) != 2 {
 			// this should never happen
@@ -123,10 +123,12 @@ func (c *cachedSync) readTopicInfoOnStartup(ctx context.Context, app *common.App
 		}
 		return nil
 	})
-	if errors.Is(err, engine.ErrUnknownTable) {
-		// if unknown table, this is our first run, so we just skip
+
+	if errors.Is(err, engine.ErrNamespaceNotFound) {
+		// if unknown namespace, this is our first run, so we just skip
 		return nil
 	}
+
 	return err
 }
 

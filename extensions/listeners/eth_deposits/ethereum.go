@@ -217,7 +217,7 @@ func retry(ctx context.Context, maxRetries int64, fn func() error) error {
 
 		// fail after maxRetries retries
 		if retrier.Attempt() > float64(maxRetries) {
-			return err
+			return fmt.Errorf("retry done: %w", err)
 		}
 
 		select {
