@@ -807,7 +807,7 @@ func (i *int8Value) Cast(t *types.DataType) (value, error) {
 			return nil, castErr(errors.New("cannot cast int to decimal array"))
 		}
 
-		dec, err := types.ParseDecimal(fmt.Sprint(i.Int64))
+		dec, err := types.ParseDecimalExplicit(fmt.Sprint(i.Int64), t.Metadata[0], t.Metadata[1])
 		if err != nil {
 			return nil, castErr(err)
 		}
@@ -945,7 +945,7 @@ func (s *textValue) Cast(t *types.DataType) (value, error) {
 			return nil, castErr(errors.New("cannot cast text to decimal array"))
 		}
 
-		dec, err := types.ParseDecimal(s.String)
+		dec, err := types.ParseDecimalExplicit(s.String, t.Metadata[0], t.Metadata[1])
 		if err != nil {
 			return nil, castErr(err)
 		}

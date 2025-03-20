@@ -647,6 +647,26 @@ func Test_Cast(t *testing.T) {
 	}
 }
 
+func Test_CastNumerics(t *testing.T) {
+	intVal, err := newValue(int64(10))
+	require.NoError(t, err)
+
+	textVal, err := newValue("10")
+	require.NoError(t, err)
+
+	nt, err := types.NewNumericType(10, 5)
+	require.NoError(t, err)
+
+	dec1, err := intVal.Cast(nt)
+	require.NoError(t, err)
+
+	dec2, err := textVal.Cast(nt)
+	require.NoError(t, err)
+
+	eq(t, dec1.RawValue(), dec2.RawValue())
+	eq(t, dec1.Type(), dec2.Type())
+}
+
 func Test_Unary(t *testing.T) {
 	type testcase struct {
 		name string

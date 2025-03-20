@@ -467,7 +467,7 @@ func (e *executionContext) setVariable(name string, value value) error {
 	}
 
 	if !oldVal.Type().EqualsStrict(value.Type()) {
-		return fmt.Errorf("%w: cannot assign variable of type %s to existing variable of type %s", engine.ErrType, value.Type(), oldVal.Type())
+		return fmt.Errorf("%w: cannot assign variable %s of type %s to existing variable of type %s", engine.ErrType, name, value.Type(), oldVal.Type())
 	}
 
 	foundScope.variables[name] = value

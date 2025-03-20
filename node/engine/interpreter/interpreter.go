@@ -788,7 +788,7 @@ func (i *baseInterpreter) call(ctx *common.EngineContext, db sql.DB, namespace, 
 				return nil, err
 			}
 			if !ok {
-				return nil, fmt.Errorf(`%w: action "%s" expected argument %d to be of type %s, but got %s`, engine.ErrType, action, i, expect[i], val.Type())
+				return nil, fmt.Errorf(`%w: action "%s" expected argument %d to be of type %s, but got %s`, engine.ErrType, action, i+1, expect[i], val.Type())
 			}
 
 			argVals[i] = val

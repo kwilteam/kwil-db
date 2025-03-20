@@ -1184,7 +1184,7 @@ func (i *interpreterPlanner) VisitExpressionFieldAccess(p0 *parse.ExpressionFiel
 }
 
 func (i *interpreterPlanner) VisitExpressionParenthesized(p0 *parse.ExpressionParenthesized) any {
-	return p0.Inner.Accept(i)
+	return cast(p0, p0.Inner.Accept(i).(exprFunc))
 }
 
 func (i *interpreterPlanner) VisitExpressionComparison(p0 *parse.ExpressionComparison) any {

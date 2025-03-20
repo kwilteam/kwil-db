@@ -2090,7 +2090,7 @@ func Test_Actions(t *testing.T) {
 			error('nullif(1,2) is not 1');
 		}
 
-		if nullif(2,1) != 2 {	
+		if nullif(2,1) != 2 {
 			error('nullif(2,1) is not 2');
 		}
 
@@ -2100,6 +2100,16 @@ func Test_Actions(t *testing.T) {
 
 		if nullif(1,null) != 1 {
 			error('nullif(1,null) is not 1');
+		}
+		`),
+		rawTest("int cast", `
+		$a := 1;
+		$b := 2;
+		$c := ($a + $b)::numeric(78,0);
+
+		$d numeric(78,0) := 3::numeric(78,0);
+		if $c != $d {
+			error('c is not d');
 		}
 		`),
 	}
