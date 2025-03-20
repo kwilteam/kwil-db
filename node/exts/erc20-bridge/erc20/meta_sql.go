@@ -13,8 +13,8 @@ import (
 
 	"github.com/kwilteam/kwil-db/common"
 	"github.com/kwilteam/kwil-db/core/types"
-	"github.com/kwilteam/kwil-db/node/_exts/evm-sync/chains"
 	"github.com/kwilteam/kwil-db/node/engine"
+	"github.com/kwilteam/kwil-db/node/exts/evm-sync/chains"
 )
 
 var (
@@ -304,6 +304,24 @@ func transferTokensFromUserToNetwork(ctx context.Context, app *common.App, rewar
 	WHERE id = $reward_id;
 	`, map[string]any{
 		"reward_id": rewardID,
+		"user":      user.Bytes(),
+		"amount":    amount,
+	}, nil)
+}
+
+// lockAndIssue locks balance from a user and issues a reward to the same user.
+func lockAndIssue(ctx context.Context, app *common.App, rewardID *types.UUID, epochID *types.UUID, user ethcommon.Address, amount *types.Decimal) error {
+	return app.Engine.ExecuteWithoutEngineCtx(ctx, app.DB, `
+	{kwil_erc20_meta}UPDATE balances
+	SET balance = balance - $amount
+	WHERE reward_id = $reward_id AND address = $user;
+
+	{kwil_erc20_meta}INSERT INTO epoch_rewards(epoch_id, recipient, amount)
+	VALUES ($epoch_id, $user, $amount)
+	ON CONFLICT (epoch_id, recipient) DO UPDATE SET amount = epoch_rewards.amount + $amount;
+	`, map[string]any{
+		"reward_id": rewardID,
+		"epoch_id":  epochID,
 		"user":      user.Bytes(),
 		"amount":    amount,
 	}, nil)

@@ -292,7 +292,6 @@ func (e *EthDepositConfig) setConfig(m map[string]string) error {
 // Map returns the configuration as a map[string]string.
 // This is used for testing
 func (e *EthDepositConfig) Map() map[string]string {
-
 	return map[string]string{
 		"starting_height":        strconv.FormatInt(e.StartingHeight, 10),
 		"contract_address":       e.ContractAddress,

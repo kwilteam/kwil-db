@@ -22,6 +22,7 @@ import (
 	authExt "github.com/kwilteam/kwil-db/extensions/auth"
 	"github.com/kwilteam/kwil-db/node"
 	"github.com/kwilteam/kwil-db/node/consensus"
+	"github.com/kwilteam/kwil-db/node/exts/erc20-bridge/signersvc"
 	"github.com/kwilteam/kwil-db/node/listeners"
 	rpcserver "github.com/kwilteam/kwil-db/node/services/jsonrpc"
 	"github.com/kwilteam/kwil-db/version"
@@ -43,7 +44,7 @@ type server struct {
 	listeners          *listeners.ListenerManager
 	jsonRPCServer      *rpcserver.Server
 	jsonRPCAdminServer *rpcserver.Server
-	// erc20BridgeSigner  *signersvc.ServiceMgr
+	erc20BridgeSigner  *signersvc.ServiceMgr
 }
 
 func runNode(ctx context.Context, rootDir string, cfg *config.Config, autogen bool, dbOwner string) (err error) {
@@ -260,12 +261,12 @@ func (s *server) Start(ctx context.Context) error {
 	})
 	s.log.Info("listener manager started")
 
-	// // Start erc20 bridge signer svc
-	// if s.erc20BridgeSigner != nil {
-	// 	group.Go(func() error {
-	// 		return s.erc20BridgeSigner.Start(groupCtx)
-	// 	})
-	// }
+	// Start erc20 bridge signer svc
+	if s.erc20BridgeSigner != nil {
+		group.Go(func() error {
+			return s.erc20BridgeSigner.Start(groupCtx)
+		})
+	}
 
 	// TODO: node is starting the consensus engine for ease of testing
 	// Start the consensus engine

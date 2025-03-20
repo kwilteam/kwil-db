@@ -38,11 +38,11 @@ import (
 	"github.com/kwilteam/kwil-db/extensions/listeners"
 	"github.com/kwilteam/kwil-db/extensions/precompiles"
 	"github.com/kwilteam/kwil-db/extensions/resolutions"
-	"github.com/kwilteam/kwil-db/node/_exts/erc20-bridge/abigen"
-	"github.com/kwilteam/kwil-db/node/_exts/erc20-bridge/utils"
-	evmsync "github.com/kwilteam/kwil-db/node/_exts/evm-sync"
-	"github.com/kwilteam/kwil-db/node/_exts/evm-sync/chains"
 	"github.com/kwilteam/kwil-db/node/engine"
+	"github.com/kwilteam/kwil-db/node/exts/erc20-bridge/abigen"
+	"github.com/kwilteam/kwil-db/node/exts/erc20-bridge/utils"
+	evmsync "github.com/kwilteam/kwil-db/node/exts/evm-sync"
+	"github.com/kwilteam/kwil-db/node/exts/evm-sync/chains"
 	"github.com/kwilteam/kwil-db/node/types/sql"
 	"github.com/kwilteam/kwil-db/node/utils/syncmap"
 )
@@ -272,7 +272,7 @@ func init() {
 			// we need to unlock before we call start because it
 			// will acquire the write lock
 			info.mu.Unlock()
-			return info.startTransferListener(ctx, app)
+			return info.startTransferListener()
 		}
 
 		info.mu.Unlock()
@@ -309,7 +309,7 @@ func init() {
 						// transfer listener. Otherwise, we should start the state poller
 						if instance.active {
 							if instance.synced {
-								err = instance.startTransferListener(ctx, app)
+								err = instance.startTransferListener()
 								if err != nil {
 									return err
 								}
@@ -411,7 +411,10 @@ func init() {
 									info.mu.RLock()
 									defer info.mu.RUnlock()
 
-									err = info.startTransferListener(ctx.TxContext.Ctx, app)
+									// an error from startTransferListener is a critical error
+									// in the code, not a user error. Therefore, not too concerned with
+									// rolling back the above changes
+									err = info.startTransferListener()
 									if err != nil {
 										return err
 									}
@@ -443,6 +446,9 @@ func init() {
 								info.mu.RLock()
 								defer info.mu.RUnlock()
 
+								// we may face a transactionality issue if either of these error, since there is already state that has been
+								// committed to the DB. I think it is very unlikely because both of these are simple operations that store
+								// some data and all validations should have already been performed, but it is something to keep an eye on
 								err = createNewRewardInstance(ctx.TxContext.Ctx, app, &info.userProvidedData)
 								if err != nil {
 									return err
@@ -483,6 +489,10 @@ func init() {
 								return fmt.Errorf("reward extension with id %s not found", id)
 							}
 
+							// Later we will need a write lock, but we start with a read lock because
+							// setActiveStatus makes a recursive call to the engine. This will require a read lock
+							// to copy the in-memory state of this extension. Therefore, if we acquire a write lock
+							// here, we will deadlock.
 							info.mu.RLock()
 
 							if !info.active {
@@ -492,13 +502,6 @@ func init() {
 
 							err := setActiveStatus(ctx.TxContext.Ctx, app, id, false)
 							if err != nil {
-								info.mu.RUnlock()
-								return err
-							}
-
-							err = info.stopAllListeners()
-							if err != nil {
-								info.mu.RUnlock()
 								return err
 							}
 
@@ -507,7 +510,10 @@ func init() {
 							info.active = false
 							info.mu.Unlock()
 
-							return nil
+							// stopAllListeners does not require a lock.
+							// Any error returned here suggests some sort of critical bug
+							// in the code, and not a user error.
+							return info.stopAllListeners()
 						},
 					},
 					{
@@ -738,7 +744,7 @@ func init() {
 							// we do at the end of this
 
 							//NOTE: we don't want to use types.DecimalSub() since it will use max precision/scale
-							left, err := info.ownedBalance.Sub(info.ownedBalance, amount)
+							left, err := decMath(info.ownedBalance, amount, types.DecimalSub)
 							if err != nil {
 								info.mu.RUnlock()
 								return err
@@ -807,7 +813,6 @@ func init() {
 						Handler: func(ctx *common.EngineContext, app *common.App, inputs []any, resultFn func([]any) error) error {
 							id := inputs[0].(*types.UUID)
 
-							var err error
 							var amount *types.Decimal
 							// if 'amount' is omitted, withdraw all balance
 							if inputs[1] == nil {
@@ -824,14 +829,7 @@ func init() {
 								amount = inputs[1].(*types.Decimal)
 							}
 
-							// first, lock required 'amount' from caller to the network
-							err = SINGLETON.lockTokens(ctx.TxContext.Ctx, app, id, ctx.TxContext.Caller, amount)
-							if err != nil {
-								return err
-							}
-
-							// then issue to caller itself
-							return SINGLETON.issueTokens(ctx.TxContext.Ctx, app, id, ctx.TxContext.Caller, amount)
+							return SINGLETON.lockAndIssueTokens(ctx.TxContext.Ctx, app, id, ctx.TxContext.Caller, amount)
 						},
 					},
 					{
@@ -1268,17 +1266,17 @@ func init() {
 					return err
 				}
 
-				// put in cache
-				var b32Root [32]byte
-				copy(b32Root[:], root)
-				mtLRUCache.Put(b32Root, jsonBody)
-
 				// create a new epoch
 				newEpoch := newPendingEpoch(id, block)
 				err = createEpoch(ctx, app, newEpoch, id)
 				if err != nil {
 					return err
 				}
+
+				// put merkle tree in cache
+				var b32Root [32]byte
+				copy(b32Root[:], root)
+				mtLRUCache.Put(b32Root, jsonBody)
 
 				newEpochs[*id] = newEpoch
 				return nil
@@ -1394,15 +1392,6 @@ func (e *extensionInfo) lockTokens(ctx context.Context, app *common.App, id *typ
 		return fmt.Errorf("amount needs to be positive")
 	}
 
-	// we call getUsableInstance before transfer to ensure that the extension is active and synced.
-	// We don't actually use the mutex lock here because it will cause a deadlock with the transfer function
-	// (which recursively calls the interpreter), we just simply want to make sure that the extension
-	// is active and synced.
-	info, err := e.getUsableInstance(id)
-	if err != nil {
-		return err
-	}
-
 	bal, err := balanceOf(ctx, app, id, fromAddr)
 	if err != nil {
 		return err
@@ -1417,18 +1406,35 @@ func (e *extensionInfo) lockTokens(ctx context.Context, app *common.App, id *typ
 		return fmt.Errorf("insufficient balance")
 	}
 
+	// we call getUsableInstance before transfer to ensure that the extension is active and synced.
+	// We don't actually use the mutex lock here because it will cause a deadlock with the transfer function
+	// (which recursively calls the interpreter), we just simply want to make sure that the extension
+	// is active and synced.
+	info, err := e.getUsableInstance(id)
+	if err != nil {
+		return err
+	}
+
+	// we add before we store the transfer in the DB because if we have an error in the add,
+	// we dont want to store the transfer in the DB.
+	// We also cannot just acquire a write lock here because transferTokensFromUserToNetwork
+	// calls the engine, which acquires a read lock on this extension.
+	info.mu.RLock()
+	newAddedBal, err := decMath(info.ownedBalance, amount, types.DecimalAdd)
+	if err != nil {
+		info.mu.RUnlock()
+		return err
+	}
+	info.mu.RUnlock()
+
 	err = transferTokensFromUserToNetwork(ctx, app, id, fromAddr, amount)
 	if err != nil {
 		return err
 	}
 
 	info.mu.Lock()
-	defer info.mu.Unlock()
-
-	info.ownedBalance, err = info.ownedBalance.Add(info.ownedBalance, amount)
-	if err != nil {
-		return err
-	}
+	info.ownedBalance = newAddedBal
+	info.mu.Unlock()
 
 	return nil
 }
@@ -1451,7 +1457,7 @@ func (e *extensionInfo) issueTokens(ctx context.Context, app *common.App, id *ty
 	// the read lock before we can acquire the write lock, which
 	// we do at the end of this
 
-	newBal, err := info.ownedBalance.Sub(info.ownedBalance, amount)
+	newBal, err := decMath(info.ownedBalance, amount, types.DecimalSub)
 	if err != nil {
 		info.mu.RUnlock()
 		return err
@@ -1476,11 +1482,83 @@ func (e *extensionInfo) issueTokens(ctx context.Context, app *common.App, id *ty
 
 	info.mu.RUnlock()
 
+	// it is critical that we only update the in-memory balance after the tx has been successfully executed
 	info.mu.Lock()
 	info.ownedBalance = newBal
 	info.mu.Unlock()
 
 	return nil
+}
+
+// lockAndIssueTokens locks tokens and issues them as a reward. It is defined as a separate function
+// in order to ensure it is atomic.
+func (e *extensionInfo) lockAndIssueTokens(ctx context.Context, app *common.App, id *types.UUID, from string, amount *types.Decimal) error {
+	fromAddr, err := ethAddressFromHex(from)
+	if err != nil {
+		return err
+	}
+
+	if !amount.IsPositive() {
+		return fmt.Errorf("amount needs to be positive")
+	}
+
+	bal, err := balanceOf(ctx, app, id, fromAddr)
+	if err != nil {
+		return err
+	}
+
+	cmp, err := bal.Cmp(amount)
+	if err != nil {
+		return err
+	}
+
+	if cmp < 0 {
+		return fmt.Errorf("insufficient balance")
+	}
+
+	// we call getUsableInstance before transfer to ensure that the extension is active and synced.
+	// We don't actually use the mutex lock here because it will cause a deadlock with the transfer function
+	// (which recursively calls the interpreter), we just simply want to make sure that the extension
+	// is active and synced.
+	info, err := e.getUsableInstance(id)
+	if err != nil {
+		return err
+	}
+
+	info.mu.RLock()
+	defer info.mu.RUnlock()
+
+	// we dont need to update the cached data here since we are directly converting
+	// a user balance (which is never cached) into a reward (which is also never cached)
+	err = lockAndIssue(ctx, app, id, info.currentEpoch.ID, fromAddr, amount)
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// decMath is a utility function that performs decimal math, guaranteeing precision and scale AND
+// guaranteeing that the x value is not modified. This is necessary because Kwil's core package
+// only provides functionality for EITHER maintaining precision and scale OR maintaining the original
+// value, but not both. For example, (z *types.Decimal).Add(x,y) will modify z. The types package does this
+// for performance reasons, but in this package, we need to maintain strict control over when in-memory
+// values are updated vs rolled back, so we need to ensure the old underlying value is not modified.
+// This function should pass functions like types.DecimalAdd() RATHER than the methods on the Decimal type.
+func decMath(x, y *types.Decimal, op func(*types.Decimal, *types.Decimal) (*types.Decimal, error)) (*types.Decimal, error) {
+	// the types package's DecimalAdd/DecimalSub return a copy of the result, but it does not guarantee
+	// precision and scale
+	z, err := op(x, y)
+	if err != nil {
+		return nil, err
+	}
+
+	err = z.SetPrecisionAndScale(x.Precision(), x.Scale())
+	if err != nil {
+		return nil, err
+	}
+
+	return z, nil
 }
 
 // getUsableInstance gets an instance and ensures it is active and synced.
@@ -1749,11 +1827,12 @@ func (r *rewardExtensionInfo) startStatePoller() error {
 }
 
 // startTransferListener starts an event listener that listens for Transfer events
-func (r *rewardExtensionInfo) startTransferListener(ctx context.Context, app *common.App) error {
+func (r *rewardExtensionInfo) startTransferListener() error {
 	// I'm not sure if copies are needed because the values should never be modified,
 	// but just in case, I copy them to be used in GetLogs, which runs outside of consensus
 	escrowCopy := r.EscrowAddress
 	erc20Copy := r.Erc20Address
+	evmMaxRetries := int64(10) // retry on evm RPC request is curicial
 
 	// we now register synchronization of the Transfer event
 	return evmsync.EventSyncer.RegisterNewListener(evmsync.EVMEventListenerConfig{
@@ -1765,40 +1844,56 @@ func (r *rewardExtensionInfo) startTransferListener(ctx context.Context, app *co
 				return nil, fmt.Errorf("failed to bind to ERC20 filterer: %w", err)
 			}
 
-			iter, err := filt.FilterTransfer(&bind.FilterOpts{
-				Start:   startBlock,
-				End:     &endBlock,
-				Context: ctx,
-			}, nil, []ethcommon.Address{escrowCopy})
+			var transferIter *abigen.Erc20TransferIterator
+			err = utils.Retry(ctx, evmMaxRetries, func() error {
+				transferIter, err = filt.FilterTransfer(&bind.FilterOpts{
+					Start:   startBlock,
+					End:     &endBlock,
+					Context: ctx,
+				}, nil, []ethcommon.Address{escrowCopy})
+				if err != nil {
+					return fmt.Errorf("failed to get transfer logs: %w", err)
+				}
+				return nil
+			})
 			if err != nil {
-				return nil, fmt.Errorf("failed to get transfer logs: %w", err)
+				return nil, err
 			}
-			defer iter.Close()
+			defer transferIter.Close()
 
 			var logs []*evmsync.EthLog
-			for iter.Next() {
+			for transferIter.Next() {
 				logs = append(logs, &evmsync.EthLog{
 					Metadata: logTypeTransfer,
-					Log:      &iter.Event.Raw,
+					Log:      &transferIter.Event.Raw,
 				})
 			}
-			if err := iter.Error(); err != nil {
+			if err := transferIter.Error(); err != nil {
 				return nil, fmt.Errorf("failed to get transfer logs: %w", err)
 			}
 
+			// get RewardPosted logs
 			escrowFilt, err := abigen.NewRewardDistributorFilterer(escrowCopy, client)
 			if err != nil {
 				return nil, fmt.Errorf("failed to bind to RewardDistributor filterer: %w", err)
 			}
 
-			postIter, err := escrowFilt.FilterRewardPosted(&bind.FilterOpts{
-				Start:   startBlock,
-				End:     &endBlock,
-				Context: ctx,
+			var postIter *abigen.RewardDistributorRewardPostedIterator
+			err = utils.Retry(ctx, evmMaxRetries, func() error {
+				postIter, err = escrowFilt.FilterRewardPosted(&bind.FilterOpts{
+					Start:   startBlock,
+					End:     &endBlock,
+					Context: ctx,
+				})
+				if err != nil {
+					return fmt.Errorf("failed to get reward posted logs: %w", err)
+				}
+				return nil
 			})
 			if err != nil {
-				return nil, fmt.Errorf("failed to get reward posted logs: %w", err)
+				return nil, err
 			}
+			defer postIter.Close()
 
 			for postIter.Next() {
 				logs = append(logs, &evmsync.EthLog{
