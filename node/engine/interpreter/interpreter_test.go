@@ -1183,925 +1183,925 @@ func Test_Actions(t *testing.T) {
 	_ = rawTest
 
 	tests := []testcase{
-		// {
-		// 	name: "insert and select",
-		// 	stmt: []string{`
-		// 	CREATE ACTION create_user($name text, $age int) public returns (count int) {
-		// 		INSERT INTO users (id, name, age)
-		// 		VALUES (1, $name, $age);
+		{
+			name: "insert and select",
+			stmt: []string{`
+			CREATE ACTION create_user($name text, $age int) public returns (count int) {
+				INSERT INTO users (id, name, age)
+				VALUES (1, $name, $age);
 
-		// 		for $row in SELECT count(*) as count FROM users WHERE name = $name {
-		// 			RETURN $row.count;
-		// 		};
+				for $row in SELECT count(*) as count FROM users WHERE name = $name {
+					RETURN $row.count;
+				};
 
-		// 		error('user not found');
-		// 	}
-		// 	`},
-		// 	action: "create_user",
-		// 	values: []any{"Alice", int64(30)},
-		// 	results: [][]any{
-		// 		{int64(1)},
-		// 	},
-		// },
-		// {
-		// 	name: "read values out of the db, perform arithmetic and conditionals",
-		// 	stmt: []string{`INSERT INTO users(id, name, age) VALUES (1, 'satoshi', 42), (2, 'hal finney', 50), (3, 'craig wright', 45)`, `
-		// 	CREATE ACTION do_something() public view returns (result int) {
-		// 		$total int8;
-		// 		$sum int8;
-		// 		for $row in SELECT count(*) as count, sum(age) as sum FROM users WHERE age >= 45 {
-		// 			$total := $row.count::int8;
-		// 			$sum := $row.sum::int8;
-		// 		}
-		// 		if $total is null {
-		// 			error('no users found');
-		// 		}
+				error('user not found');
+			}
+			`},
+			action: "create_user",
+			values: []any{"Alice", int64(30)},
+			results: [][]any{
+				{int64(1)},
+			},
+		},
+		{
+			name: "read values out of the db, perform arithmetic and conditionals",
+			stmt: []string{`INSERT INTO users(id, name, age) VALUES (1, 'satoshi', 42), (2, 'hal finney', 50), (3, 'craig wright', 45)`, `
+			CREATE ACTION do_something() public view returns (result int) {
+				$total int8;
+				$sum int8;
+				for $row in SELECT count(*) as count, sum(age) as sum FROM users WHERE age >= 45 {
+					$total := $row.count::int8;
+					$sum := $row.sum::int8;
+				}
+				if $total is null {
+					error('no users found');
+				}
 
-		// 		-- random arithmetic
-		// 		$result := ($total * 2 + $sum)/3; -- (2 * 2 + 95)/3 = 33
+				-- random arithmetic
+				$result := ($total * 2 + $sum)/3; -- (2 * 2 + 95)/3 = 33
 
-		// 		if $result < 33 {
-		// 			error('result is less than 33');
-		// 		}
-		// 		if $result > 33 {
-		// 			error('result is greater than 33');
-		// 		}
+				if $result < 33 {
+					error('result is less than 33');
+				}
+				if $result > 33 {
+					error('result is greater than 33');
+				}
 
-		// 		RETURN $result;
-		// 	}
-		// 	`},
-		// 	action: "do_something",
-		// 	results: [][]any{
-		// 		{int64(33)},
-		// 	},
-		// },
-		// {
-		// 	name: "return next from another action",
-		// 	stmt: []string{
-		// 		`INSERT INTO users(id, name, age) VALUES (1, 'satoshi', 42), (2, 'hal finney', 50), (3, 'craig wright', 45)`,
-		// 		`CREATE NAMESPACE test;`,
-		// 		`{test}CREATE ACTION get_users() public view returns table(name text, age int) {
-		// 			return SELECT name, age FROM main.users ORDER BY id;
-		// 		}`,
-		// 		`CREATE ACTION get_next_user($d int) public view returns table(name text, age int) {
-		// 			for $row in test.get_users() {
-		// 				RETURN NEXT $row.name, $row.age/$d;
-		// 			}
-		// 		}`,
-		// 	},
-		// 	values: []any{int64(2)},
-		// 	action: "get_next_user",
-		// 	results: [][]any{
-		// 		{"satoshi", int64(21)},
-		// 		{"hal finney", int64(25)},
-		// 		{"craig wright", int64(22)},
-		// 	},
-		// },
-		// {
-		// 	name: "calling an action that returns several variables",
-		// 	stmt: []string{
-		// 		`CREATE ACTION get_several_values($i int) public view returns (value1 int, value2 int, value3 int) {
-		// 			RETURN $i, $i + 1, $i + 2;
-		// 		}`,
-		// 		`CREATE ACTION call_get_several_values() public view {
-		// 			$value1, $value2, $value3 := get_several_values(1);
+				RETURN $result;
+			}
+			`},
+			action: "do_something",
+			results: [][]any{
+				{int64(33)},
+			},
+		},
+		{
+			name: "return next from another action",
+			stmt: []string{
+				`INSERT INTO users(id, name, age) VALUES (1, 'satoshi', 42), (2, 'hal finney', 50), (3, 'craig wright', 45)`,
+				`CREATE NAMESPACE test;`,
+				`{test}CREATE ACTION get_users() public view returns table(name text, age int) {
+					return SELECT name, age FROM main.users ORDER BY id;
+				}`,
+				`CREATE ACTION get_next_user($d int) public view returns table(name text, age int) {
+					for $row in test.get_users() {
+						RETURN NEXT $row.name, $row.age/$d;
+					}
+				}`,
+			},
+			values: []any{int64(2)},
+			action: "get_next_user",
+			results: [][]any{
+				{"satoshi", int64(21)},
+				{"hal finney", int64(25)},
+				{"craig wright", int64(22)},
+			},
+		},
+		{
+			name: "calling an action that returns several variables",
+			stmt: []string{
+				`CREATE ACTION get_several_values($i int) public view returns (value1 int, value2 int, value3 int) {
+					RETURN $i, $i + 1, $i + 2;
+				}`,
+				`CREATE ACTION call_get_several_values() public view {
+					$value1, $value2, $value3 := get_several_values(1);
 
-		// 			_, $value2Again, _ := get_several_values(1);
-		// 			$value1Again := get_several_values(1);
+					_, $value2Again, _ := get_several_values(1);
+					$value1Again := get_several_values(1);
 
-		// 			if $value1 != 1 {
-		// 				error('value1 is not 1');
-		// 			}
-		// 			if $value2 != 2 {
-		// 				error('value2 is not 2');
-		// 			}
-		// 			if $value3 != 3 {
-		// 				error('value3 is not 3');
-		// 			}
-		// 			if $value2Again != 2 {
-		// 				error('value2Again is not 2');
-		// 			}
-		// 			if $value1Again != 1 {
-		// 				error('value1Again is not 1');
-		// 			}
-		// 		}`,
-		// 	},
-		// 	action: "call_get_several_values",
-		// },
-		// {
-		// 	// we test a single typed receiver because it calls a different interpreter function
-		// 	name: "calling an action that returns a table to values (single receiver)",
-		// 	stmt: []string{
-		// 		`CREATE ACTION get_table() public view returns table(value int) {
-		// 			RETURN NEXT 1;
-		// 			RETURN NEXT 2;
-		// 		}`,
-		// 		`CREATE ACTION call_get_table() public view {
-		// 			$value1 text := get_table();
-		// 		}`,
-		// 	},
-		// 	action: "call_get_table",
-		// 	err:    engine.ErrReturnShape,
-		// },
-		// {
-		// 	name: "calling an action that returns a table to values (multiple receivers)",
-		// 	stmt: []string{
-		// 		`CREATE ACTION get_table() public view returns table(value int) {
-		// 			RETURN NEXT 1, 2, 3;
-		// 			RETURN NEXT 4, 5, 6;
-		// 		};
-		// 		`,
-		// 		`CREATE ACTION call_get_table() public view {
-		// 			$value1, $value2, $value3 := get_table();
-		// 		}`,
-		// 	},
-		// 	action: "call_get_table",
-		// 	err:    engine.ErrReturnShape,
-		// },
-		// {
-		// 	name: "calling an action that returns not enough values (single receiver)",
-		// 	stmt: []string{
-		// 		`CREATE ACTION get_val() public view { /*returns nothing*/ }`,
-		// 		`CREATE ACTION call_get_val() public view {
-		// 			$value1 text := get_val();
-		// 		}`,
-		// 	},
-		// 	action: "call_get_val",
-		// 	err:    engine.ErrReturnShape,
-		// },
-		// {
-		// 	name: "calling an action that returns not enough values (multiple receivers)",
-		// 	stmt: []string{
-		// 		`CREATE ACTION get_val() public view returns (int) {
-		// 			RETURN 1;
-		// 		}`,
-		// 		`CREATE ACTION call_get_val() public view {
-		// 			$value1, $value2 := get_val();
-		// 		}`,
-		// 	},
-		// 	action: "call_get_val",
-		// 	err:    engine.ErrReturnShape,
-		// },
-		// {
-		// 	// we test a single typed receiver because it calls a different interpreter function
-		// 	name: "calling an action that returns wrong type (single receiver)",
-		// 	stmt: []string{
-		// 		`CREATE ACTION get_val() public view returns (int) {
-		// 			RETURN 1;
-		// 		}`,
-		// 		`CREATE ACTION call_get_val() public view {
-		// 			$value1 text := get_val();
-		// 		}`,
-		// 	},
-		// 	action: "call_get_val",
-		// 	err:    engine.ErrType,
-		// },
-		// {
-		// 	// we test multiple returns because it calls a different interpreter function
-		// 	// if we are returning more than 1 value
-		// 	name: "calling an action that returns wrong type (multiple receivers)",
-		// 	stmt: []string{
-		// 		`CREATE ACTION get_val() public view returns (int, int) {
-		// 			RETURN 1, 2;
-		// 		}`,
-		// 		`CREATE ACTION call_get_val() public view {
-		// 			$value1 text;
-		// 			$value1, $value2 := get_val();
-		// 		}`,
-		// 	},
-		// 	action: "call_get_val",
-		// 	err:    engine.ErrType,
-		// },
-		// rawTest("loop over array", `
-		// $arr := array[1,2,3];
-		// $sum := 0;
-		// for $i in array $arr {
-		// 	$sum := $sum + $i;
-		// };
+					if $value1 != 1 {
+						error('value1 is not 1');
+					}
+					if $value2 != 2 {
+						error('value2 is not 2');
+					}
+					if $value3 != 3 {
+						error('value3 is not 3');
+					}
+					if $value2Again != 2 {
+						error('value2Again is not 2');
+					}
+					if $value1Again != 1 {
+						error('value1Again is not 1');
+					}
+				}`,
+			},
+			action: "call_get_several_values",
+		},
+		{
+			// we test a single typed receiver because it calls a different interpreter function
+			name: "calling an action that returns a table to values (single receiver)",
+			stmt: []string{
+				`CREATE ACTION get_table() public view returns table(value int) {
+					RETURN NEXT 1;
+					RETURN NEXT 2;
+				}`,
+				`CREATE ACTION call_get_table() public view {
+					$value1 text := get_table();
+				}`,
+			},
+			action: "call_get_table",
+			err:    engine.ErrReturnShape,
+		},
+		{
+			name: "calling an action that returns a table to values (multiple receivers)",
+			stmt: []string{
+				`CREATE ACTION get_table() public view returns table(value int) {
+					RETURN NEXT 1, 2, 3;
+					RETURN NEXT 4, 5, 6;
+				};
+				`,
+				`CREATE ACTION call_get_table() public view {
+					$value1, $value2, $value3 := get_table();
+				}`,
+			},
+			action: "call_get_table",
+			err:    engine.ErrReturnShape,
+		},
+		{
+			name: "calling an action that returns not enough values (single receiver)",
+			stmt: []string{
+				`CREATE ACTION get_val() public view { /*returns nothing*/ }`,
+				`CREATE ACTION call_get_val() public view {
+					$value1 text := get_val();
+				}`,
+			},
+			action: "call_get_val",
+			err:    engine.ErrReturnShape,
+		},
+		{
+			name: "calling an action that returns not enough values (multiple receivers)",
+			stmt: []string{
+				`CREATE ACTION get_val() public view returns (int) {
+					RETURN 1;
+				}`,
+				`CREATE ACTION call_get_val() public view {
+					$value1, $value2 := get_val();
+				}`,
+			},
+			action: "call_get_val",
+			err:    engine.ErrReturnShape,
+		},
+		{
+			// we test a single typed receiver because it calls a different interpreter function
+			name: "calling an action that returns wrong type (single receiver)",
+			stmt: []string{
+				`CREATE ACTION get_val() public view returns (int) {
+					RETURN 1;
+				}`,
+				`CREATE ACTION call_get_val() public view {
+					$value1 text := get_val();
+				}`,
+			},
+			action: "call_get_val",
+			err:    engine.ErrType,
+		},
+		{
+			// we test multiple returns because it calls a different interpreter function
+			// if we are returning more than 1 value
+			name: "calling an action that returns wrong type (multiple receivers)",
+			stmt: []string{
+				`CREATE ACTION get_val() public view returns (int, int) {
+					RETURN 1, 2;
+				}`,
+				`CREATE ACTION call_get_val() public view {
+					$value1 text;
+					$value1, $value2 := get_val();
+				}`,
+			},
+			action: "call_get_val",
+			err:    engine.ErrType,
+		},
+		rawTest("loop over array", `
+		$arr := array[1,2,3];
+		$sum := 0;
+		for $i in array $arr {
+			$sum := $sum + $i;
+		};
 
-		// if $sum != 6{
-		// 	error('sum is not 6');
-		// };
-		// `),
-		// rawTest("loop over range", `
-		// $sum := 0;
-		// for $i in 1..4 {
-		// 	$sum := $sum + $i;
-		// }
+		if $sum != 6{
+			error('sum is not 6');
+		};
+		`),
+		rawTest("loop over range", `
+		$sum := 0;
+		for $i in 1..4 {
+			$sum := $sum + $i;
+		}
 
-		// if $sum != 10 {
-		// 	error('sum is not 10');
-		// }
-		// `),
-		// rawTest("slice", `
-		// $arr := array[1,2,3,4,5];
-		// $slice := $arr[2:3];
-		// if $slice != array[2,3] {
-		// 	error('slice is not [2,3]');
-		// }
-		// `),
-		// rawTest("assign to array value", `
-		// $arr := array[1,2,3];
-		// $arr[2] := 5;
-		// if $arr != array[1,5,3] {
-		// 	error('array is not [1,5,3]');
-		// }
-		// if $arr[3] != 3 {
-		// 	error('array[3] is not 3');
-		// }
-		// `),
-		// {
-		// 	name: "call another action",
-		// 	stmt: []string{
-		// 		`CREATE NAMESPACE other;`,
-		// 		`{other}CREATE ACTION get_single_value() public view returns (value int) { return 1; }`,
-		// 		`{other}CREATE ACTION get_several_values() public view returns (value1 int, value2 int) { return 2, 3; }`,
-		// 		`{other}CREATE ACTION get_table($to int, $from int) public view returns table(value int) {
-		// 			for $i in $to..$from {
-		// 				RETURN NEXT $i;
-		// 			};
-		// 		}`,
-		// 		`CREATE ACTION call_other() public view {
-		// 			$value1 := other.get_single_value();
-		// 			if $value1 != 1 {
-		// 				error('value1 is not 1');
-		// 			}
+		if $sum != 10 {
+			error('sum is not 10');
+		}
+		`),
+		rawTest("slice", `
+		$arr := array[1,2,3,4,5];
+		$slice := $arr[2:3];
+		if $slice != array[2,3] {
+			error('slice is not [2,3]');
+		}
+		`),
+		rawTest("assign to array value", `
+		$arr := array[1,2,3];
+		$arr[2] := 5;
+		if $arr != array[1,5,3] {
+			error('array is not [1,5,3]');
+		}
+		if $arr[3] != 3 {
+			error('array[3] is not 3');
+		}
+		`),
+		{
+			name: "call another action",
+			stmt: []string{
+				`CREATE NAMESPACE other;`,
+				`{other}CREATE ACTION get_single_value() public view returns (value int) { return 1; }`,
+				`{other}CREATE ACTION get_several_values() public view returns (value1 int, value2 int) { return 2, 3; }`,
+				`{other}CREATE ACTION get_table($to int, $from int) public view returns table(value int) {
+					for $i in $to..$from {
+						RETURN NEXT $i;
+					};
+				}`,
+				`CREATE ACTION call_other() public view {
+					$value1 := other.get_single_value();
+					if $value1 != 1 {
+						error('value1 is not 1');
+					}
 
-		// 			$value2, $value3 := other.get_several_values();
-		// 			if $value2 != 2 {
-		// 				error('value2 is not 2');
-		// 			}
-		// 			if $value3 != 3 {
-		// 				error('value3 is not 3');
-		// 			}
+					$value2, $value3 := other.get_several_values();
+					if $value2 != 2 {
+						error('value2 is not 2');
+					}
+					if $value3 != 3 {
+						error('value3 is not 3');
+					}
 
-		// 			_, $value3Again := other.get_several_values();
-		// 			if $value3Again != 3 {
-		// 				error('value3Again is not 3');
-		// 			}
+					_, $value3Again := other.get_several_values();
+					if $value3Again != 3 {
+						error('value3Again is not 3');
+					}
 
-		// 			$iter := 0;
-		// 			for $row in other.get_table(1, 4) {
-		// 				$iter := $iter + 1;
-		// 				if $row.value != $iter {
-		// 					error('value is not equal to iter');
-		// 				}
-		// 			}
-		// 			if $iter != 4 {
-		// 				error('iter is not 4');
-		// 			}
-		// 		}`,
-		// 	},
-		// 	action: "call_other",
-		// },
-		// rawTest("assign notice to a var", `
-		// $a := notice('hello');
-		// `, engine.ErrReturnShape),
-		// rawTest("testing if, else if, else", `
-		// $a := 1;
-		// $b := 2;
-		// $total := 0;
-		// if $a < $b {
-		// 	$total := $total + 1;
-		// } else {
-		// 	error('a is not less than b');
-		// }
+					$iter := 0;
+					for $row in other.get_table(1, 4) {
+						$iter := $iter + 1;
+						if $row.value != $iter {
+							error('value is not equal to iter');
+						}
+					}
+					if $iter != 4 {
+						error('iter is not 4');
+					}
+				}`,
+			},
+			action: "call_other",
+		},
+		rawTest("assign notice to a var", `
+		$a := notice('hello');
+		`, engine.ErrReturnShape),
+		rawTest("testing if, else if, else", `
+		$a := 1;
+		$b := 2;
+		$total := 0;
+		if $a < $b {
+			$total := $total + 1;
+		} else {
+			error('a is not less than b');
+		}
 
-		// if $a > $b {
-		// 	error('a is not greater than b');
-		// } else if $a == $b {
-		// 	error('a is not equal to b');
-		// } else {
-		// 	$total := $total + 1;
-		// }
+		if $a > $b {
+			error('a is not greater than b');
+		} else if $a == $b {
+			error('a is not equal to b');
+		} else {
+			$total := $total + 1;
+		}
 
-		// if $a + $b == 4 {
-		// 	error('a + b is not 4');
-		// } elseif $a + $b == 3 { -- supports else if and elseif
-		// 	$total := $total + 1;
-		// } else {
-		// 	error('a + b is not 3');
-		// }
+		if $a + $b == 4 {
+			error('a + b is not 4');
+		} elseif $a + $b == 3 { -- supports else if and elseif
+			$total := $total + 1;
+		} else {
+			error('a + b is not 3');
+		}
 
-		// if $total != 3 {
-		// 	error('total is not 3');
-		// }
-		// `),
-		// rawTest("break", `
-		// $sum := 0;
-		// for $i in 1..10 {
-		// 	$sum := $sum + $i;
-		// 	if $i == 5 {
-		// 		break;
-		// 	}
-		// }
+		if $total != 3 {
+			error('total is not 3');
+		}
+		`),
+		rawTest("break", `
+		$sum := 0;
+		for $i in 1..10 {
+			$sum := $sum + $i;
+			if $i == 5 {
+				break;
+			}
+		}
 
-		// if $sum != 15 {
-		// 	error('sum is not 15, but ' || $sum::text);
-		// }
-		// `),
-		// rawTest("continue", `
-		// $sum := 0;
-		// for $i in 1..10 {
-		// 	if $i == 5 {
-		// 		continue;
-		// 	}
-		// 	$sum := $sum + $i;
-		// }
+		if $sum != 15 {
+			error('sum is not 15, but ' || $sum::text);
+		}
+		`),
+		rawTest("continue", `
+		$sum := 0;
+		for $i in 1..10 {
+			if $i == 5 {
+				continue;
+			}
+			$sum := $sum + $i;
+		}
 
-		// if $sum != 50 {
-		// 	error('sum is not 50, but ' || $sum::text);
-		// }
-		// `),
-		// rawTest("function call expression", `
-		// if abs(-1) != 1 {
-		// 	error('abs(-1) is not 1');
-		// }
-		// `),
-		// rawTest("logical expression", `
-		// if true and false {
-		// 	error('true and false is not false');
-		// }
+		if $sum != 50 {
+			error('sum is not 50, but ' || $sum::text);
+		}
+		`),
+		rawTest("function call expression", `
+		if abs(-1) != 1 {
+			error('abs(-1) is not 1');
+		}
+		`),
+		rawTest("logical expression", `
+		if true and false {
+			error('true and false is not false');
+		}
 
-		// if true or false {
-		// 	-- pass
-		// } else {
-		// 	error('true or false is not true');
-		// }
+		if true or false {
+			-- pass
+		} else {
+			error('true or false is not true');
+		}
 
-		// if (true or false) and true {
-		// 	-- pass
-		// } else {
-		// 	error('(true or false) and true is not true');
-		// }
+		if (true or false) and true {
+			-- pass
+		} else {
+			error('(true or false) and true is not true');
+		}
 
-		// if true and null {
-		// 	error('true and null should be null');
-		// }
-		// if null and false {
-		// 	error('null and false should be null');
-		// }
-		// `),
-		// rawTest("arithmetic", `
-		// if 1 + 2 != 3 {
-		// 	error('1 + 2 is not 3');
-		// }
-		// if 1 - 2 != -1 {
-		// 	error('1 - 2 is not -1');
-		// }
-		// if 2 * 2 != 4 {
-		// 	error('2 * 2 is not 4');
-		// }
-		// if 4 / 2 != 2 {
-		// 	error('4 / 2 is not 2');
-		// }
-		// if 5 % 2 != 1 {
-		// 	error('5 % 2 is not 1');
-		// }
-		// if 5 + null is not null {
-		// 	error('5 + null is not null');
-		// }
-		// `),
-		// {
-		// 	name: "replace action",
-		// 	stmt: []string{
-		// 		"CREATE ACTION act() public { error('replace me'); };",
-		// 		"CREATE OR REPLACE ACTION act() public { /* no error */ };",
-		// 	},
-		// 	action: "act",
-		// },
-		// rawTest("adding a string to a number", `$a := 1 + 'a';`, engine.ErrType),
-		// rawTest("if on a number", `if 'a' { error('should not be true'); }`, engine.ErrType),
-		// rawTest("invalid function arg type", `abs('a');`, engine.ErrType),
+		if true and null {
+			error('true and null should be null');
+		}
+		if null and false {
+			error('null and false should be null');
+		}
+		`),
+		rawTest("arithmetic", `
+		if 1 + 2 != 3 {
+			error('1 + 2 is not 3');
+		}
+		if 1 - 2 != -1 {
+			error('1 - 2 is not -1');
+		}
+		if 2 * 2 != 4 {
+			error('2 * 2 is not 4');
+		}
+		if 4 / 2 != 2 {
+			error('4 / 2 is not 2');
+		}
+		if 5 % 2 != 1 {
+			error('5 % 2 is not 1');
+		}
+		if 5 + null is not null {
+			error('5 + null is not null');
+		}
+		`),
+		{
+			name: "replace action",
+			stmt: []string{
+				"CREATE ACTION act() public { error('replace me'); };",
+				"CREATE OR REPLACE ACTION act() public { /* no error */ };",
+			},
+			action: "act",
+		},
+		rawTest("adding a string to a number", `$a := 1 + 'a';`, engine.ErrType),
+		rawTest("if on a number", `if 'a' { error('should not be true'); }`, engine.ErrType),
+		rawTest("invalid function arg type", `abs('a');`, engine.ErrType),
 
-		// rawTest("for loop with invalid range", `for $i in 'a'..3 { error('should not be true'); }`, engine.ErrType),
-		// rawTest("for loop with invalid array", `for $i in array 'a' { error('should not be true'); }`, engine.ErrType),
-		// {
-		// 	name: "for loop over action that returns many records",
-		// 	stmt: []string{
-		// 		`CREATE ACTION get_users() public view returns table(name text, age int) {
-		// 			return next 'satoshi', 42;
-		// 			return next 'hal finney', 50;
-		// 		}`,
-		// 		`CREATE ACTION loop_over_users() public view {
-		// 			$i := 0;
-		// 			for $row in get_users() {
-		// 				if $i == 0 {
-		// 					if $row.name != 'satoshi' {
-		// 						error('name is not satoshi');
-		// 					};
-		// 				} else if $i == 1 {
-		// 					if $row.name != 'hal finney' {
-		// 						error('name is not hal finney');
-		// 					};
-		// 				} else {
-		// 					error('too many rows');
-		// 				}
+		rawTest("for loop with invalid range", `for $i in 'a'..3 { error('should not be true'); }`, engine.ErrType),
+		rawTest("for loop with invalid array", `for $i in array 'a' { error('should not be true'); }`, engine.ErrType),
+		{
+			name: "for loop over action that returns many records",
+			stmt: []string{
+				`CREATE ACTION get_users() public view returns table(name text, age int) {
+					return next 'satoshi', 42;
+					return next 'hal finney', 50;
+				}`,
+				`CREATE ACTION loop_over_users() public view {
+					$i := 0;
+					for $row in get_users() {
+						if $i == 0 {
+							if $row.name != 'satoshi' {
+								error('name is not satoshi');
+							};
+						} else if $i == 1 {
+							if $row.name != 'hal finney' {
+								error('name is not hal finney');
+							};
+						} else {
+							error('too many rows');
+						}
 
-		// 				$i := $i + 1;
-		// 			};
-		// 		}`,
-		// 	},
-		// 	action: "loop_over_users",
-		// },
-		// {
-		// 	name: "for loop over action that returns an array",
-		// 	stmt: []string{
-		// 		`CREATE ACTION get_users($a int, $b int) public view returns (int[]) {
-		// 			return array[$a, $b];
-		// 		}`,
-		// 		`CREATE ACTION loop_over_users() public view {
-		// 			$i := 0;
-		// 			for $row in array get_users(1,2) {
-		// 				$i := $i + 1;
-		// 			}
-		// 			if $i != 2 {
-		// 				error('expected 2 rows');
-		// 			}
+						$i := $i + 1;
+					};
+				}`,
+			},
+			action: "loop_over_users",
+		},
+		{
+			name: "for loop over action that returns an array",
+			stmt: []string{
+				`CREATE ACTION get_users($a int, $b int) public view returns (int[]) {
+					return array[$a, $b];
+				}`,
+				`CREATE ACTION loop_over_users() public view {
+					$i := 0;
+					for $row in array get_users(1,2) {
+						$i := $i + 1;
+					}
+					if $i != 2 {
+						error('expected 2 rows');
+					}
 
-		// 			$i := 0;
-		// 			-- without the array keyword, it should be treated as a single row
-		// 			for $row in get_users(3,4) {
-		// 				$i := $i + 1;
-		// 			}
-		// 			if $i != 1 {
-		// 				error('expected 1 row');
-		// 			}
-		// 		}`,
-		// 	},
-		// 	action: "loop_over_users",
-		// },
-		// rawTest("loop over array without ARRAY keyword", `
-		// $a := array[1,2,3];
-		// for $i in $a {
-		// 	error('should not be true');
-		// }
-		// `, engine.ErrLoop),
-		// {
-		// 	name: "nested query",
-		// 	stmt: []string{
-		// 		`CREATE ACTION create_users() public returns table(name text, age int) {
-		// 			for $row in SELECT 'satoshi' as name, 42 as age {
-		// 				INSERT INTO users (id, name, age) VALUES (1, $row.name, $row.age);
-		// 			}
+					$i := 0;
+					-- without the array keyword, it should be treated as a single row
+					for $row in get_users(3,4) {
+						$i := $i + 1;
+					}
+					if $i != 1 {
+						error('expected 1 row');
+					}
+				}`,
+			},
+			action: "loop_over_users",
+		},
+		rawTest("loop over array without ARRAY keyword", `
+		$a := array[1,2,3];
+		for $i in $a {
+			error('should not be true');
+		}
+		`, engine.ErrLoop),
+		{
+			name: "nested query",
+			stmt: []string{
+				`CREATE ACTION create_users() public returns table(name text, age int) {
+					for $row in SELECT 'satoshi' as name, 42 as age {
+						INSERT INTO users (id, name, age) VALUES (1, $row.name, $row.age);
+					}
 
-		// 			return SELECT name, age FROM users;
-		// 		}`,
-		// 	},
-		// 	action: "create_users",
-		// 	err:    engine.ErrQueryActive,
-		// },
-		// // case sensitivity
-		// {
-		// 	name: "case insensitivity",
-		// 	stmt: []string{
-		// 		"CREATE NAMESPACE cAsE_senSitivE;",
-		// 		"{cAsE_SenSitive}CReATE TaBLE tAbLee (cOl iNT PRImARY KEY);",
-		// 		"{CAsE_SenSitive}INSeRT InTO tAbLEe (cOL) VaLUES (1);",
-		// 		"{cASE_SENSITIVE}CREATE InDEX idX ON tAblee (Col);",
-		// 		"{cAsE_sEnSiTive}DROP INDEX iDx;",
-		// 		`{cAsE_sENSiTive}CREATE AcTiON aCt($aA inT) PuBLIC vIeW retUrns tabLe(vAl InT) {
-		// 					Return seleCt $Aa + 1;
-		// 				};`,
-		// 		`{cAsE_sEnSiTivE}CrEate AcTion acT2() pUbLic vIew ReTurns tAble(vAl Int) {
-		// 					for $rOw in Act(1) {
-		// 						rEturn NeXt $roW.VAL;
-		// 					}
-		// 				}`,
-		// 		// roles
-		// 		`CREATE ROLE teSt_rOle;`,
-		// 		`grant test_rolE to 'user';`,
-		// 		`revoke tesT_Role from 'user';`,
-		// 		`grant CaLL oN CASE_SEnsItive TO Test_rOle;`,
-		// 		`revoke cALl on case_SENsitive from test_ROLe;`,
-		// 		`dRop RoLe tEst_ROLE;`,
-		// 		// namespaces
-		// 		`CREATE NAMESPACE tEst_Namespace;`,
-		// 		`DROP NAMESPACE test_namespACe;`,
-		// 	},
-		// 	namespace: "case_sensITIVE",
-		// 	action:    "Act2",
-		// 	results:   [][]any{{int64(2)}},
-		// },
-		// rawTest("null array index", `
-		// $arr := array[1,2,3];
-		// $idx int;
-		// $a := $arr[$idx];
-		// if $a is not null {
-		// 	error('a is not null');
-		// }
+					return SELECT name, age FROM users;
+				}`,
+			},
+			action: "create_users",
+			err:    engine.ErrQueryActive,
+		},
+		// case sensitivity
+		{
+			name: "case insensitivity",
+			stmt: []string{
+				"CREATE NAMESPACE cAsE_senSitivE;",
+				"{cAsE_SenSitive}CReATE TaBLE tAbLee (cOl iNT PRImARY KEY);",
+				"{CAsE_SenSitive}INSeRT InTO tAbLEe (cOL) VaLUES (1);",
+				"{cASE_SENSITIVE}CREATE InDEX idX ON tAblee (Col);",
+				"{cAsE_sEnSiTive}DROP INDEX iDx;",
+				`{cAsE_sENSiTive}CREATE AcTiON aCt($aA inT) PuBLIC vIeW retUrns tabLe(vAl InT) {
+							Return seleCt $Aa + 1;
+						};`,
+				`{cAsE_sEnSiTivE}CrEate AcTion acT2() pUbLic vIew ReTurns tAble(vAl Int) {
+							for $rOw in Act(1) {
+								rEturn NeXt $roW.VAL;
+							}
+						}`,
+				// roles
+				`CREATE ROLE teSt_rOle;`,
+				`grant test_rolE to 'user';`,
+				`revoke tesT_Role from 'user';`,
+				`grant CaLL oN CASE_SEnsItive TO Test_rOle;`,
+				`revoke cALl on case_SENsitive from test_ROLe;`,
+				`dRop RoLe tEst_ROLE;`,
+				// namespaces
+				`CREATE NAMESPACE tEst_Namespace;`,
+				`DROP NAMESPACE test_namespACe;`,
+			},
+			namespace: "case_sensITIVE",
+			action:    "Act2",
+			results:   [][]any{{int64(2)}},
+		},
+		rawTest("null array index", `
+		$arr := array[1,2,3];
+		$idx int;
+		$a := $arr[$idx];
+		if $a is not null {
+			error('a is not null');
+		}
 
-		// -- test null slices too
-		// $s1 := $arr[null:2];
-		// $s2 := $arr[1:null];
-		// $s3 := $arr[null:null];
-		// $s4 := $arr[:null];
-		// $s5 := $arr[null:];
-		// if $s1 is not null {
-		// 	error('s1 is not null');
-		// }
-		// if $s2 is not null {
-		// 	error('s2 is not null');
-		// }
-		// if $s3 is not null {
-		// 	error('s3 is not null');
-		// }
-		// if $s4 is not null {
-		// 	error('s4 is not null');
-		// }
-		// if $s5 is not null {
-		// 	error('s5 is not null');
-		// }
-		// `),
-		// rawTest("set null", `
-		// 	$a := 1;
-		// 	$a := null;
-		// `),
-		// rawTest("set null in array", `
-		// $arr := array[1,2,3];
-		// $arr[1] := null;
-		// `),
-		// rawTest("set null to untyped value", `
-		//  	$a := null;`),
-		// rawTest("allocate null to typed variable", `
-		// 	$a int := null;`),
-		// rawTest("set new type to variable", `
-		// $a int;
-		// $a text := 'hi';
-		// `, engine.ErrType),
-		// rawTest("set same type to variable", `
-		// $a := 1;
-		// $a int := 2;
-		// `),
-		// rawTest("assign int to @caller", `
-		// 	@caller int := 1;
-		// `, engine.ErrType),
-		// rawTest("assign text to @caller", `
-		// 	@caller text := 'hi';
-		// `, engine.ErrInvalidVariable),
-		// rawTest("assign to slice", `
-		// $arr := array[1,2,3];
-		// $arr[1:2] := array[4,5];
-		// if $arr != array[4,5,3] {
-		// 	error('arr is not [4,5,3]');
-		// }
-		// $arr[1:] := array[6,7,8];
-		// if $arr != array[6,7,8] {
-		// 	error('arr is not [6,7,8]');
-		// }
-		// $arr[:2] := array[9,10];
-		// if $arr != array[9,10,8] {
-		// 	error('arr is not [9,10,8]');
-		// }
-		// $arr[:] := array[11,12,13];
-		// if $arr != array[11,12,13] {
-		// 	error('arr is not [11,12,13]');
-		// }
-		// $arr[5] := 14;
-		// if $arr != array[11,12,13,null,14] {
-		// 	error('arr is not [11,12,13,null,14]');
-		// }
+		-- test null slices too
+		$s1 := $arr[null:2];
+		$s2 := $arr[1:null];
+		$s3 := $arr[null:null];
+		$s4 := $arr[:null];
+		$s5 := $arr[null:];
+		if $s1 is not null {
+			error('s1 is not null');
+		}
+		if $s2 is not null {
+			error('s2 is not null');
+		}
+		if $s3 is not null {
+			error('s3 is not null');
+		}
+		if $s4 is not null {
+			error('s4 is not null');
+		}
+		if $s5 is not null {
+			error('s5 is not null');
+		}
+		`),
+		rawTest("set null", `
+			$a := 1;
+			$a := null;
+		`),
+		rawTest("set null in array", `
+		$arr := array[1,2,3];
+		$arr[1] := null;
+		`),
+		rawTest("set null to untyped value", `
+		 	$a := null;`),
+		rawTest("allocate null to typed variable", `
+			$a int := null;`),
+		rawTest("set new type to variable", `
+		$a int;
+		$a text := 'hi';
+		`, engine.ErrType),
+		rawTest("set same type to variable", `
+		$a := 1;
+		$a int := 2;
+		`),
+		rawTest("assign int to @caller", `
+			@caller int := 1;
+		`, engine.ErrType),
+		rawTest("assign text to @caller", `
+			@caller text := 'hi';
+		`, engine.ErrInvalidVariable),
+		rawTest("assign to slice", `
+		$arr := array[1,2,3];
+		$arr[1:2] := array[4,5];
+		if $arr != array[4,5,3] {
+			error('arr is not [4,5,3]');
+		}
+		$arr[1:] := array[6,7,8];
+		if $arr != array[6,7,8] {
+			error('arr is not [6,7,8]');
+		}
+		$arr[:2] := array[9,10];
+		if $arr != array[9,10,8] {
+			error('arr is not [9,10,8]');
+		}
+		$arr[:] := array[11,12,13];
+		if $arr != array[11,12,13] {
+			error('arr is not [11,12,13]');
+		}
+		$arr[5] := 14;
+		if $arr != array[11,12,13,null,14] {
+			error('arr is not [11,12,13,null,14]');
+		}
 
-		// -- test type casting is automatic
-		// $arr[1:2] := array['15','16'];
-		// if $arr != array[15,16,13,null,14] {
-		// 	error('arr is not [15,16,13,null,14]');
-		// }
-		// `),
-		// rawTest("assign to slice that is too short (will be truncated)", `
-		// $arr := array[1,2,3];
-		// $arr[1:2] := array[4,5,6];
-		// if $arr != array[4,5,3] {
-		// 	error('arr is not [4,5,3]');
-		// }
-		// `),
-		// rawTest("assign to slice that is too long (will err)", `
-		// $arr := array[1,2,3];
-		// $arr[1:2] := array[4];
-		// `, engine.ErrArrayTooSmall),
-		// rawTest("assign to null index", `
-		// $arr := array[1,2,3];
-		// $arr[null] := 4;
-		// `, engine.ErrInvalidNull),
-		// rawTest("assign to negative index", `
-		// $arr := array[1,2,3];
-		// $arr[-1] := 4;
-		// `, engine.ErrIndexOutOfBounds),
-		// rawTest("assign to slice with from > to", `
-		// $arr := array[1,2,3];
-		// $arr[2:1] := array[4,5];
-		// `, engine.ErrIndexOutOfBounds),
-		// rawTest("assign to slice with null from", `
-		// $arr := array[1,2,3];
-		// $arr[null:2] := array[4,5];
-		// `, engine.ErrInvalidNull),
-		// rawTest("assign to slice with null to", `
-		// $arr int[] := array[1,2,3];
-		// $arr[1:null] := array[4,5];
-		// `, engine.ErrInvalidNull),
-		// rawTest("loop over range with null", `
-		// 	for $i in null..3 {
-		// 		error('should not be true');
-		// 	}
+		-- test type casting is automatic
+		$arr[1:2] := array['15','16'];
+		if $arr != array[15,16,13,null,14] {
+			error('arr is not [15,16,13,null,14]');
+		}
+		`),
+		rawTest("assign to slice that is too short (will be truncated)", `
+		$arr := array[1,2,3];
+		$arr[1:2] := array[4,5,6];
+		if $arr != array[4,5,3] {
+			error('arr is not [4,5,3]');
+		}
+		`),
+		rawTest("assign to slice that is too long (will err)", `
+		$arr := array[1,2,3];
+		$arr[1:2] := array[4];
+		`, engine.ErrArrayTooSmall),
+		rawTest("assign to null index", `
+		$arr := array[1,2,3];
+		$arr[null] := 4;
+		`, engine.ErrInvalidNull),
+		rawTest("assign to negative index", `
+		$arr := array[1,2,3];
+		$arr[-1] := 4;
+		`, engine.ErrIndexOutOfBounds),
+		rawTest("assign to slice with from > to", `
+		$arr := array[1,2,3];
+		$arr[2:1] := array[4,5];
+		`, engine.ErrIndexOutOfBounds),
+		rawTest("assign to slice with null from", `
+		$arr := array[1,2,3];
+		$arr[null:2] := array[4,5];
+		`, engine.ErrInvalidNull),
+		rawTest("assign to slice with null to", `
+		$arr int[] := array[1,2,3];
+		$arr[1:null] := array[4,5];
+		`, engine.ErrInvalidNull),
+		rawTest("loop over range with null", `
+			for $i in null..3 {
+				error('should not be true');
+			}
 
-		// 	for $i in 1..null {
-		// 		error('should not be true');
-		// 	}
+			for $i in 1..null {
+				error('should not be true');
+			}
 
-		// 	$arr int[] := null;
-		// 	for $i in array $arr {
-		// 		error('should not be true');
-		// 	}
-		// `),
-		// rawTest("if null", `
-		// if null {
-		// 	error('should not be true');
-		// }
-		// `),
-		// rawTest(`access null array`, `
-		// 	$arr int[] := null;
-		// 	$a := $arr[1];
-		// 	$a := 1; -- should be an int, so this should be fine
-		// `),
-		// rawTest(`uuid kwil`, `
-		// $id := uuid_generate_kwil('a');
-		// if $id != '819ab751-e64c-5259-bbae-4d36f25bdd84'::uuid {
-		// 	error($id::TEXT);
-		// }
-		// `),
-		// {
-		// 	name: "action param changes do not reflect in the caller",
-		// 	stmt: []string{
-		// 		`CREATE ACTION change_param($a int) public view returns (b int) {
-		// 			$a := 2;
-		// 			RETURN $a;
-		// 		}`,
-		// 		`CREATE ACTION call_change_param() public view {
-		// 			$a := 1;
-		// 			$b := change_param($a);
-		// 			if $a != 1 {
-		// 				error('a is not 1');
-		// 			}
-		// 			if $b != 2 {
-		// 				error('b is not 2');
-		// 			}
-		// 		}`,
-		// 	},
-		// 	action: "call_change_param",
-		// },
-		// {
-		// 	name: "nested action returns null",
-		// 	stmt: []string{
-		// 		`CREATE ACTION get_null() public view returns (a int) { RETURN null; }`,
-		// 		`CREATE ACTION call_get_null() public view { $a := get_null(); if $a is not null { error('a is not null'); } }`,
-		// 	},
-		// 	action: "call_get_null",
-		// },
-		// {
-		// 	name: "action returns null to another action",
-		// 	stmt: []string{
-		// 		`CREATE ACTION get_null() public view returns (a int) { RETURN null; }`,
-		// 		`CREATE ACTION call_get_null() public view { $a := get_null()::TEXT; if $a is not null { error('a is not null'); } }`,
-		// 	},
-		// 	action: "call_get_null",
-		// },
-		// {
-		// 	name: "action returning nothing to another action",
-		// 	stmt: []string{
-		// 		`CREATE ACTION get_nothing() public view { /* returns nothing */ }`,
-		// 		`CREATE ACTION call_get_nothing() public view { $a := get_nothing(); }`,
-		// 	},
-		// 	action: "call_get_nothing",
-		// 	err:    engine.ErrReturnShape,
-		// },
-		// {
-		// 	// this is a regression test
-		// 	name: "special functions called in new namespaces works as expected",
-		// 	stmt: []string{
-		// 		`CREATE NAMESPACE test;`,
-		// 		`{test} create action get_uuid() public view returns (uuid) {return uuid_generate_kwil('a');}`,
-		// 	},
-		// 	namespace: "test",
-		// 	action:    "get_uuid",
-		// 	results:   [][]any{{mustUUID("819ab751-e64c-5259-bbae-4d36f25bdd84")}},
-		// },
-		// rawTest("loop over array with nulls", `
-		// $i := 1;
-		// for $name IN ARRAY ['Alice', null, 'Bob'] {
-		// 	if $i == 1 AND $name != 'Alice' {
-		// 		error('name is not Alice');
-		// 	}
+			$arr int[] := null;
+			for $i in array $arr {
+				error('should not be true');
+			}
+		`),
+		rawTest("if null", `
+		if null {
+			error('should not be true');
+		}
+		`),
+		rawTest(`access null array`, `
+			$arr int[] := null;
+			$a := $arr[1];
+			$a := 1; -- should be an int, so this should be fine
+		`),
+		rawTest(`uuid kwil`, `
+		$id := uuid_generate_kwil('a');
+		if $id != '819ab751-e64c-5259-bbae-4d36f25bdd84'::uuid {
+			error($id::TEXT);
+		}
+		`),
+		{
+			name: "action param changes do not reflect in the caller",
+			stmt: []string{
+				`CREATE ACTION change_param($a int) public view returns (b int) {
+					$a := 2;
+					RETURN $a;
+				}`,
+				`CREATE ACTION call_change_param() public view {
+					$a := 1;
+					$b := change_param($a);
+					if $a != 1 {
+						error('a is not 1');
+					}
+					if $b != 2 {
+						error('b is not 2');
+					}
+				}`,
+			},
+			action: "call_change_param",
+		},
+		{
+			name: "nested action returns null",
+			stmt: []string{
+				`CREATE ACTION get_null() public view returns (a int) { RETURN null; }`,
+				`CREATE ACTION call_get_null() public view { $a := get_null(); if $a is not null { error('a is not null'); } }`,
+			},
+			action: "call_get_null",
+		},
+		{
+			name: "action returns null to another action",
+			stmt: []string{
+				`CREATE ACTION get_null() public view returns (a int) { RETURN null; }`,
+				`CREATE ACTION call_get_null() public view { $a := get_null()::TEXT; if $a is not null { error('a is not null'); } }`,
+			},
+			action: "call_get_null",
+		},
+		{
+			name: "action returning nothing to another action",
+			stmt: []string{
+				`CREATE ACTION get_nothing() public view { /* returns nothing */ }`,
+				`CREATE ACTION call_get_nothing() public view { $a := get_nothing(); }`,
+			},
+			action: "call_get_nothing",
+			err:    engine.ErrReturnShape,
+		},
+		{
+			// this is a regression test
+			name: "special functions called in new namespaces works as expected",
+			stmt: []string{
+				`CREATE NAMESPACE test;`,
+				`{test} create action get_uuid() public view returns (uuid) {return uuid_generate_kwil('a');}`,
+			},
+			namespace: "test",
+			action:    "get_uuid",
+			results:   [][]any{{mustUUID("819ab751-e64c-5259-bbae-4d36f25bdd84")}},
+		},
+		rawTest("loop over array with nulls", `
+		$i := 1;
+		for $name IN ARRAY ['Alice', null, 'Bob'] {
+			if $i == 1 AND $name != 'Alice' {
+				error('name is not Alice');
+			}
 
-		// 	if $i == 2 AND $name is not null {
-		// 		error('name is not null');
-		// 	}
+			if $i == 2 AND $name is not null {
+				error('name is not null');
+			}
 
-		// 	if $i == 3 AND $name != 'Bob' {
-		// 		error('name is not Bob');
-		// 	}
+			if $i == 3 AND $name != 'Bob' {
+				error('name is not Bob');
+			}
 
-		// 	$i := $i + 1;
-		// }
-		// `),
-		// {
-		// 	name: "private actions can be called within the same namespace",
-		// 	stmt: []string{
-		// 		`CREATE ACTION private_action() private { }`,
-		// 		`CREATE ACTION call_private_action() public { private_action(); }`,
-		// 	},
-		// 	action: "call_private_action",
-		// },
-		// {
-		// 	name: "private actions cannot be called from another namespace",
-		// 	stmt: []string{
-		// 		`CREATE NAMESPACE test;`,
-		// 		`{test} CREATE ACTION private_action() private { }`,
-		// 		`CREATE ACTION call_private_action() public { test.private_action(); }`,
-		// 	},
-		// 	action: "call_private_action",
-		// 	err:    engine.ErrActionPrivate,
-		// },
-		// {
-		// 	name: "system actions can be called from any namespace",
-		// 	stmt: []string{
-		// 		`CREATE NAMESPACE test;`,
-		// 		`{test} CREATE ACTION call_system_action() system { }`,
-		// 		`{test} CREATE ACTION call_system_action2() system { test.call_system_action(); }`,
-		// 		`CREATE ACTION call_system_action3() public { test.call_system_action2(); }`,
-		// 	},
-		// 	action: "call_system_action3",
-		// },
-		// {
-		// 	name: "system actions cannot be called publicly",
-		// 	stmt: []string{
-		// 		`CREATE ACTION call_system_action() system { }`,
-		// 	},
-		// 	action: "call_system_action",
-		// 	err:    engine.ErrActionSystemOnly,
-		// },
-		// {
-		// 	// regression test
-		// 	name: "early return with no values",
-		// 	stmt: []string{
-		// 		`CREATE ACTION early_return() public view {
-		// 			if true {
-		// 				RETURN;
-		// 				error('should not get here');
-		// 			}
-		// 			error('should not get here');
-		// 		}`,
-		// 	},
-		// 	action: "early_return",
-		// },
-		// {
-		// 	name: "return early with sql",
-		// 	stmt: []string{
-		// 		`CREATE ACTION early_return() public view returns table(value int) {
-		// 			if true {
-		// 				RETURN SELECT 1;
-		// 				error('should not get here');
-		// 			}
-		// 			error('should not get here');
-		// 		}`,
-		// 	},
-		// 	action:  "early_return",
-		// 	results: [][]any{{int64(1)}},
-		// },
-		// {
-		// 	// this is a regression test
-		// 	name: "format inside error",
-		// 	stmt: []string{
-		// 		`CREATE ACTION format_error() public view {
-		// 			$a := 'SomeValue';
-		// 			error(format('this is an error with a format %s', $a));
-		// 		}`,
-		// 	},
-		// 	action:               "format_error",
-		// 	executionErrContains: "this is an error with a format SomeValue",
-		// },
-		// {
-		// 	name: "remove call from default role",
-		// 	stmt: []string{
-		// 		"CREATE ROLE some_role;",
-		// 		"CREATE NAMESPACE test;",
-		// 		"{test} CREATE ACTION act() public { }",
-		// 		"REVOKE CALL ON test FROM default;",
-		// 	},
-		// 	namespace: "test",
-		// 	action:    "act",
-		// 	caller:    "some_user",
-		// 	err:       engine.ErrDoesNotHavePrivilege,
-		// },
-		// {
-		// 	name: "empty array",
-		// 	stmt: []string{
-		// 		`CREATE ACTION empty_array() public view {
-		// 			$arr := array[];
-		// 		}`,
-		// 	},
-		// 	action: "empty_array",
-		// 	err:    engine.ErrArrayDimensionality,
-		// },
-		// {
-		// 	name: "empty array (typecasted)",
-		// 	stmt: []string{
-		// 		`CREATE ACTION empty_array() public view {
-		// 			$arr := array[]::text[];
-		// 		}`,
-		// 	},
-		// 	action: "empty_array",
-		// },
-		// {
-		// 	name: "0-length numeric array",
-		// 	stmt: []string{
-		// 		`CREATE ACTION smth($arr numeric(10,5)[]) public {
-		// 			$arr := array_append($arr, 1.0);
-		// 		}`,
-		// 	},
-		// 	action: "smth",
-		// 	values: []any{[]*types.Decimal{}},
-		// },
-		// {
-		// 	name: "select error",
-		// 	stmt: []string{
-		// 		`CREATE ACTION select_error() public view {
-		// 			SELECT error('abcdef_unique');
-		// 		}`,
-		// 	},
-		// 	action:               "select_error",
-		// 	executionErrContains: "abcdef_unique",
-		// },
-		// {
-		// 	name: "primary key conflict",
-		// 	stmt: []string{
-		// 		`CREATE TABLE t (a int PRIMARY KEY);`,
-		// 		`CREATE ACTION insert_conflict($a int) public {
-		// 			INSERT INTO t (a) VALUES ($a);
-		// 			INSERT INTO t (a) VALUES ($a);
-		// 		}`,
-		// 	},
-		// 	action:               "insert_conflict",
-		// 	values:               []any{1},
-		// 	executionErrContains: "duplicate key value violates unique constraint",
-		// },
-		// {
-		// 	name: "call function in loop",
-		// 	stmt: []string{
-		// 		`CREATE ACTION call_function_in_loop() public view {
-		// 			for $i in select 1 as a {
-		// 				$a := abs($i.a);
-		// 			}
-		// 		}`,
-		// 	},
-		// 	action: "call_function_in_loop",
-		// 	err:    engine.ErrQueryActive,
-		// },
-		// {
-		// 	// regression test from a bug hit by Usher Labs.
-		// 	// I'm not totally sure what caused this bug, but it was fixed by cloning
-		// 	// slices that were passed to resultFn.
-		// 	name: "returning a table of decimals",
-		// 	stmt: []string{
-		// 		`CREATE TABLE data (id int primary key, value numeric(10,5));`,
-		// 		`INSERT INTO data (id, value) VALUES (1, 1.0::numeric(10,5)), (2, 2.0::numeric(10,5));`,
-		// 		`CREATE ACTION test() public view returns table(id int, value numeric(10,5)) {
-		// 			return SELECT * FROM data ORDER BY id asc;
-		// 		}`,
-		// 	},
-		// 	action: "test",
-		// 	results: [][]any{
-		// 		{int64(1), mustExplicitDecimal("1.00000", 10, 5)},
-		// 		{int64(2), mustExplicitDecimal("2.00000", 10, 5)},
-		// 	},
-		// },
-		// rawTest("greatest, least, nullif", `
-		// if greatest(1,2,3) != 3 {
-		// 	error('greatest(1,2,3) is not 3');
-		// }
-		// if least(1,2,3) != 1 {
-		// 	error('least(1,2,3) is not 1');
-		// }
+			$i := $i + 1;
+		}
+		`),
+		{
+			name: "private actions can be called within the same namespace",
+			stmt: []string{
+				`CREATE ACTION private_action() private { }`,
+				`CREATE ACTION call_private_action() public { private_action(); }`,
+			},
+			action: "call_private_action",
+		},
+		{
+			name: "private actions cannot be called from another namespace",
+			stmt: []string{
+				`CREATE NAMESPACE test;`,
+				`{test} CREATE ACTION private_action() private { }`,
+				`CREATE ACTION call_private_action() public { test.private_action(); }`,
+			},
+			action: "call_private_action",
+			err:    engine.ErrActionPrivate,
+		},
+		{
+			name: "system actions can be called from any namespace",
+			stmt: []string{
+				`CREATE NAMESPACE test;`,
+				`{test} CREATE ACTION call_system_action() system { }`,
+				`{test} CREATE ACTION call_system_action2() system { test.call_system_action(); }`,
+				`CREATE ACTION call_system_action3() public { test.call_system_action2(); }`,
+			},
+			action: "call_system_action3",
+		},
+		{
+			name: "system actions cannot be called publicly",
+			stmt: []string{
+				`CREATE ACTION call_system_action() system { }`,
+			},
+			action: "call_system_action",
+			err:    engine.ErrActionSystemOnly,
+		},
+		{
+			// regression test
+			name: "early return with no values",
+			stmt: []string{
+				`CREATE ACTION early_return() public view {
+					if true {
+						RETURN;
+						error('should not get here');
+					}
+					error('should not get here');
+				}`,
+			},
+			action: "early_return",
+		},
+		{
+			name: "return early with sql",
+			stmt: []string{
+				`CREATE ACTION early_return() public view returns table(value int) {
+					if true {
+						RETURN SELECT 1;
+						error('should not get here');
+					}
+					error('should not get here');
+				}`,
+			},
+			action:  "early_return",
+			results: [][]any{{int64(1)}},
+		},
+		{
+			// this is a regression test
+			name: "format inside error",
+			stmt: []string{
+				`CREATE ACTION format_error() public view {
+					$a := 'SomeValue';
+					error(format('this is an error with a format %s', $a));
+				}`,
+			},
+			action:               "format_error",
+			executionErrContains: "this is an error with a format SomeValue",
+		},
+		{
+			name: "remove call from default role",
+			stmt: []string{
+				"CREATE ROLE some_role;",
+				"CREATE NAMESPACE test;",
+				"{test} CREATE ACTION act() public { }",
+				"REVOKE CALL ON test FROM default;",
+			},
+			namespace: "test",
+			action:    "act",
+			caller:    "some_user",
+			err:       engine.ErrDoesNotHavePrivilege,
+		},
+		{
+			name: "empty array",
+			stmt: []string{
+				`CREATE ACTION empty_array() public view {
+					$arr := array[];
+				}`,
+			},
+			action: "empty_array",
+			err:    engine.ErrArrayDimensionality,
+		},
+		{
+			name: "empty array (typecasted)",
+			stmt: []string{
+				`CREATE ACTION empty_array() public view {
+					$arr := array[]::text[];
+				}`,
+			},
+			action: "empty_array",
+		},
+		{
+			name: "0-length numeric array",
+			stmt: []string{
+				`CREATE ACTION smth($arr numeric(10,5)[]) public {
+					$arr := array_append($arr, 1.0);
+				}`,
+			},
+			action: "smth",
+			values: []any{[]*types.Decimal{}},
+		},
+		{
+			name: "select error",
+			stmt: []string{
+				`CREATE ACTION select_error() public view {
+					SELECT error('abcdef_unique');
+				}`,
+			},
+			action:               "select_error",
+			executionErrContains: "abcdef_unique",
+		},
+		{
+			name: "primary key conflict",
+			stmt: []string{
+				`CREATE TABLE t (a int PRIMARY KEY);`,
+				`CREATE ACTION insert_conflict($a int) public {
+					INSERT INTO t (a) VALUES ($a);
+					INSERT INTO t (a) VALUES ($a);
+				}`,
+			},
+			action:               "insert_conflict",
+			values:               []any{1},
+			executionErrContains: "duplicate key value violates unique constraint",
+		},
+		{
+			name: "call function in loop",
+			stmt: []string{
+				`CREATE ACTION call_function_in_loop() public view {
+					for $i in select 1 as a {
+						$a := abs($i.a);
+					}
+				}`,
+			},
+			action: "call_function_in_loop",
+			err:    engine.ErrQueryActive,
+		},
+		{
+			// regression test from a bug hit by Usher Labs.
+			// I'm not totally sure what caused this bug, but it was fixed by cloning
+			// slices that were passed to resultFn.
+			name: "returning a table of decimals",
+			stmt: []string{
+				`CREATE TABLE data (id int primary key, value numeric(10,5));`,
+				`INSERT INTO data (id, value) VALUES (1, 1.0::numeric(10,5)), (2, 2.0::numeric(10,5));`,
+				`CREATE ACTION test() public view returns table(id int, value numeric(10,5)) {
+					return SELECT * FROM data ORDER BY id asc;
+				}`,
+			},
+			action: "test",
+			results: [][]any{
+				{int64(1), mustExplicitDecimal("1.00000", 10, 5)},
+				{int64(2), mustExplicitDecimal("2.00000", 10, 5)},
+			},
+		},
+		rawTest("greatest, least, nullif", `
+		if greatest(1,2,3) != 3 {
+			error('greatest(1,2,3) is not 3');
+		}
+		if least(1,2,3) != 1 {
+			error('least(1,2,3) is not 1');
+		}
 
-		// if nullif(1,1) is not null {
-		// 	error('nullif(1,1) is not null');
-		// }
+		if nullif(1,1) is not null {
+			error('nullif(1,1) is not null');
+		}
 
-		// if nullif(1,2) != 1 {
-		// 	error('nullif(1,2) is not 1');
-		// }
+		if nullif(1,2) != 1 {
+			error('nullif(1,2) is not 1');
+		}
 
-		// if nullif(2,1) != 2 {
-		// 	error('nullif(2,1) is not 2');
-		// }
+		if nullif(2,1) != 2 {
+			error('nullif(2,1) is not 2');
+		}
 
-		// if nullif(null,1) is not null {
-		// 	error('nullif(null,1) is not null');
-		// }
+		if nullif(null,1) is not null {
+			error('nullif(null,1) is not null');
+		}
 
-		// if nullif(1,null) != 1 {
-		// 	error('nullif(1,null) is not 1');
-		// }
-		// `),
+		if nullif(1,null) != 1 {
+			error('nullif(1,null) is not 1');
+		}
+		`),
 		rawTest("int cast", `
 		$a := 1;
 		$b := 2;
