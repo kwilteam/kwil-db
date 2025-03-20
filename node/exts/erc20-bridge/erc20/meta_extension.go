@@ -1266,17 +1266,17 @@ func init() {
 					return err
 				}
 
-				// put in cache
-				var b32Root [32]byte
-				copy(b32Root[:], root)
-				mtLRUCache.Put(b32Root, jsonBody)
-
 				// create a new epoch
 				newEpoch := newPendingEpoch(id, block)
 				err = createEpoch(ctx, app, newEpoch, id)
 				if err != nil {
 					return err
 				}
+
+				// put merkle tree in cache
+				var b32Root [32]byte
+				copy(b32Root[:], root)
+				mtLRUCache.Put(b32Root, jsonBody)
 
 				newEpochs[*id] = newEpoch
 				return nil

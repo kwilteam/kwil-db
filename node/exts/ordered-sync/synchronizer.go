@@ -53,11 +53,16 @@ func (c *cachedSync) RegisterTopic(ctx context.Context, db sql.DB, eng common.En
 		return fmt.Errorf("resolve function %s not registered", resolveFunc)
 	}
 
+	err := registerTopic(ctx, db, eng, topic, resolveFunc)
+	if err != nil {
+		return err
+	}
+
 	c.topics[topic] = &topicInfo{
 		resolve: resolveFn,
 	}
 
-	return registerTopic(ctx, db, eng, topic, resolveFunc)
+	return nil
 }
 
 // UnregisterTopic unregisters a topic.
@@ -72,9 +77,13 @@ func (c *cachedSync) UnregisterTopic(ctx context.Context, db sql.DB, eng common.
 		return fmt.Errorf("topic %s not registered", topic)
 	}
 
-	delete(c.topics, topic)
+	err := unregisterTopic(ctx, db, eng, topic)
+	if err != nil {
+		return err
+	}
 
-	return unregisterTopic(ctx, db, eng, topic)
+	delete(c.topics, topic)
+	return nil
 }
 
 // readTopicInfoOnStartup reads the last processed point in time for each topic.
