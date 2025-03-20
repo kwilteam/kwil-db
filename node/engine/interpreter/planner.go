@@ -261,11 +261,6 @@ func (i *interpreterPlanner) VisitActionStmtAssignment(p0 *parse.ActionStmtAssig
 
 		switch a := p0.Variable.(type) {
 		case *parse.ExpressionVariable:
-			if a.Name == "$d" {
-				fmt.Println("debug:", val)
-				valFn(exec)
-			}
-
 			// if p0 has a type, then a variable must either already exist of that type, OR it must be new
 			if p0.Type != nil {
 				v, err := exec.getVariable(a.Name) // this will error if it does not exist
