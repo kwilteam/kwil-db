@@ -59,13 +59,13 @@ func initializeExtension(ctx context.Context, svc *common.Service, db sql.DB, i 
 
 					// ensure the argument types match
 					if !method.Parameters[i].Type.Equals(arg.Type()) {
-						return fmt.Errorf(`%w: extension method "%s" expected argument %d to be of type %s, but got %s`, engine.ErrExtensionImplementation, lowerName, i, method.Parameters[i].Type, arg.Type())
+						return fmt.Errorf(`%w: extension method "%s" expected argument %d to be of type %s, but got %s`, engine.ErrExtensionImplementation, lowerName, i+1, method.Parameters[i].Type, arg.Type())
 					}
 
 					// the above will be ok if the argument is nil
 					// we therefore check for nullability here
 					if !method.Parameters[i].Nullable && arg.Null() {
-						return fmt.Errorf(`%w: extension method "%s" expected argument %d to be non-null, but got null`, engine.ErrExtensionImplementation, lowerName, i)
+						return fmt.Errorf(`%w: extension method "%s" expected argument %d to be non-null, but got null`, engine.ErrExtensionImplementation, lowerName, i+1)
 					}
 				}
 

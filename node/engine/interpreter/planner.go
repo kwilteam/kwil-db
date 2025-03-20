@@ -261,6 +261,11 @@ func (i *interpreterPlanner) VisitActionStmtAssignment(p0 *parse.ActionStmtAssig
 
 		switch a := p0.Variable.(type) {
 		case *parse.ExpressionVariable:
+			if a.Name == "$d" {
+				fmt.Println("debug:", val)
+				valFn(exec)
+			}
+
 			// if p0 has a type, then a variable must either already exist of that type, OR it must be new
 			if p0.Type != nil {
 				v, err := exec.getVariable(a.Name) // this will error if it does not exist
@@ -1184,7 +1189,7 @@ func (i *interpreterPlanner) VisitExpressionFieldAccess(p0 *parse.ExpressionFiel
 }
 
 func (i *interpreterPlanner) VisitExpressionParenthesized(p0 *parse.ExpressionParenthesized) any {
-	return p0.Inner.Accept(i)
+	return cast(p0, p0.Inner.Accept(i).(exprFunc))
 }
 
 func (i *interpreterPlanner) VisitExpressionComparison(p0 *parse.ExpressionComparison) any {
