@@ -945,7 +945,7 @@ func (s *textValue) Cast(t *types.DataType) (value, error) {
 			return nil, castErr(errors.New("cannot cast text to decimal array"))
 		}
 
-		dec, err := types.ParseDecimal(s.String)
+		dec, err := types.ParseDecimalExplicit(s.String, t.Metadata[0], t.Metadata[1])
 		if err != nil {
 			return nil, castErr(err)
 		}
