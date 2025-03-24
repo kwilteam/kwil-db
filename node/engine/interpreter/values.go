@@ -843,21 +843,6 @@ func makeNull(t *types.DataType) (value, error) {
 	return m.NullValue(t)
 }
 
-// makeNullScalar creates a new null scalar value of the given type.
-func makeNullScalar(t *types.DataType) (scalarValue, error) {
-	v, err := makeNull(t)
-	if err != nil {
-		return nil, err
-	}
-
-	s, ok := v.(scalarValue)
-	if !ok {
-		return nil, fmt.Errorf("expected to create a null scalar value, got %T", v)
-	}
-
-	return s, nil
-}
-
 func makeText(s string) *textValue {
 	return &textValue{
 		Text: pgtype.Text{
@@ -1644,7 +1629,17 @@ func (a *singleDimArray[T]) Value() (driver.Value, error) {
 func getArr[T any](arr internalArray[T], i int32, fn func(T) scalarValue) (scalarValue, error) {
 	// to match postgres, accessing a non-existent index should return null
 	if i < 1 || i > arr.Len() {
-		return makeNullScalar(arr.Type())
+		v, err := makeNull(arr.Type())
+		if err != nil {
+			return nil, err
+		}
+
+		s, ok := v.(scalarValue)
+		if !ok {
+			return nil, fmt.Errorf("expected to create a null scalar value, got %T", v)
+		}
+
+		return s, nil
 	}
 
 	pgArr := arr.pgtypeArr()
@@ -1776,12 +1771,12 @@ func (a *int8ArrayValue) RawValue() any {
 		return nil
 	}
 
-	var res []*int64
-	for _, v := range a.Elements {
+	res := make([]*int64, len(a.Elements))
+	for i, v := range a.Elements {
 		if v.Valid {
-			res = append(res, &v.Int64)
+			res[i] = &v.Int64
 		} else {
-			res = append(res, nil)
+			res[i] = nil
 		}
 	}
 
@@ -2819,6 +2814,10 @@ func parseValue(s string, t *types.DataType) (value, error) {
 		return makeNull(t)
 	}
 
+	if s == "" {
+		return newZeroValue(t)
+	}
+
 	if t.IsArray {
 		return parseArray(s, t)
 	}
@@ -3011,4 +3010,29 @@ func newValueWithSoftCast(v any, dt *types.DataType) (val value, ok bool, err er
 	}
 
 	return val, true, nil
+}
+
+// copyVal deep copies a value.
+// There are certainly more efficient ways to do this, but I am doing this
+// under a time constraint.
+func copyVal[V value](v V) (V, error) {
+	// all errors returned in this function signal some sort of
+	// internal bug, and not a user error.
+	v2 := *new(V)
+	str, err := stringifyValue(v)
+	if err != nil {
+		return v2, fmt.Errorf("could not copy val: %w", err)
+	}
+
+	parsed, err := parseValue(str, v.Type())
+	if err != nil {
+		return v2, fmt.Errorf("could not copy val: %w", err)
+	}
+
+	v3, ok := parsed.(V)
+	if !ok {
+		return v2, fmt.Errorf("could not copy val: unexpected type %T", parsed)
+	}
+
+	return v3, nil
 }

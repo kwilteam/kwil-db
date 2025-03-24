@@ -431,93 +431,6 @@ func unwrapExecutionErr(e error) (err error, isUserLogicErr bool) {
 // https://www.postgresql.org/docs/current/errcodes-appendix.html
 var allowedSQLSTATEErrRegex = regexp.MustCompile(`\(SQLSTATE ((23|22)\d{3}\)|P0001)`)
 
-// funcDefToExecutable converts a Postgres function definition to an executable.
-// This allows built-in Postgres functions to be used within the interpreter.
-// This inconveniently requires a roundtrip to the database, but it is necessary
-// to ensure that the function is executed correctly. In the future, we can replicate
-// the functionality of the function in Go to avoid the roundtrip. I initially tried
-// to do this, however it get's extroadinarily complex when getting to string formatting.
-func funcDefToExecutable(funcName string, funcDef *engine.ScalarFunctionDefinition) *executable {
-	return &executable{
-		Name: funcName,
-		Func: func(e *executionContext, args []value, fn resultFunc) error {
-			//convert args to any
-			params := make([]string, len(args))
-			argTypes := make([]*types.DataType, len(args))
-			for i, arg := range args {
-				pgType, err := engine.MakeTypeCast(arg.Type())
-				if err != nil {
-					return err
-				}
-				params[i] = "$" + strconv.Itoa(i+1) + pgType
-				argTypes[i] = arg.Type()
-			}
-
-			// get the expected return type
-			retTyp, err := funcDef.ValidateArgsFunc(argTypes)
-			if err != nil {
-				return err
-			}
-
-			// if the function name is notice, then we need to get write the notice to our logs locally,
-			// instead of executing a query. This is the functional equivalent of Kwil's console.log().
-			if funcName == "notice" {
-				var log string
-				if !args[0].Null() {
-					log = args[0].RawValue().(string)
-				}
-				*e.logs = append(*e.logs, log)
-				return nil
-			}
-
-			if funcName == "error" {
-				var msg string
-				if !args[0].Null() {
-					msg = args[0].RawValue().(string)
-				}
-				return newUserDefinedErr(errors.New(msg))
-			}
-
-			if e.queryActive {
-				return fmt.Errorf(`%w: cannot execute function "%s" while a query is active`, engine.ErrQueryActive, funcName)
-			}
-
-			zeroVal, err := newZeroValue(retTyp)
-			if err != nil {
-				return err
-			}
-
-			// format the function
-			pgFormat, err := funcDef.PGFormatFunc(params)
-			if err != nil {
-				return err
-			}
-
-			// execute the query
-			// We could avoid a roundtrip here by having a go implementation of the function.
-			// Since for now we are more concerned about expanding functionality than scalability,
-			// we will use the roundtrip.
-			iters := 0
-			err = query(e.engineCtx.TxContext.Ctx, e.db, "SELECT "+pgFormat+";", []any{zeroVal}, func() error {
-				iters++
-				return nil
-			}, args)
-			if err != nil {
-				return err
-			}
-			if iters != 1 {
-				return fmt.Errorf("expected 1 row, got %d", iters)
-			}
-
-			return fn(&row{
-				columns: []string{funcName},
-				Values:  []value{zeroVal},
-			})
-		},
-		Type: executableTypeFunction,
-	}
-}
-
 // baseInterpreter interprets Kwil SQL statements.
 type baseInterpreter struct {
 	namespaces map[string]*namespace
@@ -895,4 +808,345 @@ func copyBuiltinExecutables() map[string]*executable {
 	}
 
 	return b
+}
+
+// funcDefToExecutable converts a Postgres function definition to an executable.
+// This allows built-in Postgres functions to be used within the interpreter.
+// This inconveniently requires a roundtrip to the database, but it is necessary
+// to ensure that the function is executed correctly. In the future, we can replicate
+// the functionality of the function in Go to avoid the roundtrip. I initially tried
+// to do this, however it get's extroadinarily complex when getting to string formatting.
+func funcDefToExecutable(funcName string, funcDef *engine.ScalarFunctionDefinition) *executable {
+	return &executable{
+		Name: funcName,
+		Func: func(e *executionContext, args []value, fn resultFunc) error {
+			//convert args to any
+			params := make([]string, len(args))
+			argTypes := make([]*types.DataType, len(args))
+			for i, arg := range args {
+				pgType, err := engine.MakeTypeCast(arg.Type())
+				if err != nil {
+					return err
+				}
+				params[i] = "$" + strconv.Itoa(i+1) + pgType
+				argTypes[i] = arg.Type()
+			}
+
+			// get the expected return type
+			retTyp, err := funcDef.ValidateArgsFunc(argTypes)
+			if err != nil {
+				return err
+			}
+
+			// if the function name is notice, then we need to get write the notice to our logs locally,
+			// instead of executing a query. This is the functional equivalent of Kwil's console.log().
+			if funcName == "notice" {
+				var log string
+				if !args[0].Null() {
+					log = args[0].RawValue().(string)
+				}
+				*e.logs = append(*e.logs, log)
+				return nil
+			}
+
+			if funcName == "error" {
+				var msg string
+				if !args[0].Null() {
+					msg = args[0].RawValue().(string)
+				}
+				return newUserDefinedErr(errors.New(msg))
+			}
+
+			builtIn, ok := builtInScalarFuncs[funcName]
+			if ok {
+				res, err := builtIn(args)
+				if err != nil {
+					return err
+				}
+
+				return fn(&row{
+					columns: []string{funcName},
+					Values:  []value{res},
+				})
+			}
+			// we cannot recursively call Postgres, so if a query is active and we don't
+			// have a Go implementation, we need to error out.
+			if e.queryActive {
+				return fmt.Errorf(`%w: cannot execute function "%s" while a query is active`, engine.ErrQueryActive, funcName)
+			}
+
+			zeroVal, err := newZeroValue(retTyp)
+			if err != nil {
+				return err
+			}
+
+			// format the function
+			pgFormat, err := funcDef.PGFormatFunc(params)
+			if err != nil {
+				return err
+			}
+
+			// execute the query
+			// We could avoid a roundtrip here by having a go implementation of the function.
+			// Since for now we are more concerned about expanding functionality than scalability,
+			// we will use the roundtrip.
+			iters := 0
+			err = query(e.engineCtx.TxContext.Ctx, e.db, "SELECT "+pgFormat+";", []any{zeroVal}, func() error {
+				iters++
+				return nil
+			}, args)
+			if err != nil {
+				return err
+			}
+			if iters != 1 {
+				return fmt.Errorf("expected 1 row, got %d", iters)
+			}
+
+			return fn(&row{
+				columns: []string{funcName},
+				Values:  []value{zeroVal},
+			})
+		},
+		Type: executableTypeFunction,
+	}
+}
+
+// scalarFuncImpl is a function that implements a scalar function.
+// It allows us to replicate Postgres functions in Go.
+type scalarFuncImpl func([]value) (value, error)
+
+// builtInScalarFuncs is a map of built-in scalar functions to their implementations.
+var builtInScalarFuncs = map[string]scalarFuncImpl{
+	// for now, we are only implementing Kwil's supported array functions.
+	// This is because there are logical things that are quite hard / impossible
+	// to implement without being able to reference these functions within
+	// FOR loop over a set of rows.
+	// In the future, we can implement more functions.
+	"array_length": func(args []value) (value, error) {
+		if args[0].Null() {
+			return makeNull(types.IntType)
+		}
+
+		arr, ok := args[0].(arrayValue)
+		if !ok {
+			return nil, fmt.Errorf("expected array, got %s", args[0].Type())
+		}
+
+		return newValue(int64(arr.Len()))
+	},
+	"array_append": func(args []value) (value, error) {
+		if args[0].Null() {
+			return oneLengthArray(args[1])
+		}
+
+		arr, ok := args[0].(arrayValue)
+		if !ok {
+			return nil, fmt.Errorf("expected array, got %s", args[0].Type())
+		}
+
+		scal, ok := args[1].(scalarValue)
+		if !ok {
+			return nil, fmt.Errorf("expected scalar, got %s", args[1].Type())
+		}
+
+		// copy as to not mutate the original array
+		arr2, err := copyVal(arr)
+		if err != nil {
+			return nil, err
+		}
+
+		// 1-based indexing
+		err = arr2.Set(arr2.Len()+1, scal)
+		if err != nil {
+			return nil, err
+		}
+
+		return arr2, nil
+	},
+	"array_prepend": func(args []value) (value, error) {
+		if args[0].Null() {
+			return oneLengthArray(args[1])
+		}
+
+		arr, ok := args[0].(arrayValue)
+		if !ok {
+			return nil, fmt.Errorf("expected array, got %s", args[0].Type())
+		}
+
+		scal, ok := args[1].(scalarValue)
+		if !ok {
+			return nil, fmt.Errorf("expected scalar, got %s", args[1].Type())
+		}
+
+		// we will make a zero-value of the array and then set the first value to the scalar
+		newVal, err := newZeroValue(arr.Type())
+		if err != nil {
+			return nil, err
+		}
+
+		arrVal, ok := newVal.(arrayValue)
+		if !ok {
+			return nil, fmt.Errorf("expected array, got %s", newVal.Type())
+		}
+
+		err = arrVal.Set(1, scal)
+		if err != nil {
+			return nil, err
+		}
+
+		for i := int32(1); i <= arr.Len(); i++ {
+			val, err := arr.Get(i)
+			if err != nil {
+				return nil, err
+			}
+
+			err = arrVal.Set(i+1, val)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		return arrVal, nil
+	},
+	"array_cat": func(args []value) (value, error) {
+		if args[0].Null() {
+			return args[1], nil
+		}
+
+		if args[1].Null() {
+			return args[0], nil
+		}
+
+		arr1, ok := args[0].(arrayValue)
+		if !ok {
+			return nil, fmt.Errorf("expected array, got %s", args[0].Type())
+		}
+
+		arr2, ok := args[1].(arrayValue)
+		if !ok {
+			return nil, fmt.Errorf("expected array, got %s", args[1].Type())
+		}
+
+		// we will make a zero-value of the array and then set the first value to the scalar
+		newVal, err := newZeroValue(arr1.Type())
+		if err != nil {
+			return nil, err
+		}
+
+		arrVal, ok := newVal.(arrayValue)
+		if !ok {
+			return nil, fmt.Errorf("expected array, got %s", newVal.Type())
+		}
+
+		for i := int32(1); i <= arr1.Len(); i++ {
+			val, err := arr1.Get(i)
+			if err != nil {
+				return nil, err
+			}
+
+			err = arrVal.Set(i, val)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		for i := int32(1); i <= arr2.Len(); i++ {
+			val, err := arr2.Get(i)
+			if err != nil {
+				return nil, err
+			}
+
+			err = arrVal.Set(i+arr1.Len(), val)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		return arrVal, nil
+	},
+	"array_remove": func(args []value) (value, error) {
+		if args[0].Null() {
+			return args[0], nil
+		}
+
+		arr, ok := args[0].(arrayValue)
+		if !ok {
+			return nil, fmt.Errorf("expected array, got %s", args[0].Type())
+		}
+
+		scal, ok := args[1].(scalarValue)
+		if !ok {
+			return nil, fmt.Errorf("expected scalar, got %s", args[1].Type())
+		}
+
+		expectedScal := arr.Type().Copy()
+		expectedScal.IsArray = false
+		if !expectedScal.Equals(scal.Type()) {
+			return nil, fmt.Errorf("expected scalar of type %s, got %s", expectedScal, scal.Type())
+		}
+
+		// we will make a new array and copy all values except the one we want to remove
+		newVal, err := newZeroValue(arr.Type())
+		if err != nil {
+			return nil, err
+		}
+
+		arrVal, ok := newVal.(arrayValue)
+		if !ok {
+			return nil, fmt.Errorf("expected array, got %s", newVal.Type())
+		}
+
+		// we will iterate over the array and copy all values except the one we want to remove
+		for i := int32(1); i <= arr.Len(); i++ {
+			val, err := arr.Get(i)
+			if err != nil {
+				return nil, err
+			}
+
+			isEq, err := val.Compare(scal, _EQUAL)
+			if err != nil {
+				return nil, err
+			}
+
+			if isEq.Bool.Bool {
+				continue
+			}
+
+			err = arrVal.Set(arrVal.Len()+1, val)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		return arrVal, nil
+	},
+}
+
+// oneLengthArray makes an array with one element.
+// The arg must be a scalar.
+func oneLengthArray(v value) (arrayValue, error) {
+	scal, ok := v.(scalarValue)
+	if !ok {
+		return nil, fmt.Errorf("expected scalar, got %s", v.Type())
+	}
+
+	dt := v.Type().Copy()
+	dt.IsArray = true
+
+	newVal, err := newZeroValue(dt)
+	if err != nil {
+		return nil, err
+	}
+
+	arrVal, ok := newVal.(arrayValue)
+	if !ok {
+		return nil, fmt.Errorf("expected array, got %s", newVal.Type())
+	}
+
+	err = arrVal.Set(1, scal)
+	if err != nil {
+		return nil, err
+	}
+
+	return arrVal, nil
 }
