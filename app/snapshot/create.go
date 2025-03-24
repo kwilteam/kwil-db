@@ -27,6 +27,7 @@ import (
 	"github.com/kwilteam/kwil-db/config"
 	"github.com/kwilteam/kwil-db/core/types"
 	"github.com/kwilteam/kwil-db/node"
+	"github.com/kwilteam/kwil-db/node/engine/interpreter"
 	"github.com/kwilteam/kwil-db/node/meta"
 	"github.com/kwilteam/kwil-db/node/pg"
 	"github.com/kwilteam/kwil-db/node/voting"
@@ -338,6 +339,13 @@ func PGDump(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string, 
 	genCfg.Leader = leader // use the same leader just for the purposes of creating the genesis file
 	// without the leader, the genesis file will not be created due to unmarshal errors
 
+	// owner
+	owner, err := owner(ctx, dbName, dbUser, dbPass, dbHost, dbPort)
+	if err != nil {
+		return -1, nil, "", nil, fmt.Errorf("failed to get database owner: %w", err)
+	}
+	genCfg.DBOwner = owner
+
 	// Write the genesis config to a file
 	genesisFile := filepath.Join(snapshotDir, "genesis.json")
 	if err := genCfg.SaveAs(genesisFile); err != nil {
@@ -417,4 +425,24 @@ func namespaces(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort stri
 	defer pool.Close()
 
 	return appNode.UserNamespaces(ctx, pool)
+}
+
+func owner(ctx context.Context, dbName, dbUser, dbPass, dbHost, dbPort string) (string, error) {
+	cfg := &pg.PoolConfig{
+		ConnConfig: pg.ConnConfig{
+			Host:   dbHost,
+			Port:   dbPort,
+			User:   dbUser,
+			Pass:   dbPass,
+			DBName: dbName,
+		},
+		MaxConns: 2,
+	}
+	pool, err := pg.NewPool(ctx, cfg)
+	if err != nil {
+		return "", fmt.Errorf("failed to create pool: %w", err)
+	}
+	defer pool.Close()
+
+	return interpreter.GetDBOwner(ctx, pool)
 }
