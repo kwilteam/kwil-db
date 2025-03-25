@@ -722,3 +722,42 @@ func validatePrivileges(ps ...string) ([]privilege, error) {
 
 	return ps2, nil
 }
+
+type DB interface {
+	sql.ReadTxMaker
+}
+
+const OwnerSQL = "SELECT user_identifier FROM info.user_roles where role_name = 'owner';"
+
+func GetDBOwner(ctx context.Context, db DB) (string, error) {
+	var owner string
+	tx, err := db.BeginReadTx(ctx)
+	if err != nil {
+		return "", err
+	}
+	defer tx.Rollback(ctx)
+
+	res, err := tx.Execute(ctx, OwnerSQL)
+	if err != nil {
+		return "", fmt.Errorf("failed to execute query: %w", err)
+	}
+
+	if len(res.Columns) != 1 { // Do we always have a single owner?
+		return "", fmt.Errorf("unexpected number of columns: %d", len(res.Columns))
+	}
+
+	if len(res.Rows) == 0 {
+		return "", fmt.Errorf("no owner found")
+	}
+
+	if len(res.Rows[0]) != 1 {
+		return "", fmt.Errorf("unexpected number of columns in row: %d", len(res.Rows[0]))
+	}
+
+	owner, ok := res.Rows[0][0].(string)
+	if !ok {
+		return "", fmt.Errorf("failed to convert owner to string: %v", res.Rows[0][0])
+	}
+
+	return owner, nil
+}
