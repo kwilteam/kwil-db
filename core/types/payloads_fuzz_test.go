@@ -700,7 +700,7 @@ func TestEncodeValueDataConsistency(t *testing.T) {
 	testBytes := []byte{1, 2, 3, 4, 5}
 
 	// Encode each value multiple times and verify results are consistent
-	for i := 0; i < 10; i++ {
+	for range 10 {
 		// String
 		encoded1, err := types.EncodeValue(testString)
 		require.NoError(t, err)
@@ -743,7 +743,7 @@ func TestEncodeValueLargeArrays(t *testing.T) {
 	largeBoolArray := make([]bool, 10000)
 
 	// Fill arrays with values
-	for i := 0; i < 10000; i++ {
+	for i := range 10000 {
 		largeStringArray[i] = fmt.Sprintf("string-%d", i)
 		largeIntArray[i] = i
 		largeBoolArray[i] = i%2 == 0
