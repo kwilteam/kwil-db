@@ -659,22 +659,32 @@ func EncodeValue(v any) (*EncodedValue, error) {
 			},
 			Data: nil,
 		}, nil
+	} else if bts, ok := v.([]byte); ok {
+		// if it is a nil byte slice, encode as null
+		if bts == nil {
+			return &EncodedValue{
+				Type: DataType{
+					Name: NullType.Name,
+				},
+				Data: nil,
+			}, nil
+		}
 	}
 
 	// encodeScalar encodes a scalar value into a byte slice.
 	// It also returns the data type of the value.
-	encodeScalar := func(v any) ([]byte, *DataType, error) {
+	encodeScalar := func(v2 any) ([]byte, *DataType, error) {
 		// if it is a pointer, check if it is nil and dereference if not
-		valueOf := reflect.ValueOf(v)
+		valueOf := reflect.ValueOf(v2)
 		if valueOf.Kind() == reflect.Ptr {
 			if valueOf.IsNil() {
 				return encodeNull(), NullType.Copy(), nil
 			}
 
-			v = valueOf.Elem().Interface()
+			v2 = valueOf.Elem().Interface()
 		}
 
-		switch t := v.(type) {
+		switch t := v2.(type) {
 		case string:
 			return encodeNotNull([]byte(t)), TextType, nil
 		case int, int16, int32, int64, int8, uint, uint16, uint32, uint64: // intentionally ignore uint8 since it is an alias for byte
@@ -704,13 +714,6 @@ func EncodeValue(v any) (*EncodedValue, error) {
 			return encodeNotNull([]byte{0}), BoolType, nil
 		case nil:
 			return encodeNull(), NullType, nil
-		case *Decimal:
-			decTyp, err := NewNumericType(t.Precision(), t.Scale())
-			if err != nil {
-				return nil, nil, err
-			}
-
-			return encodeNotNull([]byte(t.String())), decTyp, nil
 		case Decimal:
 			decTyp, err := NewNumericType(t.Precision(), t.Scale())
 			if err != nil {
@@ -719,7 +722,7 @@ func EncodeValue(v any) (*EncodedValue, error) {
 
 			return encodeNotNull([]byte(t.String())), decTyp, nil
 		default:
-			return nil, nil, fmt.Errorf("cannot encode type %T", v)
+			return nil, nil, fmt.Errorf("cannot encode type %T", v2)
 		}
 	}
 
@@ -737,13 +740,32 @@ func EncodeValue(v any) (*EncodedValue, error) {
 		}
 
 		v = valOf.Elem().Interface()
+
+		// it might be a pointer to a nil value
+		if v == nil {
+			return &EncodedValue{
+				Type: *NullType,
+				Data: nil,
+			}, nil
+		}
+
 		typeOf = reflect.TypeOf(v)
 	}
 	if typeOf.Kind() == reflect.Slice && typeOf.Elem().Kind() != reflect.Uint8 { // ignore byte slices
+		// it is possible to have a nil slice that is typed
+		// (e.g. var nilSlice []string)
+		// if nil, encode as null
+		valueOf := reflect.ValueOf(v)
+		if valueOf.IsNil() {
+			return &EncodedValue{
+				Type: *NullType,
+				Data: nil,
+			}, nil
+		}
+
 		// encode each element of the array
 		encoded := make([][]byte, 0)
 		// it can be of any slice type, e.g. []any, []string, []int, etc.
-		valueOf := reflect.ValueOf(v)
 		var firstDt *DataType
 		for i := range valueOf.Len() {
 			elem := valueOf.Index(i).Interface()
@@ -769,7 +791,7 @@ func EncodeValue(v any) (*EncodedValue, error) {
 
 		// edge case where all elements are nil
 		if firstDt == nil {
-			return nil, fmt.Errorf("all null elements in array")
+			return nil, fmt.Errorf("no elements in array")
 		}
 		if firstDt.Name == "" {
 			firstDt = NullType.Copy()
