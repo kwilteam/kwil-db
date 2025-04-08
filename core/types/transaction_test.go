@@ -1294,3 +1294,11 @@ func TestReadCompactBytes(t *testing.T) {
 		require.Equal(t, []byte{0x01, 0x02, 0x03, 0x04}, result)
 	})
 }
+
+func TestReadCompactString(t *testing.T) {
+	data := []byte("\x8f\x8f\x8f\x80\xa9\xa9\xa9\xa9\xa9\x01")
+	var r io.Reader = bytes.NewReader(data)
+	_, err := ReadCompactString(r)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "longer than data length")
+}
