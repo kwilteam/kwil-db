@@ -478,6 +478,13 @@ func DecodeBlock(rawBlk []byte) (*Block, error) {
 		return nil, fmt.Errorf("failed to read signature: %w", err)
 	}
 
+	// Before allocating a large transaction slice, make sure it is possible
+	// that the input slice can actually contain that number of transactions.
+	// Alternatively, we could not allocate and just append.
+	if int64(r.Len()) < int64(hdr.NumTxns)*int64(smallestTxSize) {
+		return nil, fmt.Errorf("invalid number of transactions %d", hdr.NumTxns)
+	}
+
 	txns := make([]*Transaction, hdr.NumTxns)
 
 	for i := range txns {

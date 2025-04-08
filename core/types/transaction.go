@@ -300,6 +300,8 @@ func (t *TransactionBody) SerializeMsg(mst SignedMsgSerializationType) ([]byte, 
 	return nil, errors.New("invalid serialization type")
 }
 
+var smallestTxSize = 6 // (&Transaction{}).SerializeSize()
+
 // SerializeSize gives the size of the serialized transaction.
 func (t *Transaction) SerializeSize() int64 {
 	totalLen := func(l int) int {
