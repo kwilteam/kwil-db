@@ -274,6 +274,22 @@ func TestBlock_EncodeDecode(t *testing.T) {
 		require.Contains(t, err.Error(), "invalid signature length")
 	})
 
+	t.Run("decode with invalid transaction count", func(t *testing.T) {
+		buf := new(bytes.Buffer)
+		header := &BlockHeader{Height: 1, NumTxns: 1}
+		buf.Write(EncodeBlockHeader(header))
+		// sigLen and sig
+		buf.Write(binary.AppendUvarint(nil, 3))
+		buf.Write([]byte("sig"))
+
+		// lx len, but no tx data
+		buf.Write(binary.AppendUvarint(nil, uint64(20)))
+
+		_, err := DecodeBlock(buf.Bytes())
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "invalid number of transactions")
+	})
+
 	t.Run("decode with invalid transaction length", func(t *testing.T) {
 		buf := new(bytes.Buffer)
 		header := &BlockHeader{Height: 1, NumTxns: 1}
@@ -282,8 +298,9 @@ func TestBlock_EncodeDecode(t *testing.T) {
 		buf.Write(binary.AppendUvarint(nil, 3))
 		buf.Write([]byte("sig"))
 
-		// first txLen -- too big
+		// first txLen -- too big (but pass tx count check)
 		buf.Write(binary.AppendUvarint(nil, uint64(1<<31)))
+		buf.Write([]byte("txdata"))
 
 		_, err := DecodeBlock(buf.Bytes())
 		require.Error(t, err)
