@@ -758,6 +758,9 @@ func ReadCompactBytes(r io.Reader) ([]byte, error) {
 	if length == 0 {
 		return []byte{}, nil
 	}
+	if length < 0 {
+		return nil, fmt.Errorf("encoded length is negative (%d)", length)
+	}
 	return safeReadBytes(r, int(length))
 }
 

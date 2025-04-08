@@ -489,6 +489,9 @@ func DecodeBlock(rawBlk []byte) (*Block, error) {
 		if int(txLen) > r.Len() { // more than remaining
 			return nil, fmt.Errorf("invalid transaction length %d", txLen)
 		}
+		if txLen == 0 {
+			return nil, fmt.Errorf("invalid empty transaction idx %d", i)
+		}
 
 		rawTx := make([]byte, txLen)
 		if _, err := io.ReadFull(r, rawTx); err != nil {
@@ -541,6 +544,9 @@ func GetRawBlockTx(rawBlk []byte, idx uint32) ([]byte, error) {
 		}
 		if int(txLen) > len(rawBlk) { // TODO: do better than this
 			return nil, fmt.Errorf("invalid transaction length %d", txLen)
+		}
+		if txLen == 0 {
+			return nil, fmt.Errorf("invalid empty transaction idx %d", i)
 		}
 		if idx == i {
 			tx := make([]byte, txLen)

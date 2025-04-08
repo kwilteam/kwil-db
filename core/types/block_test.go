@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"math/big"
+	"strings"
 	"testing"
 	"time"
 
@@ -24,6 +25,13 @@ func newTx(nonce uint64, sender, payload string) *Transaction {
 		},
 		Sender: []byte(sender),
 	}
+}
+
+func TestDecodeBlockHeader_invalid(t *testing.T) {
+	data := strings.NewReader("0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001")
+	_, err := DecodeBlockHeader(data)
+	require.Error(t, err)
+	require.ErrorContains(t, err, "encoded length is negative")
 }
 
 func TestGetRawBlockTx(t *testing.T) {

@@ -1207,3 +1207,90 @@ func TestCreateNodeTransaction(t *testing.T) {
 	require.NotNil(t, tx)
 	require.Equal(t, SignedMsgDirect, tx.Serialization)
 }
+
+func TestReadCompactBytes(t *testing.T) {
+	t.Parallel()
+
+	testCases := []struct {
+		name        string
+		input       []byte
+		expected    []byte
+		expectError bool
+	}{
+		{
+			name:        "max int64 length",
+			input:       append([]byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f}, make([]byte, 100)...),
+			expectError: true,
+		},
+		{
+			name:        "length near int64 max",
+			input:       append([]byte{0xfe, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f}, make([]byte, 100)...),
+			expectError: true,
+		},
+		{
+			name:        "invalid varint encoding",
+			input:       []byte{0xff, 0xff, 0xff},
+			expectError: true,
+		},
+		{
+			name:        "incomplete data after length",
+			input:       []byte{0x08, 0x01, 0x02},
+			expectError: true,
+		},
+		{
+			name:        "length larger than remaining data",
+			input:       []byte{0x10, 0x01, 0x02, 0x03},
+			expectError: true,
+		},
+		{
+			name:     "exact data length match",
+			input:    []byte{0x08, 0x01, 0x02, 0x03, 0x04},
+			expected: []byte{0x01, 0x02, 0x03, 0x04},
+		},
+		{
+			name:        "invalid negative length",
+			input:       []byte{0x03, 0x42},
+			expectError: true,
+		},
+		{
+			name:     "single byte data",
+			input:    []byte{0x02, 0x42},
+			expected: []byte{0x42},
+		},
+		{
+			name:     "explicit zero length",
+			input:    []byte{0x00},
+			expected: []byte{},
+		},
+		{
+			name:     "nil indicator",
+			input:    []byte{0x01},
+			expected: nil,
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			reader := bytes.NewReader(tc.input)
+			result, err := ReadCompactBytes(reader)
+
+			if tc.expectError {
+				require.Error(t, err)
+				return
+			}
+
+			require.NoError(t, err)
+			require.Equal(t, tc.expected, result)
+		})
+	}
+
+	t.Run("with custom reader implementation", func(t *testing.T) {
+		bts := []byte{0x08, 0x01, 0x02, 0x03, 0x04}
+		r := &regularReader{bytes.NewReader(bts)}
+		// br := newByteReader(r)
+
+		result, err := ReadCompactBytes(r)
+		require.NoError(t, err)
+		require.Equal(t, []byte{0x01, 0x02, 0x03, 0x04}, result)
+	})
+}
