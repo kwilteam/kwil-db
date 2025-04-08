@@ -364,6 +364,9 @@ func (ci *CommitInfo) UnmarshalBinary(data []byte) error {
 	if err != nil {
 		return fmt.Errorf("failed to read vote count: %w", err)
 	}
+	if voteCount > uint64(rd.Len()) {
+		return fmt.Errorf("vote count %d exceeds remaining data length %d", voteCount, rd.Len())
+	}
 
 	ci.Votes = make([]*VoteInfo, voteCount)
 	for i := range ci.Votes {
@@ -391,6 +394,9 @@ func (ci *CommitInfo) UnmarshalBinary(data []byte) error {
 	valCount, err := binary.ReadUvarint(rd)
 	if err != nil {
 		return fmt.Errorf("failed to read validator update count: %w", err)
+	}
+	if valCount > uint64(rd.Len()) {
+		return fmt.Errorf("validator update count %d exceeds remaining data length %d", valCount, rd.Len())
 	}
 	ci.ValidatorUpdates = make([]*Validator, valCount)
 	for i := range ci.ValidatorUpdates {

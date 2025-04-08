@@ -469,7 +469,7 @@ func DecodeBlock(rawBlk []byte) (*Block, error) {
 		return nil, fmt.Errorf("failed to read signature length: %w", err)
 	}
 
-	if int(sigLen) > r.Len() { // more than remaining
+	if sigLen > uint64(r.Len()) { // more than remaining
 		return nil, fmt.Errorf("invalid signature length %d", sigLen)
 	}
 
@@ -493,7 +493,7 @@ func DecodeBlock(rawBlk []byte) (*Block, error) {
 			return nil, fmt.Errorf("failed to read tx length: %w", err)
 		}
 
-		if int(txLen) > r.Len() { // more than remaining
+		if txLen > uint64(r.Len()) { // more than remaining
 			return nil, fmt.Errorf("invalid transaction length %d", txLen)
 		}
 		if txLen == 0 {
@@ -535,7 +535,7 @@ func GetRawBlockTx(rawBlk []byte, idx uint32) ([]byte, error) {
 		return nil, fmt.Errorf("failed to read signature length: %w", err)
 	}
 
-	if int(sigLen) > len(rawBlk) { // TODO: do better than this
+	if sigLen > uint64(len(rawBlk)) { // TODO: do better than this
 		return nil, fmt.Errorf("invalid signature length %d", sigLen)
 	}
 
@@ -549,7 +549,7 @@ func GetRawBlockTx(rawBlk []byte, idx uint32) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to read tx length: %w", err)
 		}
-		if int(txLen) > len(rawBlk) { // TODO: do better than this
+		if txLen > uint64(len(rawBlk)) { // TODO: do better than this
 			return nil, fmt.Errorf("invalid transaction length %d", txLen)
 		}
 		if txLen == 0 {
