@@ -734,6 +734,78 @@ func Test_SQL(t *testing.T) {
 			execSQL:     `SELECT case when false then 1 else error('a')::INT end;`,
 			errContains: "ERROR: a (SQLSTATE P0001)",
 		},
+		{
+			// this is a regression test for a bug where default ordering
+			// applied to aggregates in windows actually changed the intent of the query
+			name: "aggregate window function ordering",
+			execSQL: `WITH data AS (
+					    SELECT 'key1' AS key, 1 AS val
+					    UNION ALL SELECT 'key1', 2
+					)
+					SELECT
+					    max(val) OVER (
+					        PARTITION BY key
+					    ) AS max_key
+					FROM data;`,
+			results: [][]any{
+				{int64(2)},
+				{int64(2)},
+			},
+		},
+		{
+			// this is the same test as above, but with ordering applied
+			// to make sure that we match the intent of the query
+			name: "aggregate window function explicit ordering",
+			execSQL: `WITH data AS (
+					    SELECT 'key1' AS key, 1 AS val
+					    UNION ALL SELECT 'key1', 2
+					)
+					SELECT
+					    max(val) OVER (
+					        PARTITION BY key ORDER BY key, val
+					    ) AS max_key
+					FROM data;`,
+			results: [][]any{
+				{int64(1)},
+				{int64(2)},
+			},
+		},
+		{
+			// testing that default ordering DOES apply to windows
+			name: "window function ordering",
+			execSQL: `WITH data AS (
+				SELECT 'key1' AS key, 1 AS val
+				UNION ALL SELECT 'key1', 2
+			)
+			SELECT
+				lag(val) OVER (
+					PARTITION BY key
+				) AS max_key
+			FROM data
+			ORDER BY 1 NULLS FIRST;`,
+			results: [][]any{
+				{nil},
+				{int64(1)},
+			},
+		},
+		{
+			// explicit ordering of the above
+			name: "window function explicit ordering",
+			execSQL: `WITH data AS (
+				SELECT 'key1' AS key, 1 AS val
+				UNION ALL SELECT 'key1', 2
+			)
+			SELECT
+				lag(val) OVER (
+					PARTITION BY key ORDER BY key desc, val desc
+				) AS max_key
+			FROM data
+			ORDER BY 1 NULLS FIRST;`,
+			results: [][]any{
+				{nil},
+				{int64(2)},
+			},
+		},
 	}
 
 	db := newTestDB(t, nil, nil)

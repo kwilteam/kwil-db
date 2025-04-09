@@ -692,7 +692,7 @@ func (s *scopeContext) selectCore(node *parse.SelectCore) (preProjectPlan Plan, 
 			return nil, nil, nil, nil, nil, fmt.Errorf(`%w: window "%s" is already defined`, ErrWindowAlreadyDefined, window.Name)
 		}
 
-		win, err := s.planWindow(plan, rel, window.Window, groupingTerms)
+		win, err := s.planWindow(plan, rel, window.Window, groupingTerms, window.Name)
 		if err != nil {
 			return nil, nil, nil, nil, nil, err
 		}
@@ -846,7 +846,7 @@ func (s *scopeContext) makeOnWindowFunc(unnamedWindows *[]*Window, namedWindows 
 			panic(fmt.Sprintf("unexpected window type %T", ewfc.Window))
 		case *parse.WindowImpl:
 			// it is an anonymous window, so we need to create a new window node
-			window, err := s.planWindow(plan, rel, win, groupingTerms)
+			window, err := s.planWindow(plan, rel, win, groupingTerms, ewfc.FunctionCall.Name)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -1011,7 +1011,7 @@ func (s *scopeContext) selectCoreWithoutFrom(cols []parse.ResultColumn, isDistin
 }
 
 // planWindow plans a window function.
-func (s *scopeContext) planWindow(plan Plan, rel *Relation, win *parse.WindowImpl, groupingTerms map[string]*IdentifiedExpr) (*Window, error) {
+func (s *scopeContext) planWindow(plan Plan, rel *Relation, win *parse.WindowImpl, groupingTerms map[string]*IdentifiedExpr, function string) (*Window, error) {
 	var partitionBy []Expression
 	for _, partition := range win.PartitionBy {
 		partition, _, err := s.expr(partition, rel, groupingTerms)
@@ -1022,17 +1022,35 @@ func (s *scopeContext) planWindow(plan Plan, rel *Relation, win *parse.WindowImp
 		partitionBy = append(partitionBy, partition)
 	}
 
+	// Adding ordering to a window function actually changes the definition of the window,
+	// and thus deviates from the user's intent. This is due to how window functions
+	// take into account "peer rows", which is best defined in the Apache Drill documentation:
+	// https://drill.apache.org/docs/sql-window-functions-introduction/
+	// Therefore, we only apply default ordering if the function is strictly a window function.
+	// If it is an aggregate, we do not need to apply default ordering.
+
 	// to add default ordering, we need to order by every column in the target relation.
 	// This is extremely inefficient, but it is the only way to guarantee that the default ordering
 	// is applied.
 	if s.plan.applyDefaultOrdering {
-		for _, field := range rel.Fields {
-			win.OrderBy = append(win.OrderBy, &parse.OrderingTerm{
-				Expression: &parse.ExpressionColumn{
-					Table:  field.Parent,
-					Column: field.Name,
-				},
-			})
+		isWindow := false
+
+		// if the function is an aggregate, we do not apply default ordering
+		if fn, ok := engine.Functions[function]; ok {
+			if _, ok := fn.(*engine.WindowFunctionDefinition); ok {
+				isWindow = true
+			}
+		}
+
+		if isWindow {
+			for _, field := range rel.Fields {
+				win.OrderBy = append(win.OrderBy, &parse.OrderingTerm{
+					Expression: &parse.ExpressionColumn{
+						Table:  field.Parent,
+						Column: field.Name,
+					},
+				})
+			}
 		}
 	}
 
