@@ -292,7 +292,7 @@ func Test_Planner(t *testing.T) {
 			wt: "Return: name [text], sum [numeric(1000,0)]\n" +
 				"└─Project: users.name; {#ref(A)}\n" +
 				"  └─Sort: 1 asc nulls last; 2 asc nulls last\n" +
-				"    └─Window [partition_by=users.name] [order_by=users.age desc nulls last, users.id asc nulls last, users.name asc nulls last, users.age asc nulls last]: {#ref(A) = sum(users.age)}\n" +
+				"    └─Window [partition_by=users.name] [order_by=users.age desc nulls last]: {#ref(A) = sum(users.age)}\n" +
 				"      └─Scan Table: users [physical]\n",
 			defaultOrdering: true,
 		},
