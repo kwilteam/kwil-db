@@ -96,7 +96,7 @@ func (s *Signature) ReadFrom(r io.Reader) (int64, error) {
 
 	if sigLen > 0 {
 		if rl, ok := r.(interface{ Len() int }); ok {
-			if int(sigLen) > rl.Len() {
+			if sigLen > uint64(rl.Len()) {
 				return cr.ReadCount(), fmt.Errorf("impossibly long signature length: %d", sigLen)
 			}
 			s.Data = make([]byte, sigLen)
@@ -120,7 +120,7 @@ func (s *Signature) ReadFrom(r io.Reader) (int64, error) {
 	}
 
 	if typeLen > 0 {
-		if rl != nil && int(typeLen) > rl.Len() {
+		if rl != nil && typeLen > uint64(rl.Len()) {
 			return cr.ReadCount(), fmt.Errorf("impossibly long sig type length: %d", typeLen)
 		}
 		typeBytes := make([]byte, typeLen)
