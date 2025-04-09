@@ -736,8 +736,8 @@ func Test_SQL(t *testing.T) {
 		},
 		{
 			// this is a regression test for a bug where default ordering
-			// applied to windows actually changed the intent of the query
-			name: "window function ordering",
+			// applied to aggregates in windows actually changed the intent of the query
+			name: "aggregate window function ordering",
 			execSQL: `WITH data AS (
 					    SELECT 'key1' AS key, 1 AS val
 					    UNION ALL SELECT 'key1', 2
@@ -755,7 +755,7 @@ func Test_SQL(t *testing.T) {
 		{
 			// this is the same test as above, but with ordering applied
 			// to make sure that we match the intent of the query
-			name: "window function ordering",
+			name: "aggregate window function explicit ordering",
 			execSQL: `WITH data AS (
 					    SELECT 'key1' AS key, 1 AS val
 					    UNION ALL SELECT 'key1', 2
@@ -767,6 +767,42 @@ func Test_SQL(t *testing.T) {
 					FROM data;`,
 			results: [][]any{
 				{int64(1)},
+				{int64(2)},
+			},
+		},
+		{
+			// testing that default ordering DOES apply to windows
+			name: "window function ordering",
+			execSQL: `WITH data AS (
+				SELECT 'key1' AS key, 1 AS val
+				UNION ALL SELECT 'key1', 2
+			)
+			SELECT
+				lag(val) OVER (
+					PARTITION BY key
+				) AS max_key
+			FROM data
+			ORDER BY 1 NULLS FIRST;`,
+			results: [][]any{
+				{nil},
+				{int64(1)},
+			},
+		},
+		{
+			// explicit ordering of the above
+			name: "window function explicit ordering",
+			execSQL: `WITH data AS (
+				SELECT 'key1' AS key, 1 AS val
+				UNION ALL SELECT 'key1', 2
+			)
+			SELECT
+				lag(val) OVER (
+					PARTITION BY key ORDER BY key desc, val desc
+				) AS max_key
+			FROM data
+			ORDER BY 1 NULLS FIRST;`,
+			results: [][]any{
+				{nil},
 				{int64(2)},
 			},
 		},
