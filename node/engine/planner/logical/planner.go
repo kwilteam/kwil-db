@@ -1022,19 +1022,26 @@ func (s *scopeContext) planWindow(plan Plan, rel *Relation, win *parse.WindowImp
 		partitionBy = append(partitionBy, partition)
 	}
 
+	// * Default ordering is commented out because it actually is not needed.
+	// Adding ordering to a window function actually changes the definition of the window,
+	// and thus deviates from the user's intent. This is due to how window functions
+	// take into account "peer rows", which is best defined in the Apache Drill documentation:
+	// https://drill.apache.org/docs/sql-window-functions-introduction/
+
+	// Adding win
 	// to add default ordering, we need to order by every column in the target relation.
 	// This is extremely inefficient, but it is the only way to guarantee that the default ordering
 	// is applied.
-	if s.plan.applyDefaultOrdering {
-		for _, field := range rel.Fields {
-			win.OrderBy = append(win.OrderBy, &parse.OrderingTerm{
-				Expression: &parse.ExpressionColumn{
-					Table:  field.Parent,
-					Column: field.Name,
-				},
-			})
-		}
-	}
+	// if s.plan.applyDefaultOrdering {
+	// 	for _, field := range rel.Fields {
+	// 		win.OrderBy = append(win.OrderBy, &parse.OrderingTerm{
+	// 			Expression: &parse.ExpressionColumn{
+	// 				Table:  field.Parent,
+	// 				Column: field.Name,
+	// 			},
+	// 		})
+	// 	}
+	// }
 
 	var orderBy []*SortExpression
 	if len(win.OrderBy) > 0 {
