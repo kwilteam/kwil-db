@@ -469,13 +469,20 @@ func DecodeBlock(rawBlk []byte) (*Block, error) {
 		return nil, fmt.Errorf("failed to read signature length: %w", err)
 	}
 
-	if int(sigLen) > r.Len() { // more than remaining
+	if sigLen > uint64(r.Len()) { // more than remaining
 		return nil, fmt.Errorf("invalid signature length %d", sigLen)
 	}
 
 	sig := make([]byte, sigLen)
 	if _, err := io.ReadFull(r, sig); err != nil {
 		return nil, fmt.Errorf("failed to read signature: %w", err)
+	}
+
+	// Before allocating a large transaction slice, make sure it is possible
+	// that the input slice can actually contain that number of transactions.
+	// Alternatively, we could not allocate and just append.
+	if int64(r.Len()) < int64(hdr.NumTxns)*int64(smallestTxSize) {
+		return nil, fmt.Errorf("invalid number of transactions %d", hdr.NumTxns)
 	}
 
 	txns := make([]*Transaction, hdr.NumTxns)
@@ -486,8 +493,11 @@ func DecodeBlock(rawBlk []byte) (*Block, error) {
 			return nil, fmt.Errorf("failed to read tx length: %w", err)
 		}
 
-		if int(txLen) > r.Len() { // more than remaining
+		if txLen > uint64(r.Len()) { // more than remaining
 			return nil, fmt.Errorf("invalid transaction length %d", txLen)
+		}
+		if txLen == 0 {
+			return nil, fmt.Errorf("invalid empty transaction idx %d", i)
 		}
 
 		rawTx := make([]byte, txLen)
@@ -525,7 +535,7 @@ func GetRawBlockTx(rawBlk []byte, idx uint32) ([]byte, error) {
 		return nil, fmt.Errorf("failed to read signature length: %w", err)
 	}
 
-	if int(sigLen) > len(rawBlk) { // TODO: do better than this
+	if sigLen > uint64(len(rawBlk)) { // TODO: do better than this
 		return nil, fmt.Errorf("invalid signature length %d", sigLen)
 	}
 
@@ -539,8 +549,11 @@ func GetRawBlockTx(rawBlk []byte, idx uint32) ([]byte, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to read tx length: %w", err)
 		}
-		if int(txLen) > len(rawBlk) { // TODO: do better than this
+		if txLen > uint64(len(rawBlk)) { // TODO: do better than this
 			return nil, fmt.Errorf("invalid transaction length %d", txLen)
+		}
+		if txLen == 0 {
+			return nil, fmt.Errorf("invalid empty transaction idx %d", i)
 		}
 		if idx == i {
 			tx := make([]byte, txLen)

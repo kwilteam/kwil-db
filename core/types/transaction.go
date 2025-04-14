@@ -300,6 +300,8 @@ func (t *TransactionBody) SerializeMsg(mst SignedMsgSerializationType) ([]byte, 
 	return nil, errors.New("invalid serialization type")
 }
 
+var smallestTxSize = 6 // (&Transaction{}).SerializeSize()
+
 // SerializeSize gives the size of the serialized transaction.
 func (t *Transaction) SerializeSize() int64 {
 	totalLen := func(l int) int {
@@ -721,12 +723,16 @@ func (r *byteReader) ReadByte() (byte, error) {
 	return b[0], err
 }
 
-func safeReadBytes(r io.Reader, length int) ([]byte, error) {
+func safeReadBytes(r io.Reader, length uint64) ([]byte, error) {
 	var data []byte
 	if rl, ok := r.(interface{ Len() int }); ok { // e.g. *bytes.Reader
 		// This case allows us to preallocate somewhat safely since the reader
 		// says it actually has that length of data. A bytes.Reader will do this.
-		if length > rl.Len() {
+		rLen := rl.Len()
+		if rLen < 0 {
+			return nil, fmt.Errorf("negative length from reader %d", rLen)
+		}
+		if length > uint64(rLen) {
 			return nil, fmt.Errorf("encoded length %d is longer than data length %d", length, rl.Len())
 		}
 		data = make([]byte, length)
@@ -758,7 +764,10 @@ func ReadCompactBytes(r io.Reader) ([]byte, error) {
 	if length == 0 {
 		return []byte{}, nil
 	}
-	return safeReadBytes(r, int(length))
+	if length < 0 {
+		return nil, fmt.Errorf("encoded length is negative (%d)", length)
+	}
+	return safeReadBytes(r, uint64(length))
 }
 
 // ReadBytes reads a byte slice from a reader. This expects a 32-bit length
@@ -777,7 +786,7 @@ func ReadBytes(r io.Reader) ([]byte, error) {
 	default:
 	}
 
-	return safeReadBytes(r, int(length))
+	return safeReadBytes(r, uint64(length))
 }
 
 // ReadString reads a string from a reader. This expects a 32-bit length prefix
@@ -799,7 +808,7 @@ func ReadCompactString(r io.Reader) (string, error) {
 	if length == 0 {
 		return "", nil
 	}
-	bts, err := safeReadBytes(r, int(length))
+	bts, err := safeReadBytes(r, length)
 	return string(bts), err
 }
 
