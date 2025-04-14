@@ -19,6 +19,10 @@ import (
 	"github.com/kwilteam/kwil-db/core/utils/random"
 )
 
+// This not-a-unit-test isolates the unexported internal logical replication
+// monitor and ensures it always returns the same expected result for a basic
+// set of modifications. The functions used here are otherwise only used by the
+// pg.DB type, which tests it in a more realistic way.
 func Test_repl(t *testing.T) {
 	UseLogger(log.New(log.WithWriter(os.Stdout), log.WithLevel(log.LevelDebug)))
 	host, port, user, pass, dbName := "127.0.0.1", "5432", "kwild", "kwild", "kwil_test_db"
@@ -48,6 +52,19 @@ func Test_repl(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if err = ensureFullReplicaIdentityTrigger(ctx, connQ); err != nil {
+		t.Fatalf("failed to create full replication identity trigger: %v", err)
+	}
+	if err = ensureSentryTable(ctx, connQ); err != nil {
+		t.Fatalf("failed to create transaction sequencing table: %v", err)
+	}
+	if _, err = connQ.Exec(ctx, "ALTER TABLE "+sentryTableNameFull+" REPLICA IDENTITY FULL"); err != nil {
+		t.Fatalf("failed to alter table: %v", err)
+	}
+	if err = ensurePublication(ctx, connQ); err != nil {
+		t.Fatalf("failed to create publication: %v", err)
+	}
+
 	_, err = connQ.Exec(ctx, sqlUpdateSentrySeq, 0)
 	if err != nil {
 		t.Fatal(err)
@@ -74,7 +91,7 @@ func Test_repl(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	wantCommitHash, _ := hex.DecodeString("1fd01e9d38e322285723643f27123762c3d7fd22761f7ab4de57e0a947f8127b")
+	wantCommitHash, _ := hex.DecodeString("d42916cd1980b7370b9adca989af0a4c5ad7e31544fd795cbfa8c2e11556d85a")
 
 	var wg sync.WaitGroup
 	wg.Add(1)
