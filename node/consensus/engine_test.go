@@ -199,7 +199,7 @@ func generateTestCEConfig(t *testing.T, nodes int, leaderDB bool) ([]*Config, ma
 var blockAppHash = nextHash()
 
 func nextHash() types.Hash {
-	newHash, err := ktypes.NewHashFromString("2d8f3ceeff2c836527da823d7b654d33d3e44b6159b172235c160001e0c9b4db")
+	newHash, err := ktypes.NewHashFromString("10453a9c0e733d40132228fc9eae3242d2aa9e62c9e35ecdd3d8318762a29bb4")
 	if err != nil {
 		panic(err)
 	}
