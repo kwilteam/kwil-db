@@ -352,8 +352,8 @@ func (n *Node) Start(ctx context.Context) error {
 		defer cancel()
 
 		broadcastFns := consensus.BroadcastFns{
-			ProposalBroadcaster: func(ctx context.Context, blk *ktypes.Block) {
-				n.announceBlkProp(ctx, blk, n.host.ID())
+			ProposalBroadcaster: func(ctx context.Context, blk *ktypes.Block, senderPubkey []byte) {
+				n.announceBlkProp(ctx, blk, senderPubkey, n.host.ID())
 			},
 			TxAnnouncer: func(ctx context.Context, txID types.Hash) {
 				n.announceTx(ctx, txID, n.host.ID())

@@ -218,7 +218,7 @@ type WhitelistFns struct {
 }
 
 // ProposalBroadcaster broadcasts the new block proposal message to the network
-type ProposalBroadcaster func(ctx context.Context, blk *ktypes.Block)
+type ProposalBroadcaster func(ctx context.Context, blk *ktypes.Block, senderPubkey []byte)
 
 // BlkAnnouncer broadcasts the new committed block to the network using the blockAnn message
 type BlkAnnouncer func(ctx context.Context, blk *ktypes.Block, ci *ktypes.CommitInfo)
@@ -916,7 +916,7 @@ func (ce *ConsensusEngine) rebroadcastBlkProposal(ctx context.Context) {
 
 	if ce.role.Load() == types.RoleLeader && ce.state.blkProp != nil {
 		ce.log.Debug("Rebroadcasting block proposal", "height", ce.state.blkProp.height)
-		go ce.proposalBroadcaster(ctx, ce.state.blkProp.blk)
+		go ce.proposalBroadcaster(ctx, ce.state.blkProp.blk, ce.pubKey.Bytes())
 	}
 }
 

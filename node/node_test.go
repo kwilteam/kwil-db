@@ -341,7 +341,7 @@ func (ce *dummyCE) NotifyResetState(height int64, txIDs []types.Hash, sender []b
 	}
 }
 
-func (ce *dummyCE) NotifyBlockProposal(blk *ktypes.Block, _ func()) {
+func (ce *dummyCE) NotifyBlockProposal(blk *ktypes.Block, pubkey []byte, _ func()) {
 	if ce.blockPropHandler != nil {
 		ce.blockPropHandler(blk)
 		return
@@ -396,8 +396,8 @@ func (ce *dummyCE) Fake() *faker {
 
 type faker dummyCE
 
-func (f *faker) Propose(ctx context.Context, blk *ktypes.Block) {
-	f.proposerBroadcaster(ctx, blk)
+func (f *faker) Propose(ctx context.Context, blk *ktypes.Block, pubkey []byte) {
+	f.proposerBroadcaster(ctx, blk, pubkey)
 }
 
 // func (f *faker) ACK(ack bool, height int64, blkID types.Hash, appHash *types.Hash, sig []byte) error {

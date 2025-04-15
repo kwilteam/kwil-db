@@ -128,7 +128,7 @@ func (ce *ConsensusEngine) proposeBlock(ctx context.Context) error {
 	ce.state.blkProp = blkProp
 
 	// Broadcast the block proposal to the network
-	go ce.proposalBroadcaster(ctx, blkProp.blk)
+	go ce.proposalBroadcaster(ctx, blkProp.blk, ce.pubKey.Bytes())
 
 	// update the stateInfo
 	ce.stateInfo.mtx.Lock()

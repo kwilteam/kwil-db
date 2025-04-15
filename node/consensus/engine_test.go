@@ -371,7 +371,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "blkProp",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.NotifyBlockProposal(blkProp1.blk, nil)
+						val.NotifyBlockProposal(blkProp1.blk, leader.pubKey.Bytes(), nil)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
@@ -398,7 +398,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "blkProp",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.NotifyBlockProposal(blkProp1.blk, nil)
+						val.NotifyBlockProposal(blkProp1.blk, leader.pubKey.Bytes(), nil)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
@@ -427,7 +427,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "blkPropOld",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.NotifyBlockProposal(blkProp1.blk, nil)
+						val.NotifyBlockProposal(blkProp1.blk, leader.pubKey.Bytes(), nil)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
@@ -436,7 +436,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "blkPropNew",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.NotifyBlockProposal(blkProp2.blk, nil)
+						val.NotifyBlockProposal(blkProp2.blk, leader.pubKey.Bytes(), nil)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Executed, 0, blkProp2.blkHash)
@@ -463,7 +463,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "blkPropNew",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.NotifyBlockProposal(blkProp2.blk, nil)
+						val.NotifyBlockProposal(blkProp2.blk, leader.pubKey.Bytes(), nil)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Executed, 0, blkProp2.blkHash)
@@ -472,7 +472,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "blkPropOld",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.NotifyBlockProposal(blkProp1.blk, nil)
+						val.NotifyBlockProposal(blkProp1.blk, leader.pubKey.Bytes(), nil)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Executed, 0, blkProp2.blkHash)
@@ -499,7 +499,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "blkPropOld",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.NotifyBlockProposal(blkProp1.blk, nil)
+						val.NotifyBlockProposal(blkProp1.blk, leader.pubKey.Bytes(), nil)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
@@ -518,7 +518,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "blkPropNew (ignored)",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.NotifyBlockProposal(blkProp1.blk, nil)
+						val.NotifyBlockProposal(blkProp1.blk, leader.pubKey.Bytes(), nil)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Committed, 1, zeroHash)
@@ -535,7 +535,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "blkPropOld",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.NotifyBlockProposal(blkProp1.blk, nil)
+						val.NotifyBlockProposal(blkProp1.blk, leader.pubKey.Bytes(), nil)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
@@ -553,7 +553,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "blkPropNew",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.NotifyBlockProposal(blkProp2.blk, nil)
+						val.NotifyBlockProposal(blkProp2.blk, leader.pubKey.Bytes(), nil)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Executed, 0, blkProp2.blkHash)
@@ -580,7 +580,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "blkPropOld",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.NotifyBlockProposal(blkProp1.blk, nil)
+						val.NotifyBlockProposal(blkProp1.blk, leader.pubKey.Bytes(), nil)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
@@ -616,7 +616,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "blkPropOld",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.NotifyBlockProposal(blkProp1.blk, nil)
+						val.NotifyBlockProposal(blkProp1.blk, leader.pubKey.Bytes(), nil)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
@@ -661,7 +661,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "blkProp",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.NotifyBlockProposal(blkProp1.blk, nil)
+						val.NotifyBlockProposal(blkProp1.blk, leader.pubKey.Bytes(), nil)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Executed, 0, blkProp1.blkHash)
@@ -706,7 +706,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "blkPropNew",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.NotifyBlockProposal(blkProp2.blk, nil)
+						val.NotifyBlockProposal(blkProp2.blk, leader.pubKey.Bytes(), nil)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Executed, 0, blkProp2.blkHash)
@@ -745,7 +745,7 @@ func TestValidatorStateMachine(t *testing.T) {
 				{
 					name: "blkPropNew",
 					trigger: func(t *testing.T, leader, val *ConsensusEngine) {
-						val.NotifyBlockProposal(blkProp2.blk, nil)
+						val.NotifyBlockProposal(blkProp2.blk, leader.pubKey.Bytes(), nil)
 					},
 					verify: func(t *testing.T, leader, val *ConsensusEngine) error {
 						return verifyStatus(t, val, Executed, 0, blkProp2.blkHash)
@@ -1022,7 +1022,7 @@ func mockBlkRequester(ctx context.Context, height int64) (types.Hash, []byte, *k
 	return types.Hash{}, nil, nil, 0, types.ErrBlkNotFound
 }
 
-func mockBlockPropBroadcaster(_ context.Context, blk *ktypes.Block) {}
+func mockBlockPropBroadcaster(_ context.Context, blk *ktypes.Block, sender []byte) {}
 
 func mockVoteBroadcaster(msg *types.AckRes) error {
 	return nil

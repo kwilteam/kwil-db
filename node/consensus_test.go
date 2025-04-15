@@ -5,10 +5,16 @@ import (
 	"testing"
 	"time"
 
+	"github.com/kwilteam/kwil-db/core/crypto"
 	"github.com/kwilteam/kwil-db/node/types"
 )
 
 func TestBlockProp_MarshalUnmarshal(t *testing.T) {
+	_, pub, err := crypto.GenerateEd25519Key(nil)
+	if err != nil {
+		t.Fatalf("failed to generate key: %v", err)
+	}
+
 	tests := []struct {
 		name    string
 		bp      blockProp
@@ -17,11 +23,12 @@ func TestBlockProp_MarshalUnmarshal(t *testing.T) {
 		{
 			name: "valid block proposal",
 			bp: blockProp{
-				Height:    100,
-				Hash:      [32]byte{1, 2, 3},
-				PrevHash:  [32]byte{4, 5, 6},
-				Stamp:     time.Now().Unix(),
-				LeaderSig: []byte{7, 8, 9, 10},
+				Height:       100,
+				Hash:         [32]byte{1, 2, 3},
+				PrevHash:     [32]byte{4, 5, 6},
+				Stamp:        time.Now().Unix(),
+				LeaderSig:    []byte{7, 8, 9, 10},
+				SenderPubKey: pub.Bytes(),
 			},
 			wantErr: false,
 		},
