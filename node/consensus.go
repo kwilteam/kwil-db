@@ -30,11 +30,12 @@ type (
 )
 
 type blockProp struct {
-	Height    int64
-	Hash      types.Hash
-	PrevHash  types.Hash
-	Stamp     int64
-	LeaderSig []byte
+	Height       int64
+	Hash         types.Hash
+	PrevHash     types.Hash
+	Stamp        int64
+	LeaderSig    []byte
+	SenderPubKey []byte
 	// Replacing *types.Hash
 }
 
@@ -48,7 +49,7 @@ var _ encoding.BinaryMarshaler = (*blockProp)(nil)
 
 func (bp blockProp) MarshalBinary() ([]byte, error) {
 	// 8 bytes for int64 + 2 hash lengths + 8 bytes for time stamp + len(sig) + sig
-	buf := make([]byte, 8+2*types.HashLen+8+8+len(bp.LeaderSig))
+	buf := make([]byte, 8+2*types.HashLen+8+8+len(bp.LeaderSig)+len(bp.SenderPubKey)+8)
 	var c int
 	binary.LittleEndian.PutUint64(buf[:8], uint64(bp.Height))
 	c += 8
@@ -60,7 +61,11 @@ func (bp blockProp) MarshalBinary() ([]byte, error) {
 	c += 8
 	binary.LittleEndian.PutUint64(buf[c:], uint64(len(bp.LeaderSig)))
 	c += 8
-	copy(buf[c:], bp.LeaderSig) // c += len(bp.LeaderSig)
+	copy(buf[c:], bp.LeaderSig)
+	c += len(bp.LeaderSig)
+	binary.LittleEndian.PutUint64(buf[c:], uint64(len(bp.SenderPubKey)))
+	c += 8
+	copy(buf[c:], bp.SenderPubKey)
 	return buf, nil
 
 	// NOTE: this can be written in terms of WriteTo, but it is more efficient
@@ -114,7 +119,15 @@ func (bp *blockProp) ReadFrom(r io.Reader) (int64, error) {
 		return int64(nr), err
 	}
 	n += int64(nr)
-	return n, nil
+	var pubkeyLen int64
+	if err := binary.Read(r, binary.LittleEndian, &pubkeyLen); err != nil {
+		return n, err
+	}
+	n += 8
+	bp.SenderPubKey = make([]byte, pubkeyLen)
+	nr, err = io.ReadFull(r, bp.SenderPubKey)
+	n += int64(nr)
+	return n, err
 }
 
 var _ io.WriterTo = (*blockProp)(nil)
@@ -162,7 +175,7 @@ func (bp *blockProp) WriteTo(w io.Writer) (int64, error) {
 	return n, nil*/
 }
 
-func (n *Node) announceBlkProp(ctx context.Context, blk *ktypes.Block, skipPeers ...peer.ID) {
+func (n *Node) announceBlkProp(ctx context.Context, blk *ktypes.Block, senderPubKey []byte, skipPeers ...peer.ID) {
 	rawBlk := ktypes.EncodeBlock(blk)
 	blkHash := blk.Hash()
 	height := blk.Header.Height
@@ -182,8 +195,8 @@ func (n *Node) announceBlkProp(ctx context.Context, blk *ktypes.Block, skipPeers
 			continue
 		}
 		prop := blockProp{Height: height, Hash: blkHash, PrevHash: blk.Header.PrevHash,
-			Stamp: blk.Header.Timestamp.UnixMilli(), LeaderSig: blk.Signature}
-		n.log.Debugf("advertising block proposal %s (height %d / txs %d) to peer %v", blkHash, height, len(blk.Txns), peerID)
+			Stamp: blk.Header.Timestamp.UnixMilli(), LeaderSig: blk.Signature, SenderPubKey: senderPubKey}
+		n.log.Debugf("advertising block proposal %s (height %d / txs %d) to peer %v from sender %v", blkHash, height, len(blk.Txns), peerID, hex.EncodeToString(senderPubKey))
 		// resID := annPropMsgPrefix + strconv.Itoa(int(height)) + ":" + prevHash + ":" + blkid
 		propID, _ := prop.MarshalBinary()
 		err := n.advertiseToPeer(ctx, peerID, ProtocolIDBlockPropose, contentAnn{prop.String(), propID, rawBlk},
@@ -223,6 +236,9 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 		n.log.Warnf("invalid block proposal message: %v", err)
 		return
 	}
+
+	n.log.Info("got block proposal", "height", prop.Height, "hash", prop.Hash, "prevHash", prop.PrevHash,
+		"stamp", prop.Stamp, "leaderSig", prop.LeaderSig, "senderPubKey", hex.EncodeToString(prop.SenderPubKey))
 
 	height := prop.Height
 
@@ -286,9 +302,9 @@ func (n *Node) blkPropStreamHandler(s network.Stream) {
 
 	ceProcessing = true // ce will call done now, neuter the defer
 
-	n.ce.NotifyBlockProposal(blk, sync.OnceFunc(func() { // make the callback idempotent, and trigger reannounce
+	n.ce.NotifyBlockProposal(blk, prop.SenderPubKey, sync.OnceFunc(func() { // make the callback idempotent, and trigger reannounce
 		done()
-		go n.announceBlkProp(context.Background(), blk, s.Conn().RemotePeer())
+		go n.announceBlkProp(context.Background(), blk, prop.SenderPubKey, s.Conn().RemotePeer())
 	}))
 }
 

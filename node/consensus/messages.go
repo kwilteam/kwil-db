@@ -130,7 +130,7 @@ func (ce *ConsensusEngine) sendResetMsg(msg *resetMsg) {
 
 // NotifyBlockProposal is used by the p2p stream handler to notify the consensus engine of a block proposal.
 // Only a validator should receive block proposals and notify the consensus engine, whereas others should ignore this message.
-func (ce *ConsensusEngine) NotifyBlockProposal(blk *ktypes.Block, doneFn func()) {
+func (ce *ConsensusEngine) NotifyBlockProposal(blk *ktypes.Block, sender []byte, doneFn func()) {
 	if ce.role.Load() == types.RoleLeader {
 		return
 	}
@@ -150,7 +150,7 @@ func (ce *ConsensusEngine) NotifyBlockProposal(blk *ktypes.Block, doneFn func())
 	go ce.sendConsensusMessage(&consensusMessage{
 		MsgType: blkProp.Type(),
 		Msg:     blkProp,
-		Sender:  ce.leader.Bytes(),
+		Sender:  sender,
 		done:    done,
 	})
 }
