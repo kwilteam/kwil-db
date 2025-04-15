@@ -14,17 +14,17 @@ package pg
 import (
 	"bytes"
 	"context"
-	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"hash"
 	"time"
 
 	"github.com/jackc/pglogrepl"
 	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgproto3"
 	"github.com/jackc/pgx/v5/pgtype"
+
+	"github.com/kwilteam/kwil-db/node/utils/muhash"
 )
 
 // replConn creates a new connection to a postgres host with the
@@ -127,7 +127,7 @@ func createRepl(ctx context.Context, conn *pgconn.PgConn, publicationName, slotN
 
 // For reference, if there is nothing going into the commit hash, the result
 // will be this "zeroHash":
-//  var zeroHash, _ = hex.DecodeString("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+//  var zeroHash, _ = hex.DecodeString("4bf5122f344554c53bde2ebb8cd2b7e3d1600ad631c385a5d7cce23c7785459a")
 
 // captureRepl begins receiving and decoding messages. Consider the conn to be
 // hijacked after calling captureRepl, and do not use it or the stream can be
@@ -142,7 +142,7 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64, comm
 	clientXLogPos := pglogrepl.LSN(startLSN)
 	standbyMessageTimeout := time.Second * 10
 	nextStandbyMessageDeadline := time.Now().Add(standbyMessageTimeout)
-	hasher := sha256.New()
+	hasher := muhash.New()
 	relations := map[uint32]*pglogrepl.RelationMessageV2{}
 
 	var inStream bool
@@ -248,8 +248,8 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64, comm
 				// This is either a commit of a regular transaction or a
 				// precommit (prepare transaction). In either case we have
 				// hashed the changeset for the entire transaction.
-				cHash := hasher.Sum(nil)
-				hasher.Reset() // hasher = sha256.New()
+				cHash := hasher.DigestHash()
+				hasher.Reset()
 
 				// Only send the commit ID on the commitHash channel if this was
 				// a tracked commit, which includes a sequence number update on
@@ -263,7 +263,7 @@ func captureRepl(ctx context.Context, conn *pgconn.PgConn, startLSN uint64, comm
 				}
 
 				cid := binary.BigEndian.AppendUint64(nil, uint64(seq))
-				cid = append(cid, cHash...)
+				cid = append(cid, cHash[:]...)
 
 				select {
 				case commitHash <- cid:
@@ -300,7 +300,7 @@ func (ws *walStats) reset() {
 // decodeWALData decodes a wal data message given known relations, returning
 // true if it was a commit message, or a non-negative seq value if it was a
 // special update message on the internal sentry table
-func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglogrepl.RelationMessageV2,
+func decodeWALData(hasher *muhash.MuHash, walData []byte, relations map[uint32]*pglogrepl.RelationMessageV2,
 	inStream *bool, stats *walStats, okSchema func(schema string) bool, changesetWriter *changesetIoWriter) (bool, int64, error) {
 	logicalMsg, err := parseV3(walData, *inStream)
 	if err != nil {
@@ -356,7 +356,7 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 
 		insertData := encodeInsertMsg(relName, &logicalMsg.InsertMessage)
 		// logger.Debugf("insertData %x", insertData)
-		hasher.Write(insertData)
+		hasher.Add(insertData)
 
 		logger.Debugf(" [msg] INSERT xid %d into rel %v.%v: %v", logicalMsg.Xid,
 			rel.Namespace, rel.RelationName, &lazyValues{logicalMsg.Tuple.Columns, rel})
@@ -397,7 +397,7 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 
 		updateData := encodeUpdateMsg(relName, &logicalMsg.UpdateMessage)
 		// logger.Debugf("updateData %x", updateData)
-		hasher.Write(updateData)
+		hasher.Add(updateData)
 
 		var oldValues *lazyValues
 		if logicalMsg.OldTuple != nil { // seems to be only if primary key changes
@@ -427,7 +427,7 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 
 		deleteData := encodeDeleteMsg(relName, &logicalMsg.DeleteMessage)
 		// logger.Debugf("deleteData %x", deleteData)
-		hasher.Write(deleteData)
+		hasher.Add(deleteData)
 
 		logger.Debugf(" [msg] DELETE from rel %v.%v: %v", rel.Namespace, rel.RelationName,
 			&lazyValues{logicalMsg.OldTuple.Columns, rel})
@@ -452,7 +452,7 @@ func decodeWALData(hasher hash.Hash, walData []byte, relations map[uint32]*pglog
 			break
 		}
 
-		hasher.Write(encodeTruncateMsg(rels, &logicalMsg.TruncateMessage))
+		hasher.Add(encodeTruncateMsg(rels, &logicalMsg.TruncateMessage))
 		stats.truncs++
 
 	case *pglogrepl.TypeMessageV2:
