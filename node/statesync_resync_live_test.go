@@ -249,6 +249,28 @@ func TestResyncRestoresANodeFarBehind(t *testing.T) {
 	require.Equal(t, records(t, fresh), records(t, n.db))
 }
 
+// A node's database holds kwild's event trigger from the node's earlier
+// starts. The changes kwild hashes for deletes and updates depend on each
+// table's replica identity, so the tables a resync restores must get the
+// identities the snapshot gives them, as on a new node.
+func TestResyncKeepsTheSnapshotsReplicaIdentities(t *testing.T) {
+	n := newResyncNode(t, "kwil_test_resync_identity")
+	openAsKwild(t, n.db)
+	require.True(t, n.resync(t))
+
+	appHash := blockAppHash(resyncSnap)
+	dump := resyncDump(appHash) + "ALTER TABLE ONLY kwild_voting.voters REPLICA IDENTITY FULL;\n"
+	n.restoreSnapshot(t, dump, appHash)
+
+	fresh := restoreTestDB(t, "kwil_test_resync_identity_fresh")
+	require.NoError(t, restore(t, fresh, dump))
+	for _, schema := range []string{"kwild_chain", "kwild_voting", "main"} {
+		require.Equal(t, replicaIdentities(t, fresh, schema), replicaIdentities(t, n.db, schema), schema)
+	}
+	require.Equal(t, "d", replicaIdentities(t, n.db, "main")["records"])
+	require.Equal(t, "f", replicaIdentities(t, n.db, "kwild_voting")["voters"])
+}
+
 func TestResyncReplaysANodeNotFarBehind(t *testing.T) {
 	n := newResyncNode(t, "kwil_test_resync_near")
 	n.height = resyncSnap - resyncBehind // exactly resync_when_behind blocks behind

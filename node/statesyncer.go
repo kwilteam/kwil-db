@@ -878,8 +878,20 @@ func RestoreDB(ctx context.Context, reader io.Reader, db config.DBConfig, snapsh
 		return err
 	}
 
-	// decompress the chunk streams and stream the sql dump to psql stdinPipe
-	copyErr := decompressAndValidateSnapshotHash(stdinPipe, reader, snapshotHash)
+	// The restored tables must keep the replica identities the dump gives
+	// them. The change kwild hashes for a delete or an update carries as much
+	// of the old row as the table's identity sets: all of it under FULL, at
+	// most the key under DEFAULT. A database kwild has already opened holds
+	// its event trigger, which sets every new table to REPLICA IDENTITY FULL,
+	// and a node cleared to restore a newer snapshot restores into such a
+	// database. An event trigger left at its default does not fire in a
+	// session whose replication role is replica, so the dump runs in one and
+	// every table comes out as it does on a new node's empty database.
+	_, copyErr := io.WriteString(stdinPipe, "SET session_replication_role = replica;\n")
+	if copyErr == nil {
+		// decompress the chunk streams and stream the sql dump to psql stdinPipe
+		copyErr = decompressAndValidateSnapshotHash(stdinPipe, reader, snapshotHash)
+	}
 	stdinPipe.Close() // signifies the end of the input stream to the psql command
 
 	// psql's own error explains a failed restore better than the broken pipe
