@@ -14,6 +14,7 @@ import (
 
 	"github.com/trufnetwork/kwil-db/config"
 	"github.com/trufnetwork/kwil-db/core/log"
+	"github.com/trufnetwork/kwil-db/node/pg"
 )
 
 // restoreTestDB creates an empty database for one test and drops it after.
@@ -55,6 +56,34 @@ func tablesIn(t *testing.T, db config.DBConfig) []string {
 func restore(t *testing.T, db config.DBConfig, dump string) error {
 	sum := sha256.Sum256([]byte(dump))
 	return RestoreDB(context.Background(), strings.NewReader(dump), db, sum[:], log.DiscardLogger)
+}
+
+// openAsKwild opens db the way kwild does at every start, then closes it. That
+// installs kwild's event trigger, which sets each table created after it to
+// REPLICA IDENTITY FULL.
+func openAsKwild(t *testing.T, db config.DBConfig) {
+	t.Helper()
+	kwild, err := pg.NewDB(context.Background(), &pg.DBConfig{PoolConfig: pg.PoolConfig{ConnConfig: *pgConnConfig(db), MaxConns: 2}})
+	require.NoError(t, err)
+	require.NoError(t, kwild.Close())
+}
+
+// replicaIdentities maps each table in schema to its replica identity as
+// pg_class records it: d for DEFAULT, f for FULL.
+func replicaIdentities(t *testing.T, db config.DBConfig, schema string) map[string]string {
+	t.Helper()
+	rows, err := dbConn(t, db).Query(context.Background(), `SELECT c.relname, c.relreplident::text
+		FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+		WHERE n.nspname = $1 AND c.relkind = 'r'`, schema)
+	require.NoError(t, err)
+	identities := map[string]string{}
+	for rows.Next() {
+		var table, identity string
+		require.NoError(t, rows.Scan(&table, &identity))
+		identities[table] = identity
+	}
+	require.NoError(t, rows.Err())
+	return identities
 }
 
 func TestRestoreDBStopsAtTheFirstFailedStatement(t *testing.T) {
@@ -119,4 +148,23 @@ func TestRestoreDBKeepsRestrictTextInsideAFunction(t *testing.T) {
 	var got string
 	require.NoError(t, conn.QueryRow(ctx, `SELECT restored.f()`).Scan(&got))
 	require.Equal(t, "\n\\restrict key1\n", got)
+}
+
+func TestRestoreDBKeepsTheDumpsReplicaIdentities(t *testing.T) {
+	db := restoreTestDB(t, "kwil_test_restore_identity")
+	openAsKwild(t, db)
+	// pg_dump writes REPLICA IDENTITY only for a table whose identity is not
+	// DEFAULT.
+	dump := "CREATE SCHEMA restored;\n" +
+		"CREATE TABLE restored.by_key (id int8 PRIMARY KEY, v text);\n" +
+		"CREATE TABLE restored.whole_row (id int8 PRIMARY KEY, v text);\n" +
+		"ALTER TABLE ONLY restored.whole_row REPLICA IDENTITY FULL;\n"
+
+	require.NoError(t, restore(t, db, dump))
+	require.Equal(t, map[string]string{"by_key": "d", "whole_row": "f"}, replicaIdentities(t, db, "restored"))
+
+	// The trigger is still there for the tables kwild creates afterwards.
+	_, err := dbConn(t, db).Exec(context.Background(), `CREATE TABLE restored.later (id int8 PRIMARY KEY)`)
+	require.NoError(t, err)
+	require.Equal(t, "f", replicaIdentities(t, db, "restored")["later"])
 }
