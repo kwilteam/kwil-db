@@ -439,6 +439,24 @@ func (bp *BlockProcessor) PrepareValidatorVoteIDTx(ctx context.Context, db sql.D
 	return tx, ids, nil
 }
 
+// checkTxComplete returns an error if the transaction lacks a part that
+// checking and executing it reads: the body, the body's fee, or the
+// signature. Decoding accepts a transaction without any of them, from a peer
+// or an RPC client alike.
+func checkTxComplete(tx *types.Transaction) error {
+	switch {
+	case tx == nil:
+		return fmt.Errorf("%w: no transaction", types.ErrMalformedTx)
+	case tx.Body == nil:
+		return fmt.Errorf("%w: no body", types.ErrMalformedTx)
+	case tx.Body.Fee == nil:
+		return fmt.Errorf("%w: no fee", types.ErrMalformedTx)
+	case tx.Signature == nil:
+		return fmt.Errorf("%w: no signature", types.ErrMalformedTx)
+	}
+	return nil
+}
+
 // verifyTransaction verifies a transaction's signature using the Authenticator
 // registry in this package.
 func verifyTransaction(tx *types.Transaction) error {

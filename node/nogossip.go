@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"runtime/debug"
 	"sync"
 	"time"
 
@@ -17,6 +18,15 @@ import (
 
 func (n *Node) txAnnStreamHandler(s network.Stream) {
 	defer s.Close()
+
+	// The announced transaction comes from a peer. A panic while handling it
+	// ends this stream, not the node.
+	defer func() {
+		if p := recover(); p != nil {
+			n.log.Errorf("panic handling a tx announcement from peer %s: %v\n%s",
+				s.Conn().RemotePeer(), p, debug.Stack())
+		}
+	}()
 
 	if n.InCatchup() { // we are in catchup, don't accept new txs
 		return

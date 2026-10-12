@@ -185,6 +185,33 @@ func TestSingleNodeMocknet(t *testing.T) {
 		assert.GreaterOrEqual(c, stat.Sync.BestBlockHeight, reachHeight)
 	}, 10*time.Second, 250*time.Millisecond)
 
+	t.Run("drops a transaction announced without a body", func(t *testing.T) {
+		_, announcer := newTestHost(t, mn, crypto.KeyTypeSecp256k1)
+		setupStreamHandlers(t, announcer)
+		joinChain(announcer, genCfg.ChainID)
+		_, err := mn.LinkPeers(announcer.ID(), h1.ID())
+		require.NoError(t, err)
+		_, err = mn.ConnectPeers(announcer.ID(), h1.ID())
+		require.NoError(t, err)
+
+		bodyless := &ktypes.Transaction{}
+		announceTx(t, announcer, h1.ID(), bodyless)
+
+		require.Nil(t, mp1.Get(bodyless.Hash()))
+		_, numTxns := mp1.Size()
+		require.Zero(t, numTxns)
+
+		stat, err := node1.Status(ctx)
+		require.NoError(t, err)
+		next := stat.Sync.BestBlockHeight + 2
+		require.EventuallyWithT(t, func(c *assert.CollectT) {
+			stat, err := node1.Status(ctx)
+			if assert.NoError(c, err) {
+				assert.GreaterOrEqual(c, stat.Sync.BestBlockHeight, next)
+			}
+		}, 10*time.Second, 250*time.Millisecond)
+	})
+
 	cancel()
 	wg.Wait()
 }

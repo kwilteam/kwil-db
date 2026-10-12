@@ -134,6 +134,17 @@ func (ce *ConsensusEngine) QueueTx(ctx context.Context, tx *types.Tx) error {
 		return err
 	}
 
+	// The transaction is stored before it is checked. If the check panics and
+	// a caller recovers, as the JSON-RPC server does, the transaction must not
+	// stay in the mempool, where every recheck reads it again and the periodic
+	// re-announcement sends it to every peer.
+	defer func() {
+		if p := recover(); p != nil {
+			ce.mempool.Remove(tx.Hash())
+			panic(p)
+		}
+	}()
+
 	const recheck = false
 	err = ce.blockProcessor.CheckTx(ctx, tx, height, timestamp, recheck)
 	if err != nil {

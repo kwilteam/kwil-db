@@ -237,6 +237,9 @@ func (bp *BlockProcessor) CheckTx(ctx context.Context, ntx *types.Tx, height int
 
 func (bp *BlockProcessor) checkTx(ctx context.Context, readTx sql.Tx, ntx *types.Tx, height int64, blockTime time.Time, recheck bool) error {
 	tx := ntx.Transaction
+	if err := checkTxComplete(tx); err != nil {
+		return err
+	}
 	txHash := ntx.Hash()
 
 	// If the network is halted for migration, we reject all transactions.

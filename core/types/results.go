@@ -14,7 +14,7 @@ type TxCode uint16
 
 const (
 	CodeOk                  TxCode = 0
-	CodeEncodingError       TxCode = 1
+	CodeEncodingError       TxCode = 1 // ErrMalformedTx
 	CodeInvalidTxType       TxCode = 2 // ErrUnknownPayloadType
 	CodeInvalidSignature    TxCode = 3
 	CodeInvalidNonce        TxCode = 4
@@ -57,6 +57,7 @@ var (
 	ErrTxTooLarge            = errors.New("transaction size limit exceeded")
 	ErrUnknownPayloadType    = errors.New("unknown payload type")
 	ErrDisallowedInMigration = errors.New("transaction type not allowed during migration")
+	ErrMalformedTx           = errors.New("malformed transaction")
 )
 
 // BroadcastErrorToCode converts an error from a broadcast method to a TxCode.
@@ -91,6 +92,9 @@ func BroadcastErrorToCode(err error) TxCode {
 	if errors.Is(err, ErrMigrationComplete) {
 		return CodeNetworkHalted
 	}
+	if errors.Is(err, ErrMalformedTx) {
+		return CodeEncodingError
+	}
 	return CodeUnknownError
 }
 
@@ -117,6 +121,8 @@ func BroadcastCodeToError(code TxCode) error {
 		return ErrDisallowedInMigration
 	case CodeNetworkHalted:
 		return ErrMigrationComplete
+	case CodeEncodingError:
+		return ErrMalformedTx
 	}
 	return nil
 }

@@ -771,6 +771,7 @@ func TestBroadcastErrorCodeRoundTrip(t *testing.T) {
 		{"unknown payload type", ErrUnknownPayloadType, CodeInvalidTxType},
 		{"disallowed in migration", ErrDisallowedInMigration, CodeNetworkInMigration},
 		{"migration complete", ErrMigrationComplete, CodeNetworkHalted},
+		{"malformed transaction", ErrMalformedTx, CodeEncodingError},
 		{"unknown error", errors.New("some unknown error"), CodeUnknownError},
 	}
 
