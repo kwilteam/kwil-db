@@ -161,6 +161,18 @@ SYNC:
 
 		tApply := time.Now()
 		err := ce.applyBlock(ctx, rawBlk, ci, blkID)
+		// A block that failed to execute here was rolled back. It is still the
+		// block the validators committed, so it is applied again, from the same
+		// bytes, after the same backoff.
+		for errors.Is(err, errRolledBack) {
+			ce.log.Warn("Applying a block again", "height", height, "error", err)
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(retrier.Duration()):
+			}
+			err = ce.applyBlock(ctx, rawBlk, ci, blkID)
+		}
 		if errors.Is(err, errUncommittedBlock) {
 			// Nothing of it was kept. What else was fetched may be from the
 			// same peer, so it goes too, and it goes before the peer is held
@@ -259,6 +271,10 @@ func (ce *ConsensusEngine) applyBlock(ctx context.Context, rawBlk []byte, ci *kt
 // validators committed at the height it was fetched for. That is the peer's
 // doing, not ours, so the block is fetched again, from another peer.
 var errUncommittedBlock = errors.New("not the block the validators committed")
+
+// errRolledBack is a block that failed to execute on this node and was rolled
+// back, so that nothing of it is kept and it can be applied again.
+var errRolledBack = errors.New("block rolled back")
 
 // decodeCommitted decodes a fetched block and checks, before any of it runs,
 // that it is the block the validators committed at the next height: the block

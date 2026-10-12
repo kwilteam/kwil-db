@@ -8,6 +8,7 @@ import (
 
 	ktypes "github.com/trufnetwork/kwil-db/core/types"
 	"github.com/trufnetwork/kwil-db/node/types"
+	"github.com/trufnetwork/kwil-db/node/types/sql"
 )
 
 // AcceptProposal determines if the node should download the block for the given proposal.
@@ -386,12 +387,16 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Blo
 		return fmt.Errorf("block %d already processed, duplicate block announcement received %s", oldH, blkID)
 	}
 
+	// A block that fails these checks gives the height back, so that the
+	// committed block can still be processed for it.
 	if err := ce.validateBlock(blk); err != nil {
+		ce.stateInfo.hasBlock.Store(oldH)
 		return err
 	}
 
 	// ensure that the commit info is valid
 	if err := ce.acceptCommitInfo(ci, blkID); err != nil {
+		ce.stateInfo.hasBlock.Store(oldH)
 		return fmt.Errorf("error validating commitInfo: %w", err)
 	}
 
@@ -414,7 +419,18 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Blo
 	ce.stateInfo.mtx.Unlock()
 
 	if err := ce.executeBlock(ctx, ce.state.blkProp, syncing); err != nil {
-		return fmt.Errorf("error executing block: %w", err)
+		// The database layer leaves a fatal error to a restart, which replays
+		// the block from the last committed height.
+		if sql.IsFatalDBError(err) {
+			return fmt.Errorf("error executing block: %w", err)
+		}
+		// Anything else is rolled back, with the height given back, so that
+		// catch-up or a later announcement can apply the block again.
+		if rbErr := ce.rollbackState(ctx); rbErr != nil {
+			return fmt.Errorf("error executing block: %w, and rolling it back: %w", err, rbErr)
+		}
+		ce.state.rolledBack = blk.Header.Height
+		return fmt.Errorf("error executing block: %w (%w)", err, errRolledBack)
 	}
 
 	// Commit the block if the appHash and commitInfo is valid
@@ -429,6 +445,15 @@ func (ce *ConsensusEngine) processAndCommit(ctx context.Context, blk *ktypes.Blo
 		}
 
 		haltR := fmt.Sprintf("processAndCommit: AppHash mismatch, halting the node. expected: %s, received: %s", ce.state.blockRes.appHash, ci.AppHash)
+		// The rollback after a failed execution undoes what the block wrote to
+		// the database and what the block processor kept, but not what the
+		// interpreter or an extension kept in memory, such as a table the block
+		// created. So a block applied again can run to another app hash. A
+		// restart rebuilds that state from the database and replays the block.
+		if blk.Header.Height == ce.state.rolledBack {
+			haltR = fmt.Sprintf("processAndCommit: block %d, applied again after it failed to execute, ran to app hash %s, not %s. Stopping the node: a restart replays the block.",
+				blk.Header.Height, ce.state.blockRes.appHash, ci.AppHash)
+		}
 		ce.sendHalt(haltR)
 		return errors.New(haltR)
 	}

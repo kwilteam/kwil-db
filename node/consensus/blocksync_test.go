@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"strings"
@@ -19,7 +20,9 @@ import (
 	ktypes "github.com/trufnetwork/kwil-db/core/types"
 	blockprocessor "github.com/trufnetwork/kwil-db/node/block_processor"
 	"github.com/trufnetwork/kwil-db/node/mempool"
+	"github.com/trufnetwork/kwil-db/node/store"
 	"github.com/trufnetwork/kwil-db/node/types"
+	"github.com/trufnetwork/kwil-db/node/types/sql"
 
 	"github.com/stretchr/testify/require"
 )
@@ -213,9 +216,17 @@ func createTestTransaction() *types.Tx {
 	return types.NewTx(tx)
 }
 
-// Minimal mock block processor that only implements RecheckTxs for testing
+// Minimal mock block processor for testing. Every block runs to the zero app
+// hash with no parameter updates, unless execute says otherwise.
 type testBlockProcessor struct {
 	recheckTxsFunc func(ctx context.Context, height int64, timestamp time.Time) error
+	// execute is called with the number of each execution, counting from 1,
+	// and gives the app hash the block runs to, or the error that fails it.
+	execute     func(n int32) (ktypes.Hash, error)
+	rollbackErr error
+	executions  atomic.Int32
+	rollbacks   atomic.Int32
+	params      *ktypes.NetworkParameters // the zero parameters if nil
 }
 
 func (bp *testBlockProcessor) RecheckTxs(ctx context.Context, height int64, timestamp time.Time) error {
@@ -235,13 +246,22 @@ func (bp *testBlockProcessor) PrepareProposal(ctx context.Context, txs []*types.
 	return nil, nil, nil
 }
 func (bp *testBlockProcessor) ExecuteBlock(ctx context.Context, req *ktypes.BlockExecRequest, syncing bool) (*ktypes.BlockExecResult, error) {
-	return &ktypes.BlockExecResult{}, nil
+	n := bp.executions.Add(1)
+	if bp.execute == nil {
+		return &ktypes.BlockExecResult{}, nil
+	}
+	appHash, err := bp.execute(n)
+	if err != nil {
+		return nil, err
+	}
+	return &ktypes.BlockExecResult{AppHash: appHash}, nil
 }
 func (bp *testBlockProcessor) Commit(ctx context.Context, req *ktypes.CommitRequest) error {
 	return nil
 }
 func (bp *testBlockProcessor) Rollback(ctx context.Context, height int64, appHash ktypes.Hash) error {
-	return nil
+	bp.rollbacks.Add(1)
+	return bp.rollbackErr
 }
 func (bp *testBlockProcessor) Close() error { return nil }
 func (bp *testBlockProcessor) CheckTx(ctx context.Context, tx *types.Tx, height int64, blockTime time.Time, recheck bool) error {
@@ -249,6 +269,9 @@ func (bp *testBlockProcessor) CheckTx(ctx context.Context, tx *types.Tx, height 
 }
 func (bp *testBlockProcessor) GetValidators() []*ktypes.Validator { return nil }
 func (bp *testBlockProcessor) ConsensusParams() *ktypes.NetworkParameters {
+	if bp.params != nil {
+		return bp.params
+	}
 	return &ktypes.NetworkParameters{}
 }
 func (bp *testBlockProcessor) BlockExecutionStatus() *ktypes.BlockExecutionStatus {
@@ -591,4 +614,188 @@ func TestReplayBlockFromNetwork_AnotherAppHashStaysFatal(t *testing.T) {
 	require.ErrorContains(t, err, "AppHash mismatch")
 	require.NotErrorIs(t, err, errUncommittedBlock)
 	require.Zero(t, rejected.Load())
+}
+
+// committingEngine is replayEngine, fetching through fetch, as a sentry with
+// what committing a block needs: a key, a leader and a block store. Blocks run
+// on bp.
+func committingEngine(t *testing.T, bp *testBlockProcessor, fetch BlkRequester) *ConsensusEngine {
+	t.Helper()
+	ce := replayEngine(0, fetch, nil)
+	ce.leader = newKey(t).Public()
+	bp.params = &ktypes.NetworkParameters{Leader: ktypes.PublicKey{PublicKey: ce.leader}}
+	ce.blockProcessor = bp
+	ce.privKey = newKey(t)
+	ce.role.Store(types.RoleSentry)
+	ce.haltChan = make(chan string, 1)
+	bs, err := store.NewBlockStore(t.TempDir())
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, bs.Close()) })
+	ce.blockStore = bs
+	return ce
+}
+
+// errPrecommitTimedOut is how a block fails to execute when the commit ID of
+// its transaction does not come in time.
+var errPrecommitTimedOut = errors.New("failed to precommit block transaction: precommit timed out waiting for commit ID from replication monitor")
+
+// failFirst fails the first execution with errPrecommitTimedOut.
+func failFirst(n int32) (ktypes.Hash, error) {
+	if n == 1 {
+		return ktypes.Hash{}, errPrecommitTimedOut
+	}
+	return ktypes.Hash{}, nil
+}
+
+// A block that fails to execute when it is announced is rolled back and gives
+// its height back, so that catch-up applies it. When the height stayed taken,
+// catch-up refused the block as already processed and stopped the node.
+func TestReplayBlockFromNetwork_AppliesABlockThatFailedWhenAnnounced(t *testing.T) {
+	var blk *ktypes.Block
+	var ci *ktypes.CommitInfo
+	bp := &testBlockProcessor{execute: failFirst}
+	ce := committingEngine(t, bp, func(ctx context.Context, h int64) (types.Hash, []byte, *ktypes.CommitInfo, int64, func(), error) {
+		if h != 2 {
+			return types.Hash{}, nil, nil, 0, nil, types.ErrBlkNotFound
+		}
+		return blk.Hash(), ktypes.EncodeBlock(blk), ci, 2, func() {}, nil
+	})
+	blk, ci = followingBlock(t, ce, newKey(t), ktypes.Hash{})
+
+	err := ce.commitBlock(context.Background(), blk, ci, blk.Hash(), func() {})
+	rolledBack, held := bp.rollbacks.Load(), ce.stateInfo.hasBlock.Load()
+	require.ErrorIs(t, err, errPrecommitTimedOut)
+
+	require.NoError(t, replayWithin(t, ce, 10*time.Second))
+	require.EqualValues(t, 2, ce.lastCommitHeight())
+	require.EqualValues(t, 2, bp.executions.Load())
+	require.EqualValues(t, 1, rolledBack, "the failed block was rolled back")
+	require.EqualValues(t, 1, held, "and gave its height back")
+}
+
+// A block that fails to execute in catch-up is rolled back and applied again
+// after the backoff. The failure was this node's, so the block is not fetched
+// again and no peer is held back.
+func TestReplayBlockFromNetwork_AppliesAgainABlockThatFailedToExecute(t *testing.T) {
+	var asked, rejected atomic.Int32
+	var blk *ktypes.Block
+	var ci *ktypes.CommitInfo
+	bp := &testBlockProcessor{execute: failFirst}
+	ce := committingEngine(t, bp, func(ctx context.Context, h int64) (types.Hash, []byte, *ktypes.CommitInfo, int64, func(), error) {
+		if h != 2 {
+			return types.Hash{}, nil, nil, 0, nil, types.ErrBlkNotFound
+		}
+		asked.Add(1)
+		return blk.Hash(), ktypes.EncodeBlock(blk), ci, 2, func() { rejected.Add(1) }, nil
+	})
+	blk, ci = followingBlock(t, ce, newKey(t), ktypes.Hash{})
+
+	t0 := time.Now()
+	require.NoError(t, replayWithin(t, ce, 10*time.Second))
+	require.EqualValues(t, 2, ce.lastCommitHeight())
+	require.EqualValues(t, 2, bp.executions.Load())
+	require.EqualValues(t, 1, bp.rollbacks.Load())
+	require.EqualValues(t, 1, asked.Load(), "the block was applied again, not fetched again")
+	require.Zero(t, rejected.Load())
+	require.GreaterOrEqual(t, time.Since(t0), 250*time.Millisecond, "after the backoff's minimum")
+}
+
+// What a failed block cannot leave behind safely still stops catch-up, and
+// the block is not applied again: a fatal database error, which the database
+// layer leaves to a restart that replays the block from the last committed
+// height, and a block that could not be rolled back.
+func TestReplayBlockFromNetwork_AFailureThatCannotBeUndoneStaysFatal(t *testing.T) {
+	for _, tc := range []struct {
+		name      string
+		bp        *testBlockProcessor
+		wantErr   error
+		rollbacks int32
+	}{
+		{"a fatal database error", &testBlockProcessor{execute: func(int32) (ktypes.Hash, error) {
+			return ktypes.Hash{}, errors.Join(sql.ErrDBFailure, errors.New("conn closed"))
+		}}, sql.ErrDBFailure, 0},
+		{"a block that could not be rolled back", &testBlockProcessor{execute: failFirst,
+			rollbackErr: errors.New("rollback failed")}, errPrecommitTimedOut, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var blk *ktypes.Block
+			var ci *ktypes.CommitInfo
+			ce := committingEngine(t, tc.bp, func(ctx context.Context, h int64) (types.Hash, []byte, *ktypes.CommitInfo, int64, func(), error) {
+				return blk.Hash(), ktypes.EncodeBlock(blk), ci, 2, func() {}, nil
+			})
+			blk, ci = followingBlock(t, ce, newKey(t), ktypes.Hash{})
+
+			err := replayWithin(t, ce, 10*time.Second)
+			require.ErrorIs(t, err, tc.wantErr)
+			require.ErrorContains(t, err, "failed to apply block at height: 2")
+			require.EqualValues(t, 1, tc.bp.executions.Load())
+			require.Equal(t, tc.rollbacks, tc.bp.rollbacks.Load())
+			require.EqualValues(t, 1, ce.lastCommitHeight())
+		})
+	}
+}
+
+// A block applied again after it failed to execute can run to another app hash
+// when its first run left state in memory that the rollback does not undo,
+// such as a table the engine still lists. The node stops then, as on any app
+// hash it cannot reach, but saying so, since a restart replays the block.
+func TestReplayBlockFromNetwork_StopsWhenABlockAppliedAgainRunsElsewhere(t *testing.T) {
+	var blk *ktypes.Block
+	var ci *ktypes.CommitInfo
+	bp := &testBlockProcessor{execute: func(n int32) (ktypes.Hash, error) {
+		if n == 1 {
+			return ktypes.Hash{}, errPrecommitTimedOut
+		}
+		return ktypes.Hash{1}, nil
+	}}
+	ce := committingEngine(t, bp, func(ctx context.Context, h int64) (types.Hash, []byte, *ktypes.CommitInfo, int64, func(), error) {
+		return blk.Hash(), ktypes.EncodeBlock(blk), ci, 2, func() {}, nil
+	})
+	blk, ci = followingBlock(t, ce, newKey(t), ktypes.Hash{})
+
+	err := replayWithin(t, ce, 10*time.Second)
+	require.ErrorContains(t, err, "block 2, applied again after it failed to execute, ran to app hash")
+	require.ErrorContains(t, err, "a restart replays the block")
+	select {
+	case reason := <-ce.haltChan:
+		require.Equal(t, "failed to apply block at height: 2: error: "+reason, err.Error(), "the node halts with the same reason")
+	default:
+		t.Fatal("the node did not halt")
+	}
+	require.EqualValues(t, 2, bp.executions.Load())
+	require.EqualValues(t, 1, ce.lastCommitHeight())
+}
+
+// A block announced after one that fails the block or commit info checks is
+// processed: the failed one gave its height back. When the height stayed
+// taken, the committed block was refused as already processed, and catch-up
+// then stopped the node.
+func TestCommitBlockAfterAnAnnouncedBlockThatFailsTheChecks(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		bad  func(t *testing.T, blk *ktypes.Block, key crypto.PrivateKey) (*ktypes.Block, *ktypes.CommitInfo)
+	}{
+		{"a block that does not follow", func(t *testing.T, blk *ktypes.Block, key crypto.PrivateKey) (*ktypes.Block, *ktypes.CommitInfo) {
+			hdr := blk.Header
+			bad := ktypes.NewBlock(2, ktypes.Hash{7}, hdr.PrevAppHash, hdr.ValidatorSetHash, hdr.NetworkParamsHash, hdr.Timestamp, nil)
+			return bad, signedBy(t, bad.Hash(), ktypes.Hash{}, key)
+		}},
+		{"commit info without the validators' votes", func(t *testing.T, blk *ktypes.Block, _ crypto.PrivateKey) (*ktypes.Block, *ktypes.CommitInfo) {
+			return blk, signedBy(t, blk.Hash(), ktypes.Hash{}, newKey(t))
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			bp := &testBlockProcessor{}
+			ce := committingEngine(t, bp, nil)
+			key := newKey(t)
+			blk, ci := followingBlock(t, ce, key, ktypes.Hash{})
+			bad, badCI := tc.bad(t, blk, key)
+
+			ctx := context.Background()
+			require.Error(t, ce.commitBlock(ctx, bad, badCI, bad.Hash(), func() {}))
+			require.NoError(t, ce.commitBlock(ctx, blk, ci, blk.Hash(), func() {}))
+			require.EqualValues(t, 2, ce.lastCommitHeight())
+			require.EqualValues(t, 1, bp.executions.Load())
+		})
+	}
 }

@@ -301,6 +301,10 @@ type state struct {
 
 	commitInfo *ktypes.CommitInfo
 
+	// rolledBack is the height of the last block that failed to execute and
+	// was rolled back to be applied again. See processAndCommit.
+	rolledBack int64
+
 	// Promoted leader uses these updates to distinguish the leader updates occurred due to
 	// "replace-leader" admin command vs the leader updates due to parameter updates
 	// and include the NewLeader field in the block header to notify the network about
