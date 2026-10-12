@@ -439,6 +439,10 @@ func (svc *Service) Broadcast(ctx context.Context, req *userjson.BroadcastReques
 	// request rather than the serialized transaction, except that a client only
 	// has to serialize the *body* to sign.
 
+	if req.Tx == nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "missing transaction", nil)
+	}
+
 	var sync = userjson.BroadcastSyncAccept // default to accept, not commit
 	if req.Sync != nil {
 		sync = *req.Sync
@@ -512,6 +516,9 @@ func (svc *Service) BroadcastRaw(ctx context.Context, req *BroadcastRawRequest) 
 */
 
 func (svc *Service) EstimatePrice(ctx context.Context, req *userjson.EstimatePriceRequest) (*userjson.EstimatePriceResponse, *jsonrpc.Error) {
+	if req.Tx == nil || req.Tx.Body == nil {
+		return nil, jsonrpc.NewError(jsonrpc.ErrorInvalidParams, "missing transaction body", nil)
+	}
 	svc.log.Debug("Estimating price", "payload_type", req.Tx.Body.PayloadType)
 	readTx := svc.db.BeginDelayedReadTx()
 	defer readTx.Rollback(ctx)

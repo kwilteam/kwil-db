@@ -322,6 +322,7 @@ type dummyCE struct {
 	blockCommitHandler func(blk *ktypes.Block, ci *ktypes.CommitInfo, blkID types.Hash)
 	blockPropHandler   func(blk *ktypes.Block)
 	resetStateHandler  func(height int64, txIDs []types.Hash)
+	queueTxHandler     func(ctx context.Context, tx *types.Tx) error
 
 	// mtx     sync.Mutex
 	// gotACKs map[string]types.AckRes // from NotifyACK: string(validatorPK) -> AckRes
@@ -388,6 +389,9 @@ func (ce *dummyCE) Role() types.Role {
 }
 
 func (ce *dummyCE) QueueTx(ctx context.Context, tx *types.Tx) error {
+	if ce.queueTxHandler != nil {
+		return ce.queueTxHandler(ctx, tx)
+	}
 	return nil
 }
 
