@@ -700,6 +700,30 @@ func TestReplayBlockFromNetwork_AppliesAgainABlockThatFailedToExecute(t *testing
 	require.GreaterOrEqual(t, time.Since(t0), 250*time.Millisecond, "after the backoff's minimum")
 }
 
+// A block that keeps failing to execute is applied again only a few times,
+// after the backoff each time. Then catch-up ends with the error, as before
+// this retry existed, so that the node stops and a restart, which rebuilds
+// what the rollback leaves in memory, replays the block.
+func TestReplayBlockFromNetwork_GivesUpOnABlockThatKeepsFailing(t *testing.T) {
+	var blk *ktypes.Block
+	var ci *ktypes.CommitInfo
+	bp := &testBlockProcessor{execute: func(int32) (ktypes.Hash, error) {
+		return ktypes.Hash{}, errPrecommitTimedOut
+	}}
+	ce := committingEngine(t, bp, func(ctx context.Context, h int64) (types.Hash, []byte, *ktypes.CommitInfo, int64, func(), error) {
+		return blk.Hash(), ktypes.EncodeBlock(blk), ci, 2, func() {}, nil
+	})
+	blk, ci = followingBlock(t, ce, newKey(t), ktypes.Hash{})
+
+	err := replayWithin(t, ce, 10*time.Second)
+	require.ErrorIs(t, err, errPrecommitTimedOut)
+	require.ErrorContains(t, err, "failed to apply block at height: 2")
+	require.EqualValues(t, 4, bp.executions.Load(), "the block was applied again three times")
+	require.EqualValues(t, 4, bp.rollbacks.Load())
+	require.EqualValues(t, 1, ce.lastCommitHeight())
+	require.EqualValues(t, 1, ce.stateInfo.hasBlock.Load(), "and its height was given back")
+}
+
 // What a failed block cannot leave behind safely still stops catch-up, and
 // the block is not applied again: a fatal database error, which the database
 // layer leaves to a restart that replays the block from the last committed
