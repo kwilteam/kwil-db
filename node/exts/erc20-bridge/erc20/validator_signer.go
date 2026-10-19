@@ -43,10 +43,9 @@ type ValidatorSigner struct {
 	address         ethcommon.Address
 	logger          log.Logger
 
-	// Track voted epochs and nonce to avoid duplicate work and nonce conflicts
+	// Track voted epochs to avoid duplicate work
 	mu          sync.Mutex
 	votedEpochs map[string]bool // epochID -> voted
-	localNonce  uint64          // Local nonce counter for transaction creation
 }
 
 // NewValidatorSignerFromInterface creates a new validator signer service using the ValidatorSigner interface.
@@ -349,6 +348,33 @@ func (v *ValidatorSigner) signAndVote(ctx context.Context, epoch *FinalizedEpoch
 	return nil
 }
 
+// nextNonce returns the nonce for the validator's next transaction: one above
+// the nonce of the last transaction the account committed.
+//
+// It is read from the account for every vote and never counted here. The node's
+// other services sign transactions with the same key, and each one moves the
+// account's nonce. A count kept from the first vote falls behind the first time
+// that happens, and every vote after it is rejected as an invalid nonce until
+// the count catches up, one retry per poll. A transaction still waiting in the
+// mempool is not counted either, so a vote that takes its nonce is rejected and
+// tried again on the next poll, once that transaction has committed.
+func (v *ValidatorSigner) nextNonce(ctx context.Context) (uint64, error) {
+	readTx, err := v.beginReadTx()
+	if err != nil {
+		return 0, fmt.Errorf("failed to begin read transaction: %w", err)
+	}
+	defer readTx.Rollback(ctx)
+
+	account, err := v.app.Accounts.GetAccount(ctx, readTx, &types.AccountID{
+		Identifier: v.address.Bytes(),
+		KeyType:    kwilcrypto.KeyTypeSecp256k1,
+	})
+	if err != nil {
+		return 0, fmt.Errorf("failed to get account nonce: %w", err)
+	}
+	return uint64(account.Nonce) + 1, nil
+}
+
 // createVoteTransaction creates a signed transaction that calls the vote_epoch action.
 func (v *ValidatorSigner) createVoteTransaction(ctx context.Context, epochID *types.UUID, signature []byte) (*types.Transaction, error) {
 	// Get transaction signer from validator signer interface
@@ -357,44 +383,10 @@ func (v *ValidatorSigner) createVoteTransaction(ctx context.Context, epochID *ty
 		return nil, fmt.Errorf("failed to create transaction signer: %w", err)
 	}
 
-	// Get current account nonce with concurrency-safe local counter
-	// Use double-check pattern to avoid holding mutex during GetAccount call
-	v.mu.Lock()
-	needsInit := v.localNonce == 0
-	v.mu.Unlock()
-
-	if needsInit {
-		// Fetch account nonce outside mutex to avoid blocking
-		// Create fresh read transaction from database pool
-		readTx, err := v.beginReadTx()
-		if err != nil {
-			return nil, fmt.Errorf("failed to begin read transaction: %w", err)
-		}
-		defer readTx.Rollback(ctx)
-
-		accountID := &types.AccountID{
-			Identifier: v.address.Bytes(),
-			KeyType:    kwilcrypto.KeyTypeSecp256k1,
-		}
-		account, err := v.app.Accounts.GetAccount(ctx, readTx, accountID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to get account nonce: %w", err)
-		}
-		initialNonce := uint64(account.Nonce)
-
-		// Double-check pattern: only set if still zero
-		v.mu.Lock()
-		if v.localNonce == 0 {
-			v.localNonce = initialNonce
-		}
-		v.mu.Unlock()
+	nonce, err := v.nextNonce(ctx)
+	if err != nil {
+		return nil, err
 	}
-
-	// Use and increment local nonce
-	v.mu.Lock()
-	nonce := v.localNonce
-	v.localNonce++
-	v.mu.Unlock()
 
 	// Create action execution payload
 	// The vote_epoch action expects: (instance_id, epoch_id, nonce, signature)
